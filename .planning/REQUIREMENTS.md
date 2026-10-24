@@ -119,11 +119,29 @@ These are deferred and tracked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTON
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| TUNE-01 | Phase 16 | Pending |
+| TUNE-02 | Phase 16 | Pending |
+| TUNE-03 | Phase 16 | Pending |
+| TUNE-04 | Phase 16 | Pending |
+| TUNE-05 | Phase 16 | Pending |
+| TUNE-06 | Phase 16 | Pending |
+| STATE-01 | Phase 17 | Pending |
+| STATE-02 | Phase 17 | Pending |
+| STATE-03 | Phase 17 | Pending |
+| STATE-04 | Phase 17 | Pending |
+| STATE-05 | Phase 17 | Pending |
+| STATE-06 | Phase 17 | Pending |
+| PLAY-01 | Phase 18 | Pending |
+| HOST-01 | Phase 18 | Pending |
+| HOST-02 | Phase 18 | Pending |
+| HOST-03 | Phase 18 | Pending |
+| REL-01 | Phase 19 | Pending |
 
 **Coverage:**
 - v0.3 requirements: 17 total
-- Mapped to phases: 0 (filled by the roadmapper)
+- Mapped to phases: 17 (Phase 16: 6, Phase 17: 6, Phase 18: 4, Phase 19: 1)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-24*
-*Last updated: 2026-10-24 at v0.3 kickoff*
+*Last updated: 2026-10-24 after the v0.3 roadmap (Phases 16–19)*

@@ -83,7 +83,7 @@
   ],
   "uncommitted_files_snapshot": "Measured before pause-document writes; these same three source/user items are intended to remain uncommitted after handoff commit.",
   "partial_file_sha256": "eb20cc11fd80bbe52242542d0328cb5744177365960246f8984587ab7d6b253b",
-  "next_action": "v0.2 milestone completed and archived; Phase 15.1 execution finished and was verified. Next: /gsd-new-milestone",
-  "resume_command": "/gsd-new-milestone",
+  "next_action": "v0.3 Save States & Host Contract initialized (requirements + roadmap, Phases 16-19). Next: Phase 16 Tune-up and v0.2 Debt Closure via /gsd-discuss-phase 16",
+  "resume_command": "/gsd-discuss-phase 16",
   "context_notes": "Phase execution paused at owner request, not complete or technically blocked. Plan07 completed before pause; Plan08 stopped safely with no active owned command. See 15.1-PAUSE-EVIDENCE.json and sanitized RED output."
 }

@@ -2,11 +2,17 @@
 gsd_state_version: "1.0"
 milestone: v0.3
 milestone_name: Save States & Host Contract
+current_phase: 16
+current_phase_name: Tune-up and v0.2 Debt Closure
+current_plan: Not started
 status: planning
-last_updated: "2026-10-24T20:12:00.014Z"
+stopped_at: v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped); Phase 16 not started; next /gsd-discuss-phase 16
+last_updated: "2026-10-24T20:19:26.059Z"
 last_activity: 2026-10-24
+last_activity_desc: v0.3 roadmap created (Phases 16–19)
+state_head: 5dcc39698987f29e3809918aeeb5721033e0f667
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +26,20 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.3 Save States & Host Contract — defining requirements and roadmap (Phases 16–19)
+**Current focus:** v0.3 Save States & Host Contract — roadmap defined (Phases 16–19); Phase 16 Tune-up and v0.2 Debt Closure is next
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 16 (Tune-up and v0.2 Debt Closure) — not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-10-24 — Milestone v0.3 started
+Status: Ready to plan
+Last activity: 2026-10-24 — v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped)
+
+Completed stage: **v0.3 milestone initialization** (requirements and roadmap; this is not Phase 16). Roadmap: Phase 16 Tune-up and v0.2 Debt Closure (TUNE-01..06, plan cap 8), Phase 17 Native Save State Core (STATE-01..06, cap 12), Phase 18 Player Save Slots and Host Contract (PLAY-01, HOST-01..03, cap 10), Phase 19 Qualified v0.3.0 Release (REL-01, cap 8).
+
+Next phase: **16 — Tune-up and v0.2 Debt Closure** (not started).
+Exact next command: `/gsd-discuss-phase 16`.
+Stop here; nothing auto-advances. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false.
 
 ### Historical Phase 12 metadata verification refresh
 
@@ -76,7 +88,7 @@ Status: planning
 Current Plan: Not started
 Total Plans in Phase: 13
 Last Activity: 2026-10-24
-Last Activity Description: v0.2 milestone completed and archived
+Last Activity Description: v0.3 roadmap created (Phases 16–19)
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
@@ -616,12 +628,12 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-22T23:05:55.490Z
-**Stopped at:** v0.2 milestone completed and archived (override_closeout); next is the owner's `/gsd-new-milestone`
+**Last session:** 2026-10-24T20:19:26.039Z
+**Stopped at:** v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped); Phase 16 not started; next /gsd-discuss-phase 16
 **Resume file:** None
 
-Completed stage: **v0.2 milestone completion** (see Current Position). Next stage: **define the next milestone** (v0.3 States & Integration, provisional). Exact next command: `/gsd-new-milestone`. Both automatic advance flags stay false.
+Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Discuss Phase 16 (Tune-up and v0.2 Debt Closure) with /gsd-discuss-phase 16
