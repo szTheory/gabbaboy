@@ -13,8 +13,8 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
-REPORT = ROOT / '.planning/v0.2-MILESTONE-AUDIT.md'
-INTEGRATION = ROOT / '.planning/v0.2-INTEGRATION-AUDIT.md'
+REPORT = ROOT / '.planning/milestones/v0.2-MILESTONE-AUDIT.md'
+INTEGRATION = ROOT / '.planning/milestones/v0.2-INTEGRATION-AUDIT.md'
 
 
 def front(text):

@@ -1,5 +1,11 @@
 # Phase 15.1 continuation
 
+Completed stage (2026-10-24): **v0.2 milestone completion** (`/gsd-complete-milestone v0.2`, override_closeout). The roadmap, requirements, milestone audit, integration audit and the quick task are archived under `.planning/milestones/`. Phase directories stay in place because CTest reads files there. The record is in `.planning/MILESTONES.md`. No LIM row was accepted, and nothing was republished.
+
+Exact next command (owner's choice; not run automatically): `/gsd-new-milestone` (v0.3 States & Integration, provisional). Both auto flags stay false.
+
+Superseded route (ran 2026-10-24):
+
 Completed stage (2026-10-24): **v0.2 milestone re-audit after Phase 15.1 Nyquist validation**, bound to source `5356d38` (main after PR #100). Result **tech_debt**, with no blocker: requirements 28/28 satisfied, phases 10/10 passed and all Nyquist-compliant, integration 14/15 connections (one warning: the Phase 8 contract verifiers have no CTest/CI caller), flows 6/6. Fresh checks at the source: `acceptance_` 74/74, focused cross-phase slice 290/290, `ctest -N` 1183, and main's push CI run 40114394844 green. Report: [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) and [v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md); accounting check `python3 .planning/verify-v02-milestone-audit.py --self-test` (26 negative controls). No LIM row was accepted or closed (owner_accepted=0).
 
 Exact next command (owner's choice; not run automatically): `/gsd-complete-milestone v0.2`, starting with an explicit review of the debt in the audit: the twelve owner LIM decisions, the Phase 8 verifier warning and triage of open PRs #75 and #78–92. Alternative: insert a cleanup phase after 15.1. Do not tag, release, archive or start v0.3 automatically. Both auto flags stay false.
