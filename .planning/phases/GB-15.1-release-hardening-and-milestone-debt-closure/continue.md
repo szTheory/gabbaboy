@@ -1,5 +1,15 @@
 # Phase 15.1 continuation
 
+Completed stage (2026-10-24): **Phase 15.1 verification - verify-work complete; Phase 15.1 is complete and v0.2 has no further phase**. `15.1-UAT.md` closes all 141 deliverables of plans 15.1-01..36 automatically with zero human checkpoints (`verify-uat-closure.py --write`, self-test 21 controls). `15.1-VERIFICATION.md` passes 5/5 on the final tree; the verify-time code review (`15.1-GAP2-REVIEW.md`) found 0 critical, 0 warning, 1 info (GR2-IN-01 deferred). Full local gate 1183/1183 at four tests at once. Verify-time fixes, each with a negative control: quoted coverage ids in the UAT closure checker; the CMake floor suite runs in parallel; the ASan inventory runs as two complementary 45-minute shards apart from the bounded fuzz campaign, whose pinned bound is unchanged (lesson GB-CI-010). Everything ships in docs PR #98, squash-merged only at exact-head green required checks; its merge receipt is recorded at the next boundary, not asserted from a later HEAD.
+
+Exact next command (owner's choice; not run automatically): `/gsd-audit-milestone`. Next stage: v0.2 milestone audit (no further numbered phase). Do not tag, release, archive, republish v0.2.0 or start v0.3 automatically. Both auto flags stay false. The open owner decisions below are unchanged; none is a pass or an owner acceptance, and the hosted release rehearsal stays `not_verified`. Keep the remote branches `gsd/phase-15.1-gap2-evidence` and `gsd/phase-15.1-gap-evidence` (strict-head boundary commits). Open owner decisions with their smallest actions are listed in STATE.md.
+
+---
+
+Earlier history (superseded route, preserved):
+
+# Phase 15.1 continuation
+
 Completed stage (2026-10-23): **Phase 15.1 gap closure round 2 (plans 15.1-31..36)**. Gap PR #97 was squash-merged to `main` as M2 = 79e20f356ac953fa7dcd3aa5e2b7d96eb9b747e1 (receipt `15.1-gap2-delivery-receipt.json`); evidence was refreshed at M2 and strict-head rows for boundary commits 9de8cf0 (15.1-35) and 3346233 (15.1-36) are in `15.1-strict-head-boundaries.tsv`. All nine findings of `15.1-GAP-REVIEW.md` are triaged (open 0 of 9): GR-CR-01, GR-WR-01, GR-WR-02, GR-IN-01, GR-IN-02, GR-IN-04 and GR-IN-05 fixed with negative controls re-run at the docs head; GR-WR-03 closed_with_residual (residual GR-WR-03(a)-R, channels A-F, under LIM-RESIDUAL-WRITE-JOBS, never fixed or accepted); GR-IN-03 deferred to P15-09. **Phase 15.1 stays open pending re-verification.**
 
 Exact next command (the only one): `/gsd-verify-work 15.1`. Next stage: Phase 15.1 re-verification (no new numbered phase). Do not run `/gsd-audit-milestone`, tag, release, archive, republish v0.2.0 or start v0.3; after verification passes the owner chooses the audit. Both auto flags stay false.
