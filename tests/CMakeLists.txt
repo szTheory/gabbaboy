@@ -2391,9 +2391,8 @@ add_test(NAME doc_contract_scope_selftest
     "-DGBB_EXPECT_REGEX=doc-contract-missing: once per open"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
-# Hosted ASan runs the whole suite under one 30-minute job timeout; serially it used about 20
-# minutes and timed out on a slow runner (LESSONS GB-CI-004). The contract keeps the ASan ctest
-# step parallel. The workflow declares its own identifiers, so only the scoped phrase is checked.
+# Hosted ASan runs the whole suite in linux-asan-ubsan-tests; serially it used about 20 minutes and timed out on
+# a slow runner (LESSONS GB-CI-004, GB-CI-010). The contract keeps the ASan ctest step parallel. The workflow declares its own identifiers, so only the scoped phrase is checked.
 set(GBB_CI_WORKFLOW "${PROJECT_SOURCE_DIR}/.github/workflows/ci.yml")
 set(GBB_CI_ASAN_PHRASE "ctest --preset phase1-asan --parallel 4")
 add_test(NAME ci_asan_parallel_contract
@@ -2401,7 +2400,7 @@ add_test(NAME ci_asan_parallel_contract
     -DGBB_DOC=${GBB_CI_WORKFLOW}
     -DGBB_DECLARATIONS=${GBB_CI_WORKFLOW}
     "-DGBB_REQUIRED=${GBB_CI_ASAN_PHRASE}"
-    "-DGBB_SCOPE_START=name: linux-asan-ubsan"
+    "-DGBB_SCOPE_START=name: linux-asan-ubsan-tests"
     -P ${GBB_DOC_CONTRACT_SCRIPT})
 set_tests_properties(ci_asan_parallel_contract PROPERTIES
   PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[0-9]+ phrases=1[^0-9]")
@@ -2410,11 +2409,32 @@ string(REPLACE "phase1-asan --parallel 4" "phase1-asan" GBB_CI_WORKFLOW_SERIAL "
 file(WRITE "${GBB_DOC_SELFTEST}/ci-serial.yml" "${GBB_CI_WORKFLOW_SERIAL}")
 add_test(NAME ci_asan_parallel_serial_selftest
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/ci-serial.yml;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ci-serial.yml;-DGBB_REQUIRED=${GBB_CI_ASAN_PHRASE};-DGBB_SCOPE_START=name: linux-asan-ubsan;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/ci-serial.yml;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ci-serial.yml;-DGBB_REQUIRED=${GBB_CI_ASAN_PHRASE};-DGBB_SCOPE_START=name: linux-asan-ubsan-tests;-P;${GBB_DOC_CONTRACT_SCRIPT}"
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=doc-contract-missing: ctest --preset phase1-asan --parallel 4"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_CI_WORKFLOW}")
+# The CMake 3.25.3 floor job runs the whole suite twice (built and relocated) under a 40-minute timeout; serially it
+# took 20-40 minutes and timed out on slow runners (LESSONS GB-CI-010). The job environment keeps every ctest call
+# parallel; the serial selftest proves the contract can fail.
+set(GBB_CI_FLOOR_PHRASE "CTEST_PARALLEL_LEVEL: 4")
+add_test(NAME ci_floor_parallel_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${GBB_CI_WORKFLOW}
+    -DGBB_DECLARATIONS=${GBB_CI_WORKFLOW}
+    "-DGBB_REQUIRED=${GBB_CI_FLOOR_PHRASE}"
+    "-DGBB_SCOPE_START=name: cmake-floor-3.25.3"
+    -P ${GBB_DOC_CONTRACT_SCRIPT})
+set_tests_properties(ci_floor_parallel_contract PROPERTIES
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[0-9]+ phrases=1[^0-9]")
+string(REPLACE "CTEST_PARALLEL_LEVEL: 4" "CTEST_PARALLEL_LEVEL: 1" GBB_CI_FLOOR_SERIAL "${GBB_CI_WORKFLOW_TEXT}")
+file(WRITE "${GBB_DOC_SELFTEST}/ci-floor-serial.yml" "${GBB_CI_FLOOR_SERIAL}")
+add_test(NAME ci_floor_parallel_serial_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/ci-floor-serial.yml;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ci-floor-serial.yml;-DGBB_REQUIRED=${GBB_CI_FLOOR_PHRASE};-DGBB_SCOPE_START=name: cmake-floor-3.25.3;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=doc-contract-missing: CTEST_PARALLEL_LEVEL: 4"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
 # CGB host-guide contract (D-28): the CGB section of the integration guide names only declared symbols
 # and keeps each promise the header makes about the info API, PGB rejection, frame copy, banking and
@@ -2677,9 +2697,10 @@ function(gbb_add_uat_closure_test name code regex)
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   set_tests_properties(${name} PROPERTIES TIMEOUT 120)
 endfunction()
-# GR-IN-04: the control count is a parsed minimum (20 at 74d0fb0), so adding controls is allowed and dropping
-# one is rejected; expect_exit_min_count_* prove the minimum check itself rejects a lower count.
-set(GBB_UAT_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=20)
+# GR-IN-04: the control count is a parsed minimum (20 at 74d0fb0; 21 once the quoted-id control was added), so
+# adding controls is allowed and dropping one is rejected; expect_exit_min_count_* prove the minimum check itself
+# rejects a lower count.
+set(GBB_UAT_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=21)
 gbb_add_uat_closure_test(uat_closure_controls 0 "uat-closure self-test pass automated=[0-9]+ controls=[0-9]+"
   "${GBB_UAT_CLOSURE_CHECKER}" "${GBB_UAT_CLOSURE_PHASE}" --self-test)
 set(GBB_UAT_EXTRA_ARGS)

@@ -1,0 +1,143 @@
+{
+  "check_runs": [
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "c864d9309ebe788e464fe94ca3f98face0a9c71f",
+      "id": 120630563477,
+      "name": "fixture-repro",
+      "status": "completed"
+    },
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "c864d9309ebe788e464fe94ca3f98face0a9c71f",
+      "id": 120630585079,
+      "name": "fixture-repro",
+      "status": "completed"
+    },
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "c864d9309ebe788e464fe94ca3f98face0a9c71f",
+      "id": 120717163147,
+      "name": "preview-package-smoke",
+      "status": "completed"
+    },
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "c864d9309ebe788e464fe94ca3f98face0a9c71f",
+      "id": 120673173047,
+      "name": "required-native",
+      "status": "completed"
+    },
+    {
+      "app_id": 15368,
+      "app_slug": "github-actions",
+      "conclusion": "success",
+      "head_sha": "c864d9309ebe788e464fe94ca3f98face0a9c71f",
+      "id": 120712508766,
+      "name": "required-native",
+      "status": "completed"
+    }
+  ],
+  "obtained_via": "gh_api",
+  "phase_pr": {
+    "head_sha": "c864d9309ebe788e464fe94ca3f98face0a9c71f",
+    "merge_commit_sha": "79e20f356ac953fa7dcd3aa5e2b7d96eb9b747e1",
+    "merge_method": "squash",
+    "merged_at": "2026-10-24T00:01:49Z",
+    "number": 97
+  },
+  "required_checks": [
+    "fixture-repro",
+    "preview-package-smoke",
+    "required-native"
+  ],
+  "schema_version": 1,
+  "stage": "phase-pr",
+  "superseded_attempts": [
+    {
+      "attempt": 1,
+      "conclusion": "cancelled",
+      "id": 40016720448,
+      "name": "ci (push)"
+    },
+    {
+      "attempt": 1,
+      "conclusion": "cancelled",
+      "id": 40016726661,
+      "name": "ci (pull_request)"
+    },
+    {
+      "attempt": 2,
+      "conclusion": "success",
+      "id": 40016726661,
+      "name": "ci (pull_request)"
+    },
+    {
+      "attempt": 3,
+      "conclusion": "cancelled",
+      "id": 40016726661,
+      "name": "ci (pull_request)"
+    },
+    {
+      "attempt": 4,
+      "conclusion": "cancelled",
+      "id": 40016726661,
+      "name": "ci (pull_request)"
+    },
+    {
+      "attempt": 1,
+      "conclusion": "failure",
+      "id": 40016726703,
+      "name": "preview-package-smoke (pull_request)"
+    },
+    {
+      "attempt": 2,
+      "conclusion": "failure",
+      "id": 40016726703,
+      "name": "preview-package-smoke (pull_request)"
+    },
+    {
+      "attempt": 1,
+      "conclusion": "failure",
+      "id": 40010621379,
+      "name": "ci (pull_request) on superseded head 6100b2d"
+    }
+  ],
+  "workflow_run_names": {
+    "40016720335": "fixture-repro (push)",
+    "40016720448": "ci (push)",
+    "40016726660": "fixture-repro (pull_request)",
+    "40016726661": "ci (pull_request)",
+    "40016726703": "preview-package-smoke (pull_request)"
+  },
+  "workflow_runs": [
+    {
+      "attempt": 1,
+      "id": 40016720335
+    },
+    {
+      "attempt": 2,
+      "id": 40016720448
+    },
+    {
+      "attempt": 1,
+      "id": 40016726660
+    },
+    {
+      "attempt": 5,
+      "id": 40016726661
+    },
+    {
+      "attempt": 3,
+      "id": 40016726703
+    }
+  ]
+}

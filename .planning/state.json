@@ -51,13 +51,13 @@
     {
       "number": "15.1",
       "name": "Release Hardening and Milestone Debt Closure",
-      "status": "in_progress"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "/gsd-progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 10 of 10 · 90% · executing"
+    "command": "/gsd-new-milestone",
+    "label": "Start a new milestone",
+    "reason": "All phases complete — start a new milestone"
   },
-  "updated_at": "2026-10-23T18:33:44.265Z"
+  "updated_at": "2026-10-24T08:44:03.474Z"
 }

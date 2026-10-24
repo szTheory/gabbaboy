@@ -9,9 +9,9 @@
     "item_count": 24
   },
   "evidence_pins": {
-    "15.1-hosted-evidence.json": "5643c3d435455c169258c6c252a771d08081868f0dffbf2d3bbc0dc06c2cb6d0",
-    "15.1-local-evidence.json": "a19b26c46f73f45b1312d00794a4eb3f1a8fa2ade334e5d319178e4d8317c30f",
-    "15.1-historical-limitations.json": "78f078b0ff573496b972f0efd391ea17947c23ce51cbba133be56946daad3cb0"
+    "15.1-hosted-evidence.json": "92de84b32bae9e780e9e7b0cd0d0f68fe5550be016d6d642472d516b7cbbc91b",
+    "15.1-local-evidence.json": "ac92a4bd8c9d4163b0a833d1c9fd951bbe64815aec39422242092fe8aadd547b",
+    "15.1-historical-limitations.json": "076dbda71d465c82c79c804320e4d5543e7805554738cb9d20b06d2b495d8933"
   },
   "shipped_release": {
     "tag": "v0.2.0",
@@ -90,15 +90,15 @@
           "ref": "python3 -I tests/scripts/verify-historical-limitations.py --self-test (receipt-labelled, mismatched, skipped and covered-drift hosted records are rejected)"
         }
       ],
-      "remaining_uncertainty": "The hosted rebuild is byte-identical to the vendored ROM on ubuntu-22.04 at merge commit 2d25a47 (run 39866149534, main). No wrong-ROM or wrong-pin run was dispatched on the host (that control is local). The run binds 2d25a47, the squash merge of PR 94; any covered-path change since invalidates it.",
+      "remaining_uncertainty": "The hosted rebuild is byte-identical to the vendored ROM on ubuntu-22.04 at merge commit 79e20f3 (run 40044574119, main). No wrong-ROM or wrong-pin run was dispatched on the host (that control is local). The run binds 79e20f3, the squash merge of PR 97; any covered-path change since invalidates it. The first dispatch (run 40043135302) failed on an api.github.com rate limit before rebuilding and was re-dispatched once; the failed attempt is kept under superseded_runs.",
       "owner_decision_required": true,
       "owner_decision": "Owner may accept the local-only wrong-ROM control or ask for a hosted negative dispatch; the hosted success is not extended to other ROMs or the release rehearsal.",
       "owner_accepted": false,
       "hosted": {
         "workflow": "libbet-repro",
-        "run_id": 39866149534,
+        "run_id": 40044574119,
         "run_attempt": 1,
-        "head_sha": "2d25a47f1b05844b4da829aa9d0978f2cb348df1",
+        "head_sha": "79e20f356ac953fa7dcd3aa5e2b7d96eb9b747e1",
         "conclusion": "success",
         "obtained_via": "gh_api",
         "receipt_labels_used": false
@@ -131,7 +131,7 @@
           "ref": "python3 -I tests/scripts/verify-historical-limitations.py --self-test (a recovered historic red run is rejected)"
         }
       ],
-      "remaining_uncertainty": "The pre-fix red run of audio_saturation (D-043) was never retained and cannot be recreated. Fresh evidence at 2d25a47 shows the mixer-scaling mutant fails audio_saturation on the headroom assertion without a success line; that is sensitivity evidence, not recovery.",
+      "remaining_uncertainty": "The pre-fix red run of audio_saturation (D-043) was never retained and cannot be recreated. Fresh evidence at 79e20f3 shows the mixer-scaling mutant fails audio_saturation on the headroom assertion without a success line; that is sensitivity evidence, not recovery.",
       "owner_decision_required": true,
       "owner_decision": "Owner decides at milestone re-audit whether fresh sensitivity evidence is an acceptable substitute. No acceptance is recorded here.",
       "owner_accepted": false,
@@ -203,7 +203,7 @@
           "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (80 intended-defect controls, including a producer mutated to contents write)"
         }
       ],
-      "remaining_uncertainty": "Corpus, fuzz and performance producers run read-only. The three subject-executing candidate jobs now hold the token only in gh steps and do not persist checkout credentials (WR-01, plan 15.1-22). Write authority itself remains the named five-job set, enforced exactly and not split: candidate, candidate-macos, candidate-windows, candidate-platform-manifest, publish-qualified-release; that is still an owner decision. No workflow has run on the release path.",
+      "remaining_uncertainty": "Corpus, fuzz and performance producers run read-only. The three subject-executing candidate jobs now hold the token only in gh steps and do not persist checkout credentials (WR-01, plan 15.1-22). Write authority itself remains the named five-job set, enforced exactly and not split: candidate, candidate-macos, candidate-windows, candidate-platform-manifest, publish-qualified-release; that is still an owner decision. No workflow has run on the release path. Owner decision 2026-10-23, narrow scope: GR-WR-03 is closed_with_residual, not fixed (plan 15.1-33). In the five residual-role jobs the policy judges the command heads of every tokened step, including heads nested in substitutions, against TOKEN_STEP_COMMANDS and trusted-operand forms and refuses unparseable tokened steps; overlay first use is read fail closed and guard expressions are pinned exactly. The static judge is defense in depth: residual GR-WR-03(a)-R leaves six channels of allowlisted programs with code-execution features unjudged, (A) python3 - or sed -f script sources read from data, (B) writes into trusted paths before a trusted-operand run, including gh release download --dir into a trusted path, (C) PATH, BASH_ENV or GITHUB_PATH changes and GITHUB_ENV or GITHUB_OUTPUT writes such as echo \"BASH_ENV=$PWD/build/x\" >> \"$GITHUB_ENV\", (D) gh alias set, gh extension install or gh config set of browser, editor or pager, (E) arithmetic or @P evaluation of tagged bytes, (F) sed's e command or s///e flag, e.g. sed '1e ./build/x --version' /dev/null or echo a | sed 's/a/./e'. The structural fix, removing the token from jobs that read the tagged tree, is owner limitation LIM-RESIDUAL-WRITE-JOBS; write authority itself remains the named five-job owner decision.",
       "owner_decision_required": true,
       "owner_decision": "Owner decides whether to split the five residual write jobs before the next release or accept the named, exactly-enforced set.",
       "owner_accepted": false
@@ -297,7 +297,7 @@
           "ref": "python3 -I tests/scripts/verify-v02-performance.py --self-test (copied acceptance prose and stale decisions are rejected)"
         }
       ],
-      "remaining_uncertainty": "The gate can now fail and stays pending until a separate receipt-bound review. On the hosted rehearsal at 2d25a47 it did trigger (median_ratio_pct=129.13, 30 samples) and no review has been recorded.",
+      "remaining_uncertainty": "The gate can now fail and stays pending until a separate receipt-bound review. On the hosted rehearsal at 79e20f3 it did trigger (median_ratio_pct=130.42, 30 samples) and no review has been recorded.",
       "owner_decision_required": true,
       "owner_decision": "Owner must record a separate receipt-bound independent review decision; none is fabricated here (LIM-PERF-REVIEW).",
       "owner_accepted": false
@@ -360,7 +360,7 @@
           "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (subject-supplied judge and shadowed modules are rejected)"
         }
       ],
-      "remaining_uncertainty": "The rehearsal judge reads judge code from the default branch, so it has not run on a hosted rehearsal: the trusted-judge job was skipped at 2d25a47 (run 39866157056) because its producers failed.",
+      "remaining_uncertainty": "The rehearsal judge reads judge code from the default branch, so it has not run on a hosted rehearsal: the trusted-judge job was skipped at 79e20f3 (run 40043165875) because its producers failed.",
       "owner_decision_required": true,
       "owner_decision": "Owner decides after the policy script is on the default branch and a rehearsal runs end to end (LIM-TRUSTED-JUDGE).",
       "owner_accepted": false
@@ -455,7 +455,7 @@
           "ref": "python3 -I .github/scripts/verify-workflow-policy.py --self-test (decoy, swallowed failure and lost attempt are rejected)"
         }
       ],
-      "remaining_uncertainty": "Retry decisions use live state, but a published release stops the publisher rather than being re-verified end to end, and the four early candidate jobs keep their older refusals. A retry after main moves can now reach publication through boundary-commit binding (commit object, commit-tree manifest and the API push-run record at the source SHA; WR-04, plan 15.1-23). This is proven by fixtures and parsed policy only; no hosted retry ran.",
+      "remaining_uncertainty": "Retry decisions use live state, but a published release stops the publisher rather than being re-verified end to end, and the four early candidate jobs keep their older refusals. A retry after main moves can now reach publication through boundary-commit binding (commit object, commit-tree manifest and the API push-run record at the source SHA; WR-04, plan 15.1-23). This is proven by fixtures and parsed policy only; no hosted retry ran. The hosted fuzz contract is now judged on the source commit's ci.yml, runner and validator arguments with HEAD as judge (GR-CR-01, plan 15.1-31), proven by bidirectional --verify-hosted fixture controls; no hosted retry ran.",
       "owner_decision_required": true,
       "owner_decision": "Owner may later ask for published-state verification in the workflow.",
       "owner_accepted": false
@@ -822,7 +822,7 @@
         "P15-11",
         "P15-16"
       ],
-      "evidence": "hosted rehearsal run 39866157056 jobs 120128744994 and 120128745123 (failure)",
+      "evidence": "hosted rehearsal run 40043165875 jobs 120718692794 and 120718692571 (failure)",
       "owner_decision": "Choose between a new release ledger for post-0.2.0 source and rewriting published v0.2.0 text. Published v0.2.0 documents and receipts must not be rewritten; this phase made neither choice.",
       "status": "open",
       "counts_as_pass": false,
@@ -830,13 +830,13 @@
     },
     {
       "id": "LIM-PERF-REVIEW",
-      "title": "Performance review trigger: the paired hosted measurement at 2d25a47 gave median_ratio_pct=129.13 over 30 samples and the receipt stays pending by design.",
+      "title": "Performance review trigger: the paired hosted measurement at 79e20f3 gave median_ratio_pct=130.42 over 30 samples and the receipt stays pending by design.",
       "kind": "owner_decision",
       "affects": [
         "P15-04",
         "P15-17"
       ],
-      "evidence": "hosted rehearsal run 39866157056 job 120128744603 (failure by design)",
+      "evidence": "hosted rehearsal run 40043165875 job 120718692639 (failure by design)",
       "owner_decision": "Record a separate receipt-bound independent review decision. None exists and none is fabricated.",
       "status": "open",
       "counts_as_pass": false,
@@ -849,7 +849,7 @@
       "affects": [
         "P15-06"
       ],
-      "evidence": "hosted rehearsal run 39866157056 job 120136288189 (skipped)",
+      "evidence": "hosted rehearsal run 40043165875 job 120723131424 (skipped)",
       "owner_decision": "Rerun the rehearsal once the policy script is on the default branch and the ledger and performance decisions are made.",
       "status": "open",
       "counts_as_pass": false,
@@ -904,7 +904,7 @@
       "affects": [
         "P15-01"
       ],
-      "evidence": "15.1-08-SUMMARY.md; verify-workflow-policy.py --check residual_write_jobs=5",
+      "evidence": "15.1-08-SUMMARY.md; verify-workflow-policy.py --check residual_write_jobs=5; 15.1-33-SUMMARY.md residual GR-WR-03(a)-R channels A-F",
       "owner_decision": "Split them or accept the named set.",
       "status": "open",
       "counts_as_pass": false,
@@ -912,7 +912,7 @@
     },
     {
       "id": "LIM-REHEARSAL-FAILED",
-      "title": "The latest hosted release rehearsal at 2d25a47 is a failure: libfuzzer and package-consumers passed; corpus-and-support-sidecar, v02-evidence-aggregate and paired-performance failed; trusted-judge was skipped. The rehearsal is not a required check and is never counted as a pass.",
+      "title": "The latest hosted release rehearsal at 79e20f3 is a failure: libfuzzer and package-consumers passed; corpus-and-support-sidecar, v02-evidence-aggregate and paired-performance failed; trusted-judge was skipped. The rehearsal is not a required check and is never counted as a pass.",
       "kind": "external_limitation",
       "affects": [
         "P15-01",
@@ -920,7 +920,7 @@
         "P15-06",
         "P15-11"
       ],
-      "evidence": "15.1-hosted-evidence.json release-rehearsal run 39866157056",
+      "evidence": "15.1-hosted-evidence.json release-rehearsal run 40043165875",
       "owner_decision": "Resolve LIM-SUPPORT-LEDGER-PIN and LIM-PERF-REVIEW, then rerun the rehearsal before any release.",
       "status": "open",
       "counts_as_pass": false,

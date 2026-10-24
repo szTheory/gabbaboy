@@ -73,10 +73,11 @@ def deliverables(directory, problems=None):
             problems.extend(f'{summary.name}: schema {error}' for error in errors or [])
         for entry in rules.coverage_entries(content):
             # The schema checker truncates quoted refs, so read the full scalars here.
-            block = re.search(r'^  - id: ' + re.escape(entry['id']) +
-                              r'\n(.*?)(?=^  - id: |^\S|\Z)', content, re.M | re.S)
+            # The schema also accepts a quoted id (15.1-18 quotes two), so match either form.
+            block = re.search(r'^  - id: (["\']?)' + re.escape(entry['id']) +
+                              r'\1\n(.*?)(?=^  - id: |^\S|\Z)', content, re.M | re.S)
             need(block, 'missing coverage block')
-            refs = re.findall(r'^\s+ref: (.+)$', block[1], re.M)
+            refs = re.findall(r'^\s+ref: (.+)$', block[2], re.M)
             entry['uat_refs'] = [v[1:-1] if v[:1] in ('"', "'") and v[-1:] == v[:1] else v
                                  for v in refs]
             key = (summary.name, entry['id'])
@@ -213,12 +214,23 @@ def self_test(directory):
         shutil.copytree(directory, scratch)
         write(scratch, 'self-test')
         need(check(scratch) == total, 'regenerated closure rejected')
+    # A quoted coverage id is still the same deliverable, so the closure must be written and accepted.
+    with tempfile.TemporaryDirectory(prefix='gbb-uat-closure-') as name:
+        scratch = Path(name) / directory.name
+        shutil.copytree(directory, scratch)
+        path = scratch / first
+        original = path.read_text(encoding='utf-8')
+        quoted = re.sub(r'^(  - id: )([^"\'\s]\S*)$', r'\1"\2"', original, count=1, flags=re.M)
+        need(quoted != original, 'quoted-id: inactive mutation')
+        path.write_text(quoted, encoding='utf-8')
+        write(scratch, 'self-test')
+        need(check(scratch) == total, 'quoted coverage id rejected')
     # The checker itself must refuse an optimized interpreter, through the real CLI.
     refused = subprocess.run([sys.executable, '-O', str(Path(__file__).resolve()), str(directory)],
                              capture_output=True, text=True, check=False)
     need(refused.returncode != 0 and 'must not run with python -O' in refused.stderr,
          'optimized interpreter was not refused')
-    print(f'uat-closure self-test pass automated={total} controls={len(controls) + 2}')
+    print(f'uat-closure self-test pass automated={total} controls={len(controls) + 3}')
 
 
 def main():

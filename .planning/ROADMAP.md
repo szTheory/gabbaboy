@@ -51,7 +51,7 @@ Milestone-wide rules:
 - [x] **Phase 14: CGB-E Model Qualification and Corpus** - CGB-E APU/I/O deltas and a headless CGB-E corpus with per-suite denominators (completed 2026-10-15)
 - [x] **Phase 15: CGB Acceptance, Support Ledger and v0.2.0 Release** - CGB game-level evidence (or an explicit absence), current docs and consumers, and a qualified exact-tag release (completed 2026-10-20)
 
-- [ ] **Phase 15.1: Release Hardening and Milestone Debt Closure (INSERTED)** - Resolve actionable closeout findings before milestone archival; preserve published v0.2.0 evidence
+- [x] **Phase 15.1: Release Hardening and Milestone Debt Closure (INSERTED)** - Resolve actionable closeout findings before milestone archival; preserve published v0.2.0 evidence (completed 2026-10-24)
 
 ## Phase Details
 
@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 33/36 plans executed (19 original, 11 gap closure, 6 gap closure round 2); 30/36 executed; round 2 (15.1-31..36) planned for GR-CR-01 and the gap re-review findings (`/gsd-execute-phase 15.1 --gaps-only`)
+**Plans:** 36/36 plans complete (19 original, 11 gap closure, 6 gap closure round 2); round 2 (15.1-31..36) closed GR-CR-01 and triaged all nine gap re-review findings. Phase 15.1 stays open pending re-verification (`/gsd-verify-work 15.1`)
 
 Plans:
 **Wave 1**
@@ -607,13 +607,13 @@ Plans:
 - [x] 15.1-33-PLAN.md — Residual-job tokened-step command judge (channels A-E recorded as residual under LIM-RESIDUAL-WRITE-JOBS), fail-closed basename overlay matching, exact guard expressions; Windows device names; no GSD_TOOLS fallback; decide() reachability comment (GR-WR-03, GR-IN-01, GR-IN-02, GR-IN-03 evidence)
 
 **Gap2 Wave 2** *(blocked on Gap2 Wave 1)*
-- [ ] 15.1-34-PLAN.md — Full gate, exact-head gap PR and squash merge with delivery receipt (M2)
+- [x] 15.1-34-PLAN.md — Full gate, exact-head gap PR and squash merge with delivery receipt (M2)
 
 **Gap2 Wave 3** *(blocked on Gap2 Wave 2)*
-- [ ] 15.1-35-PLAN.md — Refresh local and hosted evidence at M2; strict-head recorded at boundary commit B35
+- [x] 15.1-35-PLAN.md — Refresh local and hosted evidence at M2; strict-head recorded at boundary commit B35
 
 **Gap2 Wave 4** *(blocked on Gap2 Wave 3)*
-- [ ] 15.1-36-PLAN.md — Triage all 9 gap re-review findings (GR-IN-03 deferred to P15-09), persist route /gsd-verify-work 15.1, docs PR, stop
+- [x] 15.1-36-PLAN.md — Triage all 9 gap re-review findings (GR-IN-03 deferred to P15-09), persist route /gsd-verify-work 15.1, docs PR, stop
 
 **Cross-cutting constraints:**
 - Historical behavioral and producer claims are preserved while strict coverage representation is machine-readable.
@@ -631,4 +631,4 @@ Plans:
 | 13. CGB HDMA | v0.2 | 12/12 | Complete    | 2026-10-14 |
 | 14. CGB-E Model Qualification and Corpus | v0.2 | 13/13 | Complete    | 2026-10-15 |
 | 15. CGB Acceptance, Support Ledger and v0.2.0 Release | v0.2 | 10/10 | Complete    | 2026-10-20 |
-| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 33/36 | In Progress | - |
+| 15.1. Release Hardening and Milestone Debt Closure | v0.2 | 36/36 | Complete    | 2026-10-24 |

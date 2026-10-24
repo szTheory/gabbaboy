@@ -1225,10 +1225,22 @@ RELEASE_LOCAL_PATH = "./.github/workflows/release.yml"
 CI_REQUIRED = (
     "cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=",
     "cmake --build --preset phase1-asan",
-    "ctest --preset phase1-asan --parallel 4 --output-on-failure --no-tests=error --output-junit ctest.xml",
-    "bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml tests/expected-tests.txt",
     "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --fast",
 )
+# The ASan inventory runs in two jobs apart from the fuzz campaign, which keeps its pinned 45-minute bound. Their
+# exact filters are complementary, and each checks exactly its slice of the expected inventory (LESSONS GB-CI-010).
+_ASAN_SHARD_BUILD = ("cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=", "cmake --build --preset phase1-asan")
+_ASAN_SHARD_INVENTORY = "bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt"
+CI_SANITIZER_SHARDS = {
+    "linux-sanitizers-tests": _ASAN_SHARD_BUILD + (
+        "ctest --preset phase1-asan --parallel 4 -E '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml",
+        "grep -vE '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt",
+        _ASAN_SHARD_INVENTORY),
+    "linux-sanitizers-acceptance": _ASAN_SHARD_BUILD + (
+        "ctest --preset phase1-asan --parallel 4 -R '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml",
+        "grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt",
+        _ASAN_SHARD_INVENTORY),
+}
 # (command, status variable, conditional by design): the sanitizer step runs under set +e so it can always retain
 # evidence, then must assert every recorded status after errexit is restored.
 CI_STATUS_CALLS = (
@@ -1236,7 +1248,7 @@ CI_STATUS_CALLS = (
     ("python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json", "verify_status", True),
     ("GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test", "self_test_status", True),
 )
-CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "cmake-floor-3-25-3", "player-gate", "macos-player-package"}
+CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "player-gate", "macos-player-package"}
 
 
 _FORBIDDEN_PRODUCER_HEADS = {"gh", "curl", "wget", "ssh", "scp"}
@@ -1366,13 +1378,19 @@ def check_ci(root: Path) -> None:
     _require_needs(name, "required-native", gate, CI_REQUIRED_NATIVE_NEEDS, "workflow-dependency")
     if str(gate.get("if", "")).strip() != "always()":
         raise Reject("workflow-dependency", "ci.required-native must run always() so skipped or failed lanes are rejected, not skipped")
-    for var, lane in (("LINUX_SANITIZERS", "linux-sanitizers"), ("NATIVE_LINUX", "native-linux"), ("CMAKE_FLOOR", "cmake-floor-3-25-3")):
+    for var, lane in (("LINUX_SANITIZERS", "linux-sanitizers"), ("LINUX_SANITIZER_TESTS", "linux-sanitizers-tests"),
+                       ("LINUX_SANITIZER_ACCEPTANCE", "linux-sanitizers-acceptance"),
+                       ("NATIVE_LINUX", "native-linux"), ("CMAKE_FLOOR", "cmake-floor-3-25-3")):
         mapped = [step.get("env", {}).get(var) for step in gate.get("steps", [])]
         if "${{ needs." + lane + ".result }}" not in mapped:
             raise Reject("workflow-dependency", f"ci.required-native must read the {lane} result")
     require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"')
     for command in CI_REQUIRED:
         require_call(name, "linux-sanitizers", job, command)
+    for shard, commands in CI_SANITIZER_SHARDS.items():
+        shard_job = _require_job(name, tree, shard)
+        for command in commands:
+            require_call(name, shard, shard_job, command)
     for command, var, conditional in CI_STATUS_CALLS:
         require_call(name, "linux-sanitizers", job, command, conditional=conditional, errexit_off=True, status_var=var)
 
@@ -1761,6 +1779,19 @@ def _mutations():
         _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-platform-manifest]",
            "candidate-windows]", "workflow-dependency"),
         _m("required-native stops waiting for the sanitizer lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers\n", "", "workflow-dependency"),
+        _m("required-native stops waiting for the sanitizer test lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers-tests\n", "",
+           "workflow-dependency"),
+        _m("required-native ignores the sanitizer test lane result", "ci.yml", "  required-native:\n",
+           "          LINUX_SANITIZER_TESTS: ${{ needs.linux-sanitizers-tests.result }}\n", "", "workflow-dependency"),
+        _m("sanitizer test lane drops its inventory check", "ci.yml", "  linux-sanitizers-tests:\n",
+           "          bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt\n", "", "required-command-not-executed"),
+        _m("required-native stops waiting for the sanitizer acceptance shard", "ci.yml", "  required-native:\n",
+           "      - linux-sanitizers-acceptance\n", "", "workflow-dependency"),
+        _m("sanitizer shards stop being complementary", "ci.yml", "  linux-sanitizers-acceptance:\n",
+           "-R '^acceptance_'", "-R '^acceptance_cgb'", "required-command-not-executed"),
+        _m("sanitizer acceptance shard checks the whole inventory instead of its slice", "ci.yml", "  linux-sanitizers-acceptance:\n",
+           "          grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt\n", "          cp tests/expected-tests.txt build-asan/expected-shard.txt\n",
+           "required-command-not-executed"),
         # Shared unprivileged producer contract (P15-15).
         _m("rehearsal corpus re-inlines the local tag setup", "release-rehearsal.yml", "  corpus:\n", _REHEARSAL_TAG_LINE,
            'git tag -f "$REHEARSAL_TAG" "$GITHUB_SHA"', "duplicate-rehearsal-setup"),
