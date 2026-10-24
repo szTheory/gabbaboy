@@ -6,6 +6,29 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 ## Current State
 
+**Shipped: v0.2 Color & Cartridge Breadth** (milestone closed 2026-10-24; release [`v0.2.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.2.0) published from tag source `ab301aa`, unsigned and not notarized). 10 phases (7–15 plus inserted 15.1), 170 plans, 28/28 requirements. The audit is `tech_debt` with no blockers: integration 14/15, flows 6/6, all phases Nyquist-compliant. Closeout type is `override_closeout`, because the runtime reports Phase 7–15 verification files as stale after later phases changed covered files; the re-audit at `5356d38` re-ran that evidence. Record: [MILESTONES.md](MILESTONES.md); archive: [roadmap](milestones/v0.2-ROADMAP.md), [requirements](milestones/v0.2-REQUIREMENTS.md), [audit](milestones/v0.2-MILESTONE-AUDIT.md).
+
+- **Supported (software model, tested corpus only):** bootless DMG-CPU-B and CGB-CPU-E in CGB and DMG-compatibility modes; ROM-only, MBC1, MBC2, MBC3 (with emulated-time RTC and explicit host catch-up) and MBC5; RGB555 colour, KEY1 double speed, general/HBlank HDMA; scoped four-channel audio; safe battery continuation; optional SDL3 macOS player with `--model`.
+- **Evidence scope:** one rights-clear DMG game (Libbet v0.08) at game level; no CGB game-level evidence exists, and the release says so. CGB corpus: 107 cases, 25 guest passes and 82 matched expected failures. Physical DMG-B and CGB-E hardware, perceptual output, signing and notarization, and live Playstead integration are not claimed. The hosted DMG paired benchmark is slower than v0.1.0 (+14.86% ±1.62% at the v0.2.0 release; the Phase 15.1 provenance-bound comparison confirms a disclosed 23.96% median slowdown).
+- **Code:** 14,644 lines of C in `src/` + `include/` (54,384 lines of tracked C/C++ in total); 1,183 registered CTest cases plus 5 install-gated; required CI on Linux, macOS and Windows (MinGW-w64).
+- **Open at close:** 0 open issues. 16 untriaged PRs: #75 (release-please 0.2.1) and #78–92. The twelve LIM rows need owner decisions (none accepted), and the hosted release rehearsal is still `not_verified`. Phase records for 7–15.1 stay in `.planning/phases/` because CTest reads files there.
+
+## Next Milestone Goals
+
+**v0.3 States & Integration (provisional, not started):** define it with `/gsd-new-milestone`. Revisable direction is in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md).
+
+- Transactional, versioned native save states (STATE-01) over the complete DMG+CGB machine state, designed once with explicit portable serialization.
+- A qualified Playstead adapter (INT-01) that exercises only the public API.
+- Carry-over candidates for owner triage at milestone definition:
+  - the twelve open LIM decisions;
+  - wiring the Phase 8 contract verifiers into CTest;
+  - moving the test helpers that live in phase directories into `tests/`, so the v0.2 phase records can be archived;
+  - the v0.2.1 advisories and release-please PR #75;
+  - the open PR backlog.
+
+<details>
+<summary>v0.2 phase-by-phase state history (superseded)</summary>
+
 Completed stage: **Phase 15.1 execution paused at owner request — 14/19 plans executed and summarized**. Plan 07 is complete at `842ee39`; Plan 08 task 1 has an incomplete, unstaged policy checker and no task commit or SUMMARY. Waves 1–3 and Plan 07 focused evidence are retained; Wave 4 integration has not run. The latest complete core gate tested source `8174104`: 1,140/1,144 passed in 397.51 seconds. Plan 07 subsequently repaired the ledger checks in focused verification; a new full gate is still required. Plan 10 owns the obsolete dense-failure expectation and live malformed-summary negative. Five plans plus final phase qualification remain. No phase completion, live hosted qualification, PR/merge, publication, or debt acceptance is claimed.
 
 Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
@@ -30,7 +53,7 @@ Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closu
 - **Evidence scope:** admitted corpus is three source-qualified derived Mooneye CPU/timer closures plus original project ROMs. No physical hardware, perceptual output, signing/notarization, or live Playstead integration is claimed.
 - **Open:** No open issues or PRs at the v0.2 start (2026-10-10); releases `v0.1.0` and `v0.1.2` published. Accepted info-level debt is listed in the [v0.1 audit](milestones/v0.1-MILESTONE-AUDIT.md).
 
-## Current Milestone: v0.2 Color & Cartridge Breadth
+**Milestone definition (v0.2 Color & Cartridge Breadth):**
 
 **Goal:** Play supported CGB software and the common MBC2/MBC3/MBC5 cartridge set (with deterministic RTC) through the same bounded core and player, after first proving one rights-clear game end to end on the existing DMG player.
 
@@ -41,6 +64,8 @@ Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closu
 - Updated support ledger, docs, release notes, and a qualified v0.2 release scoped to the tested corpus.
 
 Deferred to v0.3 (States & Integration): transactional versioned save states (STATE-01) and a qualified Playstead adapter (INT-01), so serialization is designed once over the complete DMG+CGB machine state.
+
+</details>
 
 ## Core Value
 
@@ -72,13 +97,11 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 - ✓ An explicit record that no CGB game-level evidence exists, a current v0.2.0 support ledger with docs and relocated consumers, and an exact-tag qualified v0.2.0 release with corpus, fuzz, performance, consumer and source-archive receipts (CGB-11, SHIP-09..11) — Phase 15, goal verification 12/12, automated UAT 42/42; the release is unsigned and not notarized.
 
+- ✓ Release hardening and milestone debt closure without republishing v0.2.0: closeout scan and disposition ledgers, point-in-time boundary verifiers, automated UAT closure and Nyquist validation 82/82 (EVID-02, SHIP-09..11 re-verified) — Phase 15.1; the twelve LIM rows remain owner decisions. All 28 v0.2 requirements validated — v0.2.
+
 ### Active
 
-v0.2 Color & Cartridge Breadth (scoped in [REQUIREMENTS.md](REQUIREMENTS.md)):
-
-- All 28 v0.2 requirements have passing implementation verification; the historical milestone audit leaves three SUMMARY traces partial; Phase 7 Nyquist reconciliation is now complete with a strengthened diagnostic test. See [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md). Phase 11/13 SUMMARY claims are now reconciled using existing passed evidence; current three-source traces agree for 28/28 requirements. Next: `/gsd-audit-milestone`.
-
-Next (v0.3, provisional): transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01).
+No milestone is active. v0.3 States & Integration is provisional: transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01). `/gsd-new-milestone` writes a fresh REQUIREMENTS.md. All 28 v0.2 requirements are validated above, and their archive is [v0.2-REQUIREMENTS.md](milestones/v0.2-REQUIREMENTS.md).
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
@@ -89,7 +112,7 @@ Ongoing project principles: dependency-light C API with explicit contracts; head
 - A game library manager, accounts, online services, or mandatory telemetry — frontend concerns outside the core.
 - Universal compatibility, unmeasured “fastest” claims, or instruction-test pass rates presented as game compatibility.
 - JIT, plugin frameworks, a generic multi-console bus, and broad scripting before demonstrated need.
-- SGB/SGB2, additional silicon revisions, uncommon cartridge peripherals, link accessories, rewind/runahead, and web/mobile ports in the first milestone — retain as revisable future scope.
+- SGB/SGB2, additional silicon revisions, uncommon cartridge peripherals, link accessories, rewind/runahead, and web/mobile ports in v0.1–v0.2 — retain as revisable future scope.
 
 ## Context
 
@@ -137,6 +160,10 @@ Ongoing project principles: dependency-light C API with explicit contracts; head
 | Preserve measured oracle failures as exact-signature dispositions | A two-case pass cannot substantiate all admitted AGE behavior | Verified in Phase 12: DIV/STOP-prefetch pass, eleven qualified expected failures; M28 mode-0 sensitivity retained |
 | Rehearse exact-tag release producers on the version PR tree before tagging | Release-only jobs never run in ordinary CI | ✓ Good — Phase 15: the rehearsal found three defects before the tag; a fourth (assumed package wrapper) failed the first tagged run and was fixed before publishing, without replacing assets |
 | Insert a debt-closure phase before closing a milestone | The first audit returned `tech_debt`; closing it first gave a clean `passed` re-audit | ✓ Good — Phase 06.1 |
+| Boundary checks read facts from the boundary commit, never the live HEAD | Live-route and ancestry assertions drifted as later commits landed and produced false gaps | ✓ Good — Phase 15.1 (strict-head replay per boundary commit; seven validation rows still read live state) |
+| Automated UAT closure with zero human checkpoints | Repeatable acceptance belongs in contract checks with negative controls, not manual readings (D-069) | ✓ Good — Phases 13–15.1 closed UAT via `verify-uat-closure.py` |
+| Keep v0.2 phase records in place at milestone close | CTest and closeout verifiers read helper scripts and records in `.planning/phases/`; moving them would break main | ⚠️ Revisit — move the helpers into `tests/`, then archive with `/gsd-cleanup` |
+| Second debt-closure phase (15.1) before v0.2 archival | The post-release audit found actionable closeout debt; owner-only LIM decisions stayed explicit rather than silently accepted | ✓ Good — re-audit `tech_debt` with no blockers; 12 LIM rows still need owner decisions |
 
 ## Evolution
 
@@ -145,4 +172,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-20 after Phase 8 package verification refresh; Phase 12 metadata verification refresh next.
+Last updated: 2026-10-24 after the v0.2 Color & Cartridge Breadth milestone.

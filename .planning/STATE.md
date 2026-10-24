@@ -2,88 +2,41 @@
 gsd_state_version: "1.0"
 milestone: v0.2
 milestone_name: Color & Cartridge Breadth
-current_phase: "15.1"
 current_plan: Not started
-status: completed
-stopped_at: v0.2 milestone re-audit tech_debt (no blockers); next /gsd-complete-milestone v0.2
-last_updated: "2026-10-24T19:00:00.000Z"
+status: Awaiting next milestone
+stopped_at: v0.2 milestone completed and archived (override_closeout); next /gsd-new-milestone
+last_updated: "2026-10-24T19:01:39.203Z"
 last_activity: 2026-10-24
-last_activity_desc: v0.2 milestone re-audit (tech_debt)
-state_head: 329407b43ed10517922d4dcf8320db03adb5e77f
+last_activity_desc: v0.2 milestone completed and archived
+state_head: 07204ac477c8d485799fd2e6137a1541b8365170
 progress:
   total_phases: 10
   completed_phases: 10
   total_plans: 170
   completed_plans: 170
   percent: 100
+current_phase: "15.1"
 ---
 
 # Project State
 
 ## Project Reference
 
-See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
+See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 15.1 — Release Hardening and Milestone Debt Closure (INSERTED)
+**Current focus:** Planning the next milestone (v0.3 States & Integration, provisional and not started)
 
 ## Current Position
 
-Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — COMPLETE, verified
-Status: v0.2 audit tech_debt (no blockers); milestone completion pending owner debt review
+Phase: Milestone v0.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-10-24 — Milestone v0.2 completed and archived
 
-Completed stage (2026-10-24): **v0.2 milestone re-audit after Phase 15.1 Nyquist validation**, bound to source `5356d38` (main after PR #100). Result **tech_debt**, with no blocker: requirements 28/28 satisfied, phases 10/10 passed and all Nyquist-compliant, integration 14/15 connections (one warning: the Phase 8 contract verifiers have no CTest/CI caller), flows 6/6. Fresh checks at the source: `acceptance_` 74/74, focused cross-phase slice 290/290, `ctest -N` 1183, and main's push CI run 40114394844 green. Report: [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) and [v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md); accounting check `python3 .planning/verify-v02-milestone-audit.py --self-test` (26 negative controls). No LIM row was accepted or closed (owner_accepted=0).
+Completed stage (2026-10-24): **v0.2 Color & Cartridge Breadth milestone completion** (`/gsd-complete-milestone v0.2`). Closeout type is `override_closeout`: the runtime reports Phase 7–15 VERIFICATION.md files as stale after later phases changed covered files, and the owner chose to proceed on the `5356d38` re-audit evidence (28/28 requirements, `tech_debt` with no blockers). One open artifact was acknowledged: Phase 14's clean `14-UAT-REVIEW.md` is flagged as a UAT gap. The roadmap, requirements, milestone audit, integration audit and the quick task are archived under [milestones/](milestones/). Phase directories stay in `phases/`, because CTest reads files there. The record is in [MILESTONES.md](MILESTONES.md); [RETROSPECTIVE.md](RETROSPECTIVE.md) is updated. Milestone tag `v0.2` goes on the merged archive commit; release `v0.2.0` is unchanged. No LIM row was accepted, nothing was republished, and v0.3 is not started.
 
-Exact next command (owner's choice; not run automatically): `/gsd-complete-milestone v0.2`, starting with an explicit review of the debt in the audit: the twelve owner LIM decisions, the Phase 8 verifier warning and triage of open PRs #75 and #78–92. Alternative: insert a cleanup phase after 15.1. Do not tag, release, archive or start v0.3 automatically. Both auto flags stay false.
-
-Earlier route (ran 2026-10-24): `/gsd-audit-milestone`.
-
-Superseded stage (2026-10-24): **v0.2 milestone re-audit after Phase 15.1 verification**, bound to source `c49e3ba` (main after docs PR #98). Result **gaps_found**: requirements 28/28 satisfied, phases 10/10 passed, integration 14/15 connections (one warning: the Phase 8 contract verifiers have no CTest/CI caller), flows 6/6. The only gap is Phase 15.1 Nyquist: `15.1-VALIDATION.md` keeps `nyquist_compliant: false` (rows 15.1-15-2 and 15.1-16-2 partial; plans 15.1-31..36 have no validation rows). Report: [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) and [v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md); accounting check `python3 .planning/verify-v02-milestone-audit.py --self-test` (26 negative controls). No LIM row was accepted or closed.
-
-Earlier route (ran 2026-10-24): `/gsd-validate-phase 15.1`.
-
-Completed stage (2026-10-24): **Phase 15.1 Nyquist validation** (`/gsd-validate-phase 15.1`) at main `31bc956` (after PR #99). `15.1-VALIDATION.md` is now `nyquist_compliant: true`, with 82 of 82 rows green. Plans 15.1-31..36 gained 16 rows: 14 pass as written, and 2 now read their facts from the boundary commit, with negative controls. Row 15.1-15-2 is green because the GB-13 deferred linker note is resolved with fresh-build evidence, so the closeout scan is CLEAR. Row 15.1-16-2 is green: the hosted fuzz receipt at c49e3ba is verified, and strict-head is replayed at every boundary commit. Warning: seven rows still read live state (listed in the VALIDATION sign-off). The milestone audit file is now stale; its gaps_found was based only on this Nyquist gap.
-
-Exact next command (owner's choice; not run automatically): `/gsd-audit-milestone` (re-audit v0.2); only after a clean re-audit, `/gsd-complete-milestone v0.2`. Do not tag, release, archive or start v0.3 automatically. Both auto flags stay false.
-
-Earlier stage, superseded route preserved:
-
-
-Completed stage (2026-10-24): **Phase 15.1 verification - verify-work complete; Phase 15.1 is complete and v0.2 has no further phase**. `15.1-UAT.md` closes all 141 deliverables of plans 15.1-01..36 automatically with zero human checkpoints (`verify-uat-closure.py --write`, self-test 21 controls). `15.1-VERIFICATION.md` passes 5/5 on the final tree; the verify-time code review (`15.1-GAP2-REVIEW.md`) found 0 critical, 0 warning, 1 info (GR2-IN-01 deferred). Full local gate 1183/1183 at four tests at once. Verify-time fixes, each with a negative control: quoted coverage ids in the UAT closure checker; the CMake floor suite runs in parallel; the ASan inventory runs as two complementary 45-minute shards apart from the bounded fuzz campaign, whose pinned bound is unchanged (lesson GB-CI-010). Everything ships in docs PR #98, squash-merged only at exact-head green required checks; its merge receipt is recorded at the next boundary, not asserted from a later HEAD.
-
-Exact next command (owner's choice; not run automatically): `/gsd-audit-milestone`. Next stage: v0.2 milestone audit (no further numbered phase). Do not tag, release, archive, republish v0.2.0 or start v0.3 automatically. Both auto flags stay false. The open owner decisions below are unchanged; none is a pass or an owner acceptance, and the hosted release rehearsal stays `not_verified`.
-
-Earlier stage, superseded route preserved:
-
-Completed stage (2026-10-23): **Phase 15.1 gap closure round 2 (plans 15.1-31..36)**. Gap PR #97 squash-merged to `main` as M2 = `79e20f356ac953fa7dcd3aa5e2b7d96eb9b747e1` at head `c864d9309ebe788e464fe94ca3f98face0a9c71f`; evidence was refreshed at M2 (15.1-35) and strict-head passes at boundary commits `9de8cf0f3ceb60ae0acc6a79ae7a5889082200f2` (15.1-35) and `3346233bc139865c844d0fa81358f7b481fe0a31` (15.1-36), recorded in `15.1-strict-head-boundaries.tsv`. The docs PR is #98, opened by 15.1-36 from `gsd/phase-15.1-gap2-evidence`; its number and merge receipt are read live by PR number. All nine findings of `15.1-GAP-REVIEW.md` are triaged in `15.1-GAP-REVIEW-DISPOSITION.md` (open 0 of 9), with controls re-run at the docs-branch head in `15.1-GAP2-CLOSURE-EVIDENCE.md`:
-- GR-CR-01: fixed with bidirectional `--verify-hosted` controls and a HEAD-read mutant (15.1-31).
-- GR-WR-01, GR-WR-02, GR-IN-01, GR-IN-02, GR-IN-04, GR-IN-05: fixed, each with a named negative control (15.1-31..33).
-- GR-WR-03: closed_with_residual, never fixed or accepted; residual GR-WR-03(a)-R (bypass channels A-F) stays under `LIM-RESIDUAL-WRITE-JOBS`.
-- GR-IN-03: deferred to P15-09 (`--decide` is reached through `--check-recovery`; its full-scope published branch only on a concurrent publish after `--check-draft`).
-Superseded route (ran 2026-10-24): `/gsd-verify-work 15.1`.
-Open owner decisions (none is a pass or owner acceptance; smallest action each): `LIM-SUPPORT-LEDGER-PIN` choose a release ledger for the post-0.2.0 source; `LIM-PERF-REVIEW` record a receipt-bound independent review decision for median_ratio_pct=130.42 at M2; `LIM-RESIDUAL-WRITE-JOBS` (now also carrying residual GR-WR-03(a)-R, channels A-F) remove the token from jobs that read the tagged tree, or accept the named set; `LIM-TRUSTED-JUDGE` rerun the rehearsal after the decisions above; the GB-13 linker note, close or acknowledge it at re-audit; `P15-09` (now including GR-IN-03) optionally ask for published-state verification in the workflow; and the remaining LIM rows: `LIM-REHEARSAL-FAILED` same rerun, `LIM-HIST-AUDIO-RED` and `LIM-HIST-M7` decide whether fresh evidence substitutes, `LIM-SHIP11-UNCLASSIFIED` supply a predicate or accept the edge, `LIM-NO-HOST-WRONG-ROM` accept the local control or request a hosted negative dispatch, `LIM-WINDOWS-POSIX-CONTROLS` accept POSIX-only coverage or add Windows controls, `LIM-ASAN-STALL-TIMING` decide on the slower ASan lane, `LIM-PROHIBITION-FLAGS` supply descriptors or keep the flags.
-Boundary triage (2026-10-23): 0 open issues; 16 open PRs (#75 release-please, #78-92 verification refresh stack), none touched. Remote branches `gsd/phase-15.1-gap-evidence` and `gsd/phase-15.1-gap2-evidence` stay because they hold strict-head boundary commits.
-
-Superseded route (preserved below): the 2026-10-22 gap-closure stage and the round-2 planning stage.
-
-Completed stage (2026-10-22): **Phase 15.1 gap closure (plans 15.1-20..30)**. Gap PR #94 squash-merged to `main` as M = `2d25a47f1b05844b4da829aa9d0978f2cb348df1`; evidence was refreshed at M (15.1-26) and strict-head passes at boundary commits `01ecebeddf0f2d85492ab9c77c7e40c32d70b2c7` (15.1-26) and `1ca0b26559b8c7a195ae2bf553086fbffd028c95` (15.1-27), recorded in `15.1-strict-head-boundaries.tsv`. SC2: WR-01..WR-07 and IN-01..IN-08 are all fixed in `15.1-REVIEW-DISPOSITION.md` (open 0 of 15), each with a negative control re-run at the docs-branch head (`15.1-GAP-CLOSURE-EVIDENCE.md`). SC1/SC3: strict-head pass at M. The docs PR #95 (gap receipt, refreshed evidence, dispositions, route) is delivered by 15.1-27; its merge receipt is read live by PR number.
-Completed stage (2026-10-23): **Phase 15.1 gap-closure execution and its post-execution verification**, run on branch `gsd/phase-15.1-verification`. Results: Nyquist 27/27 new rows green; security 40 threats, 0 open; regression gate 1177/1177 with the DMG baseline passing. The verifier returned **gaps_found** with 4 of 5 must-haves met, in `15.1-VERIFICATION.md`. The re-review `15.1-GAP-REVIEW.md` of the 24 gap-changed source files found 1 critical, GR-CR-01: `verify_hosted` in `tests/scripts/verify-v02-fuzz.py` judges the workflow contract against HEAD's `ci.yml` and `run-bounded-fuzz.sh`, not the source commit's, so the WR-04 fix is incomplete. It is latent at M because those files are identical at M and HEAD, and the recorded evidence and v0.2.0 are unaffected. The same review found 3 warnings and 5 info items. All 9 are open in `15.1-GAP-REVIEW-DISPOSITION.md`.
-Completed stage (2026-10-23): **Phase 15.1 gap planning, round 2** (plans 15.1-31..36, `gap_closure: true`, on branch `gsd/phase-15.1-gap2` from origin/main `74d0fb0`). 15.1-31 closes GR-CR-01 (source-commit `ci.yml`, runner and FUZZ_ARGS judged by HEAD, bidirectional `--verify-hosted` controls plus a mutant); 15.1-32 and 15.1-33 fix GR-WR-01/02, GR-IN-01/02/04/05 and GR-WR-03(b,c); 15.1-34..36 deliver, refresh evidence at the new merge commit and triage all nine findings. Owner decision 2026-10-23 (narrow scope): GR-WR-03(a) is judged by command head, including nested substitutions, in the five residual-role jobs only; bypass channels A-F are recorded as residual GR-WR-03(a)-R under `LIM-RESIDUAL-WRITE-JOBS`, so GR-WR-03 becomes closed_with_residual and is never accepted. GR-IN-03 is deferred to P15-09. The plan checker ran 3 iterations; the last pass's remaining items were addressed in a targeted owner-approved revision without a fourth check. Wave 1 plans 31 and 32 both edit `tests/CMakeLists.txt` in separate hunks, so execute-phase runs that wave sequentially.
-**Superseded route:** the round-2 execution command `/gsd-execute-phase 15.1 --gaps-only` has run; the current route is `/gsd-verify-work 15.1` above.
-Open owner decisions (none is a pass or owner acceptance; smallest action each): `LIM-SUPPORT-LEDGER-PIN` choose a release ledger for the post-0.2.0 source (published v0.2.0 text is not rewritten); `LIM-PERF-REVIEW` record a receipt-bound independent review decision for median_ratio_pct=129.13; `LIM-RESIDUAL-WRITE-JOBS` split or accept the five jobs; `LIM-TRUSTED-JUDGE` rerun the rehearsal after the two decisions above; `LIM-REHEARSAL-FAILED` same rerun; the GB-13 linker note, close or acknowledge it at re-audit; `LIM-HIST-AUDIO-RED` and `LIM-HIST-M7` decide at re-audit whether fresh evidence substitutes; `LIM-SHIP11-UNCLASSIFIED` supply a predicate or accept the edge; `LIM-NO-HOST-WRONG-ROM` accept the local control or request a hosted negative dispatch; `LIM-WINDOWS-POSIX-CONTROLS` accept POSIX-only coverage or add Windows controls; `LIM-ASAN-STALL-TIMING` decide on the slower ASan lane; `LIM-PROHIBITION-FLAGS` supply descriptors or keep the flags.
-Boundary triage (2026-10-22): 0 open issues; 15 open PRs (#75 release-please, #78-92 verification refresh stack), none touched.
-Deferred follow-ups: symlinked-checkout path portability defect in `cgb_corpus_report_platform_controls`; CTest 4.4 prints `100% tests passed out of N` (the 15.1-26 plan verify grep expects `, 0 tests failed`).
-
-Current Plan: Not started
-Total Plans in Phase: 36
-
-Completed stage: **Phase 15.1 execution - all 19 plans executed and summarized; Plan 17 closed the 24 dispositions**. `15.1-DISPOSITIONS.json` gives every scope item an individual source-backed disposition (11 closed, 11 closed with a named residual, 2 open historical unknowns) checked by `verify-closeout-dispositions.py` (30 real-CLI rejection controls). Twelve limitations stay open and are neither passes nor owner acceptances: support-ledger pin drift, the performance review trigger, the unexercised trusted rehearsal judge, the pre-fix audio_saturation RED and isolated M7 unknowns, the SHIP-11 unclassified edge (flagged unresolved assumption), five residual write jobs, the failed hosted rehearsal, no hosted wrong-ROM run, two descriptor-less prohibition flags, three Windows-skipped POSIX controls and an undiagnosed hosted ASan stall timing. Full gate 1164/1164 at `785d55c`. The review is not independent (recorded). The phase PR, exact head, required check runs and merge are recorded from live API readback in `15.1-delivery-receipt.json`. Both auto flags stay false; no tag, release, archive or v0.3 work. **Next:** standard Phase 15.1 verification, `/gsd-verify-work 15.1`; after that the owner chooses `/gsd-audit-milestone`.
-
-Verification (2026-10-21): PR #93 squash-merged as `09805f3` at reviewed head `34b8939` with required-native, fixture-repro and preview-package-smoke success on that head. Regression gate 1164/1164 at `32ca3f9` (main-equal source). Nyquist 37/39 green (15-2 GB-13 deferred note blocks the closeout scan; 16-2 strict-head hosted evidence stale). Independent security audit 20/20 plan threats closed, threats_open 0. Independent code review: 0 critical, 7 warning (WR-01 persisted write credentials in candidate jobs, WR-02 Windows backslash archive escape, WR-03 replay STOP mismatch, WR-04 retry cannot publish after main moves, WR-05 assert-based verifier, WR-06 textual release gates, WR-07 token sent to unvalidated API URL), 8 info, all open. `15.1-VERIFICATION.md` status **gaps_found** (3/4 criteria): open review warnings and hosted evidence stale at the final source. Owner decisions still pending: support-ledger route, performance review, residual write jobs, GB-13 linker note.
-
-Next stage: **Phase 15.1 gap closure planning** (Phase 15.1 is not complete). Exact next command: `/gsd-plan-phase 15.1 --gaps`; then `/gsd-execute-phase 15.1 --gaps-only`. Only after verification passes does the owner choose `/gsd-audit-milestone`.
-
-Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md) and its machine-readable inventory track all 21 audit debts, both closeout scan items and the inherited SUMMARY schema caveat. Validate each finding before fixing; preserve historical unknowns and all v0.2.0 producer receipts. Reuse existing research and completed implementation. Both automatic advance flags remain false; v0.3 is provisional and unstarted.
+Exact next command (owner's choice; not run automatically): `/gsd-new-milestone` (v0.3 States & Integration, provisional: STATE-01, INT-01). At milestone definition, triage the twelve open LIM decisions, the Phase 8 verifier wiring, the phase-directory helpers and open PRs #75 and #78–92. Both auto flags stay false.
 
 ### Historical Phase 12 metadata verification refresh
 
@@ -132,7 +85,7 @@ Status: planning
 Current Plan: Not started
 Total Plans in Phase: 13
 Last Activity: 2026-10-24
-Last Activity Description: Phase 15.1 complete
+Last Activity Description: v0.2 milestone completed and archived
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
@@ -652,30 +605,32 @@ None outside the roadmap.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 261020-hr8 | Reconcile Phase 11 and 13 SUMMARY claims for CGB-05, CGB-09 and CGB-07 | 2026-10-20 | ba27c4b | [261020-hr8-reconcile-phase-11-and-13-summary-comple](./quick/261020-hr8-reconcile-phase-11-and-13-summary-comple/) |
 
 ### Roadmap Evolution
 
 - Phase 06.1 inserted after Phase 6: Address v0.1 tech debt: CI workflow info items and audio consumer coverage (URGENT)
 - 2026-10-10: v0.2 roadmap created — Phases 7–15 continue v0.1 numbering. Order follows research/v0.2/SUMMARY.md: acceptance + DMG baseline (7); seam merged with MBC5 and MBC2 (8, MBC5/MBC2 plans parallel after the seam plan); MBC3 + RTC + loader matrix + new-mapper continuation (9); CGB profile/banking (10); colour PPU + player colour (11); double speed (12) and HDMA (13) kept separate and sequential; CGB-E qualification + corpus (14); CGB acceptance, ledger and release (15). Deep phase research flagged for 9, 11, 12, 13, 14. Rights gates: G5/G2 on 7; G1 on 9, 11, 14; G3 on 9; G4 on 11.
 - Phase 15.1 inserted after Phase 15: Release Hardening and Milestone Debt Closure; owner chose recommended resolve-first closeout (URGENT)
+- 2026-10-24: v0.2 milestone completed and archived (override_closeout). The ROADMAP is collapsed to milestone groupings, and the phase records stay in place because CTest reads them.
 
 ## Deferred Items
 
-Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped); deferred v0.3 items (STATE-01, INT-01) and later direction are in its Future section and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md), not counted in active coverage.
+Items acknowledged and deferred at milestone close, most recent first:
+
+| Category | Item | Status | Deferred At | Milestone |
+|----------|------|--------|-------------|-----------|
+| uat_gaps | GB-14-cgb-e-model-qualification-and-corpus/14-UAT-REVIEW.md | clean (0 pending scenarios; scanner false positive) | 2026-10-24 | v0.2 |
+
+The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQUIREMENTS.md) (28/28 complete). Deferred v0.3 items (STATE-01, INT-01) and later direction are in its Future section and [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md).
 
 ## Session Continuity
 
 **Last session:** 2026-10-22T23:05:55.490Z
-**Stopped at:** v0.2 milestone re-audit tech_debt; next is the owner's `/gsd-complete-milestone v0.2`
+**Stopped at:** v0.2 milestone completed and archived (override_closeout); next is the owner's `/gsd-new-milestone`
 **Resume file:** None
 
-Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
-
-Next phase: **15.1 — Release Hardening and Milestone Debt Closure**. Exact next command: `/gsd-execute-phase 15.1`.
-
-Scope: [15.1-SCOPE.md](phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-SCOPE.md) and its machine-readable inventory track all 21 audit debts, both closeout scan items and the inherited SUMMARY schema caveat. Validate each finding before fixing; preserve historical unknowns and all v0.2.0 producer receipts. Reuse existing research and completed implementation. Both automatic advance flags remain false; v0.3 is provisional and unstarted.
+Completed stage: **v0.2 milestone completion** (see Current Position). Next stage: **define the next milestone** (v0.3 States & Integration, provisional). Exact next command: `/gsd-new-milestone`. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
-Run `/gsd-execute-phase 15.1`. Milestone completion remains deferred until cleanup and renewed audit. Preserve the pre-existing config edits.
+- Start the next milestone with /gsd-new-milestone

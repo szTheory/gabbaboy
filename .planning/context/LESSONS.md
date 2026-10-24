@@ -888,3 +888,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** `ci_floor_parallel_contract`, `ci_floor_parallel_serial_selftest`, `ci_asan_parallel_contract`, `verify-workflow-policy.py --self-test` (164 negative controls), `cgb_hdma_lane_contract_selftest`, `verify-cgb-corpus-inventory.py --ci-contract`; hosted durations on PR #98.
 - **Source:** Phase 15.1 verify-work; ci runs 40045416222, 40045420290.
 - **Status:** Adopted.
+
+### GB-GSD-026 / 2026-10-24 / Keep test-consumed files out of phase directories that milestone close will move
+
+- **Cause and evidence:** At the v0.2 close, `milestone.complete --confirm` archives phase directories by default and moved all ten v0.2 phase directories (`GB-07`..`GB-15.1`) to `milestones/v0.2-phases/`. But `tests/CMakeLists.txt` registers `.planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py` (line 1208) and the GB-15 UAT-closure phase (line 2687), and seven test scripts open files under the GB-08, GB-13, GB-14, GB-15 and GB-15.1 phase directories. Main would have lost those tests. At v0.1 nothing in `tests/` referenced a phase directory, so archiving there was safe.
+- **Remedy:** The move was reverted. The diff of the archived copy against the restored tree showed only `__pycache__` and the acknowledgement marker. The close then went ahead with phase directories in place (equivalent to `--no-archive-phases`). Only the roadmap, requirements, audits and quick task were archived, and links in the archived documents were repointed.
+- **Applies when:** A plan puts a verifier, fixture or record that CTest or CI reads inside a phase directory, or a milestone close is about to archive phases. Put reusable checkers in `tests/scripts/`. Before archiving, run `grep -rn 'planning/phases' tests .github CMakeLists.txt cmake`, and archive only when the grep is empty (or once the references point at the archive path).
+- **Verification:** the grep above lists 9 consumer files at v0.2 close; `ctest` over the affected tests passes with phase directories in place.
+- **Source:** v0.2 `/gsd-complete-milestone`.
+- **Status:** Adopted. Follow-up: move the helpers into `tests/`, then archive the v0.2 phase records.

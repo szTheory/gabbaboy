@@ -45,6 +45,49 @@
 
 ---
 
+## Milestone: v0.2 — Color & Cartridge Breadth
+
+**Shipped:** 2026-10-24 (release `v0.2.0` published from tag source `ab301aa`)
+**Phases:** 10 (7–15 plus inserted 15.1) | **Plans:** 170 | **Tasks:** 172 | **Commits:** 137 over 15 days
+
+### What Was Built
+- Libbet v0.08 game-level acceptance on DMG-CPU-B, both headless and in the packaged player, plus a frozen DMG baseline that gated every later phase.
+- A type-table mapper seam with MBC5, MBC2 and MBC3, an emulated-time RTC, explicit host catch-up and a versioned battery block.
+- The CGB-CPU-E profile: banking, register visibility, RGB555 colour and a compatibility palette, KEY1 double speed with a measured stall, and general/HBlank HDMA.
+- A pinned CGB-E corpus of 107 cases (25 passes, 82 matched expected failures), with an explicit record that no CGB game-level evidence exists.
+- The qualified `v0.2.0` release (corpus, fuzz, performance, consumer and source-archive receipts), then a 36-plan hardening phase that bound closeout evidence to immutable commits.
+
+### What Worked
+- Freezing the DMG baseline first. Every CGB and mapper phase proved DMG output unchanged with one live CTest, not by argument.
+- Measurement-pinned dispositions (exact-signature expected failures) kept CGB claims honest without tuning constants to pass oracles.
+- Rehearsing the exact-tag release producers on the version PR found three defects before tagging.
+- Automated UAT closure (`verify-uat-closure.py`) with negative controls removed manual checkpoints from Phases 13–15.1.
+
+### What Was Inefficient
+- Phase 15.1 grew to 36 plans across two gap-closure rounds, plus a validation pass and two re-audits. Several of those rounds existed only to fix verifiers that read live HEAD state instead of boundary commits (GB-GSD-024, GB-VERIFY-002, GB-EVID-002).
+- Hosted jobs near their timeouts were re-run repeatedly before anyone compared per-test durations; PR #98 needed seven CI attempts (GB-CI-010).
+- Verification freshness went stale again. By close, the runtime reported Phase 7–15 reports stale, which forced an `override_closeout` even though the audit re-ran the cross-phase evidence (GB-GSD-008 again).
+- Test-consumed helpers lived in phase directories, so the default phase archive would have broken main (GB-GSD-026).
+
+### Patterns Established
+- Boundary checks read point-in-time facts from the boundary commit (strict-head replay per boundary), never from the live HEAD.
+- Disposition ledgers: every audit debt is `closed`, `closed_with_residual` or `limitation_open` with an owner action. Nothing is silently accepted.
+- Each support claim names the model and corpus revision, and is kept separate from each execution receipt (GB-RELEASE-003).
+- Merges happen only at exact-head green required checks, and the merge receipt is recorded at the next boundary.
+
+### Key Lessons
+1. Write verifiers against an immutable commit from the start. Retrofitting point-in-time reads cost a whole gap-closure round.
+2. Keep reusable checkers in `tests/scripts/`, not phase directories, so milestone archival stays a pure move.
+3. When a hosted job fails on timeout twice, compare durations before re-running.
+4. Plan a freshness strategy for long milestones: either re-verify at close or accept a documented override bound to a fresh audit.
+
+### Cost Observations
+- Model mix: not recorded. The integration checker resolved to Haiku. Orchestration and execution ran on Opus.
+- Sessions: not recorded.
+- Notable: releasing at Phase 15 and then hardening in 15.1 took about four days, about as long as the four CGB feature phases (11–14) together.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -52,13 +95,17 @@
 | Milestone | Phases | Plans | Key Change |
 |-----------|--------|-------|------------|
 | v0.1 | 7 | 64 | Exact-head CI gate, freshness-checked verification, debt-closure phase before close |
+| v0.2 | 10 | 170 | Frozen DMG baseline gate, exact-tag release rehearsal, boundary-commit verifiers, zero-checkpoint automated UAT |
 
 ### Cumulative Quality
 
 | Milestone | Local CTest | Fuzz targets | New runtime deps in core |
 |-----------|-------------|--------------|--------------------------|
 | v0.1 | 184/184 (06.1 regression) | loader, battery, API (bounded) | 0 (SDL only in the optional player) |
+| v0.2 | 1183/1183 (15.1 verify) | v0.1 set plus hosted 60 s libFuzzer ASan/UBSan campaign | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 
-1. (Populated once a lesson is confirmed in a second milestone.)
+1. Verification freshness goes stale whenever late phases touch shared files, so budget a refresh or a documented override at close (GB-GSD-008; v0.1 and v0.2).
+2. Close a `tech_debt` audit with an inserted debt phase before archiving (06.1 and 15.1). Owner-only decisions stay explicit rather than accepted.
+3. A local pass, a stale run or a branch commit is not hosted proof. Bind evidence to the exact head or merge commit (v0.1 exact-head gate; v0.2 GB-EVID-002).

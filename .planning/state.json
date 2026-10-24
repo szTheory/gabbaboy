@@ -57,7 +57,7 @@
   "next": {
     "command": "/gsd-new-milestone",
     "label": "Start a new milestone",
-    "reason": "All phases complete — start a new milestone"
+    "reason": "v0.2 milestone completed and archived — define v0.3 (provisional)"
   },
-  "updated_at": "2026-10-24T08:44:03.474Z"
+  "updated_at": "2026-10-24T19:01:39.214Z"
 }

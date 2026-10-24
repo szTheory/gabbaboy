@@ -7,7 +7,7 @@
   "plan": 9,
   "task": 0,
   "total_tasks": 3,
-  "status": "resumed",
+  "status": "historical",
   "completed_tasks": [],
   "current_task_progress": "Plan 08 complete (6 commits, SUMMARY written). Partial checker was replaced. Resume with /gsd-execute-phase 15.1 at Plan 09.",
   "completed_plans": [
@@ -83,7 +83,7 @@
   ],
   "uncommitted_files_snapshot": "Measured before pause-document writes; these same three source/user items are intended to remain uncommitted after handoff commit.",
   "partial_file_sha256": "eb20cc11fd80bbe52242542d0328cb5744177365960246f8984587ab7d6b253b",
-  "next_action": "Read phase .continue-here.md, acknowledge actual blocking anti-patterns, inspect preserved partial workflow checker, then resume Plan08 task1 via /gsd-execute-phase 15.1. Do not replay completed plans.",
-  "resume_command": "/gsd-execute-phase 15.1",
+  "next_action": "v0.2 milestone completed and archived; Phase 15.1 execution finished and was verified. Next: /gsd-new-milestone",
+  "resume_command": "/gsd-new-milestone",
   "context_notes": "Phase execution paused at owner request, not complete or technically blocked. Plan07 completed before pause; Plan08 stopped safely with no active owned command. See 15.1-PAUSE-EVIDENCE.json and sanitized RED output."
 }

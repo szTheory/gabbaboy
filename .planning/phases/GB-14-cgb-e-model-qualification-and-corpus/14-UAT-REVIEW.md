@@ -19,6 +19,10 @@ findings:
   info: 0
   total: 0
 status: clean
+audit_acknowledged:
+  milestone: v0.2
+  at: 2026-10-24
+  gap_snapshot: "clean::scenarios=0"
 ---
 
 # Phase 14: Automated UAT Closure Review
