@@ -159,13 +159,19 @@ def check(text, data):
 def self_test(text, data):
     fm = front(text)
     status = scalar(fm, 'status')
-    mutations = [text.replace(f'status: {status}', 'status: passed', 1),
-                 text.replace(f'status: {status}', 'status: tech_debt', 1),
-                 text.replace('  requirements: 28/28', '  requirements: 25/28', 1),
+    # Each mutation flips the recorded value, so the controls stay non-trivial
+    # whether the report is gaps_found or clean.
+    partial = re.search(r'^  partial_phases: \[(.*)\]$', fm, re.M)[1]
+    overall = re.search(r'^  overall: (\w+)$', fm, re.M)[1]
+    mutations = [text.replace(f'status: {status}', f'status: {other}', 1)
+                 for other in ('passed', 'gaps_found', 'tech_debt') if other != status]
+    mutations += [text.replace('  requirements: 28/28', '  requirements: 25/28', 1),
                  text.replace('  phases: 10/10', '  phases: 9/9', 1),
-                 re.sub(r'  integration: \d+/\d+', '  integration: 15/15', text, count=1),
-                 re.sub(r'  partial_phases: \[.*\]', '  partial_phases: []', text, count=1),
-                 text.replace('  overall: partial', '  overall: compliant', 1),
+                 re.sub(r'  integration: \d+/\d+', '  integration: 1/15', text, count=1),
+                 re.sub(r'  partial_phases: \[.*\]', '  partial_phases: [' + ('' if partial else '7') + ']',
+                        text, count=1),
+                 text.replace(f'  overall: {overall}',
+                              '  overall: ' + ('compliant' if overall == 'partial' else 'partial'), 1),
                  text.replace('\nnext_command: ', '\nnext_command: /gsd-complete-milestone v0.2 #', 1),
                  re.sub(r'summary_count: \d+', 'summary_count: 134', text, count=1),
                  text.replace('  requirements: []', '  requirements:\n    - id: CGB-99', 1)]
@@ -193,8 +199,13 @@ def self_test(text, data):
         if change == 'nyquist-regress':
             altered['phases']['7']['nyquist'] = 'PARTIAL'
         elif change == 'nyquist-fixed':
-            for p in altered['phases'].values():
-                p['nyquist'] = 'COMPLIANT'
+            # Flip the last phase's recorded Nyquist state in whichever direction applies.
+            last = altered['phases'][list(altered['phases'])[-1]]
+            if all(p['nyquist'] == 'COMPLIANT' for p in altered['phases'].values()):
+                last['nyquist'] = 'NOT-VALIDATED'
+            else:
+                for p in altered['phases'].values():
+                    p['nyquist'] = 'COMPLIANT'
         else:
             altered['requirements'][0]['status'] = 'unsatisfied'
             if change == 'orphaned':
