@@ -1,5 +1,21 @@
 # Phase 15.1 continuation
 
+Completed stage (2026-10-23): **Phase 15.1 gap closure round 2 (plans 15.1-31..36)**. Gap PR #97 was squash-merged to `main` as M2 = 79e20f356ac953fa7dcd3aa5e2b7d96eb9b747e1 (receipt `15.1-gap2-delivery-receipt.json`); evidence was refreshed at M2 and strict-head rows for boundary commits 9de8cf0 (15.1-35) and 3346233 (15.1-36) are in `15.1-strict-head-boundaries.tsv`. All nine findings of `15.1-GAP-REVIEW.md` are triaged (open 0 of 9): GR-CR-01, GR-WR-01, GR-WR-02, GR-IN-01, GR-IN-02, GR-IN-04 and GR-IN-05 fixed with negative controls re-run at the docs head; GR-WR-03 closed_with_residual (residual GR-WR-03(a)-R, channels A-F, under LIM-RESIDUAL-WRITE-JOBS, never fixed or accepted); GR-IN-03 deferred to P15-09. **Phase 15.1 stays open pending re-verification.**
+
+Exact next command (the only one): `/gsd-verify-work 15.1`. Next stage: Phase 15.1 re-verification (no new numbered phase). Do not run `/gsd-audit-milestone`, tag, release, archive, republish v0.2.0 or start v0.3; after verification passes the owner chooses the audit. Both auto flags stay false.
+
+Docs PR: DOCS_PR_PLACEHOLDER (squash merge only at exact-head green required checks), opened by 15.1-36 from `gsd/phase-15.1-gap2-evidence`; its merge receipt is read live from the GitHub API by PR number, because it cannot sit inside the head it describes. The remote branch `gsd/phase-15.1-gap2-evidence` must stay (do not delete it): the squash merge leaves boundary commits 9de8cf0 and 3346233 off main, and verify-work re-evaluates strict-head in detached worktrees at those commits. The branch `gsd/phase-15.1-gap-evidence` must also stay.
+
+Open owner decisions and the smallest action for each are listed in STATE.md (LIM-SUPPORT-LEDGER-PIN, LIM-PERF-REVIEW, LIM-RESIDUAL-WRITE-JOBS with residual GR-WR-03(a)-R, LIM-TRUSTED-JUDGE, LIM-REHEARSAL-FAILED, the GB-13 linker note, P15-09 including GR-IN-03, and the remaining LIM rows of 15.1-DISPOSITIONS.md). The rehearsal run 40043165875 at M2 failed only on LIM-SUPPORT-LEDGER-PIN, LIM-PERF-REVIEW (median_ratio_pct=130.42) and LIM-TRUSTED-JUDGE; no owner decision was made. The disposable remote branch `rehearsal/phase-15.1-79e20f3` still exists.
+
+Deferred follow-ups: symlinked-checkout path portability defect in `cgb_corpus_report_platform_controls`; CTest 4.4 prints `100% tests passed out of N`. Hosted runner timing observation (budgets unchanged): linux-asan-ubsan hit its 45 minute bound once and cmake-floor-3.25.3 its 40 minute bound twice during PR #97; re-runs passed.
+
+---
+
+Earlier history (superseded route, preserved):
+
+# Phase 15.1 continuation
+
 Completed stage (2026-10-23): **Phase 15.1 gap-closure execution (plans 15.1-20..30) and its post-execution verification gates**. Nyquist: 27/27 new rows green. Security: 40 threats, 0 open. Regression: 1177/1177 tests and the DMG baseline pass. Verifier: **gaps_found** (4/5 must-haves). The remaining blocker is GR-CR-01 in `15.1-GAP-REVIEW.md`: `verify_hosted` judges the workflow contract against HEAD's `ci.yml` and fuzz runner rather than the source commit's. It is latent at M 2d25a47 and is closed by reading both files via `commit_blob(expected_sha, ...)`, with a moved-`ci.yml` negative control in both directions through the real `--verify-hosted` CLI. GR-WR-01..03 and GR-IN-01..05 are open in `15.1-GAP-REVIEW-DISPOSITION.md` and must be triaged.
 
 Gap planning round 2 completed 2026-10-23: plans 15.1-31..36 on branch `gsd/phase-15.1-gap2` (see STATE.md for scope and the narrow-scope owner decision on GR-WR-03(a)).

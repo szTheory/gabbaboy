@@ -871,3 +871,11 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** Evidence is produced on a branch that is later squash-merged, or a check compares against HEAD.
 - **Verification:** 15.1-strict-head-boundaries.tsv rows 15.1-26 and 15.1-27 reproduce byte for byte in detached worktrees; the historical `--check` rejects the old source until re-produced.
 - **Source:** Phase 15.1 plans 15.1-26 and 15.1-27; `tests/scripts/verify-historical-limitations.py`.
+
+### GB-VERIFY-002 / 2026-10-23 / A verifier that binds the subject to commit S but reads S's describing inputs from the trusted checkout fails open, then closed, after main moves
+
+- **Cause and evidence:** `verify_hosted` in `verify-v02-fuzz.py` pinned the receipt to source commit S but judged the workflow contract against HEAD's `ci.yml`, `run-bounded-fuzz.sh` and FUZZ_ARGS literals. A weak S passed after main was strengthened (`AssertionError: 0 != 1 : fixture_hosted=pass qualification=none`), and a conforming S failed after main changed (`receipt rejected: selected sanitizer job timeout must remain bounded between 30 and 45 minutes`). It was latent because the files were identical at M and HEAD (GR-CR-01, 15.1-31).
+- **Remedy:** Read the files that describe the campaign from S as data through a bounded `commit_blob`, and keep the judging code and required limits at HEAD. Controls diverge those inputs between S and HEAD in both directions through the real CLI, and a mutant that reads HEAD must fail them.
+- **Applies when:** Any verifier that takes a commit identity and also reads configuration, workflow or fixture files describing that commit from the working tree.
+- **Verification:** `verify-v02-fuzz.py --self-test` prints `negative-control=weak-source-workflow-rejected-after-main-strengthened`, `positive-control=conforming-source-workflow-accepted-after-main-changed`, `negative-control=weak-source-fuzz-args-rejected` and `negative-control-sensitivity=head-read-contract-mutant-fails-open`.
+- **Source:** Phase 15.1 plan 15.1-31; `tests/scripts/verify-v02-fuzz.py`; `15.1-GAP2-CLOSURE-EVIDENCE.md`.

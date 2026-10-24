@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 35/36 plans executed (19 original, 11 gap closure, 6 gap closure round 2); 30/36 executed; round 2 (15.1-31..36) planned for GR-CR-01 and the gap re-review findings (`/gsd-execute-phase 15.1 --gaps-only`)
+**Plans:** 36/36 plans executed (19 original, 11 gap closure, 6 gap closure round 2); round 2 (15.1-31..36) closed GR-CR-01 and triaged all nine gap re-review findings. Phase 15.1 stays open pending re-verification (`/gsd-verify-work 15.1`)
 
 Plans:
 **Wave 1**
@@ -613,7 +613,7 @@ Plans:
 - [x] 15.1-35-PLAN.md — Refresh local and hosted evidence at M2; strict-head recorded at boundary commit B35
 
 **Gap2 Wave 4** *(blocked on Gap2 Wave 3)*
-- [ ] 15.1-36-PLAN.md — Triage all 9 gap re-review findings (GR-IN-03 deferred to P15-09), persist route /gsd-verify-work 15.1, docs PR, stop
+- [x] 15.1-36-PLAN.md — Triage all 9 gap re-review findings (GR-IN-03 deferred to P15-09), persist route /gsd-verify-work 15.1, docs PR, stop
 
 **Cross-cutting constraints:**
 - Historical behavioral and producer claims are preserved while strict coverage representation is machine-readable.
