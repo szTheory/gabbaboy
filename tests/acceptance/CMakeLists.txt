@@ -298,14 +298,15 @@ gbb_span_mutant_test(test_events_mutant_wake_all_budget
   gabbaboy_core_span_mutant_wake_all_budget ".*")
 # 929ce2e: borrowed-span outputs must not overlap the span, its events or its cursor. Treating every
 # non-null output as disjoint removes the check. The 12 aliasing calls are then no longer all rejected; the count
-# aliases stay rejected by the validation-independent count pre-check, so the printed total only has to match
-# "rejected=N/12" (the denominator is SPAN_OUTPUT_ALIAS_CASES in tests/test_acceptance_lib.c).
+# aliases stay rejected by the validation-independent count pre-check, so the mutant prints exactly
+# "rejected=10/12" (measured; the numerator is pinned so a mutant that rejects more or fewer is noticed, and the
+# denominator is SPAN_OUTPUT_ALIAS_CASES in tests/test_acceptance_lib.c).
 gbb_span_core_mutant(output_alias "    if (span == NULL) return 1;"
   "    if (span == NULL || output != NULL) return 1;")
 gbb_span_mutant_test(test_acceptance_lib_mutant_output_alias
   ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_lib.c TRUE
   acceptance_drive_mutant_output_alias acceptance_drive_mutant_output_alias_control
-  acceptance_input_span_output_alias "span-output alias rejected=[0-9]+/12" acceptance_input_span_edges
+  acceptance_input_span_output_alias "span-output alias rejected=10/12" acceptance_input_span_edges
   gabbaboy_core_span_mutant_output_alias "PASS acceptance_input_span_edges")
 # WR-03: the diagnostic replay and the main stepper share gbb_accept_stop_resumable. The mutant is the real
 # stepper.c with exactly one anchored edit: the replay-side STOPPED decision inside gbb_accept_diag_advance is
@@ -348,6 +349,18 @@ gbb_span_mutant_test(test_acceptance_lib_mutant_replay_stop_resume
   acceptance_replay_mutant_stop_resume acceptance_replay_mutant_stop_resume_control
   acceptance_replay_stop_resume_parity "replay-stop-parity" acceptance_drive_stop_resume_main
   gabbaboy_accept_bare_stepper_mutant_replay_stop_resume "PASS acceptance_drive_stop_resume_main")
+
+# GR-WR-02: gbb_accept_diag_advance refuses an origin past the deadline. The mutant deletes that one guard
+# line; the origin-past-deadline parity row then sees a core run instead of GUARD. The control case is the
+# main-drive-only test, which the diagnostic guard cannot affect.
+set(GBB_GUARD_ORIGIN_ANCHOR "    if (guard_origin_half_dots > deadline) return GBB_ACCEPT_STEP_GUARD;\n")
+gbb_accept_stepper_mutant(guard_origin "${GBB_GUARD_ORIGIN_ANCHOR}" "")
+gbb_span_mutant_test(test_acceptance_lib_mutant_guard_origin
+  ${CMAKE_CURRENT_LIST_DIR}/../test_acceptance_lib.c FALSE
+  acceptance_replay_mutant_guard_origin acceptance_replay_mutant_guard_origin_control
+  acceptance_replay_stop_resume_parity "replay-stop-parity guard-origin sub=origin-past-deadline"
+  acceptance_drive_stop_resume_main
+  gabbaboy_accept_bare_stepper_mutant_guard_origin "PASS acceptance_drive_stop_resume_main")
 
 # IN-04: GBB_ACCEPT_SCRIPT_MAX_EVENTS must not exceed GBB_ACCEPT_INPUT_SPAN_MAX_EVENTS. stepper.c carries the
 # _Static_assert. Two scratch trees hold private copies of stepper.c, gbb_accept.h and gbb_accept_input.h in

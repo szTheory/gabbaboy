@@ -25,7 +25,7 @@ void gbb_accept_stepper_init(gbb_accept_stepper *stepper, gbb_instance *instance
 
 bool gbb_accept_stop_resumable(const gbb_accept_input_span *span, uint64_t deadline,
                                uint64_t consumed_half_dots, uint64_t budget_half_dots) {
-    return span != NULL && *span->cursor < span->count &&
+    return span != NULL && span->cursor != NULL && span->events != NULL && *span->cursor < span->count &&
            span->events[*span->cursor].at_half_dots <= deadline &&
            consumed_half_dots < budget_half_dots;
 }
@@ -35,6 +35,8 @@ enum gbb_accept_step_status gbb_accept_diag_advance(
     const gbb_accept_input_span *span, gbb_trace_record *trace, size_t trace_capacity,
     gbb_diagnostic_record *diagnostics, size_t diagnostic_capacity,
     gbb_accept_diag_visit_fn visit, void *visit_context, uint64_t guard_origin_half_dots) {
+    /* An origin past the deadline would underflow the guard into an effectively unbounded loop. */
+    if (guard_origin_half_dots > deadline) return GBB_ACCEPT_STEP_GUARD;
     /* The guard base is the caller's logical time, not the actual counter: a carried instruction makes
      * them differ and the diagnostic pass has always sized its guard from logical time. */
     uint64_t guard = (deadline - guard_origin_half_dots) / 4u + 1024u;

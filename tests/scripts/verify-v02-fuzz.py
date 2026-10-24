@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import http.client
 import http.server
 import ipaddress
 import io
@@ -29,11 +30,15 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = Path(__file__).resolve()
 WORKFLOW = ".github/workflows/ci.yml"
+RUNNER_SOURCE = "tests/scripts/run-bounded-fuzz.sh"
+VALIDATOR_SOURCE = "tests/scripts/verify-v02-fuzz.py"
 EXPECTED_REPOSITORY = "szTheory/gabbaboy"
 EXPECTED_BRANCH = "main"
 EXPECTED_JOB_KEY = "linux-sanitizers"
 EXPECTED_JOB_NAME = "linux-asan-ubsan"
 SCHEMA_VERSION = 1
+# Largest SOURCE_FILES blob is tests/CMakeLists.txt (about 289 KB); a hostile commit cannot make us read more.
+MAX_COMMIT_BLOB_BYTES = 8 * 1024 * 1024
 CAMPAIGN_SECONDS = 60
 SOURCE_FILES = (
     "CMakeLists.txt",
@@ -132,13 +137,13 @@ def source_commit() -> str:
     return commit
 
 
-def source_manifest(commit: str, *, compare_worktree: bool = True) -> dict[str, str]:
+def source_manifest(commit: str, *, compare_worktree: bool = True, repo: Path = ROOT) -> dict[str, str]:
     if not HEX_160.fullmatch(commit):
         raise ReceiptError("source SHA must be a full 40-character commit")
     result: dict[str, str] = {}
     for relative in SOURCE_FILES:
         committed = subprocess.run(
-            ["git", "show", f"{commit}:{relative}"], cwd=ROOT,
+            ["git", "show", f"{commit}:{relative}"], cwd=repo,
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
         )
         if committed.returncode != 0:
@@ -234,11 +239,20 @@ def commit_blob(commit: str, relative: str) -> bytes:
     """Read one file from the commit tree; the commit, not the checkout, is the subject."""
     if not HEX_160.fullmatch(commit):
         raise ReceiptError("source SHA must be a full 40-character commit")
+    sized = subprocess.run(
+        ["git", "cat-file", "-s", f"{commit}:{relative}"], cwd=ROOT,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+    )
+    if sized.returncode != 0 or not sized.stdout.strip().isdigit():
+        raise ReceiptError(f"source input absent at source SHA: {relative}")
+    size = int(sized.stdout.strip())
+    if size > MAX_COMMIT_BLOB_BYTES:
+        raise ReceiptError(f"source input exceeds MAX_COMMIT_BLOB_BYTES at source SHA: {relative}")
     result = subprocess.run(
         ["git", "show", f"{commit}:{relative}"], cwd=ROOT,
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
     )
-    if result.returncode != 0:
+    if result.returncode != 0 or len(result.stdout) != size:
         raise ReceiptError(f"source input absent at source SHA: {relative}")
     return result.stdout
 
@@ -340,7 +354,7 @@ def workflow_job_id(repository: str, run_id: int, attempt: int) -> int | None:
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             payload = json.loads(response.read(2 * 1024 * 1024))
-    except (OSError, ValueError, urllib.error.URLError):
+    except (OSError, ValueError, http.client.HTTPException):
         return None
     if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
         return None
@@ -890,11 +904,9 @@ def verify_hosted(
         supplied_receipt = validate_receipt(
             supplied_path, expected_sha=expected_sha, source_commit_only=True,
         )
-    check_workflow_contract(
-        ROOT / WORKFLOW,
-        runner_source=ROOT / "tests/scripts/run-bounded-fuzz.sh",
-        validator_source=SCRIPT,
-    )
+    # The campaign ran S's ci.yml, S's runner and S's FUZZ_ARGS, so those files are read from S as
+    # data; only this judging code (and the REQUIRED_LIMITS it compares against) is HEAD's.
+    check_workflow_contract_text(*source_contract_texts(expected_sha))
     receipt_workflow = supplied_receipt["workflow"]
     if (str(receipt_workflow.get("run_id")) != expected_run_id
             or receipt_workflow.get("attempt") != expected_attempt
@@ -1089,10 +1101,21 @@ def selected_job_block(workflow: str) -> str:
     return "\n".join(lines[start:end]) + "\n"
 
 
+def source_contract_texts(commit: str) -> tuple[str, str, str]:
+    """Workflow, runner and validator texts as they were at the source commit (subject data)."""
+    texts: list[str] = []
+    for relative in (WORKFLOW, RUNNER_SOURCE, VALIDATOR_SOURCE):
+        try:
+            texts.append(commit_blob(commit, relative).decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            raise ReceiptError("workflow contract source at source SHA is not UTF-8") from exc
+    return texts[0], texts[1], texts[2]
+
+
 def check_workflow_contract(
     workflow_path: Path,
     *,
-    runner_source: Path = ROOT / "tests/scripts/run-bounded-fuzz.sh",
+    runner_source: Path = ROOT / RUNNER_SOURCE,
     validator_source: Path = SCRIPT,
 ) -> None:
     try:
@@ -1101,6 +1124,10 @@ def check_workflow_contract(
         validator = validator_source.read_text(encoding="utf-8")
     except OSError as exc:
         raise ReceiptError("workflow contract source is unavailable") from exc
+    check_workflow_contract_text(workflow, runner, validator)
+
+
+def check_workflow_contract_text(workflow: str, runner: str, validator: str) -> None:
     job = selected_job_block(workflow)
     if not re.search(r"(?m)^    name: linux-asan-ubsan$", job):
         raise ReceiptError("selected sanitizer job name must be linux-asan-ubsan")
@@ -1164,14 +1191,16 @@ class ReceiptContractTests(unittest.TestCase):
             env=environment, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
         )
 
-    def hosted_fixture_receipt(self, head: str, run_id: int, attempt: int, job_id: int) -> bytes:
+    def hosted_fixture_receipt(
+        self, head: str, run_id: int, attempt: int, job_id: int, *, repo: Path = ROOT,
+    ) -> bytes:
         receipt = {
             "schema_version": SCHEMA_VERSION,
             "status": "complete",
             "mode": "explore",
             "source_sha": head,
-            "source_tree": git_output("rev-parse", f"{head}^{{tree}}"),
-            "source_inputs": source_manifest(head, compare_worktree=False),
+            "source_tree": git_output("rev-parse", f"{head}^{{tree}}", cwd=repo),
+            "source_inputs": source_manifest(head, compare_worktree=False, repo=repo),
             "compiler": {
                 "label": "clang-18", "version": "clang version 18.1.0", "major": 18,
                 "cmake_compiler_id": "Clang", "libfuzzer": True, "asan": True, "ubsan": True,
@@ -1195,10 +1224,10 @@ class ReceiptContractTests(unittest.TestCase):
         return (json.dumps(receipt, sort_keys=True) + "\n").encode("utf-8")
 
     def hosted_fixture_server(
-        self, head: str, *, mutation: str | None = None,
+        self, head: str, *, mutation: str | None = None, repo: Path = ROOT,
     ) -> tuple[http.server.ThreadingHTTPServer, threading.Thread]:
         run_id, attempt, job_id = 17001, 1, 27001
-        receipt_bytes = self.hosted_fixture_receipt(head, run_id, attempt, job_id)
+        receipt_bytes = self.hosted_fixture_receipt(head, run_id, attempt, job_id, repo=repo)
         artifact_receipt_bytes = receipt_bytes
         if mutation == "forged-receipt-bytes":
             altered = json.loads(receipt_bytes)
@@ -1395,10 +1424,10 @@ class ReceiptContractTests(unittest.TestCase):
         digest = sha256_bytes(target.read_bytes())
         if expected_digest is not None and digest != expected_digest:
             self.fail("head-independence: verifier bytes differ from fixed digest")
-        server, thread = self.hosted_fixture_server(source)
+        server, thread = self.hosted_fixture_server(source, repo=clone)
         with tempfile.TemporaryDirectory(prefix="gb-fuzz-hosted-clone.") as directory:
             receipt = Path(directory) / "supplied-receipt.json"
-            receipt.write_bytes(self.hosted_fixture_receipt(source, 17001, 1, 27001))
+            receipt.write_bytes(self.hosted_fixture_receipt(source, 17001, 1, 27001, repo=clone))
             environment = os.environ.copy()
             environment.update({"GITHUB_API_URL": f"http://127.0.0.1:{server.server_port}",
                                 "GITHUB_TOKEN": "fixture-token-must-not-leak"})
@@ -1456,6 +1485,121 @@ class ReceiptContractTests(unittest.TestCase):
         self.assertIn("requested source SHA does not match the current checkout", result.stdout)
         print("negative-control=head-equality-mutant-rejects-moved-main")
 
+    SANITIZER_TIMEOUT_ANCHOR = (
+        b"    name: linux-asan-ubsan\n    runs-on: ubuntu-24.04\n    timeout-minutes: 45\n"
+    )
+    SANITIZER_TIMEOUT_WEAK = (
+        b"    name: linux-asan-ubsan\n    runs-on: ubuntu-24.04\n    timeout-minutes: 90\n"
+    )
+
+    def edit_once(self, data: bytes, anchor: bytes, replacement: bytes) -> bytes:
+        self.assertEqual(data.count(anchor), 1, "fixture edit anchor must occur exactly once")
+        return data.replace(anchor, replacement, 1)
+
+    def diverged_clone(
+        self, directory: Path, source: str, verifier: bytes,
+        source_edit: tuple[str, bytes, bytes] | None,
+        head_edit: tuple[str, bytes, bytes] | None,
+    ) -> tuple[Path, str]:
+        """Clone, commit S' (source_edit on S), then commit H on top (verifier, head_edit, moved marker).
+
+        S' exists only in the clone, so every receipt fact the fixture derives must come from the clone.
+        """
+        clone = directory / "clone"
+        subprocess.run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(clone)],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["git", "checkout", "--quiet", "--detach", source], cwd=clone, check=True)
+        identity = ["git", "-c", "user.name=GabbaBoy fixture", "-c", "user.email=fixture@users.noreply.invalid",
+                    "-c", "commit.gpgsign=false"]
+        original: dict[str, bytes] = {}
+        if source_edit is not None:
+            relative, anchor, replacement = source_edit
+            original[relative] = (clone / relative).read_bytes()
+            (clone / relative).write_bytes(self.edit_once(original[relative], anchor, replacement))
+            subprocess.run(["git", "add", relative], cwd=clone, check=True)
+            subprocess.run([*identity, "commit", "--quiet", "--no-verify", "-m", "fixture: source variant"],
+                           cwd=clone, check=True, stdout=subprocess.DEVNULL)
+        source_prime = git_output("rev-parse", "HEAD", cwd=clone)
+        for relative, data in original.items():
+            (clone / relative).write_bytes(data)
+            subprocess.run(["git", "add", relative], cwd=clone, check=True)
+        if head_edit is not None:
+            relative, anchor, replacement = head_edit
+            (clone / relative).write_bytes(self.edit_once((clone / relative).read_bytes(), anchor, replacement))
+            subprocess.run(["git", "add", relative], cwd=clone, check=True)
+        (clone / "tests/scripts/verify-v02-fuzz.py").write_bytes(verifier)
+        (clone / ".gb-fixture-main-moved").write_text("main moved past the release commit\n", encoding="utf-8")
+        subprocess.run(["git", "add", "tests/scripts/verify-v02-fuzz.py", ".gb-fixture-main-moved"],
+                       cwd=clone, check=True)
+        subprocess.run([*identity, "commit", "--quiet", "--no-verify", "--allow-empty", "-m", "fixture: main moved"],
+                       cwd=clone, check=True, stdout=subprocess.DEVNULL)
+        self.assertNotEqual(git_output("rev-parse", "HEAD", cwd=clone), source_prime)
+        return clone, source_prime
+
+    def test_hosted_cli_rejects_weak_source_workflow_after_main_strengthened(self) -> None:
+        fixed = SCRIPT.read_bytes()
+        base = git_output("rev-parse", "HEAD")
+        weak = (WORKFLOW, self.SANITIZER_TIMEOUT_ANCHOR, self.SANITIZER_TIMEOUT_WEAK)
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-weak-source.") as directory:
+            clone, source = self.diverged_clone(Path(directory), base, fixed, weak, None)
+            result, _digest = self.run_clone_hosted_cli(clone, source, fixed, sha256_bytes(fixed))
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("selected sanitizer job timeout must remain bounded between 30 and 45 minutes", result.stdout)
+        self.assertNotIn("fixture_hosted=pass", result.stdout)
+        print("negative-control=weak-source-workflow-rejected-after-main-strengthened")
+
+    def test_hosted_cli_accepts_conforming_source_after_main_workflow_changed(self) -> None:
+        fixed = SCRIPT.read_bytes()
+        base = git_output("rev-parse", "HEAD")
+        # S' must differ from S so it is a real clone-only commit; a harmless whitespace-free edit of
+        # the conforming job keeps it conforming (timeout 44 is inside the 30..45 bound).
+        conforming_variant = (WORKFLOW, self.SANITIZER_TIMEOUT_ANCHOR,
+                              self.SANITIZER_TIMEOUT_ANCHOR.replace(b"45", b"44"))
+        head_weak = (WORKFLOW, self.SANITIZER_TIMEOUT_ANCHOR, self.SANITIZER_TIMEOUT_WEAK)
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-conforming-source.") as directory:
+            # Main's workflow is changed to a non-conforming shape after S' (the H commit).
+            clone, source = self.diverged_clone(Path(directory), base, fixed, conforming_variant, head_weak)
+            self.assertIn(b"timeout-minutes: 90", (clone / WORKFLOW).read_bytes())
+            result, _digest = self.run_clone_hosted_cli(clone, source, fixed, sha256_bytes(fixed))
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("fixture_hosted=pass qualification=none", result.stdout)
+        print("positive-control=conforming-source-workflow-accepted-after-main-changed")
+
+    def test_hosted_cli_rejects_weak_source_fuzz_args(self) -> None:
+        fixed = SCRIPT.read_bytes()
+        base = git_output("rev-parse", "HEAD")
+        # The element line with its indentation and newline occurs once in the FUZZ_ARGS tuple at S.
+        weak = ("tests/scripts/verify-v02-fuzz.py",
+                b'    "-max_total_time=60",\n', b'    "-max_total_time=3600",\n')
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-weak-args.") as directory:
+            clone, source = self.diverged_clone(Path(directory), base, fixed, weak, None)
+            result, _digest = self.run_clone_hosted_cli(clone, source, fixed, sha256_bytes(fixed))
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("validator fuzzer argument contract does not match the bounded campaign", result.stdout)
+        print("negative-control=weak-source-fuzz-args-rejected")
+
+    def test_hosted_cli_head_read_contract_mutant_fails_open(self) -> None:
+        fixed = SCRIPT.read_bytes()
+        anchor = (b'commit_blob(commit, relative)' + b'.decode("utf-8")')
+        if fixed.count(anchor) != 1:
+            self.fail("mutation anchor must occur exactly once (source_contract_texts is missing)")
+        mutant = fixed.replace(anchor, b'(ROOT / relative).read_bytes()' + b'.decode("utf-8")', 1)
+        self.assertNotEqual(sha256_bytes(mutant), sha256_bytes(fixed))
+        base = git_output("rev-parse", "HEAD")
+        weak = (WORKFLOW, self.SANITIZER_TIMEOUT_ANCHOR, self.SANITIZER_TIMEOUT_WEAK)
+        conforming_variant = (WORKFLOW, self.SANITIZER_TIMEOUT_ANCHOR,
+                              self.SANITIZER_TIMEOUT_ANCHOR.replace(b"45", b"44"))
+        head_weak = (WORKFLOW, self.SANITIZER_TIMEOUT_ANCHOR, self.SANITIZER_TIMEOUT_WEAK)
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-head-read-mutant-a.") as directory:
+            clone, source = self.diverged_clone(Path(directory), base, fixed, weak, None)
+            weak_result, _digest = self.run_clone_hosted_cli(clone, source, mutant, sha256_bytes(mutant))
+        with tempfile.TemporaryDirectory(prefix="gb-fuzz-head-read-mutant-b.") as directory:
+            clone, source = self.diverged_clone(Path(directory), base, fixed, conforming_variant, head_weak)
+            legit_result, _digest = self.run_clone_hosted_cli(clone, source, mutant, sha256_bytes(mutant))
+        self.assertEqual(weak_result.returncode, 0, weak_result.stdout)
+        self.assertEqual(legit_result.returncode, 1, legit_result.stdout)
+        print("negative-control-sensitivity=head-read-contract-mutant-fails-open")
+
     def test_hosted_cli_rejects_unknown_source(self) -> None:
         unknown = "0123456789abcdef" * 2 + "01234567"
         absent = subprocess.run(["git", "cat-file", "-e", f"{unknown}^{{commit}}"], cwd=ROOT,
@@ -1475,6 +1619,7 @@ class ReceiptContractTests(unittest.TestCase):
 
     def call_workflow_job_id(
         self, api_url: str, payload: bytes | None,
+        *, read_error: Exception | None = None, open_error: Exception | None = None,
     ) -> tuple[int | None, list[str]]:
         """Call workflow_job_id with urlopen replaced by a recorder; no real network is used."""
         seen: list[str] = []
@@ -1487,10 +1632,14 @@ class ReceiptContractTests(unittest.TestCase):
                 return None
 
             def read(self, _limit: int = -1) -> bytes:
+                if read_error is not None:
+                    raise read_error
                 return payload or b""
 
         def recorder(request: urllib.request.Request, timeout: float | None = None) -> Response:
             seen.append(request.full_url)
+            if open_error is not None:
+                raise open_error
             if payload is None or urllib.parse.urlsplit(request.full_url).hostname != "api.github.com":
                 raise urllib.error.URLError("fixture refuses the request")
             return Response()
@@ -1540,6 +1689,35 @@ class ReceiptContractTests(unittest.TestCase):
             thread.join(timeout=2)
         self.assertEqual(requests_seen, [], "loopback server received a request")
         print("negative-control=job-id-token-never-leaves-api-github-com")
+
+    def test_workflow_job_id_transport_errors_return_none(self) -> None:
+        good = json.dumps({"jobs": [{"name": "linux-asan-ubsan", "id": 27001}]}).encode()
+        for label, kwargs in (
+            ("incomplete-read", {"read_error": http.client.IncompleteRead(b"partial")}),
+            ("bad-status-line", {"open_error": http.client.BadStatusLine("x")}),
+        ):
+            with self.subTest(error=label):
+                result, seen = self.call_workflow_job_id("https://api.github.com", good, **kwargs)
+                self.assertIsNone(result)
+                self.assertTrue(seen, "workflow_job_id never attempted the API")
+        print("negative-control=job-id-transport-error-returns-none")
+
+    def test_commit_blob_refuses_oversized_blob(self) -> None:
+        head = git_output("rev-parse", "HEAD")
+        full = commit_blob(head, "CMakeLists.txt")
+        self.assertTrue(full)
+        global MAX_COMMIT_BLOB_BYTES
+        saved = MAX_COMMIT_BLOB_BYTES
+        MAX_COMMIT_BLOB_BYTES = 16
+        try:
+            with self.assertRaises(ReceiptError) as raised:
+                commit_blob(head, "CMakeLists.txt")
+        finally:
+            MAX_COMMIT_BLOB_BYTES = saved
+        self.assertIn("source input exceeds", str(raised.exception))
+        self.assertIn("CMakeLists.txt", str(raised.exception))
+        self.assertEqual(commit_blob(head, "CMakeLists.txt"), full)
+        print("negative-control=oversized-commit-blob-refused")
 
     def test_workflow_job_id_parses_defensively(self) -> None:
         good = json.dumps({"jobs": [{"name": "linux-asan-ubsan", "id": 27001}]}).encode()
@@ -1703,7 +1881,7 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=4 negative_controls={22 + 14} rejected_mutations={10 + 14 if result.wasSuccessful() else 0} skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
+    print(f"self-test={state} positive_controls=5 negative_controls={22 + 14 + 5} rejected_mutations={10 + 14 if result.wasSuccessful() else 0} skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
     return 0 if result.wasSuccessful() else 1
 
 

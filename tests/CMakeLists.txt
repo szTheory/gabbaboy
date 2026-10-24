@@ -1415,7 +1415,7 @@ set_tests_properties(v02_consumer_controls PROPERTIES COST 900)
 gbb_add_v02_contract(v02_performance_controls 90
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-performance.py --self-test)
-gbb_add_v02_contract(v02_fuzz_controls 90
+gbb_add_v02_contract(v02_fuzz_controls 180
   [=[self-test=pass positive_controls=[1-9][0-9]* negative_controls=[1-9][0-9]*]=]
   verify-v02-fuzz.py --self-test)
 gbb_add_v02_contract(v02_source_archive_controls 90
@@ -2673,11 +2673,29 @@ function(gbb_add_uat_closure_test name code regex)
       "-DGBB_CMD=${joined}"
       -DGBB_EXPECT_CODE=${code}
       "-DGBB_EXPECT_REGEX=${regex}"
+      ${GBB_UAT_EXTRA_ARGS}
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   set_tests_properties(${name} PROPERTIES TIMEOUT 120)
 endfunction()
-gbb_add_uat_closure_test(uat_closure_controls 0 "uat-closure self-test pass automated=[0-9]+ controls=2[0-9]"
+# GR-IN-04: the control count is a parsed minimum (20 at 74d0fb0), so adding controls is allowed and dropping
+# one is rejected; expect_exit_min_count_* prove the minimum check itself rejects a lower count.
+set(GBB_UAT_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=20)
+gbb_add_uat_closure_test(uat_closure_controls 0 "uat-closure self-test pass automated=[0-9]+ controls=[0-9]+"
   "${GBB_UAT_CLOSURE_CHECKER}" "${GBB_UAT_CLOSURE_PHASE}" --self-test)
+set(GBB_UAT_EXTRA_ARGS)
+add_test(NAME expect_exit_min_count_rejects_lower
+  COMMAND ${CMAKE_COMMAND} -DGBB_CMD=${CMAKE_COMMAND}$<SEMICOLON>-E$<SEMICOLON>echo$<SEMICOLON>controls=19
+    -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=controls
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=20
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(expect_exit_min_count_rejects_lower PROPERTIES
+  PASS_REGULAR_EXPRESSION "controls=19 is below the minimum 20" TIMEOUT 60)
+add_test(NAME expect_exit_min_count_accepts_equal
+  COMMAND ${CMAKE_COMMAND} -DGBB_CMD=${CMAKE_COMMAND}$<SEMICOLON>-E$<SEMICOLON>echo$<SEMICOLON>controls=20
+    -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=controls
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=20
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(expect_exit_min_count_accepts_equal PROPERTIES TIMEOUT 60)
 gbb_add_uat_closure_test(uat_closure_optimize_refused 1 "must not run with python -O"
   -O "${GBB_UAT_CLOSURE_CHECKER}" "${GBB_UAT_CLOSURE_PHASE}")
 

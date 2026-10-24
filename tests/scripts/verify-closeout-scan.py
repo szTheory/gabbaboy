@@ -2,8 +2,9 @@
 """Classify closeout findings while retaining the installed OpenGSD audit.
 
 Runtime requirement: this check executes an installed OpenGSD (@opengsd/gsd-core) gsd-tools.cjs with node and
-verifies its identity before trusting any audit output. The runtime is resolved from, in order: GSD_TOOLS (a file),
-then gsd-core/bin/gsd-tools.cjs under CLAUDE_CONFIG_DIR or ~/.claude, then under CODEX_HOME or ~/.codex.
+verifies its identity before trusting any audit output. When GSD_TOOLS is set it names the runtime and must be a file:
+there is no fallback past it. Otherwise the runtime is resolved from, in order, gsd-core/bin/gsd-tools.cjs under
+CLAUDE_CONFIG_DIR or ~/.claude, then under CODEX_HOME or ~/.codex.
 
 Exit codes: 0 scan clear; 1 blocked by classified findings; 2 scan error (the runtime ran or launched and failed, or
 the record could not be written); 3 runtime-unavailable (no installed runtime was found, so nothing was classified).
@@ -47,6 +48,10 @@ def runtime_candidates() -> list[Path]:
 
 
 def installed_tools() -> Path:
+    configured = os.environ.get("GSD_TOOLS")
+    if configured and not Path(configured).expanduser().is_file():
+        # The operator chose a runtime; running a different one would audit with code they did not name.
+        raise ScanError("runtime-unavailable", f"GSD_TOOLS names {configured!r}, which is not a file; refusing to fall back to another runtime")
     candidates = runtime_candidates()
     for candidate in candidates:
         if candidate.is_file():
@@ -511,6 +516,41 @@ class CloseoutScanTests(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr)
             self.assertNotIn("CLOSEOUT SCAN CLEAR", result.stdout)
             self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["error"]["code"], "runtime-unavailable")
+
+
+    def test_configured_absent_runtime_does_not_fall_back(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-closeout-no-fallback-") as temp_dir:
+            root = Path(temp_dir) / "project"
+            root.mkdir()
+            (root / ".planning").mkdir()
+            home = Path(temp_dir) / "home"
+            decoy = home / "claude" / RUNTIME_SUFFIX
+            decoy.parent.mkdir(parents=True)
+            marker = Path(temp_dir) / "decoy-ran.marker"
+            decoy.write_text(
+                "const fs = require('fs');\n"
+                f"fs.writeFileSync({json.dumps(str(marker))}, 'ran');\n"
+                "const args = process.argv.slice(2);\n"
+                "if (args[0] === 'runtime-identity') { console.log(JSON.stringify({packageName:'@opengsd/gsd-core',version:'test'})); process.exit(0); }\n"
+                "console.log('decoy fallback runtime marker');\n",
+                encoding="utf-8",
+            )
+            output = Path(temp_dir) / "closeout.json"
+            result = self.run_wrapper(
+                root,
+                output,
+                env={
+                    "GSD_TOOLS": str(Path(temp_dir) / "absent-tools.cjs"),
+                    "HOME": str(home),
+                    "CLAUDE_CONFIG_DIR": str(home / "claude"),
+                    "CODEX_HOME": str(home / "codex"),
+                },
+            )
+            self.assertEqual(result.returncode, 3, f"an absent GSD_TOOLS must exit 3: {result.stdout}\n{result.stderr}")
+            self.assertIn("runtime-unavailable", result.stderr)
+            self.assertIn("GSD_TOOLS", result.stderr)
+            self.assertFalse(marker.exists(), "the fallback runtime must not run when GSD_TOOLS names an absent file")
+            self.assertNotIn("decoy fallback runtime marker", result.stdout + result.stderr)
 
 
 def run_self_test() -> int:

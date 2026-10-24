@@ -123,9 +123,13 @@ def decide(release: Any, assets: Any, expected_rows: Any, runs: Any, run_id: int
     expected = expected_inventory(expected_rows)
     live = live_inventory(assets)
     check_runs(runs, run_id, run_attempt, workflow, source_sha)
-    # The published branch is not reachable from publish-qualified-release, which decides before its one publication
-    # transition; only the self-test exercises it. It documents the published-state contract named in residual P15-09,
-    # which records published-state re-verification as a possible owner request, so it stays.
+    # Reachability of the published branch: --decide is reached from release.yml only through
+    # verify-release-gates.sh --check-recovery (recovery_decision). publish-qualified-release calls it with scope full
+    # and attach-v02-evidence with scope subset, and subset refuses a published release. In publish-qualified-release the
+    # earlier --check-draft call already refuses a published release, so the full-scope published branch is reached only
+    # if the release is published concurrently between that check and the recovery decision; otherwise only the
+    # self-test exercises it. It documents the published-state contract named in residual P15-09, which records
+    # published-state re-verification as a possible owner request, so it stays.
     if release["draft"] is False:
         if scope == "subset":
             raise ValueError("a published release never receives further attachments")

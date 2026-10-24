@@ -18,6 +18,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import unicodedata
 import unittest
 import uuid
 
@@ -43,9 +44,11 @@ TEST_PAUSE_ENV = "GABBABOY_V02_TEST_INSTALL_PAUSE"
 TEST_EXTRACT_PAUSE_ENV = "GABBABOY_V02_TEST_EXTRACT_PAUSE"
 # The release job extracts untrusted archives on windows-2022. There a backslash is a path separator, a
 # colon in a component can select an alternate data stream or another volume, and these names are device
-# files whatever their extension, so all of them must be refused before anything is created.
+# files whatever their extension, so all of them must be refused before anything is created. CONIN$ and CONOUT$
+# are console device names too, and Windows also treats the superscript digits in COM and LPT names as devices, so
+# the stem is compared after NFKC normalisation and upper-casing (superscript one folds to COM1).
 WINDOWS_RESERVED_NAMES = frozenset(
-    ["CON", "PRN", "AUX", "NUL"]
+    ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"]
     + [f"COM{index}" for index in range(1, 10)]
     + [f"LPT{index}" for index in range(1, 10)]
 )
@@ -297,7 +300,7 @@ def windows_unsafe_member(raw_name: str, parts: tuple[str, ...]) -> bool:
     for part in parts:
         if ":" in part or part.endswith((".", " ")):
             return True
-        if part.split(".", 1)[0].rstrip(" ").upper() in WINDOWS_RESERVED_NAMES:
+        if unicodedata.normalize("NFKC", part.split(".", 1)[0].rstrip(" ")).upper() in WINDOWS_RESERVED_NAMES:
             return True
     return False
 
@@ -1126,6 +1129,10 @@ class ConsumerContractTests(unittest.TestCase):
             "reserved-nul-ext": "share/nul.txt",
             "reserved-lpt": "share/LPT1",
             "trailing-dot": "share/name.",
+            "reserved-conin": "share/CONIN$",
+            "reserved-conout-ext": "share/conout$.txt",
+            "reserved-superscript-com": "share/COM\u00b9",
+            "reserved-superscript-lpt-ext": "share/LPT\u00b3.log",
         }
         work = self.test_root / "windows-unsafe-members"
         work.mkdir()
