@@ -5,10 +5,10 @@ milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_plan: Not started
 status: completed
-stopped_at: Phase 15.1 verified complete; owner chooses /gsd-audit-milestone
-last_updated: "2026-10-24T08:44:03.463Z"
+stopped_at: v0.2 milestone re-audit gaps_found (Phase 15.1 Nyquist only); next /gsd-validate-phase 15.1
+last_updated: "2026-10-24T16:30:00.000Z"
 last_activity: 2026-10-24
-last_activity_desc: Phase 15.1 complete
+last_activity_desc: v0.2 milestone re-audit (gaps_found, validation only)
 state_head: 329407b43ed10517922d4dcf8320db03adb5e77f
 progress:
   total_phases: 10
@@ -30,7 +30,14 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 ## Current Position
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — COMPLETE, verified
-Status: All v0.2 phases complete; milestone audit is the owner's next choice
+Status: All v0.2 phases complete; milestone re-audit found one validation gap (Phase 15.1 Nyquist)
+
+Completed stage (2026-10-24): **v0.2 milestone re-audit after Phase 15.1 verification**, bound to source `c49e3ba` (main after docs PR #98). Result **gaps_found**: requirements 28/28 satisfied, phases 10/10 passed, integration 14/15 connections (one warning: the Phase 8 contract verifiers have no CTest/CI caller), flows 6/6. The only gap is Phase 15.1 Nyquist: `15.1-VALIDATION.md` keeps `nyquist_compliant: false` (rows 15.1-15-2 and 15.1-16-2 partial; plans 15.1-31..36 have no validation rows). Report: [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) and [v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md); accounting check `python3 .planning/verify-v02-milestone-audit.py --self-test` (26 negative controls). No LIM row was accepted or closed.
+
+Exact next command (owner's choice; not run automatically): `/gsd-validate-phase 15.1`, then re-run `/gsd-audit-milestone`; only after a clean re-audit, `/gsd-complete-milestone v0.2`. Do not tag, release, archive or start v0.3 automatically. Both auto flags stay false.
+
+Earlier stage, superseded route preserved:
+
 
 Completed stage (2026-10-24): **Phase 15.1 verification - verify-work complete; Phase 15.1 is complete and v0.2 has no further phase**. `15.1-UAT.md` closes all 141 deliverables of plans 15.1-01..36 automatically with zero human checkpoints (`verify-uat-closure.py --write`, self-test 21 controls). `15.1-VERIFICATION.md` passes 5/5 on the final tree; the verify-time code review (`15.1-GAP2-REVIEW.md`) found 0 critical, 0 warning, 1 info (GR2-IN-01 deferred). Full local gate 1183/1183 at four tests at once. Verify-time fixes, each with a negative control: quoted coverage ids in the UAT closure checker; the CMake floor suite runs in parallel; the ASan inventory runs as two complementary 45-minute shards apart from the bounded fuzz campaign, whose pinned bound is unchanged (lesson GB-CI-010). Everything ships in docs PR #98, squash-merged only at exact-head green required checks; its merge receipt is recorded at the next boundary, not asserted from a later HEAD.
 
