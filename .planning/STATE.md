@@ -5,10 +5,10 @@ milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_plan: Not started
 status: completed
-stopped_at: v0.2 milestone re-audit gaps_found (Phase 15.1 Nyquist only); next /gsd-validate-phase 15.1
-last_updated: "2026-10-24T16:30:00.000Z"
+stopped_at: Phase 15.1 Nyquist validation complete (82/82 green); next /gsd-audit-milestone
+last_updated: "2026-10-24T18:30:00.000Z"
 last_activity: 2026-10-24
-last_activity_desc: v0.2 milestone re-audit (gaps_found, validation only)
+last_activity_desc: Phase 15.1 Nyquist validation (compliant)
 state_head: 329407b43ed10517922d4dcf8320db03adb5e77f
 progress:
   total_phases: 10
@@ -30,11 +30,15 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 ## Current Position
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — COMPLETE, verified
-Status: All v0.2 phases complete; milestone re-audit found one validation gap (Phase 15.1 Nyquist)
+Status: All v0.2 phases complete and Nyquist-compliant; milestone re-audit pending
 
-Completed stage (2026-10-24): **v0.2 milestone re-audit after Phase 15.1 verification**, bound to source `c49e3ba` (main after docs PR #98). Result **gaps_found**: requirements 28/28 satisfied, phases 10/10 passed, integration 14/15 connections (one warning: the Phase 8 contract verifiers have no CTest/CI caller), flows 6/6. The only gap is Phase 15.1 Nyquist: `15.1-VALIDATION.md` keeps `nyquist_compliant: false` (rows 15.1-15-2 and 15.1-16-2 partial; plans 15.1-31..36 have no validation rows). Report: [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) and [v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md); accounting check `python3 .planning/verify-v02-milestone-audit.py --self-test` (26 negative controls). No LIM row was accepted or closed.
+Superseded stage (2026-10-24): **v0.2 milestone re-audit after Phase 15.1 verification**, bound to source `c49e3ba` (main after docs PR #98). Result **gaps_found**: requirements 28/28 satisfied, phases 10/10 passed, integration 14/15 connections (one warning: the Phase 8 contract verifiers have no CTest/CI caller), flows 6/6. The only gap is Phase 15.1 Nyquist: `15.1-VALIDATION.md` keeps `nyquist_compliant: false` (rows 15.1-15-2 and 15.1-16-2 partial; plans 15.1-31..36 have no validation rows). Report: [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) and [v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md); accounting check `python3 .planning/verify-v02-milestone-audit.py --self-test` (26 negative controls). No LIM row was accepted or closed.
 
-Exact next command (owner's choice; not run automatically): `/gsd-validate-phase 15.1`, then re-run `/gsd-audit-milestone`; only after a clean re-audit, `/gsd-complete-milestone v0.2`. Do not tag, release, archive or start v0.3 automatically. Both auto flags stay false.
+Earlier route (ran 2026-10-24): `/gsd-validate-phase 15.1`.
+
+Completed stage (2026-10-24): **Phase 15.1 Nyquist validation** (`/gsd-validate-phase 15.1`) at main `31bc956` (after PR #99). `15.1-VALIDATION.md` is now `nyquist_compliant: true`, with 82 of 82 rows green. Plans 15.1-31..36 gained 16 rows: 14 pass as written, and 2 now read their facts from the boundary commit, with negative controls. Row 15.1-15-2 is green because the GB-13 deferred linker note is resolved with fresh-build evidence, so the closeout scan is CLEAR. Row 15.1-16-2 is green: the hosted fuzz receipt at c49e3ba is verified, and strict-head is replayed at every boundary commit. Warning: seven rows still read live state (listed in the VALIDATION sign-off). The milestone audit file is now stale; its gaps_found was based only on this Nyquist gap.
+
+Exact next command (owner's choice; not run automatically): `/gsd-audit-milestone` (re-audit v0.2); only after a clean re-audit, `/gsd-complete-milestone v0.2`. Do not tag, release, archive or start v0.3 automatically. Both auto flags stay false.
 
 Earlier stage, superseded route preserved:
 
