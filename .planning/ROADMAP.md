@@ -7,7 +7,7 @@ GabbaBoy is an original portable C17 core for Game Boy and Game Boy Color. v0.1 
 ## Milestones
 
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 plus inserted 06.1 (shipped 2026-10-10; release `v0.1.0` published 2026-10-09)
-- 🚧 **v0.2 Color & Cartridge Breadth** — Phases 7–15 plus inserted 15.1 (nine original phases complete; release-hardening cleanup pending; next `/gsd-plan-phase 15.1`)
+- 🚧 **v0.2 Color & Cartridge Breadth** — Phases 7–15 plus inserted 15.1 (all ten phases complete and verified; re-audit 2026-10-24 gaps_found on Phase 15.1 Nyquist validation only; next `/gsd-validate-phase 15.1`)
 - 📋 **v0.3 States & Integration** (provisional) — save states (STATE-01) and a qualified Playstead adapter (INT-01)
 
 ## Phases
@@ -534,7 +534,7 @@ Plans:
   3. Canonical UAT and strict coverage pass; relevant DMG baseline and exact-head remote checks pass before merge.
   4. Re-audit is the next stage after this phase; no automatic archive, tag, publication or v0.3 start.
 
-**Plans:** 36/36 plans complete (19 original, 11 gap closure, 6 gap closure round 2); round 2 (15.1-31..36) closed GR-CR-01 and triaged all nine gap re-review findings. Phase 15.1 stays open pending re-verification (`/gsd-verify-work 15.1`)
+**Plans:** 36/36 plans complete (19 original, 11 gap closure, 6 gap closure round 2); round 2 (15.1-31..36) closed GR-CR-01 and triaged all nine gap re-review findings. Phase 15.1 verified 2026-10-24 (5/5); milestone re-audit next step `/gsd-validate-phase 15.1`
 
 Plans:
 **Wave 1**

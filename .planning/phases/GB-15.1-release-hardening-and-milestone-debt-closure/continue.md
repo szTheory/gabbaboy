@@ -1,5 +1,13 @@
 # Phase 15.1 continuation
 
+Completed stage (2026-10-24): **v0.2 milestone re-audit** at source `c49e3ba`: gaps_found. Requirements 28/28, phases 10/10, integration 14/15 (Phase 8 verifiers unwired, warning), flows 6/6. The only gap is Phase 15.1 Nyquist (rows 15.1-15-2, 15.1-16-2 partial; plans 31..36 unaudited). See `.planning/v0.2-MILESTONE-AUDIT.md`.
+
+Exact next command (owner's choice; not run automatically): `/gsd-validate-phase 15.1`, then `/gsd-audit-milestone` again. Both auto flags stay false; no tag, release, archive or v0.3.
+
+---
+
+Superseded route (preserved):
+
 Completed stage (2026-10-24): **Phase 15.1 verification - verify-work complete; Phase 15.1 is complete and v0.2 has no further phase**. `15.1-UAT.md` closes all 141 deliverables of plans 15.1-01..36 automatically with zero human checkpoints (`verify-uat-closure.py --write`, self-test 21 controls). `15.1-VERIFICATION.md` passes 5/5 on the final tree; the verify-time code review (`15.1-GAP2-REVIEW.md`) found 0 critical, 0 warning, 1 info (GR2-IN-01 deferred). Full local gate 1183/1183 at four tests at once. Verify-time fixes, each with a negative control: quoted coverage ids in the UAT closure checker; the CMake floor suite runs in parallel; the ASan inventory runs as two complementary 45-minute shards apart from the bounded fuzz campaign, whose pinned bound is unchanged (lesson GB-CI-010). Everything ships in docs PR #98, squash-merged only at exact-head green required checks; its merge receipt is recorded at the next boundary, not asserted from a later HEAD.
 
 Exact next command (owner's choice; not run automatically): `/gsd-audit-milestone`. Next stage: v0.2 milestone audit (no further numbered phase). Do not tag, release, archive, republish v0.2.0 or start v0.3 automatically. Both auto flags stay false. The open owner decisions below are unchanged; none is a pass or an owner acceptance, and the hosted release rehearsal stays `not_verified`. Keep the remote branches `gsd/phase-15.1-gap2-evidence` and `gsd/phase-15.1-gap-evidence` (strict-head boundary commits). Open owner decisions with their smallest actions are listed in STATE.md.
