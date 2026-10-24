@@ -5,10 +5,10 @@ milestone_name: Color & Cartridge Breadth
 current_phase: "15.1"
 current_plan: Not started
 status: completed
-stopped_at: Phase 15.1 Nyquist validation complete (82/82 green); next /gsd-audit-milestone
-last_updated: "2026-10-24T18:30:00.000Z"
+stopped_at: v0.2 milestone re-audit tech_debt (no blockers); next /gsd-complete-milestone v0.2
+last_updated: "2026-10-24T19:00:00.000Z"
 last_activity: 2026-10-24
-last_activity_desc: Phase 15.1 Nyquist validation (compliant)
+last_activity_desc: v0.2 milestone re-audit (tech_debt)
 state_head: 329407b43ed10517922d4dcf8320db03adb5e77f
 progress:
   total_phases: 10
@@ -30,7 +30,13 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-20)
 ## Current Position
 
 Phase: 15.1 (Release Hardening and Milestone Debt Closure (INSERTED)) — COMPLETE, verified
-Status: All v0.2 phases complete and Nyquist-compliant; milestone re-audit pending
+Status: v0.2 audit tech_debt (no blockers); milestone completion pending owner debt review
+
+Completed stage (2026-10-24): **v0.2 milestone re-audit after Phase 15.1 Nyquist validation**, bound to source `5356d38` (main after PR #100). Result **tech_debt**, with no blocker: requirements 28/28 satisfied, phases 10/10 passed and all Nyquist-compliant, integration 14/15 connections (one warning: the Phase 8 contract verifiers have no CTest/CI caller), flows 6/6. Fresh checks at the source: `acceptance_` 74/74, focused cross-phase slice 290/290, `ctest -N` 1183, and main's push CI run 40114394844 green. Report: [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) and [v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md); accounting check `python3 .planning/verify-v02-milestone-audit.py --self-test` (26 negative controls). No LIM row was accepted or closed (owner_accepted=0).
+
+Exact next command (owner's choice; not run automatically): `/gsd-complete-milestone v0.2`, starting with an explicit review of the debt in the audit: the twelve owner LIM decisions, the Phase 8 verifier warning and triage of open PRs #75 and #78–92. Alternative: insert a cleanup phase after 15.1. Do not tag, release, archive or start v0.3 automatically. Both auto flags stay false.
+
+Earlier route (ran 2026-10-24): `/gsd-audit-milestone`.
 
 Superseded stage (2026-10-24): **v0.2 milestone re-audit after Phase 15.1 verification**, bound to source `c49e3ba` (main after docs PR #98). Result **gaps_found**: requirements 28/28 satisfied, phases 10/10 passed, integration 14/15 connections (one warning: the Phase 8 contract verifiers have no CTest/CI caller), flows 6/6. The only gap is Phase 15.1 Nyquist: `15.1-VALIDATION.md` keeps `nyquist_compliant: false` (rows 15.1-15-2 and 15.1-16-2 partial; plans 15.1-31..36 have no validation rows). Report: [v0.2-MILESTONE-AUDIT.md](v0.2-MILESTONE-AUDIT.md) and [v0.2-INTEGRATION-AUDIT.md](v0.2-INTEGRATION-AUDIT.md); accounting check `python3 .planning/verify-v02-milestone-audit.py --self-test` (26 negative controls). No LIM row was accepted or closed.
 
@@ -661,7 +667,7 @@ Active v0.2 requirements are in [REQUIREMENTS.md](REQUIREMENTS.md) (28/28 mapped
 ## Session Continuity
 
 **Last session:** 2026-10-22T23:05:55.490Z
-**Stopped at:** Phase 15.1 verified complete; next is the owner's `/gsd-audit-milestone`
+**Stopped at:** v0.2 milestone re-audit tech_debt; next is the owner's `/gsd-complete-milestone v0.2`
 **Resume file:** None
 
 Completed stage: **Phase 15.1 planning and independent plan verification**. All 19 plans, 39 tasks and seven waves are ready to execute; the final checker reports zero blockers and warnings. All 24 scope items and four follow-up requirements have executable coverage. No Phase 15.1 implementation or hosted qualification has run. Nine original phases and 134 plans remain complete; v0.2 stays open. Historical unknowns and spec-less verification flags remain explicit; debt is not accepted by planning.
