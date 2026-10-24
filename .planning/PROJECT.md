@@ -13,18 +13,21 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 - **Code:** 14,644 lines of C in `src/` + `include/` (54,384 lines of tracked C/C++ in total); 1,183 registered CTest cases plus 5 install-gated; required CI on Linux, macOS and Windows (MinGW-w64).
 - **Open at close:** 0 open issues. 16 untriaged PRs: #75 (release-please 0.2.1) and #78–92. The twelve LIM rows need owner decisions (none accepted), and the hosted release rehearsal is still `not_verified`. Phase records for 7–15.1 stay in `.planning/phases/` because CTest reads files there.
 
-## Next Milestone Goals
+## Current Milestone: v0.3 Save States & Host Contract
 
-**v0.3 States & Integration (provisional, not started):** define it with `/gsd-new-milestone`. Revisable direction is in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md).
+**Goal:** Add exact-continuation native save states to the core and player, and make the runner safe to drive as a host process, after first paying down the v0.2 delivery debt.
 
-- Transactional, versioned native save states (STATE-01) over the complete DMG+CGB machine state, designed once with explicit portable serialization.
-- A qualified Playstead adapter (INT-01) that exercises only the public API.
-- Carry-over candidates for owner triage at milestone definition:
-  - the twelve open LIM decisions;
-  - wiring the Phase 8 contract verifiers into CTest;
-  - moving the test helpers that live in phase directories into `tests/`, so the v0.2 phase records can be archived;
-  - the v0.2.1 advisories and release-please PR #75;
-  - the open PR backlog.
+**Target features:**
+- **Tune-up (first):** move test-consumed helpers out of phase directories, then archive the v0.2 phase records; wire the Phase 8 verifiers; close superseded PRs #78–92; attribute the DMG slowdown and gate it cumulatively against `v0.2.0`; CI hygiene; ship v0.2.1 from PR #75 once its blockers clear.
+- **STATE-01 save states:** transactional, versioned (same-version only before 1.0), explicit portable serialization of the complete DMG+CGB machine, including in-flight state, with exact continuation equivalence.
+- **Player save slots** over the public state API.
+- **INT-01a host contract:** a `--rom`/`--save-dir` runner mode with an atomic raw `.sav`, save-and-exit 0 on SIGTERM, an exit-code table and GabbaBoy-declared save-format ids.
+- **Release v0.3.0**, with the exact-tag rehearsal run before tagging.
+
+**Key context:**
+- Scope came from a seven-lens fan-out (five sibling cores, Playstead, save-state primary sources, GabbaBoy's own delivery data) plus an adversarial review. The evidence is in [research/v0.3/](research/v0.3/).
+- The Playstead pin and continuation protocol (INT-01b), mGBA/BGB RTC footer interop and libretro are parked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md), each with a promotion trigger.
+- Process caps adopted at kickoff (D-102–D-106): at most 4 phases and about 40 plans per milestone; at most 12 plans per phase; at most 2 review-fix rounds and 1 gap round per phase.
 
 <details>
 <summary>v0.2 phase-by-phase state history (superseded)</summary>
@@ -101,7 +104,13 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 ### Active
 
-No milestone is active. v0.3 States & Integration is provisional: transactional versioned native save states (STATE-01) and a qualified Playstead adapter (INT-01). `/gsd-new-milestone` writes a fresh REQUIREMENTS.md. All 28 v0.2 requirements are validated above, and their archive is [v0.2-REQUIREMENTS.md](milestones/v0.2-REQUIREMENTS.md).
+v0.3 Save States & Host Contract. The full list with REQ-IDs is in [REQUIREMENTS.md](REQUIREMENTS.md).
+
+- [ ] Tune-up: v0.2 debt, archivable phase records, a cumulative performance gate, CI hygiene, and the v0.2.1 patch release
+- [ ] STATE-01: transactional, versioned native save states with exact continuation equivalence
+- [ ] Player save slots over the public state API
+- [ ] INT-01a: a host-process runner contract (raw `.sav`, SIGTERM save-and-exit, exit codes)
+- [ ] A qualified v0.3.0 release
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
@@ -172,4 +181,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-24 after the v0.2 Color & Cartridge Breadth milestone.
+Last updated: 2026-10-24 at v0.3 Save States & Host Contract kickoff.

@@ -1,10 +1,23 @@
 # GabbaBoy research index
 
-Updated: 2026-10-16. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
+Updated: 2026-10-24. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
 
 ## Start here
 
 Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initial DMG proposal, reconciled conflicts and open evidence gaps. [PROJECT.md](../PROJECT.md) defines product intent; [BRIEF.md](../context/BRIEF.md) preserves owner priorities; [WORKFLOW.md](../context/WORKFLOW.md) defines authorization and mandatory phase pauses. [DECISIONS.md](../context/DECISIONS.md) distinguishes adopted constraints from recommendations. [ROADMAP.md](../ROADMAP.md) is active milestone scope and [FUTURE-MILESTONES.md](../context/FUTURE-MILESTONES.md) is revisable direction; research proposals do not automatically add work.
+
+## v0.3 Save States & Host Contract research (2026-10-24)
+
+Milestone research lives in [v0.3/](v0.3/). Start with [v0.3/SUMMARY.md](v0.3/SUMMARY.md), which covers the reconciled scope, the conflicts and the adopted process caps. The supporting reports are:
+
+- sibling-core lessons: [glueyneo](v0.3/SIBLING-GLUEYNEO.md), [nesturbator and muhtari](v0.3/SIBLING-NESTURBATOR-MUHTARI.md), [younger cores](v0.3/SIBLING-YOUNGER-CORES.md);
+- the [Playstead consumer contract](v0.3/PLAYSTEAD-CONTRACT.md);
+- [save-state design](v0.3/SAVE-STATES.md);
+- [delivery velocity and carry-over](v0.3/DELIVERY-VELOCITY.md);
+- [long-term horizons](v0.3/ROADMAP-HORIZONS.md);
+- the [adversarial review](v0.3/ADVERSARIAL-REVIEW.md).
+
+Sibling observations stay evidence about other projects until a GabbaBoy check reproduces them.
 
 ## v0.2 Color & Cartridge Breadth research (2026-10-10)
 

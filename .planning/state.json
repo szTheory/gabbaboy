@@ -1,63 +1,12 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.2 — Color & Cartridge Breadth",
-  "phases": [
-    {
-      "number": "7",
-      "name": "DMG Game Acceptance and Regression Baseline",
-      "status": "complete"
-    },
-    {
-      "number": "8",
-      "name": "Cartridge Seam, MBC5 and MBC2",
-      "status": "complete"
-    },
-    {
-      "number": "9",
-      "name": "MBC3, Deterministic RTC and Cartridge Persistence",
-      "status": "complete"
-    },
-    {
-      "number": "10",
-      "name": "CGB Profile, Banking and Register Visibility",
-      "status": "complete"
-    },
-    {
-      "number": "11",
-      "name": "CGB Colour Rendering and Player Colour",
-      "status": "complete"
-    },
-    {
-      "number": "12",
-      "name": "CGB Double Speed",
-      "status": "complete"
-    },
-    {
-      "number": "13",
-      "name": "CGB HDMA",
-      "status": "complete"
-    },
-    {
-      "number": "14",
-      "name": "CGB-E Model Qualification and Corpus",
-      "status": "complete"
-    },
-    {
-      "number": "15",
-      "name": "CGB Acceptance, Support Ledger and v0.2.0 Release",
-      "status": "complete"
-    },
-    {
-      "number": "15.1",
-      "name": "Release Hardening and Milestone Debt Closure",
-      "status": "complete"
-    }
-  ],
+  "milestone": "v0.3",
+  "phases": [],
   "next": {
-    "command": "/gsd-new-milestone",
-    "label": "Start a new milestone",
-    "reason": "v0.2 milestone completed and archived — define v0.3 (provisional)"
+    "command": "/gsd-discuss-phase",
+    "label": "Discuss the first phase",
+    "reason": "Project initialized — plan your first phase"
   },
-  "updated_at": "2026-10-24T19:01:39.214Z"
+  "updated_at": "2026-10-24T20:12:00.016Z"
 }

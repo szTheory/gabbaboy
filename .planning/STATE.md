@@ -1,21 +1,22 @@
 ---
 gsd_state_version: "1.0"
-milestone: v0.2
-milestone_name: Color & Cartridge Breadth
+milestone: v0.3
+milestone_name: Save States & Host Contract
+current_phase: 16
+current_phase_name: Tune-up and v0.2 Debt Closure
 current_plan: Not started
-status: Awaiting next milestone
-stopped_at: v0.2 milestone completed and archived (override_closeout); next /gsd-new-milestone
-last_updated: "2026-10-24T19:01:39.203Z"
+status: planning
+stopped_at: v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped); Phase 16 not started; next /gsd-discuss-phase 16
+last_updated: "2026-10-24T20:19:26.059Z"
 last_activity: 2026-10-24
-last_activity_desc: v0.2 milestone completed and archived
-state_head: 07204ac477c8d485799fd2e6137a1541b8365170
+last_activity_desc: v0.3 roadmap created (Phases 16–19)
+state_head: 5dcc39698987f29e3809918aeeb5721033e0f667
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 170
-  completed_plans: 170
-  percent: 100
-current_phase: "15.1"
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,18 +26,20 @@ current_phase: "15.1"
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Planning the next milestone (v0.3 States & Integration, provisional and not started)
+**Current focus:** v0.3 Save States & Host Contract — roadmap defined (Phases 16–19); Phase 16 Tune-up and v0.2 Debt Closure is next
 
 ## Current Position
 
-Phase: Milestone v0.2 complete
+Phase: 16 (Tune-up and v0.2 Debt Closure) — not started
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-24 — Milestone v0.2 completed and archived
+Status: Ready to plan
+Last activity: 2026-10-24 — v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped)
 
-Completed stage (2026-10-24): **v0.2 Color & Cartridge Breadth milestone completion** (`/gsd-complete-milestone v0.2`). Closeout type is `override_closeout`: the runtime reports Phase 7–15 VERIFICATION.md files as stale after later phases changed covered files, and the owner chose to proceed on the `5356d38` re-audit evidence (28/28 requirements, `tech_debt` with no blockers). One open artifact was acknowledged: Phase 14's clean `14-UAT-REVIEW.md` is flagged as a UAT gap. The roadmap, requirements, milestone audit, integration audit and the quick task are archived under [milestones/](milestones/). Phase directories stay in `phases/`, because CTest reads files there. The record is in [MILESTONES.md](MILESTONES.md); [RETROSPECTIVE.md](RETROSPECTIVE.md) is updated. Milestone tag `v0.2` goes on the merged archive commit; release `v0.2.0` is unchanged. No LIM row was accepted, nothing was republished, and v0.3 is not started.
+Completed stage: **v0.3 milestone initialization** (requirements and roadmap; this is not Phase 16). Roadmap: Phase 16 Tune-up and v0.2 Debt Closure (TUNE-01..06, plan cap 8), Phase 17 Native Save State Core (STATE-01..06, cap 12), Phase 18 Player Save Slots and Host Contract (PLAY-01, HOST-01..03, cap 10), Phase 19 Qualified v0.3.0 Release (REL-01, cap 8).
 
-Exact next command (owner's choice; not run automatically): `/gsd-new-milestone` (v0.3 States & Integration, provisional: STATE-01, INT-01). At milestone definition, triage the twelve open LIM decisions, the Phase 8 verifier wiring, the phase-directory helpers and open PRs #75 and #78–92. Both auto flags stay false.
+Next phase: **16 — Tune-up and v0.2 Debt Closure** (not started).
+Exact next command: `/gsd-discuss-phase 16`.
+Stop here; nothing auto-advances. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false.
 
 ### Historical Phase 12 metadata verification refresh
 
@@ -85,7 +88,7 @@ Status: planning
 Current Plan: Not started
 Total Plans in Phase: 13
 Last Activity: 2026-10-24
-Last Activity Description: v0.2 milestone completed and archived
+Last Activity Description: v0.3 roadmap created (Phases 16–19)
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
@@ -625,12 +628,12 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-22T23:05:55.490Z
-**Stopped at:** v0.2 milestone completed and archived (override_closeout); next is the owner's `/gsd-new-milestone`
+**Last session:** 2026-10-24T20:19:26.039Z
+**Stopped at:** v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped); Phase 16 not started; next /gsd-discuss-phase 16
 **Resume file:** None
 
-Completed stage: **v0.2 milestone completion** (see Current Position). Next stage: **define the next milestone** (v0.3 States & Integration, provisional). Exact next command: `/gsd-new-milestone`. Both automatic advance flags stay false.
+Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Discuss Phase 16 (Tune-up and v0.2 Debt Closure) with /gsd-discuss-phase 16

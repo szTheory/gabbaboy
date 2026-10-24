@@ -1,24 +1,128 @@
-# Rolling milestone direction
+# Rolling product roadmap
 
-Updated: 2026-10-10 (v0.1 shipped; v0.2 started). This is revisable direction, not authorization to advance. Only the active roadmap has detailed phases. Revisit the next milestone at each phase boundary and re-scope it at the current milestone audit.
+Reviewed: 2026-10-24 · Direction revision: 3 · Active milestone: **v0.3 Save States & Host Contract** (Phases 16–19)
 
-| Horizon | Milestone | User outcome | Evidence / scope trigger |
+This is revisable direction, not authorization to advance. [ROADMAP.md](../ROADMAP.md) is the execution contract and has detailed phases for the active milestone only. Planning milestone numbers are not package versions. The evidence behind revision 3 is [research/v0.3/SUMMARY.md](../research/v0.3/SUMMARY.md).
+
+## Horizons and planning depth
+
+| Horizon | Planning depth | Milestones |
+|---|---|---|
+| Immediate | Phases, requirements and success criteria in ROADMAP.md | v0.3 |
+| Near | Outcome, scope direction, acceptance direction, triggers | v0.4–v0.5 |
+| Mid | Outcome and promotion trigger | v0.6–v0.8 |
+| Long | Outcome and the evidence that would schedule it | v1.0 and later |
+
+**Statuses:**
+
+| Status | Meaning |
+|---|---|
+| `shipped` | Released |
+| `committed` | In the active ROADMAP.md |
+| `proposed` | Intended direction, not yet scheduled |
+| `parked` | Must name a return trigger |
+| `retired` | Must name a reason |
+
+Ids `RM-NNN` are stable and never reused.
+
+**Sizing rules (D-102):**
+- At most 4 phases and about 40 plans per milestone, and at most 12 plans per phase.
+- A 50% plan overrun triggers a rescope.
+- At most two substantive tracks per milestone.
+- Every milestone ends in a qualified release, and its first phase is a capped tune-up: CI headroom, the weakest quality dimension, doc freshness, and carry-over dispositions.
+
+## Shipped
+
+| ID | Milestone | Outcome |
+|---|---|---|
+| RM-001 | v0.1 Limited DMG Preview (2026-10-10) | Installable core, timed DMG, SDL3 player, MBC1 battery, scoped audio, `v0.1.0` |
+| RM-002 | v0.2 Color & Cartridge Breadth (2026-10-24) | Libbet game-level DMG acceptance, MBC2/3/5 + RTC, CGB-CPU-E colour/double speed/HDMA, `v0.2.0` |
+
+## Immediate
+
+| ID | Status | Milestone | Outcome | Promotion / exit trigger |
+|---|---|---|---|---|
+| RM-003 | committed | **v0.3 Save States & Host Contract** | <ul><li>Players and embedders can save and restore exact machine state.</li><li>The runner is safe for a host process: raw `.sav`, SIGTERM save-and-exit, exit codes.</li><li>The v0.2 debt is paid, and v0.2.1 ships.</li></ul> | Exit: `v0.3.0` qualified, with a fork-matrix equivalence receipt and a cumulative perf gate green |
+
+**RM-003 detail.**
+- **Sources:** research/v0.3.
+- **Acceptance direction:**
+  - continuation equivalence at seeded and targeted save points with a coverage gate;
+  - refused loads leave the instance byte-identical;
+  - real-signal SIGTERM tests on POSIX.
+- **Excludes:** INT-01b (RM-020), RTC footer interop (RM-021), libretro (RM-009), BESS.
+- **Would change priority:** Playstead schedules a second emulator adapter (promote RM-020), or the perf attribution shows one merge owning more than half of the regression (insert a fix).
+
+## Near
+
+| ID | Status | Milestone | Outcome | Promotion trigger | Alternative considered |
+|---|---|---|---|---|---|
+| RM-004 | proposed | **v0.4 Evidence Floor** | <ul><li>The first CGB game-level evidence, or a re-justified absence.</li><li>Font-substituted dmg/cgb-acid2 derivatives.</li><li>gbmicrotest admission.</li></ul> | v0.3 shipped. The owner decides on copyleft fixtures and the acid2/Mealybug font strategy at kickoff | Doing PPU timing first was rejected, because the timing work needs these oracles in place first |
+| RM-005 | proposed | **v0.5 DMG PPU Timing** | DMG raster effects render correctly within a declared corpus: pixel FIFO and fetcher, mode-3 length, Mealybug DMG, Mooneye `ppu/` | RM-004 oracles admitted. Perf stays within the RM-003 budget | Landing behind a profile flag, with the old renderer kept as a reference, is the fallback if over budget |
+
+**RM-004 detail.**
+- **Candidate games:**
+  - Potion Panic (MIT, RGBDS) first;
+  - µCity (GPL-3.0+, CC BY-SA), only if copyleft fixtures are admitted;
+  - Rebound is not retried unless the owner reopens D-101.
+- **The time-box** is one plan per candidate, with a fallback decided in advance.
+- **Acid2:** the derivative replaces the glyph tiles and masks the text region. Label it as such and keep the original runner local-only as a cross-check.
+
+## Mid
+
+| ID | Status | Milestone | Outcome | Promotion trigger |
+|---|---|---|---|---|
+| RM-006 | proposed | **v0.6 CGB Timing & Colour** | <ul><li>Expected failures cut to an owner-chosen target, each one reason-coded.</li><li>A second CGB game.</li><li>An optional user-supplied boot ROM.</li></ul> | RM-005 shipped. A CGB-D profile spike is adopted only if its delta list is small and source-backed |
+| RM-007 | proposed | **v0.7 Audio Qualification** | APU edge behaviour; SameSuite APU denominators; PCM digests. No perceptual claim | RM-006 shipped. Swap with RM-006 if game evidence shows audio defects first |
+| RM-008 | proposed | **v0.8 Reach (Wasm)** | An Emscripten/Wasm CI leg with a realtime receipt | RM-007 shipped |
+| RM-009 | parked | **libretro core** | A libretro adapter with globals confined to the adapter and states via STATE-01 | A named libretro adopter, or Playstead selecting libretro |
+
+## Long
+
+| ID | Status | Milestone | Outcome | Evidence that would schedule it |
+|---|---|---|---|---|
+| RM-010 | proposed | **v1.0 Stable Embeddable Core** | <ul><li>A SemVer API/ABI freeze and a guaranteed v1 state format.</li><li>A support matrix for each model, mapper and suite.</li><li>At least two DMG and two CGB games with game-level evidence.</li><li>At least one independent embedder (Playstead, libretro or Wasm), or an owner waiver.</li><li>The perf budget met.</li></ul> | RM-004 to RM-008 shipped. This is a stability promise, not a compatibility promise |
+| RM-011 | parked | SGB borders and palettes; MGB/AGB profiles | Further hardware family | Fixtures with rights, and demand |
+| RM-012 | parked | Two-instance link cable | Local link play | An adopter request, plus a deterministic two-instance oracle |
+| RM-013 | parked | Rewind and runahead in the player | Built on STATE-01 | A measured save/load cost within the frame budget |
+| RM-014 | parked | Exotic mappers (MBC1M, MBC7, HuC1/3, camera, TAMA5) | Broader cartridges | Rights-clear fixtures plus an adopter request |
+| RM-015 | parked | Further hosts (mobile, SIMD paths) | Lower cost on more hosts | Measured bottlenecks and adopter demand |
+
+## Parked integration items
+
+| ID | Status | Item | Return trigger |
 |---|---|---|---|
-| Shipped 2026-10-10 | **v0.1 — limited DMG preview** | Download a macOS player for declared ROM-only/MBC1 software, hear audio, retain battery progress, or embed the installed core | Six phases in ROADMAP; legal fixtures, model-qualified tests, fresh-process continuation, qualified packages, initial performance/CI baselines |
-| Current: v0.2 Color & Cartridge Breadth, then v0.3 States & Integration | **GB/GBC breadth** (split: v0.2 = game acceptance, MBC2/3/5 + RTC, CGB-CPU-E; v0.3 = STATE-01 save states, INT-01 Playstead) | Play supported CGB software and a broader common cartridge set; use deterministic RTC and complete native states | CGB-01..03, CART-01, RTC-01, STATE-01, INT-01; model-specific clock/HDMA/PPU/APU tests and exact save-state continuation. Before broadening cartridge/CGB support claims, add one rights-clear ROM-only or standard-MBC1 game-level acceptance in the existing player: a guest-observable start/progress condition, meaningful input, and visible/audio response. Keep private game inputs and derived traces local. Split into smaller releases if these are too large together; do not demote CGB behind optional enhancements |
-| Following, provisional | **Interoperability and developer tools** | Use a proven Playstead/libretro path, exchange supported saves, inspect clear traces and debug failures easily | Real consumer requirements, BESS/format conformance if adopted, import negative cases, cross-emulator evidence with known limits |
-| Later, evidence driven | **Hardware family and accessories** | Use further silicon models, local link, SGB, uncommon cartridges and peripherals | Hardware/test access, licensed fixtures, clear demand; each feature gets an explicit model/peripheral acceptance matrix |
-| Ongoing, evidence driven | **Performance and additional hosts** | Lower cost and latency while preserving output, with reliable builds on more hosts | Measured bottlenecks; output-equivalent controlled benchmarks; adopter demand for Wasm/mobile/SIMD/rewind/runahead |
+| RM-020 | parked | **INT-01b:** a candidate Playstead AdapterPin plus the qualify / initial-run / continue continuation protocol over the headless runner | Playstead schedules CLNT-01 / multi-pin on its main branch. Re-read the live pin and continuation script first |
+| RM-021 | parked | mGBA/VBA-M 48-byte and BGB 44-byte RTC footer import/export as a host adapter | A user or consumer asks to import saves from other emulators |
+| RM-022 | parked | BESS export block (then import, as best effort only) | An interchange request. Never part of the equivalence tests |
 
-## Release progression within the current milestone
+## Cross-project learning (every milestone)
 
-Ship clearly named preview artifacts as capabilities arrive: installed core and real-ROM headless tracer; timed CPU diagnostics; interactive video player; safe battery continuation; sound and stable input/device behavior; qualified limited-DMG release. An artifact can be useful before a milestone is complete, but its release notes must state its actual capability level. Choose exact SemVer/prerelease mechanics during Phase 1 release planning.
+At each `/gsd-new-milestone` and `/gsd-complete-milestone`:
+- Scan the sibling emulator cores (glueyneo, nesturbator, genewhip, schwaystation, muhtari, cogmaster) and the Playstead consumer.
+- Import the transferable lessons into [LESSONS.md](LESSONS.md) with their provenance.
+- Refresh this file.
+- At close, snapshot it to `milestones/vX.Y-PRODUCT-ROADMAP.md`.
 
-## Replanning discipline
+Sibling observations stay evidence about other projects until a GabbaBoy check reproduces them.
 
-At phase completion, record what evidence changed the next step, the weakest useful quality dimension, open regressions, and any real integration constraint. Fix consequential gaps before expanding scope. Retain a next-step command and stop.
+## Release progression and replanning discipline
 
-At milestone completion, audit traceability and packaged user outcomes, summarize corpus-qualified compatibility and measured performance, export transferable lessons when requested, and revise this table. Do not prewrite speculative implementation plans for all future milestones. No calendar estimates or universal compatibility promises are attached to these horizons.
+- Ship clearly named artifacts as capabilities arrive, and state the actual capability level in the release notes.
+- At each phase completion, record what evidence changed the next step, the weakest quality dimension, open regressions and integration constraints. Fix consequential gaps before expanding scope, record the next-step command, and stop.
+- Do not prewrite speculative implementation plans for future milestones. No calendar estimates or universal compatibility promises are attached to these horizons.
+
+## Review log
+
+| Date | Revision | Change | Why |
+|---|---|---|---|
+| 2026-10-10 | 1 | v0.1 shipped; v0.2 started; v0.2/v0.3 split | Breadth too large for one milestone |
+| 2026-10-24 | 2 | v0.2 shipped and archived | Milestone close |
+| 2026-10-24 | 3 | <ul><li>Restructured into horizons with RM ids.</li><li>v0.3 became Save States & Host Contract; INT-01b and RTC footer interop were parked.</li><li>Added the Evidence Floor (v0.4) before PPU timing.</li><li>Adopted sizing caps.</li></ul> | Seven-lens fan-out plus adversarial review ([research/v0.3](../research/v0.3/SUMMARY.md)) |
+
+## Deferred-item ledger (where each deferred item went)
+
+The phase-level deferrals below are revisable direction, not authorization. Promote them into an RM row when they are scheduled.
 
 ## Deferred from Phase 8 (revisable direction, not authorization)
 
