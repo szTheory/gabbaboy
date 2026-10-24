@@ -1,21 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v0.2
-milestone_name: Color & Cartridge Breadth
-current_plan: Not started
-status: Awaiting next milestone
-stopped_at: v0.2 milestone completed and archived (override_closeout); next /gsd-new-milestone
-last_updated: "2026-10-24T19:01:39.203Z"
+milestone: v0.3
+milestone_name: Save States & Host Contract
+status: planning
+last_updated: "2026-10-24T20:12:00.014Z"
 last_activity: 2026-10-24
-last_activity_desc: v0.2 milestone completed and archived
-state_head: 07204ac477c8d485799fd2e6137a1541b8365170
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 170
-  completed_plans: 170
-  percent: 100
-current_phase: "15.1"
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,18 +20,14 @@ current_phase: "15.1"
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Planning the next milestone (v0.3 States & Integration, provisional and not started)
+**Current focus:** v0.3 Save States & Host Contract — defining requirements and roadmap (Phases 16–19)
 
 ## Current Position
 
-Phase: Milestone v0.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-10-24 — Milestone v0.2 completed and archived
-
-Completed stage (2026-10-24): **v0.2 Color & Cartridge Breadth milestone completion** (`/gsd-complete-milestone v0.2`). Closeout type is `override_closeout`: the runtime reports Phase 7–15 VERIFICATION.md files as stale after later phases changed covered files, and the owner chose to proceed on the `5356d38` re-audit evidence (28/28 requirements, `tech_debt` with no blockers). One open artifact was acknowledged: Phase 14's clean `14-UAT-REVIEW.md` is flagged as a UAT gap. The roadmap, requirements, milestone audit, integration audit and the quick task are archived under [milestones/](milestones/). Phase directories stay in `phases/`, because CTest reads files there. The record is in [MILESTONES.md](MILESTONES.md); [RETROSPECTIVE.md](RETROSPECTIVE.md) is updated. Milestone tag `v0.2` goes on the merged archive commit; release `v0.2.0` is unchanged. No LIM row was accepted, nothing was republished, and v0.3 is not started.
-
-Exact next command (owner's choice; not run automatically): `/gsd-new-milestone` (v0.3 States & Integration, provisional: STATE-01, INT-01). At milestone definition, triage the twelve open LIM decisions, the Phase 8 verifier wiring, the phase-directory helpers and open PRs #75 and #78–92. Both auto flags stay false.
+Status: Defining requirements
+Last activity: 2026-10-24 — Milestone v0.3 started
 
 ### Historical Phase 12 metadata verification refresh
 
