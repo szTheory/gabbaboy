@@ -9,8 +9,68 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    # D-21: classifies the change as planning-only or full. The classifier is the copy stored at the BASE commit, so a
+    # change cannot loosen the rule that judges it; a base without the file, an unresolvable base, an all-zero push
+    # parent (new branch, force-push) or any classifier error all mean kind=full. Read-only; never a required context.
+    name: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      kind: ${{ steps.classify.outputs.kind }}
+    steps:
+      - name: Check out source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify the change with the base commit's classifier
+        id: classify
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          base="${PR_BASE:-$PUSH_BEFORE}"
+          verdict="kind=full reason=base-without-classifier"
+          if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
+            verdict="kind=full reason=base-unavailable"
+          elif git show "$base:.github/scripts/classify-changes.py" > "$RUNNER_TEMP/classify-changes.py"; then
+            verdict=$(python3 -I "$RUNNER_TEMP/classify-changes.py" --base "$base" --head "$GITHUB_SHA" --ref "$GITHUB_REF" || echo "kind=full reason=classifier-error")
+          fi
+          echo "$verdict"
+          kind=full
+          if [ "$verdict" = "kind=planning" ]; then
+            kind=planning
+          fi
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
+  planning-checks:
+    # D-21/D-22: the cheap lane for a planning-only change. It configures without building and runs only the tests
+    # labelled planning; required-native then needs this job to succeed and every heavy job to be skipped.
+    name: planning-checks
+    needs: changes
+    if: needs.changes.outputs.kind == 'planning'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Configure without building
+        run: cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX=
+      - name: Run the planning-labelled tests
+        run: ctest --test-dir build -L planning --no-tests=error --output-on-failure
+
   native-linux:
     name: native-linux-x64
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -117,6 +177,8 @@ jobs:
 
   native-macos:
     name: native-macos-arm64
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: macos-14
     timeout-minutes: 30
     steps:
@@ -161,6 +223,8 @@ jobs:
 
   native-windows:
     name: native-windows-x64
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: windows-2022
     timeout-minutes: 30
     steps:
@@ -217,6 +281,8 @@ jobs:
 
   linux-sanitizers:
     name: linux-asan-ubsan
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -294,6 +360,8 @@ jobs:
     # and release waiters' budgets. Each shard checks exactly its slice of tests/expected-tests.txt; together the
     # slices are the whole inventory (LESSONS GB-CI-004, GB-CI-010).
     name: linux-asan-ubsan-tests
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -327,6 +395,8 @@ jobs:
     # tests run in nightly-asan.yml instead (D-19); acceptance_stall_bounded keeps the drop:START negative control
     # in this PR lane.
     name: linux-asan-ubsan-acceptance
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -357,6 +427,8 @@ jobs:
 
   cmake-floor-3-25-3:
     name: cmake-floor-3.25.3
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-22.04
     timeout-minutes: 40
     env:
@@ -374,6 +446,8 @@ jobs:
 
   player-gate:
     name: player-gate
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-22.04
     timeout-minutes: 2
     outputs:
@@ -387,8 +461,8 @@ jobs:
 
   macos-player-package:
     name: macos-player-package
-    needs: player-gate
-    if: needs.player-gate.outputs.player_required == 'true'
+    needs: [changes, player-gate]
+    if: needs.changes.outputs.kind == 'full' && needs.player-gate.outputs.player_required == 'true'
     runs-on: macos-14
     timeout-minutes: 45
     steps:
@@ -415,6 +489,8 @@ jobs:
 
   perf-gate:
     name: perf-gate
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -444,6 +520,8 @@ jobs:
     name: required-native
     if: always()
     needs:
+      - changes
+      - planning-checks
       - native-linux
       - native-macos
       - native-windows
@@ -463,6 +541,9 @@ jobs:
           persist-credentials: false
       - name: Reject missing, skipped, failed, or timed-out required jobs
         env:
+          KIND: ${{ needs.changes.outputs.kind }}
+          CHANGES: ${{ needs.changes.result }}
+          PLANNING_CHECKS: ${{ needs.planning-checks.result }}
           NATIVE_LINUX: ${{ needs.native-linux.result }}
           NATIVE_MACOS: ${{ needs.native-macos.result }}
           NATIVE_WINDOWS: ${{ needs.native-windows.result }}
@@ -475,11 +556,7 @@ jobs:
           PLAYER_REQUIRED: ${{ needs.player-gate.outputs.player_required }}
           PLAYER_RESULT: ${{ needs.macos-player-package.result }}
         run: |
-          for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$LINUX_SANITIZER_TESTS" "$LINUX_SANITIZER_ACCEPTANCE" "$CMAKE_FLOOR" "$PERF_GATE" "$PLAYER_GATE"; do
-            if [[ "$result" != success ]]; then
-              echo "Required evidence job did not succeed: $result" >&2
-              exit 1
-            fi
-          done
-          bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"
-          echo "All required native, sanitizer, and CMake floor jobs succeeded."
+          python3 -I .github/scripts/check-required-native.py
+          if [[ "$KIND" != planning ]]; then
+            bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"
+          fi

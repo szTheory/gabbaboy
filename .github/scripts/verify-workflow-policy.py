@@ -1267,7 +1267,28 @@ CI_BUDGET_BASE_PINS = (
     'base=$(git merge-base HEAD origin/main)',
     'git cat-file -e "${base}^{commit}"\n',
 )
-CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "perf-gate", "player-gate", "macos-player-package"}
+# Every job the planning-only classification may skip (D-21): each needs `changes` and runs only for kind == 'full'.
+CI_HEAVY_JOBS = ("native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests",
+                 "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "perf-gate", "player-gate", "macos-player-package")
+CI_FULL_CONDITION = "needs.changes.outputs.kind == 'full'"
+CI_REQUIRED_NATIVE_NEEDS = set(CI_HEAVY_JOBS) | {"changes", "planning-checks"}
+# The classifier is the copy stored at the base commit, so a change cannot loosen the rule that judges it. A base
+# that has no copy, cannot be resolved or has an all-zero parent classifies as full (D-21).
+CI_CLASSIFIER_PINS = (
+    'if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then',
+    'elif git show "$base:.github/scripts/classify-changes.py" > "$RUNNER_TEMP/classify-changes.py"; then',
+    'python3 -I "$RUNNER_TEMP/classify-changes.py" --base "$base" --head "$GITHUB_SHA" --ref "$GITHUB_REF"',
+    'if [ "$verdict" = "kind=planning" ]; then',
+)
+CI_PLANNING_COMMANDS = (
+    "cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX=",
+    "ctest --test-dir build -L planning --no-tests=error --output-on-failure",
+)
+CI_AGGREGATOR_ENV = {
+    "KIND": "${{ needs.changes.outputs.kind }}",
+    "CHANGES": "${{ needs.changes.result }}",
+    "PLANNING_CHECKS": "${{ needs.planning-checks.result }}",
+}
 
 
 _FORBIDDEN_PRODUCER_HEADS = {"gh", "curl", "wget", "ssh", "scp"}
@@ -1375,6 +1396,38 @@ def check_readonly_workflows(root: Path, exempt=None) -> None:
         _check_checkout_credentials(workflow, tree, [job_id for job_id in tree["jobs"] if (workflow, job_id) not in exempt])
 
 
+def _check_ci_planning_lane(workflow: str, tree: dict) -> None:
+    """The planning-only lane (D-21): a read-only classifier on the base commit's copy, a real planning-checks job, and
+    the full-matrix condition on every heavy job. required-native itself is judged by check_ci."""
+    if "pull_request_target" in _trigger_names(tree):
+        raise Reject("workflow-trigger", f"{workflow} must not use pull_request_target")
+    changes = _require_job(workflow, tree, "changes")
+    if _permissions(changes, tree["permissions"]) != {"contents": "read"}:
+        raise Reject("producer-write-authority", "ci.changes must hold only contents: read")
+    if changes.get("outputs", {}).get("kind") != "${{ steps.classify.outputs.kind }}":
+        raise Reject("planning-lane", "ci.changes must publish kind from its classify step")
+    classify = [step for step in changes.get("steps", []) if step.get("id") == "classify"]
+    run = str(classify[0].get("run", "")) if len(classify) == 1 else ""
+    for pin in CI_CLASSIFIER_PINS:
+        if pin not in run:
+            raise Reject("classifier-source", f"ci.changes classify step must contain: {pin}")
+    checkout = _checkouts(changes)
+    if len(checkout) != 1 or str(checkout[0].get("with", {}).get("fetch-depth")) != "0":
+        raise Reject("planning-lane", "ci.changes must check out the full history so the base commit can be read")
+    lane = _require_job(workflow, tree, "planning-checks")
+    if _needs(lane) != {"changes"} or _normalise_if(lane.get("if", "")) != "needs.changes.outputs.kind == 'planning'":
+        raise Reject("planning-lane", "ci.planning-checks must need changes and run only for kind == 'planning'")
+    if _permissions(lane, tree["permissions"]) != {"contents": "read"}:
+        raise Reject("producer-write-authority", "ci.planning-checks must hold only contents: read")
+    for command in CI_PLANNING_COMMANDS:
+        require_call(workflow, "planning-checks", lane, command)
+    for job_id in CI_HEAVY_JOBS:
+        job = _require_job(workflow, tree, job_id)
+        clauses = [clause.strip() for clause in _normalise_if(job.get("if", "")).split("&&")]
+        if "changes" not in _needs(job) or CI_FULL_CONDITION not in clauses:
+            raise Reject("planning-lane-condition", f"ci.{job_id} must need changes and run only if {CI_FULL_CONDITION}")
+
+
 def check_ci(root: Path) -> None:
     name = "ci"
     tree = read_workflow(root / ".github/workflows/ci.yml")
@@ -1404,7 +1457,13 @@ def check_ci(root: Path) -> None:
         mapped = [step.get("env", {}).get(var) for step in gate.get("steps", [])]
         if "${{ needs." + lane + ".result }}" not in mapped:
             raise Reject("workflow-dependency", f"ci.required-native must read the {lane} result")
-    require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"')
+    for var, expression in CI_AGGREGATOR_ENV.items():
+        if expression not in [step.get("env", {}).get(var) for step in gate.get("steps", [])]:
+            raise Reject("workflow-dependency", f"ci.required-native must pass {var}: {expression}")
+    require_call(name, "required-native", gate, "python3 -I .github/scripts/check-required-native.py")
+    require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"',
+                 conditional=True)
+    _check_ci_planning_lane(name, tree)
     for command in CI_REQUIRED:
         require_call(name, "linux-sanitizers", job, command)
     native_linux = _require_job(name, tree, "native-linux")
@@ -1795,6 +1854,31 @@ def _mutations():
          "workflow-dependency"),
         _m("rehearsal perf-gate seeded-regression control removed", reh, "  perf-gate:\n",
          "bash tests/scripts/run-perf-gate.sh --seeded-regression", "true", "required-command-not-executed"),
+        # Planning-only lane (16-04, D-21): each mutation removes one piece of the fail-toward-full wiring.
+        _m("classifier step stops reading the base commit's copy", "ci.yml", "  changes:\n",
+           'git show "$base:.github/scripts/classify-changes.py" > "$RUNNER_TEMP/classify-changes.py"',
+           'cat .github/scripts/classify-changes.py > "$RUNNER_TEMP/classify-changes.py"', "classifier-source"),
+        _m("classifier step runs the head's own copy", "ci.yml", "  changes:\n",
+           'python3 -I "$RUNNER_TEMP/classify-changes.py"', 'python3 -I .github/scripts/classify-changes.py', "classifier-source"),
+        _m("heavy job loses the kind condition", "ci.yml", "  perf-gate:\n", "    if: needs.changes.outputs.kind == 'full'\n", "",
+           "planning-lane-condition"),
+        _m("heavy job runs for kind planning", "ci.yml", "  native-windows:\n", "kind == 'full'", "kind == 'planning'", "planning-lane-condition"),
+        _m("heavy job stops needing changes", "ci.yml", "  cmake-floor-3-25-3:\n", "    needs: changes\n", "", "planning-lane-condition"),
+        _m("required-native loses if: always()", "ci.yml", "  required-native:\n", "    if: always()\n", "", "workflow-dependency"),
+        _m("required-native stops waiting for planning-checks", "ci.yml", "  required-native:\n", "      - planning-checks\n", "", "workflow-dependency"),
+        _m("required-native stops reading the classification", "ci.yml", "  required-native:\n",
+           "          KIND: ${{ needs.changes.outputs.kind }}\n", "", "workflow-dependency"),
+        _m("required-native stops running the aggregator script", "ci.yml", "  required-native:\n",
+           "python3 -I .github/scripts/check-required-native.py", "true", "required-command-not-executed"),
+        _m("changes job gains a write permission", "ci.yml", "  changes:\n", "    permissions:\n      contents: read\n",
+           "    permissions:\n      contents: write\n", "producer-write-authority"),
+        _m("planning-checks job gains a write permission", "ci.yml", "  planning-checks:\n", "    permissions:\n      contents: read\n",
+           "    permissions:\n      contents: write\n", "producer-write-authority"),
+        _m("planning-checks stops running the planning label", "ci.yml", "  planning-checks:\n", "-L planning", "-L unit",
+           "required-command-not-executed"),
+        _m("planning-checks runs for every kind", "ci.yml", "  planning-checks:\n", "    if: needs.changes.outputs.kind == 'planning'\n", "",
+           "planning-lane"),
+        _m("ci gains pull_request_target", "ci.yml", "", "  push:\n", "  pull_request_target:\n  push:\n", "workflow-trigger"),
         _m("required-native stops waiting for perf-gate", "ci.yml", "  required-native:\n", "      - perf-gate\n", "", "workflow-dependency"),
         _m("required-native ignores the perf-gate result", "ci.yml", "  required-native:\n",
            "          PERF_GATE: ${{ needs.perf-gate.result }}\n", "", "workflow-dependency"),

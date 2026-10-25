@@ -56,6 +56,9 @@ tests/data/invalid-summary-coverage.md text eol=lf
 tests/data/closeout-scan-14-uat-review.md text eol=lf
 # The perf-gate fixtures are pinned by tests/data/perf-gate/SHA256SUMS, itself digest-pinned in tests/cmake/perf.cmake.
 tests/data/perf-gate/** text eol=lf
+# Recorded raw diffs for the planning-only classifier, pinned by tests/data/classify-changes/SHA256SUMS in tests/cmake/ci-lanes.cmake.
+tests/data/classify-changes/** text eol=lf
+.github/ci-timeouts.json text eol=lf
 # The bounded stall-replay case file is digest-pinned in tests/acceptance/CMakeLists.txt.
 tests/data/stall-bounded-cases.txt text eol=lf
 

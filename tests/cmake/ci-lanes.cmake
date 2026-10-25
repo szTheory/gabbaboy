@@ -1,0 +1,86 @@
+# Phase 16 plan 04: planning-only CI lane and workflow policy CTests (TUNE-04, D-20..D-22).
+#
+# The classifier and aggregator controls read only .github/scripts and tests/data, so they carry the planning
+# label and run on a configured but unbuilt tree. The workflow policy tests read .github only, so they stay
+# unlabelled: the planning lane is for tests that read .planning/ or AGENTS.md.
+
+set(GBB_CLASSIFY_CHANGES "${PROJECT_SOURCE_DIR}/.github/scripts/classify-changes.py")
+set(GBB_CHECK_REQUIRED_NATIVE "${PROJECT_SOURCE_DIR}/.github/scripts/check-required-native.py")
+set(GBB_WORKFLOW_POLICY "${PROJECT_SOURCE_DIR}/.github/scripts/verify-workflow-policy.py")
+set(GBB_CLASSIFY_DATA "${PROJECT_SOURCE_DIR}/tests/data/classify-changes")
+
+# Immutable recorded raw diffs: SHA256SUMS lists every fixture and its digest, and the manifest itself is pinned
+# here. A drifted, missing or extra file stops configuration. Do not repair a fixture; add a second one.
+set(GBB_CLASSIFY_MANIFEST_SHA256 "86080d39d62885af805f1f36ca3e9045efcac4fd5c7bd70b3aa78917a3ccc1ef")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_CLASSIFY_DATA}/SHA256SUMS")
+file(SHA256 "${GBB_CLASSIFY_DATA}/SHA256SUMS" gbb_classify_manifest_sha256)
+if(NOT gbb_classify_manifest_sha256 STREQUAL GBB_CLASSIFY_MANIFEST_SHA256)
+  message(FATAL_ERROR "tests/data/classify-changes/SHA256SUMS is immutable test data: its SHA-256 is "
+    "${gbb_classify_manifest_sha256}, expected ${GBB_CLASSIFY_MANIFEST_SHA256}.")
+endif()
+file(STRINGS "${GBB_CLASSIFY_DATA}/SHA256SUMS" gbb_classify_manifest_lines)
+set(gbb_classify_listed "")
+foreach(gbb_line IN LISTS gbb_classify_manifest_lines)
+  if(NOT gbb_line MATCHES "^([0-9a-f]+)  (.+)$")
+    message(FATAL_ERROR "tests/data/classify-changes/SHA256SUMS: malformed line '${gbb_line}'")
+  endif()
+  set(gbb_fixture_hash "${CMAKE_MATCH_1}")
+  set(gbb_fixture_name "${CMAKE_MATCH_2}")
+  list(APPEND gbb_classify_listed "${gbb_fixture_name}")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_CLASSIFY_DATA}/${gbb_fixture_name}")
+  file(SHA256 "${GBB_CLASSIFY_DATA}/${gbb_fixture_name}" gbb_fixture_actual)
+  if(NOT gbb_fixture_actual STREQUAL gbb_fixture_hash)
+    message(FATAL_ERROR "tests/data/classify-changes/${gbb_fixture_name} is immutable test data: its SHA-256 is "
+      "${gbb_fixture_actual}, expected ${gbb_fixture_hash}.")
+  endif()
+endforeach()
+file(GLOB_RECURSE gbb_classify_present RELATIVE "${GBB_CLASSIFY_DATA}" "${GBB_CLASSIFY_DATA}/*")
+list(REMOVE_ITEM gbb_classify_present "SHA256SUMS")
+list(SORT gbb_classify_present)
+list(SORT gbb_classify_listed)
+if(NOT gbb_classify_present STREQUAL gbb_classify_listed)
+  message(FATAL_ERROR "tests/data/classify-changes holds files that SHA256SUMS does not list (or the reverse).")
+endif()
+
+# gbb_add_ci_lane_test(name code regex timeout labels script [args...]): one python3 -I invocation through
+# expect_exit.cmake. GBB_CI_LANE_EXTRA_ARGS carries any -D options for the assertion script (a parsed minimum).
+function(gbb_add_ci_lane_test name code regex timeout labels script)
+  set(command "${Python3_EXECUTABLE}" -I "${script}" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=${code}
+      "-DGBB_EXPECT_REGEX=${regex}"
+      ${GBB_CI_LANE_EXTRA_ARGS}
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT ${timeout})
+  if(NOT "${labels}" STREQUAL "")
+    set_tests_properties(${name} PROPERTIES LABELS "${labels}")
+  endif()
+endfunction()
+
+# Each control count is a parsed minimum: adding controls is allowed, dropping one is rejected.
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=40)
+gbb_add_ci_lane_test(classify_changes_controls 0 "classify-changes self-test pass controls=[0-9]+" 30 planning
+  "${GBB_CLASSIFY_CHANGES}" --self-test)
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=6)
+gbb_add_ci_lane_test(required_native_controls 0 "required-native self-test pass controls=[0-9]+" 30 planning
+  "${GBB_CHECK_REQUIRED_NATIVE}" --self-test)
+set(GBB_CI_LANE_EXTRA_ARGS)
+
+# TUNE-04 success criterion 3: a src/ change and a tests/ change offered to the classifier must both come back
+# kind=full (with a rename out of src/ and a mixed diff as extra controls); any planning verdict fails the test.
+set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_FORBID_REGEX=kind=planning")
+gbb_add_ci_lane_test(classify_changes_src_rejected 0 "kind=full" 30 planning
+  "${GBB_CLASSIFY_CHANGES}" --from-raw "${GBB_CLASSIFY_DATA}/src-change.raw" "${GBB_CLASSIFY_DATA}/tests-change.raw"
+  "${GBB_CLASSIFY_DATA}/rename-out-of-src.raw" "${GBB_CLASSIFY_DATA}/planning-plus-src.raw")
+set(GBB_CI_LANE_EXTRA_ARGS)
+
+# D-20/D-21: every workflow-policy control from plans 16-02 to 16-04 is reachable from CTest.
+gbb_add_ci_lane_test(workflow_policy_check 0 "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+" 60 ""
+  "${GBB_WORKFLOW_POLICY}" --check --root "${PROJECT_SOURCE_DIR}")
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=negative_controls -DGBB_EXPECT_MIN_VALUE=200)
+gbb_add_ci_lane_test(workflow_policy_controls 0 "PASS: workflow policy self-test negative_controls=[0-9]+ positive_controls=[0-9]+" 180 ""
+  "${GBB_WORKFLOW_POLICY}" --self-test --root "${PROJECT_SOURCE_DIR}")
+set(GBB_CI_LANE_EXTRA_ARGS)
