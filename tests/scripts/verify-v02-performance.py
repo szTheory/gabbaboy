@@ -538,6 +538,24 @@ def apply_reviewed_disposition(measurement_path: Path, decision_path: Path,
     return qualified
 
 
+def verify_reuse(receipt_path: Path, tag_tree: str) -> dict[str, object]:
+    """Accept a qualified rehearsal receipt for a release only when its measured candidate tree is the tag's tree.
+
+    The receipt is verified in full first (a pending or unreviewed measurement is never reusable). The candidate
+    revision must be readable here, so an unreadable one fails closed instead of being trusted (T-16-18).
+    """
+    require(HEX40.fullmatch(tag_tree) is not None, "reuse-tag-tree-invalid")
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    require(isinstance(receipt, dict) and receipt.get("schema_version") != 1,
+            "legacy-receipt-requires-historical-mode")
+    require(receipt.get("result") == "passed", "reuse-receipt-unqualified")
+    verified = verify_receipt(receipt)
+    candidate = verified["source"]["candidate"]
+    require(git_tree_sha(candidate["sha"]) == candidate["tree_sha"] and candidate["tree_sha"] == tag_tree,
+            "reuse-tree-mismatch")
+    return verified
+
+
 def build_record(source: dict[str, str], marker: str) -> dict[str, object]:
     compiler = {
         "id": "TestClang",
@@ -1004,6 +1022,50 @@ class PerformanceReceiptContractTests(unittest.TestCase):
         self.assertEqual(numbers_result.returncode, 1, numbers_result.stdout)
         self.assertIn("review-measurement-mismatch", numbers_result.stdout)
 
+    def run_reuse(self, receipt: dict[str, object], tree: str) -> subprocess.CompletedProcess[str]:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-reuse-") as temp:
+            path = Path(temp) / "receipt.json"
+            path.write_text(json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8")
+            return subprocess.run([sys.executable, "-I", str(SCRIPT), "--verify-reuse", str(path), "--tag-tree", tree],
+                                  cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+
+    def test_reuse_requires_the_candidate_tree_to_equal_the_tag_tree(self) -> None:
+        receipt = valid_fixture()
+        tree = receipt["source"]["candidate"]["tree_sha"]
+        equal = self.run_reuse(receipt, tree)
+        self.assertEqual(equal.returncode, 0, equal.stdout)
+        self.assertIn("candidate tree equals the tag tree", equal.stdout)
+        unequal = self.run_reuse(receipt, git_text("rev-parse", f"{BASELINE_SHA}^{{tree}}"))
+        self.assertEqual(unequal.returncode, 1, unequal.stdout)
+        self.assertIn("reuse-tree-mismatch", unequal.stdout)
+        malformed = self.run_reuse(receipt, "not-a-tree")
+        self.assertEqual(malformed.returncode, 1, malformed.stdout)
+        self.assertIn("reuse-tag-tree-invalid", malformed.stdout)
+
+    def test_reuse_rejects_a_pending_or_unreadable_candidate(self) -> None:
+        pending = triggered_pending_fixture()
+        result = self.run_reuse(pending, pending["source"]["candidate"]["tree_sha"])
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("reuse-receipt-unqualified", result.stdout)
+        unreadable = valid_fixture()
+        unreadable["source"]["candidate"]["sha"] = "1" * 40
+        result = self.run_reuse(unreadable, unreadable["source"]["candidate"]["tree_sha"])
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("source-commit-unknown", result.stdout)
+
+    def test_reuse_accepts_a_decision_qualified_receipt_of_the_same_tree(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-reuse-decision-") as temp:
+            directory = Path(temp)
+            pending = triggered_pending_fixture()
+            (directory / "pending.json").write_text(json.dumps(pending, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            (directory / "decision.json").write_text(json.dumps(decision_fixture(pending), indent=2), encoding="utf-8")
+            applied = self.run_apply_decision(directory / "pending.json", directory / "decision.json", directory / "qualified.json")
+            self.assertEqual(applied.returncode, 0, applied.stdout)
+            qualified = json.loads((directory / "qualified.json").read_text(encoding="utf-8"))
+            tree = qualified["source"]["candidate"]["tree_sha"]
+            self.assertEqual(self.run_reuse(qualified, tree).returncode, 0)
+            self.assertEqual(self.run_reuse(qualified, git_text("rev-parse", f"{BASELINE_SHA}^{{tree}}")).returncode, 1)
+
     def test_release_docs_describe_the_two_stage_review_flow(self) -> None:
         docs = (ROOT / "docs/release.md").read_text(encoding="utf-8")
         required = (
@@ -1013,6 +1075,9 @@ class PerformanceReceiptContractTests(unittest.TestCase):
             "--measurement",
             "--decision",
             "--verify-historical",
+            "--verify-reuse",
+            "measurement_run_id",
+            "performance_decision",
             "+14.86%",
             "±1.62%",
             "cannot authenticate the",
@@ -1179,7 +1244,18 @@ def main(argv: list[str]) -> int:
             reason = str(error) if isinstance(error, ReceiptError) else f"review-input-failed:{type(error).__name__}"
             print(f"verify-v02-performance: rejected:{reason}", file=sys.stderr)
             return 1
+    if len(argv) == 4 and argv[0] == "--verify-reuse" and argv[2] == "--tag-tree":
+        try:
+            verified = verify_reuse(Path(argv[1]), argv[3])
+            print("qualified rehearsal receipt reusable: candidate tree equals the tag tree "
+                  f"samples={verified['measurement']['paired_samples']} warmups={verified['measurement']['warmups']}")
+            return 0
+        except (OSError, json.JSONDecodeError, ReceiptError, KeyError, TypeError) as error:
+            reason = str(error) if isinstance(error, ReceiptError) else f"receipt-read-failed:{type(error).__name__}"
+            print(f"verify-v02-performance: rejected:{reason}", file=sys.stderr)
+            return 1
     print("usage: verify-v02-performance.py --verify PATH | --verify-historical PATH | "
+          "--verify-reuse PATH --tag-tree TREE | "
           "--apply-decision --measurement PATH --decision PATH --output PATH | --self-test", file=sys.stderr)
     return 2
 

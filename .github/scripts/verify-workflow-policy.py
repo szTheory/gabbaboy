@@ -362,17 +362,45 @@ def _download(job: dict, workflow: str, job_id: str, name: str) -> None:
         raise Reject("artifact-flow", f"{_where(workflow, job_id)} must download retained artifact {name}")
 
 
+# D-30 (16-06): the paired-performance review path needs one read-only gh step in a producer job: the rehearsal's dispatch
+# path fetches the pending measurement of an earlier run of the same workflow, and release.yml fetches the newest
+# successful rehearsal run's receipt. That step alone may hold GH_TOKEN (exactly `${{ github.token }}`) under a job-level
+# `actions: read`, may run only `gh run view`, `gh run download` and `gh run list`, and never runs tagged-tree code.
+PERFORMANCE_TOKEN_STEPS = {
+    ("release-rehearsal", "performance"): "Fetch the pending measurement that the review decision covers",
+    ("release-rehearsal", "aggregate"): "Fetch the pending measurement that the review decision covers",
+    ("release", "candidate-performance"): "Fetch the newest successful rehearsal run's performance receipt for this tag",
+}
+_GH_READ = re.compile(r"gh\s+run\s+(?:view|download|list)\b")
+
+
 def _check_unprivileged(workflow: str, tree: dict, job_id: str) -> None:
     """A producer runs subject code with a read-only job token and no token it could use or leak."""
     job = tree["jobs"][job_id]
+    token_step = PERFORMANCE_TOKEN_STEPS.get((workflow, job_id))
     perms = _permissions(job, tree.get("permissions", {}))
     if _writes(perms):
         raise Reject("producer-write-authority", f"{_where(workflow, job_id)} runs producer work with write authority")
-    if "permissions" in job and perms != {"contents": "read"}:
+    allowed = {"contents": "read", "actions": "read"} if token_step else {"contents": "read"}
+    if token_step and perms != allowed:
+        raise Reject("producer-permissions", f"{_where(workflow, job_id)} must hold exactly contents: read and actions: read")
+    if "permissions" in job and perms != allowed:
         raise Reject("producer-permissions", f"{_where(workflow, job_id)} must hold only contents: read")
-    if any(_TOKEN.search(text) for text in _strings({k: v for k, v in job.items() if k != "name"})):
+    scanned = {k: v for k, v in job.items() if k != "name"}
+    steps = [dict(step) for step in job.get("steps", [])]
+    if token_step:
+        holders = [step for step in steps if step.get("name") == token_step]
+        if len(holders) != 1 or holders[0].get("env", {}).get("GH_TOKEN") != "${{ github.token }}":
+            raise Reject("producer-token", f"{_where(workflow, job_id)} step {token_step!r} must be the one step holding GH_TOKEN: ${{{{ github.token }}}}")
+        holder = holders[0]
+        holder["env"] = {key: value for key, value in holder["env"].items() if key != "GH_TOKEN"}
+        if _TOKEN.search(str(holder.get("run", ""))) or SUBJECT_EXECUTION.search(_GH_READ.sub("", str(holder.get("run", "")))):
+            raise Reject("producer-token", f"{_where(workflow, job_id)} step {token_step!r} runs tagged-tree code while holding the token")
+        holder["run"] = _GH_READ.sub("gh-read", str(holder.get("run", "")))
+        scanned = {k: (steps if k == "steps" else v) for k, v in scanned.items()}
+    if any(_TOKEN.search(text) for text in _strings(scanned)):
         raise Reject("producer-token", f"{_where(workflow, job_id)} references the job token or a secret")
-    if any(_WRITE_COMMAND.search(step.get("run", "")) for step in job.get("steps", [])):
+    if any(_WRITE_COMMAND.search(step.get("run", "")) for step in steps):
         raise Reject("producer-write-command", f"{_where(workflow, job_id)} runs a repository-write or API command")
 
 
@@ -1052,6 +1080,8 @@ PRODUCER_SCRIPT_REQUIRED = (
     'bash "$gate" --check-v02-evidence "$evidence" "$tag" "$source_sha" "$archive"',
 )
 _SHARED = "bash " + PRODUCER_SCRIPT
+# The rehearsal tag is derived from the rehearsal/vX.Y.Z ref and the tree's own version, never a fixed default (D-28).
+_DERIVE_TAG = 'python3 -I tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME"'
 _REHEARSAL_TAG = _SHARED + ' verify-subject --subject . --source-sha "$GITHUB_SHA" --tag "$REHEARSAL_TAG" --local-tag'
 _RELEASE_SUBJECT = _SHARED + ' verify-subject --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG"'
 _CORPUS_BUILD = _SHARED + " corpus-build --subject ."
@@ -1062,9 +1092,26 @@ PERF_GATE_COMMANDS = (
     "bash tests/scripts/run-perf-gate.sh --seeded-regression",
     "bash tests/scripts/run-perf-gate.sh --noop-twin",
 )
+PERFORMANCE_MEASURE = "bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json"
+# D-30 (16-06): a decision is applied only to the retained measurement of a release-rehearsal run on the same branch whose commit has this
+# run's tree, to a decision file written outside the checkout; the fetch step and the apply step are separate so the token never meets subject code.
+PERFORMANCE_FETCH_PINS = (
+    'gh run download "$MEASUREMENT_RUN_ID"',
+    '"$run_workflow" == release-rehearsal',
+    '"$run_branch" == "$GITHUB_REF_NAME"',
+    'git rev-parse "$run_sha^{tree}"',
+    'git rev-parse "$GITHUB_SHA^{tree}"',
+    "performance-decision-tree-mismatch",
+)
+PERFORMANCE_APPLY_PINS = (
+    "--apply-decision --measurement",
+    '--decision "$RUNNER_TEMP/performance-decision.json" --output build/v02-performance-receipt.json',
+)
+PERFORMANCE_UPLOAD = "rehearsal-performance-${{ github.run_id }}-${{ github.run_attempt }}"
 REHEARSAL_REQUIRED = {
     "perf-gate": PERF_GATE_COMMANDS,
     "corpus": (
+        _DERIVE_TAG,
         _REHEARSAL_TAG,
         _CORPUS_BUILD,
         "python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json",
@@ -1085,6 +1132,7 @@ REHEARSAL_REQUIRED = {
         "python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json",
     ),
     "package": (
+        _DERIVE_TAG,
         _REHEARSAL_TAG,
         'bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"',
         'python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt',
@@ -1093,6 +1141,7 @@ REHEARSAL_REQUIRED = {
         'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .',
     ),
     "aggregate": (
+        _DERIVE_TAG,
         _REHEARSAL_TAG,
         _CORPUS_BUILD,
         _SHARED + " collect --subject . --output build/evidence",
@@ -1105,6 +1154,7 @@ REHEARSAL_REQUIRED = {
     "judge": (
         JUDGE_CALL_POLICY,
         "python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json",
+        'python3 -I trusted-judge/tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject',
     ),
 }
 _PUBLISH_INVENTORY = 'python3 -I trusted/.github/scripts/verify-published-release-assets.py --inventory "$RUNNER_TEMP/expected-inventory.json" build/release-final'
@@ -1339,6 +1389,42 @@ def _check_no_duplicate_setup(workflow: str, tree: dict) -> None:
                     raise Reject("duplicate-rehearsal-setup", f"{_where(workflow, job_id)} sets up a tag inline; use {PRODUCER_SCRIPT} verify-subject")
 
 
+def _flat(step: dict) -> str:
+    return " ".join(str(step.get("run", "")).split())
+
+
+def _check_performance_qualification(workflow: str, job: dict, job_id: str) -> None:
+    fetch_name = PERFORMANCE_TOKEN_STEPS[(workflow, job_id)]
+    steps = job.get("steps", [])
+    fetch = [step for step in steps if step.get("name") == fetch_name]
+    if len(fetch) != 1 or any(" ".join(pin.split()) not in _flat(fetch[0]) for pin in PERFORMANCE_FETCH_PINS):
+        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must fetch a decision's measurement only from a same-branch release-rehearsal run of this tree")
+    apply_steps = [step for step in steps if "--apply-decision" in _flat(step)]
+    if len(apply_steps) != 1 or any(pin not in _flat(apply_steps[0]) for pin in PERFORMANCE_APPLY_PINS) or apply_steps[0].get("env", {}).get("GH_TOKEN"):
+        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must apply the decision to the fetched measurement in a tokenless step with the decision outside the checkout")
+    if steps.index(fetch[0]) > steps.index(apply_steps[0]):
+        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must fetch the measurement before applying a decision")
+    if job_id == "performance":
+        uploads = [step for step in _artifact_steps(job, "upload") if step.get("with", {}).get("name") == PERFORMANCE_UPLOAD]
+        if len(uploads) != 1 or str(uploads[0].get("if", "")).strip() not in ("always()", "${{ always() }}") \
+                or uploads[0]["with"].get("path") != "build/v02-performance-receipt.json":
+            raise Reject("artifact-flow", f"{_where(workflow, job_id)} must retain the measurement or qualified receipt with if: always()")
+
+
+def _check_performance_reuse(workflow: str, job: dict) -> None:
+    """release.yml reuses a rehearsal receipt only through --verify-reuse with the tag's tree, from a successful rehearsal run of this tag."""
+    steps = job.get("steps", [])
+    fetch = [step for step in steps if step.get("name") == PERFORMANCE_TOKEN_STEPS[(workflow, "candidate-performance")]]
+    run = _flat(fetch[0]) if len(fetch) == 1 else ""
+    for pin in ('--workflow release-rehearsal.yml --branch "rehearsal/$RELEASE_TAG" --status success', "gh run download"):
+        if pin not in run:
+            raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must fetch only from a successful rehearsal run of this tag: {pin}")
+    reuse = [step for step in steps if "--verify-reuse" in _flat(step)]
+    if len(reuse) != 1 or '--tag-tree "$tag_tree"' not in _flat(reuse[0]) or 'tag_tree=$(git rev-parse "$SOURCE_SHA^{tree}")' not in _flat(reuse[0]) \
+            or reuse[0].get("env", {}).get("GH_TOKEN"):
+        raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must reuse a rehearsal receipt only through --verify-reuse with the tag's tree")
+
+
 def check_rehearsal(root: Path) -> None:
     name = "release-rehearsal"
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
@@ -1377,7 +1463,10 @@ def check_rehearsal(root: Path) -> None:
             raise Reject("judge-subject-execution", f"{_where(name, 'judge')} names a path inside the subject tree; subject files are data only")
     for job_id, commands in REHEARSAL_REQUIRED.items():
         for command in commands:
-            require_call(name, job_id, tree["jobs"][job_id], command)
+            # The paired measurement is the no-decision branch of the qualification step (D-30); the verifier after it is unconditional.
+            require_call(name, job_id, tree["jobs"][job_id], command, conditional=command == PERFORMANCE_MEASURE and job_id in ("performance", "aggregate"))
+    for job_id in ("performance", "aggregate"):
+        _check_performance_qualification(name, tree["jobs"][job_id], job_id)
 
 
 # Read-only workflows must not leave the checkout token in .git/config for later steps (IN-08). A job that truly
@@ -1756,7 +1845,8 @@ def check_release(root: Path) -> None:
         _check_no_subject_execution(name, job_id, job)
     for job_id, commands in RELEASE_REQUIRED.items():
         for command in commands:
-            require_call(name, job_id, jobs[job_id], command)
+            require_call(name, job_id, jobs[job_id], command, conditional=command == PERFORMANCE_MEASURE and job_id == "candidate-performance")
+    _check_performance_reuse(name, jobs["candidate-performance"])
     _check_fuzz_source_binding(name, tree)
     _check_fuzz_wait_budget(name, tree)
     publisher = jobs["publish-qualified-release"]
@@ -2130,7 +2220,7 @@ def _mutations():
          "persist-credentials: true", "checkout-credentials"),
         _m("unpinned action", reh, "", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
          "actions/upload-artifact@v4", "workflow-unpinned-action"),
-        _m("YAML anchor", reh, "", "REHEARSAL_TAG: v0.2.0\n", "REHEARSAL_TAG: &tag v0.2.0\n", "workflow-unsupported-yaml"),
+        _m("YAML anchor", reh, "", "  cancel-in-progress: true\n", "  cancel-in-progress: &stop true\n", "workflow-unsupported-yaml"),
         _m("release corpus producer gains contents: write", rel, "  candidate-corpus:\n", "      contents: read\n",
          "      contents: write\n", "producer-write-authority"),
         _m("release corpus producer receives the job token", rel, "  candidate-corpus:\n", "    env:\n",
@@ -2202,8 +2292,44 @@ def _mutations():
         _m("rehearsal ctest step interpolates the run nonce into its run body", "release-rehearsal.yml",
            "Run the full CTest stream once", '${RUN_NONCE}.xml"', '${{ steps.corpus_run.outputs.run_nonce }}.xml"', "run-expression"),
         _m("release performance verifier skipped by if false", "release.yml", "  candidate-performance:\n",
-           "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n",
-           "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n        if: ${{ false }}\n", "disabled-gate"),
+           "      - name: Reuse the qualified rehearsal receipt of this exact tree, else measure the clean paired v0.1.0 baseline and exact-tag candidate\n",
+           "      - name: Reuse the qualified rehearsal receipt of this exact tree, else measure the clean paired v0.1.0 baseline and exact-tag candidate\n        if: ${{ false }}\n", "disabled-gate"),
+        # Receipt-bound performance review path (16-06, D-30, T-16-17/T-16-18): each mutation removes one binding.
+        *[_m(f"{job} applies a decision without the tree-equality check", reh, f"  {job}:\n", 'git rev-parse "$run_sha^{tree}"', 'echo "$run_sha"',
+             "performance-decision-unbound") for job in ("performance", "aggregate")],
+        *[_m(f"{job} applies a decision measured by another workflow", reh, f"  {job}:\n", '"$run_workflow" == release-rehearsal', '"$run_workflow" == ci',
+             "performance-decision-unbound") for job in ("performance", "aggregate")],
+        *[_m(f"{job} applies a decision measured on another branch", reh, f"  {job}:\n", '"$run_branch" == "$GITHUB_REF_NAME"', '"$run_branch" == main',
+             "performance-decision-unbound") for job in ("performance", "aggregate")],
+        *[_m(f"{job} writes the decision inside the checkout", reh, f"  {job}:\n", '--decision "$RUNNER_TEMP/performance-decision.json"',
+             "--decision performance-decision.json", "performance-decision-unbound") for job in ("performance", "aggregate")],
+        *[_m(f"{job} gives the token to the step that applies the decision", reh, f"  {job}:\n", "        env:\n          MEASUREMENT_RUN_ID",
+             "        env:\n          GH_TOKEN: ${{ github.token }}\n          MEASUREMENT_RUN_ID", "producer-token") for job in ("performance", "aggregate")],
+        *[_m(f"rehearsal {job} gains actions: write", reh, f"  {job}:\n", "      actions: read\n", "      actions: write\n", "producer-write-authority")
+          for job in ("performance", "aggregate")],
+        *[_m(f"rehearsal {job} gains issues: read", reh, f"  {job}:\n", "      actions: read\n", "      actions: read\n      issues: read\n", "producer-permissions")
+          for job in ("performance", "aggregate")],
+        _m("rehearsal performance receipt retained only on success", reh, "  performance:\n", "        if: ${{ always() }}\n", "", "artifact-flow"),
+        _m("rehearsal fetch step runs tagged code while holding the token", reh, "  performance:\n", 'mkdir -p "$RUNNER_TEMP/measurement"\n',
+           'mkdir -p "$RUNNER_TEMP/measurement"\n          bash tests/scripts/measure-release-baseline.sh\n', "producer-token"),
+        _m("rehearsal judge stops cross-checking the tree version", reh, "  judge:\n", '--derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject',
+           '--derive-rehearsal-tag "rehearsal/v0.2.0" --root subject', "required-command-not-executed"),
+        _m("rehearsal corpus falls back to a fixed tag", reh, "  corpus:\n", '--derive-rehearsal-tag "$GITHUB_REF_NAME"',
+           '--derive-rehearsal-tag "rehearsal/v0.2.0"', "required-command-not-executed"),
+        _m("release reuses a rehearsal receipt without --verify-reuse", "release.yml", "  candidate-performance:\n",
+           '--verify-reuse "$found" --tag-tree "$tag_tree"', '--verify "$found"', "performance-reuse-unbound"),
+        _m("release reuse compares against the wrong tree", "release.yml", "  candidate-performance:\n",
+           'tag_tree=$(git rev-parse "$SOURCE_SHA^{tree}")', 'tag_tree=$(git rev-parse "HEAD^{tree}")', "performance-reuse-unbound"),
+        _m("release fetches the receipt from any branch", "release.yml", "  candidate-performance:\n",
+           '--branch "rehearsal/$RELEASE_TAG"', "--branch main", "performance-reuse-unbound"),
+        _m("release fetches the receipt of an unsuccessful run", "release.yml", "  candidate-performance:\n",
+           "--status success", "--status failure", "performance-reuse-unbound"),
+        _m("release performance job gains actions: write", "release.yml", "  candidate-performance:\n", "      actions: read\n", "      actions: write\n",
+           "producer-write-authority"),
+        _m("release performance job gains contents: write", "release.yml", "  candidate-performance:\n", "      actions: read\n", "      actions: read\n      pull-requests: write\n",
+           "producer-write-authority"),
+        _m("release fetch step runs tagged code while holding the token", "release.yml", "  candidate-performance:\n",
+           'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n', 'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n          bash tests/scripts/measure-release-baseline.sh\n', "producer-token"),
         _m("release attacher upload commented out", "release.yml", "  attach-v02-evidence:\n", 'gh release upload "$RELEASE_TAG" "$1/$2"',
            '# gh release upload "$RELEASE_TAG" "$1/$2"', "required-command-not-executed"),
         _m("release manifest judge call replaced by echo", "release.yml", "  candidate-platform-manifest:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence',

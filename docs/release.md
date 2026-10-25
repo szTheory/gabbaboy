@@ -75,6 +75,11 @@ historical disposition was `accepted-with-disclosed-regression`. This
 source-bound result describes that historical comparison only. It is not a
 current approval, fresh result, or equivalent-speed claim.
 
+The hosted instruction-count gate (cachegrind Ir against a v0.2.0 build made in
+the same job) is a regression tripwire, not a performance claim; its blind spots
+and rejection codes are in the limitation note in
+[`tests/baseline/perf-gate-v1.txt`](../tests/baseline/perf-gate-v1.txt).
+
 Start a fresh measurement from the checkout being evaluated:
 
 ```sh
@@ -115,6 +120,26 @@ the supplied review record's shape and bindings; it cannot authenticate the
 reviewer's identity or prove that an external link represents a real
 independent review. Do not create a review record on a reviewer's behalf or use
 a self-test fixture as approval.
+
+The release rehearsal carries that decision through the hosted workflow without
+creating one. A rehearsal run whose paired measurement is `pending-investigation`
+still uploads the measurement as an artifact (`if: always()`, seven days). After
+the independent reviewer has recorded a decision outside the checkout, dispatch
+`release-rehearsal.yml` on the same `rehearsal/vX.Y.Z` branch with the inputs
+`measurement_run_id` (the run that produced the pending measurement) and
+`performance_decision` (the decision as a JSON string). The step downloads that
+artifact, requires that run to be a `release-rehearsal` run on a commit with the
+same tree as this run, applies the decision as shown above, verifies
+the result and uploads the qualified receipt. With neither input the step is
+the plain paired measurement.
+
+`release.yml` reuses that qualified receipt for the paired gate only when
+`python3 -I tests/scripts/verify-v02-performance.py --verify-reuse PATH --tag-tree TREE`
+accepts it, which requires a fully verified `passed` receipt whose measured
+candidate tree equals the tag's tree (`reuse-tree-mismatch` otherwise). A
+missing, expired, pending or unequal-tree receipt means the release measures
+fresh, exactly as before. The paired wall-clock gate and its trigger thresholds
+are unchanged.
 
 Schema-v1 receipts can be inspected only with
 `python3 -I tests/scripts/verify-v02-performance.py --verify-historical PATH`.
@@ -202,8 +227,11 @@ runner label or one successful build.
   process. Never attach commercial ROMs, save files containing private data,
   or secrets.
 
-Before a version PR is merged, push a `rehearsal/<name>` branch to run
-`.github/workflows/release-rehearsal.yml`: it executes the corpus, support
+Before a version PR is merged, push a `rehearsal/vX.Y.Z` branch, where `X.Y.Z`
+is the tree's own version (CMake `project` VERSION, which must equal the
+release-please manifest), to run `.github/workflows/release-rehearsal.yml`. The
+workflow derives its runner-local tag from the branch name and refuses any other
+ref or a ref for another version. It executes the corpus, support
 sidecar, fuzz, paired performance, relocated-consumer and source-archive
 producers on that commit with a read-only token and a runner-local tag, and it
 never creates a tag, release or upload. It does not exercise the draft-bound
@@ -215,6 +243,9 @@ Privilege is split so tagged code never holds release write authority for the
 v0.2 evidence. The corpus and performance producers run tagged build, test and
 measurement code with `contents: read`, no GitHub token in their environment and
 no persisted checkout credential, and retain their receipts as run artifacts.
+The two paired-performance producers additionally hold `actions: read`, with the
+token in one `gh` step that fetches a pending measurement and runs no tagged
+code; the step that applies a decision has no token.
 The fuzz job executes no tagged code: it reads the completed exact-source
 `ci.yml` push campaign through the trusted validator, and fails with a named
 limitation when no such completed campaign exists. A separate attacher holds the
