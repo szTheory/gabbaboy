@@ -69,8 +69,9 @@ jobs:
 
   native-linux:
     name: native-linux-x64
+    # Timeout ledger (D-20): p50 11.07 min in main run 40159200194; 31 keeps a margin over ceil(2 x p50) for slow hosted days.
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 31
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     steps:
@@ -177,8 +178,9 @@ jobs:
 
   native-macos:
     name: native-macos-arm64
+    # Timeout ledger (D-20): p50 17.80 min in main run 40156247875, so ceil(2 x p50) = 36; 40 keeps a margin.
     runs-on: macos-14
-    timeout-minutes: 30
+    timeout-minutes: 40
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     steps:
@@ -223,8 +225,9 @@ jobs:
 
   native-windows:
     name: native-windows-x64
+    # Timeout ledger (D-20): p50 18.59 min in main run 40163270595; planning-time samples reached 23 min, so 50 covers ceil(2 x 23) = 46.
     runs-on: windows-2022
-    timeout-minutes: 30
+    timeout-minutes: 50
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     steps:

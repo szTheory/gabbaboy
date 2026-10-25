@@ -80,7 +80,7 @@ set(GBB_CI_LANE_EXTRA_ARGS)
 # D-20/D-21: every workflow-policy control from plans 16-02 to 16-04 is reachable from CTest.
 gbb_add_ci_lane_test(workflow_policy_check 0 "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+" 60 ""
   "${GBB_WORKFLOW_POLICY}" --check --root "${PROJECT_SOURCE_DIR}")
-set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=negative_controls -DGBB_EXPECT_MIN_VALUE=200)
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=negative_controls -DGBB_EXPECT_MIN_VALUE=220)
 gbb_add_ci_lane_test(workflow_policy_controls 0 "PASS: workflow policy self-test negative_controls=[0-9]+ positive_controls=[0-9]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --root "${PROJECT_SOURCE_DIR}")
 set(GBB_CI_LANE_EXTRA_ARGS)

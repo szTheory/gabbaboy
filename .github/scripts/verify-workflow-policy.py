@@ -19,10 +19,13 @@ a trusted checkout and pass the subject tree as --root (data only).
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import re
 import subprocess
 import sys
 import tempfile
+from fractions import Fraction
 from pathlib import Path
 
 
@@ -1037,7 +1040,7 @@ RELEASE_ARTIFACTS = {
     "candidate-fuzz": ("release-evidence-fuzz", ("build/ci-fuzz/v02-fuzz-receipt.json",)),
 }
 SUBJECT_REF = "${{ env.SOURCE_SHA }}"
-JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
+JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head"
 PRODUCER_SCRIPT = ".github/scripts/produce-release-evidence.sh"
 PRODUCER_SCRIPT_REQUIRED = (
     'same_commit "$head" "$source_sha"',
@@ -1760,7 +1763,170 @@ def check_release(root: Path) -> None:
             _check_token_step_commands(name, job_id, jobs[job_id], job_wide=job_id in TOKEN_SCOPE_EXEMPT)
 
 
-def check_all(root: Path) -> dict[str, int]:
+# --------------------------------------------------------------------------- timeout ledger (D-20)
+LEDGER_PATH = ".github/ci-timeouts.json"
+LEDGER_WHOLE_RUN_MINUTES = Fraction(30)
+LEDGER_NORMAL_FIELDS = frozenset({"timeout_minutes", "cited_run_id", "cited_sha", "p50_minutes", "samples", "provisional"})
+LEDGER_BOUND_FIELDS = frozenset({"timeout_minutes", "release_bound", "provisional", "sizing_basis"})
+# D-20 'release-bound ledger row (Phase 16)': release-only and rehearsal-only job bodies that have no green run since they were written. Each
+# is exempt from the samples, cited run, cited sha and ceil(2 x p50) rules, only while the project VERSION is at most
+# LEDGER_BOUND_LAST_VERSION; 16-06 and 16-07 re-cite them from the rehearsal rerun and the v0.2.1 release run. A generic skip is never allowed.
+LEDGER_RELEASE_BOUND_KEYS = ("release.yml:attach-v02-evidence", "release.yml:candidate-fuzz", "release-rehearsal.yml:judge")
+LEDGER_BOUND_LAST_VERSION = (0, 2, 1)
+_P50 = re.compile(r"^[0-9]+(?:\.[0-9]+)?$")
+_SHA40 = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _ledger_pairs(pairs):
+    seen: dict = {}
+    for key, value in pairs:
+        if key in seen:
+            raise Reject("timeout-ledger-schema", f"{LEDGER_PATH} repeats the key {key!r}")
+        seen[key] = value
+    return seen
+
+
+def _is_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _project_version(root: Path) -> tuple[int, int, int]:
+    try:
+        text = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+    except OSError as exc:
+        raise Reject("timeout-ledger-release-bound", f"cannot read CMakeLists.txt to check the release-bound expiry: {exc.strerror}") from exc
+    match = re.search(r"project\(\s*\w+\s+VERSION\s+(\d+)\.(\d+)\.(\d+)", text)
+    if not match:
+        raise Reject("timeout-ledger-release-bound", "CMakeLists.txt has no project VERSION to check the release-bound expiry against")
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def judge_timeout_ledger(ledger, yaml_timeouts: dict[str, int], gating: set[str], version: tuple[int, int, int],
+                         release_head: bool) -> None:
+    """Judge parsed ledger data against {workflow:job -> YAML timeout}; gating names the jobs behind required-native."""
+    if not isinstance(ledger, dict) or not ledger:
+        raise Reject("timeout-ledger-schema", f"{LEDGER_PATH} must be a non-empty object of workflow:job rows")
+    for key in yaml_timeouts:
+        if key not in ledger:
+            raise Reject("timeout-ledger-missing-row", f"{key} has timeout-minutes but no row in {LEDGER_PATH}")
+    for key in ledger:
+        if key not in yaml_timeouts:
+            raise Reject("timeout-ledger-stale", f"{LEDGER_PATH} row {key} names a job with no timeout-minutes")
+    longest = Fraction(0)
+    for key, row in ledger.items():
+        if not isinstance(row, dict):
+            raise Reject("timeout-ledger-schema", f"{key}: a row must be an object")
+        if "release_bound" in row:
+            if key not in LEDGER_RELEASE_BOUND_KEYS:
+                raise Reject("timeout-ledger-release-bound", f"{key}: release_bound is legal only under {', '.join(LEDGER_RELEASE_BOUND_KEYS)}")
+            if version > LEDGER_BOUND_LAST_VERSION:
+                raise Reject("timeout-ledger-release-bound",
+                             f"{key}: release_bound expired when the project VERSION passed {'.'.join(map(str, LEDGER_BOUND_LAST_VERSION))}; re-cite it from the release run")
+            if set(row) != LEDGER_BOUND_FIELDS or row["release_bound"] is not True or row["provisional"] is not False \
+                    or not isinstance(row["sizing_basis"], str) or not row["sizing_basis"].strip() or not _is_int(row["timeout_minutes"]):
+                raise Reject("timeout-ledger-schema", f"{key}: a release_bound row holds exactly timeout_minutes, release_bound true, "
+                             "provisional false and a non-empty sizing_basis, and none of cited_run_id, cited_sha, p50_minutes or samples")
+            if row["timeout_minutes"] != yaml_timeouts[key]:
+                raise Reject("timeout-ledger-stale", f"{key}: ledger timeout {row['timeout_minutes']} differs from the workflow's {yaml_timeouts[key]}")
+            continue
+        if set(row) != LEDGER_NORMAL_FIELDS:
+            raise Reject("timeout-ledger-schema", f"{key}: a row holds exactly {sorted(LEDGER_NORMAL_FIELDS)}")
+        if not _is_int(row["timeout_minutes"]) or not _is_int(row["cited_run_id"]) or row["cited_run_id"] <= 0 \
+                or not _is_int(row["samples"]) or row["samples"] < 1 or not isinstance(row["provisional"], bool) \
+                or not isinstance(row["cited_sha"], str) or not _SHA40.match(row["cited_sha"]) \
+                or not isinstance(row["p50_minutes"], str) or not _P50.match(row["p50_minutes"]):
+            raise Reject("timeout-ledger-schema", f"{key}: malformed field (timeout and samples integers, cited_sha 40 hex, p50 a decimal string)")
+        if row["timeout_minutes"] != yaml_timeouts[key]:
+            raise Reject("timeout-ledger-stale", f"{key}: ledger timeout {row['timeout_minutes']} differs from the workflow's {yaml_timeouts[key]}")
+        p50 = Fraction(row["p50_minutes"])
+        if row["timeout_minutes"] < math.ceil(2 * p50):
+            raise Reject("timeout-ledger-ratio", f"{key}: timeout {row['timeout_minutes']} is below ceil(2 x p50 {row['p50_minutes']}) = {math.ceil(2 * p50)}")
+        if release_head and row["provisional"]:
+            raise Reject("timeout-ledger-provisional", f"{key}: a provisional row cannot stand at the release head; re-cite it from a main run")
+        if key in gating and p50 > longest:
+            longest = p50
+    if longest > LEDGER_WHOLE_RUN_MINUTES:
+        raise Reject("timeout-ledger-whole-run", f"the longest p50 behind required-native is {float(longest):g} min, over {LEDGER_WHOLE_RUN_MINUTES}")
+
+
+def check_timeout_ledger(root: Path, release_head: bool = False) -> None:
+    try:
+        text = (root / LEDGER_PATH).read_text(encoding="utf-8")
+        ledger = json.loads(text, object_pairs_hook=_ledger_pairs)
+    except OSError as exc:
+        raise Reject("timeout-ledger-schema", f"cannot read {LEDGER_PATH}: {exc.strerror}") from exc
+    except ValueError as exc:
+        raise Reject("timeout-ledger-schema", f"{LEDGER_PATH} is not valid JSON: {exc}") from exc
+    yaml_timeouts: dict[str, int] = {}
+    trees = {}
+    for path in sorted((root / ".github/workflows").glob("*.yml")):
+        tree = read_workflow(path)
+        trees[path.name] = tree
+        for job_id, job in tree["jobs"].items():
+            if "timeout-minutes" in job:
+                raw = str(job["timeout-minutes"])
+                if not raw.isdigit():
+                    raise Reject("timeout-ledger-schema", f"{path.name}:{job_id} timeout-minutes must be an integer literal")
+                yaml_timeouts[f"{path.name}:{job_id}"] = int(raw)
+    gating = {f"ci.yml:{need}" for need in _needs(trees["ci.yml"]["jobs"]["required-native"])} if "ci.yml" in trees else set()
+    judge_timeout_ledger(ledger, yaml_timeouts, gating, _project_version(root), release_head)
+
+
+
+def verify_cited(root: Path) -> int:
+    """Online, advisory (D-20): confirm each ledger citation through gh. Never runs in CTest."""
+    def gh(*args: str):
+        result = subprocess.run(["gh", "api", *args], capture_output=True, text=True, check=False, timeout=120)
+        if result.returncode != 0:
+            raise Reject("timeout-ledger-cited", f"gh api {' '.join(args)} failed: {result.stderr.strip()[:200]}")
+        return json.loads(result.stdout)
+
+    ledger = json.loads((root / LEDGER_PATH).read_text(encoding="utf-8"), object_pairs_hook=_ledger_pairs)
+    display: dict[str, str] = {}
+    for path in sorted((root / ".github/workflows").glob("*.yml")):
+        for job_id, job in read_workflow(path)["jobs"].items():
+            name = str(job.get("name", job_id))
+            display[f"{path.name}:{job_id}"] = f"release-candidate / {name}" if path.name == "release.yml" else name
+    failures = 0
+    for key, row in ledger.items():
+        if "release_bound" in row:
+            print(f"skip {key}: release_bound ({row['sizing_basis'][:60]})")
+            continue
+        try:
+            run = gh("repos/{owner}/{repo}/actions/runs/%d" % row["cited_run_id"])
+            jobs = gh("repos/{owner}/{repo}/actions/runs/%d/jobs?per_page=100" % row["cited_run_id"], "--paginate")
+            found = [j for page in ([jobs] if isinstance(jobs, dict) else jobs) for j in page.get("jobs", []) if j["name"] == display[key]]
+            problems = []
+            if run["head_sha"] != row["cited_sha"]:
+                problems.append(f"run head {run['head_sha'][:8]} is not the cited sha")
+            if not found or found[0]["conclusion"] != "success":
+                problems.append("job missing or not successful")
+            else:
+                started = found[0]["started_at"], found[0]["completed_at"]
+                from datetime import datetime
+                seconds = (datetime.strptime(started[1], "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(started[0], "%Y-%m-%dT%H:%M:%SZ")).total_seconds()
+                if Fraction(math.ceil(Fraction(seconds) / 60 * 100), 100) != Fraction(row["p50_minutes"]):
+                    problems.append(f"cited job lasted {seconds / 60:.2f} min, not p50 {row['p50_minutes']}")
+            if run["event"] == "pull_request":
+                pulls = gh("repos/{owner}/{repo}/commits/%s/pulls" % row["cited_sha"])
+                provisional = not any(item.get("merged_at") for item in pulls)
+            else:
+                ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", row["cited_sha"], "origin/main"], cwd=root, check=False).returncode == 0
+                provisional = not ancestor
+            if provisional != row["provisional"]:
+                problems.append(f"provisional should be {str(provisional).lower()} for a {run['event']} run")
+        except Reject as exc:
+            problems = [str(exc)]
+        for problem in problems:
+            print(f"FAIL {key}: {problem}")
+        failures += bool(problems)
+        if not problems:
+            print(f"ok {key}")
+    print(f"verify-cited rows={len(ledger)} failures={failures}")
+    return 1 if failures else 0
+
+
+def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_producer_script(root)
     check_rehearsal(root)
     check_ci(root)
@@ -1768,12 +1934,13 @@ def check_all(root: Path) -> dict[str, int]:
     check_nightly(root)
     check_readonly_workflows(root)
     check_release(root)
+    check_timeout_ledger(root, release_head)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml", "libbet-repro.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -1781,14 +1948,18 @@ def _copy_fixture(root: Path, target: Path) -> None:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
+    for extra in (LEDGER_PATH, "CMakeLists.txt"):
+        if (root / extra).is_file():
+            (target / extra).parent.mkdir(parents=True, exist_ok=True)
+            (target / extra).write_bytes((root / extra).read_bytes())
     script = target / PRODUCER_SCRIPT
     script.parent.mkdir(parents=True, exist_ok=True)
     script.write_bytes((root / PRODUCER_SCRIPT).read_bytes()) if (root / PRODUCER_SCRIPT).is_file() else None
 
 
-def _run_cli(fixture: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
+def _run_cli(fixture: Path, cwd: Path, *extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--root", str(fixture)],
+        [sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--root", str(fixture), *extra],
         capture_output=True, text=True, check=False, cwd=cwd, timeout=60,
     )
 
@@ -1797,7 +1968,7 @@ def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str)
     return (label, workflow, [(after, old, new)], expected)
 
 
-JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
+JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head"
 _REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
 FUZZ_TAG_CHECK = '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {'
@@ -2243,6 +2414,94 @@ def _mutations():
     ]
 
 
+
+def _ledger_edit(fixture: Path, edit) -> None:
+    path = fixture / LEDGER_PATH
+    data = json.loads(path.read_text(encoding="utf-8"))
+    edit(data)
+    path.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
+
+
+def _ledger_mutations():
+    """(label, mutate(fixture), extra CLI args, expected code) for the timeout ledger, run through the CLI."""
+    def yaml_edit(workflow: str, old: str, new: str):
+        def apply(fixture: Path) -> None:
+            path = fixture / ".github/workflows" / workflow
+            text = path.read_text(encoding="utf-8")
+            if old not in text:
+                raise SystemExit(f"self-test anchor missing in {workflow}: {old[:50]!r}")
+            path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        return apply
+
+    def ledger(edit):
+        return lambda fixture: _ledger_edit(fixture, edit)
+
+    def both(first, second):
+        def apply(fixture: Path) -> None:
+            first(fixture)
+            second(fixture)
+        return apply
+
+    bound = {"timeout_minutes": 5, "release_bound": True, "provisional": False, "sizing_basis": "sized from a worst-case budget"}
+    return [
+        ("ledger: edited YAML timeout", yaml_edit("ci.yml", "    runs-on: ubuntu-22.04\n    timeout-minutes: 31\n", "    runs-on: ubuntu-22.04\n    timeout-minutes: 32\n"), (), "timeout-ledger-stale"),
+        ("ledger: removed row", ledger(lambda d: d.pop("ci.yml:native-linux")), (), "timeout-ledger-missing-row"),
+        ("ledger: p50 above half of the timeout", ledger(lambda d: d["ci.yml:native-linux"].update(p50_minutes="15.51")), (), "timeout-ledger-ratio"),
+        ("ledger: stale ledger value", ledger(lambda d: d["ci.yml:native-linux"].update(timeout_minutes=29)), (), "timeout-ledger-stale"),
+        ("ledger: new job with no row", yaml_edit("ci.yml", "\n  required-native:\n", "\n  extra-job:\n    runs-on: ubuntu-22.04\n    timeout-minutes: 5\n    steps:\n      - run: true\n\n  required-native:\n"), (), "timeout-ledger-missing-row"),
+        ("ledger: row for a job that no longer exists", ledger(lambda d: d.update({"ci.yml:gone": dict(d["ci.yml:native-linux"])})), (), "timeout-ledger-stale"),
+        ("ledger: duplicate key", lambda fixture: (fixture / LEDGER_PATH).write_text(
+            (fixture / LEDGER_PATH).read_text(encoding="utf-8").replace('"ci.yml:native-linux": {', '"ci.yml:native-linux": {"samples": 1, "samples": 2, ', 1), encoding="utf-8"), (), "timeout-ledger-schema"),
+        ("ledger: provisional row under --release-head", ledger(lambda d: d["ci.yml:native-linux"].update(provisional=True)), ("--release-head",), "timeout-ledger-provisional"),
+        ("ledger: longest gating p50 of 30.1", both(yaml_edit("ci.yml", "timeout-minutes: 50\n", "timeout-minutes: 70\n"),
+            ledger(lambda d: d["ci.yml:native-windows"].update(timeout_minutes=70, p50_minutes="30.1"))), (), "timeout-ledger-whole-run"),
+        ("ledger: release_bound row under a different key", ledger(lambda d: d.update({"ci.yml:native-linux": {**bound, "timeout_minutes": 31}})), (), "timeout-ledger-release-bound"),
+        ("ledger: release_bound row under a third key", ledger(lambda d: d["fixture-repro.yml:fixture-repro"].clear() or d["fixture-repro.yml:fixture-repro"].update({**bound, "timeout_minutes": 15})), (), "timeout-ledger-release-bound"),
+        ("ledger: release_bound row once VERSION is above 0.2.1", lambda fixture: (fixture / "CMakeLists.txt").write_text(
+            (fixture / "CMakeLists.txt").read_text(encoding="utf-8").replace("VERSION 0.2.0", "VERSION 0.3.0", 1), encoding="utf-8"), (), "timeout-ledger-release-bound"),
+        ("ledger: normal row with samples removed", ledger(lambda d: d["ci.yml:native-linux"].pop("samples")), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row that also cites a run", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(cited_run_id=1)), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row that is provisional", ledger(lambda d: d["release.yml:candidate-fuzz"].update(provisional=True)), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row without a sizing basis", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(sizing_basis=" ")), (), "timeout-ledger-schema"),
+        ("ledger: empty ledger", lambda fixture: (fixture / LEDGER_PATH).write_text("{}\n", encoding="utf-8"), (), "timeout-ledger-schema"),
+    ]
+
+
+def _ledger_boundary_controls() -> int:
+    """In-process precision controls: Fraction arithmetic, never floats."""
+    row = {"timeout_minutes": 25, "cited_run_id": 1, "cited_sha": "a" * 40, "p50_minutes": "12.4", "samples": 1, "provisional": False}
+    done = 0
+
+    def judge(overrides: dict, timeout: int = 25, gating: bool = False, version=(0, 2, 0), head: bool = False) -> None:
+        merged = {**row, **overrides, "timeout_minutes": timeout}
+        judge_timeout_ledger({"w.yml:j": merged}, {"w.yml:j": timeout}, {"w.yml:j"} if gating else set(), version, head)
+
+    judge({})                                   # exactly ceil(2 x 12.4) = 25 passes
+    done += 1
+    for label, code, call in (
+        ("timeout one minute below ceil(2 x p50) fails", "timeout-ledger-ratio", lambda: judge({}, timeout=24)),
+        ("p50 of exactly 30 behind required-native passes", None, lambda: judge({"p50_minutes": "30"}, timeout=60, gating=True)),
+        ("p50 of 30.1 behind required-native fails", "timeout-ledger-whole-run", lambda: judge({"p50_minutes": "30.1"}, timeout=61, gating=True)),
+        ("p50 of 30.1 outside required-native passes", None, lambda: judge({"p50_minutes": "30.1"}, timeout=61)),
+        ("a binary-float trap p50 of 0.1 + 0.2 style decimal is exact", None, lambda: judge({"p50_minutes": "12.500000000000000001"}, timeout=26)),
+        ("a non-provisional row passes at the release head", None, lambda: judge({}, head=True)),
+        ("a provisional row passes before the release head", None, lambda: judge({"provisional": True})),
+        ("a provisional row fails at the release head", "timeout-ledger-provisional", lambda: judge({"provisional": True}, head=True)),
+        ("a p50 given as a number is rejected", "timeout-ledger-schema", lambda: judge({"p50_minutes": 12.4})),
+        ("a boolean samples count is rejected", "timeout-ledger-schema", lambda: judge({"samples": True})),
+    ):
+        try:
+            call()
+        except Reject as exc:
+            if exc.code != code:
+                raise SystemExit(f"self-test boundary {label!r}: wrong code {exc.code}")
+        else:
+            if code is not None:
+                raise SystemExit(f"self-test boundary {label!r}: accepted")
+        done += 1
+    return done
+
+
 def self_test(root: Path) -> None:
     rejected = 0
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
@@ -2279,14 +2538,31 @@ def self_test(root: Path) -> None:
             rejected += 1
             print(f"rejected: {label}: {diagnostic}")
             path.write_text(baselines[workflow], encoding="utf-8")
+        # Timeout ledger (D-20): data mutations through the CLI, each restoring the baseline afterwards.
+        ledger_baseline = (fixture / LEDGER_PATH).read_text(encoding="utf-8")
+        cmake_baseline = (fixture / "CMakeLists.txt").read_text(encoding="utf-8")
+        for label, mutate, extra, expected in _ledger_mutations():
+            mutate(fixture)
+            result = _run_cli(fixture, work, *extra)
+            diagnostic = result.stderr.strip()
+            if result.returncode != 1 or f"REJECT {expected}:" not in diagnostic or "PASS:" in result.stdout:
+                raise SystemExit(f"self-test negative {label!r} failed: want REJECT {expected}, exit={result.returncode}, "
+                                 f"stdout={result.stdout!r}, stderr={diagnostic!r}")
+            rejected += 1
+            print(f"rejected: {label}: {diagnostic}")
+            (fixture / LEDGER_PATH).write_text(ledger_baseline, encoding="utf-8")
+            (fixture / "CMakeLists.txt").write_text(cmake_baseline, encoding="utf-8")
+            for item in WORKFLOWS:
+                (fixture / ".github/workflows" / item).write_text(baselines[item], encoding="utf-8")
+        rejected += _ledger_boundary_controls()
         # Equivalent shell formatting of a required call stays valid: continuation, quoting, extra spaces,
         # interleaved comments and blank lines do not change what runs.
         path = fixture / ".github/workflows/release-rehearsal.yml"
         accepted = 0
         for variant in (
-            "python3  -I \\\n{I}  trusted-judge/.github/scripts/verify-workflow-policy.py \\\n{I}  --check --root subject",
-            'python3 -I "trusted-judge/.github/scripts/verify-workflow-policy.py" --check --root \'subject\'',
-            "# the judge\n{I}\n{I}python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject  # trailing",
+            "python3  -I \\\n{I}  trusted-judge/.github/scripts/verify-workflow-policy.py \\\n{I}  --check --root subject --release-head",
+            'python3 -I "trusted-judge/.github/scripts/verify-workflow-policy.py" --check --root \'subject\' --release-head',
+            "# the judge\n{I}\n{I}python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head  # trailing",
         ):
             text = baselines["release-rehearsal.yml"]
             position = text.find(JUDGE_CALL, text.find("  judge:\n"))
@@ -2351,13 +2627,19 @@ def main() -> int:
     modes.add_argument("--self-test", action="store_true", help="run positive and intended-defect controls through the CLI")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="tree whose .github/workflows files are judged as data")
+    parser.add_argument("--release-head", action="store_true",
+                        help="judge as the release head: a provisional timeout-ledger row is rejected")
+    parser.add_argument("--verify-cited", action="store_true",
+                        help="online and advisory (never in CTest): confirm each ledger citation through gh")
     args = parser.parse_args()
     root = args.root.resolve()
     try:
         if args.self_test:
             self_test(root)
             return 0
-        facts = check_all(root)
+        if args.verify_cited:
+            return verify_cited(root)
+        facts = check_all(root, args.release_head)
         print(f"PASS: workflow privilege and trust wiring residual_write_jobs={facts['residual']}")
         return 0
     except Reject as exc:
