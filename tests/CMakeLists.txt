@@ -10,6 +10,11 @@ if(GBB_TEST_INSTALL_PREFIX)
   set(GBB_TEST_INSTALL_PREFIX "${GBB_TEST_INSTALL_PREFIX_ABSOLUTE}")
 endif()
 include(${PROJECT_SOURCE_DIR}/cmake/ExpectedTests.cmake)
+# Phase directories (Phase 16 TUNE-01, D-07). Tests read completed-milestone records only from the archive
+# directory. The live directory below is the one allowlisted spelling of the current milestone's phases;
+# tests/scripts/verify-no-phase-paths.py rejects every other spelling in tracked files outside the planning tree.
+set(GBB_LIVE_PHASES_DIR "${PROJECT_SOURCE_DIR}/.planning/phases")
+set(GBB_V02_PHASES_DIR "${PROJECT_SOURCE_DIR}/.planning/milestones/v0.2-phases")
 # Internal core test-seam header (src/core/gabbaboy_test.h). Directory-scoped so the mutant copies of
 # gabbaboy.c, which are compiled from the build tree, resolve the same include as the real core.
 include_directories("${PROJECT_SOURCE_DIR}/src/core")
@@ -2680,6 +2685,18 @@ endfunction()
 gbb_add_summary_coverage_test(summary_coverage_selftest 0 "summary-coverage self-test pass mutants=1[2-9]" --self-test)
 gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 9)
 
+# Phase-path lint (Phase 16 TUNE-01, D-06). The controls prove each forbidden spelling and each scope root is
+# rejected and a stale or over-max allowlist row fails; the minimum keeps the control count from shrinking.
+set(GBB_NO_PHASE_PATHS_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-no-phase-paths.py")
+add_test(NAME no_phase_paths_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_NO_PHASE_PATHS_CHECKER};--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=no-phase-paths self-test pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=12
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(no_phase_paths_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+
 # UAT closure gate (DECISIONS D-069, review WR-05): the checker enforces its contract with ClosureError, never
 # assert, and refuses python -O. The controls run on a tracked closed phase; the second test proves through the
 # real CLI that an optimized interpreter is refused instead of silently passing.
@@ -4649,6 +4666,10 @@ foreach(GBB_CGB_CORPUS_CASE_INDEX RANGE 0 ${GBB_CGB_CORPUS_CASE_LAST})
   list(APPEND GBB_CGB_CORPUS_TEST_NAMES "${GBB_CGB_CORPUS_CTEST}")
   set_tests_properties("${GBB_CGB_CORPUS_CTEST}" PROPERTIES LABELS "cgb-corpus")
 endforeach()
+
+# Per-area CTest fragments (Phase 16 D-02a). Fragments run in directory scope, so they must be included
+# before the inventory check and before the sanitizer timeout scaling below.
+include("${PROJECT_SOURCE_DIR}/tests/cmake/areas.cmake")
 
 gabbaboy_verify_registered_tests()
 

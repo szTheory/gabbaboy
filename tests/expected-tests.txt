@@ -538,6 +538,7 @@ model_gates_real_doc_mismatch
 model_gates_release_blocked
 summary_coverage_selftest
 summary_coverage
+no_phase_paths_controls
 uat_closure_controls
 uat_closure_optimize_refused
 summary_coverage_invalid_fixture_rejected
