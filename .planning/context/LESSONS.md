@@ -43,7 +43,7 @@ Status: observed / reproduced / adopted / superseded
 | XFER-013 | 69 offline checks passed while the real compiled path never ran (genewhip `ea0c6ef`) | D-105: the first plan of a feature exercises the compiled public API | Adopted |
 | XFER-014 | Playstead sends SIGTERM and then SIGKILL about 2 s later; mGBA and RetroArch on macOS do not flush saves on SIGTERM (Playstead `AdapterHost.swift`, read 2026-10-24) | INT-01a: save-and-exit 0 well under 2 s, handled in the adapter only, tested with real signals | Imported; implementation pending |
 | XFER-015 | Decide the closeout and freshness policy before work starts, not after verification goes stale (muhtari `GSD-HANDOFF.md`, cogmaster `GSD-HANDOFF.md`) | D-103: re-verify at the exact final head and aim for a verified closeout | Adopted, with GabbaBoy's stricter variant |
-| XFER-016 | Duplicate lesson ids go unnoticed without a check (schwaystation `policy.lessons_unique`). GabbaBoy currently has GB-FIXTURE-001 three times and GB-TEST-001 twice | Phase 16: renumber the duplicates and add a uniqueness test | Imported; implementation pending |
+| XFER-016 | Duplicate lesson ids go unnoticed without a check (schwaystation `policy.lessons_unique`). GabbaBoy had GB-FIXTURE-001 three times and GB-TEST-001 twice (renumbered in Phase 16: the later duplicates are now GB-FIXTURE-003, GB-FIXTURE-004 and GB-TEST-007) | Phase 16: renumber the duplicates and add a uniqueness test | Imported; implemented in Phase 16 (`lessons_unique_ids`) |
 | XFER-017 | A rolling product roadmap with stable ids, statuses, promotion triggers and a snapshot at each close keeps milestones scoped (nesturbator `v3-PRODUCT-ROADMAP.md`, muhtari `v1.0-PRODUCT-ROADMAP.md`) | FUTURE-MILESTONES.md revision 3 | Adopted |
 
 The implementation and planning lessons follow; retain their distinct evidence classes.
@@ -222,7 +222,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:** D-025 in `.planning/context/DECISIONS.md`, the 2026-10-07 addendum in `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-RESEARCH.md`, `.planning/milestones/v0.1-phases/GB-03-visible-interactive-dmg/03-13-SUMMARY.md`, and `docs/dmg-video-evidence.md`.
 - **Status:** Applied to VIDEO-02/03 in Phase 3 under confidence-qualified software behavior; VIDEO-04 passed the user's live packaged-preview check. The full project still makes no exact CPU-B timing or silicon-parity claim.
 
-### GB-FIXTURE-001 / 2026-10-08 / Preserve fixture bytes across Windows checkout
+### GB-FIXTURE-003 / 2026-10-08 / Preserve fixture bytes across Windows checkout
 
 - **Cause and evidence:** The first Phase 4 Windows installed-package run failed only at the authored MBC1 fixture digest checks. Git's Windows text conversion rewrote `continuation.asm` because the fixture directory had no path-specific attributes; expected assembly/ROM digests remained stable on macOS/Linux. This was a checkout transformation, not a mismatch in the fixture recipe.
 - **Remedy:** Add narrow `.gitattributes` rules forcing LF for the assembly, manifest, and license, and `-text` for the generated ROM. Keep digest checks fail-closed and print expected plus observed hashes when they differ. Do not normalize checked-in binary fixtures or weaken manifest validation.
@@ -231,7 +231,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:** `.gitattributes`, `cmake/VerifyInstalledPackage.cmake`, `fixtures/mbc1-continuation/manifest.json`, Phase 4 review and validation.
 - **Status:** Fixed and verified for the authored MBC1 fixture across the exercised Windows, macOS, and Linux paths.
 
-### GB-TEST-001 / 2026-10-08 / Isolate macOS preference storage in sandboxed player tests
+### GB-TEST-007 / 2026-10-08 / Isolate macOS preference storage in sandboxed player tests
 
 - **Cause and evidence:** `player_smoke` stages a real battery lock through the production `SDL_GetPrefPath` path. The sandbox denied that write because SDL 3.4.18's Cocoa implementation resolves `NSApplicationSupportDirectory` through Foundation, which ignored a plain `HOME` override and pointed outside the writable workspace/temp roots. The exact test error was `Could not open the battery session lock safely.`
 - **Remedy:** For local sandbox runs, set both `HOME` and `CFFIXED_USER_HOME` to a newly created directory under `/private/tmp`; do not weaken lock checks or change the product's save path to suit the test harness. The hosted macOS runner uses its normal writable account preferences path.
@@ -291,7 +291,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Remedy:** Give the `player_smoke` CTest a build-local `HOME` and `CFFIXED_USER_HOME`. Give the downloaded-package smoke a unique temporary home and remove it on exit. Keep production save routing unchanged and do not weaken lock checks.
 - **Applies when:** Native macOS tests or package smokes exercise application preferences, battery saves, or lock files in restricted environments.
 - **Verification:** `player_smoke` passed under its CTest environment; all 50 player tests passed; the pinned SDL 3.4.18 package build and extracted-byte smoke passed with MBC1 continuation; the combined suite passed 229/229. Exact PR head `de966868057c1fb5b3bca5b4cdac50cadf3bae57` passed required-native, fixture-repro, and preview-package-smoke in runs 37942469774, 37942469816, and 37942469925.
-- **Source:** `tests/player/CMakeLists.txt`, `tests/scripts/verify-phase3-player.sh`, `src/player/main.c`, and existing lesson GB-TEST-001.
+- **Source:** `tests/player/CMakeLists.txt`, `tests/scripts/verify-phase3-player.sh`, `src/player/main.c`, and existing lesson GB-TEST-007.
 - **Status:** Adopted and exact-revision hosted validation passed.
 
 ### GB-GSD-008 / 2026-10-09 / Audit runtime freshness, summary parseability, and state source
@@ -843,7 +843,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:** Phase 7 `07-VALIDATION.md`; `tests/scripts/verify-stall-report.py`; test revision `5f9bfbd`.
 - **Status:** Adopted; Phase 11/13 completion metadata and milestone re-audit remain separate owner-selected work.
 
-### GB-FIXTURE-001 / 2026-10-20 / Validate output paths before creating directories
+### GB-FIXTURE-004 / 2026-10-20 / Validate output paths before creating directories
 
 - **Cause and evidence:** Phase 10's fixture rebuild script called `mkdir` before rejecting an in-tree build path. Its first repair covered explicit destinations but still called `mktemp` before checking an in-tree `TMPDIR`. Disposable-repository tests reproduced both rejected-write side effects.
 - **Remedy:** Canonicalize missing destinations and existing symlink parents before directory creation; validate both build and evidence destinations, including the temporary root. Keep the offline checks in the existing registered guard test so the release-bound test inventory stays unchanged.

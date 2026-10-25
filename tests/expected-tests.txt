@@ -1219,3 +1219,14 @@ workflow_policy_check
 workflow_policy_controls
 planning_labels
 planning_labels_controls
+phase8_closure_contract
+phase8_closure_contract_selftest
+phase8_closure_contract_wrong_boundary
+phase8_player_contract
+phase8_player_contract_selftest
+phase8_player_contract_wrong_boundary
+plan_cap
+lessons_unique_ids
+state_size
+planning_hygiene_controls
+playstead_docs
