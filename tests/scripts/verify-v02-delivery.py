@@ -802,7 +802,7 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
     env = ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false"]
     source_tree = git(repo, "rev-parse", f"{source}^{{tree}}")
     producer_tree = git(repo, "rev-parse", f"{producer}^{{tree}}")
-    rehearsal = git(repo, "commit-tree", source_tree, "-p", producer, "-m", "rehearsal")
+    rehearsal = git(repo, *env, "commit-tree", source_tree, "-p", producer, "-m", "rehearsal")
     subprocess.run(["git", "-C", str(repo), "update-ref", "refs/rehearsal/head", rehearsal], check=True, capture_output=True)
     if subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", rehearsal, source]).returncode == 0:
         raise SystemExit("delivery self-test rehearsal head must not be an ancestor of the tag source")
