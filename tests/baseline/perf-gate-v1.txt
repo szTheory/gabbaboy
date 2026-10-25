@@ -8,7 +8,8 @@
 # Limit rule (D-14). Raising ir_ratio_limit, ir_floor or determinism_limit, or lowering realtime_floor,
 # needs a DECISIONS.md entry that states the evidence. The realtime floor staging is D-109: PR A gated at
 # realtime_floor=2.0 (the max() lower bound) and PR B raises it to max(2.0, 0.6 x the hosted realtime
-# multiple in tests/baseline/perf-attribution-v1.json) once that receipt exists.
+# multiple in tests/baseline/perf-attribution-v1.json) once that receipt exists. The receipt multiple is
+# 6.7027 (hosted run 40156286321), so the PR B value is 4.02, the floor of 0.6 x 6.7027 to two decimals.
 # The visible-demo consumed_half_dots pin of 999992 is the measured per-ROM exception recorded in D-107; the
 # guard is an exact equality per ROM.
 #
@@ -36,7 +37,7 @@ schema=perf-gate-v1
 ir_ratio_limit=110/100
 ir_floor=100000000
 determinism_limit=2/10000
-realtime_floor=2.0
+realtime_floor=4.02
 rom.tracer.path=fixtures/tracer/tracer.gb
 rom.tracer.sha256=ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d
 rom.tracer.digest=4c7a57ff3d50d228

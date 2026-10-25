@@ -73,3 +73,14 @@ gbb_add_perf_gate_test(perf_gate_canned_realtime_under_floor 1 "REJECT realtime-
   --realtime "${GBB_PERF_GATE_DATA}/realtime-below-floor.txt")
 gbb_add_perf_gate_test(perf_gate_limits_schema 0 "perf-gate limits ok"
   --check-limits "${GBB_PERF_GATE_LIMITS}" --root "${PROJECT_SOURCE_DIR}")
+
+# D-17 attribution receipt (Task 3): the committed hosted receipt is re-derived from git history, so these two
+# controls need the full history and the v0.1.0 and v0.2.0 tags. The minimums are parsed keys of the one
+# "perf-attribution pass revisions=N merges=M" line.
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=revisions -DGBB_EXPECT_MIN_VALUE=39)
+gbb_add_perf_gate_test(perf_attribution 0 "perf-attribution pass revisions=[0-9]+ merges=[0-9]+"
+  --check-attribution "${PROJECT_SOURCE_DIR}/tests/baseline/perf-attribution-v1.json" --repo "${PROJECT_SOURCE_DIR}")
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=merges -DGBB_EXPECT_MIN_VALUE=20)
+gbb_add_perf_gate_test(perf_attribution_merges 0 "perf-attribution pass revisions=[0-9]+ merges=[0-9]+"
+  --check-attribution "${PROJECT_SOURCE_DIR}/tests/baseline/perf-attribution-v1.json" --repo "${PROJECT_SOURCE_DIR}")
+set(GBB_PERF_GATE_EXTRA_ARGS)

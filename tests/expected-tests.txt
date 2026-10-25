@@ -1195,3 +1195,5 @@ perf_gate_canned_pass
 perf_gate_canned_ir_over_limit
 perf_gate_canned_realtime_under_floor
 perf_gate_limits_schema
+perf_attribution
+perf_attribution_merges
