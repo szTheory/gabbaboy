@@ -329,7 +329,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject
+          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head
       - name: Verify the retained rehearsal campaign receipt with the trusted validator
         shell: bash
         run: |

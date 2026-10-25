@@ -81,3 +81,4 @@ v02_fuzz_controls	180	0.4	GB-CI-004	Lower when a measured run is under half the 
 v02_performance_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 v02_source_archive_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 v02_support_ledger_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+workflow_policy_controls	180	0.4	16-04	Lower when a measured run is under half the ceiling; the self-test mutates a copy of every workflow once per control
