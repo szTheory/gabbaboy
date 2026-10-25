@@ -3,7 +3,7 @@
   "timestamp": "2026-10-21T14:21:46.842Z",
   "phase": "15.1",
   "phase_name": "Release Hardening and Milestone Debt Closure",
-  "phase_dir": ".planning/phases/GB-15.1-release-hardening-and-milestone-debt-closure",
+  "phase_dir": ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure",
   "plan": 9,
   "task": 0,
   "total_tasks": 3,

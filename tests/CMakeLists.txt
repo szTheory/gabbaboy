@@ -10,6 +10,11 @@ if(GBB_TEST_INSTALL_PREFIX)
   set(GBB_TEST_INSTALL_PREFIX "${GBB_TEST_INSTALL_PREFIX_ABSOLUTE}")
 endif()
 include(${PROJECT_SOURCE_DIR}/cmake/ExpectedTests.cmake)
+# Phase directories (Phase 16 TUNE-01, D-07). Tests read completed-milestone records only from the archive
+# directory. The live directory below is the one allowlisted spelling of the current milestone's phases;
+# tests/scripts/verify-no-phase-paths.py rejects every other spelling in tracked files outside the planning tree.
+set(GBB_LIVE_PHASES_DIR "${PROJECT_SOURCE_DIR}/.planning/phases")
+set(GBB_V02_PHASES_DIR "${PROJECT_SOURCE_DIR}/.planning/milestones/v0.2-phases")
 # Internal core test-seam header (src/core/gabbaboy_test.h). Directory-scoped so the mutant copies of
 # gabbaboy.c, which are compiled from the build tree, resolve the same include as the real core.
 include_directories("${PROJECT_SOURCE_DIR}/src/core")
@@ -1204,8 +1209,8 @@ set_tests_properties(cgb_hdma_dispositions_selftest PROPERTIES TIMEOUT 30
 # native and sanitizer lanes do not depend on Node or the local OpenGSD runtime.
 set(GBB_CGB_HDMA_CLAIMS_VERIFIER
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-claims.py")
-set(GBB_HDMA_CLOSURE_CHECKER
-  "${PROJECT_SOURCE_DIR}/.planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py")
+set(GBB_HDMA_LANE_CHECKER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-hdma-lane.py")
 set(GBB_HDMA_REMOTE_EVIDENCE_TEST
   "${PROJECT_SOURCE_DIR}/tests/scripts/test_hdma_remote_evidence.py")
 add_test(NAME cgb_hdma_claims_contract
@@ -1215,9 +1220,9 @@ add_test(NAME cgb_hdma_claims_contract_native
 add_test(NAME cgb_hdma_claims_contract_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_CLAIMS_VERIFIER}" --self-test)
 add_test(NAME cgb_hdma_lane_contract
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_CLOSURE_CHECKER}" --lane)
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_LANE_CHECKER}" --lane)
 add_test(NAME cgb_hdma_lane_contract_selftest
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_CLOSURE_CHECKER}" --lane-self-test)
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_LANE_CHECKER}" --lane-self-test)
 add_test(NAME cgb_hdma_remote_evidence_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_REMOTE_EVIDENCE_TEST}")
 set_tests_properties(
@@ -1368,6 +1373,7 @@ set_tests_properties(cgb_corpus_report_tracer cgb_corpus_report_tracer_controls
   ENVIRONMENT "GBB_TEST_BUILD_DIR=${PROJECT_BINARY_DIR};GBB_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}")
 set_tests_properties(cgb_corpus_claims cgb_corpus_claims_controls
   cgb_corpus_red_evidence_privacy PROPERTIES TIMEOUT 60)
+set_tests_properties(cgb_corpus_red_evidence_privacy PROPERTIES LABELS "planning")
 
 # Phase 15 recurring v0.2 contracts. Each runs its production checker (or the checker's own positive and
 # negative controls) through expect_exit.cmake, which requires exit code 0 AND a success line with nonzero
@@ -1451,7 +1457,7 @@ endif()
 # time and rejects each defect with its own diagnostic, and proves a failing attempt keeps its diagnostic.
 add_test(NAME historical_limitations_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-historical-limitations.py" --self-test)
-set_tests_properties(historical_limitations_controls PROPERTIES TIMEOUT 60
+set_tests_properties(historical_limitations_controls PROPERTIES TIMEOUT 60 LABELS "planning"
   PASS_REGULAR_EXPRESSION "historical-limitations self-test pass positives=2 rejected_controls=[1-9][0-9]* retention_fixture=1")
 # Plan 15.1-17: every scope ID keeps an individual disposition bound to the immutable audit commit. The
 # self-test drives the real CLI over a private fixture repository and rejects each named defect (dropped ID,
@@ -1460,7 +1466,7 @@ set_tests_properties(historical_limitations_controls PROPERTIES TIMEOUT 60
 # hosted, hardware or historical proof.
 add_test(NAME closeout_dispositions_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-closeout-dispositions.py" --self-test)
-set_tests_properties(closeout_dispositions_controls PROPERTIES TIMEOUT 120
+set_tests_properties(closeout_dispositions_controls PROPERTIES TIMEOUT 120 LABELS "planning"
   PASS_REGULAR_EXPRESSION "closeout-dispositions self-test pass positives=3 rejected_controls=[1-9][0-9]*")
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
@@ -2665,26 +2671,62 @@ gbb_add_model_gate_test(model_gates_release_blocked 1 "gate-unresolved-unknown"
 # control is the immutable, deliberately malformed tests/data/invalid-summary-coverage.md, not a live
 # summary, so correcting a live summary can never invalidate the negative control.
 set(GBB_SUMMARY_COVERAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-summary-coverage.py")
-function(gbb_add_summary_coverage_test name code regex)
+# phases_dir has no default (D-07): every sweep names the directory it reads. A sweep of a completed
+# milestone also carries --min-files and a parsed files= minimum, so an emptied or misrouted directory
+# fails instead of passing vacuously (D-08).
+function(gbb_add_summary_coverage_test name code regex phases_dir)
   set(command "${Python3_EXECUTABLE}" -I "${GBB_SUMMARY_COVERAGE_CHECKER}"
-    --phases-dir "${PROJECT_SOURCE_DIR}/.planning/phases" ${ARGN})
+    --phases-dir "${phases_dir}" ${ARGN})
   list(JOIN command "$<SEMICOLON>" joined)
   add_test(NAME ${name}
     COMMAND ${CMAKE_COMMAND}
       "-DGBB_CMD=${joined}"
       -DGBB_EXPECT_CODE=${code}
       "-DGBB_EXPECT_REGEX=${regex}"
+      ${GBB_SUMMARY_EXTRA_ARGS}
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60 LABELS "planning")
 endfunction()
-gbb_add_summary_coverage_test(summary_coverage_selftest 0 "summary-coverage self-test pass mutants=1[2-9]" --self-test)
-gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+" --since 9)
+gbb_add_summary_coverage_test(summary_coverage_selftest 0 "summary-coverage self-test pass mutants=1[2-9]"
+  "${GBB_V02_PHASES_DIR}" --self-test)
+# 143 SUMMARY files measured in the archive after the move (Phase 16 plan 01).
+set(GBB_SUMMARY_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=files -DGBB_EXPECT_MIN_VALUE=143)
+gbb_add_summary_coverage_test(summary_coverage 0 "summary-coverage pass files=[0-9]+"
+  "${GBB_V02_PHASES_DIR}" --since 9 --min-files 143)
+set(GBB_SUMMARY_EXTRA_ARGS)
+# The live sweep covers the current milestone and tolerates an empty directory (no minimum).
+gbb_add_summary_coverage_test(summary_coverage_live 0 "summary-coverage pass files=[0-9]+"
+  "${GBB_LIVE_PHASES_DIR}" --since 16)
+# Control: an empty sweep must be rejected by --min-files, not pass vacuously.
+gbb_add_summary_coverage_test(summary_coverage_empty_dir_rejected 1 "below minimum"
+  "${PROJECT_SOURCE_DIR}/tests/data" --min-files 1)
+
+# Phase-path lint (Phase 16 TUNE-01, D-06). The controls prove each forbidden spelling and each scope root is
+# rejected and a stale or over-max allowlist row fails; the minimum keeps the control count from shrinking.
+set(GBB_NO_PHASE_PATHS_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-no-phase-paths.py")
+add_test(NAME no_phase_paths_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_NO_PHASE_PATHS_CHECKER};--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=no-phase-paths self-test pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=12
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(no_phase_paths_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+# The tree check: every tracked text file outside the planning tree, with a floor on the files scanned.
+add_test(NAME no_phase_paths
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_NO_PHASE_PATHS_CHECKER};--check"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=no-phase-paths pass files=[0-9]+ allowlisted=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=files -DGBB_EXPECT_MIN_VALUE=380
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(no_phase_paths PROPERTIES TIMEOUT 60 LABELS "planning")
 
 # UAT closure gate (DECISIONS D-069, review WR-05): the checker enforces its contract with ClosureError, never
 # assert, and refuses python -O. The controls run on a tracked closed phase; the second test proves through the
 # real CLI that an optimized interpreter is refused instead of silently passing.
 set(GBB_UAT_CLOSURE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-uat-closure.py")
-set(GBB_UAT_CLOSURE_PHASE "${PROJECT_SOURCE_DIR}/.planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release")
+set(GBB_UAT_CLOSURE_PHASE "${GBB_V02_PHASES_DIR}/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release")
 function(gbb_add_uat_closure_test name code regex)
   set(command "${Python3_EXECUTABLE}" -I ${ARGN})
   list(JOIN command "$<SEMICOLON>" joined)
@@ -2695,7 +2737,7 @@ function(gbb_add_uat_closure_test name code regex)
       "-DGBB_EXPECT_REGEX=${regex}"
       ${GBB_UAT_EXTRA_ARGS}
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-  set_tests_properties(${name} PROPERTIES TIMEOUT 120)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 120 LABELS "planning")
 endfunction()
 # GR-IN-04: the control count is a parsed minimum (20 at 74d0fb0; 21 once the quoted-id control was added), so
 # adding controls is allowed and dropping one is rejected; expect_exit_min_count_* prove the minimum check itself
@@ -2758,7 +2800,19 @@ add_test(NAME summary_coverage_invalid_fixture_repaired_passes
     "-DGBB_FORBID_REGEX=summary-coverage-invalid"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(summary_coverage_invalid_fixture_rejected summary_coverage_invalid_fixture_repaired_passes
-  PROPERTIES TIMEOUT 60)
+  PROPERTIES TIMEOUT 60 LABELS "planning")
+
+# verify-closeout-scan.py reads its Phase 14 review seed from a byte copy of the archived record (Phase 16 D-08),
+# so the scan never reaches into a phase directory. Pin the copy the same way as the malformed summary fixture.
+set(GBB_CLOSEOUT_SCAN_SEED "${PROJECT_SOURCE_DIR}/tests/data/closeout-scan-14-uat-review.md")
+set(GBB_CLOSEOUT_SCAN_SEED_SHA256 "b4d88a9421f13ecd1d56750dc65e821606590640d74eca53837368f11c30d897")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_CLOSEOUT_SCAN_SEED}")
+file(SHA256 "${GBB_CLOSEOUT_SCAN_SEED}" gbb_closeout_scan_seed_sha256)
+if(NOT gbb_closeout_scan_seed_sha256 STREQUAL GBB_CLOSEOUT_SCAN_SEED_SHA256)
+  message(FATAL_ERROR "tests/data/closeout-scan-14-uat-review.md is immutable test data: its SHA-256 is "
+    "${gbb_closeout_scan_seed_sha256}, expected ${GBB_CLOSEOUT_SCAN_SEED_SHA256}. It is a byte copy of the archived "
+    "Phase 14 review; do not repair it, add a second fixture instead.")
+endif()
 
 # Post-boot table mirror (D-06): docs/cgb-profile.md must equal post_boot[] and obey the provenance
 # rules. White-box like test_mbc5_internal, so it includes the core and must not link it.
@@ -4649,6 +4703,10 @@ foreach(GBB_CGB_CORPUS_CASE_INDEX RANGE 0 ${GBB_CGB_CORPUS_CASE_LAST})
   list(APPEND GBB_CGB_CORPUS_TEST_NAMES "${GBB_CGB_CORPUS_CTEST}")
   set_tests_properties("${GBB_CGB_CORPUS_CTEST}" PROPERTIES LABELS "cgb-corpus")
 endforeach()
+
+# Per-area CTest fragments (Phase 16 D-02a). Fragments run in directory scope, so they must be included
+# before the inventory check and before the sanitizer timeout scaling below.
+include("${PROJECT_SOURCE_DIR}/tests/cmake/areas.cmake")
 
 gabbaboy_verify_registered_tests()
 

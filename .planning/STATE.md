@@ -4,18 +4,18 @@ milestone: v0.3
 milestone_name: Save States & Host Contract
 current_phase: 16
 current_phase_name: Tune-up and v0.2 Debt Closure
-current_plan: Not started
-status: planning
-stopped_at: v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped); Phase 16 not started; next /gsd-discuss-phase 16
-last_updated: "2026-10-24T20:19:26.059Z"
+current_plan: 1
+status: executing
+stopped_at: 16-02 Tasks 1-2 done; Task 3 blocked on PR A merge and hosted perf-attribution dispatch
+last_updated: "2026-10-25T01:34:06.314Z"
 last_activity: 2026-10-24
-last_activity_desc: v0.3 roadmap created (Phases 16–19)
-state_head: 5dcc39698987f29e3809918aeeb5721033e0f667
+last_activity_desc: Phase 16 execution started
+state_head: 120f8e9b61ebf484fe8294eaf99d11b749432480
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 7
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,19 +26,19 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.3 Save States & Host Contract — roadmap defined (Phases 16–19); Phase 16 Tune-up and v0.2 Debt Closure is next
+**Current focus:** Phase 16 — Tune-up and v0.2 Debt Closure
 
 ## Current Position
 
-Phase: 16 (Tune-up and v0.2 Debt Closure) — not started
-Plan: —
-Status: Ready to plan
-Last activity: 2026-10-24 — v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped)
+Phase: 16 (Tune-up and v0.2 Debt Closure) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 16
+Last activity: 2026-10-24 — Phase 16 execution started
 
-Completed stage: **v0.3 milestone initialization** (requirements and roadmap; this is not Phase 16). Roadmap: Phase 16 Tune-up and v0.2 Debt Closure (TUNE-01..06, plan cap 8), Phase 17 Native Save State Core (STATE-01..06, cap 12), Phase 18 Player Save Slots and Host Contract (PLAY-01, HOST-01..03, cap 10), Phase 19 Qualified v0.3.0 Release (REL-01, cap 8).
+Completed stage: **Phase 16 planning** — [16-RESEARCH.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-RESEARCH.md), [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md), [16-PATTERNS.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-PATTERNS.md) and plans 16-01..16-07 (TUNE-01..06 and D-01..D-33 covered). Owner accepted at plan-phase: token estimates over the advisory budget and the 16-01 19-file scope exception. Phase 16 is not executed. Prior stage: **Phase 16 discussion (context gathered)**. [16-CONTEXT.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-CONTEXT.md) locks D-01..D-33: release-last, 7 target plans (cap 8), no src/ change, owner decisions D-13 (accept +8.3% perf with attribution, seed RM-023), D-29 (pin both v0.2.0 ledger digests; #93 append disclosed) and D-07 (TUNE-01 live-phase carve-out as disclosed interpretation).
 
-Next phase: **16 — Tune-up and v0.2 Debt Closure** (not started).
-Exact next command: `/gsd-discuss-phase 16`.
+Next phase: **16 — Tune-up and v0.2 Debt Closure** (planned; execution next).
+Exact next command: `/gsd-execute-phase 16`.
 Stop here; nothing auto-advances. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false.
 
 ### Historical Phase 12 metadata verification refresh
@@ -85,10 +85,10 @@ Review stack: branch `gsd/phase-13-verification-refresh` builds on Phase 12 refr
 
 Phase: 8
 Status: planning
-Current Plan: Not started
-Total Plans in Phase: 13
+Current Plan: 1
+Total Plans in Phase: 7
 Last Activity: 2026-10-24
-Last Activity Description: v0.3 roadmap created (Phases 16–19)
+Last Activity Description: Phase 16 execution started
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
@@ -333,6 +333,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P29 | 25 min | 2 tasks | 5 files |
 | Phase 15.1 P25 | 5h 0m | 3 tasks | 4 files |
 | Phase 15.1 P26 | 3h | 3 tasks | 7 files |
+| Phase 16 P01 | 30 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -582,6 +583,9 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-25: final-head required-check IDs recorded in the delivery receipt, not the merged evidence file (self-reference would move the head forever)
 - [Phase 15.1]: 15.1-25: tests/fuzz/fuzz_core.dict pinned to LF in .gitattributes after hosted Windows lane exposed CRLF digest mismatch
 - [Phase 15.1]: 15.1-26: evidence bound to M 2d25a47; rehearsal failures all map to existing owner limitations; strict-head recorded at B 01ecebe
+- [Phase 16]: Archive v0.2 phase records (578 files) as pure renames under .planning/milestones/v0.2-phases; embedded legacy paths rewritten under the archive, no pinned JSON bytes changed
+- [Phase 16]: TUNE-01 read per D-07: no test reads completed-milestone records from the live phases directory; current-milestone live reads go only through GBB_LIVE_PHASES_DIR, which the lint allowlists
+- [Phase 16]: 16-02: visible-demo consumed_half_dots pinned at the measured 999992 (D-107); realtime floor staged 2.0 then max(2.0, 0.6 x receipt multiple) (D-109)
 
 ### Pending Todos
 
@@ -628,8 +632,8 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-24T20:19:26.039Z
-**Stopped at:** v0.3 roadmap created (Phases 16–19, 17/17 requirements mapped); Phase 16 not started; next /gsd-discuss-phase 16
+**Last session:** 2026-10-25T01:34:06.291Z
+**Stopped at:** 16-02 Tasks 1-2 done; Task 3 blocked on PR A merge and hosted perf-attribution dispatch
 **Resume file:** None
 
 Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.

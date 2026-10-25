@@ -31,9 +31,9 @@
 - Review findings GR-IN-03 and GR2-IN-01 are deferred.
 - Open PRs #75 and #78–92 (including release-please 0.2.1) are untriaged.
 
-**Phase records not moved:** the phase directories for Phases 7–15.1 stay in `.planning/phases/`. `tests/CMakeLists.txt` and the closeout verifiers read files there (for example `GB-13-cgb-hdma/verify-hdma-closure.py` and the GB-15 UAT-closure phase), so moving them would break the test suite on main. Before these directories can be archived, the helpers they hold must move into `tests/`. Do that in the next milestone, or archive the directories with `/gsd-cleanup` once nothing references them.
+**Phase records not moved:** the phase directories for Phases 7–15.1 stay in `.planning/phases/`. `tests/CMakeLists.txt` and the closeout verifiers read files there (for example `GB-13-cgb-hdma/verify-hdma-closure.py` and the GB-15 UAT-closure phase), so moving them would break the test suite on main. Before these directories can be archived, the helpers they hold must move into `tests/`. Do that in the next milestone, or archive the directories with `/gsd-cleanup` once nothing references them. **Update:** Phase 16 moved them to `.planning/milestones/v0.2-phases/` and retargeted every reader.
 
-**Archive:** [roadmap](milestones/v0.2-ROADMAP.md) · [requirements](milestones/v0.2-REQUIREMENTS.md) · [audit](milestones/v0.2-MILESTONE-AUDIT.md) · [integration audit](milestones/v0.2-INTEGRATION-AUDIT.md) · [phases](phases/) · [quick tasks](milestones/v0.2-quick/)
+**Archive:** [roadmap](milestones/v0.2-ROADMAP.md) · [requirements](milestones/v0.2-REQUIREMENTS.md) · [audit](milestones/v0.2-MILESTONE-AUDIT.md) · [integration audit](milestones/v0.2-INTEGRATION-AUDIT.md) · [phases](milestones/v0.2-phases/) · [quick tasks](milestones/v0.2-quick/)
 
 ---
 

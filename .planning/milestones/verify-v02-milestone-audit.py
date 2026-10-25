@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 REPORT = ROOT / '.planning/milestones/v0.2-MILESTONE-AUDIT.md'
 INTEGRATION = ROOT / '.planning/milestones/v0.2-INTEGRATION-AUDIT.md'
 

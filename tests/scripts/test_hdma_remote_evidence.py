@@ -10,7 +10,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CHECKER_PATH = ROOT / ".planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py"
+CHECKER_PATH = ROOT / "tests/scripts/verify-hdma-lane.py"
 EXPECTED_HEAD = "a" * 40
 REQUIRED_CONTEXTS = (
     "required-native",

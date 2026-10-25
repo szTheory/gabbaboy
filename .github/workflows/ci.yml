@@ -392,6 +392,33 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  perf-gate:
+    name: perf-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # The gate builds v0.2.0 in the same job and verifies the tag, so it needs tags and history.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install valgrind
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y valgrind || { sleep 20; sudo apt-get update -qq; sudo apt-get install -y valgrind; }
+      - name: Gate cachegrind Ir against v0.2.0 and the realtime floor
+        shell: bash
+        run: bash tests/scripts/run-perf-gate.sh --gate
+      - name: Prove the gate rejects a seeded regression
+        shell: bash
+        run: bash tests/scripts/run-perf-gate.sh --seeded-regression
+      - name: Prove the gate accepts a no-op twin patch
+        shell: bash
+        run: bash tests/scripts/run-perf-gate.sh --noop-twin
+
   required-native:
     name: required-native
     if: always()
@@ -403,6 +430,7 @@ jobs:
       - linux-sanitizers-tests
       - linux-sanitizers-acceptance
       - cmake-floor-3-25-3
+      - perf-gate
       - player-gate
       - macos-player-package
     runs-on: ubuntu-22.04
@@ -421,11 +449,12 @@ jobs:
           LINUX_SANITIZER_TESTS: ${{ needs.linux-sanitizers-tests.result }}
           LINUX_SANITIZER_ACCEPTANCE: ${{ needs.linux-sanitizers-acceptance.result }}
           CMAKE_FLOOR: ${{ needs.cmake-floor-3-25-3.result }}
+          PERF_GATE: ${{ needs.perf-gate.result }}
           PLAYER_GATE: ${{ needs.player-gate.result }}
           PLAYER_REQUIRED: ${{ needs.player-gate.outputs.player_required }}
           PLAYER_RESULT: ${{ needs.macos-player-package.result }}
         run: |
-          for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$LINUX_SANITIZER_TESTS" "$LINUX_SANITIZER_ACCEPTANCE" "$CMAKE_FLOOR" "$PLAYER_GATE"; do
+          for result in "$NATIVE_LINUX" "$NATIVE_MACOS" "$NATIVE_WINDOWS" "$LINUX_SANITIZERS" "$LINUX_SANITIZER_TESTS" "$LINUX_SANITIZER_ACCEPTANCE" "$CMAKE_FLOOR" "$PERF_GATE" "$PLAYER_GATE"; do
             if [[ "$result" != success ]]; then
               echo "Required evidence job did not succeed: $result" >&2
               exit 1
