@@ -1399,6 +1399,41 @@ def check_readonly_workflows(root: Path, exempt=None) -> None:
         _check_checkout_credentials(workflow, tree, [job_id for job_id in tree["jobs"] if (workflow, job_id) not in exempt])
 
 
+# preview.yml player smoke vs the planning-only lane (D-21): a kind=planning exact-head CI run skips
+# macos-player-package, so the wait excuses exactly that skip (and only for a planning run, which the wait reads from the
+# run's own job results) and the three download/verify/upload steps are skipped when the wait reports kind=planning.
+# `!= 'planning'` keeps the steps running (and failing on the missing run id) whenever the kind output is absent.
+PREVIEW_PLAYER_JOB = "player-package-smoke-macos"
+PREVIEW_PLAYER_WAIT_PINS = (
+    "--require required-native --require macos-player-package",
+    "--planning-skippable macos-player-package --deadline-seconds",
+)
+PREVIEW_PLAYER_GUARD = "steps.candidate.outputs.kind != 'planning'"
+PREVIEW_PLAYER_GUARDED_STEPS = (
+    "Download run-scoped candidate package",
+    "Verify downloaded package bytes and create consumer receipt",
+    "Upload qualified macOS player preview and receipt",
+)
+
+
+def check_preview_player_lane(root: Path) -> None:
+    workflow = "preview.yml"
+    tree = read_workflow(root / ".github/workflows" / workflow)
+    job = _require_job(workflow, tree, PREVIEW_PLAYER_JOB)
+    steps = job.get("steps", [])
+    waits = [step for step in steps if step.get("id") == "candidate"]
+    run = " ".join(str(waits[0].get("run", "")).split()) if len(waits) == 1 else ""
+    for pin in PREVIEW_PLAYER_WAIT_PINS:
+        if pin not in run:
+            raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} wait step must contain: {pin}")
+    if run.count("--planning-skippable") != 1 or run.count("--require") != 2:
+        raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} may excuse only macos-player-package, with both jobs required")
+    for name in PREVIEW_PLAYER_GUARDED_STEPS:
+        named = [step for step in steps if step.get("name") == name]
+        if len(named) != 1 or _normalise_if(named[0].get("if", "")) != PREVIEW_PLAYER_GUARD:
+            raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} step {name!r} must run only when {PREVIEW_PLAYER_GUARD}")
+
+
 def _check_ci_planning_lane(workflow: str, tree: dict) -> None:
     """The planning-only lane (D-21): a read-only classifier on the base commit's copy, a real planning-checks job, and
     the full-matrix condition on every heavy job. required-native itself is judged by check_ci."""
@@ -1933,6 +1968,7 @@ def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_perf_attribution(root)
     check_nightly(root)
     check_readonly_workflows(root)
+    check_preview_player_lane(root)
     check_release(root)
     check_timeout_ledger(root, release_head)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
@@ -2361,6 +2397,19 @@ def _mutations():
            "          persist-credentials: false\n", "", "checkout-credentials"),
         _m("preview installed-package-smoke checkout persists credentials", "preview.yml", "  installed-package-smoke-linux-x64:\n",
            "          persist-credentials: false\n", "", "checkout-credentials"),
+        _m("preview player wait stops excusing the planning skip", "preview.yml", "  player-package-smoke-macos:\n",
+           "          --planning-skippable macos-player-package\n", "", "preview-player-lane"),
+        _m("preview player wait also excuses required-native", "preview.yml", "  player-package-smoke-macos:\n",
+           "--planning-skippable macos-player-package", "--planning-skippable macos-player-package --planning-skippable required-native",
+           "preview-player-lane"),
+        _m("preview player wait stops requiring macos-player-package", "preview.yml", "  player-package-smoke-macos:\n",
+           "--require required-native --require macos-player-package", "--require required-native", "preview-player-lane"),
+        _m("preview player download guard inverted", "preview.yml", "      - name: Download run-scoped candidate package\n",
+           "kind != 'planning'", "kind == 'planning'", "preview-player-lane"),
+        _m("preview player byte verification no longer guarded", "preview.yml", "      - name: Verify downloaded package bytes and create consumer receipt\n",
+           "        if: steps.candidate.outputs.kind != 'planning'\n", "", "preview-player-lane"),
+        _m("preview player upload guard made unconditional", "preview.yml", "      - name: Upload qualified macOS player preview and receipt\n",
+           "kind != 'planning'", "kind != 'planning' || true", "preview-player-lane"),
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),

@@ -556,12 +556,17 @@ add_test(NAME acceptance_stall_diagnosis
 set_tests_properties(acceptance_stall_diagnosis PROPERTIES
   TIMEOUT 60 FIXTURES_REQUIRED gbb_stall_full WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-# Bounded PR replay (D-19, TUNE-04): the same drop:START negative control on a tenth of the libbet budget, from
-# the SHA-256 pinned case file tests/data/stall-bounded-cases.txt (the ROM is pinned inside it by rom_sha256 and
+# Bounded PR replay (D-19, TUNE-04): the same drop:START negative control on a twenty-fifth of the libbet budget
+# (144 frames; it was a tenth, 360 frames, until the ASan lane hit this test's scaled 180 s TIMEOUT: the test runs
+# two serial replays and the hosted ASan job measured 92.9 s once, then timed out twice under --parallel 4). The
+# replay is bounded by its half-dot budget, never unbounded. The budget cannot shrink freely: the stall report must
+# hold a joypad (FF00) write, which libbet first makes between 111 and 120 frames in, so 100 and 110 frames fail
+# the report check and 120 passes; 144 keeps a 20% margin. From the SHA-256 pinned
+# case file tests/data/stall-bounded-cases.txt (the ROM is pinned inside it by rom_sha256 and
 # rom_size). It must still fail with predicate-not-reached and produce a deterministic report and PPM, so the PR
 # sanitizer lane keeps the negative control while the full replays move to the scheduled lane.
 set(GBB_STALL_BOUNDED_CASES ${PROJECT_SOURCE_DIR}/tests/data/stall-bounded-cases.txt)
-set(GBB_STALL_BOUNDED_CASES_SHA256 "ed65d0082979f5e87260adddcf3b6f2cb1ca93b713400999d71ad8b3e7535f5b")
+set(GBB_STALL_BOUNDED_CASES_SHA256 "30f64d8d529ede13d941fb71fda59fad21ac71db3cd14b61c521dc43d98d5e4f")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_STALL_BOUNDED_CASES})
 file(SHA256 ${GBB_STALL_BOUNDED_CASES} gbb_stall_bounded_cases_sha256)
 if(NOT gbb_stall_bounded_cases_sha256 STREQUAL GBB_STALL_BOUNDED_CASES_SHA256)
