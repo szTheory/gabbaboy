@@ -82,7 +82,7 @@ Milestone-wide rules:
   4. Planning hygiene CTests reject an over-cap phase fixture against the ROADMAP `**Plan cap**` lines, a duplicated LESSONS id (current duplicates renumbered) and an oversized STATE.md, and a docs check rejects the stale Playstead statements now corrected in README, `docs/native-integration.md` and PRECEDENT.
   5. A new versioned support ledger for post-`v0.2.0` source passes `--check-current` while a check rejects any change to the `v0.2.0` ledger bytes; the hosted rehearsal and trusted judge are green at the exact head; `v0.2.1` is published from release-please PR #75 and its release readback reconciles; PRs #78–92 are closed as superseded and the D-106 LIM dispositions are recorded.
 
-**Plans**: 3/7 plans executed (cap 8; one slot kept for the single gap round)
+**Plans**: 5/7 plans executed (cap 8; one slot kept for the single gap round)
 
 Plans:
 **Wave 1**
@@ -95,10 +95,10 @@ Plans:
 - [x] 16-03-PLAN.md — Per-test TIMEOUT ratchet, sharded and bounded ASan stall replay, nightly-asan lane (TUNE-04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 16-04-PLAN.md — Planning-only classifier behind required-native, timeout ledger, planning-label lint (TUNE-04)
+- [x] 16-04-PLAN.md — Planning-only classifier behind required-native, timeout ledger, planning-label lint (TUNE-04)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 16-05-PLAN.md — Phase 8 verifiers in CTest on a boundary tag; plan-cap, LESSONS, STATE and Playstead checks (TUNE-02, TUNE-05)
+- [x] 16-05-PLAN.md — Phase 8 verifiers in CTest on a boundary tag; plan-cap, LESSONS, STATE and Playstead checks (TUNE-02, TUNE-05)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 16-06-PLAN.md — v0.2.0 ledger freeze, version-agnostic release checks, review path, v0.3 disposition record (TUNE-06)
@@ -164,7 +164,7 @@ Plans:
 
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
-| 16. Tune-up and v0.2 Debt Closure | 3/7 | 8 | Planned | - |
+| 16. Tune-up and v0.2 Debt Closure | 5/7 | 8 | Planned | - |
 | 17. Native Save State Core | 0/TBD | 12 | Not started | - |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |
