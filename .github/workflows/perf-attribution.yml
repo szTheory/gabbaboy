@@ -1,0 +1,47 @@
+name: perf-attribution
+
+# Hosted measurement for the D-17 attribution receipt (tests/baseline/perf-attribution-v1.json).
+# Dispatch it by hand: `gh workflow run perf-attribution.yml --ref main`. The job measures cachegrind Ir
+# at the selected revisions and uploads the receipt as an artifact. It never pushes: a human or agent
+# downloads the artifact and commits it in a normal reviewed PR.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GBB_ATTRIBUTION_OUT: perf-attribution-v1.json
+
+jobs:
+  attribution:
+    name: attribution
+    runs-on: ubuntu-24.04
+    # About 39 Release builds, each measured twice under cachegrind for three ROMs, plus the realtime set.
+    timeout-minutes: 150
+    steps:
+      - name: Check out source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build every selected revision before any cachegrind work
+        shell: bash
+        run: bash tests/scripts/run-perf-gate.sh --attribution-dry-run
+      - name: Install valgrind
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y valgrind || { sleep 20; sudo apt-get update -qq; sudo apt-get install -y valgrind; }
+      - name: Measure the selection and write the receipt
+        shell: bash
+        run: bash tests/scripts/run-perf-gate.sh --attribution
+      - name: Retain the receipt
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: perf-attribution-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: perf-attribution-v1.json
+          if-no-files-found: error
+          retention-days: 14

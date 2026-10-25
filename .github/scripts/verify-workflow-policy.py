@@ -994,7 +994,7 @@ def _overlay_basename(word: str) -> str:
 
 
 # --------------------------------------------------------------------------- policy
-REHEARSAL_PRODUCERS = ("corpus", "fuzz", "performance", "package", "aggregate")
+REHEARSAL_PRODUCERS = ("corpus", "fuzz", "performance", "perf-gate", "package", "aggregate")
 REHEARSAL_FUZZ_ARTIFACT = "rehearsal-fuzz-${{ github.run_id }}-${{ github.run_attempt }}"
 DEFAULT_BRANCH_REF = "${{ github.event.repository.default_branch }}"
 TRUSTED_SHA_REF = "${{ github.sha }}"
@@ -1053,7 +1053,14 @@ _REHEARSAL_TAG = _SHARED + ' verify-subject --subject . --source-sha "$GITHUB_SH
 _RELEASE_SUBJECT = _SHARED + ' verify-subject --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG"'
 _CORPUS_BUILD = _SHARED + " corpus-build --subject ."
 _LEDGER_BASE = 'python3 -I tests/scripts/verify-support-ledger.py --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --receipt build/cgb-corpus-receipt.json'
+# The hosted cumulative performance gate (Phase 16, D-14..D-16): the gate itself and both seeded controls.
+PERF_GATE_COMMANDS = (
+    "bash tests/scripts/run-perf-gate.sh --gate",
+    "bash tests/scripts/run-perf-gate.sh --seeded-regression",
+    "bash tests/scripts/run-perf-gate.sh --noop-twin",
+)
 REHEARSAL_REQUIRED = {
+    "perf-gate": PERF_GATE_COMMANDS,
     "corpus": (
         _REHEARSAL_TAG,
         _CORPUS_BUILD,
@@ -1248,7 +1255,7 @@ CI_STATUS_CALLS = (
     ("python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json", "verify_status", True),
     ("GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test", "self_test_status", True),
 )
-CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "player-gate", "macos-player-package"}
+CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "perf-gate", "player-gate", "macos-player-package"}
 
 
 _FORBIDDEN_PRODUCER_HEADS = {"gh", "curl", "wget", "ssh", "scp"}
@@ -1340,7 +1347,7 @@ def check_rehearsal(root: Path) -> None:
 # Read-only workflows must not leave the checkout token in .git/config for later steps (IN-08). A job that truly
 # needs the persisted credential is listed here as (workflow file, job id) -> reason; none does today, because the
 # jobs authenticate gh through an explicit step-level token and fetch only public sources.
-READONLY_WORKFLOWS = ("ci.yml", "fixture-repro.yml", "preview.yml")
+READONLY_WORKFLOWS = ("ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml")
 CREDENTIAL_EXEMPT: dict[tuple[str, str], str] = {}
 
 
@@ -1380,19 +1387,57 @@ def check_ci(root: Path) -> None:
         raise Reject("workflow-dependency", "ci.required-native must run always() so skipped or failed lanes are rejected, not skipped")
     for var, lane in (("LINUX_SANITIZERS", "linux-sanitizers"), ("LINUX_SANITIZER_TESTS", "linux-sanitizers-tests"),
                        ("LINUX_SANITIZER_ACCEPTANCE", "linux-sanitizers-acceptance"),
-                       ("NATIVE_LINUX", "native-linux"), ("CMAKE_FLOOR", "cmake-floor-3-25-3")):
+                       ("NATIVE_LINUX", "native-linux"), ("CMAKE_FLOOR", "cmake-floor-3-25-3"),
+                       ("PERF_GATE", "perf-gate")):
         mapped = [step.get("env", {}).get(var) for step in gate.get("steps", [])]
         if "${{ needs." + lane + ".result }}" not in mapped:
             raise Reject("workflow-dependency", f"ci.required-native must read the {lane} result")
     require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"')
     for command in CI_REQUIRED:
         require_call(name, "linux-sanitizers", job, command)
+    perf_job = _require_job(name, tree, "perf-gate")
+    if perf_job.get("runs-on") != "ubuntu-24.04":
+        raise Reject("runner-image", "ci.perf-gate must run on the pinned ubuntu-24.04 image")
+    for command in PERF_GATE_COMMANDS:
+        require_call(name, "perf-gate", perf_job, command)
     for shard, commands in CI_SANITIZER_SHARDS.items():
         shard_job = _require_job(name, tree, shard)
         for command in commands:
             require_call(name, shard, shard_job, command)
     for command, var, conditional in CI_STATUS_CALLS:
         require_call(name, "linux-sanitizers", job, command, conditional=conditional, errexit_off=True, status_var=var)
+
+
+PERF_ATTRIBUTION_COMMANDS = (
+    "bash tests/scripts/run-perf-gate.sh --attribution-dry-run",
+    "bash tests/scripts/run-perf-gate.sh --attribution",
+)
+
+
+def check_perf_attribution(root: Path) -> None:
+    """The dispatched D-17 measurement job: manual trigger only, read-only, never pushes (D-02a)."""
+    name = "perf-attribution"
+    tree = read_workflow(root / ".github/workflows/perf-attribution.yml")
+    if _trigger_names(tree) != {"workflow_dispatch"}:
+        raise Reject("workflow-trigger", "perf-attribution must trigger on workflow_dispatch only")
+    if tree.get("permissions") != {"contents": "read"}:
+        raise Reject("workflow-permissions", "perf-attribution must declare only top-level contents: read")
+    _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_bounded_downloads(name, tree)
+    _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
+    _check_checkout_credentials(name, tree, tree["jobs"])
+    if set(tree["jobs"]) != {"attribution"}:
+        raise Reject("job-unclassified", "perf-attribution must hold exactly the attribution job")
+    job = tree["jobs"]["attribution"]
+    if _writes(_permissions(job, tree["permissions"])) or "permissions" in job:
+        raise Reject("producer-write-authority", "perf-attribution.attribution must not hold or widen permissions")
+    _check_unprivileged(name, tree, "attribution")
+    if job.get("runs-on") != "ubuntu-24.04":
+        raise Reject("runner-image", "perf-attribution must run on the pinned ubuntu-24.04 image")
+    for command in PERF_ATTRIBUTION_COMMANDS:
+        require_call(name, "attribution", job, command)
 
 
 def _check_residual_classification(roles=None, subject=None, exempt=None, overlays=None) -> None:
@@ -1597,6 +1642,7 @@ def check_all(root: Path) -> dict[str, int]:
     check_producer_script(root)
     check_rehearsal(root)
     check_ci(root)
+    check_perf_attribution(root)
     check_readonly_workflows(root)
     check_release(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
@@ -1604,7 +1650,7 @@ def check_all(root: Path) -> dict[str, int]:
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -1678,8 +1724,35 @@ def _mutations():
          "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject",
          "python3 -I subject/.github/scripts/verify-workflow-policy.py --check --root subject", "judge-subject-execution"),
         _m("rehearsal judge stops waiting for the fuzz producer", reh, "  judge:\n",
-         "needs: [corpus, fuzz, performance, package, aggregate]", "needs: [corpus, performance, package, aggregate]",
+         "needs: [corpus, fuzz, performance, perf-gate, package, aggregate]", "needs: [corpus, fuzz, performance, package, aggregate]",
          "workflow-dependency"),
+        _m("rehearsal judge stops waiting for the perf-gate producer", reh, "  judge:\n",
+         "needs: [corpus, fuzz, performance, perf-gate, package, aggregate]", "needs: [corpus, fuzz, performance, package, aggregate]",
+         "workflow-dependency"),
+        _m("rehearsal perf-gate seeded-regression control removed", reh, "  perf-gate:\n",
+         "bash tests/scripts/run-perf-gate.sh --seeded-regression", "true", "required-command-not-executed"),
+        _m("required-native stops waiting for perf-gate", "ci.yml", "  required-native:\n", "      - perf-gate\n", "", "workflow-dependency"),
+        _m("required-native ignores the perf-gate result", "ci.yml", "  required-native:\n",
+           "          PERF_GATE: ${{ needs.perf-gate.result }}\n", "", "workflow-dependency"),
+        _m("ci perf-gate gate command replaced by echo", "ci.yml", "  perf-gate:\n",
+           "run: bash tests/scripts/run-perf-gate.sh --gate", "run: echo bash tests/scripts/run-perf-gate.sh --gate",
+           "required-command-not-executed"),
+        _m("ci perf-gate no-op twin control removed", "ci.yml", "  perf-gate:\n",
+           "bash tests/scripts/run-perf-gate.sh --noop-twin", "true", "required-command-not-executed"),
+        _m("ci perf-gate checkout persists credentials", "ci.yml", "  perf-gate:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("ci perf-gate gains contents: write", "ci.yml", "  perf-gate:\n", "    runs-on: ubuntu-24.04\n",
+           "    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n", "producer-write-authority"),
+        _m("perf-attribution gains a push trigger", "perf-attribution.yml", "", "on:\n  workflow_dispatch:\n",
+           "on:\n  workflow_dispatch:\n  push:\n    branches: [main]\n", "workflow-trigger"),
+        _m("perf-attribution top-level write", "perf-attribution.yml", "", "permissions:\n  contents: read\n",
+           "permissions:\n  contents: write\n", "workflow-permissions"),
+        _m("perf-attribution job gains contents: write", "perf-attribution.yml", "  attribution:\n", "    runs-on: ubuntu-24.04\n",
+           "    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n", "producer-write-authority"),
+        _m("perf-attribution checkout persists credentials", "perf-attribution.yml", "  attribution:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("perf-attribution dry run before cachegrind work removed", "perf-attribution.yml", "  attribution:\n",
+           "run: bash tests/scripts/run-perf-gate.sh --attribution-dry-run", "run: true", "required-command-not-executed"),
         _m("rehearsal fuzz artifact no longer retained", reh, "  fuzz:\n", "name: " + REHEARSAL_FUZZ_ARTIFACT,
          "name: renamed-" + REHEARSAL_FUZZ_ARTIFACT, "artifact-flow"),
         _m("rehearsal checkout persists credentials", reh, "  corpus:\n", "persist-credentials: false",

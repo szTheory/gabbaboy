@@ -137,6 +137,33 @@ jobs:
           bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json
           python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
 
+  perf-gate:
+    name: rehearse-perf-gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out the rehearsed source with full history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          # The gate builds v0.2.0 in the same job and verifies the tag, so it needs tags and history.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install valgrind
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y valgrind || { sleep 20; sudo apt-get update -qq; sudo apt-get install -y valgrind; }
+      - name: Gate cachegrind Ir against v0.2.0 and the realtime floor
+        shell: bash
+        run: bash tests/scripts/run-perf-gate.sh --gate
+      - name: Prove the gate rejects a seeded regression
+        shell: bash
+        run: bash tests/scripts/run-perf-gate.sh --seeded-regression
+      - name: Prove the gate accepts a no-op twin patch
+        shell: bash
+        run: bash tests/scripts/run-perf-gate.sh --noop-twin
+
   package:
     name: rehearse-package-consumers-and-archive
     runs-on: ubuntu-22.04
@@ -278,7 +305,7 @@ jobs:
   # producer bytes as data. A rehearsal run proves nothing until the judge exists on that branch.
   judge:
     name: rehearse-trusted-judge
-    needs: [corpus, fuzz, performance, package, aggregate]
+    needs: [corpus, fuzz, performance, perf-gate, package, aggregate]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

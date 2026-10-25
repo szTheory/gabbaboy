@@ -56,7 +56,7 @@ function(gbb_add_perf_gate_test name code regex)
 endfunction()
 
 # The control count is a parsed minimum: adding controls is allowed, dropping one is rejected.
-set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10)
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=33)
 gbb_add_perf_gate_test(perf_gate_controls 0 "perf-gate self-test pass controls=[0-9]+" --self-test)
 set(GBB_PERF_GATE_EXTRA_ARGS)
 
