@@ -4,9 +4,9 @@ milestone: v0.3
 milestone_name: Save States & Host Contract
 current_phase: 16
 current_phase_name: Tune-up and v0.2 Debt Closure
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed 16-05-PLAN.md (merged in #112; follow-ups #110 and #111 merged)
+stopped_at: Completed 16-06-PLAN.md (merged in #114)
 last_updated: "2026-10-25T12:00:00.000Z"
 last_activity: 2026-10-25
 last_activity_desc: Phase 16 execution started
@@ -15,7 +15,7 @@ progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -31,9 +31,9 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 ## Current Position
 
 Phase: 16 (Tune-up and v0.2 Debt Closure) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Executing Phase 16
-Last activity: 2026-10-25 — 16-01..16-05 merged (#104-#107, #109, #112); planning-lane fix #110 and parallel native CTest #111 merged
+Last activity: 2026-10-25 — 16-01..16-06 merged (#104-#107, #109, #112, #114); planning-lane fix #110 and parallel native CTest #111 merged
 
 Completed stage: **Phase 16 planning** — [16-RESEARCH.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-RESEARCH.md), [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md), [16-PATTERNS.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-PATTERNS.md) and plans 16-01..16-07 (TUNE-01..06 and D-01..D-33 covered). Owner accepted at plan-phase: token estimates over the advisory budget and the 16-01 19-file scope exception. Phase 16 is not executed. Prior stage: **Phase 16 discussion (context gathered)**. [16-CONTEXT.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-CONTEXT.md) locks D-01..D-33: release-last, 7 target plans (cap 8), no src/ change, owner decisions D-13 (accept +8.3% perf with attribution, seed RM-023), D-29 (pin both v0.2.0 ledger digests; #93 append disclosed) and D-07 (TUNE-01 live-phase carve-out as disclosed interpretation).
 
@@ -80,7 +80,7 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 ## Session Continuity
 
 **Last session:** 2026-10-25T03:42:34.087Z
-**Stopped at:** Completed 16-05-PLAN.md; 16-06 next within Phase 16
+**Stopped at:** Completed 16-06-PLAN.md; 16-07 (v0.2.1 release) next within Phase 16
 **Resume file:** None
 
 Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.
