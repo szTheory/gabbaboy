@@ -1439,13 +1439,13 @@ if(NOT WIN32)
   set(GBB_CORE_LINKAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-core-linkage.py")
   add_test(NAME core_linkage_links
     COMMAND ${CMAKE_COMMAND}
-      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--check;--build-dir;${PROJECT_BINARY_DIR}"
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--check;--build-dir;${PROJECT_BINARY_DIR};--ctest;${CMAKE_CTEST_COMMAND}"
       -DGBB_EXPECT_CODE=0
       "-DGBB_EXPECT_REGEX=core-linkage pass targets=[1-9][0-9]* mutant_targets=[1-9][0-9]* identity_normal=[1-9][0-9]* identity_mutant=[1-9][0-9]*"
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   add_test(NAME core_linkage_controls
     COMMAND ${CMAKE_COMMAND}
-      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--self-test;--build-dir;${PROJECT_BINARY_DIR}"
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--self-test;--build-dir;${PROJECT_BINARY_DIR};--ctest;${CMAKE_CTEST_COMMAND}"
       -DGBB_EXPECT_CODE=0
       "-DGBB_EXPECT_REGEX=core-linkage self-test pass targets=[1-9][0-9]* .* behavioural=3 rejected_controls=[1-9][0-9]*"
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
@@ -1748,6 +1748,10 @@ add_test(NAME preview_package_smoke
     -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
+
+# Phase 16 D-18: the base TIMEOUT for tests that set none. The player child scope inherits it and
+# applies the same sweep, because this directory's pass cannot reach child-directory tests.
+set(GBB_DEFAULT_TEST_TIMEOUT_SECONDS 60)
 
 if(GABBABOY_BUILD_PLAYER)
   add_subdirectory(player)
@@ -2721,6 +2725,26 @@ add_test(NAME no_phase_paths
     -DGBB_EXPECT_MIN_KEY=files -DGBB_EXPECT_MIN_VALUE=380
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(no_phase_paths PROPERTIES TIMEOUT 60 LABELS "planning")
+
+# Per-test TIMEOUT ratchet (Phase 16 TUNE-04, D-18). The controls prove each budget, ceiling, staleness, expiry,
+# base-ratchet and base-commit ref rule; the tree check reads the real json-v1 inventory with a floor on its size.
+set(GBB_TEST_BUDGET_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-test-budget.py")
+add_test(NAME test_budget_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=test-budget self-test pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(test_budget_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+add_test(NAME test_budget
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--build-dir;${PROJECT_BINARY_DIR};--ctest;${CMAKE_CTEST_COMMAND}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=test-budget pass tests=[0-9]+ allowlisted=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=tests -DGBB_EXPECT_MIN_VALUE=1000
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(test_budget PROPERTIES TIMEOUT 60 LABELS "planning")
 
 # UAT closure gate (DECISIONS D-069, review WR-05): the checker enforces its contract with ClosureError, never
 # assert, and refuses python -O. The controls run on a tracked closed phase; the second test proves through the
@@ -4714,6 +4738,20 @@ gabbaboy_verify_registered_tests()
 # slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
 # runner (LESSONS GB-CI-004). Apply one shared multiplier after every test registration.
 include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+
+# Default budget (Phase 16 D-18). A test that sets no TIMEOUT keeps CTest's 1500 s default, and the
+# scaler skips unset tests, so such a test would also stay at 1500 s under ASan. Give every unset test
+# in this directory scope the explicit base budget so the scaler multiplies it and
+# tests/scripts/verify-test-budget.py can rule out a test with no limit.
+get_property(gbb_default_budget_tests DIRECTORY PROPERTY TESTS)
+foreach(gbb_default_budget_test IN LISTS gbb_default_budget_tests)
+  get_test_property(${gbb_default_budget_test} TIMEOUT gbb_default_budget_timeout)
+  if(NOT gbb_default_budget_timeout)
+    set_tests_properties(${gbb_default_budget_test}
+      PROPERTIES TIMEOUT ${GBB_DEFAULT_TEST_TIMEOUT_SECONDS})
+  endif()
+endforeach()
+
 gbb_scale_sanitizer_test_timeouts()
 
 if(GABBABOY_ENABLE_SANITIZERS)

@@ -35,6 +35,24 @@ jobs:
         run: |
           mkdir -p build/package-prefix
           cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+      - name: Resolve the per-test budget base commit
+        id: budget_base
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          # D-18: the PR base, or the push parent. A push that creates a branch or tag has an all-zero parent,
+          # so it is judged against the merge base with origin/main; an empty or unresolvable base still fails.
+          base="${PR_BASE:-$PUSH_BEFORE}"
+          if [ -z "${base//0/}" ]; then
+            base=$(git merge-base HEAD origin/main)
+          fi
+          git cat-file -e "${base}^{commit}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+      - name: Check per-test TIMEOUT budgets against the base allowlist
+        env:
+          BUDGET_BASE: ${{ steps.budget_base.outputs.base }}
+        run: python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"
       - name: Build
         run: cmake --build --preset phase1 --verbose
       - name: Record acceptance and Mooneye observations

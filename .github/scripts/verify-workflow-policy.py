@@ -1255,6 +1255,11 @@ CI_STATUS_CALLS = (
     ("python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json", "verify_status", True),
     ("GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test", "self_test_status", True),
 )
+# The per-test TIMEOUT ratchet (D-18): the native-linux job passes the PR base or push parent as --base so a change
+# cannot judge its own allowlist against itself.
+CI_BUDGET_COMMANDS = (
+    'python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"',
+)
 CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "perf-gate", "player-gate", "macos-player-package"}
 
 
@@ -1395,6 +1400,9 @@ def check_ci(root: Path) -> None:
     require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"')
     for command in CI_REQUIRED:
         require_call(name, "linux-sanitizers", job, command)
+    native_linux = _require_job(name, tree, "native-linux")
+    for command in CI_BUDGET_COMMANDS:
+        require_call(name, "native-linux", native_linux, command)
     perf_job = _require_job(name, tree, "perf-gate")
     if perf_job.get("runs-on") != "ubuntu-24.04":
         raise Reject("runner-image", "ci.perf-gate must run on the pinned ubuntu-24.04 image")
@@ -1736,6 +1744,9 @@ def _mutations():
            "          PERF_GATE: ${{ needs.perf-gate.result }}\n", "", "workflow-dependency"),
         _m("ci perf-gate gate command replaced by echo", "ci.yml", "  perf-gate:\n",
            "run: bash tests/scripts/run-perf-gate.sh --gate", "run: echo bash tests/scripts/run-perf-gate.sh --gate",
+           "required-command-not-executed"),
+        _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
+           'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
            "required-command-not-executed"),
         _m("ci perf-gate no-op twin control removed", "ci.yml", "  perf-gate:\n",
            "bash tests/scripts/run-perf-gate.sh --noop-twin", "true", "required-command-not-executed"),
