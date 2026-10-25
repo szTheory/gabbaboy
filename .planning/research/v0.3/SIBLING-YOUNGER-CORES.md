@@ -27,7 +27,8 @@ reproduce it. All paths are relative to the named repository.
 - [V] schwaystation enforces unique lesson IDs with a test, `policy.lessons_unique` (LESSONS.md:24-26).
   Reason: a sibling ledger reused IDs (XFER-069, sourced from GabbaBoy). GabbaBoy's own LESSONS.md still
   has duplicate IDs: `GB-FIXTURE-001` appears three times (lines 64, 214, 835) and `GB-TEST-001` twice
-  (151, 223).
+  (151, 223). (Renumbered in Phase 16: the later duplicates are now `GB-FIXTURE-003`, `GB-FIXTURE-004`
+  and `GB-TEST-007`, and `lessons_unique_ids` enforces uniqueness.)
 
 ## 1. Process and velocity footguns, and what fixed them
 

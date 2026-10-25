@@ -46,3 +46,22 @@ set(GBB_HYGIENE_EXTRA_ARGS "-DGBB_FORBID_REGEX=boundary unreadable")
 gbb_add_hygiene_test(phase8_player_contract_wrong_boundary 1 "phase8-player-contract: FAIL" 60
   "${GBB_PHASE8_PLAYER_CHECKER}" --boundary v0.2.0)
 set(GBB_HYGIENE_EXTRA_ARGS)
+
+# TUNE-05 planning hygiene (D-24..D-27). Each check reads one planning file; planning_hygiene_controls drives every rule
+# against generated and committed fixtures, so the over-cap, missing-cap, duplicate-id and oversized-STATE controls
+# never touch the live files.
+set(GBB_PLANNING_HYGIENE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-planning-hygiene.py")
+set(GBB_HYGIENE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=phases -DGBB_EXPECT_MIN_VALUE=4)
+gbb_add_hygiene_test(plan_cap 0 "plan-cap pass phases=[0-9]+ plans=[0-9]+" 30
+  "${GBB_PLANNING_HYGIENE_CHECKER}" --check plan-cap
+  --roadmap "${PROJECT_SOURCE_DIR}/.planning/ROADMAP.md" --phases-dir "${GBB_LIVE_PHASES_DIR}")
+set(GBB_HYGIENE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=ids -DGBB_EXPECT_MIN_VALUE=90)
+gbb_add_hygiene_test(lessons_unique_ids 0 "lessons-ids pass ids=[0-9]+" 30
+  "${GBB_PLANNING_HYGIENE_CHECKER}" --check lessons-ids --lessons "${PROJECT_SOURCE_DIR}/.planning/context/LESSONS.md")
+set(GBB_HYGIENE_EXTRA_ARGS)
+gbb_add_hygiene_test(state_size 0 "state-size pass bytes=[0-9]+ lines=[0-9]+" 30
+  "${GBB_PLANNING_HYGIENE_CHECKER}" --check state-size --state "${PROJECT_SOURCE_DIR}/.planning/STATE.md")
+set(GBB_HYGIENE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=12)
+gbb_add_hygiene_test(planning_hygiene_controls 0 "planning-hygiene self-test pass controls=[0-9]+" 30
+  "${GBB_PLANNING_HYGIENE_CHECKER}" --self-test)
+set(GBB_HYGIENE_EXTRA_ARGS)
