@@ -11,7 +11,7 @@ set(GBB_CLASSIFY_DATA "${PROJECT_SOURCE_DIR}/tests/data/classify-changes")
 
 # Immutable recorded raw diffs: SHA256SUMS lists every fixture and its digest, and the manifest itself is pinned
 # here. A drifted, missing or extra file stops configuration. Do not repair a fixture; add a second one.
-set(GBB_CLASSIFY_MANIFEST_SHA256 "86080d39d62885af805f1f36ca3e9045efcac4fd5c7bd70b3aa78917a3ccc1ef")
+set(GBB_CLASSIFY_MANIFEST_SHA256 "af528d6b7b2f80a1028644d5f01167bc70ce42b599dbf345a834413dd5cb9bb6")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_CLASSIFY_DATA}/SHA256SUMS")
 file(SHA256 "${GBB_CLASSIFY_DATA}/SHA256SUMS" gbb_classify_manifest_sha256)
 if(NOT gbb_classify_manifest_sha256 STREQUAL GBB_CLASSIFY_MANIFEST_SHA256)
@@ -83,4 +83,17 @@ gbb_add_ci_lane_test(workflow_policy_check 0 "PASS: workflow privilege and trust
 set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=negative_controls -DGBB_EXPECT_MIN_VALUE=200)
 gbb_add_ci_lane_test(workflow_policy_controls 0 "PASS: workflow policy self-test negative_controls=[0-9]+ positive_controls=[0-9]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --root "${PROJECT_SOURCE_DIR}")
+set(GBB_CI_LANE_EXTRA_ARGS)
+
+# D-22 planning-label lint. It reads the configured tree's CTest listing, never a built artifact, so it runs from the
+# build directory as its working directory (a path argument under the build dir would be a planning-test-needs-build
+# violation of the very rule it enforces) and carries the planning label itself.
+set(GBB_PLANNING_LABELS_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-planning-labels.py")
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=planning -DGBB_EXPECT_MIN_VALUE=10)
+gbb_add_ci_lane_test(planning_labels 0 "planning-labels pass tests=[0-9]+ planning=[0-9]+" 60 planning
+  "${GBB_PLANNING_LABELS_CHECKER}" --build-dir .)
+set_tests_properties(planning_labels PROPERTIES WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=3)
+gbb_add_ci_lane_test(planning_labels_controls 0 "planning-labels self-test pass controls=[0-9]+" 60 planning
+  "${GBB_PLANNING_LABELS_CHECKER}" --self-test)
 set(GBB_CI_LANE_EXTRA_ARGS)

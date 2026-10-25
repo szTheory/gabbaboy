@@ -2750,12 +2750,14 @@ if(WIN32)
 endif()
 add_test(NAME test_budget
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--build-dir;${PROJECT_BINARY_DIR};--ctest;${CMAKE_CTEST_COMMAND}${GBB_TEST_BUDGET_PARTIAL}"
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--build-dir;.;--ctest;${CMAKE_CTEST_COMMAND}${GBB_TEST_BUDGET_PARTIAL}"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=test-budget pass tests=[0-9]+ allowlisted=[0-9]+"
     -DGBB_EXPECT_MIN_KEY=tests -DGBB_EXPECT_MIN_VALUE=1000
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-set_tests_properties(test_budget PROPERTIES TIMEOUT 60 LABELS "planning")
+# The checker reads only the configured build tree's CTest listing (never a built artifact), so it runs from the
+# build directory as its working directory and the planning lane can run it on an unbuilt tree (D-22).
+set_tests_properties(test_budget PROPERTIES TIMEOUT 60 LABELS "planning" WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
 
 # UAT closure gate (DECISIONS D-069, review WR-05): the checker enforces its contract with ClosureError, never
 # assert, and refuses python -O. The controls run on a tracked closed phase; the second test proves through the
@@ -2825,11 +2827,17 @@ endif()
 string(REPLACE "${gbb_invalid_summary_item}"
   "      - kind: integration\n        ref: \"ctest -R '^fixture$'\"\n        status: pass"
   gbb_invalid_summary_repaired "${gbb_invalid_summary_text}")
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/summary-coverage")
-file(WRITE "${PROJECT_BINARY_DIR}/summary-coverage/repaired-summary-coverage.md" "${gbb_invalid_summary_repaired}")
+# The repaired copy is committed (not generated into the build tree) so the test needs no build artifact and runs in
+# the unbuilt planning lane (D-22); configuration fails if it ever drifts from the derivation above.
+set(GBB_REPAIRED_SUMMARY_FIXTURE "${PROJECT_SOURCE_DIR}/tests/data/repaired-summary-coverage.md")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_REPAIRED_SUMMARY_FIXTURE}")
+file(READ "${GBB_REPAIRED_SUMMARY_FIXTURE}" gbb_repaired_summary_committed)
+if(NOT gbb_repaired_summary_committed STREQUAL gbb_invalid_summary_repaired)
+  message(FATAL_ERROR "tests/data/repaired-summary-coverage.md must equal the invalid fixture with only the flow-style item rewritten in block style.")
+endif()
 add_test(NAME summary_coverage_invalid_fixture_repaired_passes
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SUMMARY_COVERAGE_CHECKER};--file;${PROJECT_BINARY_DIR}/summary-coverage/repaired-summary-coverage.md"
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SUMMARY_COVERAGE_CHECKER};--file;${GBB_REPAIRED_SUMMARY_FIXTURE}"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=summary-coverage pass files=1 entries=1"
     "-DGBB_FORBID_REGEX=summary-coverage-invalid"

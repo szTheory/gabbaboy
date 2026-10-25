@@ -1210,3 +1210,5 @@ classify_changes_src_rejected
 required_native_controls
 workflow_policy_check
 workflow_policy_controls
+planning_labels
+planning_labels_controls
