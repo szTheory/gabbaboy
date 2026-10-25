@@ -250,7 +250,9 @@ def validate_consumer_receipt(consumer: dict[str, Any], source: str) -> None:
 # ------------------------------------------------------------------------- evidence directory
 
 def check_evidence(evidence: Path, tag: str, source: str, judge_root: Path,
-                   source_root: Path, archive: Path | None) -> dict[str, int]:
+                   source_root: Path, archive: Path | None, rehearsal: bool = False) -> dict[str, int]:
+    """rehearsal=True is only for the pre-merge rehearsal: a hosted ci.yml-on-main run cannot exist for a branch
+    commit, so the fuzz receipt is verified as bound to the exact source SHA instead. The release never passes it."""
     if not TAG_RE.fullmatch(tag) or not HEX40.fullmatch(source):
         reject("identity-malformed", "tag or source SHA is malformed")
     docs: dict[str, Any] = {}
@@ -341,7 +343,10 @@ def check_evidence(evidence: Path, tag: str, source: str, judge_root: Path,
                 run_owner(family, judge_root, source_root, source, trusted_source, "--verify-reuse",
                           str(evidence / name), "--tag-tree", subject_tree)
             elif reuse[family] is None:
-                if family == "fuzz":
+                if family == "fuzz" and rehearsal:
+                    run_owner(family, judge_root, source_root, source, trusted_source,
+                              "--verify-source", str((evidence / name).resolve(strict=True)), "--source-sha", source)
+                elif family == "fuzz":
                     run_owner(
                         family, judge_root, source_root, source, trusted_source,
                         "--verify-hosted", "--source-sha", source,
@@ -535,6 +540,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--self-test-subject-trust", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--check-evidence", type=Path)
+    parser.add_argument("--rehearsal", action="store_true",
+                        help="pre-merge rehearsal only: verify the fuzz receipt as bound to the exact source SHA")
     parser.add_argument("--tag")
     parser.add_argument("--source-sha")
     parser.add_argument("--source-archive", type=Path)
@@ -551,11 +558,13 @@ def main(argv: list[str]) -> int:
             return run_self_test()
         if args.self_test_subject_trust:
             return subject_trust_self_test()
+        if args.rehearsal and not args.check_evidence:
+            parser.error("--rehearsal is only accepted with --check-evidence")
         if args.check_evidence:
             if not (args.tag and args.source_sha):
                 parser.error("--check-evidence needs --tag and --source-sha")
             counts = check_evidence(args.check_evidence, args.tag, args.source_sha,
-                                    args.judge_root, args.source_root, args.source_archive)
+                                    args.judge_root, args.source_root, args.source_archive, args.rehearsal)
             print(f"PASS: v02 delivery evidence binds {counts['evidence_families']} families to {args.tag} "
                   f"(reused={counts['reused']})")
             return 0
@@ -604,9 +613,15 @@ elif name == "verify-v02-performance.py":
     elif cand.get("sha") != head():  # a receipt of another revision is only valid through the reuse rule
         die("rejected:candidate-is-not-this-revision")
 elif name == "verify-v02-fuzz.py":
-    r = load(opt("--receipt") if "--verify-hosted" in a else a[1])
+    if "--verify-source" in a:  # rehearsal: bound to the named source, no HEAD and no hosted run
+        r = load(opt("--verify-source"))
+        if r.get("source_sha") != opt("--source-sha"): die("receipt source SHA does not match the requested source SHA")
+    else:
+        r = load(opt("--receipt") if "--verify-hosted" in a else a[1])
+        if "--verify-hosted" in a and r.get("workflow", {}).get("event") != "push":
+            die("supplied receipt run/attempt/event/job does not match trusted CI policy")
+        if r.get("source_sha") != head(): die("stale receipt source SHA")
     if r.get("status") != "complete" or r.get("mode") != "explore": die("campaign is not a complete exploration")
-    if r.get("source_sha") != head(): die("stale receipt source SHA")
 elif name == "verify-v02-source-archive.py":
     r = load(opt("--check-receipt"))
     if r.get("archive_sha256") != hashlib.sha256(pathlib.Path(opt("--archive")).read_bytes()).hexdigest():
@@ -762,6 +777,24 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
     if done.returncode != 0 or "PASS: v02 delivery evidence binds 6 families" not in done.stdout:
         raise SystemExit(f"complete evidence was not accepted: {done.stderr.strip()}")
     positives += 1
+
+    # Rehearsal scope: a rehearsal-workflow fuzz receipt passes only with --rehearsal; the release never passes it.
+    work = base / "rehearsal-fuzz"
+    shutil.copytree(base / "evidence", work)
+    edit(work / FUZZ, lambda d: d["workflow"].update(event="workflow_dispatch"))
+    done = run("--check-evidence", str(work), *common, "--rehearsal")
+    if done.returncode != 0:
+        raise SystemExit(f"rehearsal fuzz receipt was not accepted with --rehearsal: {done.stderr.strip()}")
+    positives += 1
+    done = run("--check-evidence", str(work), *common)
+    if done.returncode == 0 or "REJECT owner-fuzz:" not in done.stderr:
+        raise SystemExit(f"rehearsal fuzz receipt was accepted without --rehearsal: {done.stderr.strip()}")
+    rejected += 1
+    edit(work / FUZZ, lambda d: d.update(source_sha="b" * 40))
+    done = run("--check-evidence", str(work), *common, "--rehearsal")
+    if done.returncode == 0 or "REJECT fuzz-binding:" not in done.stderr:
+        raise SystemExit(f"--rehearsal rescued a fuzz receipt for another SHA: {done.stderr.strip()}")
+    rejected += 1
 
     def mutate(label: str, code: str, change: Callable[[Path], Path | None]) -> None:
         nonlocal rejected

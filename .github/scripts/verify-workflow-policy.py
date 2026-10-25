@@ -1145,7 +1145,7 @@ REHEARSAL_REQUIRED = {
         _REHEARSAL_TAG,
         _CORPUS_BUILD,
         _SHARED + " collect --subject . --output build/evidence",
-        _SHARED + ' verify --judge . --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG" --evidence build/evidence --archive "$RUNNER_TEMP/source-archive.tar.gz"',
+        _SHARED + ' verify --judge . --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG" --evidence build/evidence --archive "$RUNNER_TEMP/source-archive.tar.gz" --rehearsal',
         "python3 -I tests/scripts/verify-cgb-corpus-claims.py --receipt build/cgb-corpus-receipt.json",
         "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json",
         "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json",
@@ -1153,7 +1153,7 @@ REHEARSAL_REQUIRED = {
     ),
     "judge": (
         JUDGE_CALL_POLICY,
-        "python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json",
+        'python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify-source rehearsal-evidence/v02-fuzz-receipt.json --source-sha "$GITHUB_SHA"',
         'python3 -I trusted-judge/tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject',
     ),
 }
@@ -2054,8 +2054,27 @@ def verify_cited(root: Path) -> int:
     return 1 if failures else 0
 
 
+REHEARSAL_FLAG = re.compile(r"(?<![\w-])--rehearsal(?![\w-])")
+
+
+def check_rehearsal_flag_scope(root: Path) -> None:
+    """--rehearsal turns the fuzz receipt check into a source-bound one, because no hosted ci.yml run on main exists
+    for a rehearsed branch commit. It is allowed in exactly one place, the rehearsal aggregate's verify call; the release
+    and every other workflow keep the strict hosted binding."""
+    for path in sorted((root / ".github/workflows").glob("*.yml")):
+        if path.name != "release-rehearsal.yml":
+            if REHEARSAL_FLAG.search(path.read_text(encoding="utf-8")):
+                raise Reject("rehearsal-flag-scope", f"{path.name} must not pass --rehearsal; only the rehearsal aggregate may")
+    tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
+    for job_id, job in tree["jobs"].items():
+        for step in job.get("steps", []):
+            if job_id != "aggregate" and REHEARSAL_FLAG.search(step.get("run", "")):
+                raise Reject("rehearsal-flag-scope", f"release-rehearsal.{job_id} must not pass --rehearsal; only the aggregate may")
+
+
 def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_producer_script(root)
+    check_rehearsal_flag_scope(root)
     check_rehearsal(root)
     check_ci(root)
     check_perf_attribution(root)
@@ -2137,6 +2156,15 @@ def _mutations():
     reh = "release-rehearsal.yml"
     rel = "release.yml"
     return [
+        _m("rehearsal aggregate verifies fuzz as the hosted release does", reh, "  aggregate:\n",
+           '"$RUNNER_TEMP/source-archive.tar.gz" --rehearsal', '"$RUNNER_TEMP/source-archive.tar.gz"', "required-command-not-executed"),
+        _m("rehearsal judge verifies the fuzz receipt without its source", reh, "  judge:\n",
+           ' --source-sha "$GITHUB_SHA"', "", "required-command-not-executed"),
+        _m("release passes --rehearsal to the evidence gate", rel, "  candidate-platform-manifest:\n",
+           '"$RUNNER_TEMP/source-archive.tar.gz"\n      - name: Validate the exact candidate asset set',
+           '"$RUNNER_TEMP/source-archive.tar.gz" --rehearsal\n      - name: Validate the exact candidate asset set', "rehearsal-flag-scope"),
+        _m("a rehearsal producer job passes --rehearsal", reh, "  fuzz:\n",
+           "run-bounded-fuzz.sh --self-test", "run-bounded-fuzz.sh --self-test --rehearsal", "rehearsal-flag-scope"),
         _m("rehearsal fuzz producer gains contents: write", reh, "  fuzz:\n", "    runs-on: ubuntu-24.04\n",
          "    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n", "producer-write-authority"),
         _m("rehearsal top-level write", reh, "", "permissions:\n  contents: read\n", "permissions:\n  contents: write\n",

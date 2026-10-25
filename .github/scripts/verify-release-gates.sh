@@ -327,14 +327,15 @@ PY
 # checkout (the judge, $ROOT). The exact tag checkout the caller is standing in is data: it is passed to the
 # delivery checker as --source-root, and the performance and fuzz receipts bind that checkout's HEAD.
 check_v02_evidence() {
-  local directory=$1 tag=$2 source_sha=$3 archive=$4 repo_root
+  local directory=$1 tag=$2 source_sha=$3 archive=$4 rehearsal=${5:-} repo_root
+  [[ -z "$rehearsal" || "$rehearsal" == --rehearsal ]] || fail 'the only optional argument is --rehearsal (pre-merge rehearsal)'
   repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || fail 'v0.2 evidence validation must run in the exact tag checkout'
   [[ $(git -C "$repo_root" rev-parse HEAD) == "$source_sha" ]] || fail 'checkout HEAD differs from the frozen source SHA'
   # The entry point and every delegated validator come from this script's own checkout (the judge); the exact
   # tag checkout in the current directory is only the subject whose bytes are judged (Plan 05 separation).
   python3 -I "$ROOT/tests/scripts/verify-v02-delivery.py" --check-evidence "$directory" \
     --tag "$tag" --source-sha "$source_sha" --source-archive "$archive" \
-    --judge-root "$ROOT" --source-root "$repo_root"
+    --judge-root "$ROOT" --source-root "$repo_root" ${rehearsal:+"$rehearsal"}
 }
 
 fetch_source_archive() {
@@ -856,8 +857,8 @@ PY
     printf 'PASS: final draft receipt and all downloaded bytes qualify; no publication performed\n'
     ;;
   --check-v02-evidence)
-    [[ $# -eq 5 ]] || fail 'usage: verify-release-gates.sh --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE'
-    check_v02_evidence "$2" "$3" "$4" "$5"
+    [[ $# -eq 5 || $# -eq 6 ]] || fail 'usage: verify-release-gates.sh --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE [--rehearsal]'
+    check_v02_evidence "$2" "$3" "$4" "$5" "${6:-}"
     ;;
   --check-recovery)
     [[ $# -eq 8 ]] || fail 'usage: verify-release-gates.sh --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset'

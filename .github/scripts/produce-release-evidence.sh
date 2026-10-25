@@ -33,6 +33,7 @@ output=""
 evidence=""
 archive=""
 local_tag=0
+rehearsal=0
 
 assign_once() {
   # $1 variable name, $2 option text, $3 value
@@ -47,6 +48,12 @@ parse_options() {
     if [[ "$opt" == --local-tag ]]; then
       [[ "$local_tag" == 0 ]] || fail "duplicate option: $opt"
       local_tag=1
+      shift
+      continue
+    fi
+    if [[ "$opt" == --rehearsal ]]; then
+      [[ "$rehearsal" == 0 ]] || fail "duplicate option: $opt"
+      rehearsal=1
       shift
       continue
     fi
@@ -152,7 +159,12 @@ cmd_verify() {
   evidence=$(cd "$evidence" && pwd)
   archive=$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")
   cd "$subject"
-  bash "$gate" --check-v02-evidence "$evidence" "$tag" "$source_sha" "$archive"
+  if [[ "$rehearsal" == 1 ]]; then
+    # Pre-merge rehearsal only: the fuzz receipt is verified as bound to the exact source (no hosted main run exists).
+    bash "$gate" --check-v02-evidence "$evidence" "$tag" "$source_sha" "$archive" --rehearsal
+  else
+    bash "$gate" --check-v02-evidence "$evidence" "$tag" "$source_sha" "$archive"
+  fi
 }
 
 self_test() {
@@ -237,6 +249,13 @@ self_test() {
     --evidence "$work/evidence" --archive "$work/archive.tar.gz"
   printf '%s\n' "$repo" --check-v02-evidence "$work/evidence" v9.9.9 "$head" "$work/archive.tar.gz" > "$work/gate-want"
   cmp -s "$work/gate-record" "$work/gate-want" || fail "the judge gate was not given the explicit subject and arguments: $(cat "$work/gate-record") // $(cat "$work/gate-want")"
+  rm -f "$work/gate-record"
+  bash "$script" verify --judge "$work/judge" --subject "$repo" --source-sha "$head" --tag v9.9.9 \
+    --evidence "$work/evidence" --archive "$work/archive.tar.gz" --rehearsal
+  printf '%s\n' "$repo" --check-v02-evidence "$work/evidence" v9.9.9 "$head" "$work/archive.tar.gz" --rehearsal > "$work/gate-want"
+  cmp -s "$work/gate-record" "$work/gate-want" || fail "--rehearsal was not forwarded to the judge gate alone: $(cat "$work/gate-record")"
+  expect_reject "duplicate --rehearsal" "duplicate option" verify --judge "$work/judge" --subject "$repo" --source-sha "$head" \
+    --tag v9.9.9 --evidence "$work/evidence" --archive "$work/archive.tar.gz" --rehearsal --rehearsal
   printf 'PASS: judge gate receives the subject as its working tree and explicit identities\n'
   printf 'PASS: producer contract self-test negative_controls=%s\n' "$rejected"
 }
