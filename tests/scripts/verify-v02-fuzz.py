@@ -1798,6 +1798,45 @@ class ReceiptContractTests(unittest.TestCase):
                 "schema_version": 1, "status": "complete", "mode": "explore", "source_sha": "a" * 40,
             }, "stale receipt source SHA")
 
+    def source_bound_receipt(self, head: str) -> bytes:
+        return self.hosted_fixture_receipt(head, 17001, 1, 27001)
+
+    def test_source_bound_verify_accepts_exact_source(self) -> None:
+        head = git_output("rev-parse", "HEAD")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "receipt.json"
+            path.write_bytes(self.source_bound_receipt(head))
+            receipt = validate_receipt(path, expected_sha=head, source_commit_only=True)
+            self.assertEqual(receipt["source_sha"], head)
+
+    def test_source_bound_verify_rejects_other_source(self) -> None:
+        head = git_output("rev-parse", "HEAD")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "receipt.json"
+            path.write_bytes(self.source_bound_receipt(head))
+            with self.assertRaises(ReceiptError) as caught:
+                validate_receipt(path, expected_sha="b" * 40, source_commit_only=True)
+            self.assertIn("does not match the requested source SHA", str(caught.exception))
+
+    def test_source_bound_verify_rejects_fast_mode(self) -> None:
+        head = git_output("rev-parse", "HEAD")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "receipt.json"
+            altered = json.loads(self.source_bound_receipt(head))
+            altered["mode"] = "fast"
+            path.write_text(json.dumps(altered), encoding="utf-8")
+            with self.assertRaises(ReceiptError) as caught:
+                validate_receipt(path, expected_sha=head, source_commit_only=True)
+            self.assertIn("fast-only", str(caught.exception))
+
+    def test_source_bound_flag_requires_source_sha(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "receipt.json"
+            path.write_text("{}", encoding="utf-8")
+            result = self.run_cli("--verify-source", str(path))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--verify-source requires --source-sha", result.stdout)
+
     def test_rejects_relaxed_campaign_bounds(self) -> None:
         limits = json.loads(json.dumps(REQUIRED_LIMITS))
         limits["campaign_seconds"] = 61
@@ -1881,13 +1920,16 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=5 negative_controls={22 + 14 + 5} rejected_mutations={10 + 14 if result.wasSuccessful() else 0} skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
+    print(f"self-test={state} positive_controls=6 negative_controls={22 + 14 + 5 + 3} rejected_mutations={10 + 14 if result.wasSuccessful() else 0} skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
     return 0 if result.wasSuccessful() else 1
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--verify", type=Path, help="strictly verify a local campaign receipt")
+    parser.add_argument("--verify-source", type=Path,
+                        help="verify a campaign receipt bound to --source-sha without reading HEAD or the hosted run; "
+                             "used only by the pre-merge rehearsal, never by the release")
     parser.add_argument("--produce", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--build-dir", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--receipt", type=Path, help="receipt output for --produce or positive self-test input")
@@ -1906,6 +1948,13 @@ def main() -> int:
     try:
         if args.self_test:
             return self_test(args.receipt)
+        if args.verify_source:
+            if not args.source_sha:
+                raise ReceiptError("--verify-source requires --source-sha")
+            receipt = validate_receipt(args.verify_source, expected_sha=args.source_sha, source_commit_only=True)
+            print(f"receipt=pass source_sha={receipt['source_sha']} binding=source-commit hosted=not-checked "
+                  f"executions={receipt['result']['execution_count']}")
+            return 0
         if args.verify:
             receipt = validate_receipt(args.verify)
             print(f"receipt=pass source_sha={receipt['source_sha']} executions={receipt['result']['execution_count']} elapsed={receipt['result']['elapsed_seconds']}s")

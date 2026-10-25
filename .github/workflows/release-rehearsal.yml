@@ -397,7 +397,7 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/produce-release-evidence.sh collect --subject . --output build/evidence
-          bash .github/scripts/produce-release-evidence.sh verify --judge . --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG" --evidence build/evidence --archive "$RUNNER_TEMP/source-archive.tar.gz"
+          bash .github/scripts/produce-release-evidence.sh verify --judge . --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG" --evidence build/evidence --archive "$RUNNER_TEMP/source-archive.tar.gz" --rehearsal
 
   # Trust split: every job above runs code from the rehearsed branch with a read-only token. This
   # job runs only after all of them completed, takes its judge code from the repository's default
@@ -439,4 +439,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json
+          # The rehearsed commit is data: bring its objects into the trusted checkout, then verify the receipt as bound
+          # to that exact commit. Plain --verify judges the trusted checkout's own HEAD, which is the default branch.
+          git -C trusted-judge fetch --no-tags --quiet "$PWD/subject" "$GITHUB_SHA"
+          python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify-source rehearsal-evidence/v02-fuzz-receipt.json --source-sha "$GITHUB_SHA"
