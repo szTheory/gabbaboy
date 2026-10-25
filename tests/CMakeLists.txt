@@ -2451,6 +2451,40 @@ add_test(NAME ci_floor_parallel_serial_selftest
     "-DGBB_EXPECT_REGEX=doc-contract-missing: CTEST_PARALLEL_LEVEL: 4"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# Each native job runs the full suite, which serially took about 20 minutes of the CI critical path. The job
+# environment keeps its ctest calls parallel, like the floor job; each serial selftest blanks that one job's
+# setting and proves its contract can fail.
+foreach(gbb_native_job IN ITEMS native-linux-x64 native-macos-arm64 native-windows-x64)
+  string(REPLACE "-" "_" gbb_native_id "${gbb_native_job}")
+  add_test(NAME ci_${gbb_native_id}_parallel_contract
+    COMMAND ${CMAKE_COMMAND}
+      -DGBB_DOC=${GBB_CI_WORKFLOW}
+      -DGBB_DECLARATIONS=${GBB_CI_WORKFLOW}
+      "-DGBB_REQUIRED=${GBB_CI_FLOOR_PHRASE}"
+      "-DGBB_SCOPE_START=name: ${gbb_native_job}\n"
+      -P ${GBB_DOC_CONTRACT_SCRIPT})
+  set_tests_properties(ci_${gbb_native_id}_parallel_contract PROPERTIES
+    PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[0-9]+ phrases=1[^0-9]")
+  string(FIND "${GBB_CI_WORKFLOW_TEXT}" "name: ${gbb_native_job}\n" gbb_native_at)
+  if(gbb_native_at EQUAL -1)
+    message(FATAL_ERROR "ci.yml has no job named ${gbb_native_job}")
+  endif()
+  string(SUBSTRING "${GBB_CI_WORKFLOW_TEXT}" 0 ${gbb_native_at} gbb_native_before)
+  string(SUBSTRING "${GBB_CI_WORKFLOW_TEXT}" ${gbb_native_at} -1 gbb_native_after)
+  string(FIND "${gbb_native_after}" "CTEST_PARALLEL_LEVEL: 4" gbb_native_level_at)
+  string(SUBSTRING "${gbb_native_after}" 0 ${gbb_native_level_at} gbb_native_head)
+  math(EXPR gbb_native_tail_at "${gbb_native_level_at} + 23")
+  string(SUBSTRING "${gbb_native_after}" ${gbb_native_tail_at} -1 gbb_native_tail)
+  file(WRITE "${GBB_DOC_SELFTEST}/ci-${gbb_native_job}-serial.yml"
+    "${gbb_native_before}${gbb_native_head}CTEST_PARALLEL_LEVEL: 1${gbb_native_tail}")
+  add_test(NAME ci_${gbb_native_id}_parallel_serial_selftest
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/ci-${gbb_native_job}-serial.yml;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ci-${gbb_native_job}-serial.yml;-DGBB_REQUIRED=${GBB_CI_FLOOR_PHRASE};-DGBB_SCOPE_START=name: ${gbb_native_job}\n;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=doc-contract-missing: CTEST_PARALLEL_LEVEL: 4"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endforeach()
+
 # CGB host-guide contract (D-28): the CGB section of the integration guide names only declared symbols
 # and keeps each promise the header makes about the info API, PGB rejection, frame copy, banking and
 # deferred registers. The missing-phrase selftest proves the check can fail.
