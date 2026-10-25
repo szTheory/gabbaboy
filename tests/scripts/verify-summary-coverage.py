@@ -297,13 +297,19 @@ def self_test():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--phases-dir", default=".planning/phases")
+    # No default (Phase 16 D-07): a sweep must name the directory it reads, so it can never silently fall back
+    # to the live phases directory. --file and --self-test do not sweep a directory.
+    parser.add_argument("--phases-dir")
     parser.add_argument("--since", type=float, default=11)
+    parser.add_argument("--min-files", type=int, default=0,
+                        help="fail when the sweep reads fewer SUMMARY files than this (anti-vacuity)")
     parser.add_argument("--file")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
         return self_test()
+    if not args.file and not args.phases_dir:
+        parser.error("--phases-dir is required (it has no default)")
     if args.file:
         with open(args.file, encoding="utf-8") as handle:
             count, errors = check_text(handle.read())
@@ -314,6 +320,9 @@ def main():
         print("summary-coverage-invalid: %s" % failure)
     if failures:
         print("summary-coverage FAIL files=%d problems=%d" % (files, len(failures)))
+        return 1
+    if files < args.min_files:
+        print("summary-coverage FAIL files=%d below minimum %d" % (files, args.min_files))
         return 1
     print("summary-coverage pass files=%d entries=%d" % (files, count))
     return 0

@@ -1209,8 +1209,8 @@ set_tests_properties(cgb_hdma_dispositions_selftest PROPERTIES TIMEOUT 30
 # native and sanitizer lanes do not depend on Node or the local OpenGSD runtime.
 set(GBB_CGB_HDMA_CLAIMS_VERIFIER
   "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-hdma-claims.py")
-set(GBB_HDMA_CLOSURE_CHECKER
-  "${PROJECT_SOURCE_DIR}/.planning/phases/GB-13-cgb-hdma/verify-hdma-closure.py")
+set(GBB_HDMA_LANE_CHECKER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-hdma-lane.py")
 set(GBB_HDMA_REMOTE_EVIDENCE_TEST
   "${PROJECT_SOURCE_DIR}/tests/scripts/test_hdma_remote_evidence.py")
 add_test(NAME cgb_hdma_claims_contract
@@ -1220,9 +1220,9 @@ add_test(NAME cgb_hdma_claims_contract_native
 add_test(NAME cgb_hdma_claims_contract_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_CGB_HDMA_CLAIMS_VERIFIER}" --self-test)
 add_test(NAME cgb_hdma_lane_contract
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_CLOSURE_CHECKER}" --lane)
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_LANE_CHECKER}" --lane)
 add_test(NAME cgb_hdma_lane_contract_selftest
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_CLOSURE_CHECKER}" --lane-self-test)
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_LANE_CHECKER}" --lane-self-test)
 add_test(NAME cgb_hdma_remote_evidence_selftest
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HDMA_REMOTE_EVIDENCE_TEST}")
 set_tests_properties(
