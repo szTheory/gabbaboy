@@ -18,7 +18,11 @@ error-code prefixes, so a control can pin the failure class instead of "some err
       STATE.md stays within STATE_MAX_BYTES raw bytes and STATE_MAX_LINES newline characters (D-26).
       Prints "state-size pass bytes=N lines=M".
   --check playstead-docs --root DIR
-      Added by the Playstead docs task of the same plan.
+      README.md, docs/native-integration.md and .planning/research/PRECEDENT.md state PLAYSTEAD-CONTRACT section
+      5 (GB, GBC and GBA through mGBA 0.10.5 on Playstead main 234bd45b21 as process adapters): the stale pin,
+      "GBA/mGBA" and the current-tense 1de3e95 blocked-capability sentences are rejected, "234bd45b21" is required
+      in each file, and the two sentences verify-v02-adoption.py requires must survive (D-27). No live
+      GabbaBoy/Playstead integration is ever claimed. Prints "playstead-docs pass files=3".
 
   --self-test   runs every rule against generated and committed fixtures and prints
                 "planning-hygiene self-test pass controls=N" once.
@@ -311,11 +315,6 @@ def self_test() -> int:
     return 0
 
 
-def self_test_playstead(base: Path) -> int:
-    """Hook for the Playstead docs controls; replaced by the docs task of this plan."""
-    return 0
-
-
 # ---- CLI -------------------------------------------------------------------------------------------------
 
 
@@ -361,8 +360,117 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+PLAYSTEAD_FILES = ("README.md", "docs/native-integration.md", ".planning/research/PRECEDENT.md")
+PLAYSTEAD_PIN = "234bd45b21"
+# (needle, error code). Needles are compared on whitespace-normalised, case-sensitive text.
+PLAYSTEAD_STALE = (
+    ("a102d608", "playstead-stale-pin"),
+    ("GBA/mGBA", "playstead-stale-adapter-scope"),
+    # The 1de3e95 observation is dated and superseded, never current: these are the sentences that stated it as current.
+    ("latest 2026-09-28 qualification ledger remains", "playstead-stale-blocked-capability"),
+    ("current continuation capability refusal", "playstead-stale-blocked-capability"),
+    ("No current in-game continuation pass", "playstead-stale-blocked-capability"),
+)
+# (file, needle, error code): the contract facts and the sentences verify-v02-adoption.py requires.
+PLAYSTEAD_REQUIRED = (
+    ("README.md", "Playstead remains a future integration", "playstead-limit-missing"),
+    ("README.md", "mGBA 0.10.5", "playstead-contract-missing"),
+    ("docs/native-integration.md", "it is not a live GabbaBoy/Playstead integration", "playstead-limit-missing"),
+    ("docs/native-integration.md", "mGBA 0.10.5", "playstead-contract-missing"),
+    (".planning/research/PRECEDENT.md", "mGBA 0.10.5", "playstead-contract-missing"),
+)
+
+
 def check_playstead_docs(root: Path) -> tuple[str, list[str]]:
-    return "", ["playstead-docs-unavailable: not implemented yet"]
+    texts: dict[str, str] = {}
+    errors: list[str] = []
+    for name in PLAYSTEAD_FILES:
+        try:
+            texts[name] = " ".join((root / name).read_text(encoding="utf-8").split())
+        except OSError as error:
+            errors.append(f"playstead-file-unreadable: {name}: {error}")
+    for name, text in texts.items():
+        for needle, code in PLAYSTEAD_STALE:
+            if needle in text:
+                errors.append(f"{code}: {name} still says {needle!r}")
+        if PLAYSTEAD_PIN not in text:
+            errors.append(f"playstead-pin-missing: {name} does not name Playstead main {PLAYSTEAD_PIN}")
+    for name, needle, code in PLAYSTEAD_REQUIRED:
+        if name in texts and needle not in texts[name]:
+            errors.append(f"{code}: {name} lacks {needle!r}")
+    return f"playstead-docs pass files={len(PLAYSTEAD_FILES)}", errors
+
+
+def playstead_good_tree(root: Path) -> None:
+    good = {
+        "README.md": (
+            "Playstead remains a future integration: it runs GB, GBC and GBA through mGBA\n"
+            "0.10.5 as an external process adapter (Playstead main `234bd45b21`)."
+        ),
+        "docs/native-integration.md": (
+            "Playstead main `234bd45b21` runs GB, GBC and GBA through mGBA 0.10.5 as an external\n"
+            "process adapter; it is not a live GabbaBoy/Playstead integration."
+        ),
+        ".planning/research/PRECEDENT.md": (
+            "As observed at Playstead `1de3e95` (2026-09-28) the ledger was blocked; superseded by main\n"
+            "`234bd45b21`, which runs GB, GBC and GBA through mGBA 0.10.5."
+        ),
+    }
+    for name, text in good.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text + "\n", encoding="utf-8")
+
+
+def self_test_playstead(base: Path) -> int:
+    controls = 0
+
+    def mutate(label: str, name: str, edit, code: str | None) -> None:
+        nonlocal controls
+        root = base / f"playstead-{controls}"
+        playstead_good_tree(root)
+        path = root / name
+        path.write_text(edit(path.read_text(encoding="utf-8")), encoding="utf-8")
+        _, errors = check_playstead_docs(root)
+        if code is None:
+            if errors:
+                raise SystemExit(f"planning-hygiene self-test FAIL: {label} should pass but gave {errors}")
+        elif code not in codes(errors):
+            raise SystemExit(f"planning-hygiene self-test FAIL: {label} did not report {code}: {errors}")
+        controls += 1
+
+    root = base / "playstead-good"
+    playstead_good_tree(root)
+    summary, errors = check_playstead_docs(root)
+    if errors or summary != "playstead-docs pass files=3":
+        raise SystemExit(f"planning-hygiene self-test FAIL: the good Playstead tree gave {summary!r} {errors}")
+    controls += 1
+    mutate("rewrapped text still passes", "README.md", lambda t: t.replace(" ", "\n"), None)
+    mutate("stale pin", "docs/native-integration.md", lambda t: t + "pinned a102d6082968bc09ca00fefbf5c552ecf979fd63\n",
+           "playstead-stale-pin")
+    mutate("stale adapter scope", "README.md", lambda t: t + "its adapter is GBA/mGBA\n", "playstead-stale-adapter-scope")
+    mutate("current-tense blocked capability", ".planning/research/PRECEDENT.md",
+           lambda t: t + "Playstead's latest 2026-09-28 qualification ledger remains `blocked-capability`.\n",
+           "playstead-stale-blocked-capability")
+    mutate("current refusal in the table row", ".planning/research/PRECEDENT.md",
+           lambda t: t + "| a | b | current continuation capability refusal |\n", "playstead-stale-blocked-capability")
+    mutate("pin dropped from a file", "docs/native-integration.md", lambda t: t.replace("234bd45b21", "main"),
+           "playstead-pin-missing")
+    mutate("future-integration sentence dropped", "README.md",
+           lambda t: t.replace("Playstead remains a future integration", "Playstead is integrated"), "playstead-limit-missing")
+    mutate("not-live sentence dropped", "docs/native-integration.md",
+           lambda t: t.replace("it is not a live GabbaBoy/Playstead integration", "it is live"), "playstead-limit-missing")
+    mutate("mGBA version dropped", ".planning/research/PRECEDENT.md", lambda t: t.replace("mGBA 0.10.5", "mGBA"),
+           "playstead-contract-missing")
+    # A missing file is an error, never a pass.
+    gone = base / "playstead-gone"
+    playstead_good_tree(gone)
+    (gone / "README.md").unlink()
+    _, errors = check_playstead_docs(gone)
+    if "playstead-file-unreadable" not in codes(errors):
+        raise SystemExit(f"planning-hygiene self-test FAIL: a missing README was not reported: {errors}")
+    controls += 1
+    return controls
 
 
 if __name__ == "__main__":

@@ -65,3 +65,8 @@ set(GBB_HYGIENE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=
 gbb_add_hygiene_test(planning_hygiene_controls 0 "planning-hygiene self-test pass controls=[0-9]+" 30
   "${GBB_PLANNING_HYGIENE_CHECKER}" --self-test)
 set(GBB_HYGIENE_EXTRA_ARGS)
+
+# D-27: the corrected Playstead statements stay corrected. It reads PRECEDENT.md, so it carries the planning label.
+set(GBB_HYGIENE_EXTRA_ARGS)
+gbb_add_hygiene_test(playstead_docs 0 "playstead-docs pass files=3" 30
+  "${GBB_PLANNING_HYGIENE_CHECKER}" --check playstead-docs --root "${PROJECT_SOURCE_DIR}")

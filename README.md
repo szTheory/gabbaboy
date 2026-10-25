@@ -43,8 +43,10 @@ remains the record for that release. A release attaches a separate
 `support-ledger.json` bound to the tagged source and ledger blob. The ledger
 makes no publication claim for v0.2.0; the repository's GitHub Releases page
 is the only record of what has been published.
-Playstead remains a future integration: its inspected adapter is currently
-GBA/mGBA through an external process.
+Playstead remains a future integration: it runs GB, GBC and GBA through mGBA
+0.10.5 as an external process adapter (inspected at Playstead main
+`234bd45b21`), not through libretro or an FFI binding, so GabbaBoy is not yet
+one of its adapters.
 
 ## Build and run the tracer
 
