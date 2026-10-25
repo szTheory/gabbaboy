@@ -334,9 +334,9 @@ def check(record_path: str, repo: pathlib.Path, rev: str | None) -> str:
 
 
 # ------------------------------------------------------------------------------------------------ self-test
-RECORD_REL = ".planning/phases/GB-16-fixture/16-DISPOSITIONS.json"
-READBACK_REL = ".planning/phases/GB-16-fixture/16-release-readback.json"
-CLOSURES_REL = ".planning/phases/GB-16-fixture/16-pr-closures.json"
+RECORD_REL = "fixture/16-DISPOSITIONS.json"
+READBACK_REL = "fixture/16-release-readback.json"
+CLOSURES_REL = "fixture/16-pr-closures.json"
 SCRIPT = pathlib.Path(__file__).resolve()
 
 
