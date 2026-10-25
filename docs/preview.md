@@ -8,7 +8,7 @@ For a relocated installed C consumer, including bounded stepping, timestamped
 input, caller-owned video/audio, and host battery import/export, see the
 [native integration guide](native-integration.md). Its Playstead section
 describes a possible future adapter seam; no live Game Boy integration exists.
-The tracked [v0.2.0 support ledger](support/v0.2.0.md) states the model and
+The tracked [v0.2.1 support ledger](support/v0.2.1.md) states the model and
 corpus limits; the [v0.1.0 ledger](support/v0.1.0.md) remains the record for
 that release. A release's separate `support-ledger.json` attachment binds the
 applicable ledger to the exact tagged source revision. No CGB game-level

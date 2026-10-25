@@ -36,7 +36,7 @@ The install exports `GabbaBoy::core` for C17 consumers. The
 [native integration guide](docs/native-integration.md) walks through the
 relocated C example, bounded stepping, timestamped input, caller-owned frame
 and audio buffers, and host-owned battery persistence. The
-[versioned support ledger](docs/support/v0.2.0.md) defines the DMG-CPU-B and
+[versioned support ledger](docs/support/v0.2.1.md) defines the DMG-CPU-B and
 CGB-CPU-E software-model scope, the cartridge and save matrix, and the corpus
 evidence, with its known limits; the earlier [v0.1.0 ledger](docs/support/v0.1.0.md)
 remains the record for that release. A release attaches a separate

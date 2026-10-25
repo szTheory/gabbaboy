@@ -2553,7 +2553,7 @@ def self_test_v2_sidecar() -> None:
         def tagged_ledger_variant(name: str, tag: str, mutate) -> None:
             branch = "sidecar-" + name
             git_fixture(repository, "checkout", "-b", branch, source_sha)
-            variant = copy.deepcopy(data)
+            variant = {**copy.deepcopy(data), "version": "0.2.0"}  # the private fixture repository is always the v0.2.0 tag
             mutate(variant)
             text = base_ledger_text
             start = text.index(BEGIN)
