@@ -4,13 +4,13 @@ milestone: v0.3
 milestone_name: Save States & Host Contract
 current_phase: 16
 current_phase_name: Tune-up and v0.2 Debt Closure
-current_plan: Not started
+current_plan: 1
 status: executing
 stopped_at: Phase 16 context gathered
-last_updated: "2026-10-25T00:55:48.543Z"
+last_updated: "2026-10-25T01:06:31.807Z"
 last_activity: 2026-10-24
-last_activity_desc: Phase GB-16 planning complete — 7 plans ready
-state_head: 83cee09e3daae677ee2c187dc465bb3ade193286
+last_activity_desc: Phase 16 execution started
+state_head: bc31e8b574dc5fe0ef4b661d577cf9b164f4d6fd
 progress:
   total_phases: 4
   completed_phases: 0
@@ -26,14 +26,14 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.3 Save States & Host Contract — roadmap defined (Phases 16–19); Phase 16 Tune-up and v0.2 Debt Closure is next
+**Current focus:** Phase 16 — Tune-up and v0.2 Debt Closure
 
 ## Current Position
 
-Phase: GB-16 (Tune-up and v0.2 Debt Closure) — READY TO EXECUTE
-Plan: —
-Status: Ready to execute
-Last activity: 2026-10-24 — Phase 16 planned (7 plans, 7 serialized waves; checker loop closed after an owner-approved guided fix pass)
+Phase: 16 (Tune-up and v0.2 Debt Closure) — EXECUTING
+Plan: 1 of 7
+Status: Executing Phase 16
+Last activity: 2026-10-24 — Phase 16 execution started
 
 Completed stage: **Phase 16 planning** — [16-RESEARCH.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-RESEARCH.md), [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md), [16-PATTERNS.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-PATTERNS.md) and plans 16-01..16-07 (TUNE-01..06 and D-01..D-33 covered). Owner accepted at plan-phase: token estimates over the advisory budget and the 16-01 19-file scope exception. Phase 16 is not executed. Prior stage: **Phase 16 discussion (context gathered)**. [16-CONTEXT.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-CONTEXT.md) locks D-01..D-33: release-last, 7 target plans (cap 8), no src/ change, owner decisions D-13 (accept +8.3% perf with attribution, seed RM-023), D-29 (pin both v0.2.0 ledger digests; #93 append disclosed) and D-07 (TUNE-01 live-phase carve-out as disclosed interpretation).
 
@@ -85,10 +85,10 @@ Review stack: branch `gsd/phase-13-verification-refresh` builds on Phase 12 refr
 
 Phase: 8
 Status: planning
-Current Plan: Not started
-Total Plans in Phase: 13
+Current Plan: 1
+Total Plans in Phase: 7
 Last Activity: 2026-10-24
-Last Activity Description: v0.3 roadmap created (Phases 16–19)
+Last Activity Description: Phase 16 execution started
 
 Completed workflow stage: **Phase 14 — CGB-E Model Qualification and Corpus, automated UAT complete**. [14-UAT.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md) closes all 49 deliverables across 13 plans automatically, with zero issues, pending/skipped/blocked rows or human checkpoints. All 13 bounded commit windows reconcile. The canonical [14-VERIFICATION.md](phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md) passes 41/41; CGB-08 and CGB-10 are complete. Nyquist covers 31/31 tasks, security closes 27/27 threats, and all eight implementation review findings are fixed and independently checked.
 
