@@ -2413,17 +2413,13 @@ def self_test_v2_sidecar() -> None:
             controls.append("evidence-only-alone-still-never-qualifies")
 
             def attached_mutant(name: str, mutate, expected_error: str) -> None:
+                # In process: each CLI spawn is expensive on the Windows runner and the CLI path is covered above.
                 variant = copy.deepcopy(second_sidecar)
                 before = json.dumps(variant, sort_keys=True)
                 mutate(variant)
                 if json.dumps(variant, sort_keys=True) == before:
                     fail("attached-evidence mutation was inactive:" + name)
-                result = run_attached(name, variant)
-                if result.returncode == 0 or ATTACHED_CONSISTENT in result.stdout:
-                    fail("attached-evidence control was accepted:" + name)
-                if expected_error not in result.stderr:
-                    fail("attached-evidence control has wrong diagnostic:" + name + ":" + result.stderr.strip())
-                controls.append(name)
+                expect_rejected(name, lambda: verify_attached_sidecar(variant, downloaded), expected_error)
 
             attached_mutant("attached-tampered-declared-identity",
                             lambda v: v["build_evidence"].update(receipt_declared_identity_sha256="0" * 64),
