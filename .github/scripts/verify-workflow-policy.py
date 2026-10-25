@@ -1896,7 +1896,10 @@ LEDGER_BOUND_FIELDS = frozenset({"timeout_minutes", "release_bound", "provisiona
 # D-20 'release-bound ledger row (Phase 16)': release-only and rehearsal-only job bodies that have no green run since they were written. Each
 # is exempt from the samples, cited run, cited sha and ceil(2 x p50) rules, only while the project VERSION is at most
 # LEDGER_BOUND_LAST_VERSION; 16-06 and 16-07 re-cite them from the rehearsal rerun and the v0.2.1 release run. A generic skip is never allowed.
-LEDGER_RELEASE_BOUND_KEYS = ("release.yml:attach-v02-evidence", "release.yml:candidate-fuzz", "release-rehearsal.yml:judge")
+LEDGER_RELEASE_BOUND_KEYS = ("release.yml:attach-v02-evidence", "release.yml:candidate-fuzz", "release-rehearsal.yml:judge",
+                             # D-111: the rehearsal producers that cannot pass until the version-bound ledger and the owner-recorded
+                             # performance review exist; a provisional row would make the rehearsal judge's own --release-head check circular.
+                             "release-rehearsal.yml:corpus", "release-rehearsal.yml:performance", "release-rehearsal.yml:aggregate")
 LEDGER_BOUND_LAST_VERSION = (0, 2, 1)
 _P50 = re.compile(r"^[0-9]+(?:\.[0-9]+)?$")
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")

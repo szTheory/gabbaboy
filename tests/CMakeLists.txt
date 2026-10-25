@@ -1502,6 +1502,34 @@ add_test(NAME closeout_dispositions_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-closeout-dispositions.py" --self-test)
 set_tests_properties(closeout_dispositions_controls PROPERTIES TIMEOUT 120 LABELS "planning"
   PASS_REGULAR_EXPRESSION "closeout-dispositions self-test pass positives=3 rejected_controls=[1-9][0-9]*")
+# Phase 16 D-33 (16-06): the v0.3 carry-over record. Release-linked rows sit in pending-release until the post-release planning
+# commit closes them with tag-bound receipts; the checker reads the record by the live-phases path, so it needs no build.
+set(GBB_V03_DISPOSITIONS "${GBB_LIVE_PHASES_DIR}/GB-16-tune-up-and-v0-2-debt-closure/16-DISPOSITIONS.json")
+add_test(NAME v03_dispositions
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--check;${GBB_V03_DISPOSITIONS}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=v03-dispositions pass rows=[0-9]+ pending=[0-9]+ closed=[0-9]+ owner_accepted=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=rows -DGBB_EXPECT_MIN_VALUE=21
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(v03_dispositions PROPERTIES TIMEOUT 60 LABELS "planning")
+add_test(NAME v03_dispositions_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=v03-dispositions self-test pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(v03_dispositions_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+# The v0.2 checker asserts owner_accepted=0 for the archived 15.1-17 record only. Pointed at the new record it must reject on its plan
+# id, which proves that expectation is scoped and is never asserted on the v0.3 record (verify-closeout-dispositions.py is unedited).
+add_test(NAME closeout_dispositions_scope_v03
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-closeout-dispositions.py;--check;--dispositions;${GBB_V03_DISPOSITIONS}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=REJECT schema-malformed: not a version 1 plan 15.1-17 disposition record"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(closeout_dispositions_scope_v03 PROPERTIES TIMEOUT 30 LABELS "planning")
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
 if(GABBABOY_ENABLE_SANITIZERS)
