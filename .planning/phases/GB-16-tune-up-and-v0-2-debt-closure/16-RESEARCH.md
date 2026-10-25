@@ -287,7 +287,7 @@ Both Phase 8 verifiers use `git show <BOUNDARY>:<path>`, so they need full histo
     - Phase merges and feature commits: #63 `5673bed` (Phase 7), #64 `30230b2` (Phase 8), #65 `d7e2e0a`, #66 `3012e8f`, #67 `70c441b`, #68 `8091fb5`, #69 `261c660`, #71 `c771b1b`, #72 `04fe3c6`.
     - Others: #35 `96f76de`, #40 `8c80d59`, #43 `bce8564`, #45 `2463a38`, #54 `ab76d09`.
   - `v0.2.0..main` has 14 first-parent commits; exactly 3 touch `src/` or `include/`: `79e20f3`, `2d25a47`, `09805f3`. `git diff --stat v0.2.0 main -- src include` shows 5 files changed (401 insertions, 117 deletions) and none under `include/`.
-  - The receipt's commit-selection rule must be stated explicitly. D-17 says "every first-parent merge", but the 58-commit set is mostly docs, which cannot change Ir. Recommend measuring the 14 `src/include`-touching commits plus `v0.1.0`, `v0.2.0`, `HEAD`, with the selector rule recorded in the receipt and re-derived by the CTest (`git rev-list --first-parent <range> -- src include`). Confirm with the owner only if D-17 is read literally; it costs about 17 hosted builds either way. (Open Question 2)
+  - The receipt's commit-selection rule must be stated explicitly. D-17 says "every first-parent merge", but the 58-commit set is mostly docs, which cannot change Ir. Recommend measuring the 14 `src/include`-touching commits plus `v0.1.0`, `v0.2.0`, `HEAD`, with the selector rule recorded in the receipt and re-derived by the CTest (`git rev-list --first-parent <range> -- src include`). Confirm with the owner only if D-17 is read literally; it costs about 17 hosted builds either way. (Open Question 2, RESOLVED: all 20 `--first-parent --merges` commits plus the 14 `src`/`include` commits; see there.)
 - **Valgrind is not installed locally** (`which valgrind` empty; macOS). Real Ir work is hosted-only or Linux-container-only. The valgrind-free canned-output CTest (D-15) is the only locally runnable part: design the parser and arithmetic first, then the hosted job.
 - Plan to record Ir numerics from CONTEXT only as expectations: 1.081-1.083 head/v0.2.0 today, limit 1.10. The mutation patch of about 12 Ir per half-dot inside `advance_devices_to` adds about 12M Ir (about +5%) on top of 1.083, which just crosses 1.10. That margin is thin; compute it from the first hosted run and size the patch from it, not from this note.
 
@@ -478,19 +478,52 @@ The move is a code edit plus a data move (git rename), with no data migration. E
 |---|-------|---------|---------------|
 | A1 | Valgrind installs via apt on `ubuntu-24.04` within one retry, and cachegrind `--cache-sim=no` Ir is deterministic across hosted runs. | Perf Facts | The gate's `proxy-nondeterministic` guard fires; fall back to D-14's recorded failure mode. |
 | A2 | The visible-demo ROM is at most 32768 bytes and loads in `measure_core`. | Perf Facts | The third workload ROM needs a different harness or an exclusion; check at plan time. |
-| A3 | Measuring only the 14 `src`/`include`-touching first-parent commits (plus endpoints) satisfies D-17's "every first-parent merge". | Perf Facts | If the owner means all 58, build count and job minutes roughly triple (hosted-minutes cost only). |
+| A3 | (Retired by Open Question 2: the receipt measures all 20 first-parent merges literally plus the 14 `src`/`include` commits for attribution, 39 revisions in total.) | Perf Facts | none |
 | A4 | Preview and release workflow jobs have too few main-branch samples to cite non-provisionally. | CI Facts | If not, rows need no `provisional` flag. |
 | A5 | LESSONS.md:294 refers to the macOS-preference lesson (line 234), so it should become `GB-TEST-007`. | Hygiene Facts | If it means the HRAM lesson (line 162), it stays `GB-TEST-001`. |
 | A6 | (Retired: all four v0.3 phases carry `**Plan cap**` lines, 8/12/10/8 = 38, verified at ROADMAP.md:76,89,102,115.) | Hygiene Facts | none |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Resolved:** `docs/mbc1-evidence.md` only links to `.planning/milestones/v0.1-phases/`, which the lint allows. No allowlist row is needed.
-2. **Commit set for the attribution receipt** (A3). Recommendation: the 14-commit `src/include` selection plus endpoints, rule recorded in the receipt and recomputed in CTest; ask only if the owner wants all 58.
-3. **Reviewer identity for the D-30 `independent` review type.** Recommendation: the plan names the owner decision D-13 as the review reference. The receipt-bound check needs an `https` review reference, so a commit or issue URL for the D-13 record is needed.
-4. **Where `nightly-asan.yml` is judged by `verify-workflow-policy.py`.** It needs `issues: write` on one job, which the read-only rules forbid. Recommendation: add it to `WORKFLOWS` for the fixture and give it its own `check_nightly()` that pins the single `issues: write` job and the schedule/dispatch triggers.
-5. **Resolved:** ROADMAP.md has cap lines at 76, 89, 102 and 115 (8, 12, 10, 8; sum 38, within the 40 limit). The checker can parse the real tree.
-6. **Timeout-ledger scope breadth.** About 40 jobs across 7 workflows, some with no green main sample. Recommendation: seed from real runs with a documented `samples` count (including 1), mark unobservable rows `provisional`, and resolve them before the D-31 window.
+1. **Phase-path links in `docs/mbc1-evidence.md`.**
+   RESOLVED: the file only links to `.planning/milestones/v0.1-phases/`, which the lint allows. No allowlist row is needed.
+2. **Commit set for the attribution receipt** (A3).
+   RESOLVED: 16-02 honors D-17 literally and adds a resolution set. The receipt measures 39 revisions:
+   - v0.1.0;
+   - `merge_set`, which equals exactly `git rev-list --first-parent --merges v0.1.0..v0.2.0` (20 merge commits; only `261c660` changes `src/` or `include/`);
+   - `resolution_set`, which equals exactly `git rev-list --first-parent v0.1.0..v0.2.0 -- src include` (14 commits);
+   - v0.2.0;
+   - `post_v020_set`, which equals exactly `git rev-list --first-parent v0.2.0..<head> -- src` (3 commits);
+   - HEAD.
+
+   The union of merge_set and resolution_set has 33 commits, measured 2026-10-24. The checker re-derives each set with its own command, recomputes every delta and every `affects_binary` flag, and rejects any mismatch.
+
+   The resolution set is needed because the phase PRs, including Phase 7 `5673bed`, landed as squash commits, not git merges. Measuring only the 20 merges would lump Phases 7-12 into one delta, and success criterion 2 ("assigns the v0.2 slowdown to phase merges") could not be met. The earlier 17-commit Ir-path selection and the 14-commit-only recommendation are both superseded.
+
+   `tests/measure_core.c` does not exist at v0.1.0. The receipt-head harness is therefore overlaid on each revision's `src/` and `include/`, and the receipt records the harness SHA-256.
+3. **Reviewer identity for the D-30 `independent` review type.**
+   RESOLVED: the owner is the reviewer.
+   - In 16-07 Task 1, Claude opens one GitHub review issue with a drafted decision, but only if the paired trigger fires.
+   - The owner approves by commenting (checkpoint Task 2). That comment URL is the `https` `review_reference`, and the owner's handle is `reviewer_identity`.
+   - D-13 is cited in the rationale. Claude never fills or approves the decision on the owner's behalf.
+4. **Where `nightly-asan.yml` is judged by `verify-workflow-policy.py`.**
+   RESOLVED: 16-03 adds `nightly-asan.yml` to `WORKFLOWS` (not `READONLY_WORKFLOWS`) and a dedicated `check_nightly()`.
+   - It pins the schedule and workflow_dispatch triggers.
+   - It requires a read-only `asan-full-replay` job and a separate `report-red` job, which holds `issues: write` only, runs no checkout, and carries no `timeout-minutes`.
+   - Four mutations are rejected.
+5. **ROADMAP cap lines.**
+   RESOLVED: ROADMAP.md has cap lines at 76, 89, 102 and 115 (8, 12, 10, 8; sum 38, within the 40 limit). The checker can parse the real tree.
+6. **Timeout-ledger scope breadth.**
+   RESOLVED: 16-04 seeds every row from a real completed job, with a documented `samples` count that may be 1. A row is `provisional` only when it cites an unmerged PR or a non-main probe ref. Real runs are scheduled for every new job:
+   - `perf-gate` and `changes` cite main pushes.
+   - `perf-attribution` and `nightly-asan` cite their main-ref dispatches.
+   - The rehearsal `perf-gate` cites a `rehearsal/ledger-probe-16-04` push at the main head.
+   - Existing rehearsal jobs, including the judge, cite green v0.2.0-era rehearsals such as run 39401388702.
+   - Preview jobs cite merged PR runs.
+   - `planning-checks` first cites a stacked probe PR (provisional). Then 16-04 delivers its SUMMARY as a genuinely planning-only PR B, whose main push runs `planning-checks`.
+   - `report-red` runs only on failure and is out of scope.
+
+   16-06 re-cites every provisional row from main runs, including planning-checks from the PR B push. `--check --release-head` then passes before the D-31 window.
 
 ## Validation Architecture
 

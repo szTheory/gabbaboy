@@ -70,6 +70,7 @@ Milestone-wide rules:
 ## Phase Details
 
 ### Phase 16: Tune-up and v0.2 Debt Closure
+
 **Goal**: v0.3 feature work starts from a clean, fast and honest baseline: the v0.2 phase records are archived, the Phase 8 verifiers run in CTest, performance and CI budgets are gated, planning hygiene is machine-checked, and `v0.2.1` is published.
 **Depends on**: Nothing in v0.3 (builds on shipped `v0.2.0`)
 **Requirements**: TUNE-01, TUNE-02, TUNE-03, TUNE-04, TUNE-05, TUNE-06
@@ -80,9 +81,36 @@ Milestone-wide rules:
   3. CI budget checks fail on their negative controls: an over-budget per-test fixture; a PR ASan stall replay that is bounded (full replay in a split or scheduled lane) yet still rejects its control; a job timeout that cites no doubled run or exceeds the 60% ratio; and a `src/` or `tests/` change offered to the planning-only aggregator classifier.
   4. Planning hygiene CTests reject an over-cap phase fixture against the ROADMAP `**Plan cap**` lines, a duplicated LESSONS id (current duplicates renumbered) and an oversized STATE.md, and a docs check rejects the stale Playstead statements now corrected in README, `docs/native-integration.md` and PRECEDENT.
   5. A new versioned support ledger for post-`v0.2.0` source passes `--check-current` while a check rejects any change to the `v0.2.0` ledger bytes; the hosted rehearsal and trusted judge are green at the exact head; `v0.2.1` is published from release-please PR #75 and its release readback reconciles; PRs #78–92 are closed as superseded and the D-106 LIM dispositions are recorded.
-**Plans**: TBD
+
+**Plans**: 7 plans (cap 8; one slot kept for the single gap round)
+
+Plans:
+**Wave 1**
+- [ ] 16-01-PLAN.md — Archive v0.2 phase records behind the phase-path lint; CTest scaffolding (TUNE-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 16-02-PLAN.md — Cachegrind Ir perf gate vs v0.2.0, seeded-regression control, attribution receipt (TUNE-03)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 16-03-PLAN.md — Per-test TIMEOUT ratchet, sharded and bounded ASan stall replay, nightly-asan lane (TUNE-04)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 16-04-PLAN.md — Planning-only classifier behind required-native, timeout ledger, planning-label lint (TUNE-04)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 16-05-PLAN.md — Phase 8 verifiers in CTest on a boundary tag; plan-cap, LESSONS, STATE and Playstead checks (TUNE-02, TUNE-05)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 16-06-PLAN.md — v0.2.0 ledger freeze, version-agnostic release checks, review path, v0.3 disposition record (TUNE-06)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 16-07-PLAN.md — v0.2.1 release window, publication and readback, PR #78-92 closures, boundary commit (TUNE-06)
+
+**Cross-cutting constraints:**
+- git diff --quiet <plan base> HEAD -- src include holds (D-04).
 
 ### Phase 17: Native Save State Core
+
 **Goal**: Embedders can save a running instance to bytes and restore it into any instance with the same ROM and mode, continuing exactly as if never interrupted, with refused loads leaving the instance untouched and completeness, bounds and portability machine-checked.
 **Depends on**: Phase 16 (phase-path lint, CI budget, perf gate and plan-cap checks in place)
 **Requirements**: STATE-01, STATE-02, STATE-03, STATE-04, STATE-05, STATE-06
@@ -93,9 +121,11 @@ Milestone-wide rules:
   3. A fork matrix over the admitted corpus saves at seeded random points and at the targeted in-flight points (mid OAM DMA, mid HDMA, speed-switch stall, HALT/EI delay, APU sequencer, RTC sub-seconds, partly drawn frame), loads each state into a fresh deliberately corrupted instance, and matches every later frame, PCM sample, run result, battery image and final state byte; a coverage gate fails when an in-flight category never occurred at a save point, and every field-drop mutant build is caught.
   4. Every refused load (truncation, byte flips, wrong magic/version/profile/mode/ROM, out-of-range fields, 64-bit time fields above 2^62) leaves the instance byte-identical; a closure property test shows any accepted state run N steps still saves to an accepted state; and a state-load fuzz target runs in the hosted fuzz campaign.
   5. State bytes are explicitly little-endian and re-saving a just-loaded state reproduces identical bytes; pinned state digests match on Linux, macOS and Windows CI (an altered pin fails); a load carries cart RAM and the full RTC without reading the wall clock or applying catch-up, and a test shows an unchanged-battery load leaves the battery generation alone while a changed one bumps it exactly once, with the docs stating that loading replaces save RAM and the clock.
+
 **Plans**: TBD
 
 ### Phase 18: Player Save Slots and Host Contract
+
 **Goal**: Players can save and load numbered state slots in the SDL player without risking the running game, and a host process can drive the runner with a predictable save directory, atomic battery saves, a clean SIGTERM save-and-exit and documented exit codes and save formats.
 **Depends on**: Phase 17 (public save-state API)
 **Requirements**: PLAY-01, HOST-01, HOST-02, HOST-03
@@ -105,10 +135,12 @@ Milestone-wide rules:
   2. The runner's `--rom <path> --save-dir <dir>` mode writes battery saves as a raw `{saveDir}/{romBaseName}.sav` through an O_EXCL temp file in the save dir and a rename, flushing periodically; separate negative tests reject an unsanitised basename (separators or `..`), a symlinked target and an import outside the size the cartridge header implies, each with no partial mutation.
   3. A real-signal POSIX test sends SIGTERM and observes the runner finish the current frame, flush the save and exit 0 well within 2 s; a check rejects signal code seeded into the core (handling stays a `sig_atomic_t` flag in the adapter), each row of the documented exit-code table (clean quit, refusal, failure, crash) is exercised, and Windows is declared exempt.
   4. A machine-readable table declares GabbaBoy's save-format id and byte size for each cartridge kind (MBC3+RTC is 32,789 B), and a CTest checks it against the files the runner produces, failing on a seeded size or id mismatch.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 19: Qualified v0.3.0 Release
+
 **Goal**: `v0.3.0` is published from its exact tag with save-state and host-contract claims scoped by model, corpus and platform, and every receipt bound to that tag; release hardening happens before the tag, not after.
 **Depends on**: Phase 18
 **Requirements**: REL-01
@@ -117,6 +149,7 @@ Milestone-wide rules:
   1. The exact-tag producer rehearsal ran green on the version PR before tagging, and a check rejects a release whose rehearsal receipt names a different revision or postdates the tag.
   2. A `v0.3.0` support ledger scopes the save-state and host-contract claims by model, corpus and platform and passes its ledger check, which rejects a seeded unscoped claim.
   3. Consumer, package, fuzz and perf-gate receipts are bound to the `v0.3.0` tag and the published asset readback reconciles; a receipt bound to any other revision is rejected.
+
 **Plans**: TBD
 
 ## Progress
@@ -131,7 +164,7 @@ Milestone-wide rules:
 
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
-| 16. Tune-up and v0.2 Debt Closure | 0/TBD | 8 | Not started | - |
+| 16. Tune-up and v0.2 Debt Closure | 0/7 | 8 | Planned | - |
 | 17. Native Save State Core | 0/TBD | 12 | Not started | - |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |
