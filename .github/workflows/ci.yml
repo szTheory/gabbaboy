@@ -41,10 +41,11 @@ jobs:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
         run: |
-          # D-18: the PR base, or the push parent. A push that creates a branch or tag has an all-zero parent,
-          # so it is judged against the merge base with origin/main; an empty or unresolvable base still fails.
+          # D-18: the PR base, or the push parent. A push that creates a branch or tag has an all-zero parent, and
+          # a rebased or force-pushed branch has a parent that no fetched ref reaches any more; both are judged
+          # against the merge base with origin/main. An empty or still-unresolvable base fails the step.
           base="${PR_BASE:-$PUSH_BEFORE}"
-          if [ -z "${base//0/}" ]; then
+          if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
             base=$(git merge-base HEAD origin/main)
           fi
           git cat-file -e "${base}^{commit}"

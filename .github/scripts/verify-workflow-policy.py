@@ -1260,6 +1260,13 @@ CI_STATUS_CALLS = (
 CI_BUDGET_COMMANDS = (
     'python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"',
 )
+# The budget base falls back to the merge base with origin/main when the push parent is all-zero or no longer a
+# reachable commit (rebased and force-pushed branch), and still fails closed on an unresolvable final base.
+CI_BUDGET_BASE_PINS = (
+    '! git cat-file -e "${base}^{commit}"',
+    'base=$(git merge-base HEAD origin/main)',
+    'git cat-file -e "${base}^{commit}"\n',
+)
 CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "perf-gate", "player-gate", "macos-player-package"}
 
 
@@ -1403,6 +1410,11 @@ def check_ci(root: Path) -> None:
     native_linux = _require_job(name, tree, "native-linux")
     for command in CI_BUDGET_COMMANDS:
         require_call(name, "native-linux", native_linux, command)
+    base_steps = [step for step in native_linux.get("steps", []) if step.get("id") == "budget_base"]
+    base_run = str(base_steps[0].get("run", "")) if len(base_steps) == 1 else ""
+    for needle in CI_BUDGET_BASE_PINS:
+        if needle not in base_run:
+            raise Reject("budget-base-fallback", f"ci.native-linux budget_base step must contain: {needle}")
     perf_job = _require_job(name, tree, "perf-gate")
     if perf_job.get("runs-on") != "ubuntu-24.04":
         raise Reject("runner-image", "ci.perf-gate must run on the pinned ubuntu-24.04 image")
@@ -1792,6 +1804,10 @@ def _mutations():
         _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
            'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
            "required-command-not-executed"),
+        _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "  native-linux:\n",
+           ' || ! git cat-file -e "${base}^{commit}"; then', "; then", "budget-base-fallback"),
+        _m("ci budget base stops failing closed", "ci.yml", "  native-linux:\n",
+           '          git cat-file -e "${base}^{commit}"\n          echo', "          echo", "budget-base-fallback"),
         _m("nightly gains a pull_request trigger", "nightly-asan.yml", "", "  workflow_dispatch:\n",
            "  workflow_dispatch:\n  pull_request:\n", "workflow-trigger"),
         _m("nightly replay job gains issues: write", "nightly-asan.yml", "  asan-full-replay:\n", "    runs-on: ubuntu-24.04\n",
