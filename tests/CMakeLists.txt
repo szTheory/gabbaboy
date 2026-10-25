@@ -4708,6 +4708,25 @@ add_test(NAME sanitizer_timeout_policy_selftest
     "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
     -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
 set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
+# D-23: the same script in assert-clean mode proves the selftest above removed its probe directory.
+add_test(NAME sanitizer_timeout_policy_temp_clean
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
+    -DGBB_POLICY_MODE=assert-clean
+    -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
+set_tests_properties(sanitizer_timeout_policy_temp_clean PROPERTIES
+  TIMEOUT 30 DEPENDS sanitizer_timeout_policy_selftest
+  PASS_REGULAR_EXPRESSION "sanitizer timeout policy temp clean pass")
+# Negative control: a leftover probe directory in the inspected binary directory must fail the assertion.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/temp-clean-control/sanitizer-timeout-policy-leftover")
+add_test(NAME sanitizer_timeout_policy_temp_clean_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR};-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}/temp-clean-control;-DGBB_POLICY_MODE=assert-clean;-P;${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=left temporary directories behind"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(sanitizer_timeout_policy_temp_clean_control PROPERTIES TIMEOUT 30)
 
 # Phase 14's report adapter consumes exactly the inventory-bound corpus CTests.
 # Report/control tests stay unlabeled so --run cannot recursively schedule itself.

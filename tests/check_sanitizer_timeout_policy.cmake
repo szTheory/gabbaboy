@@ -2,6 +2,24 @@ if(NOT DEFINED GBB_SOURCE_DIR OR NOT DEFINED GBB_BINARY_DIR)
   message(FATAL_ERROR "GBB_SOURCE_DIR and GBB_BINARY_DIR are required")
 endif()
 
+# Phase 16 D-23: temp hygiene. -DGBB_POLICY_MODE=assert-clean is the sanitizer_timeout_policy_temp_clean test:
+# after a passing policy run no sanitizer-timeout-policy-* directory may remain in the build directory.
+file(GLOB gbb_policy_siblings LIST_DIRECTORIES true "${GBB_BINARY_DIR}/sanitizer-timeout-policy-*")
+if(DEFINED GBB_POLICY_MODE AND GBB_POLICY_MODE STREQUAL "assert-clean")
+  if(gbb_policy_siblings)
+    message(FATAL_ERROR "Sanitizer timeout policy left temporary directories behind: ${gbb_policy_siblings}")
+  endif()
+  message(STATUS "sanitizer timeout policy temp clean pass")
+  return()
+elseif(DEFINED GBB_POLICY_MODE AND NOT GBB_POLICY_MODE STREQUAL "")
+  message(FATAL_ERROR "Unknown GBB_POLICY_MODE '${GBB_POLICY_MODE}'")
+endif()
+
+# A failed earlier run keeps its directory for diagnosis; the next run sweeps those stale siblings first.
+foreach(gbb_policy_stale IN LISTS gbb_policy_siblings)
+  file(REMOVE_RECURSE "${gbb_policy_stale}")
+endforeach()
+
 string(RANDOM LENGTH 8 ALPHABET 0123456789abcdef gbb_policy_nonce)
 set(gbb_policy_root "${GBB_BINARY_DIR}/sanitizer-timeout-policy-${gbb_policy_nonce}")
 file(MAKE_DIRECTORY "${gbb_policy_root}")
@@ -109,5 +127,9 @@ gbb_expect_timeout("${gbb_parent_only_properties}" initial_120 360)
 gbb_expect_timeout("${gbb_parent_only_properties}" child_120 120)
 gbb_expect_timeout("${gbb_parent_only_properties}" child_240 240)
 gbb_expect_timeout("${gbb_parent_only_properties}" child_300 300)
+
+# Every assertion above raises FATAL_ERROR on failure, which keeps this directory for diagnosis. Reaching here
+# means the policy passed, so remove the probe build trees.
+file(REMOVE_RECURSE "${gbb_policy_root}")
 
 message(STATUS "sanitizer timeout policy pass normal=unchanged scaled=120:360,240:720,60:180 child=120:360,240:720,300:900 early-scaler=detected double-scaler=detected parent-only=detected")

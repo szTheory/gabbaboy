@@ -1448,6 +1448,49 @@ def check_perf_attribution(root: Path) -> None:
         require_call(name, "attribution", job, command)
 
 
+NIGHTLY_COMMANDS = (
+    "cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=",
+    "cmake --build --preset phase1-asan",
+    "ctest --preset phase1-asan --parallel 2 -R '^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure --no-tests=error",
+)
+
+
+def check_nightly(root: Path) -> None:
+    """The scheduled full ASan stall replay (D-19, D-108): two triggers, a read-only replay job that runs the repository
+    code, and a separate report job that alone holds issues: write, has no checkout and runs no repository code (T-16-07)."""
+    name = "nightly-asan"
+    tree = read_workflow(root / ".github/workflows/nightly-asan.yml")
+    if _trigger_names(tree) != {"schedule", "workflow_dispatch"}:
+        raise Reject("workflow-trigger", "nightly-asan must trigger on schedule and workflow_dispatch only")
+    if tree.get("permissions") != {"contents": "read"}:
+        raise Reject("workflow-permissions", "nightly-asan must declare only top-level contents: read")
+    _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_bounded_downloads(name, tree)
+    _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
+    if set(tree["jobs"]) != {"asan-full-replay", "report-red"}:
+        raise Reject("job-unclassified", "nightly-asan must hold exactly the asan-full-replay and report-red jobs")
+    replay = tree["jobs"]["asan-full-replay"]
+    if "permissions" in replay or _writes(_permissions(replay, tree["permissions"])):
+        raise Reject("producer-write-authority", "nightly-asan.asan-full-replay must not hold or widen permissions")
+    _check_unprivileged(name, tree, "asan-full-replay")
+    _check_checkout_credentials(name, tree, ("asan-full-replay",))
+    if replay.get("runs-on") != "ubuntu-24.04":
+        raise Reject("runner-image", "nightly-asan.asan-full-replay must run on the pinned ubuntu-24.04 image")
+    if "timeout-minutes" not in replay:
+        raise Reject("job-timeout", "nightly-asan.asan-full-replay must carry timeout-minutes")
+    for command in NIGHTLY_COMMANDS:
+        require_call(name, "asan-full-replay", replay, command)
+    report = tree["jobs"]["report-red"]
+    if _needs(report) != {"asan-full-replay"} or str(report.get("if", "")).strip() != "failure()":
+        raise Reject("nightly-report-trigger", "nightly-asan.report-red must need asan-full-replay and run if: failure()")
+    if report.get("permissions") != {"issues": "write"}:
+        raise Reject("nightly-report-permissions", "nightly-asan.report-red must hold issues: write as its only permission")
+    if _checkouts(report) or any("uses" in step for step in report.get("steps", [])):
+        raise Reject("nightly-report-checkout", "nightly-asan.report-red must not check out source or use any action")
+
+
 def _check_residual_classification(roles=None, subject=None, exempt=None, overlays=None) -> None:
     """Every residual job is named once: it runs tagged code (job token forbidden) or is a reasoned exemption."""
     roles = RELEASE_ROLES if roles is None else roles
@@ -1651,6 +1694,7 @@ def check_all(root: Path) -> dict[str, int]:
     check_rehearsal(root)
     check_ci(root)
     check_perf_attribution(root)
+    check_nightly(root)
     check_readonly_workflows(root)
     check_release(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
@@ -1658,7 +1702,7 @@ def check_all(root: Path) -> dict[str, int]:
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -1748,6 +1792,15 @@ def _mutations():
         _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
            'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
            "required-command-not-executed"),
+        _m("nightly gains a pull_request trigger", "nightly-asan.yml", "", "  workflow_dispatch:\n",
+           "  workflow_dispatch:\n  pull_request:\n", "workflow-trigger"),
+        _m("nightly replay job gains issues: write", "nightly-asan.yml", "  asan-full-replay:\n", "    runs-on: ubuntu-24.04\n",
+           "    runs-on: ubuntu-24.04\n    permissions:\n      issues: write\n", "producer-write-authority"),
+        _m("nightly report job gains a checkout", "nightly-asan.yml", "  report-red:\n", "    steps:\n",
+           "    steps:\n      - name: Check out source\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\n"
+           "        with:\n          persist-credentials: false\n", "nightly-report-checkout"),
+        _m("nightly replay drops the full-replay ctest filter", "nightly-asan.yml", "  asan-full-replay:\n",
+           "-R '^acceptance_stall_diagnosis(_replay_[12])?$'", "-R '^acceptance_'", "required-command-not-executed"),
         _m("ci perf-gate no-op twin control removed", "ci.yml", "  perf-gate:\n",
            "bash tests/scripts/run-perf-gate.sh --noop-twin", "true", "required-command-not-executed"),
         _m("ci perf-gate checkout persists credentials", "ci.yml", "  perf-gate:\n", "persist-credentials: false",
