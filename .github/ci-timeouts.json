@@ -1,11 +1,11 @@
 {
  "ci.yml:changes": {
   "timeout_minutes": 5,
-  "cited_run_id": 40165925846,
-  "cited_sha": "e624dad9d5bb3705c86f8db4eb820170f09ec9fc",
-  "p50_minutes": "0.10",
+  "cited_run_id": 40211538920,
+  "cited_sha": "60bd41cd963e322f870a5b9368c4bd0c78ae39fe",
+  "p50_minutes": "0.09",
   "samples": 1,
-  "provisional": true
+  "provisional": false
  },
  "ci.yml:cmake-floor-3-25-3": {
   "timeout_minutes": 40,
@@ -81,11 +81,11 @@
  },
  "ci.yml:planning-checks": {
   "timeout_minutes": 15,
-  "cited_run_id": 40166565258,
-  "cited_sha": "1b7fa0cedb700e6d3b9f60cbfd3105eab070e33e",
-  "p50_minutes": "0.35",
+  "cited_run_id": 40205944089,
+  "cited_sha": "6f4f4bf7cacd65de8f1840451aaf5fb8fbecad99",
+  "p50_minutes": "0.59",
   "samples": 1,
-  "provisional": true
+  "provisional": false
  },
  "ci.yml:player-gate": {
   "timeout_minutes": 2,
@@ -217,27 +217,23 @@
  },
  "release-rehearsal.yml:aggregate": {
   "timeout_minutes": 75,
-  "cited_run_id": 39391950429,
-  "cited_sha": "56eaf1ba1aa385feef0fb9a15ae3f128d2b2a191",
-  "p50_minutes": "12.42",
-  "samples": 3,
-  "provisional": true
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-v02-evidence-aggregate fails at the same --check-current step and the same pending measurement; the last green sample (run 39391950429 at 56eaf1b, 12.42 min) is on a non-ancestor rehearsal branch. The 75-minute cap is the reviewed limit for the six evidence families; the v0.2.1 rehearsal re-cites this row (D-111)."
  },
  "release-rehearsal.yml:corpus": {
   "timeout_minutes": 60,
-  "cited_run_id": 39382974145,
-  "cited_sha": "6b83695aeec9926162814521beedc53bf01147c6",
-  "p50_minutes": "6.57",
-  "samples": 4,
-  "provisional": true
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-corpus-and-support-sidecar fails its --check-current step because docs/support/v0.2.0.md pins source digests that moved after the tag; the last green sample (run 39382974145 at 6b83695, 6.57 min) is on a rehearsal branch that is not an ancestor of main. The 60-minute cap is the reviewed limit for the full CTest stream; the v0.2.1 rehearsal re-cites this row (D-111)."
  },
  "release-rehearsal.yml:fuzz": {
   "timeout_minutes": 45,
-  "cited_run_id": 39401388702,
-  "cited_sha": "d6f74b5dba707b76a0c348f8fea84f13d93b753a",
-  "p50_minutes": "2.00",
-  "samples": 4,
-  "provisional": true
+  "cited_run_id": 40166530630,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "2.40",
+  "samples": 1,
+  "provisional": false
  },
  "release-rehearsal.yml:judge": {
   "timeout_minutes": 15,
@@ -247,11 +243,11 @@
  },
  "release-rehearsal.yml:package": {
   "timeout_minutes": 35,
-  "cited_run_id": 39382974145,
-  "cited_sha": "6b83695aeec9926162814521beedc53bf01147c6",
-  "p50_minutes": "0.27",
-  "samples": 4,
-  "provisional": true
+  "cited_run_id": 40166530630,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "0.40",
+  "samples": 1,
+  "provisional": false
  },
  "release-rehearsal.yml:perf-gate": {
   "timeout_minutes": 40,
@@ -263,11 +259,9 @@
  },
  "release-rehearsal.yml:performance": {
   "timeout_minutes": 45,
-  "cited_run_id": 39382974145,
-  "cited_sha": "6b83695aeec9926162814521beedc53bf01147c6",
-  "p50_minutes": "0.50",
-  "samples": 4,
-  "provisional": true
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-paired-performance-qualification stays pending-investigation (median 118.35 percent, review trigger fired) until an owner-recorded, receipt-bound review decision is applied through the dispatch inputs; the last green sample (run 39382974145, 0.50 min) is on a non-ancestor rehearsal branch. The 45-minute cap is the reviewed limit for one paired measurement; the v0.2.1 rehearsal re-cites this row (D-111)."
  },
  "release.yml:attach-v02-evidence": {
   "timeout_minutes": 15,

@@ -1,0 +1,367 @@
+{
+ "schema_version": 1,
+ "plan": "16-06",
+ "scope": "v0.3 Phase 16 carry-over dispositions (D-33)",
+ "audit_source": ".planning/milestones/v0.2-MILESTONE-AUDIT.md at 02776e5",
+ "receipts": null,
+ "rows": [
+  {
+   "id": "LIM-SUPPORT-LEDGER-PIN",
+   "status": "pending-release",
+   "decision": "D-106",
+   "title": "docs/support/v0.2.0.md pins digests of files that Phase 15.1 changed, so a release ledger for the post-0.2.0 source is needed (a new versioned ledger, never a rewrite of v0.2.0.md)",
+   "evidence": [
+    "docs/support/v0.2.0.md",
+    "tests/scripts/verify-support-ledger.py",
+    "ctest:ledger_freeze",
+    "ctest:ledger_freeze_controls",
+    "ctest:support_ledger_binding",
+    "ctest:support_ledger_binding_controls"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-28/D-29: the v0.2.0 bytes are frozen by two digests and the checks bind to the tree version; v0.2.1.md is generated from the version PR tree in the D-31 window.",
+   "closure_requires": [
+    "rehearsal_run",
+    "trusted_judge",
+    "nightly_asan_run",
+    "release_readback"
+   ]
+  },
+  {
+   "id": "LIM-PERF-REVIEW",
+   "status": "pending-release",
+   "decision": "D-106",
+   "title": "The paired hosted wall-clock measurement fires the review trigger and stays pending until a receipt-bound independent review decision is recorded (this record never creates one)",
+   "evidence": [
+    "tests/baseline/perf-attribution-v1.json",
+    "tests/baseline/perf-gate-v1.txt",
+    "tests/scripts/verify-v02-performance.py",
+    "ctest:v02_performance_controls",
+    "ctest:perf_attribution",
+    "ctest:perf_gate_controls",
+    "run:40166530630"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-13/D-17/D-30: no performance fix lands in Phase 16; the attribution receipt and the Ir gate are the evidence, and the owner records the review for the exact v0.2.1 measurement.",
+   "closure_requires": [
+    "rehearsal_run",
+    "trusted_judge",
+    "nightly_asan_run",
+    "release_readback"
+   ]
+  },
+  {
+   "id": "LIM-REHEARSAL-FAILED",
+   "status": "pending-release",
+   "decision": "D-110",
+   "title": "The hosted release rehearsal has never been green on the current tree; it is not a required check and is never counted as a pass",
+   "evidence": [
+    ".github/workflows/release-rehearsal.yml",
+    "run:40166530630",
+    "ctest:workflow_policy_check",
+    "ctest:workflow_policy_controls"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-31: a green exact-tag rehearsal on rehearsal/v0.2.1 at the version PR head, bound to the squash commit by tree equality.",
+   "closure_requires": [
+    "rehearsal_run",
+    "trusted_judge",
+    "nightly_asan_run",
+    "release_readback"
+   ]
+  },
+  {
+   "id": "LIM-TRUSTED-JUDGE",
+   "status": "pending-release",
+   "decision": "D-110",
+   "title": "The trusted rehearsal judge has never run green on the host, so its default-branch trust split is untested",
+   "evidence": [
+    ".github/workflows/release-rehearsal.yml",
+    "run:40166530630",
+    "ctest:workflow_policy_check"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-31 and D-110: the judge row in .github/ci-timeouts.json stays release_bound until a green rehearsal exists.",
+   "closure_requires": [
+    "rehearsal_run",
+    "trusted_judge",
+    "nightly_asan_run",
+    "release_readback"
+   ]
+  },
+  {
+   "id": "PR-78-92-SUPERSEDED",
+   "status": "pending-release",
+   "decision": "D-106",
+   "title": "Open PRs #78-#92 (the v0.2 verification refresh stack) close as superseded by #93 and the v0.2 archive",
+   "evidence": [
+    ".planning/milestones/v0.2-phases",
+    ".planning/milestones/v0.2-MILESTONE-AUDIT.md"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-32: PR #93 (09805f3) and the archive location are named in each closing comment; none of the PRs touches src/ or include/.",
+   "closure_requires": [
+    "pr_closures"
+   ]
+  },
+  {
+   "id": "LIM-ASAN-STALL-TIMING",
+   "status": "closed",
+   "decision": "D-108",
+   "title": "The hosted ASan lane was slower on the stall replay; the full replays moved to a scheduled read-only nightly lane and the PR lane keeps a bounded drop:START control",
+   "evidence": [
+    ".github/workflows/nightly-asan.yml",
+    "ctest:acceptance_stall_bounded",
+    "ctest:acceptance_stall_diagnosis",
+    "ctest:test_budget",
+    "run:40163271239"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-19 (16-03): nightly-asan dispatch 40163271239 at 2bd618d concluded success; a green nightly-asan run at the rehearsal head is still a release precondition."
+  },
+  {
+   "id": "LIM-RESIDUAL-WRITE-JOBS",
+   "status": "accepted-later",
+   "decision": "D-106",
+   "title": "Five source-executing release jobs keep write authority as an exactly enforced named set",
+   "evidence": [
+    ".github/scripts/verify-workflow-policy.py",
+    "ctest:workflow_policy_check"
+   ],
+   "owner_accepted": true,
+   "owner_decision": "D-106",
+   "basis": "Owner decision D-106: accepted for later."
+  },
+  {
+   "id": "LIM-NO-HOST-WRONG-ROM",
+   "status": "accepted-later",
+   "decision": "D-106",
+   "title": "No wrong-ROM Libbet run was dispatched on the host; that negative control is local only",
+   "evidence": [
+    ".github/workflows/libbet-repro.yml",
+    "tests/scripts/reproduce-libbet.sh"
+   ],
+   "owner_accepted": true,
+   "owner_decision": "D-106",
+   "basis": "Owner decision D-106: accepted for later."
+  },
+  {
+   "id": "LIM-WINDOWS-POSIX-CONTROLS",
+   "status": "accepted-later",
+   "decision": "D-106",
+   "title": "Three controls (two consumer interrupt-cleanup tests and the controlled paired-performance producer) are skipped on Windows only",
+   "evidence": [
+    "tests/scripts/verify-v02-performance.py",
+    "ctest:v02_consumer_controls_c"
+   ],
+   "owner_accepted": true,
+   "owner_decision": "D-106",
+   "basis": "Owner decision D-106: accepted for later."
+  },
+  {
+   "id": "LIM-HIST-AUDIO-RED",
+   "status": "accepted-dropped",
+   "decision": "D-106",
+   "title": "The pre-fix red run of audio_saturation was never retained and cannot be recreated",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-historical-limitations.json",
+    "ctest:historical_limitations_controls"
+   ],
+   "owner_accepted": true,
+   "owner_decision": "D-106",
+   "basis": "Owner decision D-106: accepted and dropped; fresh evidence is not recovery."
+  },
+  {
+   "id": "LIM-HIST-M7",
+   "status": "accepted-dropped",
+   "decision": "D-106",
+   "title": "The isolated M7 control failure kept no diagnostic and cannot be recreated",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-historical-limitations.json",
+    "ctest:historical_limitations_controls"
+   ],
+   "owner_accepted": true,
+   "owner_decision": "D-106",
+   "basis": "Owner decision D-106: accepted and dropped."
+  },
+  {
+   "id": "LIM-SHIP11-UNCLASSIFIED",
+   "status": "accepted-dropped",
+   "decision": "D-106",
+   "title": "The deterministic unclassified SHIP-11 edge has no defensible semantic predicate",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-VALIDATION.md"
+   ],
+   "owner_accepted": true,
+   "owner_decision": "D-106",
+   "basis": "Owner decision D-106: accepted and dropped."
+  },
+  {
+   "id": "LIM-PROHIBITION-FLAGS",
+   "status": "accepted-dropped",
+   "decision": "D-106",
+   "title": "Two descriptor-less prohibitions remain flagged-unverified reviewer flags",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-DISPOSITIONS.json"
+   ],
+   "owner_accepted": true,
+   "owner_decision": "D-106",
+   "basis": "Owner decision D-106: accepted and dropped."
+  },
+  {
+   "id": "LEDGER-93-APPEND",
+   "status": "disclosed-exception",
+   "decision": "D-106",
+   "title": "PR #93 (09805f3) appended a 12-line performance-history block to docs/support/v0.2.0.md after the v0.2.0 tag; this is the one disclosed exception to D-106's never-rewritten rule",
+   "evidence": [
+    "docs/support/v0.2.0.md",
+    "ctest:ledger_freeze",
+    "ctest:ledger_freeze_controls"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-29: the freeze check pins the tag blob, the working file and the appended block, and rejects any other change. No revert."
+  },
+  {
+   "id": "VAL-34-1",
+   "status": "superseded",
+   "decision": "D-105",
+   "title": "15.1-VALIDATION row 34-1 read live or HEAD-relative state and no CTest executes it",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-VALIDATION.md",
+    "ctest:no_phase_paths"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-10: superseded by the Phase 16 archive and boundary-commit checkers; no archived file was edited."
+  },
+  {
+   "id": "VAL-34-2",
+   "status": "superseded",
+   "decision": "D-105",
+   "title": "15.1-VALIDATION row 34-2 read live or HEAD-relative state and no CTest executes it",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-VALIDATION.md",
+    "ctest:no_phase_paths"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-10: superseded by the Phase 16 archive and boundary-commit checkers; no archived file was edited."
+  },
+  {
+   "id": "VAL-35-2",
+   "status": "superseded",
+   "decision": "D-105",
+   "title": "15.1-VALIDATION row 35-2 read live or HEAD-relative state and no CTest executes it",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-VALIDATION.md",
+    "ctest:no_phase_paths"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-10: superseded by the Phase 16 archive and boundary-commit checkers; no archived file was edited."
+  },
+  {
+   "id": "VAL-35-3",
+   "status": "superseded",
+   "decision": "D-105",
+   "title": "15.1-VALIDATION row 35-3 read live or HEAD-relative state and no CTest executes it",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-VALIDATION.md",
+    "ctest:no_phase_paths"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-10: superseded by the Phase 16 archive and boundary-commit checkers; no archived file was edited."
+  },
+  {
+   "id": "VAL-36-1",
+   "status": "superseded",
+   "decision": "D-105",
+   "title": "15.1-VALIDATION row 36-1 read live or HEAD-relative state and no CTest executes it",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-VALIDATION.md",
+    "ctest:no_phase_paths"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-10: superseded by the Phase 16 archive and boundary-commit checkers; no archived file was edited."
+  },
+  {
+   "id": "VAL-36-2",
+   "status": "superseded",
+   "decision": "D-105",
+   "title": "15.1-VALIDATION row 36-2 read live or HEAD-relative state and no CTest executes it",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-VALIDATION.md",
+    "ctest:no_phase_paths"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-10: superseded by the Phase 16 archive and boundary-commit checkers; no archived file was edited."
+  },
+  {
+   "id": "VAL-36-3",
+   "status": "superseded",
+   "decision": "D-105",
+   "title": "15.1-VALIDATION row 36-3 read live or HEAD-relative state and no CTest executes it",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-VALIDATION.md",
+    "ctest:no_phase_paths"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-10: superseded by the Phase 16 archive and boundary-commit checkers; no archived file was edited."
+  },
+  {
+   "id": "AUDIT-13-VERIFICATION-PADDING",
+   "status": "accepted-history",
+   "decision": "D-102",
+   "title": "13-VERIFICATION.md lost table cell padding in 09805f3; content is still SATISFIED",
+   "evidence": [
+    ".planning/milestones/v0.2-MILESTONE-AUDIT.md"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-33: accepted as history."
+  },
+  {
+   "id": "GR-IN-03",
+   "status": "seed",
+   "decision": "D-102",
+   "title": "Info item GR-IN-03 (deferred to P15-09)",
+   "evidence": [
+    ".planning/milestones/v0.2-MILESTONE-AUDIT.md"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-33: an Info item becomes a seed (D-102)."
+  },
+  {
+   "id": "GR2-IN-01",
+   "status": "seed",
+   "decision": "D-102",
+   "title": "Info item GR2-IN-01 (the fuzz self-test prints totals from literals)",
+   "evidence": [
+    ".planning/milestones/v0.2-MILESTONE-AUDIT.md"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-33: an Info item becomes a seed (D-102)."
+  },
+  {
+   "id": "AUDIT-SUMMARY-REQUIREMENTS-KEY",
+   "status": "accepted-history",
+   "decision": "D-102",
+   "title": "15.1-31, 15.1-32 and 15.1-33 record requirements: instead of requirements-completed:",
+   "evidence": [
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-31-SUMMARY.md",
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-32-SUMMARY.md",
+    ".planning/milestones/v0.2-phases/GB-15.1-release-hardening-and-milestone-debt-closure/15.1-33-SUMMARY.md"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-33: accepted as history."
+  },
+  {
+   "id": "AUDIT-LEGACY-SUMMARY-PROBLEMS",
+   "status": "accepted-history",
+   "decision": "D-102",
+   "title": "47 legacy Phase 9/10 SUMMARY schema problems reported by the summary sweep",
+   "evidence": [
+    ".planning/milestones/v0.2-MILESTONE-AUDIT.md",
+    "ctest:summary_coverage"
+   ],
+   "owner_accepted": false,
+   "basis": "Phase 16 D-33: accepted as history."
+  }
+ ]
+}

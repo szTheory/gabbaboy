@@ -1157,6 +1157,10 @@ v02_game_claims
 v02_game_claims_controls
 v02_support_ledger
 v02_support_ledger_controls
+ledger_freeze
+ledger_freeze_controls
+support_ledger_binding
+support_ledger_binding_controls
 v02_adoption_docs
 v02_adoption_docs_controls
 v02_consumer_controls_c
@@ -1169,6 +1173,9 @@ core_linkage_links
 core_linkage_controls
 historical_limitations_controls
 closeout_dispositions_controls
+v03_dispositions
+v03_dispositions_controls
+closeout_dispositions_scope_v03
 acceptance_dense_script_delivered
 acceptance_dense_input_controls
 acceptance_drive_dense_queue

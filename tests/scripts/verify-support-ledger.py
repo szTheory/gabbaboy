@@ -84,6 +84,213 @@ def ledger_version(path: str) -> str:
     return ".".join(LEDGER_NAME.fullmatch(pathlib.PurePosixPath(path).name).groups())
 
 
+def tree_version(root: pathlib.Path = ROOT) -> str:
+    """The release version of a tree: CMake project VERSION, which must equal the release-please manifest entry.
+
+    A pre-release suffix is out of scope (release-please emits plain X.Y.Z here), and a disagreement is a hard
+    failure rather than a choice of one source (D-28).
+    """
+    try:
+        cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+        manifest = json.loads((root / ".release-please-manifest.json").read_text(encoding="utf-8"),
+                              object_pairs_hook=unique_pairs)
+    except (OSError, ValueError) as error:
+        fail(f"REJECT version-unreadable: {error}")
+    match = re.search(r"^project\(\s*\w+\s+VERSION\s+(\d+\.\d+\.\d+)[\s)]", cmake, re.M)
+    if not match:
+        fail("REJECT version-missing: CMakeLists.txt has no plain X.Y.Z project VERSION")
+    manifest_version = manifest.get(".") if type(manifest) is dict else None
+    if type(manifest_version) is not str or manifest_version != match.group(1):
+        fail(f"REJECT version-mismatch: CMakeLists.txt {match.group(1)} differs from "
+             f".release-please-manifest.json {manifest_version!r}")
+    return match.group(1)
+
+
+def tree_ledger(root: pathlib.Path = ROOT) -> str:
+    """The newest ledger in this tree's major/minor scope that is not above its version."""
+    try:
+        names = sorted(entry.name for entry in (root / LEDGER_DIR).iterdir())
+    except OSError as error:
+        fail(f"REJECT ledger-dir-unreadable: {error}")
+    return select_ledger(names, "v" + tree_version(root))
+
+
+def derive_rehearsal_tag(ref: str, root: pathlib.Path = ROOT) -> str:
+    """The rehearsal branch rehearsal/vX.Y.Z names the tag; it must be the rehearsed tree's own version, never a default."""
+    match = re.fullmatch(r"rehearsal/(v\d+\.\d+\.\d+)", ref)
+    if not match:
+        fail(f"REJECT rehearsal-ref: {ref!r} is not rehearsal/vX.Y.Z")
+    version = tree_version(root)
+    if match.group(1) != "v" + version:
+        fail(f"REJECT rehearsal-ref-version: {ref!r} names {match.group(1)} but the rehearsed tree is v{version}")
+    return "REHEARSAL_TAG=" + match.group(1)
+
+
+README_LEDGER_LINK = re.compile(r"\[versioned\s+support\s+ledger\]\(docs/support/(v\d+\.\d+\.\d+\.md)\)")
+
+
+def check_binding(root: pathlib.Path = ROOT) -> tuple[str, str]:
+    """README must link the ledger this tree's version selects, not an older or newer one (D-28)."""
+    version = tree_version(root)
+    selected = tree_ledger(root)
+    try:
+        readme = (root / "README.md").read_text(encoding="utf-8")
+    except OSError as error:
+        fail(f"REJECT readme-unreadable: {error}")
+    links = [match.group(1) for match in README_LEDGER_LINK.finditer(readme)]
+    if links != [pathlib.PurePosixPath(selected).name]:
+        fail(f"REJECT readme-ledger-link: README links {links or 'no versioned support ledger'}, "
+             f"but version {version} binds {selected}")
+    return version, selected
+
+
+def self_test_binding() -> int:
+    """Private fixture trees: main-like, window-like, and each way the binding can break."""
+    def tree(base: pathlib.Path, version: str, manifest: str, ledgers: list[str], readme_link: str) -> pathlib.Path:
+        base.mkdir()
+        (base / "CMakeLists.txt").write_text(
+            f"project(GabbaBoy VERSION {version} LANGUAGES C) # x-release-please-version\n")
+        (base / ".release-please-manifest.json").write_text(json.dumps({".": manifest}) + "\n")
+        (base / LEDGER_DIR).mkdir(parents=True)
+        for name in ledgers:
+            (base / LEDGER_DIR / name).write_text("ledger\n")
+        (base / "README.md").write_text(
+            f"The [versioned support ledger](docs/support/{readme_link}) defines the scope.\n")
+        return base
+
+    controls = 0
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-binding-") as temporary:
+        root = pathlib.Path(temporary)
+        positives = (
+            ("main", ("0.2.0", "0.2.0", ["v0.1.0.md", "v0.2.0.md"], "v0.2.0.md"), ("0.2.0", "docs/support/v0.2.0.md")),
+            ("window", ("0.2.1", "0.2.1", ["v0.1.0.md", "v0.2.0.md", "v0.2.1.md"], "v0.2.1.md"),
+             ("0.2.1", "docs/support/v0.2.1.md")),
+            ("patch", ("0.2.2", "0.2.2", ["v0.2.0.md", "v0.2.1.md"], "v0.2.1.md"), ("0.2.2", "docs/support/v0.2.1.md")),
+        )
+        for name, args, expected in positives:
+            if check_binding(tree(root / name, *args)) != expected:
+                fail(f"{name}-like tree did not bind {expected[1]}")
+        negatives = (
+            ("readme-links-older-ledger", ("0.2.1", "0.2.1", ["v0.2.0.md", "v0.2.1.md"], "v0.2.0.md"), "readme-ledger-link"),
+            ("readme-links-future-ledger", ("0.2.0", "0.2.0", ["v0.2.0.md", "v0.2.1.md"], "v0.2.1.md"), "readme-ledger-link"),
+            ("manifest-cmake-mismatch", ("0.2.1", "0.2.0", ["v0.2.0.md", "v0.2.1.md"], "v0.2.1.md"), "version-mismatch"),
+            ("version-without-ledger", ("0.3.0", "0.3.0", ["v0.2.0.md"], "v0.2.0.md"), "no support ledger exists"),
+        )
+        for name, args, reason in negatives:
+            try:
+                check_binding(tree(root / name, *args))
+            except ValueError as error:
+                if reason not in str(error):
+                    fail(f"{name}: rejected for the wrong reason: {error}")
+                controls += 1
+            else:
+                fail(f"{name}: the binding check accepted it")
+        for name, ref, args, reason in (
+            ("derive-ref-for-another-version", "rehearsal/v0.2.0", ("0.2.1", "0.2.1", ["v0.2.1.md"], "v0.2.1.md"), "rehearsal-ref-version"),
+            ("derive-ref-without-a-version", "rehearsal/phase-15.1-79e20f3", ("0.2.0", "0.2.0", ["v0.2.0.md"], "v0.2.0.md"), "rehearsal-ref"),
+        ):
+            try:
+                derive_rehearsal_tag(ref, tree(root / name, *args))
+            except ValueError as error:
+                if reason not in str(error):
+                    fail(f"{name}: rejected for the wrong reason: {error}")
+                controls += 1
+            else:
+                fail(f"{name}: the rehearsal tag derivation accepted it")
+        if derive_rehearsal_tag("rehearsal/v0.2.1", root / "window") != "REHEARSAL_TAG=v0.2.1":
+            fail("the window-like tree did not derive its own rehearsal tag")
+    return controls
+
+
+# The v0.2.0 ledger is frozen (D-29, TUNE-06): its tag blob and working bytes are pinned, and the working file may differ
+# from the tag only by the one disclosed #93 (09805f3) performance-history block inserted at a pinned offset.
+FREEZE_TAG = "v0.2.0"
+FREEZE_PATH = f"{LEDGER_DIR}/v0.2.0.md"
+TAG_BLOB_SHA256 = "a542a5c01e236246f83d4f1b67aba20f2a9200e74e5ffe70b930daf9f3af2b8f"
+WORKING_SHA256 = "c47ff12b089fd386ebe1dd1a16d4ceaefc9fd60d072acdce510267c3dff19a9e"
+APPENDED_BLOCK_OFFSET = 7233
+APPENDED_BLOCK_LENGTH = 794
+APPENDED_BLOCK_SHA256 = "1422b9ebb82e20ffabe8c0072551cbbc2520fee4420ce201359913085a065b7d"
+FREEZE_PINS = (TAG_BLOB_SHA256, WORKING_SHA256, APPENDED_BLOCK_OFFSET, APPENDED_BLOCK_LENGTH, APPENDED_BLOCK_SHA256)
+
+
+def read_freeze_tag_blob(tag: str = FREEZE_TAG, path: str = FREEZE_PATH) -> bytes:
+    result = subprocess.run(["git", "show", f"{tag}:{path}"], cwd=ROOT, capture_output=True, check=False)
+    if result.returncode != 0 or not result.stdout:
+        fail(f"REJECT tag-missing: {tag}:{path} is unreadable; fetch the tag (fetch-depth: 0) before checking the freeze")
+    return result.stdout
+
+
+def judge_freeze(tag_raw: bytes, working_raw: bytes, pins: tuple = FREEZE_PINS) -> int:
+    """Return the block's line count when the working bytes are the tag blob plus the one pinned block."""
+    tag_sha, working_sha, offset, length, block_sha = pins
+    if sha256(tag_raw) != tag_sha:
+        fail(f"REJECT tag-blob-digest: the {FREEZE_TAG} blob digest {sha256(tag_raw)} is not the pinned {tag_sha}")
+    if sha256(working_raw) != working_sha:
+        fail(f"REJECT working-digest: {FREEZE_PATH} digest {sha256(working_raw)} is not the pinned {working_sha}")
+    if len(working_raw) != len(tag_raw) + length or \
+            working_raw[:offset] + working_raw[offset + length:] != tag_raw:
+        fail("REJECT edit-outside-block: the working file is not the tag blob plus exactly the one disclosed block")
+    block = working_raw[offset:offset + length]
+    if sha256(block) != block_sha:
+        fail("REJECT block-digest: the disclosed #93 performance-history block differs from its pinned digest")
+    return block.count(b"\n")
+
+
+def check_freeze() -> str:
+    tag_raw = read_freeze_tag_blob()
+    working_raw = bounded_file(ROOT / FREEZE_PATH, MAX_LEDGER_BYTES, "ledger")
+    lines = judge_freeze(tag_raw, working_raw)
+    return f"ledger-freeze pass tag={sha256(tag_raw)} working={sha256(working_raw)} appended_lines={lines}"
+
+
+def self_test_freeze() -> int:
+    tag_raw = read_freeze_tag_blob()
+    working_raw = bounded_file(ROOT / FREEZE_PATH, MAX_LEDGER_BYTES, "ledger")
+    if judge_freeze(tag_raw, working_raw) < 1:
+        fail("the positive freeze control found no disclosed block")
+
+    def flipped(raw: bytes, index: int) -> bytes:
+        return raw[:index] + bytes([raw[index] ^ 1]) + raw[index + 1:]
+
+    def repin(raw: bytes) -> tuple:
+        # Pin the mutated working digest too, so only the structural rule can reject it.
+        return (TAG_BLOB_SHA256, sha256(raw), APPENDED_BLOCK_OFFSET, APPENDED_BLOCK_LENGTH, APPENDED_BLOCK_SHA256)
+
+    inserted = working_raw[:100] + b"x" + working_raw[100:]
+    edited = flipped(working_raw, 500)
+    block_edited = flipped(working_raw, APPENDED_BLOCK_OFFSET + 10)
+    cases = (
+        ("flipped-byte-in-tag-blob", flipped(tag_raw, 500), working_raw, FREEZE_PINS, "tag-blob-digest"),
+        ("flipped-byte-in-working-file", tag_raw, edited, FREEZE_PINS, "working-digest"),
+        ("wrong-tag-pin", tag_raw, working_raw, ("0" * 64,) + FREEZE_PINS[1:], "tag-blob-digest"),
+        ("wrong-working-pin", tag_raw, working_raw, (FREEZE_PINS[0], "0" * 64) + FREEZE_PINS[2:], "working-digest"),
+        ("extra-insertion-outside-the-block", tag_raw, inserted, repin(inserted), "edit-outside-block"),
+        ("equal-length-edit-outside-the-block", tag_raw, edited, repin(edited), "edit-outside-block"),
+        ("block-removed", tag_raw, tag_raw, repin(tag_raw), "edit-outside-block"),
+        ("block-edited", tag_raw, block_edited, repin(block_edited), "block-digest"),
+    )
+    controls = 0
+    for name, tag_case, working_case, pins, reason in cases:
+        try:
+            judge_freeze(tag_case, working_case, pins)
+        except ValueError as error:
+            if reason not in str(error):
+                fail(f"{name}: rejected for the wrong reason: {error}")
+            controls += 1
+        else:
+            fail(f"{name}: the freeze check accepted it")
+    try:
+        read_freeze_tag_blob("v0.0.0-no-such-tag")
+    except ValueError as error:
+        if "tag-missing" not in str(error):
+            fail(f"a missing tag was rejected for the wrong reason: {error}")
+        controls += 1
+    else:
+        fail("a missing tag was accepted")
+    return controls
+
+
 def working_tree_ledger() -> str:
     # Keep the legacy validator's fixture fixed as newer ledger schemas arrive.
     return f"{LEDGER_DIR}/v0.1.0.md"
@@ -375,7 +582,7 @@ def _count_receipt_cases(observations: list[dict]) -> dict:
 def validate_data_v2(data: dict, expected_version: str, expected_case_count: int = V2_REQUIRED_CASES) -> None:
     if type(data) is not dict or data.get("schema_version") != 2:
         fail("unsupported ledger schema")
-    if expected_version != "0.2.0" or data.get("version") != expected_version:
+    if not re.fullmatch(r"0\.2\.[0-9]+", expected_version) or data.get("version") != expected_version:
         fail("v0.2 ledger version/profile identity is missing or unstable")
     game = data.get("game_evidence")
     if (type(game) is not dict or game.get("status") != "absent" or
@@ -736,7 +943,7 @@ def _validate_run_identity(receipt: dict, inventory_sha256: str) -> dict:
 
 def build_v2_data(receipt: dict, receipt_raw: bytes, inventory: dict, inventory_raw: bytes,
                   repo_root: pathlib.Path, receipt_path: str,
-                  tagged_inputs: dict[str, bytes] | None = None) -> dict:
+                  tagged_inputs: dict[str, bytes] | None = None, *, version: str) -> dict:
     inventory_sha = sha256(inventory_raw)
     identity = _validate_run_identity(receipt, inventory_sha)
     bindings = _case_binding_rows(inventory)
@@ -824,7 +1031,7 @@ def build_v2_data(receipt: dict, receipt_raw: bytes, inventory: dict, inventory_
     }
     return {
         "schema_version": 2,
-        "version": "0.2.0",
+        "version": version,
         "game_evidence": {
             "status": "absent",
             "statement": "No CGB game-level evidence exists",
@@ -869,9 +1076,9 @@ def render_v2_ledger(data: dict) -> str:
     counts = data["receipt"]["counts"]
     suite_rows = data["receipt"]["suite_model_mode_counts"]
     lines = [
-        "# GabbaBoy v0.2.0 support ledger",
+        f"# GabbaBoy v{data['version']} support ledger",
         "",
-        "This ledger records implemented scope and the software evidence available for the v0.2.0 release. The CGB corpus is a bounded test-ROM set, not a game library or hardware qualification. Boot ROMs are skipped; the CGB corpus ran on the selected CGB-CPU-E software model. Physical CGB-E remains UNKNOWN/POLICY.",
+        f"This ledger records implemented scope and the software evidence available for the v{data['version']} release. The CGB corpus is a bounded test-ROM set, not a game library or hardware qualification. Boot ROMs are skipped; the CGB corpus ran on the selected CGB-CPU-E software model. Physical CGB-E remains UNKNOWN/POLICY.",
         "",
         "## Models and execution modes",
         "",
@@ -951,16 +1158,17 @@ def create_current_ledger(receipt_path: pathlib.Path) -> dict:
     receipt_raw = bounded_file(receipt_path, MAX_RECEIPT_BYTES, "receipt")
     receipt = strict_json(receipt_raw, "receipt")
     run_inventory_validator()
-    data = build_v2_data(receipt, receipt_raw, inventory, inventory_raw, ROOT, receipt_rel)
+    version = tree_version()
+    data = build_v2_data(receipt, receipt_raw, inventory, inventory_raw, ROOT, receipt_rel, version=version)
     identity = receipt.get("identity", {})
     current = current_git_revision()
     if identity.get("core_revision") == current:
         run_existing_receipt_validator(receipt_path, inventory)
     else:
         check_source_ancestry(identity.get("core_revision", ""), current)
-    validate_data_v2(data, "0.2.0")
+    validate_data_v2(data, version)
     validate_source_bindings(data, ROOT)
-    target = ROOT / "docs/support/v0.2.0.md"
+    target = ROOT / f"{LEDGER_DIR}/v{version}.md"
     target.write_text(render_v2_ledger(data), encoding="utf-8")
     return data
 
@@ -1098,17 +1306,19 @@ def run_existing_receipt_validator(receipt_path: pathlib.Path, inventory: dict,
         fail("existing corpus report validator failed: " + str(error))
 
 
-def check_ledger_static(root: pathlib.Path = ROOT, run_inventory: bool = True) -> dict:
-    """Receipt-free currency check of the tracked v0.2.0 ledger.
+def check_ledger_static(root: pathlib.Path = ROOT, run_inventory: bool = True, ledger_rel: str | None = None) -> dict:
+    """Receipt-free currency check of the tracked ledger bound to this tree's version.
 
     The tracked ledger carries a historical producer snapshot. Source digests are checked against
     that immutable producer revision, not today's checkout; build artifacts require the full receipt-
     bound check where they were produced.
     """
-    ledger = parse_ledger(bounded_file(root / "docs/support/v0.2.0.md", MAX_LEDGER_BYTES, "ledger"), "0.2.0")
+    ledger_rel = ledger_rel or tree_ledger(root)
+    version = ledger_version(ledger_rel)
+    ledger = parse_ledger(bounded_file(root / ledger_rel, MAX_LEDGER_BYTES, "ledger"), version)
     if run_inventory:
         run_inventory_validator(root)
-    validate_data_v2(ledger, "0.2.0")
+    validate_data_v2(ledger, version)
     revision = ledger["receipt"]["producer_revision"] if root.resolve() == ROOT.resolve() else None
     validate_source_bindings(ledger, root, source_revision=revision, include_build=False)
     return ledger
@@ -1122,23 +1332,25 @@ def check_current(receipt_path: pathlib.Path) -> dict:
         fail("receipt path must stay inside the repository")
     if receipt_rel != "build/cgb-corpus-receipt.json":
         fail("current support ledger requires the canonical build/cgb-corpus-receipt.json path")
-    ledger_path = ROOT / "docs/support/v0.2.0.md"
-    ledger = parse_ledger(bounded_file(ledger_path, MAX_LEDGER_BYTES, "ledger"), "0.2.0")
+    ledger_rel = tree_ledger(ROOT)
+    version = ledger_version(ledger_rel)
+    ledger_path = ROOT / ledger_rel
+    ledger = parse_ledger(bounded_file(ledger_path, MAX_LEDGER_BYTES, "ledger"), version)
     inventory_path = ROOT / "tests/external/cgb-corpus-inventory.json"
     inventory_raw = bounded_file(inventory_path, MAX_INPUT_BYTES, "inventory")
     inventory = strict_json(inventory_raw, "inventory")
     receipt_raw = bounded_file(receipt_path, MAX_RECEIPT_BYTES, "receipt")
     receipt = strict_json(receipt_raw, "receipt")
     run_inventory_validator()
-    data = build_v2_data(receipt, receipt_raw, inventory, inventory_raw, ROOT, receipt_rel)
+    data = build_v2_data(receipt, receipt_raw, inventory, inventory_raw, ROOT, receipt_rel, version=version)
     identity = receipt.get("identity", {})
     current = current_git_revision()
     if identity.get("core_revision") == current:
         run_existing_receipt_validator(receipt_path, inventory)
     else:
         check_source_ancestry(identity.get("core_revision", ""), current)
-    validate_data_v2(ledger, "0.2.0")
-    validate_data_v2(data, "0.2.0")
+    validate_data_v2(ledger, version)
+    validate_data_v2(data, version)
     validate_source_bindings(data, ROOT)
     if stable_v2_evidence(ledger) != stable_v2_evidence(data):
         fail("v0.2 ledger stable evidence differs from the current receipt, inventory, source inputs, or assertions")
@@ -1235,9 +1447,9 @@ def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
     producer_revision = identity["core_revision"]
     check_source_ancestry(producer_revision, source_sha, repo_root)
     derived = build_v2_data(receipt, receipt_raw, inventory, inventory_raw,
-                            repo_root, receipt_rel, tagged_inputs)
-    validate_data_v2(data, "0.2.0")
-    validate_data_v2(derived, "0.2.0")
+                            repo_root, receipt_rel, tagged_inputs, version=ledger_version(ledger))
+    validate_data_v2(data, ledger_version(ledger))
+    validate_data_v2(derived, ledger_version(ledger))
     if stable_v2_evidence(derived) != stable_v2_evidence(data):
         fail("tagged ledger stable evidence differs from complete receipt or tagged source inputs")
     validate_source_bindings(derived, repo_root, tagged_inputs)
@@ -1672,14 +1884,16 @@ def self_test_v2() -> None:
         fail("single-entry-below-required: a one-case ledger satisfied a two-case requirement")
     # SHIP-09 encoding edges: ledger identity is the SHA-256 of the exact bytes, and the
     # size bound counts bytes, not characters.
-    lf_raw = bounded_file(ROOT / "docs/support/v0.2.0.md", MAX_LEDGER_BYTES, "ledger")
-    lf_data = parse_ledger(lf_raw, "0.2.0")
-    lf_sidecar = {"tag": "v0.2.0", "ledger_sha256": sha256(lf_raw)}
+    lf_rel = tree_ledger(ROOT)
+    lf_version = ledger_version(lf_rel)
+    lf_raw = bounded_file(ROOT / lf_rel, MAX_LEDGER_BYTES, "ledger")
+    lf_data = parse_ledger(lf_raw, lf_version)
+    lf_sidecar = {"tag": "v" + lf_version, "ledger_sha256": sha256(lf_raw)}
 
     def identity_rejected(name: str, variant_raw: bytes) -> None:
         if sha256(variant_raw) == sha256(lf_raw):
             fail(name + ": variant bytes have the same digest as the LF ledger")
-        if parse_ledger(variant_raw, "0.2.0") != lf_data:
+        if parse_ledger(variant_raw, lf_version) != lf_data:
             fail(name + ": variant did not parse to data equal to the LF ledger")
         try:
             verify_sidecar_data({**lf_sidecar, "ledger_sha256": sha256(variant_raw)}, lf_sidecar)
@@ -1820,8 +2034,8 @@ def self_test() -> None:
 
 def self_test_static_ledger() -> None:
     """Drive check_ledger_static through its production entry over a private copy of the covered inputs."""
-    ledger_rel = "docs/support/v0.2.0.md"
-    ledger = parse_ledger(bounded_file(ROOT / ledger_rel, MAX_LEDGER_BYTES, "ledger"), "0.2.0")
+    ledger_rel = tree_ledger(ROOT)
+    ledger = parse_ledger(bounded_file(ROOT / ledger_rel, MAX_LEDGER_BYTES, "ledger"), ledger_version(ledger_rel))
     rows = ledger["source_inputs"]
     if not rows:
         fail("static ledger self-test has no covered source inputs")
@@ -1837,13 +2051,13 @@ def self_test_static_ledger() -> None:
             target = copy_root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(immutable_git_file(ROOT, producer, relative))
-        check_ledger_static(copy_root, run_inventory=False)
+        check_ledger_static(copy_root, run_inventory=False, ledger_rel=ledger_rel)
         controls = 0
         victim = copy_root / rows[0]["path"]
         original = victim.read_bytes()
         victim.write_bytes(original + b"\n")
         try:
-            check_ledger_static(copy_root, run_inventory=False)
+            check_ledger_static(copy_root, run_inventory=False, ledger_rel=ledger_rel)
         except ValueError as error:
             if "source input is stale" not in str(error):
                 fail("static ledger control rejected a changed covered input for the wrong reason: " + str(error))
@@ -1853,7 +2067,7 @@ def self_test_static_ledger() -> None:
         victim.write_bytes(original)
         victim.unlink()
         try:
-            check_ledger_static(copy_root, run_inventory=False)
+            check_ledger_static(copy_root, run_inventory=False, ledger_rel=ledger_rel)
         except (ValueError, OSError):
             controls += 1
         else:
@@ -1871,7 +2085,7 @@ def self_test_static_ledger() -> None:
             (copy_root / ledger_rel).write_bytes(
                 ledger_bytes.replace(denominator, b'"required_case_count": %d' % count))
             try:
-                check_ledger_static(copy_root, run_inventory=False)
+                check_ledger_static(copy_root, run_inventory=False, ledger_rel=ledger_rel)
             except ValueError as error:
                 if "required inventory membership is incomplete or narrowed" not in str(error):
                     fail("static ledger control " + label + " was rejected for the wrong reason: " + str(error))
@@ -1880,7 +2094,7 @@ def self_test_static_ledger() -> None:
                 fail("static ledger accepted a " + label + " denominator")
         (copy_root / ledger_rel).write_bytes(b"not a ledger\n")
         try:
-            check_ledger_static(copy_root, run_inventory=False)
+            check_ledger_static(copy_root, run_inventory=False, ledger_rel=ledger_rel)
         except ValueError:
             controls += 1
         else:
@@ -1893,10 +2107,10 @@ def self_test_static_ledger() -> None:
 def self_test_v2_sidecar() -> None:
     """Exercise full-membership sidecars without relying on ignored build outputs."""
     global EVIDENCE_ONLY
-    ledger_path = ROOT / "docs/support/v0.2.0.md"
+    ledger_path = ROOT / tree_ledger(ROOT)
     ledger_raw = bounded_file(ledger_path, MAX_LEDGER_BYTES, "ledger")
-    data = parse_ledger(ledger_raw, "0.2.0")
-    validate_data_v2(data, "0.2.0")
+    data = parse_ledger(ledger_raw, ledger_version(ledger_path.name))
+    validate_data_v2(data, data["version"])
     receipt_path = pathlib.Path("build/cgb-corpus-receipt.json")
     # The tracked ledger is a frozen producer snapshot. Its source identity must
     # be read from that receipt's immutable producer commit, not today's HEAD.
@@ -2009,9 +2223,10 @@ def self_test_v2_sidecar() -> None:
 
         receipt, receipt_raw, first_artifact_bytes = make_receipt("first-independent-run")
         fixture_data = build_v2_data(receipt, receipt_raw, inventory, inventory_raw,
-                                     repository, receipt_path.as_posix(), source_bytes)
+                                     repository, receipt_path.as_posix(), source_bytes, version="0.2.0")
         validate_data_v2(fixture_data, "0.2.0")
-        if stable_v2_evidence(fixture_data) != stable_v2_evidence(data):
+        # The private fixture repository is always the v0.2.0 tag; only the version field may differ from the tracked ledger.
+        if stable_v2_evidence(fixture_data) != stable_v2_evidence({**data, "version": "0.2.0"}):
             fail("synthetic full-membership receipt differs from stable historical evidence")
         ledger_text = render_v2_ledger(fixture_data)
         fixture_ledger = repository / "docs/support/v0.2.0.md"
@@ -2304,8 +2519,20 @@ def main() -> int:
     parser.add_argument("--output", type=pathlib.Path)
     parser.add_argument("--verify-sidecar", type=pathlib.Path)
     parser.add_argument("--check-current", action="store_true")
+    parser.add_argument("--check-freeze", action="store_true",
+                        help="the v0.2.0 ledger is the tag blob plus only the disclosed #93 block (D-29)")
+    parser.add_argument("--self-test-freeze", action="store_true")
+    parser.add_argument("--check-binding", action="store_true",
+                        help="README links the ledger this tree's CMake/manifest version selects (D-28)")
+    parser.add_argument("--self-test-binding", action="store_true")
+    parser.add_argument("--derive-rehearsal-tag", metavar="REF",
+                        help="print REHEARSAL_TAG=vX.Y.Z when REF is rehearsal/vX.Y.Z for this tree's own version")
+    parser.add_argument("--root", type=pathlib.Path, default=ROOT,
+                        help="tree to read the version from with --derive-rehearsal-tag (default: this checkout)")
+    parser.add_argument("--print-version", action="store_true",
+                        help="print the tree version (CMake project VERSION cross-checked with the manifest)")
     parser.add_argument("--check-ledger", action="store_true",
-                        help="receipt-free check of the tracked v0.2.0 ledger against its covered source inputs")
+                        help="receipt-free check of the tracked ledger for this tree's version against its covered source inputs")
     parser.add_argument("--write-current", action="store_true")
     parser.add_argument("--receipt", type=pathlib.Path)
     parser.add_argument("--evidence-only", action="store_true",
@@ -2326,9 +2553,28 @@ def main() -> int:
             self_test_v2_sidecar()
             self_test_static_ledger()
             return 0
+        if args.print_version:
+            print(tree_version())
+            return 0
+        if args.derive_rehearsal_tag is not None:
+            print(derive_rehearsal_tag(args.derive_rehearsal_tag, args.root.resolve()))
+            return 0
+        if args.check_freeze:
+            print(check_freeze())
+            return 0
+        if args.self_test_freeze:
+            print(f"ledger-freeze self-test pass controls={self_test_freeze()}")
+            return 0
+        if args.check_binding:
+            version, ledger = check_binding()
+            print(f"support-ledger binding pass version={version} ledger={ledger}")
+            return 0
+        if args.self_test_binding:
+            print(f"support-ledger binding self-test pass controls={self_test_binding()}")
+            return 0
         if args.check_ledger:
             data = check_ledger_static()
-            print("support-ledger static pass version=0.2.0 cases=" +
+            print("support-ledger static pass version=" + data["version"] + " cases=" +
                   str(data["receipt"]["counts"]["completed_cases"]) +
                   " source-inputs=" + str(len(data["source_inputs"])))
             return 0
@@ -2337,7 +2583,7 @@ def main() -> int:
                 parser.error("--check-current requires --receipt PATH")
             data = check_current(args.receipt)
             counts = data["receipt"]["counts"]
-            print("support-ledger current pass version=0.2.0 cases=" +
+            print("support-ledger current pass version=" + data["version"] + " cases=" +
                   str(counts["completed_cases"]) +
                   " passes=" + str(counts["observed_pass_cases"]) +
                   " matched-xfails=" + str(counts["matched_xfail_cases"]) +
@@ -2348,7 +2594,7 @@ def main() -> int:
                 parser.error("--write-current requires --receipt PATH")
             data = create_current_ledger(args.receipt)
             counts = data["receipt"]["counts"]
-            print("support-ledger wrote version=0.2.0 cases=" +
+            print("support-ledger wrote version=" + data["version"] + " cases=" +
                   str(counts["completed_cases"]) +
                   " passes=" + str(counts["observed_pass_cases"]) +
                   " matched-xfails=" + str(counts["matched_xfail_cases"]) +

@@ -11,6 +11,7 @@ self-tests run the real command line against isolated mutated copies.
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 import hashlib
 import importlib.util
 import json
@@ -38,11 +39,45 @@ PROFILE = "docs/cgb-profile.md"
 AUDIO = "docs/audio-and-playback.md"
 PREVIEW = "docs/preview.md"
 RELEASE = "docs/release.md"
-LEDGER = "docs/support/v0.2.0.md"
 NOTICES = "THIRD_PARTY_NOTICES.md"
 HEADER = "include/gabbaboy/gabbaboy.h"
 
-RELEASE_VERSION = "0.2.0"
+PERF_ATTRIBUTION = "tests/baseline/perf-attribution-v1.json"
+
+
+def tree_identity(root: Path) -> tuple[str, str]:
+    """(release version, bound ledger path) of a tree (D-28).
+
+    The version is CMakeLists.txt's project VERSION and must equal the release-please manifest entry; the ledger is
+    the newest docs/support/vX.Y.Z.md in the same major.minor that is not above that version.
+    """
+    try:
+        cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+        manifest = json.loads((root / ".release-please-manifest.json").read_text(encoding="utf-8"))
+        names = sorted(entry.name for entry in (root / "docs/support").iterdir())
+    except (OSError, ValueError) as error:
+        raise SystemExit(f"verify-v02-adoption fail: version-unreadable:{error}")
+    match = re.search(r"^project\(\s*\w+\s+VERSION\s+(\d+)\.(\d+)\.(\d+)[\s)]", cmake, re.M)
+    if not match:
+        raise SystemExit("verify-v02-adoption fail: version-missing:CMakeLists.txt")
+    version = ".".join(match.groups())
+    if not isinstance(manifest, dict) or manifest.get(".") != version:
+        raise SystemExit(f"verify-v02-adoption fail: version-mismatch:{version}:{manifest!r}")
+    release = tuple(int(part) for part in match.groups())
+    candidates = []
+    for name in names:
+        ledger = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)\.md", name)
+        if ledger:
+            numbers = tuple(int(part) for part in ledger.groups())
+            if numbers[:2] == release[:2] and numbers <= release:
+                candidates.append((numbers, name))
+    if not candidates:
+        raise SystemExit(f"verify-v02-adoption fail: support-ledger-missing:{version}")
+    return version, "docs/support/" + max(candidates)[1]
+
+
+RELEASE_VERSION, LEDGER = tree_identity(DEFAULT_ROOT)
+LEDGER_VERSION = LEDGER.rsplit("/v", 1)[1].removesuffix(".md")
 ABSENCE_STATEMENT = "No CGB game-level evidence exists"
 ABSENCE_SENTENCE = "No CGB game-level evidence exists."
 
@@ -137,7 +172,7 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
         ("emulated-time real-time clock and explicit host catch-up",
          "rtc-host-catchup-missing"),
         ("host-owned battery persistence", "host-save-ownership-missing"),
-        ("[versioned support ledger](docs/support/v0.2.0.md)",
+        (f"[versioned support ledger]({LEDGER})",
          "support-ledger-link-missing"),
         ("General game compatibility is not claimed", "general-game-limit-missing"),
         ("Playstead remains a future integration", "playstead-limit-missing"),
@@ -195,7 +230,7 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
         ("Physical CGB-E remains UNKNOWN/POLICY", "physical-cgb-limit-missing"),
         ("SDL dummy audio path", "dummy-sdl-limit-missing"),
         ("raw RGB555", "rgb555-contract-missing"),
-        ("[v0.2.0 support ledger](support/v0.2.0.md)", "support-ledger-link-missing"),
+        (f"[v{LEDGER_VERSION} support ledger](support/v{LEDGER_VERSION}.md)", "support-ledger-link-missing"),
         ("No CGB game-level evidence exists", "absence-statement-missing"),
         ("[native integration guide](native-integration.md)", "native-guide-link-missing"),
     ),
@@ -217,7 +252,7 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
         ("no fuzz campaign result is claimed by this document", "fuzz-limit-missing"),
         ("installed-prefix check", "installed-proof-missing"),
         ("downloaded-asset check", "downloaded-proof-missing"),
-        ("[support ledger](support/v0.2.0.md)", "support-ledger-link-missing"),
+        (f"[support ledger](support/v{LEDGER_VERSION}.md)", "support-ledger-link-missing"),
         (ABSENCE_STATEMENT, "absence-statement-missing"),
         ("Physical CGB-E remains UNKNOWN/POLICY", "physical-cgb-limit-missing"),
         ("does not establish physical-device, perceptual, or hardware equivalence",
@@ -257,8 +292,8 @@ NOTICE_ROW = re.compile(
 NOTICE_INLINE_DIGEST = re.compile(
     r"`(?P<path>fixtures/[A-Za-z0-9_./-]+)`: `(?P<digest>[0-9a-f]{64})`"
 )
-LEDGER_LINK = re.compile(r"\]\([^)\s]*docs/support/v0\.2\.0\.md[^)]*\)")
-VERSION_TOKEN = re.compile(r"(?<![\w.])v?0\.2\.0(?![\w.])")
+LEDGER_LINK = re.compile(r"\]\([^)\s]*docs/support/v" + re.escape(LEDGER_VERSION) + r"\.md[^)]*\)")
+VERSION_TOKEN = re.compile(r"(?<![\w.])v?" + re.escape(RELEASE_VERSION) + r"(?![\w.])")
 
 
 class ContractError(Exception):
@@ -535,7 +570,21 @@ def check_notices(root: Path) -> int:
     return checks
 
 
-def check_release_notes(path: Path) -> int:
+def perf_disclosure_percent(root: Path) -> str:
+    """The head-versus-v0.2.0 instruction-count increase to disclose, one decimal: the maximum ratio over the
+    three attribution ROMs and every repeat in the committed receipt (D-30, D-13)."""
+    try:
+        receipt = json.loads(read_bounded(root, PERF_ATTRIBUTION, 4 * MAX_DOCUMENT_BYTES))
+        by_revision = {row["revision"]: row["ir"] for row in receipt["measurements"]}
+        base, head = by_revision[receipt["selection"]["v020"]], by_revision[receipt["selection"]["head"]]
+        ratios = [Fraction(h, b) for rom in head for b, h in zip(base[rom], head[rom])]
+    except (ContractError, KeyError, TypeError, ValueError, ZeroDivisionError) as error:
+        raise ContractError("perf-attribution-receipt-unreadable") from error
+    require(bool(ratios), "perf-attribution-receipt-empty")
+    return f"{float((max(ratios) - 1) * 100):.1f}"
+
+
+def check_release_notes(path: Path, root: Path = DEFAULT_ROOT) -> int:
     try:
         resolved = path.resolve(strict=True)
         if resolved.stat().st_size > MAX_NOTES_BYTES:
@@ -558,6 +607,10 @@ def check_release_notes(path: Path) -> int:
     checks += 1
     require(re.search(r"unsigned and not notarized", text, re.IGNORECASE) is not None,
             "release-notes-unsigned-limit-missing")
+    checks += 1
+    percent = perf_disclosure_percent(root)
+    require(re.search(r"(?<![\d.])\+" + re.escape(percent) + r"%", text) is not None and PERF_ATTRIBUTION in text,
+            f"release-notes-perf-disclosure-missing:+{percent}%:{PERF_ATTRIBUTION}")
     checks += 1
     claims = claims_module()
     for pattern, reason in (
@@ -662,25 +715,29 @@ def copy_inputs(root: Path, target: Path) -> None:
         shutil.copyfile(source, destination)
 
 
-VALID_RELEASE_NOTES = """\
-## v0.2.0
+VALID_RELEASE_NOTES_TEMPLATE = """\
+## v@VERSION@
 
-GabbaBoy v0.2.0 adds the selected CGB-CPU-E software model beside DMG-CPU-B.
+GabbaBoy v@VERSION@ adds the selected CGB-CPU-E software model beside DMG-CPU-B.
 
 - No CGB game-level evidence exists. The CGB test-ROM corpus is software-model
   evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY.
 - The macOS player archive is unsigned and not notarized.
-- Support scope and known limits: [support ledger](https://example.invalid/docs/support/v0.2.0.md).
+- Support scope and known limits: [support ledger](https://example.invalid/@LEDGER@).
+- Instruction count: +@PERCENT@% versus v0.2.0 (receipt: tests/baseline/perf-attribution-v1.json).
 """
 
 
 def run_self_test_release_notes() -> tuple[int, int]:
+    percent = perf_disclosure_percent(DEFAULT_ROOT)
+    VALID_RELEASE_NOTES = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
+                           .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent))
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-notes-") as temp:
         notes = Path(temp) / "release-notes.md"
         write_lf(notes, VALID_RELEASE_NOTES)
         expect_pass(["--release-notes", str(notes)])
         mutations = (
-            ("wrong-version", ("0.2.0", "0.1.0"),
+            ("wrong-version", (RELEASE_VERSION, "0.1.0"),
              "release-notes-version-missing"),
             ("missing-absence", (ABSENCE_SENTENCE, ""),
              "release-notes-absence-missing"),
@@ -688,11 +745,19 @@ def run_self_test_release_notes() -> tuple[int, int]:
              (ABSENCE_SENTENCE, f"<!-- {ABSENCE_SENTENCE} -->"),
              "release-notes-absence-missing"),
             ("missing-ledger-link",
-             ("(https://example.invalid/docs/support/v0.2.0.md)",
+             (f"(https://example.invalid/{LEDGER})",
               "(https://example.invalid/docs/support/v0.1.0.md)"),
              "release-notes-ledger-link-missing"),
             ("missing-unsigned-limit", ("unsigned and not notarized", "ready"),
              "release-notes-unsigned-limit-missing"),
+            ("missing-perf-percentage", (f"+{percent}%", "+0.0%"),
+             "release-notes-perf-disclosure-missing"),
+            ("missing-perf-receipt-path", (PERF_ATTRIBUTION, "the receipt"),
+             "release-notes-perf-disclosure-missing"),
+            ("comment-only-perf-disclosure",
+             (f"- Instruction count: +{percent}% versus v0.2.0 (receipt: {PERF_ATTRIBUTION}).",
+              f"<!-- Instruction count: +{percent}% ({PERF_ATTRIBUTION}) -->"),
+             "release-notes-perf-disclosure-missing"),
             ("contrary-game-claim", None,
              "release-notes-unsupported-cgb-game-qualification"),
             ("false-signing-claim", None,
@@ -929,7 +994,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.release_notes is not None:
-            checks = check_release_notes(args.release_notes)
+            checks = check_release_notes(args.release_notes, args.root.resolve(strict=True))
             print(json.dumps({
                 "mode": "release-notes",
                 "target": RELEASE_VERSION,
