@@ -9,6 +9,15 @@
 * **Battery image:** timer cartridges (`$0F`, `$10`) export cartridge RAM followed by a versioned 21-byte clock block, and importing an image never advances the clock; other battery types and MBC1 images are unchanged.
 * **Player persistence:** the macOS player saves MBC1, MBC2, MBC3 (with the game clock) and MBC5 battery cartridges, reads ROMs up to 8 MiB, and catches a timer cartridge's clock up from the save time on reopen. Save envelope version 2 is used for every battery type except MBC1 `$03`, whose v0.1 file is unchanged. Time spent paused while the player stays open is not recovered.
 
+## [0.2.1](https://github.com/szTheory/gabbaboy/compare/v0.2.0...v0.2.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* **15.1:** close GR-CR-01 and the gap re-review findings ([#97](https://github.com/szTheory/gabbaboy/issues/97)) ([79e20f3](https://github.com/szTheory/gabbaboy/commit/79e20f356ac953fa7dcd3aa5e2b7d96eb9b747e1))
+* **15.1:** close review warnings WR-01..WR-07 and info findings ([#94](https://github.com/szTheory/gabbaboy/issues/94)) ([2d25a47](https://github.com/szTheory/gabbaboy/commit/2d25a47f1b05844b4da829aa9d0978f2cb348df1))
+* accept the shipped product package layout and run trusted release verifiers on tagged data ([#74](https://github.com/szTheory/gabbaboy/issues/74)) ([08e7309](https://github.com/szTheory/gabbaboy/commit/08e7309aab699333d73f7ffeae58a5332133f242))
+
 ## [0.2.0](https://github.com/szTheory/gabbaboy/compare/v0.1.2...v0.2.0) (2026-10-20)
 
 
