@@ -1408,16 +1408,50 @@ gbb_add_v02_contract(v02_adoption_docs_controls 90
   [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "docs"]=]
   verify-v02-adoption.py --self-test docs)
 gbb_add_v02_contract(v02_support_ledger 60
-  [=[support-ledger static pass version=0.2.0 cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
+  [=[support-ledger static pass version=0\.[0-9]+\.[0-9]+ cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)
 gbb_add_v02_contract(v02_support_ledger_controls 120
   [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
-gbb_add_v02_contract(v02_consumer_controls 900
-  [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
-  verify-v02-consumers.py --self-test)
-# Start this long test first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
-set_tests_properties(v02_consumer_controls PROPERTIES COST 900)
+# Phase 16 D-28/D-29 (16-06): the v0.2.0 ledger is frozen to the tag blob plus the one disclosed #93 block, and README links the
+# ledger that this tree's version selects. The version in the binding regex comes from the project VERSION at configure time, so
+# the same test follows the tree to v0.2.1 without an edit; the freeze reads the v0.2.0 tag, which every full-suite job fetches.
+string(REPLACE "." "\\." gbb_version_regex "${PROJECT_VERSION}")
+function(gbb_add_ledger_contract name regex)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-support-ledger.py;${ARGN}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=${regex}"
+      ${GBB_LEDGER_MIN}
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60 LABELS "v02")
+endfunction()
+set(GBB_LEDGER_MIN "")
+gbb_add_ledger_contract(ledger_freeze
+  [=[ledger-freeze pass tag=a542a5c01e236246f83d4f1b67aba20f2a9200e74e5ffe70b930daf9f3af2b8f working=c47ff12b089fd386ebe1dd1a16d4ceaefc9fd60d072acdce510267c3dff19a9e appended_lines=12]=]
+  --check-freeze)
+gbb_add_ledger_contract(support_ledger_binding
+  "support-ledger binding pass version=${gbb_version_regex} ledger=docs/support/v0\\.[0-9]+\\.[0-9]+\\.md"
+  --check-binding)
+set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=4)
+gbb_add_ledger_contract(ledger_freeze_controls
+  [=[ledger-freeze self-test pass controls=[0-9]+]=]
+  --self-test-freeze)
+gbb_add_ledger_contract(support_ledger_binding_controls
+  [=[support-ledger binding self-test pass controls=[0-9]+]=]
+  --self-test-binding)
+unset(GBB_LEDGER_MIN)
+# Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
+# so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
+gbb_add_v02_contract(v02_consumer_controls_c 600
+  [=["consumer": "c", "negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
+  verify-v02-consumers.py --self-test --consumer c)
+gbb_add_v02_contract(v02_consumer_controls_cpp 600
+  [=["consumer": "cpp", "negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
+  verify-v02-consumers.py --self-test --consumer cpp)
+# Start these long tests first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
+set_tests_properties(v02_consumer_controls_c v02_consumer_controls_cpp PROPERTIES COST 600)
 gbb_add_v02_contract(v02_performance_controls 90
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-performance.py --self-test)
@@ -1468,6 +1502,34 @@ add_test(NAME closeout_dispositions_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-closeout-dispositions.py" --self-test)
 set_tests_properties(closeout_dispositions_controls PROPERTIES TIMEOUT 120 LABELS "planning"
   PASS_REGULAR_EXPRESSION "closeout-dispositions self-test pass positives=3 rejected_controls=[1-9][0-9]*")
+# Phase 16 D-33 (16-06): the v0.3 carry-over record. Release-linked rows sit in pending-release until the post-release planning
+# commit closes them with tag-bound receipts; the checker reads the record by the live-phases path, so it needs no build.
+set(GBB_V03_DISPOSITIONS "${GBB_LIVE_PHASES_DIR}/GB-16-tune-up-and-v0-2-debt-closure/16-DISPOSITIONS.json")
+add_test(NAME v03_dispositions
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--check;${GBB_V03_DISPOSITIONS}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=v03-dispositions pass rows=[0-9]+ pending=[0-9]+ closed=[0-9]+ owner_accepted=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=rows -DGBB_EXPECT_MIN_VALUE=21
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(v03_dispositions PROPERTIES TIMEOUT 60 LABELS "planning")
+add_test(NAME v03_dispositions_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=v03-dispositions self-test pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(v03_dispositions_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+# The v0.2 checker asserts owner_accepted=0 for the archived 15.1-17 record only. Pointed at the new record it must reject on its plan
+# id, which proves that expectation is scoped and is never asserted on the v0.3 record (verify-closeout-dispositions.py is unedited).
+add_test(NAME closeout_dispositions_scope_v03
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-closeout-dispositions.py;--check;--dispositions;${GBB_V03_DISPOSITIONS}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=REJECT schema-malformed: not a version 1 plan 15.1-17 disposition record"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(closeout_dispositions_scope_v03 PROPERTIES TIMEOUT 30 LABELS "planning")
 set(GBB_AGE_PHASE14_CONTRACT "${PROJECT_SOURCE_DIR}/tests/scripts/verify-age-phase14-contract.py")
 set(GBB_AGE_PHASE14_GUEST_TIMEOUT 15)
 if(GABBABOY_ENABLE_SANITIZERS)
@@ -1748,6 +1810,10 @@ add_test(NAME preview_package_smoke
     -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
+
+# Phase 16 D-18: the base TIMEOUT for tests that set none. The player child scope inherits it and
+# applies the same sweep, because this directory's pass cannot reach child-directory tests.
+set(GBB_DEFAULT_TEST_TIMEOUT_SECONDS 60)
 
 if(GABBABOY_BUILD_PLAYER)
   add_subdirectory(player)
@@ -2442,6 +2508,40 @@ add_test(NAME ci_floor_parallel_serial_selftest
     "-DGBB_EXPECT_REGEX=doc-contract-missing: CTEST_PARALLEL_LEVEL: 4"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 
+# Each native job runs the full suite, which serially took about 20 minutes of the CI critical path. The job
+# environment keeps its ctest calls parallel, like the floor job; each serial selftest blanks that one job's
+# setting and proves its contract can fail.
+foreach(gbb_native_job IN ITEMS native-linux-x64 native-macos-arm64 native-windows-x64)
+  string(REPLACE "-" "_" gbb_native_id "${gbb_native_job}")
+  add_test(NAME ci_${gbb_native_id}_parallel_contract
+    COMMAND ${CMAKE_COMMAND}
+      -DGBB_DOC=${GBB_CI_WORKFLOW}
+      -DGBB_DECLARATIONS=${GBB_CI_WORKFLOW}
+      "-DGBB_REQUIRED=${GBB_CI_FLOOR_PHRASE}"
+      "-DGBB_SCOPE_START=name: ${gbb_native_job}\n"
+      -P ${GBB_DOC_CONTRACT_SCRIPT})
+  set_tests_properties(ci_${gbb_native_id}_parallel_contract PROPERTIES
+    PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[0-9]+ phrases=1[^0-9]")
+  string(FIND "${GBB_CI_WORKFLOW_TEXT}" "name: ${gbb_native_job}\n" gbb_native_at)
+  if(gbb_native_at EQUAL -1)
+    message(FATAL_ERROR "ci.yml has no job named ${gbb_native_job}")
+  endif()
+  string(SUBSTRING "${GBB_CI_WORKFLOW_TEXT}" 0 ${gbb_native_at} gbb_native_before)
+  string(SUBSTRING "${GBB_CI_WORKFLOW_TEXT}" ${gbb_native_at} -1 gbb_native_after)
+  string(FIND "${gbb_native_after}" "CTEST_PARALLEL_LEVEL: 4" gbb_native_level_at)
+  string(SUBSTRING "${gbb_native_after}" 0 ${gbb_native_level_at} gbb_native_head)
+  math(EXPR gbb_native_tail_at "${gbb_native_level_at} + 23")
+  string(SUBSTRING "${gbb_native_after}" ${gbb_native_tail_at} -1 gbb_native_tail)
+  file(WRITE "${GBB_DOC_SELFTEST}/ci-${gbb_native_job}-serial.yml"
+    "${gbb_native_before}${gbb_native_head}CTEST_PARALLEL_LEVEL: 1${gbb_native_tail}")
+  add_test(NAME ci_${gbb_native_id}_parallel_serial_selftest
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_DOC=${GBB_DOC_SELFTEST}/ci-${gbb_native_job}-serial.yml;-DGBB_DECLARATIONS=${GBB_DOC_SELFTEST}/ci-${gbb_native_job}-serial.yml;-DGBB_REQUIRED=${GBB_CI_FLOOR_PHRASE};-DGBB_SCOPE_START=name: ${gbb_native_job}\n;-P;${GBB_DOC_CONTRACT_SCRIPT}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=doc-contract-missing: CTEST_PARALLEL_LEVEL: 4"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endforeach()
+
 # CGB host-guide contract (D-28): the CGB section of the integration guide names only declared symbols
 # and keeps each promise the header makes about the info API, PGB rejection, frame copy, banking and
 # deferred registers. The missing-phrase selftest proves the check can fail.
@@ -2722,6 +2822,34 @@ add_test(NAME no_phase_paths
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(no_phase_paths PROPERTIES TIMEOUT 60 LABELS "planning")
 
+# Per-test TIMEOUT ratchet (Phase 16 TUNE-04, D-18). The controls prove each budget, ceiling, staleness, expiry,
+# base-ratchet and base-commit ref rule; the tree check reads the real json-v1 inventory with a floor on its size.
+set(GBB_TEST_BUDGET_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-test-budget.py")
+add_test(NAME test_budget_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=test-budget self-test pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(test_budget_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+# Many allowlisted tests register only under if(NOT WIN32), so a Windows inventory is partial by design and
+# unregistered rows are skipped there; the native-linux CI step runs the full inventory and still rejects stale rows.
+set(GBB_TEST_BUDGET_PARTIAL "")
+if(WIN32)
+  set(GBB_TEST_BUDGET_PARTIAL ";--partial-inventory")
+endif()
+add_test(NAME test_budget
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--build-dir;.;--ctest;${CMAKE_CTEST_COMMAND}${GBB_TEST_BUDGET_PARTIAL}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=test-budget pass tests=[0-9]+ allowlisted=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=tests -DGBB_EXPECT_MIN_VALUE=1000
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+# The checker reads only the configured build tree's CTest listing (never a built artifact), so it runs from the
+# build directory as its working directory and the planning lane can run it on an unbuilt tree (D-22).
+set_tests_properties(test_budget PROPERTIES TIMEOUT 60 LABELS "planning" WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
+
 # UAT closure gate (DECISIONS D-069, review WR-05): the checker enforces its contract with ClosureError, never
 # assert, and refuses python -O. The controls run on a tracked closed phase; the second test proves through the
 # real CLI that an optimized interpreter is refused instead of silently passing.
@@ -2790,11 +2918,17 @@ endif()
 string(REPLACE "${gbb_invalid_summary_item}"
   "      - kind: integration\n        ref: \"ctest -R '^fixture$'\"\n        status: pass"
   gbb_invalid_summary_repaired "${gbb_invalid_summary_text}")
-file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/summary-coverage")
-file(WRITE "${PROJECT_BINARY_DIR}/summary-coverage/repaired-summary-coverage.md" "${gbb_invalid_summary_repaired}")
+# The repaired copy is committed (not generated into the build tree) so the test needs no build artifact and runs in
+# the unbuilt planning lane (D-22); configuration fails if it ever drifts from the derivation above.
+set(GBB_REPAIRED_SUMMARY_FIXTURE "${PROJECT_SOURCE_DIR}/tests/data/repaired-summary-coverage.md")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_REPAIRED_SUMMARY_FIXTURE}")
+file(READ "${GBB_REPAIRED_SUMMARY_FIXTURE}" gbb_repaired_summary_committed)
+if(NOT gbb_repaired_summary_committed STREQUAL gbb_invalid_summary_repaired)
+  message(FATAL_ERROR "tests/data/repaired-summary-coverage.md must equal the invalid fixture with only the flow-style item rewritten in block style.")
+endif()
 add_test(NAME summary_coverage_invalid_fixture_repaired_passes
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SUMMARY_COVERAGE_CHECKER};--file;${PROJECT_BINARY_DIR}/summary-coverage/repaired-summary-coverage.md"
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SUMMARY_COVERAGE_CHECKER};--file;${GBB_REPAIRED_SUMMARY_FIXTURE}"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=summary-coverage pass files=1 entries=1"
     "-DGBB_FORBID_REGEX=summary-coverage-invalid"
@@ -4679,6 +4813,25 @@ add_test(NAME sanitizer_timeout_policy_selftest
     "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
     -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
 set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
+# D-23: the same script in assert-clean mode proves the selftest above removed its probe directory.
+add_test(NAME sanitizer_timeout_policy_temp_clean
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
+    -DGBB_POLICY_MODE=assert-clean
+    -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
+set_tests_properties(sanitizer_timeout_policy_temp_clean PROPERTIES
+  TIMEOUT 30 DEPENDS sanitizer_timeout_policy_selftest
+  PASS_REGULAR_EXPRESSION "sanitizer timeout policy temp clean pass")
+# Negative control: a leftover probe directory in the inspected binary directory must fail the assertion.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/temp-clean-control/sanitizer-timeout-policy-leftover")
+add_test(NAME sanitizer_timeout_policy_temp_clean_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR};-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}/temp-clean-control;-DGBB_POLICY_MODE=assert-clean;-P;${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=left temporary directories behind"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(sanitizer_timeout_policy_temp_clean_control PROPERTIES TIMEOUT 30)
 
 # Phase 14's report adapter consumes exactly the inventory-bound corpus CTests.
 # Report/control tests stay unlabeled so --run cannot recursively schedule itself.
@@ -4714,6 +4867,20 @@ gabbaboy_verify_registered_tests()
 # slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
 # runner (LESSONS GB-CI-004). Apply one shared multiplier after every test registration.
 include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+
+# Default budget (Phase 16 D-18). A test that sets no TIMEOUT keeps CTest's 1500 s default, and the
+# scaler skips unset tests, so such a test would also stay at 1500 s under ASan. Give every unset test
+# in this directory scope the explicit base budget so the scaler multiplies it and
+# tests/scripts/verify-test-budget.py can rule out a test with no limit.
+get_property(gbb_default_budget_tests DIRECTORY PROPERTY TESTS)
+foreach(gbb_default_budget_test IN LISTS gbb_default_budget_tests)
+  get_test_property(${gbb_default_budget_test} TIMEOUT gbb_default_budget_timeout)
+  if(NOT gbb_default_budget_timeout)
+    set_tests_properties(${gbb_default_budget_test}
+      PROPERTIES TIMEOUT ${GBB_DEFAULT_TEST_TIMEOUT_SECONDS})
+  endif()
+endforeach()
+
 gbb_scale_sanitizer_test_timeouts()
 
 if(GABBABOY_ENABLE_SANITIZERS)

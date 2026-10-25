@@ -60,8 +60,24 @@ def _wait(state, reason):
     return ("WAIT", reason, None)
 
 
-def decide(sha, listing, fetch_detail, fetch_jobs, required, state):
-    """Return (verdict, reason, payload) for one poll. All I/O is injected."""
+def planning_run(jobs):
+    """True when the run's own job results show the D-21 planning lane: `changes` and `planning-checks` each
+    appear exactly once and succeeded. ci.yml runs planning-checks only for kind=planning (it is skipped for
+    kind=full), and required-native, a required job here, passes kind=planning only if every heavy job was skipped,
+    so this is read from the trusted exact-head run, never from pull-request text."""
+    for name in ("changes", "planning-checks"):
+        matches = [j for j in jobs if isinstance(j, dict) and j.get("name") == name]
+        if len(matches) != 1 or matches[0].get("conclusion") != "success":
+            return False
+    return True
+
+
+def decide(sha, listing, fetch_detail, fetch_jobs, required, state, planning_skippable=()):
+    """Return (verdict, reason, payload) for one poll. All I/O is injected.
+
+    planning_skippable names required jobs that a kind=planning run legitimately skips (the macOS player package:
+    a planning-only head changes no source, so no package exists to verify). Only an exact `skipped` conclusion in
+    a planning run is excused; every other case, and every non-planning run, judges the job as before."""
     if (not isinstance(listing, dict) or not isinstance(listing.get("total_count"), int)
             or not isinstance(listing.get("workflow_runs"), list)):
         return _wait(state, "malformed run list")
@@ -91,18 +107,23 @@ def decide(sha, listing, fetch_detail, fetch_jobs, required, state):
         if jobs["total_count"] > len(jobs["jobs"]):
             return ("FAIL", "job list truncated", None)
         job_attempts = {}
+        planning = planning_run(jobs["jobs"])
         for name in required:
             matches = [j for j in jobs["jobs"] if isinstance(j, dict) and j.get("name") == name]
             if len(matches) != 1:
                 return ("FAIL", "required job {} appears {} times in run {}".format(name, len(matches), run_id),
                         {"run_id": run_id, "failed_job": name, "result": "missing" if not matches else "duplicated"})
             job = matches[0]
+            if planning and name in planning_skippable and job.get("conclusion") == "skipped":
+                job_attempts[name] = None
+                continue
             if job.get("conclusion") != "success":
                 return ("FAIL", "required job {} concluded {} in run {}".format(name, job.get("conclusion"), run_id),
                         {"run_id": run_id, "failed_job": name, "result": job.get("conclusion")})
             job_attempts[name] = job.get("run_attempt")
         return ("PASS", "run {} attempt {} succeeded".format(run_id, attempt),
-                {"run_id": run_id, "run_attempt": attempt, "job_attempts": job_attempts})
+                {"run_id": run_id, "run_attempt": attempt, "job_attempts": job_attempts,
+                 "kind": "planning" if planning else "full"})
 
     # Any non-success terminal conclusion: believe it only after consecutive agreeing polls.
     key = (run_id, attempt)
@@ -125,26 +146,31 @@ def legacy_message(sha, payload, attempt_job):
 
 
 def run_gate(sha, repo, required, deadline_seconds, interval_seconds, clock, sleep,
-             fetchers, github_output=None, attempt_job=None):
+             fetchers, github_output=None, attempt_job=None, planning_skippable=()):
     """Poll until PASS or FAIL, or fail closed at the deadline. Returns an exit code."""
     state = {"key": None, "streak": 0}
     start = clock()
     while True:
         try:
             verdict, reason, payload = decide(sha, fetchers["list"](), fetchers["detail"],
-                                              fetchers["jobs"], required, state)
+                                              fetchers["jobs"], required, state,
+                                              planning_skippable)
         except TransientError as exc:
             state["key"] = None
             state["streak"] = 0
             verdict, reason, payload = "WAIT", "transport: {}".format(exc), None
         if verdict == "PASS":
             attempt = payload["job_attempts"][attempt_job] if attempt_job else payload["run_attempt"]
-            print("exact-head-ci: PASS run_id={} run_attempt={} sha={}".format(payload["run_id"], attempt, sha))
+            if attempt is None:
+                attempt = payload["run_attempt"]  # the excused job never ran, so no artifact is named after it
+            print("exact-head-ci: PASS run_id={} run_attempt={} kind={} sha={}".format(
+                payload["run_id"], attempt, payload["kind"], sha))
             if github_output:
                 # The player artifact is named with the attempt in which the job ran
                 # (research Pitfall 3), which is the job's run_attempt, not the run's.
                 with open(github_output, "a") as handle:
-                    handle.write("run_id={}\nrun_attempt={}\n".format(payload["run_id"], attempt))
+                    handle.write("run_id={}\nrun_attempt={}\nkind={}\n".format(
+                        payload["run_id"], attempt, payload["kind"]))
             return 0
         if verdict == "FAIL":
             print("exact-head-ci: FAIL {}".format(reason), file=sys.stderr)
@@ -195,11 +221,11 @@ def _copy(value):
     return json.loads(json.dumps(value))
 
 
-def _decide_poll(poll, state, required):
+def _decide_poll(poll, state, required, skippable=()):
     listing, jobs = _copy(poll["listing"]), _copy(poll.get("jobs"))
     details = {k: _copy(v) for k, v in poll.get("details", {}).items()}
     try:
-        return decide(SELF_SHA, listing, lambda i: details[i], lambda i: jobs, required, state)
+        return decide(SELF_SHA, listing, lambda i: details[i], lambda i: jobs, required, state, skippable)
     except KeyError as exc:
         # The case never expected this run to be fetched: report it as a labelled mismatch.
         return ("UNEXPECTED FETCH of run {}".format(exc), None, None)
@@ -222,7 +248,40 @@ def _poll_cases():
         return (label, req, [{"listing": make_listing(run), "details": {2: run}, "expect": "WAIT"},
                              {"listing": make_listing(run), "details": {2: run}, "expect": "FAIL"}])
 
+    player = ["required-native", "macos-player-package"]
+    planning_jobs = {"changes": ("success", 1), "planning-checks": ("success", 1),
+                     "required-native": ("success", 1), "macos-player-package": ("skipped", 1)}
+    full_jobs = {"changes": ("success", 1), "planning-checks": ("skipped", 1),
+                 "required-native": ("success", 1), "macos-player-package": ("skipped", 1)}
+
+    def player_case(label, jobs, expect, skippable=("macos-player-package",)):
+        run = done(2, 20, "success")
+        return (label, player, [{"listing": make_listing(run), "details": {2: run},
+                                 "jobs": make_jobs(jobs), "expect": expect}], skippable)
+
     return [
+        player_case("planning run permits a skipped player job -> PASS", planning_jobs, "PASS"),
+        player_case("full run still rejects a skipped player job -> FAIL", full_jobs, "FAIL"),
+        player_case("planning run without the skippable flag still rejects a skipped player job -> FAIL",
+                    planning_jobs, "FAIL", ()),
+        player_case("planning run does not excuse a failed player job -> FAIL",
+                    {**planning_jobs, "macos-player-package": ("failure", 1)}, "FAIL"),
+        player_case("planning run does not excuse a cancelled player job -> FAIL",
+                    {**planning_jobs, "macos-player-package": ("cancelled", 1)}, "FAIL"),
+        player_case("planning run does not excuse a missing player job -> FAIL",
+                    {k: v for k, v in planning_jobs.items() if k != "macos-player-package"}, "FAIL"),
+        player_case("planning-checks skipped (full) is not planning even with a skipped player job -> FAIL",
+                    {**planning_jobs, "planning-checks": ("skipped", 1)}, "FAIL"),
+        player_case("planning-checks failed is not planning -> FAIL",
+                    {**planning_jobs, "planning-checks": ("failure", 1)}, "FAIL"),
+        player_case("changes job missing is not planning -> FAIL",
+                    {k: v for k, v in planning_jobs.items() if k != "changes"}, "FAIL"),
+        player_case("planning run with a skipped required-native is still FAIL",
+                    {**planning_jobs, "required-native": ("skipped", 1)}, "FAIL"),
+        player_case("full run with a successful player job -> PASS",
+                    {**full_jobs, "macos-player-package": ("success", 1)}, "PASS"),
+        player_case("planning run whose player job ran and succeeded -> PASS",
+                    {**planning_jobs, "macos-player-package": ("success", 1)}, "PASS"),
         ("older failed + newest in progress -> WAIT", req, [
             {"listing": make_listing(done(1, 10, "failure"), pending(2, 20)),
              "details": {2: pending(2, 20)}, "expect": "WAIT"}]),
@@ -331,7 +390,33 @@ def _gate_case_player_output():
         with open(out) as handle:
             content = handle.read()
     _check("player mode exits 0", 0, rc)
-    _check("player output takes run_attempt from the job object", "run_id=77\nrun_attempt=1\n", content)
+    _check("player output takes run_attempt from the job object", "run_id=77\nrun_attempt=1\nkind=full\n", content)
+
+
+def _gate_case_planning_output():
+    """A planning run excuses the skipped player job: exit 0, kind=planning, run attempt in the output."""
+    run = make_run(78, 20, 3, "completed", "success")
+    jobs = make_jobs({"changes": ("success", 3), "planning-checks": ("success", 3),
+                      "required-native": ("success", 3), "macos-player-package": ("skipped", 3)})
+    fetchers = {"list": lambda: make_listing(run), "detail": lambda i: _copy(run), "jobs": lambda i: _copy(jobs)}
+    with tempfile.TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, "github-output")
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = run_gate(SELF_SHA, "o/r", ["required-native", "macos-player-package"], 60, 10,
+                          lambda: 0, lambda s: None, fetchers, out, "macos-player-package",
+                          ["macos-player-package"])
+        with open(out) as handle:
+            content = handle.read()
+    _check("planning run exits 0", 0, rc)
+    _check("planning output declares kind=planning", "run_id=78\nrun_attempt=3\nkind=planning\n", content)
+
+
+def _gate_case_unknown_skippable():
+    with contextlib.redirect_stderr(io.StringIO()):
+        rc = main(["--sha", SELF_SHA, "--repo", "o/r", "--require", "required-native",
+                   "--planning-skippable", "macos-player-package", "--deadline-seconds", "5"],
+                  fetchers_factory=lambda repo, sha: None)
+    _check("--planning-skippable outside --require exits 2", 2, rc)
 
 
 def _gate_case_player_failure_message():
@@ -396,23 +481,25 @@ def _bad_sha_cases():
 
 def run_self_test():
     count = 0
-    for label, required, polls in _poll_cases():
+    for label, required, polls, *rest in _poll_cases():
         state = {"key": None, "streak": 0}
         for index, poll in enumerate(polls):
             _check("{} (poll {})".format(label, index + 1), poll["expect"],
-                   _decide_poll(poll, state, required)[0])
+                   _decide_poll(poll, state, required, rest[0] if rest else ())[0])
         print("PASS: {}".format(label))
         count += 1
     for fn, label in ((_bad_sha_cases, "invalid SHA or repo exits 2 before any fetch"),
                       (_gate_case_deadline, "deadline fails closed with the legacy message"),
                       (_gate_case_player_output, "player mode writes the job-level run_attempt"),
+                      (_gate_case_planning_output, "planning run writes kind=planning and excuses the skipped player job"),
+                      (_gate_case_unknown_skippable, "--planning-skippable must name a required job"),
                       (_gate_case_player_failure_message, "failed player job keeps the legacy message"),
                       (_gate_case_transient_then_pass, "transport error waits instead of failing"),
                       (_gate_case_jobs_filter_latest, "jobs use filter=latest and the list is SHA/event scoped")):
         fn()
         print("PASS: {}".format(label))
         count += 1
-    print("PASS: exact-head gate self-test ({} cases)".format(count))
+    print("PASS: exact-head gate self-test ({} cases) controls={}".format(count, count))
 
 
 def main(argv=None, fetchers_factory=make_fetchers):
@@ -425,6 +512,8 @@ def main(argv=None, fetchers_factory=make_fetchers):
     parser.add_argument("--interval-seconds", type=int, default=10)
     parser.add_argument("--github-output")
     parser.add_argument("--attempt-job")
+    parser.add_argument("--planning-skippable", action="append", default=[],
+                        help="required job a kind=planning run may skip (repeatable)")
     args = parser.parse_args(argv)
     if args.self_test:
         run_self_test()
@@ -444,9 +533,12 @@ def main(argv=None, fetchers_factory=make_fetchers):
     if args.attempt_job and args.attempt_job not in args.require:
         print("exact-head-ci: --attempt-job must be one of the --require names", file=sys.stderr)
         return 2
+    if any(name not in args.require for name in args.planning_skippable):
+        print("exact-head-ci: --planning-skippable must name --require jobs", file=sys.stderr)
+        return 2
     return run_gate(args.sha, args.repo, args.require, args.deadline_seconds, args.interval_seconds,
                     time.monotonic, time.sleep, fetchers_factory(args.repo, args.sha),
-                    args.github_output, args.attempt_job)
+                    args.github_output, args.attempt_job, args.planning_skippable)
 
 
 if __name__ == "__main__":

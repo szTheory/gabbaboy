@@ -1,0 +1,342 @@
+{
+ "ci.yml:changes": {
+  "timeout_minutes": 5,
+  "cited_run_id": 40211538920,
+  "cited_sha": "60bd41cd963e322f870a5b9368c4bd0c78ae39fe",
+  "p50_minutes": "0.09",
+  "samples": 1,
+  "provisional": false
+ },
+ "ci.yml:cmake-floor-3-25-3": {
+  "timeout_minutes": 40,
+  "cited_run_id": 40159200194,
+  "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
+  "p50_minutes": "13.00",
+  "samples": 5,
+  "provisional": false
+ },
+ "ci.yml:linux-sanitizers": {
+  "timeout_minutes": 45,
+  "cited_run_id": 40159200194,
+  "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
+  "p50_minutes": "3.12",
+  "samples": 5,
+  "provisional": false
+ },
+ "ci.yml:linux-sanitizers-acceptance": {
+  "timeout_minutes": 45,
+  "cited_run_id": 40163270595,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "10.04",
+  "samples": 1,
+  "provisional": false
+ },
+ "ci.yml:linux-sanitizers-tests": {
+  "timeout_minutes": 45,
+  "cited_run_id": 40163270595,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "21.55",
+  "samples": 5,
+  "provisional": false
+ },
+ "ci.yml:macos-player-package": {
+  "timeout_minutes": 45,
+  "cited_run_id": 40153459913,
+  "cited_sha": "e719aa7e2a336717d0c9500eb7e473b774847078",
+  "p50_minutes": "2.52",
+  "samples": 5,
+  "provisional": false
+ },
+ "ci.yml:native-linux": {
+  "timeout_minutes": 31,
+  "cited_run_id": 40159200194,
+  "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
+  "p50_minutes": "11.07",
+  "samples": 5,
+  "provisional": false
+ },
+ "ci.yml:native-macos": {
+  "timeout_minutes": 40,
+  "cited_run_id": 40156247875,
+  "cited_sha": "711f4fd7e66a8ae67f2013edc39c98cfa21ea5fe",
+  "p50_minutes": "17.80",
+  "samples": 5,
+  "provisional": false
+ },
+ "ci.yml:native-windows": {
+  "timeout_minutes": 50,
+  "cited_run_id": 40163270595,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "18.59",
+  "samples": 5,
+  "provisional": false
+ },
+ "ci.yml:perf-gate": {
+  "timeout_minutes": 40,
+  "cited_run_id": 40163270595,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "0.80",
+  "samples": 3,
+  "provisional": false
+ },
+ "ci.yml:planning-checks": {
+  "timeout_minutes": 15,
+  "cited_run_id": 40205944089,
+  "cited_sha": "6f4f4bf7cacd65de8f1840451aaf5fb8fbecad99",
+  "p50_minutes": "0.59",
+  "samples": 1,
+  "provisional": false
+ },
+ "ci.yml:player-gate": {
+  "timeout_minutes": 2,
+  "cited_run_id": 40156247875,
+  "cited_sha": "711f4fd7e66a8ae67f2013edc39c98cfa21ea5fe",
+  "p50_minutes": "0.05",
+  "samples": 5,
+  "provisional": false
+ },
+ "ci.yml:required-native": {
+  "timeout_minutes": 5,
+  "cited_run_id": 40159200194,
+  "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
+  "p50_minutes": "0.10",
+  "samples": 5,
+  "provisional": false
+ },
+ "fixture-repro.yml:fixture-repro": {
+  "timeout_minutes": 15,
+  "cited_run_id": 40163270636,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "0.29",
+  "samples": 5,
+  "provisional": false
+ },
+ "fixture-repro.yml:magentests-repro": {
+  "timeout_minutes": 20,
+  "cited_run_id": 40159200156,
+  "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
+  "p50_minutes": "0.12",
+  "samples": 5,
+  "provisional": false
+ },
+ "fixture-repro.yml:mooneye-candidate-repro": {
+  "timeout_minutes": 30,
+  "cited_run_id": 40159200156,
+  "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
+  "p50_minutes": "0.29",
+  "samples": 5,
+  "provisional": false
+ },
+ "fixture-repro.yml:mooneye-cgb-repro": {
+  "timeout_minutes": 30,
+  "cited_run_id": 40156247943,
+  "cited_sha": "711f4fd7e66a8ae67f2013edc39c98cfa21ea5fe",
+  "p50_minutes": "0.29",
+  "samples": 5,
+  "provisional": false
+ },
+ "fixture-repro.yml:mooneye-mbc-repro": {
+  "timeout_minutes": 30,
+  "cited_run_id": 40159200156,
+  "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
+  "p50_minutes": "0.30",
+  "samples": 5,
+  "provisional": false
+ },
+ "fixture-repro.yml:mooneye-original-repro": {
+  "timeout_minutes": 30,
+  "cited_run_id": 40131912757,
+  "cited_sha": "a064b0bbcc4ffc04c1d49585267d86cd1c52d9b4",
+  "p50_minutes": "0.20",
+  "samples": 5,
+  "provisional": false
+ },
+ "fixture-repro.yml:rtc3test-repro": {
+  "timeout_minutes": 45,
+  "cited_run_id": 40159200156,
+  "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
+  "p50_minutes": "0.40",
+  "samples": 5,
+  "provisional": false
+ },
+ "libbet-repro.yml:libbet-repro": {
+  "timeout_minutes": 20,
+  "cited_run_id": 39866149534,
+  "cited_sha": "2d25a47f1b05844b4da829aa9d0978f2cb348df1",
+  "p50_minutes": "0.15",
+  "samples": 2,
+  "provisional": false
+ },
+ "nightly-asan.yml:asan-full-replay": {
+  "timeout_minutes": 60,
+  "cited_run_id": 40163271239,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "5.79",
+  "samples": 1,
+  "provisional": false
+ },
+ "perf-attribution.yml:attribution": {
+  "timeout_minutes": 150,
+  "cited_run_id": 40156286321,
+  "cited_sha": "711f4fd7e66a8ae67f2013edc39c98cfa21ea5fe",
+  "p50_minutes": "4.64",
+  "samples": 1,
+  "provisional": false
+ },
+ "preview.yml:installed-package-smoke-linux-x64": {
+  "timeout_minutes": 55,
+  "cited_run_id": 40153459897,
+  "cited_sha": "e719aa7e2a336717d0c9500eb7e473b774847078",
+  "p50_minutes": "25.32",
+  "samples": 5,
+  "provisional": false
+ },
+ "preview.yml:installed-package-smoke-macos-arm64": {
+  "timeout_minutes": 55,
+  "cited_run_id": 40157490726,
+  "cited_sha": "8738d07e61cf50bc3cb297c50b3ebe690112ebbe",
+  "p50_minutes": "22.75",
+  "samples": 5,
+  "provisional": false
+ },
+ "preview.yml:player-package-smoke-macos": {
+  "timeout_minutes": 60,
+  "cited_run_id": 40154479072,
+  "cited_sha": "5d26b7eb8cc4f7bf2fc725615becb5e494d02ba2",
+  "p50_minutes": "22.50",
+  "samples": 5,
+  "provisional": false
+ },
+ "preview.yml:preview-package-smoke": {
+  "timeout_minutes": 5,
+  "cited_run_id": 40157490726,
+  "cited_sha": "8738d07e61cf50bc3cb297c50b3ebe690112ebbe",
+  "p50_minutes": "0.05",
+  "samples": 5,
+  "provisional": false
+ },
+ "release-rehearsal.yml:aggregate": {
+  "timeout_minutes": 75,
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-v02-evidence-aggregate fails at the same --check-current step and the same pending measurement; the last green sample (run 39391950429 at 56eaf1b, 12.42 min) is on a non-ancestor rehearsal branch. The 75-minute cap is the reviewed limit for the six evidence families; the v0.2.1 rehearsal re-cites this row (D-111)."
+ },
+ "release-rehearsal.yml:corpus": {
+  "timeout_minutes": 60,
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-corpus-and-support-sidecar fails its --check-current step because docs/support/v0.2.0.md pins source digests that moved after the tag; the last green sample (run 39382974145 at 6b83695, 6.57 min) is on a rehearsal branch that is not an ancestor of main. The 60-minute cap is the reviewed limit for the full CTest stream; the v0.2.1 rehearsal re-cites this row (D-111)."
+ },
+ "release-rehearsal.yml:fuzz": {
+  "timeout_minutes": 45,
+  "cited_run_id": 40166530630,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "2.40",
+  "samples": 1,
+  "provisional": false
+ },
+ "release-rehearsal.yml:judge": {
+  "timeout_minutes": 15,
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Needs every rehearsal producer, so it only runs when all of them succeed. 0 success in every rehearsal run: the five post-15.1 runs skipped it, and probe run 40166530630 at 2bd618d skipped it because rehearse-paired-performance-qualification failed. The 15-minute cap is the reviewed limit for one --check run; 16-06 re-cites this row from the green rehearsal rerun."
+ },
+ "release-rehearsal.yml:package": {
+  "timeout_minutes": 35,
+  "cited_run_id": 40166530630,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "0.40",
+  "samples": 1,
+  "provisional": false
+ },
+ "release-rehearsal.yml:perf-gate": {
+  "timeout_minutes": 40,
+  "cited_run_id": 40166530630,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "0.90",
+  "samples": 1,
+  "provisional": false
+ },
+ "release-rehearsal.yml:performance": {
+  "timeout_minutes": 45,
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-paired-performance-qualification stays pending-investigation (median 118.35 percent, review trigger fired) until an owner-recorded, receipt-bound review decision is applied through the dispatch inputs; the last green sample (run 39382974145, 0.50 min) is on a non-ancestor rehearsal branch. The 45-minute cap is the reviewed limit for one paired measurement; the v0.2.1 rehearsal re-cites this row (D-111)."
+ },
+ "release.yml:attach-v02-evidence": {
+  "timeout_minutes": 15,
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Runs only when release-please creates a release. Full-history search on 2026-10-25: 94 release-please runs, 14 contain attach-qualified-v02-evidence, all 14 skipped, 0 success. The 15-minute cap is the reviewed limit for one published-asset readback and attach; 16-07 re-cites this row from the v0.2.1 release run."
+ },
+ "release.yml:candidate": {
+  "timeout_minutes": 35,
+  "cited_run_id": 38072343626,
+  "cited_sha": "01b514f5f45b0594fba24767d3f1ba90754962af",
+  "p50_minutes": "0.34",
+  "samples": 5,
+  "provisional": false
+ },
+ "release.yml:candidate-corpus": {
+  "timeout_minutes": 60,
+  "cited_run_id": 39406047351,
+  "cited_sha": "08e7309aab699333d73f7ffeae58a5332133f242",
+  "p50_minutes": "13.87",
+  "samples": 1,
+  "provisional": false
+ },
+ "release.yml:candidate-fuzz": {
+  "timeout_minutes": 112,
+  "release_bound": true,
+  "provisional": false,
+  "sizing_basis": "Runs only when release-please creates a release. Full-history search on 2026-10-25: 94 release-please runs, 14 contain exact-source-ci-campaign-receipt-reader, all 14 skipped, 0 success; the earlier exact-tag-clang-libfuzzer-campaign run 39406047351 was a different job body. The 112-minute cap is the policy-enforced worst-case poll budget (fuzz-wait-budget); 16-07 re-cites this row from the v0.2.1 release run."
+ },
+ "release.yml:candidate-macos": {
+  "timeout_minutes": 60,
+  "cited_run_id": 38072343626,
+  "cited_sha": "01b514f5f45b0594fba24767d3f1ba90754962af",
+  "p50_minutes": "1.45",
+  "samples": 5,
+  "provisional": false
+ },
+ "release.yml:candidate-performance": {
+  "timeout_minutes": 45,
+  "cited_run_id": 39406047351,
+  "cited_sha": "08e7309aab699333d73f7ffeae58a5332133f242",
+  "p50_minutes": "0.67",
+  "samples": 1,
+  "provisional": false
+ },
+ "release.yml:candidate-platform-manifest": {
+  "timeout_minutes": 25,
+  "cited_run_id": 39406047351,
+  "cited_sha": "08e7309aab699333d73f7ffeae58a5332133f242",
+  "p50_minutes": "0.25",
+  "samples": 5,
+  "provisional": false
+ },
+ "release.yml:candidate-windows": {
+  "timeout_minutes": 35,
+  "cited_run_id": 38072343626,
+  "cited_sha": "01b514f5f45b0594fba24767d3f1ba90754962af",
+  "p50_minutes": "0.74",
+  "samples": 5,
+  "provisional": false
+ },
+ "release.yml:publish-qualified-release": {
+  "timeout_minutes": 20,
+  "cited_run_id": 38073177978,
+  "cited_sha": "3fa00be9d8ad8ca12a9bc4672d4851db1eabfa8e",
+  "p50_minutes": "0.27",
+  "samples": 2,
+  "provisional": false
+ },
+ "release.yml:release": {
+  "timeout_minutes": 10,
+  "cited_run_id": 40163270650,
+  "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
+  "p50_minutes": "0.22",
+  "samples": 5,
+  "provisional": false
+ }
+}

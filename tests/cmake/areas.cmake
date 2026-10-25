@@ -6,3 +6,5 @@
 # plan 16-01 adds none. Every test name registered by a fragment must also be listed in
 # tests/expected-tests.txt.
 include("${PROJECT_SOURCE_DIR}/tests/cmake/perf.cmake")
+include("${PROJECT_SOURCE_DIR}/tests/cmake/ci-lanes.cmake")
+include("${PROJECT_SOURCE_DIR}/tests/cmake/hygiene.cmake")

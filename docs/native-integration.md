@@ -275,9 +275,10 @@ is not a game compatibility percentage. No physical DMG observation, CGB,
 MBC1M, RTC, broad game-library, or perceptual claim is made.
 
 The optional macOS SDL3 player is the current interactive host. The inspected
-Playstead adapter at pinned revision
-[`a102d6082968bc09ca00fefbf5c552ecf979fd63`](https://github.com/szTheory/playstead/blob/a102d6082968bc09ca00fefbf5c552ecf979fd63/playstead-mac/Playstead/Adapter/AdapterHost.swift)
-uses an external process for GBA/mGBA. This native C example shows a possible
+Playstead adapter, at Playstead main
+[`234bd45b21`](https://github.com/szTheory/playstead/commit/234bd45b21),
+runs GB, GBC and GBA through mGBA 0.10.5 as an external process adapter, not
+through libretro or an FFI binding. This native C example shows a possible
 future Game Boy adapter seam; it is not a live GabbaBoy/Playstead integration.
 
 To upgrade, install the new package into a clean prefix, reconfigure the host

@@ -1,0 +1,84 @@
+# Per-test TIMEOUT allowlist for tests/scripts/verify-test-budget.py (Phase 16 D-18, T-16-08).
+# One tab-separated row per test whose base TIMEOUT exceeds 60 s: name, ceiling seconds, expires, ref, shrink trigger.
+# expires is a project minor (the row fails once the project version reaches it). ref must resolve in the base commit's
+# LESSONS.md heading, DECISIONS.md table id or a phase plan file. Raising a ceiling or adding a row without a ref fails the ratchet.
+# Seeded from a fresh ctest json-v1 scan; a test with no TIMEOUT is never allowlisted (the default-budget sweep gives it 60 s).
+accept_event_limit_link_control	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+accept_event_limit_link_violation	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_cgb_colour_progress_refused	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_core_mutant	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_dense_input_controls	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_dense_script_delivered	400	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_lib_libbet_replay	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet-no-input	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet-no-input_raw	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet-select	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet-select_raw	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet_drop_start	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet_observe	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_sgb_tolerance	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_stall_diagnosis_replay_1	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_stall_diagnosis_replay_2	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_suite	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_suite_declared_exclusion	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_suite_undeclared_exclusion	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_unexpected_pass	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_sensitivity_m21	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_sensitivity_m27	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_sensitivity_m28	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_sensitivity_m6	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_ch2_lc_delay_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_div_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_interrupts_cgbE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_mode0_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_stop_prefetch_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_tima_cgbBC	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_tima_cgbE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stall_window	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_cgbE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_ds_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_sprites_dmgC_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_sprites_ds_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_window_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_window_ds_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+cgb_adr_half_dot_static_assert_mutant	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_bench_ab_missing_elapsed	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_bench_ab_missing_field	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_bench_ab_selftest	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_bench_ab_wrong_digest	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_runner_profile_dmg_identity_acceptance	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_runner_profile_dmg_identity_mooneye	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_samesuite_apu_suite	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+cgb_speed_stall_static_assert_mutant	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+closeout_dispositions_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+core_linkage_controls	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+dmg_baseline	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+libbet_install_tree	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+mooneye_mbc_required_suite	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+player_cgb_cli	240	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_hdma_smoke	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_hdma_smoke_no_transfer	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_model_auto_smoke	300	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_smoke	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_smoke_mutant_dmg_path	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_smoke_mutant_rb_swap	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_speed_smoke	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_speed_smoke_mutant_ppu_follows_cpu	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_speed_smoke_wrong_sha	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_session_script_no_input	300	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+rtc3test_basic	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+rtc3test_negative_control	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+rtc3test_range	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+rtc3test_subsecond	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+uat_closure_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+uat_closure_optimize_refused	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_adoption_docs_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_consumer_controls_c	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_consumer_controls_cpp	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_delivery_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_fuzz_controls	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_performance_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_source_archive_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_support_ledger_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+workflow_policy_controls	180	0.4	16-04	Lower when a measured run is under half the ceiling; the self-test mutates a copy of every workflow once per control

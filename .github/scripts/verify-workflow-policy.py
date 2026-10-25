@@ -19,10 +19,13 @@ a trusted checkout and pass the subject tree as --root (data only).
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import re
 import subprocess
 import sys
 import tempfile
+from fractions import Fraction
 from pathlib import Path
 
 
@@ -359,17 +362,45 @@ def _download(job: dict, workflow: str, job_id: str, name: str) -> None:
         raise Reject("artifact-flow", f"{_where(workflow, job_id)} must download retained artifact {name}")
 
 
+# D-30 (16-06): the paired-performance review path needs one read-only gh step in a producer job: the rehearsal's dispatch
+# path fetches the pending measurement of an earlier run of the same workflow, and release.yml fetches the newest
+# successful rehearsal run's receipt. That step alone may hold GH_TOKEN (exactly `${{ github.token }}`) under a job-level
+# `actions: read`, may run only `gh run view`, `gh run download` and `gh run list`, and never runs tagged-tree code.
+PERFORMANCE_TOKEN_STEPS = {
+    ("release-rehearsal", "performance"): "Fetch the pending measurement that the review decision covers",
+    ("release-rehearsal", "aggregate"): "Fetch the pending measurement that the review decision covers",
+    ("release", "candidate-performance"): "Fetch the newest successful rehearsal run's performance receipt for this tag",
+}
+_GH_READ = re.compile(r"gh\s+run\s+(?:view|download|list)\b")
+
+
 def _check_unprivileged(workflow: str, tree: dict, job_id: str) -> None:
     """A producer runs subject code with a read-only job token and no token it could use or leak."""
     job = tree["jobs"][job_id]
+    token_step = PERFORMANCE_TOKEN_STEPS.get((workflow, job_id))
     perms = _permissions(job, tree.get("permissions", {}))
     if _writes(perms):
         raise Reject("producer-write-authority", f"{_where(workflow, job_id)} runs producer work with write authority")
-    if "permissions" in job and perms != {"contents": "read"}:
+    allowed = {"contents": "read", "actions": "read"} if token_step else {"contents": "read"}
+    if token_step and perms != allowed:
+        raise Reject("producer-permissions", f"{_where(workflow, job_id)} must hold exactly contents: read and actions: read")
+    if "permissions" in job and perms != allowed:
         raise Reject("producer-permissions", f"{_where(workflow, job_id)} must hold only contents: read")
-    if any(_TOKEN.search(text) for text in _strings({k: v for k, v in job.items() if k != "name"})):
+    scanned = {k: v for k, v in job.items() if k != "name"}
+    steps = [dict(step) for step in job.get("steps", [])]
+    if token_step:
+        holders = [step for step in steps if step.get("name") == token_step]
+        if len(holders) != 1 or holders[0].get("env", {}).get("GH_TOKEN") != "${{ github.token }}":
+            raise Reject("producer-token", f"{_where(workflow, job_id)} step {token_step!r} must be the one step holding GH_TOKEN: ${{{{ github.token }}}}")
+        holder = holders[0]
+        holder["env"] = {key: value for key, value in holder["env"].items() if key != "GH_TOKEN"}
+        if _TOKEN.search(str(holder.get("run", ""))) or SUBJECT_EXECUTION.search(_GH_READ.sub("", str(holder.get("run", "")))):
+            raise Reject("producer-token", f"{_where(workflow, job_id)} step {token_step!r} runs tagged-tree code while holding the token")
+        holder["run"] = _GH_READ.sub("gh-read", str(holder.get("run", "")))
+        scanned = {k: (steps if k == "steps" else v) for k, v in scanned.items()}
+    if any(_TOKEN.search(text) for text in _strings(scanned)):
         raise Reject("producer-token", f"{_where(workflow, job_id)} references the job token or a secret")
-    if any(_WRITE_COMMAND.search(step.get("run", "")) for step in job.get("steps", [])):
+    if any(_WRITE_COMMAND.search(step.get("run", "")) for step in steps):
         raise Reject("producer-write-command", f"{_where(workflow, job_id)} runs a repository-write or API command")
 
 
@@ -1037,7 +1068,7 @@ RELEASE_ARTIFACTS = {
     "candidate-fuzz": ("release-evidence-fuzz", ("build/ci-fuzz/v02-fuzz-receipt.json",)),
 }
 SUBJECT_REF = "${{ env.SOURCE_SHA }}"
-JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
+JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head"
 PRODUCER_SCRIPT = ".github/scripts/produce-release-evidence.sh"
 PRODUCER_SCRIPT_REQUIRED = (
     'same_commit "$head" "$source_sha"',
@@ -1049,6 +1080,8 @@ PRODUCER_SCRIPT_REQUIRED = (
     'bash "$gate" --check-v02-evidence "$evidence" "$tag" "$source_sha" "$archive"',
 )
 _SHARED = "bash " + PRODUCER_SCRIPT
+# The rehearsal tag is derived from the rehearsal/vX.Y.Z ref and the tree's own version, never a fixed default (D-28).
+_DERIVE_TAG = 'python3 -I tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME"'
 _REHEARSAL_TAG = _SHARED + ' verify-subject --subject . --source-sha "$GITHUB_SHA" --tag "$REHEARSAL_TAG" --local-tag'
 _RELEASE_SUBJECT = _SHARED + ' verify-subject --subject . --source-sha "$SOURCE_SHA" --tag "$RELEASE_TAG"'
 _CORPUS_BUILD = _SHARED + " corpus-build --subject ."
@@ -1059,9 +1092,26 @@ PERF_GATE_COMMANDS = (
     "bash tests/scripts/run-perf-gate.sh --seeded-regression",
     "bash tests/scripts/run-perf-gate.sh --noop-twin",
 )
+PERFORMANCE_MEASURE = "bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json"
+# D-30 (16-06): a decision is applied only to the retained measurement of a release-rehearsal run on the same branch whose commit has this
+# run's tree, to a decision file written outside the checkout; the fetch step and the apply step are separate so the token never meets subject code.
+PERFORMANCE_FETCH_PINS = (
+    'gh run download "$MEASUREMENT_RUN_ID"',
+    '"$run_workflow" == release-rehearsal',
+    '"$run_branch" == "$GITHUB_REF_NAME"',
+    'git rev-parse "$run_sha^{tree}"',
+    'git rev-parse "$GITHUB_SHA^{tree}"',
+    "performance-decision-tree-mismatch",
+)
+PERFORMANCE_APPLY_PINS = (
+    "--apply-decision --measurement",
+    '--decision "$RUNNER_TEMP/performance-decision.json" --output build/v02-performance-receipt.json',
+)
+PERFORMANCE_UPLOAD = "rehearsal-performance-${{ github.run_id }}-${{ github.run_attempt }}"
 REHEARSAL_REQUIRED = {
     "perf-gate": PERF_GATE_COMMANDS,
     "corpus": (
+        _DERIVE_TAG,
         _REHEARSAL_TAG,
         _CORPUS_BUILD,
         "python3 -I tests/scripts/verify-cgb-corpus-report.py --begin-run --build-dir build --receipt build/cgb-corpus-receipt.json",
@@ -1082,6 +1132,7 @@ REHEARSAL_REQUIRED = {
         "python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json",
     ),
     "package": (
+        _DERIVE_TAG,
         _REHEARSAL_TAG,
         'bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"',
         'python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt',
@@ -1090,6 +1141,7 @@ REHEARSAL_REQUIRED = {
         'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .',
     ),
     "aggregate": (
+        _DERIVE_TAG,
         _REHEARSAL_TAG,
         _CORPUS_BUILD,
         _SHARED + " collect --subject . --output build/evidence",
@@ -1102,6 +1154,7 @@ REHEARSAL_REQUIRED = {
     "judge": (
         JUDGE_CALL_POLICY,
         "python3 -I trusted-judge/tests/scripts/verify-v02-fuzz.py --verify rehearsal-evidence/v02-fuzz-receipt.json",
+        'python3 -I trusted-judge/tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject',
     ),
 }
 _PUBLISH_INVENTORY = 'python3 -I trusted/.github/scripts/verify-published-release-assets.py --inventory "$RUNNER_TEMP/expected-inventory.json" build/release-final'
@@ -1244,8 +1297,8 @@ CI_SANITIZER_SHARDS = {
         "grep -vE '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt",
         _ASAN_SHARD_INVENTORY),
     "linux-sanitizers-acceptance": _ASAN_SHARD_BUILD + (
-        "ctest --preset phase1-asan --parallel 4 -R '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml",
-        "grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt",
+        "ctest --preset phase1-asan --parallel 4 -R '^acceptance_' -E '^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure --no-tests=error --output-junit ctest.xml",
+        "grep -E '^acceptance_' tests/expected-tests.txt | grep -vE '^acceptance_stall_diagnosis(_replay_[12])?$' > build-asan/expected-shard.txt",
         _ASAN_SHARD_INVENTORY),
 }
 # (command, status variable, conditional by design): the sanitizer step runs under set +e so it can always retain
@@ -1255,7 +1308,40 @@ CI_STATUS_CALLS = (
     ("python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json", "verify_status", True),
     ("GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test", "self_test_status", True),
 )
-CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "perf-gate", "player-gate", "macos-player-package"}
+# The per-test TIMEOUT ratchet (D-18): the native-linux job passes the PR base or push parent as --base so a change
+# cannot judge its own allowlist against itself.
+CI_BUDGET_COMMANDS = (
+    'python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"',
+)
+# The budget base falls back to the merge base with origin/main when the push parent is all-zero or no longer a
+# reachable commit (rebased and force-pushed branch), and still fails closed on an unresolvable final base.
+CI_BUDGET_BASE_PINS = (
+    '! git cat-file -e "${base}^{commit}"',
+    'base=$(git merge-base HEAD origin/main)',
+    'git cat-file -e "${base}^{commit}"\n',
+)
+# Every job the planning-only classification may skip (D-21): each needs `changes` and runs only for kind == 'full'.
+CI_HEAVY_JOBS = ("native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests",
+                 "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "perf-gate", "player-gate", "macos-player-package")
+CI_FULL_CONDITION = "needs.changes.outputs.kind == 'full'"
+CI_REQUIRED_NATIVE_NEEDS = set(CI_HEAVY_JOBS) | {"changes", "planning-checks"}
+# The classifier is the copy stored at the base commit, so a change cannot loosen the rule that judges it. A base
+# that has no copy, cannot be resolved or has an all-zero parent classifies as full (D-21).
+CI_CLASSIFIER_PINS = (
+    'if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then',
+    'elif git show "$base:.github/scripts/classify-changes.py" > "$RUNNER_TEMP/classify-changes.py"; then',
+    'python3 -I "$RUNNER_TEMP/classify-changes.py" --base "$base" --head "$GITHUB_SHA" --ref "$GITHUB_REF"',
+    'if [ "$verdict" = "kind=planning" ]; then',
+)
+CI_PLANNING_COMMANDS = (
+    "cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX=",
+    "ctest --test-dir build -L planning --no-tests=error --output-on-failure",
+)
+CI_AGGREGATOR_ENV = {
+    "KIND": "${{ needs.changes.outputs.kind }}",
+    "CHANGES": "${{ needs.changes.result }}",
+    "PLANNING_CHECKS": "${{ needs.planning-checks.result }}",
+}
 
 
 _FORBIDDEN_PRODUCER_HEADS = {"gh", "curl", "wget", "ssh", "scp"}
@@ -1303,6 +1389,42 @@ def _check_no_duplicate_setup(workflow: str, tree: dict) -> None:
                     raise Reject("duplicate-rehearsal-setup", f"{_where(workflow, job_id)} sets up a tag inline; use {PRODUCER_SCRIPT} verify-subject")
 
 
+def _flat(step: dict) -> str:
+    return " ".join(str(step.get("run", "")).split())
+
+
+def _check_performance_qualification(workflow: str, job: dict, job_id: str) -> None:
+    fetch_name = PERFORMANCE_TOKEN_STEPS[(workflow, job_id)]
+    steps = job.get("steps", [])
+    fetch = [step for step in steps if step.get("name") == fetch_name]
+    if len(fetch) != 1 or any(" ".join(pin.split()) not in _flat(fetch[0]) for pin in PERFORMANCE_FETCH_PINS):
+        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must fetch a decision's measurement only from a same-branch release-rehearsal run of this tree")
+    apply_steps = [step for step in steps if "--apply-decision" in _flat(step)]
+    if len(apply_steps) != 1 or any(pin not in _flat(apply_steps[0]) for pin in PERFORMANCE_APPLY_PINS) or apply_steps[0].get("env", {}).get("GH_TOKEN"):
+        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must apply the decision to the fetched measurement in a tokenless step with the decision outside the checkout")
+    if steps.index(fetch[0]) > steps.index(apply_steps[0]):
+        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must fetch the measurement before applying a decision")
+    if job_id == "performance":
+        uploads = [step for step in _artifact_steps(job, "upload") if step.get("with", {}).get("name") == PERFORMANCE_UPLOAD]
+        if len(uploads) != 1 or str(uploads[0].get("if", "")).strip() not in ("always()", "${{ always() }}") \
+                or uploads[0]["with"].get("path") != "build/v02-performance-receipt.json":
+            raise Reject("artifact-flow", f"{_where(workflow, job_id)} must retain the measurement or qualified receipt with if: always()")
+
+
+def _check_performance_reuse(workflow: str, job: dict) -> None:
+    """release.yml reuses a rehearsal receipt only through --verify-reuse with the tag's tree, from a successful rehearsal run of this tag."""
+    steps = job.get("steps", [])
+    fetch = [step for step in steps if step.get("name") == PERFORMANCE_TOKEN_STEPS[(workflow, "candidate-performance")]]
+    run = _flat(fetch[0]) if len(fetch) == 1 else ""
+    for pin in ('--workflow release-rehearsal.yml --branch "rehearsal/$RELEASE_TAG" --status success', "gh run download"):
+        if pin not in run:
+            raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must fetch only from a successful rehearsal run of this tag: {pin}")
+    reuse = [step for step in steps if "--verify-reuse" in _flat(step)]
+    if len(reuse) != 1 or '--tag-tree "$tag_tree"' not in _flat(reuse[0]) or 'tag_tree=$(git rev-parse "$SOURCE_SHA^{tree}")' not in _flat(reuse[0]) \
+            or reuse[0].get("env", {}).get("GH_TOKEN"):
+        raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must reuse a rehearsal receipt only through --verify-reuse with the tag's tree")
+
+
 def check_rehearsal(root: Path) -> None:
     name = "release-rehearsal"
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
@@ -1341,7 +1463,10 @@ def check_rehearsal(root: Path) -> None:
             raise Reject("judge-subject-execution", f"{_where(name, 'judge')} names a path inside the subject tree; subject files are data only")
     for job_id, commands in REHEARSAL_REQUIRED.items():
         for command in commands:
-            require_call(name, job_id, tree["jobs"][job_id], command)
+            # The paired measurement is the no-decision branch of the qualification step (D-30); the verifier after it is unconditional.
+            require_call(name, job_id, tree["jobs"][job_id], command, conditional=command == PERFORMANCE_MEASURE and job_id in ("performance", "aggregate"))
+    for job_id in ("performance", "aggregate"):
+        _check_performance_qualification(name, tree["jobs"][job_id], job_id)
 
 
 # Read-only workflows must not leave the checkout token in .git/config for later steps (IN-08). A job that truly
@@ -1361,6 +1486,73 @@ def check_readonly_workflows(root: Path, exempt=None) -> None:
             raise Reject("checkout-credentials", f"CREDENTIAL_EXEMPT entry {workflow}.{job_id} has no reason")
     for workflow, tree in trees.items():
         _check_checkout_credentials(workflow, tree, [job_id for job_id in tree["jobs"] if (workflow, job_id) not in exempt])
+
+
+# preview.yml player smoke vs the planning-only lane (D-21): a kind=planning exact-head CI run skips
+# macos-player-package, so the wait excuses exactly that skip (and only for a planning run, which the wait reads from the
+# run's own job results) and the three download/verify/upload steps are skipped when the wait reports kind=planning.
+# `!= 'planning'` keeps the steps running (and failing on the missing run id) whenever the kind output is absent.
+PREVIEW_PLAYER_JOB = "player-package-smoke-macos"
+PREVIEW_PLAYER_WAIT_PINS = (
+    "--require required-native --require macos-player-package",
+    "--planning-skippable macos-player-package --deadline-seconds",
+)
+PREVIEW_PLAYER_GUARD = "steps.candidate.outputs.kind != 'planning'"
+PREVIEW_PLAYER_GUARDED_STEPS = (
+    "Download run-scoped candidate package",
+    "Verify downloaded package bytes and create consumer receipt",
+    "Upload qualified macOS player preview and receipt",
+)
+
+
+def check_preview_player_lane(root: Path) -> None:
+    workflow = "preview.yml"
+    tree = read_workflow(root / ".github/workflows" / workflow)
+    job = _require_job(workflow, tree, PREVIEW_PLAYER_JOB)
+    steps = job.get("steps", [])
+    waits = [step for step in steps if step.get("id") == "candidate"]
+    run = " ".join(str(waits[0].get("run", "")).split()) if len(waits) == 1 else ""
+    for pin in PREVIEW_PLAYER_WAIT_PINS:
+        if pin not in run:
+            raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} wait step must contain: {pin}")
+    if run.count("--planning-skippable") != 1 or run.count("--require") != 2:
+        raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} may excuse only macos-player-package, with both jobs required")
+    for name in PREVIEW_PLAYER_GUARDED_STEPS:
+        named = [step for step in steps if step.get("name") == name]
+        if len(named) != 1 or _normalise_if(named[0].get("if", "")) != PREVIEW_PLAYER_GUARD:
+            raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} step {name!r} must run only when {PREVIEW_PLAYER_GUARD}")
+
+
+def _check_ci_planning_lane(workflow: str, tree: dict) -> None:
+    """The planning-only lane (D-21): a read-only classifier on the base commit's copy, a real planning-checks job, and
+    the full-matrix condition on every heavy job. required-native itself is judged by check_ci."""
+    if "pull_request_target" in _trigger_names(tree):
+        raise Reject("workflow-trigger", f"{workflow} must not use pull_request_target")
+    changes = _require_job(workflow, tree, "changes")
+    if _permissions(changes, tree["permissions"]) != {"contents": "read"}:
+        raise Reject("producer-write-authority", "ci.changes must hold only contents: read")
+    if changes.get("outputs", {}).get("kind") != "${{ steps.classify.outputs.kind }}":
+        raise Reject("planning-lane", "ci.changes must publish kind from its classify step")
+    classify = [step for step in changes.get("steps", []) if step.get("id") == "classify"]
+    run = str(classify[0].get("run", "")) if len(classify) == 1 else ""
+    for pin in CI_CLASSIFIER_PINS:
+        if pin not in run:
+            raise Reject("classifier-source", f"ci.changes classify step must contain: {pin}")
+    checkout = _checkouts(changes)
+    if len(checkout) != 1 or str(checkout[0].get("with", {}).get("fetch-depth")) != "0":
+        raise Reject("planning-lane", "ci.changes must check out the full history so the base commit can be read")
+    lane = _require_job(workflow, tree, "planning-checks")
+    if _needs(lane) != {"changes"} or _normalise_if(lane.get("if", "")) != "needs.changes.outputs.kind == 'planning'":
+        raise Reject("planning-lane", "ci.planning-checks must need changes and run only for kind == 'planning'")
+    if _permissions(lane, tree["permissions"]) != {"contents": "read"}:
+        raise Reject("producer-write-authority", "ci.planning-checks must hold only contents: read")
+    for command in CI_PLANNING_COMMANDS:
+        require_call(workflow, "planning-checks", lane, command)
+    for job_id in CI_HEAVY_JOBS:
+        job = _require_job(workflow, tree, job_id)
+        clauses = [clause.strip() for clause in _normalise_if(job.get("if", "")).split("&&")]
+        if "changes" not in _needs(job) or CI_FULL_CONDITION not in clauses:
+            raise Reject("planning-lane-condition", f"ci.{job_id} must need changes and run only if {CI_FULL_CONDITION}")
 
 
 def check_ci(root: Path) -> None:
@@ -1392,9 +1584,23 @@ def check_ci(root: Path) -> None:
         mapped = [step.get("env", {}).get(var) for step in gate.get("steps", [])]
         if "${{ needs." + lane + ".result }}" not in mapped:
             raise Reject("workflow-dependency", f"ci.required-native must read the {lane} result")
-    require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"')
+    for var, expression in CI_AGGREGATOR_ENV.items():
+        if expression not in [step.get("env", {}).get(var) for step in gate.get("steps", [])]:
+            raise Reject("workflow-dependency", f"ci.required-native must pass {var}: {expression}")
+    require_call(name, "required-native", gate, "python3 -I .github/scripts/check-required-native.py")
+    require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"',
+                 conditional=True)
+    _check_ci_planning_lane(name, tree)
     for command in CI_REQUIRED:
         require_call(name, "linux-sanitizers", job, command)
+    native_linux = _require_job(name, tree, "native-linux")
+    for command in CI_BUDGET_COMMANDS:
+        require_call(name, "native-linux", native_linux, command)
+    base_steps = [step for step in native_linux.get("steps", []) if step.get("id") == "budget_base"]
+    base_run = str(base_steps[0].get("run", "")) if len(base_steps) == 1 else ""
+    for needle in CI_BUDGET_BASE_PINS:
+        if needle not in base_run:
+            raise Reject("budget-base-fallback", f"ci.native-linux budget_base step must contain: {needle}")
     perf_job = _require_job(name, tree, "perf-gate")
     if perf_job.get("runs-on") != "ubuntu-24.04":
         raise Reject("runner-image", "ci.perf-gate must run on the pinned ubuntu-24.04 image")
@@ -1438,6 +1644,49 @@ def check_perf_attribution(root: Path) -> None:
         raise Reject("runner-image", "perf-attribution must run on the pinned ubuntu-24.04 image")
     for command in PERF_ATTRIBUTION_COMMANDS:
         require_call(name, "attribution", job, command)
+
+
+NIGHTLY_COMMANDS = (
+    "cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=",
+    "cmake --build --preset phase1-asan",
+    "ctest --preset phase1-asan --parallel 2 -R '^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure --no-tests=error",
+)
+
+
+def check_nightly(root: Path) -> None:
+    """The scheduled full ASan stall replay (D-19, D-108): two triggers, a read-only replay job that runs the repository
+    code, and a separate report job that alone holds issues: write, has no checkout and runs no repository code (T-16-07)."""
+    name = "nightly-asan"
+    tree = read_workflow(root / ".github/workflows/nightly-asan.yml")
+    if _trigger_names(tree) != {"schedule", "workflow_dispatch"}:
+        raise Reject("workflow-trigger", "nightly-asan must trigger on schedule and workflow_dispatch only")
+    if tree.get("permissions") != {"contents": "read"}:
+        raise Reject("workflow-permissions", "nightly-asan must declare only top-level contents: read")
+    _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_bounded_downloads(name, tree)
+    _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
+    if set(tree["jobs"]) != {"asan-full-replay", "report-red"}:
+        raise Reject("job-unclassified", "nightly-asan must hold exactly the asan-full-replay and report-red jobs")
+    replay = tree["jobs"]["asan-full-replay"]
+    if "permissions" in replay or _writes(_permissions(replay, tree["permissions"])):
+        raise Reject("producer-write-authority", "nightly-asan.asan-full-replay must not hold or widen permissions")
+    _check_unprivileged(name, tree, "asan-full-replay")
+    _check_checkout_credentials(name, tree, ("asan-full-replay",))
+    if replay.get("runs-on") != "ubuntu-24.04":
+        raise Reject("runner-image", "nightly-asan.asan-full-replay must run on the pinned ubuntu-24.04 image")
+    if "timeout-minutes" not in replay:
+        raise Reject("job-timeout", "nightly-asan.asan-full-replay must carry timeout-minutes")
+    for command in NIGHTLY_COMMANDS:
+        require_call(name, "asan-full-replay", replay, command)
+    report = tree["jobs"]["report-red"]
+    if _needs(report) != {"asan-full-replay"} or str(report.get("if", "")).strip() != "failure()":
+        raise Reject("nightly-report-trigger", "nightly-asan.report-red must need asan-full-replay and run if: failure()")
+    if report.get("permissions") != {"issues": "write"}:
+        raise Reject("nightly-report-permissions", "nightly-asan.report-red must hold issues: write as its only permission")
+    if _checkouts(report) or any("uses" in step for step in report.get("steps", [])):
+        raise Reject("nightly-report-checkout", "nightly-asan.report-red must not check out source or use any action")
 
 
 def _check_residual_classification(roles=None, subject=None, exempt=None, overlays=None) -> None:
@@ -1596,7 +1845,8 @@ def check_release(root: Path) -> None:
         _check_no_subject_execution(name, job_id, job)
     for job_id, commands in RELEASE_REQUIRED.items():
         for command in commands:
-            require_call(name, job_id, jobs[job_id], command)
+            require_call(name, job_id, jobs[job_id], command, conditional=command == PERFORMANCE_MEASURE and job_id == "candidate-performance")
+    _check_performance_reuse(name, jobs["candidate-performance"])
     _check_fuzz_source_binding(name, tree)
     _check_fuzz_wait_budget(name, tree)
     publisher = jobs["publish-qualified-release"]
@@ -1638,19 +1888,188 @@ def check_release(root: Path) -> None:
             _check_token_step_commands(name, job_id, jobs[job_id], job_wide=job_id in TOKEN_SCOPE_EXEMPT)
 
 
-def check_all(root: Path) -> dict[str, int]:
+# --------------------------------------------------------------------------- timeout ledger (D-20)
+LEDGER_PATH = ".github/ci-timeouts.json"
+LEDGER_WHOLE_RUN_MINUTES = Fraction(30)
+LEDGER_NORMAL_FIELDS = frozenset({"timeout_minutes", "cited_run_id", "cited_sha", "p50_minutes", "samples", "provisional"})
+LEDGER_BOUND_FIELDS = frozenset({"timeout_minutes", "release_bound", "provisional", "sizing_basis"})
+# D-20 'release-bound ledger row (Phase 16)': release-only and rehearsal-only job bodies that have no green run since they were written. Each
+# is exempt from the samples, cited run, cited sha and ceil(2 x p50) rules, only while the project VERSION is at most
+# LEDGER_BOUND_LAST_VERSION; 16-06 and 16-07 re-cite them from the rehearsal rerun and the v0.2.1 release run. A generic skip is never allowed.
+LEDGER_RELEASE_BOUND_KEYS = ("release.yml:attach-v02-evidence", "release.yml:candidate-fuzz", "release-rehearsal.yml:judge",
+                             # D-111: the rehearsal producers that cannot pass until the version-bound ledger and the owner-recorded
+                             # performance review exist; a provisional row would make the rehearsal judge's own --release-head check circular.
+                             "release-rehearsal.yml:corpus", "release-rehearsal.yml:performance", "release-rehearsal.yml:aggregate")
+LEDGER_BOUND_LAST_VERSION = (0, 2, 1)
+_P50 = re.compile(r"^[0-9]+(?:\.[0-9]+)?$")
+_SHA40 = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _ledger_pairs(pairs):
+    seen: dict = {}
+    for key, value in pairs:
+        if key in seen:
+            raise Reject("timeout-ledger-schema", f"{LEDGER_PATH} repeats the key {key!r}")
+        seen[key] = value
+    return seen
+
+
+def _is_int(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _project_version(root: Path) -> tuple[int, int, int]:
+    try:
+        text = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+    except OSError as exc:
+        raise Reject("timeout-ledger-release-bound", f"cannot read CMakeLists.txt to check the release-bound expiry: {exc.strerror}") from exc
+    match = re.search(r"project\(\s*\w+\s+VERSION\s+(\d+)\.(\d+)\.(\d+)", text)
+    if not match:
+        raise Reject("timeout-ledger-release-bound", "CMakeLists.txt has no project VERSION to check the release-bound expiry against")
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def judge_timeout_ledger(ledger, yaml_timeouts: dict[str, int], gating: set[str], version: tuple[int, int, int],
+                         release_head: bool) -> None:
+    """Judge parsed ledger data against {workflow:job -> YAML timeout}; gating names the jobs behind required-native."""
+    if not isinstance(ledger, dict) or not ledger:
+        raise Reject("timeout-ledger-schema", f"{LEDGER_PATH} must be a non-empty object of workflow:job rows")
+    for key in yaml_timeouts:
+        if key not in ledger:
+            raise Reject("timeout-ledger-missing-row", f"{key} has timeout-minutes but no row in {LEDGER_PATH}")
+    for key in ledger:
+        if key not in yaml_timeouts:
+            raise Reject("timeout-ledger-stale", f"{LEDGER_PATH} row {key} names a job with no timeout-minutes")
+    longest = Fraction(0)
+    for key, row in ledger.items():
+        if not isinstance(row, dict):
+            raise Reject("timeout-ledger-schema", f"{key}: a row must be an object")
+        if "release_bound" in row:
+            if key not in LEDGER_RELEASE_BOUND_KEYS:
+                raise Reject("timeout-ledger-release-bound", f"{key}: release_bound is legal only under {', '.join(LEDGER_RELEASE_BOUND_KEYS)}")
+            if version > LEDGER_BOUND_LAST_VERSION:
+                raise Reject("timeout-ledger-release-bound",
+                             f"{key}: release_bound expired when the project VERSION passed {'.'.join(map(str, LEDGER_BOUND_LAST_VERSION))}; re-cite it from the release run")
+            if set(row) != LEDGER_BOUND_FIELDS or row["release_bound"] is not True or row["provisional"] is not False \
+                    or not isinstance(row["sizing_basis"], str) or not row["sizing_basis"].strip() or not _is_int(row["timeout_minutes"]):
+                raise Reject("timeout-ledger-schema", f"{key}: a release_bound row holds exactly timeout_minutes, release_bound true, "
+                             "provisional false and a non-empty sizing_basis, and none of cited_run_id, cited_sha, p50_minutes or samples")
+            if row["timeout_minutes"] != yaml_timeouts[key]:
+                raise Reject("timeout-ledger-stale", f"{key}: ledger timeout {row['timeout_minutes']} differs from the workflow's {yaml_timeouts[key]}")
+            continue
+        if set(row) != LEDGER_NORMAL_FIELDS:
+            raise Reject("timeout-ledger-schema", f"{key}: a row holds exactly {sorted(LEDGER_NORMAL_FIELDS)}")
+        if not _is_int(row["timeout_minutes"]) or not _is_int(row["cited_run_id"]) or row["cited_run_id"] <= 0 \
+                or not _is_int(row["samples"]) or row["samples"] < 1 or not isinstance(row["provisional"], bool) \
+                or not isinstance(row["cited_sha"], str) or not _SHA40.match(row["cited_sha"]) \
+                or not isinstance(row["p50_minutes"], str) or not _P50.match(row["p50_minutes"]):
+            raise Reject("timeout-ledger-schema", f"{key}: malformed field (timeout and samples integers, cited_sha 40 hex, p50 a decimal string)")
+        if row["timeout_minutes"] != yaml_timeouts[key]:
+            raise Reject("timeout-ledger-stale", f"{key}: ledger timeout {row['timeout_minutes']} differs from the workflow's {yaml_timeouts[key]}")
+        p50 = Fraction(row["p50_minutes"])
+        if row["timeout_minutes"] < math.ceil(2 * p50):
+            raise Reject("timeout-ledger-ratio", f"{key}: timeout {row['timeout_minutes']} is below ceil(2 x p50 {row['p50_minutes']}) = {math.ceil(2 * p50)}")
+        if release_head and row["provisional"]:
+            raise Reject("timeout-ledger-provisional", f"{key}: a provisional row cannot stand at the release head; re-cite it from a main run")
+        if key in gating and p50 > longest:
+            longest = p50
+    if longest > LEDGER_WHOLE_RUN_MINUTES:
+        raise Reject("timeout-ledger-whole-run", f"the longest p50 behind required-native is {float(longest):g} min, over {LEDGER_WHOLE_RUN_MINUTES}")
+
+
+def check_timeout_ledger(root: Path, release_head: bool = False) -> None:
+    try:
+        text = (root / LEDGER_PATH).read_text(encoding="utf-8")
+        ledger = json.loads(text, object_pairs_hook=_ledger_pairs)
+    except OSError as exc:
+        raise Reject("timeout-ledger-schema", f"cannot read {LEDGER_PATH}: {exc.strerror}") from exc
+    except ValueError as exc:
+        raise Reject("timeout-ledger-schema", f"{LEDGER_PATH} is not valid JSON: {exc}") from exc
+    yaml_timeouts: dict[str, int] = {}
+    trees = {}
+    for path in sorted((root / ".github/workflows").glob("*.yml")):
+        tree = read_workflow(path)
+        trees[path.name] = tree
+        for job_id, job in tree["jobs"].items():
+            if "timeout-minutes" in job:
+                raw = str(job["timeout-minutes"])
+                if not raw.isdigit():
+                    raise Reject("timeout-ledger-schema", f"{path.name}:{job_id} timeout-minutes must be an integer literal")
+                yaml_timeouts[f"{path.name}:{job_id}"] = int(raw)
+    gating = {f"ci.yml:{need}" for need in _needs(trees["ci.yml"]["jobs"]["required-native"])} if "ci.yml" in trees else set()
+    judge_timeout_ledger(ledger, yaml_timeouts, gating, _project_version(root), release_head)
+
+
+
+def verify_cited(root: Path) -> int:
+    """Online, advisory (D-20): confirm each ledger citation through gh. Never runs in CTest."""
+    def gh(*args: str):
+        result = subprocess.run(["gh", "api", *args], capture_output=True, text=True, check=False, timeout=120)
+        if result.returncode != 0:
+            raise Reject("timeout-ledger-cited", f"gh api {' '.join(args)} failed: {result.stderr.strip()[:200]}")
+        return json.loads(result.stdout)
+
+    ledger = json.loads((root / LEDGER_PATH).read_text(encoding="utf-8"), object_pairs_hook=_ledger_pairs)
+    display: dict[str, str] = {}
+    for path in sorted((root / ".github/workflows").glob("*.yml")):
+        for job_id, job in read_workflow(path)["jobs"].items():
+            name = str(job.get("name", job_id))
+            display[f"{path.name}:{job_id}"] = f"release-candidate / {name}" if path.name == "release.yml" else name
+    failures = 0
+    for key, row in ledger.items():
+        if "release_bound" in row:
+            print(f"skip {key}: release_bound ({row['sizing_basis'][:60]})")
+            continue
+        try:
+            run = gh("repos/{owner}/{repo}/actions/runs/%d" % row["cited_run_id"])
+            jobs = gh("repos/{owner}/{repo}/actions/runs/%d/jobs?per_page=100" % row["cited_run_id"], "--paginate")
+            found = [j for page in ([jobs] if isinstance(jobs, dict) else jobs) for j in page.get("jobs", []) if j["name"] == display[key]]
+            problems = []
+            if run["head_sha"] != row["cited_sha"]:
+                problems.append(f"run head {run['head_sha'][:8]} is not the cited sha")
+            if not found or found[0]["conclusion"] != "success":
+                problems.append("job missing or not successful")
+            else:
+                started = found[0]["started_at"], found[0]["completed_at"]
+                from datetime import datetime
+                seconds = (datetime.strptime(started[1], "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(started[0], "%Y-%m-%dT%H:%M:%SZ")).total_seconds()
+                if Fraction(math.ceil(Fraction(seconds) / 60 * 100), 100) != Fraction(row["p50_minutes"]):
+                    problems.append(f"cited job lasted {seconds / 60:.2f} min, not p50 {row['p50_minutes']}")
+            if run["event"] == "pull_request":
+                pulls = gh("repos/{owner}/{repo}/commits/%s/pulls" % row["cited_sha"])
+                provisional = not any(item.get("merged_at") for item in pulls)
+            else:
+                ancestor = subprocess.run(["git", "merge-base", "--is-ancestor", row["cited_sha"], "origin/main"], cwd=root, check=False).returncode == 0
+                provisional = not ancestor
+            if provisional != row["provisional"]:
+                problems.append(f"provisional should be {str(provisional).lower()} for a {run['event']} run")
+        except Reject as exc:
+            problems = [str(exc)]
+        for problem in problems:
+            print(f"FAIL {key}: {problem}")
+        failures += bool(problems)
+        if not problems:
+            print(f"ok {key}")
+    print(f"verify-cited rows={len(ledger)} failures={failures}")
+    return 1 if failures else 0
+
+
+def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_producer_script(root)
     check_rehearsal(root)
     check_ci(root)
     check_perf_attribution(root)
+    check_nightly(root)
     check_readonly_workflows(root)
+    check_preview_player_lane(root)
     check_release(root)
+    check_timeout_ledger(root, release_head)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml", "libbet-repro.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -1658,14 +2077,18 @@ def _copy_fixture(root: Path, target: Path) -> None:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
+    for extra in (LEDGER_PATH, "CMakeLists.txt"):
+        if (root / extra).is_file():
+            (target / extra).parent.mkdir(parents=True, exist_ok=True)
+            (target / extra).write_bytes((root / extra).read_bytes())
     script = target / PRODUCER_SCRIPT
     script.parent.mkdir(parents=True, exist_ok=True)
     script.write_bytes((root / PRODUCER_SCRIPT).read_bytes()) if (root / PRODUCER_SCRIPT).is_file() else None
 
 
-def _run_cli(fixture: Path, cwd: Path) -> subprocess.CompletedProcess[str]:
+def _run_cli(fixture: Path, cwd: Path, *extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--root", str(fixture)],
+        [sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--root", str(fixture), *extra],
         capture_output=True, text=True, check=False, cwd=cwd, timeout=60,
     )
 
@@ -1674,7 +2097,7 @@ def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str)
     return (label, workflow, [(after, old, new)], expected)
 
 
-JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject"
+JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head"
 _REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
 FUZZ_TAG_CHECK = '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {'
@@ -1731,12 +2154,53 @@ def _mutations():
          "workflow-dependency"),
         _m("rehearsal perf-gate seeded-regression control removed", reh, "  perf-gate:\n",
          "bash tests/scripts/run-perf-gate.sh --seeded-regression", "true", "required-command-not-executed"),
+        # Planning-only lane (16-04, D-21): each mutation removes one piece of the fail-toward-full wiring.
+        _m("classifier step stops reading the base commit's copy", "ci.yml", "  changes:\n",
+           'git show "$base:.github/scripts/classify-changes.py" > "$RUNNER_TEMP/classify-changes.py"',
+           'cat .github/scripts/classify-changes.py > "$RUNNER_TEMP/classify-changes.py"', "classifier-source"),
+        _m("classifier step runs the head's own copy", "ci.yml", "  changes:\n",
+           'python3 -I "$RUNNER_TEMP/classify-changes.py"', 'python3 -I .github/scripts/classify-changes.py', "classifier-source"),
+        _m("heavy job loses the kind condition", "ci.yml", "  perf-gate:\n", "    if: needs.changes.outputs.kind == 'full'\n", "",
+           "planning-lane-condition"),
+        _m("heavy job runs for kind planning", "ci.yml", "  native-windows:\n", "kind == 'full'", "kind == 'planning'", "planning-lane-condition"),
+        _m("heavy job stops needing changes", "ci.yml", "  cmake-floor-3-25-3:\n", "    needs: changes\n", "", "planning-lane-condition"),
+        _m("required-native loses if: always()", "ci.yml", "  required-native:\n", "    if: always()\n", "", "workflow-dependency"),
+        _m("required-native stops waiting for planning-checks", "ci.yml", "  required-native:\n", "      - planning-checks\n", "", "workflow-dependency"),
+        _m("required-native stops reading the classification", "ci.yml", "  required-native:\n",
+           "          KIND: ${{ needs.changes.outputs.kind }}\n", "", "workflow-dependency"),
+        _m("required-native stops running the aggregator script", "ci.yml", "  required-native:\n",
+           "python3 -I .github/scripts/check-required-native.py", "true", "required-command-not-executed"),
+        _m("changes job gains a write permission", "ci.yml", "  changes:\n", "    permissions:\n      contents: read\n",
+           "    permissions:\n      contents: write\n", "producer-write-authority"),
+        _m("planning-checks job gains a write permission", "ci.yml", "  planning-checks:\n", "    permissions:\n      contents: read\n",
+           "    permissions:\n      contents: write\n", "producer-write-authority"),
+        _m("planning-checks stops running the planning label", "ci.yml", "  planning-checks:\n", "-L planning", "-L unit",
+           "required-command-not-executed"),
+        _m("planning-checks runs for every kind", "ci.yml", "  planning-checks:\n", "    if: needs.changes.outputs.kind == 'planning'\n", "",
+           "planning-lane"),
+        _m("ci gains pull_request_target", "ci.yml", "", "  push:\n", "  pull_request_target:\n  push:\n", "workflow-trigger"),
         _m("required-native stops waiting for perf-gate", "ci.yml", "  required-native:\n", "      - perf-gate\n", "", "workflow-dependency"),
         _m("required-native ignores the perf-gate result", "ci.yml", "  required-native:\n",
            "          PERF_GATE: ${{ needs.perf-gate.result }}\n", "", "workflow-dependency"),
         _m("ci perf-gate gate command replaced by echo", "ci.yml", "  perf-gate:\n",
            "run: bash tests/scripts/run-perf-gate.sh --gate", "run: echo bash tests/scripts/run-perf-gate.sh --gate",
            "required-command-not-executed"),
+        _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
+           'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
+           "required-command-not-executed"),
+        _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "  native-linux:\n",
+           ' || ! git cat-file -e "${base}^{commit}"; then', "; then", "budget-base-fallback"),
+        _m("ci budget base stops failing closed", "ci.yml", "  native-linux:\n",
+           '          git cat-file -e "${base}^{commit}"\n          echo', "          echo", "budget-base-fallback"),
+        _m("nightly gains a pull_request trigger", "nightly-asan.yml", "", "  workflow_dispatch:\n",
+           "  workflow_dispatch:\n  pull_request:\n", "workflow-trigger"),
+        _m("nightly replay job gains issues: write", "nightly-asan.yml", "  asan-full-replay:\n", "    runs-on: ubuntu-24.04\n",
+           "    runs-on: ubuntu-24.04\n    permissions:\n      issues: write\n", "producer-write-authority"),
+        _m("nightly report job gains a checkout", "nightly-asan.yml", "  report-red:\n", "    steps:\n",
+           "    steps:\n      - name: Check out source\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\n"
+           "        with:\n          persist-credentials: false\n", "nightly-report-checkout"),
+        _m("nightly replay drops the full-replay ctest filter", "nightly-asan.yml", "  asan-full-replay:\n",
+           "-R '^acceptance_stall_diagnosis(_replay_[12])?$'", "-R '^acceptance_'", "required-command-not-executed"),
         _m("ci perf-gate no-op twin control removed", "ci.yml", "  perf-gate:\n",
            "bash tests/scripts/run-perf-gate.sh --noop-twin", "true", "required-command-not-executed"),
         _m("ci perf-gate checkout persists credentials", "ci.yml", "  perf-gate:\n", "persist-credentials: false",
@@ -1759,7 +2223,7 @@ def _mutations():
          "persist-credentials: true", "checkout-credentials"),
         _m("unpinned action", reh, "", "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
          "actions/upload-artifact@v4", "workflow-unpinned-action"),
-        _m("YAML anchor", reh, "", "REHEARSAL_TAG: v0.2.0\n", "REHEARSAL_TAG: &tag v0.2.0\n", "workflow-unsupported-yaml"),
+        _m("YAML anchor", reh, "", "  cancel-in-progress: true\n", "  cancel-in-progress: &stop true\n", "workflow-unsupported-yaml"),
         _m("release corpus producer gains contents: write", rel, "  candidate-corpus:\n", "      contents: read\n",
          "      contents: write\n", "producer-write-authority"),
         _m("release corpus producer receives the job token", rel, "  candidate-corpus:\n", "    env:\n",
@@ -1831,8 +2295,44 @@ def _mutations():
         _m("rehearsal ctest step interpolates the run nonce into its run body", "release-rehearsal.yml",
            "Run the full CTest stream once", '${RUN_NONCE}.xml"', '${{ steps.corpus_run.outputs.run_nonce }}.xml"', "run-expression"),
         _m("release performance verifier skipped by if false", "release.yml", "  candidate-performance:\n",
-           "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n",
-           "      - name: Measure the clean paired v0.1.0 baseline and exact-tag candidate\n        if: ${{ false }}\n", "disabled-gate"),
+           "      - name: Reuse the qualified rehearsal receipt of this exact tree, else measure the clean paired v0.1.0 baseline and exact-tag candidate\n",
+           "      - name: Reuse the qualified rehearsal receipt of this exact tree, else measure the clean paired v0.1.0 baseline and exact-tag candidate\n        if: ${{ false }}\n", "disabled-gate"),
+        # Receipt-bound performance review path (16-06, D-30, T-16-17/T-16-18): each mutation removes one binding.
+        *[_m(f"{job} applies a decision without the tree-equality check", reh, f"  {job}:\n", 'git rev-parse "$run_sha^{tree}"', 'echo "$run_sha"',
+             "performance-decision-unbound") for job in ("performance", "aggregate")],
+        *[_m(f"{job} applies a decision measured by another workflow", reh, f"  {job}:\n", '"$run_workflow" == release-rehearsal', '"$run_workflow" == ci',
+             "performance-decision-unbound") for job in ("performance", "aggregate")],
+        *[_m(f"{job} applies a decision measured on another branch", reh, f"  {job}:\n", '"$run_branch" == "$GITHUB_REF_NAME"', '"$run_branch" == main',
+             "performance-decision-unbound") for job in ("performance", "aggregate")],
+        *[_m(f"{job} writes the decision inside the checkout", reh, f"  {job}:\n", '--decision "$RUNNER_TEMP/performance-decision.json"',
+             "--decision performance-decision.json", "performance-decision-unbound") for job in ("performance", "aggregate")],
+        *[_m(f"{job} gives the token to the step that applies the decision", reh, f"  {job}:\n", "        env:\n          MEASUREMENT_RUN_ID",
+             "        env:\n          GH_TOKEN: ${{ github.token }}\n          MEASUREMENT_RUN_ID", "producer-token") for job in ("performance", "aggregate")],
+        *[_m(f"rehearsal {job} gains actions: write", reh, f"  {job}:\n", "      actions: read\n", "      actions: write\n", "producer-write-authority")
+          for job in ("performance", "aggregate")],
+        *[_m(f"rehearsal {job} gains issues: read", reh, f"  {job}:\n", "      actions: read\n", "      actions: read\n      issues: read\n", "producer-permissions")
+          for job in ("performance", "aggregate")],
+        _m("rehearsal performance receipt retained only on success", reh, "  performance:\n", "        if: ${{ always() }}\n", "", "artifact-flow"),
+        _m("rehearsal fetch step runs tagged code while holding the token", reh, "  performance:\n", 'mkdir -p "$RUNNER_TEMP/measurement"\n',
+           'mkdir -p "$RUNNER_TEMP/measurement"\n          bash tests/scripts/measure-release-baseline.sh\n', "producer-token"),
+        _m("rehearsal judge stops cross-checking the tree version", reh, "  judge:\n", '--derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject',
+           '--derive-rehearsal-tag "rehearsal/v0.2.0" --root subject', "required-command-not-executed"),
+        _m("rehearsal corpus falls back to a fixed tag", reh, "  corpus:\n", '--derive-rehearsal-tag "$GITHUB_REF_NAME"',
+           '--derive-rehearsal-tag "rehearsal/v0.2.0"', "required-command-not-executed"),
+        _m("release reuses a rehearsal receipt without --verify-reuse", "release.yml", "  candidate-performance:\n",
+           '--verify-reuse "$found" --tag-tree "$tag_tree"', '--verify "$found"', "performance-reuse-unbound"),
+        _m("release reuse compares against the wrong tree", "release.yml", "  candidate-performance:\n",
+           'tag_tree=$(git rev-parse "$SOURCE_SHA^{tree}")', 'tag_tree=$(git rev-parse "HEAD^{tree}")', "performance-reuse-unbound"),
+        _m("release fetches the receipt from any branch", "release.yml", "  candidate-performance:\n",
+           '--branch "rehearsal/$RELEASE_TAG"', "--branch main", "performance-reuse-unbound"),
+        _m("release fetches the receipt of an unsuccessful run", "release.yml", "  candidate-performance:\n",
+           "--status success", "--status failure", "performance-reuse-unbound"),
+        _m("release performance job gains actions: write", "release.yml", "  candidate-performance:\n", "      actions: read\n", "      actions: write\n",
+           "producer-write-authority"),
+        _m("release performance job gains contents: write", "release.yml", "  candidate-performance:\n", "      actions: read\n", "      actions: read\n      pull-requests: write\n",
+           "producer-write-authority"),
+        _m("release fetch step runs tagged code while holding the token", "release.yml", "  candidate-performance:\n",
+           'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n', 'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n          bash tests/scripts/measure-release-baseline.sh\n', "producer-token"),
         _m("release attacher upload commented out", "release.yml", "  attach-v02-evidence:\n", 'gh release upload "$RELEASE_TAG" "$1/$2"',
            '# gh release upload "$RELEASE_TAG" "$1/$2"', "required-command-not-executed"),
         _m("release manifest judge call replaced by echo", "release.yml", "  candidate-platform-manifest:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-v02-evidence',
@@ -1863,7 +2363,13 @@ def _mutations():
         _m("sanitizer shards stop being complementary", "ci.yml", "  linux-sanitizers-acceptance:\n",
            "-R '^acceptance_'", "-R '^acceptance_cgb'", "required-command-not-executed"),
         _m("sanitizer acceptance shard checks the whole inventory instead of its slice", "ci.yml", "  linux-sanitizers-acceptance:\n",
-           "          grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt\n", "          cp tests/expected-tests.txt build-asan/expected-shard.txt\n",
+           "          grep -E '^acceptance_' tests/expected-tests.txt | grep -vE '^acceptance_stall_diagnosis(_replay_[12])?$' > build-asan/expected-shard.txt\n",
+           "          cp tests/expected-tests.txt build-asan/expected-shard.txt\n",
+           "required-command-not-executed"),
+        _m("sanitizer acceptance shard keeps the full stall replay", "ci.yml", "  linux-sanitizers-acceptance:\n",
+           " -E '^acceptance_stall_diagnosis(_replay_[12])?$'", "", "required-command-not-executed"),
+        _m("sanitizer acceptance shard excludes the bounded stall replay", "ci.yml", "  linux-sanitizers-acceptance:\n",
+           "'^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure", "'^acceptance_stall_' --output-on-failure",
            "required-command-not-executed"),
         # Shared unprivileged producer contract (P15-15).
         _m("rehearsal corpus re-inlines the local tag setup", "release-rehearsal.yml", "  corpus:\n", _REHEARSAL_TAG_LINE,
@@ -2020,6 +2526,19 @@ def _mutations():
            "          persist-credentials: false\n", "", "checkout-credentials"),
         _m("preview installed-package-smoke checkout persists credentials", "preview.yml", "  installed-package-smoke-linux-x64:\n",
            "          persist-credentials: false\n", "", "checkout-credentials"),
+        _m("preview player wait stops excusing the planning skip", "preview.yml", "  player-package-smoke-macos:\n",
+           "          --planning-skippable macos-player-package\n", "", "preview-player-lane"),
+        _m("preview player wait also excuses required-native", "preview.yml", "  player-package-smoke-macos:\n",
+           "--planning-skippable macos-player-package", "--planning-skippable macos-player-package --planning-skippable required-native",
+           "preview-player-lane"),
+        _m("preview player wait stops requiring macos-player-package", "preview.yml", "  player-package-smoke-macos:\n",
+           "--require required-native --require macos-player-package", "--require required-native", "preview-player-lane"),
+        _m("preview player download guard inverted", "preview.yml", "      - name: Download run-scoped candidate package\n",
+           "kind != 'planning'", "kind == 'planning'", "preview-player-lane"),
+        _m("preview player byte verification no longer guarded", "preview.yml", "      - name: Verify downloaded package bytes and create consumer receipt\n",
+           "        if: steps.candidate.outputs.kind != 'planning'\n", "", "preview-player-lane"),
+        _m("preview player upload guard made unconditional", "preview.yml", "      - name: Upload qualified macOS player preview and receipt\n",
+           "kind != 'planning'", "kind != 'planning' || true", "preview-player-lane"),
         _m("ci campaign status no longer asserted", "ci.yml", "  linux-sanitizers:\n", 'test "$verify_status" -eq 0', 'echo test "$verify_status" -eq 0', "required-command-not-executed"),
         _m("ci campaign verifier removed", "ci.yml", "  linux-sanitizers:\n", "python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json\n            verify_status=$?",
            "true\n            verify_status=$?", "required-command-not-executed"),
@@ -2073,6 +2592,94 @@ def _mutations():
     ]
 
 
+
+def _ledger_edit(fixture: Path, edit) -> None:
+    path = fixture / LEDGER_PATH
+    data = json.loads(path.read_text(encoding="utf-8"))
+    edit(data)
+    path.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
+
+
+def _ledger_mutations():
+    """(label, mutate(fixture), extra CLI args, expected code) for the timeout ledger, run through the CLI."""
+    def yaml_edit(workflow: str, old: str, new: str):
+        def apply(fixture: Path) -> None:
+            path = fixture / ".github/workflows" / workflow
+            text = path.read_text(encoding="utf-8")
+            if old not in text:
+                raise SystemExit(f"self-test anchor missing in {workflow}: {old[:50]!r}")
+            path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        return apply
+
+    def ledger(edit):
+        return lambda fixture: _ledger_edit(fixture, edit)
+
+    def both(first, second):
+        def apply(fixture: Path) -> None:
+            first(fixture)
+            second(fixture)
+        return apply
+
+    bound = {"timeout_minutes": 5, "release_bound": True, "provisional": False, "sizing_basis": "sized from a worst-case budget"}
+    return [
+        ("ledger: edited YAML timeout", yaml_edit("ci.yml", "    runs-on: ubuntu-22.04\n    timeout-minutes: 31\n", "    runs-on: ubuntu-22.04\n    timeout-minutes: 32\n"), (), "timeout-ledger-stale"),
+        ("ledger: removed row", ledger(lambda d: d.pop("ci.yml:native-linux")), (), "timeout-ledger-missing-row"),
+        ("ledger: p50 above half of the timeout", ledger(lambda d: d["ci.yml:native-linux"].update(p50_minutes="15.51")), (), "timeout-ledger-ratio"),
+        ("ledger: stale ledger value", ledger(lambda d: d["ci.yml:native-linux"].update(timeout_minutes=29)), (), "timeout-ledger-stale"),
+        ("ledger: new job with no row", yaml_edit("ci.yml", "\n  required-native:\n", "\n  extra-job:\n    runs-on: ubuntu-22.04\n    timeout-minutes: 5\n    steps:\n      - run: true\n\n  required-native:\n"), (), "timeout-ledger-missing-row"),
+        ("ledger: row for a job that no longer exists", ledger(lambda d: d.update({"ci.yml:gone": dict(d["ci.yml:native-linux"])})), (), "timeout-ledger-stale"),
+        ("ledger: duplicate key", lambda fixture: (fixture / LEDGER_PATH).write_text(
+            (fixture / LEDGER_PATH).read_text(encoding="utf-8").replace('"ci.yml:native-linux": {', '"ci.yml:native-linux": {"samples": 1, "samples": 2, ', 1), encoding="utf-8"), (), "timeout-ledger-schema"),
+        ("ledger: provisional row under --release-head", ledger(lambda d: d["ci.yml:native-linux"].update(provisional=True)), ("--release-head",), "timeout-ledger-provisional"),
+        ("ledger: longest gating p50 of 30.1", both(yaml_edit("ci.yml", "timeout-minutes: 50\n", "timeout-minutes: 70\n"),
+            ledger(lambda d: d["ci.yml:native-windows"].update(timeout_minutes=70, p50_minutes="30.1"))), (), "timeout-ledger-whole-run"),
+        ("ledger: release_bound row under a different key", ledger(lambda d: d.update({"ci.yml:native-linux": {**bound, "timeout_minutes": 31}})), (), "timeout-ledger-release-bound"),
+        ("ledger: release_bound row under a third key", ledger(lambda d: d["fixture-repro.yml:fixture-repro"].clear() or d["fixture-repro.yml:fixture-repro"].update({**bound, "timeout_minutes": 15})), (), "timeout-ledger-release-bound"),
+        ("ledger: release_bound row once VERSION is above 0.2.1", lambda fixture: (fixture / "CMakeLists.txt").write_text(
+            (fixture / "CMakeLists.txt").read_text(encoding="utf-8").replace("VERSION 0.2.0", "VERSION 0.3.0", 1), encoding="utf-8"), (), "timeout-ledger-release-bound"),
+        ("ledger: normal row with samples removed", ledger(lambda d: d["ci.yml:native-linux"].pop("samples")), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row that also cites a run", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(cited_run_id=1)), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row that is provisional", ledger(lambda d: d["release.yml:candidate-fuzz"].update(provisional=True)), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row without a sizing basis", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(sizing_basis=" ")), (), "timeout-ledger-schema"),
+        ("ledger: empty ledger", lambda fixture: (fixture / LEDGER_PATH).write_text("{}\n", encoding="utf-8"), (), "timeout-ledger-schema"),
+    ]
+
+
+def _ledger_boundary_controls() -> int:
+    """In-process precision controls: Fraction arithmetic, never floats."""
+    row = {"timeout_minutes": 25, "cited_run_id": 1, "cited_sha": "a" * 40, "p50_minutes": "12.4", "samples": 1, "provisional": False}
+    done = 0
+
+    def judge(overrides: dict, timeout: int = 25, gating: bool = False, version=(0, 2, 0), head: bool = False) -> None:
+        merged = {**row, **overrides, "timeout_minutes": timeout}
+        judge_timeout_ledger({"w.yml:j": merged}, {"w.yml:j": timeout}, {"w.yml:j"} if gating else set(), version, head)
+
+    judge({})                                   # exactly ceil(2 x 12.4) = 25 passes
+    done += 1
+    for label, code, call in (
+        ("timeout one minute below ceil(2 x p50) fails", "timeout-ledger-ratio", lambda: judge({}, timeout=24)),
+        ("p50 of exactly 30 behind required-native passes", None, lambda: judge({"p50_minutes": "30"}, timeout=60, gating=True)),
+        ("p50 of 30.1 behind required-native fails", "timeout-ledger-whole-run", lambda: judge({"p50_minutes": "30.1"}, timeout=61, gating=True)),
+        ("p50 of 30.1 outside required-native passes", None, lambda: judge({"p50_minutes": "30.1"}, timeout=61)),
+        ("a binary-float trap p50 of 0.1 + 0.2 style decimal is exact", None, lambda: judge({"p50_minutes": "12.500000000000000001"}, timeout=26)),
+        ("a non-provisional row passes at the release head", None, lambda: judge({}, head=True)),
+        ("a provisional row passes before the release head", None, lambda: judge({"provisional": True})),
+        ("a provisional row fails at the release head", "timeout-ledger-provisional", lambda: judge({"provisional": True}, head=True)),
+        ("a p50 given as a number is rejected", "timeout-ledger-schema", lambda: judge({"p50_minutes": 12.4})),
+        ("a boolean samples count is rejected", "timeout-ledger-schema", lambda: judge({"samples": True})),
+    ):
+        try:
+            call()
+        except Reject as exc:
+            if exc.code != code:
+                raise SystemExit(f"self-test boundary {label!r}: wrong code {exc.code}")
+        else:
+            if code is not None:
+                raise SystemExit(f"self-test boundary {label!r}: accepted")
+        done += 1
+    return done
+
+
 def self_test(root: Path) -> None:
     rejected = 0
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
@@ -2109,14 +2716,31 @@ def self_test(root: Path) -> None:
             rejected += 1
             print(f"rejected: {label}: {diagnostic}")
             path.write_text(baselines[workflow], encoding="utf-8")
+        # Timeout ledger (D-20): data mutations through the CLI, each restoring the baseline afterwards.
+        ledger_baseline = (fixture / LEDGER_PATH).read_text(encoding="utf-8")
+        cmake_baseline = (fixture / "CMakeLists.txt").read_text(encoding="utf-8")
+        for label, mutate, extra, expected in _ledger_mutations():
+            mutate(fixture)
+            result = _run_cli(fixture, work, *extra)
+            diagnostic = result.stderr.strip()
+            if result.returncode != 1 or f"REJECT {expected}:" not in diagnostic or "PASS:" in result.stdout:
+                raise SystemExit(f"self-test negative {label!r} failed: want REJECT {expected}, exit={result.returncode}, "
+                                 f"stdout={result.stdout!r}, stderr={diagnostic!r}")
+            rejected += 1
+            print(f"rejected: {label}: {diagnostic}")
+            (fixture / LEDGER_PATH).write_text(ledger_baseline, encoding="utf-8")
+            (fixture / "CMakeLists.txt").write_text(cmake_baseline, encoding="utf-8")
+            for item in WORKFLOWS:
+                (fixture / ".github/workflows" / item).write_text(baselines[item], encoding="utf-8")
+        rejected += _ledger_boundary_controls()
         # Equivalent shell formatting of a required call stays valid: continuation, quoting, extra spaces,
         # interleaved comments and blank lines do not change what runs.
         path = fixture / ".github/workflows/release-rehearsal.yml"
         accepted = 0
         for variant in (
-            "python3  -I \\\n{I}  trusted-judge/.github/scripts/verify-workflow-policy.py \\\n{I}  --check --root subject",
-            'python3 -I "trusted-judge/.github/scripts/verify-workflow-policy.py" --check --root \'subject\'',
-            "# the judge\n{I}\n{I}python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject  # trailing",
+            "python3  -I \\\n{I}  trusted-judge/.github/scripts/verify-workflow-policy.py \\\n{I}  --check --root subject --release-head",
+            'python3 -I "trusted-judge/.github/scripts/verify-workflow-policy.py" --check --root \'subject\' --release-head',
+            "# the judge\n{I}\n{I}python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head  # trailing",
         ):
             text = baselines["release-rehearsal.yml"]
             position = text.find(JUDGE_CALL, text.find("  judge:\n"))
@@ -2181,13 +2805,19 @@ def main() -> int:
     modes.add_argument("--self-test", action="store_true", help="run positive and intended-defect controls through the CLI")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="tree whose .github/workflows files are judged as data")
+    parser.add_argument("--release-head", action="store_true",
+                        help="judge as the release head: a provisional timeout-ledger row is rejected")
+    parser.add_argument("--verify-cited", action="store_true",
+                        help="online and advisory (never in CTest): confirm each ledger citation through gh")
     args = parser.parse_args()
     root = args.root.resolve()
     try:
         if args.self_test:
             self_test(root)
             return 0
-        facts = check_all(root)
+        if args.verify_cited:
+            return verify_cited(root)
+        facts = check_all(root, args.release_head)
         print(f"PASS: workflow privilege and trust wiring residual_write_jobs={facts['residual']}")
         return 0
     except Reject as exc:

@@ -8,9 +8,27 @@ name: release-rehearsal
 # producers need is created only inside the runner's checkout and is never pushed. A rehearsal
 # branch is created by pushing `rehearsal/<anything>`; it proves nothing about the draft-bound
 # steps (download, attach, final gate, publish), which still need a real draft.
+#
+# The rehearsal tag is derived from the branch, which must be rehearsal/vX.Y.Z for the tree's own version
+# (CMake project VERSION cross-checked with the release-please manifest); nothing falls back to a fixed tag.
+# A triggered paired measurement stays pending until a separately recorded, receipt-bound independent review
+# decision exists. This workflow never creates one: dispatch it on the same rehearsal branch with the pending
+# run's id and the recorded decision (docs/release.md) and it applies that decision to the retained measurement.
 on:
   push:
     branches: ['rehearsal/**']
+  workflow_dispatch:
+    inputs:
+      measurement_run_id:
+        description: Run id of the release-rehearsal run on this branch whose pending paired measurement the decision covers
+        required: false
+        type: string
+        default: ''
+      performance_decision:
+        description: The recorded independent review decision for that measurement, as a JSON string
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -18,9 +36,6 @@ permissions:
 concurrency:
   group: release-rehearsal-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  REHEARSAL_TAG: v0.2.0
 
 jobs:
   corpus:
@@ -33,6 +48,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Derive the rehearsal tag from the ref and the tree version
+        shell: bash
+        run: python3 -I tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
@@ -123,19 +141,61 @@ jobs:
     name: rehearse-paired-performance-qualification
     runs-on: ubuntu-22.04
     timeout-minutes: 45
+    # actions: read lets the dispatch path fetch the pending measurement of an earlier run of this workflow.
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Check out the rehearsed source with full history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Fetch the pending measurement that the review decision covers
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MEASUREMENT_RUN_ID: ${{ inputs.measurement_run_id }}
+          PERFORMANCE_DECISION: ${{ inputs.performance_decision }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/measurement"
+          if [[ -n "$MEASUREMENT_RUN_ID" || -n "$PERFORMANCE_DECISION" ]]; then
+            # Only an operator-supplied decision for a measurement made by this workflow, on this branch, for this
+            # exact tree can qualify anything; each check below fails closed.
+            [[ -n "$MEASUREMENT_RUN_ID" && -n "$PERFORMANCE_DECISION" && "$MEASUREMENT_RUN_ID" =~ ^[0-9]+$ ]] || { echo "performance-decision-inputs: measurement_run_id and performance_decision must be set together" >&2; exit 1; }
+            run_workflow=$(gh run view "$MEASUREMENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --json workflowName --jq .workflowName)
+            run_branch=$(gh run view "$MEASUREMENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headBranch --jq .headBranch)
+            run_sha=$(gh run view "$MEASUREMENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)
+            [[ "$run_workflow" == release-rehearsal && "$run_branch" == "$GITHUB_REF_NAME" ]] || { echo "performance-decision-wrong-run: run $MEASUREMENT_RUN_ID is not a release-rehearsal run on $GITHUB_REF_NAME" >&2; exit 1; }
+            [[ "$(git rev-parse "$run_sha^{tree}")" == "$(git rev-parse "$GITHUB_SHA^{tree}")" ]] || { echo "performance-decision-tree-mismatch: the measured tree is not this run's tree" >&2; exit 1; }
+            gh run download "$MEASUREMENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'rehearsal-performance-*' --dir "$RUNNER_TEMP/measurement"
+          fi
       - name: Measure the clean paired v0.1.0 baseline and candidate
         shell: bash
+        env:
+          MEASUREMENT_RUN_ID: ${{ inputs.measurement_run_id }}
+          PERFORMANCE_DECISION: ${{ inputs.performance_decision }}
         run: |
           set -euo pipefail
           mkdir -p build
-          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json
+          if [[ -z "$MEASUREMENT_RUN_ID" && -z "$PERFORMANCE_DECISION" ]]; then
+            bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json
+          else
+            measurement=$(find "$RUNNER_TEMP/measurement" -name v02-performance-receipt.json)
+            [[ -n "$measurement" && "$(printf '%s\n' "$measurement" | wc -l)" == 1 ]] || { echo "performance-decision-measurement: expected exactly one retained measurement" >&2; exit 1; }
+            printf '%s' "$PERFORMANCE_DECISION" > "$RUNNER_TEMP/performance-decision.json"
+            python3 -I tests/scripts/verify-v02-performance.py --apply-decision --measurement "$measurement" --decision "$RUNNER_TEMP/performance-decision.json" --output build/v02-performance-receipt.json
+          fi
           python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
+      - name: Retain the measurement or qualified receipt for review and for the release
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rehearsal-performance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/v02-performance-receipt.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   perf-gate:
     name: rehearse-perf-gate
@@ -174,6 +234,9 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Derive the rehearsal tag from the ref and the tree version
+        shell: bash
+        run: python3 -I tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
@@ -224,12 +287,18 @@ jobs:
     name: rehearse-v02-evidence-aggregate
     runs-on: ubuntu-24.04
     timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Check out the rehearsed source with full history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Derive the rehearsal tag from the ref and the tree version
+        shell: bash
+        run: python3 -I tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" >> "$GITHUB_ENV"
       - name: Create the local-only rehearsal tag
         shell: bash
         run: |
@@ -265,11 +334,42 @@ jobs:
           GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json
           python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json
           cp build-asan/v02-fuzz-receipt.json build/v02-fuzz-receipt.json
-      - name: Paired performance receipt
+      - name: Fetch the pending measurement that the review decision covers
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MEASUREMENT_RUN_ID: ${{ inputs.measurement_run_id }}
+          PERFORMANCE_DECISION: ${{ inputs.performance_decision }}
         run: |
           set -euo pipefail
-          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json
+          mkdir -p "$RUNNER_TEMP/measurement"
+          if [[ -n "$MEASUREMENT_RUN_ID" || -n "$PERFORMANCE_DECISION" ]]; then
+            # Only an operator-supplied decision for a measurement made by this workflow, on this branch, for this
+            # exact tree can qualify anything; each check below fails closed.
+            [[ -n "$MEASUREMENT_RUN_ID" && -n "$PERFORMANCE_DECISION" && "$MEASUREMENT_RUN_ID" =~ ^[0-9]+$ ]] || { echo "performance-decision-inputs: measurement_run_id and performance_decision must be set together" >&2; exit 1; }
+            run_workflow=$(gh run view "$MEASUREMENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --json workflowName --jq .workflowName)
+            run_branch=$(gh run view "$MEASUREMENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headBranch --jq .headBranch)
+            run_sha=$(gh run view "$MEASUREMENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)
+            [[ "$run_workflow" == release-rehearsal && "$run_branch" == "$GITHUB_REF_NAME" ]] || { echo "performance-decision-wrong-run: run $MEASUREMENT_RUN_ID is not a release-rehearsal run on $GITHUB_REF_NAME" >&2; exit 1; }
+            [[ "$(git rev-parse "$run_sha^{tree}")" == "$(git rev-parse "$GITHUB_SHA^{tree}")" ]] || { echo "performance-decision-tree-mismatch: the measured tree is not this run's tree" >&2; exit 1; }
+            gh run download "$MEASUREMENT_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'rehearsal-performance-*' --dir "$RUNNER_TEMP/measurement"
+          fi
+      - name: Paired performance receipt
+        shell: bash
+        env:
+          MEASUREMENT_RUN_ID: ${{ inputs.measurement_run_id }}
+          PERFORMANCE_DECISION: ${{ inputs.performance_decision }}
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          if [[ -z "$MEASUREMENT_RUN_ID" && -z "$PERFORMANCE_DECISION" ]]; then
+            bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json
+          else
+            measurement=$(find "$RUNNER_TEMP/measurement" -name v02-performance-receipt.json)
+            [[ -n "$measurement" && "$(printf '%s\n' "$measurement" | wc -l)" == 1 ]] || { echo "performance-decision-measurement: expected exactly one retained measurement" >&2; exit 1; }
+            printf '%s' "$PERFORMANCE_DECISION" > "$RUNNER_TEMP/performance-decision.json"
+            python3 -I tests/scripts/verify-v02-performance.py --apply-decision --measurement "$measurement" --decision "$RUNNER_TEMP/performance-decision.json" --output build/v02-performance-receipt.json
+          fi
           python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json
       - name: Relocated consumer receipt and source archive receipt
         shell: bash
@@ -329,7 +429,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject
+          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head
+      - name: Confirm the rehearsal ref names the rehearsed tree's own version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I trusted-judge/tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject
       - name: Verify the retained rehearsal campaign receipt with the trusted validator
         shell: bash
         run: |
