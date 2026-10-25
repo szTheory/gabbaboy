@@ -14,7 +14,7 @@ jobs:
     # change cannot loosen the rule that judges it; a base without the file, an unresolvable base, an all-zero push
     # parent (new branch, force-push) or any classifier error all mean kind=full. Read-only; never a required context.
     name: changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -52,7 +52,7 @@ jobs:
     name: planning-checks
     needs: changes
     if: needs.changes.outputs.kind == 'planning'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -69,10 +69,10 @@ jobs:
 
   native-linux:
     name: native-linux-x64
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -177,10 +177,10 @@ jobs:
 
   native-macos:
     name: native-macos-arm64
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: macos-14
     timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -223,10 +223,10 @@ jobs:
 
   native-windows:
     name: native-windows-x64
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: windows-2022
     timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     steps:
       - name: Check out source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -281,10 +281,10 @@ jobs:
 
   linux-sanitizers:
     name: linux-asan-ubsan
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     permissions:
       actions: read
       contents: read
@@ -360,10 +360,10 @@ jobs:
     # and release waiters' budgets. Each shard checks exactly its slice of tests/expected-tests.txt; together the
     # slices are the whole inventory (LESSONS GB-CI-004, GB-CI-010).
     name: linux-asan-ubsan-tests
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     env:
       CC: clang-18
       CXX: clang++-18
@@ -395,10 +395,10 @@ jobs:
     # tests run in nightly-asan.yml instead (D-19); acceptance_stall_bounded keeps the drop:START negative control
     # in this PR lane.
     name: linux-asan-ubsan-acceptance
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     env:
       CC: clang-18
       CXX: clang++-18
@@ -427,10 +427,10 @@ jobs:
 
   cmake-floor-3-25-3:
     name: cmake-floor-3.25.3
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-22.04
     timeout-minutes: 40
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     env:
       # Serially the floor suite took 20-40 of these 40 minutes (LESSONS GB-CI-010); every ctest call runs 4 at once.
       CTEST_PARALLEL_LEVEL: 4
@@ -446,10 +446,10 @@ jobs:
 
   player-gate:
     name: player-gate
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-22.04
     timeout-minutes: 2
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     outputs:
       player_required: ${{ steps.decide.outputs.player_required }}
     steps:
@@ -489,10 +489,10 @@ jobs:
 
   perf-gate:
     name: perf-gate
-    needs: changes
-    if: needs.changes.outputs.kind == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    needs: changes
+    if: needs.changes.outputs.kind == 'full'
     steps:
       - name: Check out source with full history
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
