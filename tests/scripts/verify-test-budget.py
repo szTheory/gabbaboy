@@ -15,6 +15,11 @@ Contract:
   that names an unregistered test is stale, and a row whose expires minor is at or below the project
   version has expired. Rows naming player_* tests are not judged stale when the build has
   GABBABOY_BUILD_PLAYER off; they are counted as player_rows_skipped.
+* ``--partial-inventory`` marks a build whose registered inventory is known to be incomplete: tests/CMakeLists.txt
+  registers many tests only under if(NOT WIN32), so the Windows CTest lane cannot tell a stale row from a test
+  that platform never builds. That lane passes the flag and unregistered rows are counted as
+  partial_rows_skipped instead of stale. Every other rule (budget, ceiling, expiry, ratchet, refs) still applies,
+  and the authoritative lane (the native-linux CI step, which runs without the flag) still rejects stale rows.
 * ``--base REV`` also reads the allowlist at REV (absent there means first seeding), rejects a raised
   ceiling, and resolves every row's ref at REV only: a LESSONS heading token, a DECISIONS D-NNN id or a
   plan id whose PLAN.md path exists at REV. A ref added only in the head commit does not resolve, so a PR
@@ -143,10 +148,12 @@ class BaseView:
 
 def evaluate(tests: dict[str, float | None], rows: dict[str, Row], *, player_on: bool,
              project_minor: tuple[int, int], base: BaseView | None,
-             base_rows: dict[str, Row] | None) -> tuple[list[str], int]:
-    """Return (findings, player_rows_skipped). ``tests`` maps name to effective base TIMEOUT or None."""
+             base_rows: dict[str, Row] | None, partial: bool = False) -> tuple[list[str], int, int]:
+    """Return (findings, player_rows_skipped, partial_rows_skipped). ``tests`` maps name to effective base
+    TIMEOUT or None."""
     findings: list[str] = []
     skipped = 0
+    partial_skipped = 0
     for name in sorted(tests):
         timeout = tests[name]
         row = rows.get(name)
@@ -162,6 +169,8 @@ def evaluate(tests: dict[str, float | None], rows: dict[str, Row], *, player_on:
         if name not in tests:
             if name.startswith("player_") and not player_on:
                 skipped += 1
+            elif partial:
+                partial_skipped += 1
             else:
                 findings.append(f"REJECT stale-row: {name} is not a registered test")
         if row.expires <= project_minor:
@@ -172,7 +181,7 @@ def evaluate(tests: dict[str, float | None], rows: dict[str, Row], *, player_on:
         if base_rows is not None and name in base_rows and row.ceiling > base_rows[name].ceiling:
             findings.append(f"REJECT ceiling-raised: {name} ceiling {row.ceiling} s above base "
                             f"{base_rows[name].ceiling} s")
-    return findings, skipped
+    return findings, skipped, partial_skipped
 
 
 def read_cache(build_dir: Path) -> dict[str, str]:
@@ -216,7 +225,8 @@ def load_tests(json_text: str, scale: int) -> dict[str, float | None]:
     return result
 
 
-def run_check(build_dir: Path, base_rev: str | None, repo: Path, allowlist_path: Path, ctest: str) -> int:
+def run_check(build_dir: Path, base_rev: str | None, repo: Path, allowlist_path: Path, ctest: str,
+              partial: bool = False) -> int:
     cache = read_cache(build_dir)
     scale = SANITIZER_SCALE if truthy(cache.get("GABBABOY_ENABLE_SANITIZERS")) else 1
     listed = subprocess.run([ctest, "--test-dir", str(build_dir), "--show-only=json-v1"],
@@ -238,8 +248,8 @@ def run_check(build_dir: Path, base_rev: str | None, repo: Path, allowlist_path:
         base = BaseView(repo, base_rev)
         base_text = base.allowlist()
         base_rows = parse_allowlist(base_text, []) if base_text is not None else None
-    more, skipped = evaluate(tests, rows, player_on=truthy(cache.get("GABBABOY_BUILD_PLAYER")),
-                             project_minor=project_minor_from(repo), base=base, base_rows=base_rows)
+    more, skipped, partial_skipped = evaluate(tests, rows, player_on=truthy(cache.get("GABBABOY_BUILD_PLAYER")),
+                             project_minor=project_minor_from(repo), base=base, base_rows=base_rows, partial=partial)
     findings.extend(more)
     slowest = sorted(((t, n) for n, t in tests.items() if t is not None), key=lambda p: (-p[0], p[1]))
     print("slowest:")
@@ -250,6 +260,7 @@ def run_check(build_dir: Path, base_rev: str | None, repo: Path, allowlist_path:
             print(finding, file=sys.stderr)
         return 1
     extra = f" player_rows_skipped={skipped}" if skipped else ""
+    extra += f" partial_rows_skipped={partial_skipped}" if partial_skipped else ""
     print(f"test-budget pass tests={len(tests)} allowlisted={len(rows)}{extra}")
     return 0
 
@@ -271,9 +282,9 @@ def self_test() -> int:
         assert match
         return Row(name, ceiling, (int(match.group(1)), int(match.group(2))), ref, "shrink when split")
 
-    def judge(tests, rows, *, player_on=False, base=None, base_rows=None, minor=(0, 2)):
+    def judge(tests, rows, *, player_on=False, base=None, base_rows=None, minor=(0, 2), partial=False):
         return evaluate(tests, {r.name: r for r in rows}, player_on=player_on, project_minor=minor,
-                        base=base, base_rows=base_rows)
+                        base=base, base_rows=base_rows, partial=partial)
 
     # Budget boundary: exactly 60 passes, 61 without a row fails.
     expect("clean", judge({"a": 30.0, "b": 60.0}, [])[0], None)
@@ -290,10 +301,19 @@ def self_test() -> int:
     expect("not expired", judge({"a": 120.0}, [row("a", expires="0.3")])[0], None)
     expect("expired below version", judge({"a": 120.0}, [row("a", expires="0.1")])[0], "row-expired")
     # Player scope: skipped when OFF, stale when ON.
-    findings, skipped = judge({"a": 30.0}, [row("player_x")], player_on=False)
+    findings, skipped, _ = judge({"a": 30.0}, [row("player_x")], player_on=False)
     expect("player off", findings, None)
     assert skipped == 1
     expect("player on", judge({"a": 30.0}, [row("player_x")], player_on=True)[0], "stale-row")
+    # Partial inventory (Windows lane): an unregistered row is skipped and counted, not stale; the flag off keeps
+    # the authoritative rejection (negative control), and every other rule still fires on a partial inventory.
+    findings, _, partial_skipped = judge({"a": 30.0}, [row("gone")], partial=True)
+    expect("partial skips unregistered", findings, None)
+    assert partial_skipped == 1
+    expect("authoritative still stale", judge({"a": 30.0}, [row("gone")], partial=False)[0], "stale-row")
+    expect("partial still over ceiling", judge({"a": 121.0}, [row("a", 120)], partial=True)[0], "over-ceiling")
+    expect("partial still expires", judge({"a": 30.0}, [row("gone", expires="0.2")], partial=True)[0],
+           "row-expired")
     # Ratchet against the base allowlist.
     expect("raised", judge({"a": 120.0}, [row("a", 180)], base_rows={"a": row("a", 120)})[0], "ceiling-raised")
     expect("lowered", judge({"a": 120.0}, [row("a", 120)], base_rows={"a": row("a", 180)})[0], None)
@@ -391,6 +411,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--repo", type=Path, default=ROOT, help="repository root (default: this checkout)")
     parser.add_argument("--allowlist", type=Path)
     parser.add_argument("--ctest", default="ctest", help="ctest executable (CTest passes CMAKE_CTEST_COMMAND)")
+    parser.add_argument("--partial-inventory", action="store_true",
+                        help="the build registers only part of the inventory (Windows): skip, do not fail, stale rows")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -399,7 +421,7 @@ def main(argv: list[str]) -> int:
         if args.build_dir is None:
             parser.error("--build-dir or --self-test is required")
         allowlist = args.allowlist or args.repo / ALLOWLIST_REL
-        return run_check(args.build_dir, args.base, args.repo, allowlist, args.ctest)
+        return run_check(args.build_dir, args.base, args.repo, allowlist, args.ctest, args.partial_inventory)
     except BudgetError as exc:
         print(exc, file=sys.stderr)
         return 1
