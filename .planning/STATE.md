@@ -6,16 +6,16 @@ current_phase: 16
 current_phase_name: Tune-up and v0.2 Debt Closure
 current_plan: 1
 status: executing
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-10-25T01:18:34.084Z"
+stopped_at: 16-02 Tasks 1-2 done; Task 3 blocked on PR A merge and hosted perf-attribution dispatch
+last_updated: "2026-10-25T01:34:06.314Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 16 execution started
-state_head: a72f99c0dab0c7cc2edd49ed31d0db0c07f28875
+state_head: 120f8e9b61ebf484fe8294eaf99d11b749432480
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -585,6 +585,7 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-26: evidence bound to M 2d25a47; rehearsal failures all map to existing owner limitations; strict-head recorded at B 01ecebe
 - [Phase 16]: Archive v0.2 phase records (578 files) as pure renames under .planning/milestones/v0.2-phases; embedded legacy paths rewritten under the archive, no pinned JSON bytes changed
 - [Phase 16]: TUNE-01 read per D-07: no test reads completed-milestone records from the live phases directory; current-milestone live reads go only through GBB_LIVE_PHASES_DIR, which the lint allowlists
+- [Phase 16]: 16-02: visible-demo consumed_half_dots pinned at the measured 999992 (D-107); realtime floor staged 2.0 then max(2.0, 0.6 x receipt multiple) (D-109)
 
 ### Pending Todos
 
@@ -631,8 +632,8 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-25T01:18:34.055Z
-**Stopped at:** Completed 16-01-PLAN.md
+**Last session:** 2026-10-25T01:34:06.291Z
+**Stopped at:** 16-02 Tasks 1-2 done; Task 3 blocked on PR A merge and hosted perf-attribution dispatch
 **Resume file:** None
 
 Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.
