@@ -5,3 +5,4 @@
 # the shared sanitizer timeout scaling. Later plans append one include() line each for their fragment;
 # plan 16-01 adds none. Every test name registered by a fragment must also be listed in
 # tests/expected-tests.txt.
+include("${PROJECT_SOURCE_DIR}/tests/cmake/perf.cmake")

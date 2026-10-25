@@ -1,0 +1,1 @@
+mode=no-trace workload=original-wram-tracer-1m-half-dots-v1 budget_half_dots=1000000 consumed_half_dots=1000000 stop_reason=0 elapsed_ns=10582000 clock_resolution_ns=1000 clock_method=monotonic peak_rss_bytes=1769472 trace_records=0 correctness_digest_fnv1a64=4c7a57ff3d50d228

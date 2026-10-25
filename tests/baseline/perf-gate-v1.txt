@@ -1,0 +1,51 @@
+# GabbaBoy cumulative DMG performance gate limits (perf-gate-v1) and limitation note.
+#
+# What this gate is. A deterministic valgrind cachegrind instruction count (Ir, --cache-sim=no) of
+# measure_core --no-trace on three DMG-CPU-B ROMs at 1,000,000 half-dots, compared with a v0.2.0 build made
+# in the same job, plus a native realtime floor (min of nine Release wall-time runs after one discarded
+# warm-up run, one retry). It is a regression tripwire for the portable core. It is not a performance claim.
+#
+# Limit rule (D-14). Raising ir_ratio_limit, ir_floor or determinism_limit, or lowering realtime_floor,
+# needs a DECISIONS.md entry that states the evidence. The realtime floor staging is D-109: PR A gated at
+# realtime_floor=2.0 (the max() lower bound) and PR B raises it to max(2.0, 0.6 x the hosted realtime
+# multiple in tests/baseline/perf-attribution-v1.json) once that receipt exists.
+# The visible-demo consumed_half_dots pin of 999992 is the measured per-ROM exception recorded in D-107; the
+# guard is an exact equality per ROM.
+#
+# Blind spots (read before trusting a pass).
+#   - PPU, sprite, DMA and banking paths are barely exercised by these three ROMs.
+#   - About 87% of Ir is in advance_devices_to, so the gate mostly watches the device catch-up loop.
+#   - Ir does not see cache misses or branch mispredictions.
+#   - CGB colour-attribute work is informational only and is not gated.
+#   - Hosted runners are shared machines; only Ir is deterministic, the realtime floor is deliberately loose.
+#
+# How to read a REJECT line.
+#   ir-budget-exceeded        head Ir over v0.2.0 Ir is above ir_ratio_limit on the named ROM: a real slowdown
+#                             or an intended cost; investigate, then fix or record a DECISIONS entry.
+#   proxy-nondeterministic    two head runs differ by more than determinism_limit: the proxy is unusable
+#                             until the cause (ASLR-dependent work, uninitialised data) is found.
+#   proxy-vacuous             Ir at or below ir_floor, or consumed_half_dots differs from the per-ROM pin: the
+#                             ROM stopped early or did not run, so a pass would mean nothing.
+#   workload-digest-mismatch  the guest correctness digest changed: behaviour changed, not just speed.
+#   realtime-below-floor      the native multiple (simulated seconds over wall seconds) is under
+#                             realtime_floor on the named ROM.
+#   limits-schema             this file has an unknown, missing, duplicate or malformed key.
+#   valgrind-missing, seeded-anchor-missing, harness-adapt-anchor, harness-build-failed are driver errors
+#   from tests/scripts/run-perf-gate.sh, not performance verdicts.
+schema=perf-gate-v1
+ir_ratio_limit=110/100
+ir_floor=100000000
+determinism_limit=2/10000
+realtime_floor=2.0
+rom.tracer.path=fixtures/tracer/tracer.gb
+rom.tracer.sha256=ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d
+rom.tracer.digest=4c7a57ff3d50d228
+rom.tracer.consumed_half_dots=1000000
+rom.libbet.path=fixtures/libbet/libbet.gb
+rom.libbet.sha256=3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9
+rom.libbet.digest=7d992ad8eee13c40
+rom.libbet.consumed_half_dots=1000000
+rom.visible-demo.path=fixtures/visible-demo/demo.gb
+rom.visible-demo.sha256=38afb54b40f4b6612906c7a68e367199d8bff135508a39d7acdc996bf3d86530
+rom.visible-demo.digest=3c5797f6525df9c7
+rom.visible-demo.consumed_half_dots=999992
