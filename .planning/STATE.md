@@ -6,16 +6,16 @@ current_phase: 16
 current_phase_name: Tune-up and v0.2 Debt Closure
 current_plan: 1
 status: executing
-stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-10-25T03:13:50.750Z"
+stopped_at: Completed 16-03-PLAN.md (local; hosted PR items pending)
+last_updated: "2026-10-25T03:42:34.109Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 16 execution started
-state_head: 28a8fde3e3d4bc12c35106c3d03a2cb15f5f358d
+state_head: 337c170f7954ae3e5145b329f50cbfbcf6b708c7
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 2
+  completed_plans: 3
   percent: 0
 ---
 
@@ -335,6 +335,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P26 | 3h | 3 tasks | 7 files |
 | Phase 16 P01 | 30 min | 3 tasks | 19 files |
 | Phase 16 P02 | 90 min | 3 tasks | 13 files |
+| Phase 16 P03 | 150min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -589,6 +590,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 16]: 16-02: visible-demo consumed_half_dots pinned at the measured 999992 (D-107); realtime floor staged 2.0 then max(2.0, 0.6 x receipt multiple) (D-109)
 - [Phase 16]: D-109 realtime floor staged: PR A 2.0, PR B 4.02 = floor(0.6 x hosted multiple 6.7027)
 - [Phase 16]: Phase 7 (5673bed) carries about 65% of v0.1.0 to v0.2.0 Ir growth; LIM-PERF-REVIEW closed by receipt citation
+- [Phase 16]: 16-03: test_budget divides TIMEOUTs by 3 under sanitizers; an all-zero push parent resolves to the merge base with origin/main; every seeded allowlist row cites GB-CI-004 resolved at the base
+- [Phase 16]: 16-03: nightly-asan.yml replay is read-only and report-red alone holds issues: write (D-108); LIM-ASAN-STALL-TIMING closes on the first green dispatched run
 
 ### Pending Todos
 
@@ -635,8 +638,8 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-25T03:13:50.728Z
-**Stopped at:** Completed 16-02-PLAN.md
+**Last session:** 2026-10-25T03:42:34.087Z
+**Stopped at:** Completed 16-03-PLAN.md (local; hosted PR items pending)
 **Resume file:** None
 
 Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.

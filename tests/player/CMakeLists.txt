@@ -493,6 +493,18 @@ endif()
 
 # The parent pass cannot reach child-directory test properties at the CMake 3.25 floor.
 include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+
+# Default budget (Phase 16 D-18): the parent's sweep cannot reach this directory scope, so repeat it with
+# the base TIMEOUT inherited from tests/CMakeLists.txt. Unset tests would otherwise keep CTest's 1500 s.
+get_property(gbb_default_budget_tests DIRECTORY PROPERTY TESTS)
+foreach(gbb_default_budget_test IN LISTS gbb_default_budget_tests)
+  get_test_property(${gbb_default_budget_test} TIMEOUT gbb_default_budget_timeout)
+  if(NOT gbb_default_budget_timeout)
+    set_tests_properties(${gbb_default_budget_test}
+      PROPERTIES TIMEOUT ${GBB_DEFAULT_TEST_TIMEOUT_SECONDS})
+  endif()
+endforeach()
+
 gbb_scale_sanitizer_test_timeouts()
 
 if(GABBABOY_ENABLE_SANITIZERS)

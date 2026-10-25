@@ -35,6 +35,25 @@ jobs:
         run: |
           mkdir -p build/package-prefix
           cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+      - name: Resolve the per-test budget base commit
+        id: budget_base
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          # D-18: the PR base, or the push parent. A push that creates a branch or tag has an all-zero parent, and
+          # a rebased or force-pushed branch has a parent that no fetched ref reaches any more; both are judged
+          # against the merge base with origin/main. An empty or still-unresolvable base fails the step.
+          base="${PR_BASE:-$PUSH_BEFORE}"
+          if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
+            base=$(git merge-base HEAD origin/main)
+          fi
+          git cat-file -e "${base}^{commit}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+      - name: Check per-test TIMEOUT budgets against the base allowlist
+        env:
+          BUDGET_BASE: ${{ steps.budget_base.outputs.base }}
+        run: python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"
       - name: Build
         run: cmake --build --preset phase1 --verbose
       - name: Record acceptance and Mooneye observations
@@ -304,7 +323,9 @@ jobs:
           bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt
 
   linux-sanitizers-acceptance:
-    # The '^acceptance_' shard of the ASan inventory (see linux-sanitizers-tests).
+    # The '^acceptance_' shard of the ASan inventory (see linux-sanitizers-tests). The three full stall-replay
+    # tests run in nightly-asan.yml instead (D-19); acceptance_stall_bounded keeps the drop:START negative control
+    # in this PR lane.
     name: linux-asan-ubsan-acceptance
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -330,8 +351,8 @@ jobs:
         run: cmake --build --preset phase1-asan
       - name: Run and verify nonempty test inventory shard
         run: |
-          ctest --preset phase1-asan --parallel 4 -R '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml
-          grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt
+          ctest --preset phase1-asan --parallel 4 -R '^acceptance_' -E '^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure --no-tests=error --output-junit ctest.xml
+          grep -E '^acceptance_' tests/expected-tests.txt | grep -vE '^acceptance_stall_diagnosis(_replay_[12])?$' > build-asan/expected-shard.txt
           bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt
 
   cmake-floor-3-25-3:

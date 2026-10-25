@@ -1244,8 +1244,8 @@ CI_SANITIZER_SHARDS = {
         "grep -vE '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt",
         _ASAN_SHARD_INVENTORY),
     "linux-sanitizers-acceptance": _ASAN_SHARD_BUILD + (
-        "ctest --preset phase1-asan --parallel 4 -R '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml",
-        "grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt",
+        "ctest --preset phase1-asan --parallel 4 -R '^acceptance_' -E '^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure --no-tests=error --output-junit ctest.xml",
+        "grep -E '^acceptance_' tests/expected-tests.txt | grep -vE '^acceptance_stall_diagnosis(_replay_[12])?$' > build-asan/expected-shard.txt",
         _ASAN_SHARD_INVENTORY),
 }
 # (command, status variable, conditional by design): the sanitizer step runs under set +e so it can always retain
@@ -1254,6 +1254,18 @@ CI_STATUS_CALLS = (
     ("GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --explore --receipt build-asan/v02-fuzz-receipt.json", "campaign_status", False),
     ("python3 -I tests/scripts/verify-v02-fuzz.py --verify build-asan/v02-fuzz-receipt.json", "verify_status", True),
     ("GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --self-test", "self_test_status", True),
+)
+# The per-test TIMEOUT ratchet (D-18): the native-linux job passes the PR base or push parent as --base so a change
+# cannot judge its own allowlist against itself.
+CI_BUDGET_COMMANDS = (
+    'python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"',
+)
+# The budget base falls back to the merge base with origin/main when the push parent is all-zero or no longer a
+# reachable commit (rebased and force-pushed branch), and still fails closed on an unresolvable final base.
+CI_BUDGET_BASE_PINS = (
+    '! git cat-file -e "${base}^{commit}"',
+    'base=$(git merge-base HEAD origin/main)',
+    'git cat-file -e "${base}^{commit}"\n',
 )
 CI_REQUIRED_NATIVE_NEEDS = {"native-linux", "native-macos", "native-windows", "linux-sanitizers", "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "perf-gate", "player-gate", "macos-player-package"}
 
@@ -1395,6 +1407,14 @@ def check_ci(root: Path) -> None:
     require_call(name, "required-native", gate, 'bash .github/scripts/check-player-result.sh "$PLAYER_GATE" "$PLAYER_REQUIRED" "$PLAYER_RESULT"')
     for command in CI_REQUIRED:
         require_call(name, "linux-sanitizers", job, command)
+    native_linux = _require_job(name, tree, "native-linux")
+    for command in CI_BUDGET_COMMANDS:
+        require_call(name, "native-linux", native_linux, command)
+    base_steps = [step for step in native_linux.get("steps", []) if step.get("id") == "budget_base"]
+    base_run = str(base_steps[0].get("run", "")) if len(base_steps) == 1 else ""
+    for needle in CI_BUDGET_BASE_PINS:
+        if needle not in base_run:
+            raise Reject("budget-base-fallback", f"ci.native-linux budget_base step must contain: {needle}")
     perf_job = _require_job(name, tree, "perf-gate")
     if perf_job.get("runs-on") != "ubuntu-24.04":
         raise Reject("runner-image", "ci.perf-gate must run on the pinned ubuntu-24.04 image")
@@ -1438,6 +1458,49 @@ def check_perf_attribution(root: Path) -> None:
         raise Reject("runner-image", "perf-attribution must run on the pinned ubuntu-24.04 image")
     for command in PERF_ATTRIBUTION_COMMANDS:
         require_call(name, "attribution", job, command)
+
+
+NIGHTLY_COMMANDS = (
+    "cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=",
+    "cmake --build --preset phase1-asan",
+    "ctest --preset phase1-asan --parallel 2 -R '^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure --no-tests=error",
+)
+
+
+def check_nightly(root: Path) -> None:
+    """The scheduled full ASan stall replay (D-19, D-108): two triggers, a read-only replay job that runs the repository
+    code, and a separate report job that alone holds issues: write, has no checkout and runs no repository code (T-16-07)."""
+    name = "nightly-asan"
+    tree = read_workflow(root / ".github/workflows/nightly-asan.yml")
+    if _trigger_names(tree) != {"schedule", "workflow_dispatch"}:
+        raise Reject("workflow-trigger", "nightly-asan must trigger on schedule and workflow_dispatch only")
+    if tree.get("permissions") != {"contents": "read"}:
+        raise Reject("workflow-permissions", "nightly-asan must declare only top-level contents: read")
+    _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_bounded_downloads(name, tree)
+    _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
+    if set(tree["jobs"]) != {"asan-full-replay", "report-red"}:
+        raise Reject("job-unclassified", "nightly-asan must hold exactly the asan-full-replay and report-red jobs")
+    replay = tree["jobs"]["asan-full-replay"]
+    if "permissions" in replay or _writes(_permissions(replay, tree["permissions"])):
+        raise Reject("producer-write-authority", "nightly-asan.asan-full-replay must not hold or widen permissions")
+    _check_unprivileged(name, tree, "asan-full-replay")
+    _check_checkout_credentials(name, tree, ("asan-full-replay",))
+    if replay.get("runs-on") != "ubuntu-24.04":
+        raise Reject("runner-image", "nightly-asan.asan-full-replay must run on the pinned ubuntu-24.04 image")
+    if "timeout-minutes" not in replay:
+        raise Reject("job-timeout", "nightly-asan.asan-full-replay must carry timeout-minutes")
+    for command in NIGHTLY_COMMANDS:
+        require_call(name, "asan-full-replay", replay, command)
+    report = tree["jobs"]["report-red"]
+    if _needs(report) != {"asan-full-replay"} or str(report.get("if", "")).strip() != "failure()":
+        raise Reject("nightly-report-trigger", "nightly-asan.report-red must need asan-full-replay and run if: failure()")
+    if report.get("permissions") != {"issues": "write"}:
+        raise Reject("nightly-report-permissions", "nightly-asan.report-red must hold issues: write as its only permission")
+    if _checkouts(report) or any("uses" in step for step in report.get("steps", [])):
+        raise Reject("nightly-report-checkout", "nightly-asan.report-red must not check out source or use any action")
 
 
 def _check_residual_classification(roles=None, subject=None, exempt=None, overlays=None) -> None:
@@ -1643,6 +1706,7 @@ def check_all(root: Path) -> dict[str, int]:
     check_rehearsal(root)
     check_ci(root)
     check_perf_attribution(root)
+    check_nightly(root)
     check_readonly_workflows(root)
     check_release(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
@@ -1650,7 +1714,7 @@ def check_all(root: Path) -> dict[str, int]:
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -1737,6 +1801,22 @@ def _mutations():
         _m("ci perf-gate gate command replaced by echo", "ci.yml", "  perf-gate:\n",
            "run: bash tests/scripts/run-perf-gate.sh --gate", "run: echo bash tests/scripts/run-perf-gate.sh --gate",
            "required-command-not-executed"),
+        _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
+           'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
+           "required-command-not-executed"),
+        _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "  native-linux:\n",
+           ' || ! git cat-file -e "${base}^{commit}"; then', "; then", "budget-base-fallback"),
+        _m("ci budget base stops failing closed", "ci.yml", "  native-linux:\n",
+           '          git cat-file -e "${base}^{commit}"\n          echo', "          echo", "budget-base-fallback"),
+        _m("nightly gains a pull_request trigger", "nightly-asan.yml", "", "  workflow_dispatch:\n",
+           "  workflow_dispatch:\n  pull_request:\n", "workflow-trigger"),
+        _m("nightly replay job gains issues: write", "nightly-asan.yml", "  asan-full-replay:\n", "    runs-on: ubuntu-24.04\n",
+           "    runs-on: ubuntu-24.04\n    permissions:\n      issues: write\n", "producer-write-authority"),
+        _m("nightly report job gains a checkout", "nightly-asan.yml", "  report-red:\n", "    steps:\n",
+           "    steps:\n      - name: Check out source\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\n"
+           "        with:\n          persist-credentials: false\n", "nightly-report-checkout"),
+        _m("nightly replay drops the full-replay ctest filter", "nightly-asan.yml", "  asan-full-replay:\n",
+           "-R '^acceptance_stall_diagnosis(_replay_[12])?$'", "-R '^acceptance_'", "required-command-not-executed"),
         _m("ci perf-gate no-op twin control removed", "ci.yml", "  perf-gate:\n",
            "bash tests/scripts/run-perf-gate.sh --noop-twin", "true", "required-command-not-executed"),
         _m("ci perf-gate checkout persists credentials", "ci.yml", "  perf-gate:\n", "persist-credentials: false",
@@ -1863,7 +1943,13 @@ def _mutations():
         _m("sanitizer shards stop being complementary", "ci.yml", "  linux-sanitizers-acceptance:\n",
            "-R '^acceptance_'", "-R '^acceptance_cgb'", "required-command-not-executed"),
         _m("sanitizer acceptance shard checks the whole inventory instead of its slice", "ci.yml", "  linux-sanitizers-acceptance:\n",
-           "          grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt\n", "          cp tests/expected-tests.txt build-asan/expected-shard.txt\n",
+           "          grep -E '^acceptance_' tests/expected-tests.txt | grep -vE '^acceptance_stall_diagnosis(_replay_[12])?$' > build-asan/expected-shard.txt\n",
+           "          cp tests/expected-tests.txt build-asan/expected-shard.txt\n",
+           "required-command-not-executed"),
+        _m("sanitizer acceptance shard keeps the full stall replay", "ci.yml", "  linux-sanitizers-acceptance:\n",
+           " -E '^acceptance_stall_diagnosis(_replay_[12])?$'", "", "required-command-not-executed"),
+        _m("sanitizer acceptance shard excludes the bounded stall replay", "ci.yml", "  linux-sanitizers-acceptance:\n",
+           "'^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure", "'^acceptance_stall_' --output-on-failure",
            "required-command-not-executed"),
         # Shared unprivileged producer contract (P15-15).
         _m("rehearsal corpus re-inlines the local tag setup", "release-rehearsal.yml", "  corpus:\n", _REHEARSAL_TAG_LINE,

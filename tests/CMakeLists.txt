@@ -1413,11 +1413,16 @@ gbb_add_v02_contract(v02_support_ledger 60
 gbb_add_v02_contract(v02_support_ledger_controls 120
   [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
-gbb_add_v02_contract(v02_consumer_controls 900
-  [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
-  verify-v02-consumers.py --self-test)
-# Start this long test first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
-set_tests_properties(v02_consumer_controls PROPERTIES COST 900)
+# Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
+# so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
+gbb_add_v02_contract(v02_consumer_controls_c 600
+  [=["consumer": "c", "negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
+  verify-v02-consumers.py --self-test --consumer c)
+gbb_add_v02_contract(v02_consumer_controls_cpp 600
+  [=["consumer": "cpp", "negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
+  verify-v02-consumers.py --self-test --consumer cpp)
+# Start these long tests first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
+set_tests_properties(v02_consumer_controls_c v02_consumer_controls_cpp PROPERTIES COST 600)
 gbb_add_v02_contract(v02_performance_controls 90
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-performance.py --self-test)
@@ -1748,6 +1753,10 @@ add_test(NAME preview_package_smoke
     -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
+
+# Phase 16 D-18: the base TIMEOUT for tests that set none. The player child scope inherits it and
+# applies the same sweep, because this directory's pass cannot reach child-directory tests.
+set(GBB_DEFAULT_TEST_TIMEOUT_SECONDS 60)
 
 if(GABBABOY_BUILD_PLAYER)
   add_subdirectory(player)
@@ -2721,6 +2730,32 @@ add_test(NAME no_phase_paths
     -DGBB_EXPECT_MIN_KEY=files -DGBB_EXPECT_MIN_VALUE=380
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(no_phase_paths PROPERTIES TIMEOUT 60 LABELS "planning")
+
+# Per-test TIMEOUT ratchet (Phase 16 TUNE-04, D-18). The controls prove each budget, ceiling, staleness, expiry,
+# base-ratchet and base-commit ref rule; the tree check reads the real json-v1 inventory with a floor on its size.
+set(GBB_TEST_BUDGET_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-test-budget.py")
+add_test(NAME test_budget_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=test-budget self-test pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(test_budget_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+# Many allowlisted tests register only under if(NOT WIN32), so a Windows inventory is partial by design and
+# unregistered rows are skipped there; the native-linux CI step runs the full inventory and still rejects stale rows.
+set(GBB_TEST_BUDGET_PARTIAL "")
+if(WIN32)
+  set(GBB_TEST_BUDGET_PARTIAL ";--partial-inventory")
+endif()
+add_test(NAME test_budget
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--build-dir;${PROJECT_BINARY_DIR};--ctest;${CMAKE_CTEST_COMMAND}${GBB_TEST_BUDGET_PARTIAL}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=test-budget pass tests=[0-9]+ allowlisted=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=tests -DGBB_EXPECT_MIN_VALUE=1000
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(test_budget PROPERTIES TIMEOUT 60 LABELS "planning")
 
 # UAT closure gate (DECISIONS D-069, review WR-05): the checker enforces its contract with ClosureError, never
 # assert, and refuses python -O. The controls run on a tracked closed phase; the second test proves through the
@@ -4679,6 +4714,25 @@ add_test(NAME sanitizer_timeout_policy_selftest
     "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
     -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
 set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
+# D-23: the same script in assert-clean mode proves the selftest above removed its probe directory.
+add_test(NAME sanitizer_timeout_policy_temp_clean
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
+    -DGBB_POLICY_MODE=assert-clean
+    -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
+set_tests_properties(sanitizer_timeout_policy_temp_clean PROPERTIES
+  TIMEOUT 30 DEPENDS sanitizer_timeout_policy_selftest
+  PASS_REGULAR_EXPRESSION "sanitizer timeout policy temp clean pass")
+# Negative control: a leftover probe directory in the inspected binary directory must fail the assertion.
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/temp-clean-control/sanitizer-timeout-policy-leftover")
+add_test(NAME sanitizer_timeout_policy_temp_clean_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR};-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}/temp-clean-control;-DGBB_POLICY_MODE=assert-clean;-P;${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=left temporary directories behind"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(sanitizer_timeout_policy_temp_clean_control PROPERTIES TIMEOUT 30)
 
 # Phase 14's report adapter consumes exactly the inventory-bound corpus CTests.
 # Report/control tests stay unlabeled so --run cannot recursively schedule itself.
@@ -4714,6 +4768,20 @@ gabbaboy_verify_registered_tests()
 # slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
 # runner (LESSONS GB-CI-004). Apply one shared multiplier after every test registration.
 include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+
+# Default budget (Phase 16 D-18). A test that sets no TIMEOUT keeps CTest's 1500 s default, and the
+# scaler skips unset tests, so such a test would also stay at 1500 s under ASan. Give every unset test
+# in this directory scope the explicit base budget so the scaler multiplies it and
+# tests/scripts/verify-test-budget.py can rule out a test with no limit.
+get_property(gbb_default_budget_tests DIRECTORY PROPERTY TESTS)
+foreach(gbb_default_budget_test IN LISTS gbb_default_budget_tests)
+  get_test_property(${gbb_default_budget_test} TIMEOUT gbb_default_budget_timeout)
+  if(NOT gbb_default_budget_timeout)
+    set_tests_properties(${gbb_default_budget_test}
+      PROPERTIES TIMEOUT ${GBB_DEFAULT_TEST_TIMEOUT_SECONDS})
+  endif()
+endforeach()
+
 gbb_scale_sanitizer_test_timeouts()
 
 if(GABBABOY_ENABLE_SANITIZERS)
