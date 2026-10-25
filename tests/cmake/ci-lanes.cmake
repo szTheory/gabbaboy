@@ -67,6 +67,12 @@ gbb_add_ci_lane_test(classify_changes_controls 0 "classify-changes self-test pas
 set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=6)
 gbb_add_ci_lane_test(required_native_controls 0 "required-native self-test pass controls=[0-9]+" 30 planning
   "${GBB_CHECK_REQUIRED_NATIVE}" --self-test)
+# Defect fix: preview.yml's player smoke waits on the exact-head CI run, which a planning-only head skips the player
+# package in. The controls prove a planning run excuses exactly that skip and a full run (or any other result) does not.
+set(GBB_WAIT_EXACT_HEAD_CI "${PROJECT_SOURCE_DIR}/.github/scripts/wait-exact-head-ci.py")
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=40)
+gbb_add_ci_lane_test(wait_exact_head_ci_controls 0 "exact-head gate self-test [^c]+cases[^c]+controls=[0-9]+" 60 planning
+  "${GBB_WAIT_EXACT_HEAD_CI}" --self-test)
 set(GBB_CI_LANE_EXTRA_ARGS)
 
 # TUNE-04 success criterion 3: a src/ change and a tests/ change offered to the classifier must both come back

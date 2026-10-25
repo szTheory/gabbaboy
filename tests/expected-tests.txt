@@ -1208,6 +1208,7 @@ sanitizer_timeout_policy_temp_clean_control
 classify_changes_controls
 classify_changes_src_rejected
 required_native_controls
+wait_exact_head_ci_controls
 workflow_policy_check
 workflow_policy_controls
 planning_labels

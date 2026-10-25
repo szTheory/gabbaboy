@@ -130,9 +130,14 @@ jobs:
           python3 .github/scripts/wait-exact-head-ci.py
           --sha "$EXPECTED_SHA" --repo "$GITHUB_REPOSITORY"
           --require required-native --require macos-player-package
+          --planning-skippable macos-player-package
           --deadline-seconds 2700 --github-output "$GITHUB_OUTPUT"
           --attempt-job macos-player-package
+      # A planning-only head (the exact-head ci.yml run reports kind=planning through its own job results) changes no
+      # source and builds no player package, so the three steps below are skipped for it. The guard is `!= 'planning'`,
+      # so a missing or unknown kind output still runs them and fails closed on the absent run id.
       - name: Download run-scoped candidate package
+        if: steps.candidate.outputs.kind != 'planning'
         env:
           GH_TOKEN: ${{ github.token }}
           GBB_BUILD_RUN_ID: ${{ steps.candidate.outputs.run_id }}
@@ -142,6 +147,7 @@ jobs:
             --name "phase3-player-candidate-${GBB_BUILD_RUN_ID}-${GBB_BUILD_RUN_ATTEMPT}" \
             --dir "$RUNNER_TEMP/player-candidate"
       - name: Verify downloaded package bytes and create consumer receipt
+        if: steps.candidate.outputs.kind != 'planning'
         env:
           GBB_EXPECTED_SOURCE_REVISION: ${{ github.event.pull_request.head.sha }}
           GBB_EXPECTED_BUILD_RUN_ID: ${{ steps.candidate.outputs.run_id }}
@@ -151,6 +157,7 @@ jobs:
           GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: bash tests/scripts/verify-phase3-player.sh --verify-package "$RUNNER_TEMP/player-candidate"
       - name: Upload qualified macOS player preview and receipt
+        if: steps.candidate.outputs.kind != 'planning'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: preview-player-macos-arm64-${{ github.run_id }}-${{ github.run_attempt }}
