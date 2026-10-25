@@ -1546,6 +1546,44 @@ def verify_sidecar_data(observed: dict, expected: dict) -> None:
         fail("sidecar source SHA, tagged ledger blob, or fixture/corpus identity differs from the tag")
 
 
+ATTACHED_CONSISTENT = ("attached retained-build evidence consistent; "
+                       "qualification established by the producer job of the same run/head")
+
+
+def verify_attached_sidecar(observed: dict, expected: dict) -> str | None:
+    """Verify a sidecar attached as downloaded evidence whose producer job held the build tree.
+
+    The local expectation is receipt-only because the build is absent here. A retained-build sidecar is
+    consistent with that only when everything outside build_evidence matches exactly and the build
+    identity it claims agrees with the receipt (required count and receipt-declared digest). This
+    never qualifies anything: the producer job of the same run and head did, and only it can.
+    Returns the consistency statement, or None when the ordinary comparison applied."""
+    expected_build = expected.get("build_evidence") if type(expected) is dict else None
+    observed_build = observed.get("build_evidence") if type(observed) is dict else None
+    if type(expected_build) is not dict or type(observed_build) is not dict:
+        fail("attached-evidence-malformed: build_evidence is missing")
+    if expected_build.get("scope") != "receipt-only" or observed_build.get("scope") != "retained-build":
+        verify_sidecar_data(observed, expected)
+        return None
+    required = expected_build.get("required_count")
+    retained = observed_build.get("retained_build_identity_sha256")
+    if (type(required) is not int or required < 1 or
+            observed_build.get("qualification_status") != "qualified" or
+            observed_build.get("required_count") != required or
+            observed_build.get("observed_count") != required or
+            observed_build.get("skipped_count") != 0 or
+            type(retained) is not str or not re.fullmatch(r"[0-9a-f]{64}", retained)):
+        fail("attached-evidence-build-count: attached retained-build evidence does not cover every required artifact")
+    if (type(observed_build.get("receipt_declared_identity_sha256")) is not str or
+            observed_build.get("receipt_declared_identity_sha256") !=
+            expected_build.get("receipt_declared_identity_sha256")):
+        fail("attached-evidence-declared-identity: receipt-declared build identity differs from the receipt")
+    if ({k: v for k, v in observed.items() if k != "build_evidence"} !=
+            {k: v for k, v in expected.items() if k != "build_evidence"}):
+        fail("sidecar source SHA, tagged ledger blob, or fixture/corpus identity differs from the tag")
+    return ATTACHED_CONSISTENT
+
+
 def _schema2_test_data(cases: int = 2) -> dict:
     # cases=2 is the historical fixture; cases=1 keeps only case-a for single-entry controls.
     if cases not in (1, 2):
@@ -2346,6 +2384,65 @@ def self_test_v2_sidecar() -> None:
                      f"exit={completed.returncode}; stdout={completed.stdout.strip()!r}; "
                      f"stderr={completed.stderr.strip()!r}")
             positive_checks.append("cli-receipt-only-scope-explicitly-nonqualifying")
+            # Attached evidence: the producer job held the build, this job does not (D-112 gap round).
+            attached_command = [sys.executable, "-I", str(cli_script), "--tag", "v0.2.0",
+                                "--source-sha", source_sha, "--receipt", str(outside_receipt),
+                                "--evidence-only", "--attached-evidence", "--verify-sidecar"]
+
+            def run_attached(name: str, sidecar: dict):
+                path = temp_root / (name + ".json")
+                path.write_text(json.dumps(sidecar, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+                return subprocess.run([*attached_command, str(path)], cwd=repository, env=author_env,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                                      check=False, timeout=120)
+
+            consistent = run_attached("attached-consistent", second_sidecar)
+            if (consistent.returncode != 0 or ATTACHED_CONSISTENT not in consistent.stdout or
+                    "verified source-bound support sidecar" in consistent.stdout or
+                    "qualification=qualified" in consistent.stdout):
+                fail("consistent attached retained-build evidence was not accepted as non-qualifying: "
+                     f"exit={consistent.returncode}; stdout={consistent.stdout.strip()!r}; "
+                     f"stderr={consistent.stderr.strip()!r}")
+            positive_checks.append("cli-attached-retained-build-consistent")
+            plain = subprocess.run([*attached_command[:-3], "--verify-sidecar",
+                                    str(temp_root / "attached-consistent.json"), "--evidence-only"],
+                                   cwd=repository, env=author_env, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True, check=False, timeout=120)
+            if plain.returncode == 0 or "build-evidence-unavailable" not in plain.stderr:
+                fail("evidence-only without --attached-evidence must still reject a retained-build sidecar")
+            controls.append("evidence-only-alone-still-never-qualifies")
+
+            def attached_mutant(name: str, mutate, expected_error: str) -> None:
+                # In process: each CLI spawn is expensive on the Windows runner and the CLI path is covered above.
+                variant = copy.deepcopy(second_sidecar)
+                before = json.dumps(variant, sort_keys=True)
+                mutate(variant)
+                if json.dumps(variant, sort_keys=True) == before:
+                    fail("attached-evidence mutation was inactive:" + name)
+                expect_rejected(name, lambda: verify_attached_sidecar(variant, downloaded), expected_error)
+
+            attached_mutant("attached-tampered-declared-identity",
+                            lambda v: v["build_evidence"].update(receipt_declared_identity_sha256="0" * 64),
+                            "attached-evidence-declared-identity")
+            attached_mutant("attached-changed-non-build-field",
+                            lambda v: v.update(inventory_sha256="f" * 64),
+                            "differs from the tag")
+            attached_mutant("attached-required-count-mismatch",
+                            lambda v: v["build_evidence"].update(required_count=v["build_evidence"]["required_count"] + 1,
+                                                                 observed_count=v["build_evidence"]["required_count"] + 1),
+                            "attached-evidence-build-count")
+            attached_mutant("attached-partial-observed-count",
+                            lambda v: v["build_evidence"].update(observed_count=v["build_evidence"]["required_count"] - 1,
+                                                                 skipped_count=1),
+                            "attached-evidence-build-count")
+            attached_mutant("attached-retained-without-identity",
+                            lambda v: v["build_evidence"].update(retained_build_identity_sha256=None),
+                            "attached-evidence-build-count")
+            attached_mutant("attached-receipt-only-claims-qualification",
+                            lambda v: v["build_evidence"].update(
+                                scope="receipt-only", observed_count=0, skipped_count=v["build_evidence"]["required_count"],
+                                retained_build_identity_sha256=None),
+                            "build-evidence-unavailable")
             partial_name = sorted(build_files)[0]
             (repository / partial_name).parent.mkdir(parents=True, exist_ok=True)
             (repository / partial_name).write_bytes(build_files[partial_name])
@@ -2535,6 +2632,9 @@ def main() -> int:
                         help="receipt-free check of the tracked ledger for this tree's version against its covered source inputs")
     parser.add_argument("--write-current", action="store_true")
     parser.add_argument("--receipt", type=pathlib.Path)
+    parser.add_argument("--attached-evidence", action="store_true",
+                        help="with --verify-sidecar --evidence-only: accept a retained-build sidecar consistent with the "
+                             "receipt; reports consistency, never qualification")
     parser.add_argument("--evidence-only", action="store_true",
                         help="with --verify-sidecar: the receipt is a downloaded asset and the producer's build is absent")
     args = parser.parse_args()
@@ -2543,6 +2643,8 @@ def main() -> int:
             parser.error("--evidence-only is only accepted with --verify-sidecar")
         global EVIDENCE_ONLY
         EVIDENCE_ONLY = True
+    if args.attached_evidence and not (args.verify_sidecar and args.evidence_only):
+        parser.error("--attached-evidence requires --verify-sidecar and --evidence-only")
     try:
         if args.self_test_v2:
             self_test_v2()
@@ -2606,7 +2708,13 @@ def main() -> int:
         if args.verify_sidecar:
             observed = strict_json(bounded_file(args.verify_sidecar, MAX_LEDGER_BYTES,
                                                 "sidecar"), "sidecar")
-            verify_sidecar_data(observed, sidecar)
+            if args.attached_evidence:
+                statement = verify_attached_sidecar(observed, sidecar)
+                if statement is not None:
+                    print(statement)
+                    return 0
+            else:
+                verify_sidecar_data(observed, sidecar)
             scope = sidecar.get("build_evidence", {})
             if scope.get("qualification_status") == "not-established":
                 print("verified receipt-only support evidence; qualification=not-established "
