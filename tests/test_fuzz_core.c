@@ -185,6 +185,11 @@ static int run_speed_seed(void) {
     static const uint8_t seed_lcd_off[] = {0x90u, 0x05u, 0x0Fu};
     static const uint8_t seed_compat_twin[] = {0x90u, 0x06u, 0x0Fu};
     static const uint8_t seed_dmg_twin[] = {0x10u, 0x07u, 0x0Fu};
+    /* Hosted fuzz run 40151212480 minimized to 519 bytes (sha256 346ceb26...6bb5ca6) whose decoded
+     * prefix is data[0]=0x90 (CGB speed) data[1]=0xFF (scenario 7). The CGB-mode unarmed STOP must
+     * report GBB_STOP_STOPPED, wake through STOP_WAKE and never switch speed. */
+    static const uint8_t seed_cgb_unarmed_stop[] = {0x90u, 0x07u, 0x0Fu};
+    static const uint8_t seed_cgb_unarmed_minimized_prefix[] = {0x90u, 0xFFu, 0x07u, 0x02u, 0x03u, 0x04u};
     /* DMG-profile KEY1 scenarios: hosted fuzz run 38947419636 minimized to a 518-byte input
      * (sha256 532b3bf198c578ebf2b97e05415208187a34a8aa5ecd0e5fc96b6609f12f8263) whose decoded
      * prefix is data[0]=0x10 (DMG speed) data[1]=1. The oracle demanded a speed switch on a DMG
@@ -235,7 +240,14 @@ static int run_speed_seed(void) {
                             1, 0xFFu, 0x01u, 0, 0, 0) != 0 ||
         run_speed_seed_case(seed_dmg_twin, sizeof(seed_dmg_twin), 7u,
                             GBB_MODE_DMG, GBB_PROFILE_DMG_CPU_B, 0u, 0u, 0u, 0u,
-                            0, 0u, 0x00u, 0, 0, 0) != 0)
+                            0, 0u, 0x00u, 0, 0, 0) != 0 ||
+        run_speed_seed_case(seed_cgb_unarmed_stop, sizeof(seed_cgb_unarmed_stop), 7u,
+                            GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 0u, 0u, 0u, 0u,
+                            0, 0u, 0x00u, 0, 0, 1) != 0 ||
+        run_speed_seed_case(seed_cgb_unarmed_minimized_prefix,
+                            sizeof(seed_cgb_unarmed_minimized_prefix), 7u,
+                            GBB_MODE_CGB, GBB_PROFILE_CGB_CPU_E, 0u, 0u, 0u, 0u,
+                            0, 0u, 0x00u, 0, 0, 1) != 0)
         return 1;
     printf("ok 1 - cgb_fuzz_speed_regressions\n");
     return 0;

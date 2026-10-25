@@ -511,8 +511,10 @@ static size_t speed_emit_loop_jump(uint8_t *rom, size_t at, size_t target) {
     return at;
 }
 
+/* Scenario 7 never writes KEY1, so its STOP is unarmed: on a CGB-mode cartridge that is the ordinary
+ * low-power STOP (Pan Docs CGB Registers, docs/cgb-profile.md "STOP with KEY1 armed"), not a switch. */
 static int speed_switches_on_stop(uint8_t scenario, uint32_t mode) {
-    return mode == GBB_MODE_CGB && scenario != 3u;
+    return mode == GBB_MODE_CGB && scenario != 3u && scenario != 7u;
 }
 
 static void speed_apply_last_instruction(const gbb_trace_record *record,
@@ -726,7 +728,8 @@ static void fuzz_speed(gbb_instance *machine, const uint8_t *data, size_t size,
         require_contract(info.profile == (cgb_profile ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B));
         if (after_speed != 0u)
             require_contract(info.profile == GBB_PROFILE_CGB_CPU_E && info.mode == GBB_MODE_CGB);
-        if (info.mode == GBB_MODE_CGB) require_contract(run.reason != GBB_STOP_STOPPED);
+        if (info.mode == GBB_MODE_CGB && scenario != 7u)
+            require_contract(run.reason != GBB_STOP_STOPPED);
         require_contract((run.reason == GBB_STOP_BUDGET) ||
                          (run.reason == GBB_STOP_TRACE_FULL) ||
                          (run.reason == GBB_STOP_HALTED_IDLE) ||
