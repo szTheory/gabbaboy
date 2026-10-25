@@ -47,6 +47,7 @@ ARCHIVE_RECEIPT = "source-archive-receipt.json"
 CONSUMER = "v02-consumer-receipt.json"
 EVIDENCE_NAMES = (CORPUS, SIDECAR, PERFORMANCE, FUZZ, ARCHIVE_RECEIPT, CONSUMER)
 REUSE_FILE = "evidence-reuse.json"
+TREE_REUSE = "tree-equal"  # sentinel: the performance receipt stands in for the tag by tree equality
 WORKLOAD_ID = "original-wram-tracer-1m-half-dots-v1"
 BEHAVIORS = ("profile_selection", "probe_info", "rgb555_frame_copy", "rtc_catch_up")
 
@@ -298,8 +299,9 @@ def check_evidence(evidence: Path, tag: str, source: str, judge_root: Path,
                 reject("fuzz-binding", "fuzz evidence must come from the exact qualified source revision")
             reuse[family] = reuse_entry(evidence, family, claimed, source_root, source, tag)
             if reuse[family] is None:
-                reject(f"{'fuzz' if family == 'fuzz' else 'performance'}-binding",
-                       f"{family} receipt was produced for another revision and no justified reuse is recorded")
+                # A qualified rehearsal receipt of the same tree needs no ancestry (a squash-merged tag has none);
+                # the tree and the owner's --verify-reuse rule are checked once the source tree is known below.
+                reuse[family] = TREE_REUSE
 
     consumer = docs[CONSUMER]
     validate_consumer_receipt(consumer, source)
@@ -319,13 +321,26 @@ def check_evidence(evidence: Path, tag: str, source: str, judge_root: Path,
         raise Reject("source-binding", "subject source or trusted judge root is unavailable") from error
     if subject_tag_sha != source or judge_commit != source or subject_tree != judge_tree:
         reject("source-binding", "tag, subject and trusted judge source identities do not agree")
+    if reuse["performance"] == TREE_REUSE:
+        candidate = (docs[PERFORMANCE].get("source") or {}).get("candidate") or {}
+        try:
+            candidate_tree = git(judge_root, "rev-parse", f"{perf_sha}^{{tree}}")
+        except Reject:
+            candidate_tree = None
+        if candidate_tree != subject_tree or candidate.get("tree_sha") != subject_tree:
+            reject("performance-binding", "performance receipt was produced for another revision whose tree is not "
+                   "the tag's tree, and no justified reuse is recorded")
 
     with trusted_validator_checkout(judge_root, source) as trusted_source:
         run_owner("ledger", judge_root, source_root, source, trusted_source, "--tag", tag,
                   "--source-sha", source, "--receipt", str(evidence / CORPUS),
                   "--verify-sidecar", str(evidence / SIDECAR), "--evidence-only")
         for family, option, name in (("performance", "--verify", PERFORMANCE), ("fuzz", "--verify", FUZZ)):
-            if reuse[family] is None:
+            if reuse[family] == TREE_REUSE:
+                # Same rule release.yml applies: a fully verified, passed receipt whose measured tree is the tag's.
+                run_owner(family, judge_root, source_root, source, trusted_source, "--verify-reuse",
+                          str(evidence / name), "--tag-tree", subject_tree)
+            elif reuse[family] is None:
                 if family == "fuzz":
                     run_owner(
                         family, judge_root, source_root, source, trusted_source,
@@ -582,8 +597,14 @@ elif name == "verify-v02-performance.py":
     r = load(a[1])
     if r.get("result") != "passed" or r.get("workload", {}).get("id") != "original-wram-tracer-1m-half-dots-v1":
         die("rejected:workload-identity-mismatch")
+    cand = r.get("source", {}).get("candidate", {})
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
+    if "--verify-reuse" in a:  # release reuse rule: the measured tree is the tag's tree
+        if opt("--tag-tree") != tree or cand.get("tree_sha") != tree: die("rejected:reuse-tree-mismatch")
+    elif cand.get("sha") != head():  # a receipt of another revision is only valid through the reuse rule
+        die("rejected:candidate-is-not-this-revision")
 elif name == "verify-v02-fuzz.py":
-    r = load(a[1])
+    r = load(opt("--receipt") if "--verify-hosted" in a else a[1])
     if r.get("status") != "complete" or r.get("mode") != "explore": die("campaign is not a complete exploration")
     if r.get("source_sha") != head(): die("stale receipt source SHA")
 elif name == "verify-v02-source-archive.py":
@@ -593,16 +614,18 @@ elif name == "verify-v02-source-archive.py":
 '''
 
 
-def run_cli(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([sys.executable, "-I", str(Path(__file__).resolve()), *args], cwd=cwd,
+def run_cli(*args: str, cwd: Path | None = None, script: Path | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, "-I", str(script or Path(__file__).resolve()), *args], cwd=cwd,
                           capture_output=True, text=True, timeout=300)
 
 
 def make_fixture_repo(base: Path) -> tuple[Path, str, str]:
     repo = base / "repo"
     (repo / "tests/scripts").mkdir(parents=True)
-    for owner in OWNERS.values():
+    for owner in TRUSTED_DELEGATES:
         (repo / owner).write_text(STUB_OWNER)
+    # The fixture is its own judge: the delivery checker requires the judge root to be the checkout holding it.
+    (repo / "tests/scripts/verify-v02-delivery.py").write_text(Path(__file__).read_text(encoding="utf-8"))
     for path in COVERED_INPUTS:
         target = repo / path
         if target.suffix:
@@ -728,9 +751,14 @@ def subject_trust_self_test() -> int:
 
 def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tuple[int, int]:
     positives = rejected = 0
-    archive = make_evidence(base / "evidence", source)
+    judge = repo / "tests/scripts/verify-v02-delivery.py"
+
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        return run_cli(*args, script=judge)
+
+    archive = make_evidence(base / "evidence", source, repo)
     common = ["--tag", "v0.2.0", "--source-sha", source, "--repo-root", str(repo), "--source-archive", str(archive)]
-    done = run_cli("--check-evidence", str(base / "evidence"), *common)
+    done = run("--check-evidence", str(base / "evidence"), *common)
     if done.returncode != 0 or "PASS: v02 delivery evidence binds 6 families" not in done.stdout:
         raise SystemExit(f"complete evidence was not accepted: {done.stderr.strip()}")
     positives += 1
@@ -742,7 +770,7 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
         replacement = change(work)
         args = list(common)
         args[args.index("--source-archive") + 1] = str(replacement if isinstance(replacement, Path) else archive)
-        result = run_cli("--check-evidence", str(work), *args)
+        result = run("--check-evidence", str(work), *args)
         if result.returncode == 0:
             raise SystemExit(f"delivery self-test accepted {label}")
         if f"REJECT {code}:" not in result.stderr:
@@ -769,6 +797,38 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
            lambda w: edit(w / PERFORMANCE, lambda d: d["workload"].update(id="other-workload")))
     mutate("performance for another SHA without reuse", "performance-binding",
            lambda w: edit(w / PERFORMANCE, lambda d: d["source"]["candidate"].update(sha=producer)))
+    # Tree-equality reuse (what release.yml's reuse step produces): a qualified rehearsal receipt whose candidate is
+    # not an ancestor of the tag but whose measured tree is the tag's tree.
+    env = ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false"]
+    source_tree = git(repo, "rev-parse", f"{source}^{{tree}}")
+    producer_tree = git(repo, "rev-parse", f"{producer}^{{tree}}")
+    rehearsal = git(repo, "commit-tree", source_tree, "-p", producer, "-m", "rehearsal")
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/rehearsal/head", rehearsal], check=True, capture_output=True)
+    if subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", rehearsal, source]).returncode == 0:
+        raise SystemExit("delivery self-test rehearsal head must not be an ancestor of the tag source")
+
+    def tree_receipt(work: Path, sha: str, tree: str, result: str = "passed") -> None:
+        edit(work / PERFORMANCE, lambda d: (d.update(result=result), d["source"]["candidate"].update(sha=sha, tree_sha=tree)))
+
+    work = base / "tree-reuse"
+    shutil.copytree(base / "evidence", work)
+    tree_receipt(work, rehearsal, source_tree)
+    done = run("--check-evidence", str(work), *common)
+    if done.returncode != 0 or "reused=1" not in done.stdout:
+        raise SystemExit(f"equal-tree reuse of a qualified receipt was not accepted: {done.stderr.strip()}")
+    positives += 1
+    mutate("reuse of a receipt measured on a different tree", "performance-binding",
+           lambda w: tree_receipt(w, producer, producer_tree))
+    mutate("reuse receipt claiming the tag tree for a commit of another tree", "performance-binding",
+           lambda w: tree_receipt(w, producer, source_tree))
+    mutate("reuse receipt for an unknown commit", "performance-binding",
+           lambda w: tree_receipt(w, "c" * 40, source_tree))
+    mutate("pending receipt under equal-tree reuse", "owner-performance",
+           lambda w: tree_receipt(w, rehearsal, source_tree, "pending-investigation"))
+    mutate("equal-tree reuse with a tampered workload", "owner-performance",
+           lambda w: (tree_receipt(w, rehearsal, source_tree),
+                      edit(w / PERFORMANCE, lambda d: d["workload"].update(id="other-workload"))))
+
     mutate("missing downloaded C++ result", "consumer-binding",
            lambda w: edit(w / CONSUMER, lambda d: d["results"].pop("cpp")))
     mutate("partial C/C++ behavior coverage", "consumer-binding",
@@ -783,7 +843,7 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
     write_json(reuse_dir / REUSE_FILE, {"performance": {
         "original_producer_sha": producer, "justification": "Only a non-covered notes file changed after the producer."}})
     reuse_args = list(common)
-    done = run_cli("--check-evidence", str(reuse_dir), *reuse_args)
+    done = run("--check-evidence", str(reuse_dir), *reuse_args)
     if done.returncode != 0 or "reused=1" not in done.stdout:
         raise SystemExit(f"justified reuse was not accepted: {done.stderr.strip()}")
     positives += 1
@@ -795,7 +855,7 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
         bad = base / f"reuse-bad-{rejected}"
         shutil.copytree(reuse_dir, bad)
         edit(bad / REUSE_FILE, change)
-        result = run_cli("--check-evidence", str(bad), *common)
+        result = run("--check-evidence", str(bad), *common)
         if result.returncode == 0 or f"REJECT {code}:" not in result.stderr:
             raise SystemExit(f"delivery self-test mishandled {label}: {result.stderr.strip()}")
         rejected += 1
@@ -810,7 +870,7 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
     edit(drift / SIDECAR, lambda d: d.update(source_sha=changed, tag="v0.2.1", version="0.2.1"))
     edit(drift / CONSUMER, lambda d: d.update(source_sha=changed))
     edit(drift / PERFORMANCE, lambda d: d["source"]["candidate"].update(sha=producer))
-    result = run_cli("--check-evidence", str(drift), "--tag", "v0.2.1", "--source-sha", changed,
+    result = run("--check-evidence", str(drift), "--tag", "v0.2.1", "--source-sha", changed,
                      "--repo-root", str(repo), "--source-archive", str(archive))
     if result.returncode == 0 or "REJECT reuse-input-changed:" not in result.stderr:
         raise SystemExit(f"delivery self-test reused a producer across a changed covered input: {result.stderr.strip()}")
@@ -940,7 +1000,9 @@ def run_self_test() -> int:
         if not trust_result.wasSuccessful():
             return 1
         p2, r2 = stage_controls(base / "stage")  # separate tree keeps the fixtures independent
-        positives, controls = p2, r2 + trust_result.testsRun
+        fixture, producer, source = make_fixture_repo(base / "evidence-fixture")
+        p3, r3 = evidence_controls(base / "evidence-fixture", fixture, producer, source)
+        positives, controls = p2 + p3, r2 + r3 + trust_result.testsRun
         # The real owner validators must reject a forged receipt that reaches them through this entry point.
         forged = base / "forged-owner"
         forged.mkdir()
@@ -953,7 +1015,7 @@ def run_self_test() -> int:
             if done.returncode == 0:
                 raise SystemExit(f"real {family} owner validator accepted a forged receipt")
             owner_controls += 1
-        if positives < 2 or controls < 12 or owner_controls != 2:
+        if positives < 5 or controls < 30 or owner_controls != 2:
             raise SystemExit("delivery self-test inventory is too small to qualify")
         print(f"PASS: delivery checker positives={positives} rejected_controls={controls} "
               f"real_owner_rejections={owner_controls}")
