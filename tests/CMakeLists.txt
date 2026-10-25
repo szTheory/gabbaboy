@@ -1444,13 +1444,13 @@ if(NOT WIN32)
   set(GBB_CORE_LINKAGE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-core-linkage.py")
   add_test(NAME core_linkage_links
     COMMAND ${CMAKE_COMMAND}
-      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--check;--build-dir;${PROJECT_BINARY_DIR};--ctest;${CMAKE_CTEST_COMMAND}"
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--check;--build-dir;${PROJECT_BINARY_DIR}"
       -DGBB_EXPECT_CODE=0
       "-DGBB_EXPECT_REGEX=core-linkage pass targets=[1-9][0-9]* mutant_targets=[1-9][0-9]* identity_normal=[1-9][0-9]* identity_mutant=[1-9][0-9]*"
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   add_test(NAME core_linkage_controls
     COMMAND ${CMAKE_COMMAND}
-      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--self-test;--build-dir;${PROJECT_BINARY_DIR};--ctest;${CMAKE_CTEST_COMMAND}"
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_CORE_LINKAGE_CHECKER};--self-test;--build-dir;${PROJECT_BINARY_DIR}"
       -DGBB_EXPECT_CODE=0
       "-DGBB_EXPECT_REGEX=core-linkage self-test pass targets=[1-9][0-9]* .* behavioural=3 rejected_controls=[1-9][0-9]*"
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)

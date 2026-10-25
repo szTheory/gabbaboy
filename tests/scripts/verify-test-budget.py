@@ -342,14 +342,14 @@ def self_test() -> int:
         base_rev = commit({
             ".planning/context/LESSONS.md": "### GB-CI-004 / 2026-10-13 / Budgets\nbody\n",
             ".planning/context/DECISIONS.md": "| D-107 | something |\n",
-            ".planning/phases/GB-01-x/01-02-PLAN.md": "plan\n",
-            ".planning/phases/GB-1-x/01.1-03-PLAN.md": "plan\n",
+            ".planning/milestones/v0.1-phases/GB-01-x/01-02-PLAN.md": "plan\n",
+            ".planning/milestones/v0.1-phases/GB-1-x/01.1-03-PLAN.md": "plan\n",
         }, "base")
         # The head adds a lesson, a decision and a plan that the base lacks.
         head_rev = commit({
             ".planning/context/LESSONS.md": "### GB-CI-004 / 2026-10-13 / Budgets\n### GB-CI-099 / now / New\n",
             ".planning/context/DECISIONS.md": "| D-107 | something |\n| D-200 | new |\n",
-            ".planning/phases/GB-16-x/16-03-PLAN.md": "plan\n",
+            ".planning/milestones/v0.1-phases/GB-16-x/16-03-PLAN.md": "plan\n",
         }, "head")
         base = BaseView(repo, base_rev)
         tests = {"a": 120.0}
