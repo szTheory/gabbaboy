@@ -6,11 +6,11 @@ current_phase: 16
 current_phase_name: Tune-up and v0.2 Debt Closure
 current_plan: 1
 status: executing
-stopped_at: 16-02 Tasks 1-2 done; Task 3 blocked on PR A merge and hosted perf-attribution dispatch
-last_updated: "2026-10-25T01:34:06.314Z"
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-10-25T03:13:50.750Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 16 execution started
-state_head: 120f8e9b61ebf484fe8294eaf99d11b749432480
+state_head: 28a8fde3e3d4bc12c35106c3d03a2cb15f5f358d
 progress:
   total_phases: 4
   completed_phases: 0
@@ -334,6 +334,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P25 | 5h 0m | 3 tasks | 4 files |
 | Phase 15.1 P26 | 3h | 3 tasks | 7 files |
 | Phase 16 P01 | 30 min | 3 tasks | 19 files |
+| Phase 16 P02 | 90 min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -586,6 +587,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 16]: Archive v0.2 phase records (578 files) as pure renames under .planning/milestones/v0.2-phases; embedded legacy paths rewritten under the archive, no pinned JSON bytes changed
 - [Phase 16]: TUNE-01 read per D-07: no test reads completed-milestone records from the live phases directory; current-milestone live reads go only through GBB_LIVE_PHASES_DIR, which the lint allowlists
 - [Phase 16]: 16-02: visible-demo consumed_half_dots pinned at the measured 999992 (D-107); realtime floor staged 2.0 then max(2.0, 0.6 x receipt multiple) (D-109)
+- [Phase 16]: D-109 realtime floor staged: PR A 2.0, PR B 4.02 = floor(0.6 x hosted multiple 6.7027)
+- [Phase 16]: Phase 7 (5673bed) carries about 65% of v0.1.0 to v0.2.0 Ir growth; LIM-PERF-REVIEW closed by receipt citation
 
 ### Pending Todos
 
@@ -632,8 +635,8 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-25T01:34:06.291Z
-**Stopped at:** 16-02 Tasks 1-2 done; Task 3 blocked on PR A merge and hosted perf-attribution dispatch
+**Last session:** 2026-10-25T03:13:50.728Z
+**Stopped at:** Completed 16-02-PLAN.md
 **Resume file:** None
 
 Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.
