@@ -234,7 +234,15 @@ Base used for local ratchet runs: `--base 711f4fd` (the origin/main commit PR #1
 **7. Consumer split is by test method, not by driver language**
 - The plan's wording ("one language's relocated build") would need the verifier driver to restrict languages, which would weaken the real qualification path. The halves partition the self-test methods instead; both halves still build both languages inside the driver. The split cuts wall-clock because each half is about half the heavy tests (local: 24 s and 30 s in parallel, against 50 s serial).
 
-**Total deviations:** 7 (2 bug fixes, 3 missing-critical additions, 2 interpretation notes). **Impact:** none on the plan's intent; the CI step and sanitizer scale are the two pieces whose real behavior only hosted runs can confirm.
+**8. [Rule 1 - Bug] Budget base failed on a rebased, force-pushed branch (hosted CI, PR #106 push run 40159268927, job 121067192711)**
+- **Issue:** `github.event.before` named a commit no fetched ref reaches after the branch was rebased following the previous squash merge, so `git cat-file -e` exited 128 in the "Resolve the per-test budget base commit" step. The pull_request run (PR_BASE set) passed.
+- **Fix:** the step falls back to `git merge-base HEAD origin/main` when the chosen base is all-zero or does not resolve as a commit, then still fails closed on the final `git cat-file -e`. `verify-workflow-policy.py` now pins the fallback and the closing check (rule `budget-base-fallback`) with two mutations (fallback removed, final check removed); the existing drop-`--base` mutation is kept. The policy `--check` and `--self-test` pass.
+
+**9. [Rule 1 - Bug] `test_budget` judged platform-conditional rows stale on Windows (hosted CI, PR #106, native-windows-x64 both runs)**
+- **Issue:** `cgb_bench_ab_*`, `core_linkage_controls` and other allowlisted tests register only under `if(NOT WIN32)`, so the Windows inventory rejected them as `stale-row`.
+- **Fix:** `verify-test-budget.py` gains `--partial-inventory`; unregistered rows are then counted as `partial_rows_skipped=N` instead of stale, while budget, ceiling, expiry, ratchet and ref rules still apply. `tests/CMakeLists.txt` passes it only when `WIN32`; the native-linux CI step runs without it and keeps the authoritative stale-row rejection. Self-test controls (38) cover the skip, the stale negative control with the flag off, and ceiling and expiry on a partial inventory. macOS and the sanitizer builds have no tests guarded by APPLE or sanitizer options in `tests/CMakeLists.txt`; only `if(NOT WIN32)` guards exist. Hosted check: the Windows `test_budget` log should end `test-budget pass tests=N allowlisted=M partial_rows_skipped=K`.
+
+**Total deviations:** 9 (4 bug fixes, 3 missing-critical additions, 2 interpretation notes). **Impact:** none on the plan's intent; the CI step and sanitizer scale are the two pieces whose real behavior only hosted runs can confirm.
 
 ## Known Stubs
 
