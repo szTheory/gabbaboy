@@ -11,7 +11,9 @@ import re
 import subprocess
 import sys
 
-BOUNDARY = '96d5eec977bee99a0629499b89c737415e24184c'
+# The boundary is a durable annotated tag on the Phase 8 verification commit (D-12). It is resolved once to a
+# commit id and never falls back to a literal SHA, so an unreadable tag fails closed.
+DEFAULT_BOUNDARY = 'historical/phase-08-boundary'
 PHASE = '.planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/'
 # Each fragment represents a required claim or an explicit limit in the original
 # boundary. Normalize whitespace so wrapping alone does not weaken the contract.
@@ -76,6 +78,16 @@ FROZEN = ('cmake/VerifyMooneye.cmake', 'tests/scripts/reproduce-mooneye.sh') + t
         'selftest/CHANGES.md', 'selftest/junit.xml', 'selftest/ledger.txt', 'selftest/observed.txt'))
 OLD = '5673bed'
 
+def resolve_boundary(rev: str) -> str | None:
+    """Return the commit id for rev, or None when rev is empty, option-shaped or not a readable commit."""
+    if not rev or rev.startswith('-'):
+        return None
+    result = subprocess.run(['git', 'rev-parse', '--verify', '--quiet', f'{rev}^{{commit}}'], capture_output=True, text=True)
+    sha = result.stdout.strip()
+    if result.returncode or not re.fullmatch(r'[0-9a-f]{40}', sha):
+        return None
+    return sha
+
 def normalized(text: str) -> str:
     return ' '.join(text.split())
 
@@ -86,7 +98,11 @@ def verify(files: dict[str, str]) -> list[str]:
         for fragment in required:
             if normalized(fragment) not in source:
                 errors.append(f'{path}: missing historical clause {fragment!r}')
-    config = json.loads(files['.planning/config.json'])
+    try:
+        config = json.loads(files['.planning/config.json'])
+    except ValueError:
+        config = {}
+        errors.append('missing historical clause: config.json is absent or unparsable at the boundary')
     for name in ('auto_advance', '_auto_chain_active'):
         if config.get('workflow', {}).get(name) is not False:
             errors.append(f'historical {name} must be false')
@@ -122,23 +138,38 @@ def verify(files: dict[str, str]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--self-test', action='store_true')
+    parser.add_argument('--boundary', default=DEFAULT_BOUNDARY,
+                        help='revision of the Phase 8 verification commit (default: %(default)s)')
     args = parser.parse_args()
+    boundary = resolve_boundary(args.boundary)
+    if boundary is None:
+        print(f'phase8-closure-contract FAIL: boundary unreadable: {args.boundary}', file=sys.stderr)
+        return 1
     paths = list(CONTRACT) + ['.planning/config.json', '.planning/context/DECISIONS.md',
                               '.planning/context/LESSONS.md', 'src/core/gabbaboy.c', 'tests/expected-tests.txt'] + list(FROZEN) + ['old:'+p for p in (*FROZEN, 'tests/expected-tests.txt')]
     files = {}
     for path in paths:
-        ref = f'{OLD}:{path[4:]}' if path.startswith('old:') else f'{BOUNDARY}:{path}'
+        ref = f'{OLD}:{path[4:]}' if path.startswith('old:') else f'{boundary}:{path}'
         result = subprocess.run(['git', 'show', ref], capture_output=True)
-        if result.returncode:
+        if result.returncode and path.startswith('old:'):
             print(f'phase8-closure-contract FAIL cannot read {path}: {result.stderr.strip()}', file=sys.stderr)
             return 1
-        files[path] = result.stdout.hex() if path.endswith('.gb') else result.stdout.decode('utf-8')
+        # A path absent at a readable but wrong boundary reads as empty, so the failure is a clause miss
+        # (missing historical clause), distinct from an unreadable revision, which exited above.
+        files[path] = '' if result.returncode else (
+            result.stdout.hex() if path.endswith('.gb') else result.stdout.decode('utf-8'))
     errors = verify(files)
     if errors:
         print('\n'.join('phase8-closure-contract FAIL '+e for e in errors), file=sys.stderr)
         return 1
     controls = 0
     if args.self_test:
+        # An unreadable boundary is its own failure class: empty, option-shaped and missing revisions all fail closed.
+        for bad in ('', '--help', 'refs/tags/does-not-exist-phase8'):
+            if resolve_boundary(bad) is not None:
+                print(f'phase8-closure-contract FAIL ineffective unreadable-boundary control {bad!r}', file=sys.stderr)
+                return 1
+            controls += 1
         # Every clause must independently matter: remove one at a time without
         # fetching or mutating HEAD, the working tree or a remote service.
         for path, fragments in CONTRACT.items():
@@ -194,7 +225,7 @@ def main() -> int:
             if not verify(mutant):
                 return 1
             controls += 1
-    print(f'phase8-closure-contract PASS boundary={BOUNDARY} files={len(files)} rejected_controls={controls}; historical receipts only, no live CI/route qualification')
+    print(f'phase8-closure-contract PASS boundary={boundary} files={len(files)} rejected_controls={controls}; historical receipts only, no live CI/route qualification')
     return 0
 
 if __name__ == '__main__':

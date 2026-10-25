@@ -8,11 +8,14 @@ Phase 8 evidence boundary rather than the current checkout's player behavior.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 
 
-BOUNDARY = "96d5eec977bee99a0629499b89c737415e24184c"
+# The boundary is a durable annotated tag on the Phase 8 verification commit (D-12). It is resolved once to a
+# commit id and never falls back to a literal SHA, so an unreadable tag fails closed.
+DEFAULT_BOUNDARY = "historical/phase-08-boundary"
 STATUS = (
     "Battery saving is not supported for this cartridge type yet; "
     "progress is not kept"
@@ -24,9 +27,25 @@ LIMITATION_CLAUSE = (
 )
 
 
-def read_boundary(path: str) -> str:
+def resolve_boundary(rev: str) -> str | None:
+    """Return the commit id for rev, or None when rev is empty, option-shaped or not a readable commit."""
+    if not rev or rev.startswith("-"):
+        return None
     result = subprocess.run(
-        ["git", "show", f"{BOUNDARY}:{path}"],
+        ["git", "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    sha = result.stdout.strip()
+    if result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return None
+    return sha
+
+
+def read_boundary(boundary: str, path: str) -> str:
+    result = subprocess.run(
+        ["git", "show", f"{boundary}:{path}"],
         check=False,
         capture_output=True,
         text=True,
@@ -137,7 +156,16 @@ def verify_contract(files: dict[str, str]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true", help="run the contract and fail-first controls")
+    parser.add_argument(
+        "--boundary",
+        default=DEFAULT_BOUNDARY,
+        help="revision of the Phase 8 verification commit (default: %(default)s)",
+    )
     args = parser.parse_args()
+    boundary = resolve_boundary(args.boundary)
+    if boundary is None:
+        print(f"phase8-player-contract: FAIL: boundary unreadable: {args.boundary}", file=sys.stderr)
+        return 1
 
     paths = (
         "src/player/main.c",
@@ -148,7 +176,7 @@ def main() -> int:
         "tests/player/CMakeLists.txt",
     )
     try:
-        files = {path: read_boundary(path) for path in paths}
+        files = {path: read_boundary(boundary, path) for path in paths}
     except RuntimeError as error:
         print(f"phase8-player-contract: FAIL: {error}", file=sys.stderr)
         return 1
@@ -158,10 +186,16 @@ def main() -> int:
         for error in errors:
             print(f"phase8-player-contract: FAIL: {error}", file=sys.stderr)
         return 1
-    print(f"phase8-player-contract: PASS boundary={BOUNDARY} startup=replacement=stderr=copy=save-guard")
+    print(f"phase8-player-contract: PASS boundary={boundary} startup=replacement=stderr=copy=save-guard")
 
     if not args.self_test:
         return 0
+
+    # An unreadable boundary is its own failure class: empty, option-shaped and missing revisions fail closed.
+    for bad in ("", "--help", "refs/tags/does-not-exist-phase8"):
+        if resolve_boundary(bad) is not None:
+            print(f"phase8-player-contract self-test: unreadable boundary {bad!r} was accepted", file=sys.stderr)
+            return 1
 
     original_main = files["src/player/main.c"]
     mutated_main = original_main.replace(WARNING, "", 1)
@@ -207,7 +241,7 @@ def main() -> int:
             print(f"phase8-player-contract self-test: {label} was not rejected", file=sys.stderr)
             return 1
 
-    print("phase8-player-contract self-test: PASS controls=warning-removed,pinned-copy-changed,branch-removed,status-call-removed,stderr-call-removed")
+    print("phase8-player-contract self-test: PASS controls=unreadable-boundary,warning-removed,pinned-copy-changed,branch-removed,status-call-removed,stderr-call-removed")
     return 0
 
 
