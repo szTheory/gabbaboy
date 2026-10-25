@@ -36,7 +36,9 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-PHASE_DIR = ROOT / ".planning/phases/GB-15.1-release-hardening-and-milestone-debt-closure"
+# Completed-milestone records are read from the v0.2 archive (Phase 16 TUNE-01, D-08).
+V02_PHASES = ROOT / ".planning/milestones/v0.2-phases"
+PHASE_DIR = V02_PHASES / "GB-15.1-release-hardening-and-milestone-debt-closure"
 ITEM_IDS = ("P7-02", "P7-03", "P12-01")
 SCHEMA = 1
 M7_ATTEMPTS = 100
@@ -96,7 +98,10 @@ def decision_row(decision_id: str) -> str:
 
 
 def followup_paragraph() -> str:
-    path = next((ROOT / ".planning/phases").glob("GB-12-*/12-REVIEW-FOLLOWUP.md"))
+    matches = sorted(V02_PHASES.glob("GB-12-*/12-REVIEW-FOLLOWUP.md"))
+    if not matches:
+        raise Rejected("Phase 12 follow-up record is missing from the v0.2 archive")
+    path = matches[0]
     for line in path.read_text(encoding="utf-8").splitlines():
         if line.startswith("The earlier `cgb_speed_mutant_m7_xfail_ppu` one-off failure"):
             return line
@@ -670,7 +675,7 @@ def item_of(doc: dict, item_id: str) -> dict:
 
 def self_test() -> int:
     ctx = SyntheticContext()
-    ctx.changes[(SOURCE, PUSHED)] = [".planning/phases/x/15.1-16-SUMMARY.md"]
+    ctx.changes[(SOURCE, PUSHED)] = [".planning/milestones/v0.2-phases/x/15.1-16-SUMMARY.md"]
     positives = 0
     for verified in (True, False):
         problems = validate(synthetic_historical(verified), synthetic_local(), synthetic_hosted(verified), ctx)

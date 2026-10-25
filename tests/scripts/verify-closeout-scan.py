@@ -26,10 +26,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-REVIEW_SOURCE = (
-    ROOT
-    / ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT-REVIEW.md"
-)
+# Byte copy of the archived Phase 14 review, pinned by SHA-256 in tests/CMakeLists.txt (Phase 16 D-08).
+REVIEW_SOURCE = ROOT / "tests/data/closeout-scan-14-uat-review.md"
 CLASSIFIER_VERSION = "1"
 RUNTIME_SUFFIX = "gsd-core/bin/gsd-tools.cjs"
 REVIEW_NAME = re.compile(r"^\d+(?:\.\d+)*-UAT-REVIEW\.md$")

@@ -9,7 +9,8 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-PHASE = ROOT / ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus"
+# Completed-milestone record: read from the v0.2 archive, never the live phases directory (Phase 16 TUNE-01).
+PHASE = ROOT / ".planning/milestones/v0.2-phases/GB-14-cgb-e-model-qualification-and-corpus"
 RED_RECORDS = (
     "14-07-task3-red-evidence.json",
     "14-09-red-task1.json",

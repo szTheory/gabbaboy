@@ -34,7 +34,12 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-PHASE_REL = ".planning/phases/GB-15.1-release-hardening-and-milestone-debt-closure/"
+# The v0.2 phase records live in the milestone archive (Phase 16 D-05). The pinned JSON records still carry the
+# legacy prefix they were written with; the bytes are digest-pinned and never edited, so each embedded path is
+# rewritten under the archive instead (D-08).
+ARCHIVE_REL = ".planning/milestones/v0.2-phases/"
+LEGACY_PREFIX = ".planning/phases/"
+PHASE_REL = ARCHIVE_REL + "GB-15.1-release-hardening-and-milestone-debt-closure/"
 DEFAULT_DISPOSITIONS = ROOT / PHASE_REL / "15.1-DISPOSITIONS.json"
 SCHEMA = 1
 SELF = pathlib.Path(__file__).resolve()
@@ -61,7 +66,7 @@ SHIPPED = {
     "source_sha": "ab301aa69b1f085050fd66bf7b1378863a0821f2",
     "release_id": 418219852,
     "published_at": "2026-10-20T10:25:34Z",
-    "published_receipt": ".planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-delivery-receipt.json",
+    "published_receipt": LEGACY_PREFIX + "GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-delivery-receipt.json",
 }
 
 
@@ -74,6 +79,24 @@ class Rejected(Exception):
 
 def reject(code: str, message: str):
     raise Rejected(code, message)
+
+
+def archived_rel(rel: str) -> str:
+    """Rewrite one embedded legacy phase path to its archive location. Only the exact legacy prefix is stripped
+    and the remainder is rejoined under the archive directory: no basename search and no escape through '..'."""
+    if not isinstance(rel, str) or not rel.startswith(LEGACY_PREFIX):
+        reject("archived-record-escape", f"{rel!r} does not start with the legacy phase prefix")
+    tail = pathlib.PurePosixPath(rel[len(LEGACY_PREFIX):])
+    if not tail.parts or tail.is_absolute() or ".." in tail.parts or "\\" in rel:
+        reject("archived-record-escape", f"{rel} escapes the archived phase directory")
+    return ARCHIVE_REL + tail.as_posix()
+
+
+def archived_file(root: pathlib.Path, rel: str) -> pathlib.Path:
+    path = root / archived_rel(rel)
+    if not path.is_file():
+        reject("archived-record-missing", f"{rel} is not present at its archive location {archived_rel(rel)}")
+    return path
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -293,8 +316,8 @@ def check_shipped_and_checks(doc: dict, root: pathlib.Path) -> None:
             reject("shipped-release-altered", f"shipped release {key} differs from the published v0.2.0 identity")
     if shipped.get("republished") is not False:
         reject("shipped-release-altered", "v0.2.0 must not be recorded as republished")
-    receipt = root / SHIPPED["published_receipt"]
-    if not receipt.is_file() or digest_lf(receipt.read_bytes()) != shipped.get("published_receipt_sha256"):
+    receipt = archived_file(root, SHIPPED["published_receipt"])
+    if digest_lf(receipt.read_bytes()) != shipped.get("published_receipt_sha256"):
         reject("shipped-release-altered", "the published delivery receipt differs from the digest recorded for it")
     published = load_json(receipt, "shipped-release-altered")
     if (published.get("tag"), published.get("source_sha"), published.get("release_id")) != \
@@ -341,7 +364,7 @@ def check(dispositions: pathlib.Path, scope_path: pathlib.Path | None, root: pat
     doc = load_json(dispositions)
     if not isinstance(doc, dict) or doc.get("schema") != SCHEMA or doc.get("plan") != "15.1-17":
         reject("schema-malformed", "not a version 1 plan 15.1-17 disposition record")
-    scope_file = scope_path or (root / text((doc.get("scope") or {}).get("file"), "scope file"))
+    scope_file = scope_path or archived_file(root, text((doc.get("scope") or {}).get("file"), "scope file"))
     scope_items = check_scope(doc, scope_file, root)
     evidence = check_evidence_files(doc, dispositions.parent)
     check_shipped_and_checks(doc, root)
@@ -381,7 +404,7 @@ def git(root: pathlib.Path, *args: str) -> str:
 def build_fixture(base: pathlib.Path) -> pathlib.Path:
     """A private repository holding a synthetic audit commit and copies of the real records."""
     real = json.loads(DEFAULT_DISPOSITIONS.read_text(encoding="utf-8"))
-    real_scope = json.loads((ROOT / real["scope"]["file"]).read_text(encoding="utf-8"))
+    real_scope = json.loads(archived_file(ROOT, real["scope"]["file"]).read_text(encoding="utf-8"))
     root = base / "fixture"
     phase = root / PHASE_REL
     phase.mkdir(parents=True)
@@ -402,9 +425,9 @@ def build_fixture(base: pathlib.Path) -> pathlib.Path:
     write_json(phase / "15.1-SCOPE.json", real_scope)
     for name in real["evidence_pins"]:
         shutil.copyfile(ROOT / PHASE_REL / name, phase / name)
-    published = root / SHIPPED["published_receipt"]
+    published = root / archived_rel(SHIPPED["published_receipt"])
     published.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / SHIPPED["published_receipt"], published)
+    shutil.copyfile(archived_file(ROOT, SHIPPED["published_receipt"]), published)
     for item in real["items"]:
         for rel in item["affected_source"]:
             target = root / rel
@@ -491,7 +514,7 @@ def controls(root: pathlib.Path):
         edit_json(r / "receipt.json", lambda v: v.pop("obtained_via"))
 
     def alter_receipt(r):
-        published = r / SHIPPED["published_receipt"]
+        published = r / archived_rel(SHIPPED["published_receipt"])
         edit_json(published, lambda v: v.update(source_sha="d" * 40))
 
     def accept_limitation(v):
@@ -532,6 +555,11 @@ def controls(root: pathlib.Path):
         ("a v0.2.0 republication claim", "shipped-release-altered",
          items(lambda v: v["shipped_release"].update(republished=True))),
         ("an altered published receipt", "shipped-release-altered", alter_receipt),
+        ("an archived scope record that is missing", "archived-record-missing", lambda r: s(r).unlink()),
+        ("a legacy path that climbs out of the archive", "archived-record-escape",
+         items(lambda v: v["scope"].update(file=LEGACY_PREFIX + "../GB-15.1/15.1-SCOPE.json"))),
+        ("an embedded path outside the legacy prefix", "archived-record-escape",
+         items(lambda v: v["scope"].update(file="tests/scripts/verify-closeout-dispositions.py"))),
         ("an altered required-check list", "required-checks-altered",
          items(lambda v: v.update(required_checks=["required-native"]))),
         ("inferred owner acceptance on an item", "owner-acceptance-inferred",
@@ -568,7 +596,7 @@ def self_test() -> int:
         for name in ("15.1-SCOPE.json", "15.1-hosted-evidence.json", "15.1-local-evidence.json",
                      "15.1-historical-limitations.json"):
             (phase / name).write_bytes((phase / name).read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
-        receipt = crlf / SHIPPED["published_receipt"]
+        receipt = crlf / archived_rel(SHIPPED["published_receipt"])
         receipt.write_bytes(receipt.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
         converted = run_cli(crlf)
         if converted.returncode != 0 or "closeout-dispositions pass items=24" not in converted.stdout:

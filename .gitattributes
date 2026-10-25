@@ -53,6 +53,7 @@ tests/baseline/** text eol=lf
 tests/fuzz/fuzz_core.dict text eol=lf
 # The immutable malformed summary-coverage fixture is digest-pinned in tests/CMakeLists.txt.
 tests/data/invalid-summary-coverage.md text eol=lf
+tests/data/closeout-scan-14-uat-review.md text eol=lf
 
 # Mooneye mbc2/mbc5 derivatives: ROM bytes are binary; the manifest is admitted by the SHA-256 of its raw bytes.
 fixtures/mooneye-mbc/*.gb binary

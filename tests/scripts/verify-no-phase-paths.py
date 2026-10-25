@@ -41,9 +41,13 @@ ALLOWLIST = (
      "GBB_LIVE_PHASES_DIR definition, the single allowlisted spelling of the live phases directory (D-07)"),
     ("tests/scripts/verify-phase8-closure-contract.py", 1,
      "PHASE constant: Phase 8 boundary-commit reads, a point-in-time git show path (D-06)"),
-    ("tests/scripts/verify-closeout-scan.py", 5,
+    ("tests/scripts/verify-closeout-dispositions.py", 1,
+     "legacy-prefix rewrite for archived records: the prefix the pinned JSON records were written with"),
+    ("tests/scripts/verify-closeout-scan.py", 4,
      "temp-fixture layout strings built inside a throwaway repository, not reads of the live tree"),
-    ("tests/scripts/verify-no-phase-paths.py", 0,
+    ("tests/data/closeout-scan-14-uat-review.md", 6,
+     "byte copy of the archived 14-UAT-REVIEW.md seed for verify-closeout-scan.py, D-08"),
+    ("tests/scripts/verify-no-phase-paths.py", 12,
      "the lint's own spelling patterns and self-test fixture text"),
 )
 
