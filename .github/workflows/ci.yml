@@ -322,7 +322,9 @@ jobs:
           bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt
 
   linux-sanitizers-acceptance:
-    # The '^acceptance_' shard of the ASan inventory (see linux-sanitizers-tests).
+    # The '^acceptance_' shard of the ASan inventory (see linux-sanitizers-tests). The three full stall-replay
+    # tests run in nightly-asan.yml instead (D-19); acceptance_stall_bounded keeps the drop:START negative control
+    # in this PR lane.
     name: linux-asan-ubsan-acceptance
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -348,8 +350,8 @@ jobs:
         run: cmake --build --preset phase1-asan
       - name: Run and verify nonempty test inventory shard
         run: |
-          ctest --preset phase1-asan --parallel 4 -R '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml
-          grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt
+          ctest --preset phase1-asan --parallel 4 -R '^acceptance_' -E '^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure --no-tests=error --output-junit ctest.xml
+          grep -E '^acceptance_' tests/expected-tests.txt | grep -vE '^acceptance_stall_diagnosis(_replay_[12])?$' > build-asan/expected-shard.txt
           bash .github/scripts/verify-test-inventory.sh build-asan/ctest.xml build-asan/expected-shard.txt
 
   cmake-floor-3-25-3:

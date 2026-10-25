@@ -1413,11 +1413,16 @@ gbb_add_v02_contract(v02_support_ledger 60
 gbb_add_v02_contract(v02_support_ledger_controls 120
   [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
-gbb_add_v02_contract(v02_consumer_controls 900
-  [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
-  verify-v02-consumers.py --self-test)
-# Start this long test first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
-set_tests_properties(v02_consumer_controls PROPERTIES COST 900)
+# Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
+# so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
+gbb_add_v02_contract(v02_consumer_controls_c 600
+  [=["consumer": "c", "negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
+  verify-v02-consumers.py --self-test --consumer c)
+gbb_add_v02_contract(v02_consumer_controls_cpp 600
+  [=["consumer": "cpp", "negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
+  verify-v02-consumers.py --self-test --consumer cpp)
+# Start these long tests first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
+set_tests_properties(v02_consumer_controls_c v02_consumer_controls_cpp PROPERTIES COST 600)
 gbb_add_v02_contract(v02_performance_controls 90
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-performance.py --self-test)

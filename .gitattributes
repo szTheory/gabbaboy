@@ -56,6 +56,8 @@ tests/data/invalid-summary-coverage.md text eol=lf
 tests/data/closeout-scan-14-uat-review.md text eol=lf
 # The perf-gate fixtures are pinned by tests/data/perf-gate/SHA256SUMS, itself digest-pinned in tests/cmake/perf.cmake.
 tests/data/perf-gate/** text eol=lf
+# The bounded stall-replay case file is digest-pinned in tests/acceptance/CMakeLists.txt.
+tests/data/stall-bounded-cases.txt text eol=lf
 
 # Mooneye mbc2/mbc5 derivatives: ROM bytes are binary; the manifest is admitted by the SHA-256 of its raw bytes.
 fixtures/mooneye-mbc/*.gb binary

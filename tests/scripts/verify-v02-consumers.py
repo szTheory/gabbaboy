@@ -1258,16 +1258,74 @@ class ConsumerContractTests(unittest.TestCase):
                            "interruption must occur after staged package bytes exist")
 
 
-def self_test() -> int:
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(ConsumerContractTests)
+# Phase 16 D-19: --self-test --consumer {c,cpp} runs the static controls plus one half of the heavy relocated
+# builds, so the two halves can run side by side in CTest. Every test method must be classified exactly once;
+# an unclassified or doubly classified test fails the self-test instead of silently dropping out of a half.
+SELF_TEST_STATIC = frozenset({
+    "test_missing_prefix_is_rejected",
+    "test_removed_package_config_is_rejected",
+    "test_forged_runner_source_does_not_qualify_changed_package",
+    "test_workflow_command_without_candidate_manifest_is_rejected",
+    "test_manifest_writer_rejects_unbound_inputs",
+    "test_changed_archive_does_not_match_stale_candidate_manifest",
+    "test_empty_archive_with_matching_manifest_is_rejected",
+    "test_active_output_collision_is_rejected",
+    "test_extract_rejects_windows_unsafe_members",
+    "test_extract_accepts_nested_directories",
+    "test_extract_rejects_existing_destination",
+})
+SELF_TEST_HEAVY = {
+    "c": frozenset({
+        "test_relocated_prefix_runs_both_consumers",
+        "test_repeated_runs_keep_behavior_and_package_identity",
+        "test_failing_c_consumer_is_rejected",
+        "test_interrupted_extraction_removes_partial_tree_and_retries",
+    }),
+    "cpp": frozenset({
+        "test_written_manifest_binds_archive_and_build_receipt_and_qualifies",
+        "test_concurrent_runs_use_distinct_build_and_output_roots",
+        "test_interrupted_run_retries_without_partial_receipt",
+        "test_failing_cpp_consumer_is_rejected",
+    }),
+}
+SELF_TEST_POSITIVE = frozenset({
+    "test_relocated_prefix_runs_both_consumers",
+    "test_repeated_runs_keep_behavior_and_package_identity",
+    "test_written_manifest_binds_archive_and_build_receipt_and_qualifies",
+    "test_concurrent_runs_use_distinct_build_and_output_roots",
+    "test_interrupted_run_retries_without_partial_receipt",
+    "test_extract_accepts_nested_directories",
+})
+
+
+def select_self_tests(consumer: str | None) -> unittest.TestSuite:
+    loaded = list(unittest.defaultTestLoader.loadTestsFromTestCase(ConsumerContractTests))
+    names = [test._testMethodName for test in loaded]
+    classified = list(SELF_TEST_STATIC) + [n for group in SELF_TEST_HEAVY.values() for n in group]
+    need(sorted(names) == sorted(classified),
+         "self-test-partition-mismatch:" + ",".join(sorted(set(names) ^ set(classified))))
+    chosen = set(names) if consumer is None else set(SELF_TEST_STATIC) | set(SELF_TEST_HEAVY[consumer])
+    return unittest.TestSuite(test for test in loaded if test._testMethodName in chosen)
+
+
+def self_test(consumer: str | None = None) -> int:
+    suite = select_self_tests(consumer)
+    names = {test._testMethodName for test in suite}  # a run empties the suite, so read it first
     result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2).run(suite)
-    controls = 12
+    if consumer is None:
+        controls = 12
+        positives = 8
+    else:
+        positives = len(names & SELF_TEST_POSITIVE)
+        controls = len(names - SELF_TEST_POSITIVE)
     summary = {
         "status": "passed" if result.wasSuccessful() else "failed",
-        "positive_successes": 8 if result.wasSuccessful() else 0,
+        "positive_successes": positives if result.wasSuccessful() else 0,
         "negative_controls": controls,
         "tests_run": result.testsRun,
     }
+    if consumer is not None:
+        summary["consumer"] = consumer
     print(json.dumps(summary, sort_keys=True))
     if not result.wasSuccessful() or controls == 0 or summary["positive_successes"] == 0:
         return 1
@@ -1279,6 +1337,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--run", action="store_true", help="install and verify the configured build")
     mode.add_argument("--self-test", action="store_true", help="exercise positive and named rejection controls")
+    parser.add_argument("--consumer", choices=LANGUAGES,
+                        help="with --self-test, run the static controls plus this half of the relocated builds")
     parser.add_argument("--prefix", type=Path, help="require an extracted prefix matching the candidate archive")
     parser.add_argument("--archive", type=Path, help="candidate product archive to qualify")
     parser.add_argument("--candidate-manifest", type=Path,
@@ -1291,6 +1351,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--source-sha", help="candidate source commit for --write-candidate-manifest")
     parser.add_argument("--build-receipt", type=Path, help="build receipt bound by --write-candidate-manifest")
     args = parser.parse_args(argv)
+    if args.consumer and not args.self_test:
+        parser.error("--consumer is only for --self-test")
     if args.write_candidate_manifest:
         if args.run or args.self_test or args.prefix or args.extract or args.output or args.candidate_manifest:
             parser.error("--write-candidate-manifest accepts only --archive, --source-sha and --build-receipt")
@@ -1354,4 +1416,7 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--self-test"]:
         install_signal_handlers()
         raise SystemExit(self_test())
+    if len(sys.argv) == 4 and sys.argv[1:3] == ["--self-test", "--consumer"] and sys.argv[3] in LANGUAGES:
+        install_signal_handlers()
+        raise SystemExit(self_test(sys.argv[3]))
     raise SystemExit(main(sys.argv[1:]))

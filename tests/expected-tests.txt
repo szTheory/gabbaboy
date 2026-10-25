@@ -399,6 +399,9 @@ acceptance_libbet-select_raw
 acceptance_libbet_drop_start
 acceptance_sgb_tolerance
 acceptance_stall_diagnosis
+acceptance_stall_diagnosis_replay_1
+acceptance_stall_diagnosis_replay_2
+acceptance_stall_bounded
 acceptance_core_mutant
 acceptance_suite_declared_exclusion
 acceptance_suite_undeclared_exclusion
@@ -1150,7 +1153,8 @@ v02_support_ledger
 v02_support_ledger_controls
 v02_adoption_docs
 v02_adoption_docs_controls
-v02_consumer_controls
+v02_consumer_controls_c
+v02_consumer_controls_cpp
 v02_performance_controls
 v02_fuzz_controls
 v02_source_archive_controls

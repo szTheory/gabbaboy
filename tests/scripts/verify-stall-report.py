@@ -8,6 +8,7 @@ from collections import Counter
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -209,19 +210,41 @@ def run_self_test() -> None:
     else:
         raise ReportError("mismatching repeated reports unexpectedly passed")
 
+    with tempfile.TemporaryDirectory(prefix="gbb-stall-compare-") as tmp:
+        ppm = PPM_HEADER + b"\x00" * (PPM_BYTES - len(PPM_HEADER))
+        dirs = []
+        for name, report_bytes, ppm_bytes in (("a", valid, ppm), ("b", valid, ppm), ("c", valid + b"", ppm[:-1] + b"\x01"),
+                                             ("d", _sample_report(trace_rows=["000001 0100 00", "000002 0100 3e"], histogram_rows=["0100 2"]), ppm)):
+            directory = Path(tmp) / name
+            directory.mkdir()
+            (directory / "libbet.stall.txt").write_bytes(report_bytes)
+            (directory / "libbet.ppm").write_bytes(ppm_bytes)
+            dirs.append(directory)
+        run_compare(dirs[0], dirs[1])
+        for label, other in (("differing PPM", dirs[2]), ("differing report", dirs[3])):
+            try:
+                run_compare(dirs[0], other)
+            except ReportError:
+                continue
+            raise ReportError(f"compare control unexpectedly passed: {label}")
+        try:
+            run_compare(dirs[0], Path(tmp) / "missing")
+        except ReportError:
+            pass
+        else:
+            raise ReportError("compare control unexpectedly passed: missing replay directory")
+
     print(f"stall-report-selftest pass rejected={len(negatives) + 1} report-controls={len(negatives)} repeated-byte-mismatch=1")
 
 
-def run_integration(args: argparse.Namespace) -> None:
-    runner = Path(args.runner).resolve()
-    cases = Path(args.cases).resolve()
-    workdir = Path(args.workdir).resolve()
-    failure_dir = Path(args.failure_dir).resolve()
+def run_one_replay(runner: Path, cases: Path, workdir: Path, failure_dir: Path, runner_timeout: int,
+                   label: str) -> tuple[bytes, bytes]:
+    """Run the drop:START libbet case once with fresh output files and return the validated (report, PPM)."""
     failure_dir.mkdir(parents=True, exist_ok=True)
     report_path = failure_dir / "libbet.stall.txt"
     ppm_path = failure_dir / "libbet.ppm"
-    run_artifacts: list[tuple[bytes, bytes]] = []
-
+    report_path.unlink(missing_ok=True)
+    ppm_path.unlink(missing_ok=True)
     command = [
         str(runner),
         "--acceptance",
@@ -233,53 +256,86 @@ def run_integration(args: argparse.Namespace) -> None:
         "--failure-dir",
         str(failure_dir),
     ]
-    for run_number in (1, 2):
-        report_path.unlink(missing_ok=True)
-        ppm_path.unlink(missing_ok=True)
-        try:
-            result = subprocess.run(
-                command,
-                cwd=workdir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                timeout=args.runner_timeout,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise ReportError(f"runner timed out on repetition {run_number}") from exc
-        if result.returncode != 1:
-            raise ReportError(
-                f"runner repetition {run_number} returned {result.returncode}, expected 1:\n{result.stdout}"
-            )
-        if not re.search(
-            r"acceptance id=libbet status=fail model=dmg-cpu-b reason=predicate-not-reached\b",
-            result.stdout,
-        ):
-            raise ReportError(f"runner repetition {run_number} missed the expected failure:\n{result.stdout}")
-        if not report_path.is_file() or not ppm_path.is_file():
-            raise ReportError(f"runner repetition {run_number} did not create fresh report and PPM files")
+    try:
+        result = subprocess.run(
+            command,
+            cwd=workdir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=runner_timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ReportError(f"runner timed out on {label}") from exc
+    if result.returncode != 1:
+        raise ReportError(f"runner {label} returned {result.returncode}, expected 1:\n{result.stdout}")
+    if not re.search(
+        r"acceptance id=libbet status=fail model=dmg-cpu-b reason=predicate-not-reached\b",
+        result.stdout,
+    ):
+        raise ReportError(f"runner {label} missed the expected failure:\n{result.stdout}")
+    if not report_path.is_file() or not ppm_path.is_file():
+        raise ReportError(f"runner {label} did not create fresh report and PPM files")
+    return read_artifacts(failure_dir)
 
-        report = report_path.read_bytes()
-        summary = validate_report(report, expected_id="libbet", expected_reason="predicate-not-reached")
-        if summary["trace_truncated"] != 0:
-            raise ReportError("small Libbet report unexpectedly marked trace_truncated")
-        ppm = ppm_path.read_bytes()
-        if len(ppm) != PPM_BYTES or not ppm.startswith(PPM_HEADER):
-            raise ReportError(f"failure PPM is not a complete 160x144 P6 image ({len(ppm)} bytes)")
-        run_artifacts.append((report, ppm))
 
-    require_identical(run_artifacts[0][0], run_artifacts[1][0], "stall report")
-    require_identical(run_artifacts[0][1], run_artifacts[1][1], "failure PPM")
-    summary = validate_report(
-        run_artifacts[0][0], expected_id="libbet", expected_reason="predicate-not-reached"
-    )
-    print(
+def read_artifacts(directory: Path) -> tuple[bytes, bytes]:
+    """Read and validate one replay's report and PPM from a directory."""
+    report_path = directory / "libbet.stall.txt"
+    ppm_path = directory / "libbet.ppm"
+    if not report_path.is_file() or not ppm_path.is_file():
+        raise ReportError(f"{directory} lacks the report or the PPM of a replay")
+    report = report_path.read_bytes()
+    summary = validate_report(report, expected_id="libbet", expected_reason="predicate-not-reached")
+    if summary["trace_truncated"] != 0:
+        raise ReportError("small Libbet report unexpectedly marked trace_truncated")
+    ppm = ppm_path.read_bytes()
+    if len(ppm) != PPM_BYTES or not ppm.startswith(PPM_HEADER):
+        raise ReportError(f"failure PPM is not a complete 160x144 P6 image ({len(ppm)} bytes)")
+    return report, ppm
+
+
+def compare_artifacts(first: tuple[bytes, bytes], second: tuple[bytes, bytes]) -> str:
+    require_identical(first[0], second[0], "stall report")
+    require_identical(first[1], second[1], "failure PPM")
+    summary = validate_report(first[0], expected_id="libbet", expected_reason="predicate-not-reached")
+    return (
         "stall-report-integration pass "
-        f"bytes={len(run_artifacts[0][0])} trace={summary['trace_records']} "
+        f"bytes={len(first[0])} trace={summary['trace_records']} "
         f"io_writes={summary['io_writes']} pc_histogram={summary['histogram_entries']} "
         "fresh=2 deterministic=report+ppm"
     )
+
+
+def run_integration(args: argparse.Namespace) -> None:
+    """Two fresh replays in one process, then a byte comparison (the bounded PR case)."""
+    runner = Path(args.runner).resolve()
+    cases = Path(args.cases).resolve()
+    workdir = Path(args.workdir).resolve()
+    failure_dir = Path(args.failure_dir).resolve()
+    artifacts = [
+        run_one_replay(runner, cases, workdir, failure_dir, args.runner_timeout, f"repetition {number}")
+        for number in (1, 2)
+    ]
+    print(compare_artifacts(artifacts[0], artifacts[1]))
+
+
+def run_replay(args: argparse.Namespace) -> None:
+    """One replay into --failure-dir/replay-N, for the parallel full-stall CTest fixtures."""
+    runner = Path(args.runner).resolve()
+    cases = Path(args.cases).resolve()
+    workdir = Path(args.workdir).resolve()
+    target = Path(args.failure_dir).resolve() / f"replay-{args.replay}"
+    run_one_replay(runner, cases, workdir, target, args.runner_timeout, f"replay {args.replay}")
+    print(f"stall-report-replay pass replay={args.replay} fresh=1")
+
+
+def run_compare(first: Path, second: Path) -> str:
+    """Require the two replay directories to hold identical report and PPM bytes; return the pass line."""
+    if first.resolve() == second.resolve():
+        raise ReportError("--compare needs two different replay directories")
+    return compare_artifacts(read_artifacts(first), read_artifacts(second))
 
 
 def main() -> int:
@@ -290,15 +346,25 @@ def main() -> int:
     parser.add_argument("--workdir")
     parser.add_argument("--failure-dir")
     parser.add_argument("--runner-timeout", type=int, default=300)
+    parser.add_argument("--replay", type=int, choices=(1, 2),
+                        help="run the runner once into --failure-dir/replay-N")
+    parser.add_argument("--compare", nargs=2, metavar=("DIR1", "DIR2"), type=Path,
+                        help="require two replay directories to hold identical report and PPM bytes")
     args = parser.parse_args()
     try:
         if args.self_test:
             run_self_test()
+        elif args.compare:
+            run_self_test()
+            print(run_compare(*args.compare))
         elif all((args.runner, args.cases, args.workdir, args.failure_dir)):
             run_self_test()
-            run_integration(args)
+            if args.replay:
+                run_replay(args)
+            else:
+                run_integration(args)
         else:
-            parser.error("use --self-test or provide --runner, --cases, --workdir and --failure-dir")
+            parser.error("use --self-test, --compare DIR1 DIR2, or provide --runner, --cases, --workdir and --failure-dir")
     except (OSError, ReportError) as exc:
         print(f"stall-report-check failed: {exc}", file=sys.stderr)
         return 1

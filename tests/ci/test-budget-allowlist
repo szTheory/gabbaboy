@@ -18,7 +18,8 @@ acceptance_libbet-select_raw	300	0.4	GB-CI-004	Lower when a measured run is unde
 acceptance_libbet_drop_start	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_libbet_observe	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_sgb_tolerance	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_stall_diagnosis	1200	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_stall_diagnosis_replay_1	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_stall_diagnosis_replay_2	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_suite	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_suite_declared_exclusion	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_suite_undeclared_exclusion	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
@@ -73,7 +74,8 @@ rtc3test_subsecond	300	0.4	GB-CI-004	Lower when a measured run is under half the
 uat_closure_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 uat_closure_optimize_refused	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 v02_adoption_docs_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_consumer_controls	900	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_consumer_controls_c	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_consumer_controls_cpp	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 v02_delivery_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 v02_fuzz_controls	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 v02_performance_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s

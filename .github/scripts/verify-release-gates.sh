@@ -42,15 +42,16 @@ def validate_extractor_destinations(text):
 # Executable wiring of the evidence producers, judges, attacher and gates (which job runs which command, with what
 # authority, after which dependency) is judged by .github/scripts/verify-workflow-policy.py, not by counting text here.
 V02_CONTRACTS = ("v02_game_claims", "v02_game_claims_controls", "v02_support_ledger", "v02_support_ledger_controls",
-                 "v02_adoption_docs", "v02_adoption_docs_controls", "v02_consumer_controls", "v02_performance_controls",
+                 "v02_adoption_docs", "v02_adoption_docs_controls", "v02_consumer_controls_c", "v02_consumer_controls_cpp",
+                 "v02_performance_controls",
                  "v02_fuzz_controls", "v02_source_archive_controls", "v02_delivery_controls")
 def validate_v02_inventory(cmake_text, expected_text):
     registered = re.findall(r"(?m)^gbb_add_v02_contract\((v02_[a-z_]+) ", cmake_text)
     required = [line.strip() for line in expected_text.splitlines() if line.strip().startswith("v02_")]
     if sorted(registered) != sorted(V02_CONTRACTS):
-        raise ValueError("the configured CTest set must register each of the eleven v0.2 contracts exactly once")
+        raise ValueError("the configured CTest set must register each of the twelve v0.2 contracts exactly once")
     if sorted(required) != sorted(V02_CONTRACTS):
-        raise ValueError("the required inventory must name each of the eleven v0.2 contracts exactly once")
+        raise ValueError("the required inventory must name each of the twelve v0.2 contracts exactly once")
     if "-DGBB_EXPECT_CODE=0" not in cmake_text or "[1-9][0-9]*" not in cmake_text:
         raise ValueError("v0.2 contracts must require exit code 0 and a nonzero success count")
 def validate_retained_platforms(text):

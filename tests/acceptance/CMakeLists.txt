@@ -525,24 +525,59 @@ gbb_add_acceptance_exit(acceptance_sgb_tolerance 0
 # (owner amendment of D-18: the cap applies to the text report, plus one 69,135-byte final-frame image).
 set(GBB_STALL_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_stall_diagnosis)
 file(MAKE_DIRECTORY ${GBB_STALL_FAIL_DIR})
-# Each of the two replays has its own child deadline. Main ran one replay in 529 s on a hosted ASan/UBSan runner;
-# on the Phase 15.1 head one replay exceeded 900 s under the sanitizer lane's parallel load (a quiet Linux ASan
-# container measured 186 s on main and 204 s here, one sample each). The sanitizer deadline is therefore 1800 s
-# and the TIMEOUT property below (scaled by 3 for sanitizers, two replays) leaves room for both; other builds keep 300 s.
+# Phase 16 D-19: the two full replays are separate CTests so a parallel lane runs them side by side, and
+# acceptance_stall_diagnosis (a frozen inventory name) only compares their report and PPM bytes. Each replay
+# has its own child deadline. Main ran one replay in 529 s on a hosted ASan/UBSan runner; on the Phase 15.1
+# head one replay exceeded 900 s under the sanitizer lane's parallel load (a quiet Linux ASan container
+# measured 186 s on main and 204 s here, one sample each). The sanitizer deadline is therefore 1800 s, which is
+# the single-replay TIMEOUT property below scaled by 3; other builds keep 300 s. The PR sanitizer lane excludes
+# these three tests and runs acceptance_stall_bounded instead; nightly-asan.yml runs the full replays.
 set(GBB_STALL_RUNNER_TIMEOUT 300)
 if(GABBABOY_ENABLE_SANITIZERS)
   set(GBB_STALL_RUNNER_TIMEOUT 1800)
 endif()
+foreach(gbb_stall_replay IN ITEMS 1 2)
+  add_test(NAME acceptance_stall_diagnosis_replay_${gbb_stall_replay}
+    COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-stall-report.py
+      --replay ${gbb_stall_replay}
+      --runner-timeout ${GBB_STALL_RUNNER_TIMEOUT}
+      --runner $<TARGET_FILE:gabbaboy-runner>
+      --cases ${PROJECT_SOURCE_DIR}/${GBB_CASES}
+      --workdir ${PROJECT_SOURCE_DIR}
+      --failure-dir ${GBB_STALL_FAIL_DIR})
+  # COST makes a parallel ctest start the longest tests first, so a lane with a job limit does not leave the
+  # replays as its tail (they ended a 45 minute sanitizer lane at about 41 minutes when they started last).
+  set_tests_properties(acceptance_stall_diagnosis_replay_${gbb_stall_replay} PROPERTIES
+    TIMEOUT 600 COST 600 FIXTURES_SETUP gbb_stall_full WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+endforeach()
 add_test(NAME acceptance_stall_diagnosis
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-stall-report.py
+    --compare ${GBB_STALL_FAIL_DIR}/replay-1 ${GBB_STALL_FAIL_DIR}/replay-2)
+set_tests_properties(acceptance_stall_diagnosis PROPERTIES
+  TIMEOUT 60 FIXTURES_REQUIRED gbb_stall_full WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+
+# Bounded PR replay (D-19, TUNE-04): the same drop:START negative control on a tenth of the libbet budget, from
+# the SHA-256 pinned case file tests/data/stall-bounded-cases.txt (the ROM is pinned inside it by rom_sha256 and
+# rom_size). It must still fail with predicate-not-reached and produce a deterministic report and PPM, so the PR
+# sanitizer lane keeps the negative control while the full replays move to the scheduled lane.
+set(GBB_STALL_BOUNDED_CASES ${PROJECT_SOURCE_DIR}/tests/data/stall-bounded-cases.txt)
+set(GBB_STALL_BOUNDED_CASES_SHA256 "ed65d0082979f5e87260adddcf3b6f2cb1ca93b713400999d71ad8b3e7535f5b")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${GBB_STALL_BOUNDED_CASES})
+file(SHA256 ${GBB_STALL_BOUNDED_CASES} gbb_stall_bounded_cases_sha256)
+if(NOT gbb_stall_bounded_cases_sha256 STREQUAL GBB_STALL_BOUNDED_CASES_SHA256)
+  message(FATAL_ERROR "tests/data/stall-bounded-cases.txt is immutable test data: its SHA-256 is "
+    "${gbb_stall_bounded_cases_sha256}, expected ${GBB_STALL_BOUNDED_CASES_SHA256}.")
+endif()
+set(GBB_STALL_BOUNDED_FAIL_DIR ${PROJECT_BINARY_DIR}/acceptance-failures/acceptance_stall_bounded)
+file(MAKE_DIRECTORY ${GBB_STALL_BOUNDED_FAIL_DIR})
+add_test(NAME acceptance_stall_bounded
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-stall-report.py
     --runner-timeout ${GBB_STALL_RUNNER_TIMEOUT}
     --runner $<TARGET_FILE:gabbaboy-runner>
-    --cases ${PROJECT_SOURCE_DIR}/${GBB_CASES}
+    --cases ${GBB_STALL_BOUNDED_CASES}
     --workdir ${PROJECT_SOURCE_DIR}
-    --failure-dir ${GBB_STALL_FAIL_DIR})
-# COST makes a parallel ctest start the longest tests first, so a sanitizer lane with a 45 minute job limit does
-# not leave the two stall replays as its tail (they ended the lane at about 41 minutes when they started last).
-set_tests_properties(acceptance_stall_diagnosis PROPERTIES TIMEOUT 1200 COST 1200 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+    --failure-dir ${GBB_STALL_BOUNDED_FAIL_DIR})
+set_tests_properties(acceptance_stall_bounded PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
 # Core mutant (D-14): a copy of the core whose JOYP direction/button select test is inverted, built into a
 # test-only static library and runner. The source line is the single anchor guaranteed by Plans 07-03 and

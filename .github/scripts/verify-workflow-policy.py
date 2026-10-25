@@ -1244,8 +1244,8 @@ CI_SANITIZER_SHARDS = {
         "grep -vE '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt",
         _ASAN_SHARD_INVENTORY),
     "linux-sanitizers-acceptance": _ASAN_SHARD_BUILD + (
-        "ctest --preset phase1-asan --parallel 4 -R '^acceptance_' --output-on-failure --no-tests=error --output-junit ctest.xml",
-        "grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt",
+        "ctest --preset phase1-asan --parallel 4 -R '^acceptance_' -E '^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure --no-tests=error --output-junit ctest.xml",
+        "grep -E '^acceptance_' tests/expected-tests.txt | grep -vE '^acceptance_stall_diagnosis(_replay_[12])?$' > build-asan/expected-shard.txt",
         _ASAN_SHARD_INVENTORY),
 }
 # (command, status variable, conditional by design): the sanitizer step runs under set +e so it can always retain
@@ -1874,7 +1874,13 @@ def _mutations():
         _m("sanitizer shards stop being complementary", "ci.yml", "  linux-sanitizers-acceptance:\n",
            "-R '^acceptance_'", "-R '^acceptance_cgb'", "required-command-not-executed"),
         _m("sanitizer acceptance shard checks the whole inventory instead of its slice", "ci.yml", "  linux-sanitizers-acceptance:\n",
-           "          grep -E '^acceptance_' tests/expected-tests.txt > build-asan/expected-shard.txt\n", "          cp tests/expected-tests.txt build-asan/expected-shard.txt\n",
+           "          grep -E '^acceptance_' tests/expected-tests.txt | grep -vE '^acceptance_stall_diagnosis(_replay_[12])?$' > build-asan/expected-shard.txt\n",
+           "          cp tests/expected-tests.txt build-asan/expected-shard.txt\n",
+           "required-command-not-executed"),
+        _m("sanitizer acceptance shard keeps the full stall replay", "ci.yml", "  linux-sanitizers-acceptance:\n",
+           " -E '^acceptance_stall_diagnosis(_replay_[12])?$'", "", "required-command-not-executed"),
+        _m("sanitizer acceptance shard excludes the bounded stall replay", "ci.yml", "  linux-sanitizers-acceptance:\n",
+           "'^acceptance_stall_diagnosis(_replay_[12])?$' --output-on-failure", "'^acceptance_stall_' --output-on-failure",
            "required-command-not-executed"),
         # Shared unprivileged producer contract (P15-15).
         _m("rehearsal corpus re-inlines the local tag setup", "release-rehearsal.yml", "  corpus:\n", _REHEARSAL_TAG_LINE,
