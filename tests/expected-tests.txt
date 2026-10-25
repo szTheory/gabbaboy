@@ -1157,6 +1157,10 @@ v02_game_claims
 v02_game_claims_controls
 v02_support_ledger
 v02_support_ledger_controls
+ledger_freeze
+ledger_freeze_controls
+support_ledger_binding
+support_ledger_binding_controls
 v02_adoption_docs
 v02_adoption_docs_controls
 v02_consumer_controls_c

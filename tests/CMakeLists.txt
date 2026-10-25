@@ -1408,11 +1408,40 @@ gbb_add_v02_contract(v02_adoption_docs_controls 90
   [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "docs"]=]
   verify-v02-adoption.py --self-test docs)
 gbb_add_v02_contract(v02_support_ledger 60
-  [=[support-ledger static pass version=0.2.0 cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
+  [=[support-ledger static pass version=0\.[0-9]+\.[0-9]+ cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)
 gbb_add_v02_contract(v02_support_ledger_controls 120
   [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
+# Phase 16 D-28/D-29 (16-06): the v0.2.0 ledger is frozen to the tag blob plus the one disclosed #93 block, and README links the
+# ledger that this tree's version selects. The version in the binding regex comes from the project VERSION at configure time, so
+# the same test follows the tree to v0.2.1 without an edit; the freeze reads the v0.2.0 tag, which every full-suite job fetches.
+string(REPLACE "." "\\." gbb_version_regex "${PROJECT_VERSION}")
+function(gbb_add_ledger_contract name regex)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-support-ledger.py;${ARGN}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=${regex}"
+      ${GBB_LEDGER_MIN}
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60 LABELS "v02")
+endfunction()
+set(GBB_LEDGER_MIN "")
+gbb_add_ledger_contract(ledger_freeze
+  [=[ledger-freeze pass tag=a542a5c01e236246f83d4f1b67aba20f2a9200e74e5ffe70b930daf9f3af2b8f working=c47ff12b089fd386ebe1dd1a16d4ceaefc9fd60d072acdce510267c3dff19a9e appended_lines=12]=]
+  --check-freeze)
+gbb_add_ledger_contract(support_ledger_binding
+  "support-ledger binding pass version=${gbb_version_regex} ledger=docs/support/v0\\.[0-9]+\\.[0-9]+\\.md"
+  --check-binding)
+set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=4)
+gbb_add_ledger_contract(ledger_freeze_controls
+  [=[ledger-freeze self-test pass controls=[0-9]+]=]
+  --self-test-freeze)
+gbb_add_ledger_contract(support_ledger_binding_controls
+  [=[support-ledger binding self-test pass controls=[0-9]+]=]
+  --self-test-binding)
+unset(GBB_LEDGER_MIN)
 # Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
 # so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
 gbb_add_v02_contract(v02_consumer_controls_c 600
