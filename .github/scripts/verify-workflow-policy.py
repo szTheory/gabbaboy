@@ -2636,7 +2636,7 @@ def _ledger_mutations():
         ("ledger: release_bound row under a different key", ledger(lambda d: d.update({"ci.yml:native-linux": {**bound, "timeout_minutes": 31}})), (), "timeout-ledger-release-bound"),
         ("ledger: release_bound row under a third key", ledger(lambda d: d["fixture-repro.yml:fixture-repro"].clear() or d["fixture-repro.yml:fixture-repro"].update({**bound, "timeout_minutes": 15})), (), "timeout-ledger-release-bound"),
         ("ledger: release_bound row once VERSION is above 0.2.1", lambda fixture: (fixture / "CMakeLists.txt").write_text(
-            (fixture / "CMakeLists.txt").read_text(encoding="utf-8").replace("VERSION 0.2.0", "VERSION 0.3.0", 1), encoding="utf-8"), (), "timeout-ledger-release-bound"),
+            re.sub(r"VERSION \d+\.\d+\.\d+", "VERSION 0.3.0", (fixture / "CMakeLists.txt").read_text(encoding="utf-8"), count=1), encoding="utf-8"), (), "timeout-ledger-release-bound"),
         ("ledger: normal row with samples removed", ledger(lambda d: d["ci.yml:native-linux"].pop("samples")), (), "timeout-ledger-schema"),
         ("ledger: release_bound row that also cites a run", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(cited_run_id=1)), (), "timeout-ledger-schema"),
         ("ledger: release_bound row that is provisional", ledger(lambda d: d["release.yml:candidate-fuzz"].update(provisional=True)), (), "timeout-ledger-schema"),
