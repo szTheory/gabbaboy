@@ -141,6 +141,26 @@ missing, expired, pending or unequal-tree receipt means the release measures
 fresh, exactly as before. The paired wall-clock gate and its trigger thresholds
 are unchanged.
 
+The attach and evidence gate applies the same rule. `verify-v02-delivery.py
+--check-evidence` accepts a performance receipt whose candidate SHA differs
+from the tag source (a rehearsal head is never an ancestor of a squash-merged
+tag) only when the receipt's `candidate.tree_sha` and the tree of the commit it
+names both equal the tag source's tree, and the performance owner's
+`--verify-reuse PATH --tag-tree TREE` then accepts it as a fully verified
+`passed` receipt. A different tree, a pending or unqualified receipt, a
+tampered decision or digest, or a missing receipt is rejected
+(`performance-binding` or `owner-performance`). A fresh measurement taken
+inside the release would re-trigger the review with a digest no earlier
+decision binds, so the supported route is: measure in the rehearsal, record the
+independent decision, qualify through the rehearsal, then tag a source with the
+same tree.
+
+An `evidence-reuse.json` record beside the evidence remains accepted for the
+ancestor route (a justified producer SHA that is an ancestor of the tag source
+with every covered input unchanged). No workflow produces it; it is kept for a
+hand-reviewed ancestor case and takes precedence over tree equality when
+present.
+
 Schema-v1 receipts can be inspected only with
 `python3 -I tests/scripts/verify-v02-performance.py --verify-historical PATH`.
 That mode identifies legacy evidence as historical and pins it to the original
