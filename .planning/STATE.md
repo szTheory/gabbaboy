@@ -6,16 +6,16 @@ current_phase: 16
 current_phase_name: Tune-up and v0.2 Debt Closure
 current_plan: 1
 status: executing
-stopped_at: Phase 16 context gathered
-last_updated: "2026-10-25T01:06:31.807Z"
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-10-25T01:18:34.084Z"
 last_activity: 2026-10-24
 last_activity_desc: Phase 16 execution started
-state_head: bc31e8b574dc5fe0ef4b661d577cf9b164f4d6fd
+state_head: a72f99c0dab0c7cc2edd49ed31d0db0c07f28875
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -333,6 +333,7 @@ Verified workflow stage: **Phase 12 - CGB Double Speed, verification** (2026-10-
 | Phase 15.1 P29 | 25 min | 2 tasks | 5 files |
 | Phase 15.1 P25 | 5h 0m | 3 tasks | 4 files |
 | Phase 15.1 P26 | 3h | 3 tasks | 7 files |
+| Phase 16 P01 | 30 min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -582,6 +583,8 @@ Adopted choices: [DECISIONS.md](context/DECISIONS.md). Evidence navigation: [res
 - [Phase 15.1]: 15.1-25: final-head required-check IDs recorded in the delivery receipt, not the merged evidence file (self-reference would move the head forever)
 - [Phase 15.1]: 15.1-25: tests/fuzz/fuzz_core.dict pinned to LF in .gitattributes after hosted Windows lane exposed CRLF digest mismatch
 - [Phase 15.1]: 15.1-26: evidence bound to M 2d25a47; rehearsal failures all map to existing owner limitations; strict-head recorded at B 01ecebe
+- [Phase 16]: Archive v0.2 phase records (578 files) as pure renames under .planning/milestones/v0.2-phases; embedded legacy paths rewritten under the archive, no pinned JSON bytes changed
+- [Phase 16]: TUNE-01 read per D-07: no test reads completed-milestone records from the live phases directory; current-milestone live reads go only through GBB_LIVE_PHASES_DIR, which the lint allowlists
 
 ### Pending Todos
 
@@ -628,9 +631,9 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-24T21:31:19.553Z
-**Stopped at:** Phase 16 context gathered
-**Resume file:** .planning/phases/GB-16-tune-up-and-v0-2-debt-closure/16-CONTEXT.md
+**Last session:** 2026-10-25T01:18:34.055Z
+**Stopped at:** Completed 16-01-PLAN.md
+**Resume file:** None
 
 Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.
 

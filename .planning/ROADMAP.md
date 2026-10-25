@@ -82,11 +82,11 @@ Milestone-wide rules:
   4. Planning hygiene CTests reject an over-cap phase fixture against the ROADMAP `**Plan cap**` lines, a duplicated LESSONS id (current duplicates renumbered) and an oversized STATE.md, and a docs check rejects the stale Playstead statements now corrected in README, `docs/native-integration.md` and PRECEDENT.
   5. A new versioned support ledger for post-`v0.2.0` source passes `--check-current` while a check rejects any change to the `v0.2.0` ledger bytes; the hosted rehearsal and trusted judge are green at the exact head; `v0.2.1` is published from release-please PR #75 and its release readback reconciles; PRs #78–92 are closed as superseded and the D-106 LIM dispositions are recorded.
 
-**Plans**: 7 plans (cap 8; one slot kept for the single gap round)
+**Plans**: 1/7 plans executed (cap 8; one slot kept for the single gap round)
 
 Plans:
 **Wave 1**
-- [ ] 16-01-PLAN.md — Archive v0.2 phase records behind the phase-path lint; CTest scaffolding (TUNE-01)
+- [x] 16-01-PLAN.md — Archive v0.2 phase records behind the phase-path lint; CTest scaffolding (TUNE-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 16-02-PLAN.md — Cachegrind Ir perf gate vs v0.2.0, seeded-regression control, attribution receipt (TUNE-03)
@@ -164,7 +164,7 @@ Plans:
 
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
-| 16. Tune-up and v0.2 Debt Closure | 0/7 | 8 | Planned | - |
+| 16. Tune-up and v0.2 Debt Closure | 1/7 | 8 | Planned | - |
 | 17. Native Save State Core | 0/TBD | 12 | Not started | - |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |
