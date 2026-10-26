@@ -2,6 +2,17 @@
 set -euo pipefail
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+# The repository the gates read live state from. GH_REPO (set by the workflow, never by tagged code) wins, because some
+# jobs (the evidence attacher) run in a workspace that is not a git work tree and `gh repo view` needs one.
+repo_identity() {
+  local repo=${GH_REPO:-}
+  if [[ -z "$repo" ]]; then
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || fail 'repository identity could not be read'
+  fi
+  [[ "$repo" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || fail 'repository identity is malformed'
+  printf '%s\n' "$repo"
+}
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 mode=${1:-}
 # One list for the draft inventory, the final inventory and the fixture the self-test builds from it.
@@ -357,7 +368,7 @@ recovery_decision() (
   [[ -s "$expected" ]] || fail 'the trusted expected inventory is missing'
   tmp=$(mktemp -d "${TMPDIR:-/tmp}/gb-recovery.XXXXXX")
   trap 'rm -rf "$tmp"' EXIT HUP INT TERM
-  repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || fail 'repository identity could not be read'
+  repo=$(repo_identity) || exit 1
   gh api "repos/$repo/releases/$release_id" > "$tmp/release.json" || fail 'live release state could not be read'
   [[ $(jq -r .tag_name "$tmp/release.json") == "$tag" ]] || fail 'live release tag differs from the frozen tag'
   gh api "repos/$repo/releases/$release_id/assets?per_page=100" > "$tmp/assets.json" || fail 'live release assets could not be read'
@@ -521,6 +532,25 @@ GH
     ! grep -Eq 'release (upload|edit|delete|create)|-X |--method|-f |--field|-F ' "$log" || fail "recovery wrote to GitHub for $row"
     ! compgen -G "$dir/tmp/*" >/dev/null || fail "recovery left scratch files behind for $row"
   done
+  # The evidence attacher's workspace root is not a git work tree. With GH_REPO set the repository comes from it and
+  # `gh repo view` is never called; without GH_REPO (or with a malformed one) the decision refuses.
+  local nongit="$dir/not-a-work-tree" repo_case
+  mkdir -p "$nongit"
+  for repo_case in 'szTheory/gabbaboy|ok' '|REJECT repository identity could not be read' 'not a repo|REJECT repository identity is malformed'; do
+    : > "$log"
+    rm -rf "$dir/tmp" && mkdir -p "$dir/tmp"
+    output=$(cd "$nongit" && PATH="$dir/bin:$PATH" FAKE_DIR="$dir" FAKE_LOG="$log" FAKE_RELEASE=draft FAKE_ASSETS=assets-complete \
+             FAKE_RUNS=runs-quiet FAKE_FAIL='repo view' TMPDIR="$dir/tmp" GH_REPO="${repo_case%%|*}" \
+             bash "$ROOT/.github/scripts/verify-release-gates.sh" --check-recovery 424242 v0.2.0 "$sha" "$dir/expected.json" 7 1 full 2>&1) && status=0 || status=$?
+    if [[ ${repo_case#*|} == ok ]]; then
+      [[ $status -eq 0 && "$output" == draft-reuse ]] || fail "recovery from a non-git directory with GH_REPO set failed: $output"
+      ! grep -q 'repo view' "$log" || fail 'recovery asked gh to resolve the repository although GH_REPO was set'
+      [[ $(sed -n 1p "$log") == *'/releases/424242' ]] || fail 'recovery did not read live release state first from a non-git directory'
+    else
+      [[ $status -ne 0 && "$output" == *"${repo_case#*|REJECT }"* && "$output" != *PASS* ]] || fail "recovery from a non-git directory accepted or mis-diagnosed GH_REPO='${repo_case%%|*}': $output"
+    fi
+  done
+  printf 'PASS: recovery reads the repository from GH_REPO in a non-git directory; rejected: GH_REPO unset or malformed\n'
   printf 'PASS: recovery CLI reads live release state first, writes nothing, ignores unrelated CI and cleans up on every exit\n'
   printf 'rejected: changed attachment, concurrent eligible release, concurrent retry dispatch, stale and absent attempt, changed published assets, unreadable live state\n'
 }
@@ -785,7 +815,7 @@ PY
     [[ $# -eq 3 ]] || fail 'usage: verify-release-gates.sh --check-pr PR_NUMBER EXPECTED_HEAD_SHA'
     command -v gh >/dev/null || fail 'GitHub CLI is required'
     gh auth status >/dev/null 2>&1 || fail 'GitHub CLI authentication is unavailable'
-    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    repo=$(repo_identity)
     rules=$(gh api "repos/$repo/branches/main/protection")
     pr=$(gh api "repos/$repo/pulls/$2")
     [[ $(jq -r .base.ref <<<"$pr") == main && $(jq -r .state <<<"$pr") == open ]] || fail 'version PR is not open against main'
@@ -803,7 +833,7 @@ PY
   --check-draft)
     [[ $# -eq 4 ]] || fail 'usage: verify-release-gates.sh --check-draft RELEASE_ID TAG SOURCE_SHA'
     command -v gh >/dev/null || fail 'GitHub CLI is required'
-    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    repo=$(repo_identity)
     release=$(gh api "repos/$repo/releases/$2")
     [[ $(jq -r .draft <<<"$release") == true ]] || fail 'release is already published'
     [[ $(jq -r .tag_name <<<"$release") == "$3" ]] || fail 'draft release tag differs'
@@ -823,7 +853,7 @@ PY
   --check-merged-source)
     [[ $# -eq 6 ]] || fail 'usage: verify-release-gates.sh --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER'
     command -v gh >/dev/null || fail 'GitHub CLI is required'
-    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    repo=$(repo_identity)
     source_sha=$2 tag=$3 release_id=$4 receipt=$5 proof_verifier=$6
     proof=$(jq -er '.prior_pr_proof | select(.pr_number > 0 and (.head_sha | test("^[0-9a-f]{40}$")))' "$receipt")
     pr_number=$(jq -r .pr_number <<<"$proof")
@@ -838,7 +868,7 @@ PY
   --check-draft-final)
     [[ $# -eq 4 ]] || fail 'usage: verify-release-gates.sh --check-draft-final RELEASE_ID TAG SOURCE_SHA'
     command -v gh >/dev/null || fail 'GitHub CLI is required'
-    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    repo=$(repo_identity)
     release=$(gh api "repos/$repo/releases/$2")
     [[ $(jq -r .draft <<<"$release") == true ]] || fail 'release is already published'
     [[ $(jq -r .tag_name <<<"$release") == "$3" ]] || fail 'draft release tag differs'
