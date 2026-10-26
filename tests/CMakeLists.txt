@@ -4884,6 +4884,19 @@ target_compile_features(test_state_api PRIVATE c_std_17)
 set_target_properties(test_state_api PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME state_size_bound COMMAND test_state_api size_bound)
 add_test(NAME state_audio_bound COMMAND test_state_api audio_bound)
+add_test(NAME state_format_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --format-contract --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --version-module "${PROJECT_SOURCE_DIR}/cmake/StateVersion.cmake"
+    --api "$<TARGET_FILE:test_state_api>"
+    --rom "${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb"
+    --cmake "${CMAKE_COMMAND}")
+add_test(NAME state_tracer
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --tracer --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --build-dir "${PROJECT_BINARY_DIR}" --cmake "${CMAKE_COMMAND}"
+    --cc "${CMAKE_C_COMPILER}" --generator "${CMAKE_GENERATOR}"
+    --rom "${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb")
 add_test(NAME state_inventory
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
     --inventory --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
@@ -4903,8 +4916,9 @@ add_test(NAME state_precodec_gate
     --build-dir "${PROJECT_BINARY_DIR}"
     --output "${PROJECT_BINARY_DIR}/state-precodec-proof.json"
     --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
-set_tests_properties(state_size_bound state_audio_bound state_inventory state_inventory_controls
-  state_globals state_globals_controls state_precodec_gate PROPERTIES TIMEOUT 60)
+set_tests_properties(state_size_bound state_audio_bound state_format_contract state_tracer
+  state_inventory state_inventory_controls state_globals state_globals_controls
+  state_precodec_gate PROPERTIES TIMEOUT 180)
 
 gabbaboy_verify_registered_tests()
 

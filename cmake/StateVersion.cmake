@@ -1,0 +1,28 @@
+function(gbb_parse_state_release_version version out_major out_minor out_patch)
+  if(NOT "${version}" MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+    message(FATAL_ERROR
+      "GabbaBoy state release version must contain exactly three nonnegative numeric components: ${version}")
+  endif()
+
+  set(_parts "${CMAKE_MATCH_1}" "${CMAKE_MATCH_2}" "${CMAKE_MATCH_3}")
+  set(_normalized_parts)
+  foreach(_part IN LISTS _parts)
+    string(REGEX REPLACE "^0+" "" _normalized "${_part}")
+    if(_normalized STREQUAL "")
+      set(_normalized "0")
+    endif()
+    string(LENGTH "${_normalized}" _length)
+    if(_length GREATER 5 OR (_length EQUAL 5 AND _normalized STRGREATER "65535"))
+      message(FATAL_ERROR
+        "GabbaBoy state release version component exceeds 65535: ${version}")
+    endif()
+    list(APPEND _normalized_parts "${_normalized}")
+  endforeach()
+
+  list(GET _normalized_parts 0 _major)
+  list(GET _normalized_parts 1 _minor)
+  list(GET _normalized_parts 2 _patch)
+  set(${out_major} "${_major}" PARENT_SCOPE)
+  set(${out_minor} "${_minor}" PARENT_SCOPE)
+  set(${out_patch} "${_patch}" PARENT_SCOPE)
+endfunction()

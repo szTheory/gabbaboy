@@ -405,6 +405,98 @@ def source_digest(root: Path, rev: str) -> tuple[str, str, str]:
     return source_hash, descriptor_hash, input_hash
 
 
+def verify_public_state_contract(header: str, core: str) -> None:
+    clean_header = strip_comments(header)
+    error_enum = next((match for match in re.finditer(
+        r"typedef\s+enum\s*\{(.*?)\}\s*(\w+)\s*;", clean_header, re.S)
+        if match.group(2) == "gbb_error"), None)
+    if error_enum is None:
+        raise ContractError("public gbb_error enum is missing")
+    values: dict[str, int] = {}
+    value = -1
+    for part in error_enum.group(1).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        match = re.fullmatch(r"([A-Za-z_]\w*)\s*(?:=\s*(\d+))?", part)
+        if not match:
+            raise ContractError(f"unparsed public error enumerator: {part}")
+        value = int(match.group(2)) if match.group(2) is not None else value + 1
+        values[match.group(1)] = value
+    old_errors = [name for name in values if not name.startswith("GBB_STATE_")]
+    if len(old_errors) < 21 or any(values[name] != index for index, name in enumerate(old_errors[:21])):
+        raise ContractError("existing public gbb_error values 0..20 changed")
+    expected_errors = {
+        "GBB_STATE_NO_ROM": 21,
+        "GBB_STATE_BAD_FORMAT": 22,
+        "GBB_STATE_UNSUPPORTED_VERSION": 23,
+        "GBB_STATE_IDENTITY_MISMATCH": 24,
+        "GBB_STATE_SIZE_MISMATCH": 25,
+        "GBB_STATE_CORRUPT": 26,
+        "GBB_STATE_INVALID_CONTENT": 27,
+    }
+    for name, expected in expected_errors.items():
+        if values.get(name) != expected:
+            raise ContractError(f"{name} must have frozen numeric value {expected}")
+    signatures = (
+        r"gbb_error\s+gbb_state_size\s*\(\s*const\s+gbb_instance\s*\*\s*\w+\s*,\s*size_t\s*\*\s*\w+\s*\)\s*;",
+        r"gbb_error\s+gbb_save_state\s*\(\s*const\s+gbb_instance\s*\*\s*\w+\s*,\s*uint8_t\s*\*\s*\w+\s*,\s*size_t\s+\w+\s*\)\s*;",
+        r"gbb_error\s+gbb_load_state\s*\(\s*gbb_instance\s*\*\s*\w+\s*,\s*const\s+uint8_t\s*\*\s*\w+\s*,\s*size_t\s+\w+\s*\)\s*;",
+    )
+    for signature in signatures:
+        if not re.search(signature, clean_header):
+            raise ContractError("public state API declaration is missing or has the wrong signature")
+    required_core = (
+        "state_walk", "state_validate", "state_apply", "state_crc32", "state_sha256",
+        "rom_sha256", "GBB_STATE_FORMAT_VERSION", "GBB_STATE_BEHAVIOR_VERSION",
+    )
+    missing = [name for name in required_core if name not in core]
+    if missing:
+        raise ContractError("state codec implementation is missing: " + ", ".join(missing))
+
+
+def version_component_self_test(cmake: str, module: Path) -> None:
+    if not module.is_file():
+        raise ContractError(f"state release version helper is missing: {module}")
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-state-version-") as temp:
+        root = Path(temp)
+        escaped_module = str(module.resolve()).replace("\\", "\\\\").replace('"', '\\"')
+        project = root / "CMakeLists.txt"
+        project.write_text(
+            "cmake_minimum_required(VERSION 3.25)\n"
+            "project(StateVersionControl NONE)\n"
+            f'include("{escaped_module}")\n'
+            'gbb_parse_state_release_version("${GBB_VERSION_UNDER_TEST}" GBB_MAJOR GBB_MINOR GBB_PATCH)\n'
+            'message(STATUS "state version parsed=${GBB_MAJOR}.${GBB_MINOR}.${GBB_PATCH}")\n'
+        )
+        valid = ("0.2.1", "65535.65535.65535")
+        invalid = ("-1.0.0", "1.0", "1.0.0.1", "1.a.0", "65536.0.0", "1.65536.0")
+        for version in valid:
+            result = run([cmake, "-S", str(root), "-B", str(root / ("valid-" + version.replace(".", "-"))),
+                          f"-DGBB_VERSION_UNDER_TEST={version}"])
+            expected_line = "state version parsed=" + version
+            if result.returncode != 0 or expected_line not in result.stdout:
+                raise ContractError(f"valid state version control failed for {version}: {result.stdout}{result.stderr}")
+        for version in invalid:
+            result = run([cmake, "-S", str(root), "-B", str(root / ("invalid-" + re.sub(r"[^A-Za-z0-9]+", "-", version))),
+                          f"-DGBB_VERSION_UNDER_TEST={version}"])
+            if result.returncode == 0 or "GabbaBoy state release version" not in result.stdout + result.stderr:
+                raise ContractError(f"invalid state version control survived for {version}: {result.stdout}{result.stderr}")
+
+
+def run_format_contract(args: argparse.Namespace, root: Path, core: str, header: str) -> None:
+    verify_public_state_contract(header, core)
+    if args.version_module is None or args.api is None or args.rom is None or args.cmake is None:
+        raise ContractError("--format-contract requires --version-module, --api, --rom and --cmake")
+    version_component_self_test(args.cmake, args.version_module)
+    if not args.api.is_file():
+        raise ContractError(f"format proof executable is missing: {args.api}")
+    result = run([str(args.api), "format_contract", str(args.rom)], cwd=root)
+    if result.returncode != 0:
+        raise ContractError(f"format proof executable failed ({result.returncode}): {result.stdout}{result.stderr}")
+    print(f"state format contract pass source={args.rev} version_controls=8 api={result.stdout.strip() or 'pass'}")
+
+
 def run_precodec(args: argparse.Namespace, root: Path) -> None:
     core = git_show(root, args.rev, "src/core/gabbaboy.c")
     header = git_show(root, args.rev, "include/gabbaboy/gabbaboy.h")
@@ -458,12 +550,17 @@ def main() -> int:
     parser.add_argument("--globals", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--precodec", action="store_true")
+    parser.add_argument("--format-contract", action="store_true")
     parser.add_argument("--tracer", action="store_true")
     parser.add_argument("--control", choices=("inventory", "globals", "all"), default="all")
     parser.add_argument("--rev", required=False)
     parser.add_argument("--library", type=Path)
     parser.add_argument("--build-dir", type=Path, default=Path("build"))
     parser.add_argument("--output", type=Path, default=Path("build/state-precodec-proof.json"))
+    parser.add_argument("--version-module", type=Path)
+    parser.add_argument("--api", type=Path)
+    parser.add_argument("--rom", type=Path)
+    parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--nm", default=os.environ.get("CMAKE_NM", "nm"))
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
     parser.add_argument("--repo", type=Path, default=Path.cwd())
@@ -493,6 +590,9 @@ def main() -> int:
             return 0
         if args.precodec:
             run_precodec(args, root)
+            return 0
+        if args.format_contract:
+            run_format_contract(args, root, core, header)
             return 0
         if args.tracer:
             raise ContractError("--tracer is implemented with the installed API in the next plan task")
