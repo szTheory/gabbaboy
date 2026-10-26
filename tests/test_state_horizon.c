@@ -99,6 +99,7 @@ static void rechecksum_state(uint8_t *bytes) {
 static int branch_no_progress(const char *reason, gbb_instance *machine,
                               uint64_t budget) {
     const gbb_instance before = *machine;
+    printf("# horizon witness: %s\n", reason);
     const gbb_run_result result = gbb_run(machine, budget, NULL, 0u);
     if (result.reason != GBB_STOP_NO_PROGRESS || result.consumed_half_dots != 0u) {
         fprintf(stderr, "expected no progress; actual reason=%d consumed=%llu now=%llu\n",
@@ -115,6 +116,7 @@ static int horizon_stop_wait(void) {
     REQUIRE_CASE(machine != NULL, "fixture: valid DMG machine creation");
     seed_time(machine, TEST_HORIZON - 2u);
     machine->stopped = 1u;
+    puts("# horizon witness: stop-wait");
     const gbb_run_result result = gbb_run(machine, 4u, NULL, 0u);
     REQUIRE_CASE(result.reason == GBB_STOP_NO_PROGRESS &&
                  result.consumed_half_dots == 2u &&
@@ -217,6 +219,7 @@ static int horizon_peripheral(void) {
     REQUIRE_CASE(machine != NULL, "fixture: valid CGB machine creation");
     seed_time(machine, TEST_HORIZON - 1u);
     const gbb_instance before = *machine;
+    puts("# horizon witness: peripheral-addition");
     advance_devices(machine, 2u);
     REQUIRE_CASE(memcmp(&before, machine, sizeof(before)) == 0,
                  "horizon discrepancy: peripheral-addition");
@@ -264,6 +267,7 @@ static int horizon_exact_fit(void) {
 }
 
 static int horizon_wrappers(void) {
+    int all_wrappers_pass = 1;
     for (unsigned wrapper = 0u; wrapper < 5u; ++wrapper) {
         gbb_instance *machine = new_machine(GBB_PROFILE_CGB_CPU_E);
         REQUIRE_CASE(machine != NULL, "fixture: wrapper machine creation");
@@ -310,19 +314,24 @@ static int horizon_wrappers(void) {
                     wrapper, (int)result.reason,
                     (unsigned long long)result.consumed_half_dots,
                     (unsigned long long)machine->time_half_dots);
-            return fail_case("horizon discrepancy: public or acceptance wrapper");
+            all_wrappers_pass = 0;
+            free(before);
+            gbb_destroy(machine);
+            continue;
         }
         uint8_t *after = NULL;
         size_t after_size = 0u;
-        REQUIRE_CASE(save_snapshot(machine, &after, &after_size) &&
-                     after_size == before_size &&
-                     memcmp(before, after, before_size) == 0,
-                     "closure discrepancy: wrapper changed a blocked state");
+        if (!save_snapshot(machine, &after, &after_size) ||
+            after_size != before_size || memcmp(before, after, before_size) != 0) {
+            fprintf(stderr, "wrapper=%u changed its blocked state\n", wrapper);
+            all_wrappers_pass = 0;
+        }
         free(after);
         free(before);
         gbb_destroy(machine);
     }
-    return 1;
+    return all_wrappers_pass ? 1 :
+        fail_case("horizon discrepancy: public or acceptance wrapper");
 }
 
 static int horizon_sentinels(void) {
@@ -355,6 +364,7 @@ static int horizon_sentinels(void) {
     target->time_half_dots = TEST_HORIZON + 1u;
     target->instruction_start_half_dots = TEST_HORIZON + 1u;
     const gbb_instance invalid_state = *target;
+    puts("# horizon witness: run-entry-over-cap");
     const gbb_run_result invalid = gbb_run(target, 8u, NULL, 0u);
     REQUIRE_CASE(invalid.reason == GBB_STOP_INVALID_STATE &&
                  invalid.consumed_half_dots == 0u &&
@@ -385,6 +395,7 @@ static int horizon_event_admission(void) {
     const gbb_input_event cap_plus_one = {
         TEST_HORIZON + 1u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_B
     };
+    puts("# horizon witness: ordinary-event cap-plus-one");
     const gbb_error over_cap = gbb_queue_events(machine, &cap_plus_one, 1u);
     if (over_cap != GBB_INVALID_EVENT) {
         fprintf(stderr, "ordinary event cap+1 actual error=%d count=%zu\n",
@@ -442,6 +453,7 @@ static int horizon_span_admission(void) {
     };
     const gbb_accept_input_span over_cap = {&over_cap_event, 1u, &cursor};
     const gbb_instance before = *machine;
+    puts("# horizon witness: borrowed-span cap-plus-one");
     const gbb_run_result rejected = gbb_accept_run_diagnostic(
         machine, 8u, &over_cap, NULL, 0u, NULL, 0u);
     REQUIRE_CASE(rejected.reason == GBB_STOP_INVALID_STATE &&
