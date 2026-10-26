@@ -5049,6 +5049,16 @@ set_tests_properties(state_horizon_closure PROPERTIES
   FIXTURES_SETUP gabbaboy_horizon_closure_0
   FIXTURES_REQUIRED "${GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES}"
   TIMEOUT 60)
+set(GBB_STATE_HORIZON_CHECKER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-horizon.py")
+add_test(NAME state_horizon_mutants
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_HORIZON_CHECKER}"
+    --rev "${GABBABOY_BUILD_REVISION}" --build-dir "${PROJECT_BINARY_DIR}")
+add_test(NAME state_horizon_mutant_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_HORIZON_CHECKER}"
+    --rev "${GABBABOY_BUILD_REVISION}" --build-dir "${PROJECT_BINARY_DIR}" --self-test)
+set_tests_properties(state_horizon_mutants state_horizon_mutant_controls
+  PROPERTIES TIMEOUT 60)
 
 # Each observer/RTC mutant is a disposable core-source copy. Its named contract
 # test must fail on the intended assertion while the unrelated size/save control

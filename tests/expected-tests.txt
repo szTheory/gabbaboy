@@ -1295,6 +1295,8 @@ state_horizon_closure_13
 state_horizon_closure_14
 state_horizon_closure_15
 state_horizon_events
+state_horizon_mutant_controls
+state_horizon_mutants
 state_horizon_sentinels
 state_horizon_wrappers
 state_refusal

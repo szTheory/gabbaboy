@@ -227,6 +227,42 @@ static int horizon_peripheral(void) {
     return 1;
 }
 
+static int horizon_peripheral_target(void) {
+    gbb_instance *machine = new_machine(GBB_PROFILE_CGB_CPU_E);
+    REQUIRE_CASE(machine != NULL, "fixture: peripheral target machine");
+    seed_time(machine, TEST_HORIZON - 1u);
+    const gbb_instance before = *machine;
+    puts("# horizon witness: peripheral-target");
+    advance_devices_to(machine, TEST_HORIZON + 1u);
+    REQUIRE_CASE(memcmp(&before, machine, sizeof(before)) == 0,
+                 "horizon discrepancy: peripheral-target");
+    gbb_destroy(machine);
+    return 1;
+}
+
+static int horizon_fixture_control(void) {
+    gbb_instance *source = new_machine(GBB_PROFILE_CGB_CPU_E);
+    gbb_instance *target = new_machine(GBB_PROFILE_CGB_CPU_E);
+    REQUIRE_CASE(source != NULL && target != NULL,
+                 "fixture: unrelated codec-control machines");
+    uint8_t *before = NULL;
+    size_t before_size = 0u;
+    REQUIRE_CASE(save_snapshot(source, &before, &before_size),
+                 "fixture: unrelated codec control saves source");
+    REQUIRE_CASE(gbb_load_state(target, before, before_size) == GBB_OK,
+                 "fixture: unrelated codec control loads state");
+    uint8_t *after = NULL;
+    size_t after_size = 0u;
+    REQUIRE_CASE(save_snapshot(target, &after, &after_size) &&
+                 after_size == before_size && memcmp(before, after, before_size) == 0,
+                 "fixture: unrelated codec control roundtrips bytes");
+    free(after);
+    free(before);
+    gbb_destroy(target);
+    gbb_destroy(source);
+    return 1;
+}
+
 static int horizon_exact_fit(void) {
     gbb_instance *source = new_machine(GBB_PROFILE_CGB_CPU_E);
     gbb_instance *target = new_machine(GBB_PROFILE_CGB_CPU_E);
@@ -701,7 +737,7 @@ static int horizon_matrix(void) {
     return horizon_stop_wait() && horizon_cpu_stall() && horizon_hdma_tick() &&
            horizon_irq() && horizon_halt() && horizon_instruction() &&
            horizon_speed_switch() && horizon_hdma_reservation() &&
-           horizon_peripheral() && horizon_exact_fit();
+           horizon_peripheral() && horizon_peripheral_target() && horizon_exact_fit();
 }
 
 int main(int argc, char **argv) {
@@ -719,7 +755,9 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "horizon_speed_switch") == 0) passed = horizon_speed_switch();
     else if (strcmp(argv[1], "horizon_hdma_reservation") == 0) passed = horizon_hdma_reservation();
     else if (strcmp(argv[1], "horizon_peripheral") == 0) passed = horizon_peripheral();
+    else if (strcmp(argv[1], "horizon_peripheral_target") == 0) passed = horizon_peripheral_target();
     else if (strcmp(argv[1], "horizon_exact_fit") == 0) passed = horizon_exact_fit();
+    else if (strcmp(argv[1], "horizon_fixture_control") == 0) passed = horizon_fixture_control();
     else if (strcmp(argv[1], "horizon_wrappers") == 0) passed = horizon_wrappers();
     else if (strcmp(argv[1], "horizon_sentinels") == 0) passed = horizon_sentinels();
     else if (strcmp(argv[1], "horizon_events") == 0) passed = horizon_events();

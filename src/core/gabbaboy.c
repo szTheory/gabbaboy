@@ -3837,6 +3837,7 @@ static void apu_sequencer_clock(gbb_instance *m) {
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
+    /* GBB_HORIZON_GUARD: peripheral-target */
     if (m->time_half_dots > GBB_STATE_TIME_LIMIT || target > GBB_STATE_TIME_LIMIT ||
         target < m->time_half_dots) return;
     while (m->time_half_dots < target) {
@@ -3947,6 +3948,7 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
                            size_t count) {
     if (instance == NULL || (events == NULL && count != 0)) return GBB_INVALID_ARGUMENT;
     if (count == 0) return GBB_OK;
+    /* GBB_HORIZON_GUARD: ordinary-event-clock */
     if (instance->time_half_dots > GBB_STATE_TIME_LIMIT) return GBB_INVALID_EVENT;
     if (instance->input_event_count > GBB_INPUT_EVENT_CAPACITY ||
         count > GBB_INPUT_EVENT_CAPACITY - instance->input_event_count)
@@ -3956,6 +3958,7 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
         previous = instance->input_events[instance->input_event_count - 1].at_half_dots;
     for (size_t i = 0; i < count; ++i) {
         const gbb_input_event *event = &events[i];
+        /* GBB_HORIZON_GUARD: ordinary-event */
         if (event->at_half_dots > GBB_STATE_TIME_LIMIT ||
             event->at_half_dots < instance->time_half_dots || event->at_half_dots < previous ||
             !input_event_valid(event))
@@ -4893,6 +4896,7 @@ static int validate_accept_input_span(const gbb_instance *instance,
     if (instance == NULL || span == NULL || span->cursor == NULL ||
         span->count > GBB_ACCEPT_INPUT_SPAN_MAX_EVENTS ||
         (span->events == NULL && span->count != 0u) ||
+        /* GBB_HORIZON_GUARD: borrowed-span-clock */
         instance->time_half_dots > GBB_STATE_TIME_LIMIT ||
         instance->input_event_count != 0u || instance->accept_input_span != NULL)
         return 0;
@@ -4914,6 +4918,7 @@ static int validate_accept_input_span(const gbb_instance *instance,
     uint64_t previous = 0u;
     for (size_t i = 0; i < span->count; ++i) {
         const gbb_input_event *event = &span->events[i];
+        /* GBB_HORIZON_GUARD: borrowed-span-event */
         if (!input_event_valid(event) || event->at_half_dots > GBB_STATE_TIME_LIMIT ||
             (i != 0u && event->at_half_dots < previous) ||
             (i >= *span->cursor && event->at_half_dots < instance->time_half_dots))
@@ -5095,6 +5100,7 @@ static int audio_preflight(const gbb_instance *m, uint64_t half_dots) {
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {
     uint64_t target = 0u;
+    /* GBB_HORIZON_GUARD: peripheral-addition */
     if (state_time_project(m->time_half_dots, half_dots, &target))
         advance_devices_to(m, target);
 }
@@ -6009,6 +6015,7 @@ static int hdma_start_headroom_available(const gbb_instance *m, uint8_t value,
     const uint64_t blocks = (uint64_t)(value & 0x7Fu) + 1u;
     if (blocks > (UINT64_MAX - operation_cost) / UINT64_C(64)) return 0;
     const uint64_t required = operation_cost + blocks * UINT64_C(64);
+    /* GBB_HORIZON_GUARD: hdma-block-reservation */
     return state_time_fits(m->time_half_dots, required);
 }
 
@@ -6129,6 +6136,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                                        gbb_trace_record *trace, size_t trace_capacity) {
     gbb_run_result result={0, GBB_STOP_BUDGET, 0, 0, 0, 0};
     if (instance == NULL || !instance->loaded || (trace == NULL && trace_capacity != 0)) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+    /* GBB_HORIZON_GUARD: run-entry-over-cap */
     if (instance->time_half_dots > GBB_STATE_TIME_LIMIT) {
         result.reason = GBB_STOP_INVALID_STATE;
         return result;
@@ -6140,6 +6148,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         if (instance->locked) { result.reason=GBB_STOP_LOCKUP; result.lockup_pc=instance->lockup_pc; result.lockup_opcode=instance->lockup_opcode; return result; }
         if (instance->stopped) {
             uint64_t remaining = budget_half_dots - result.consumed_half_dots;
+            /* GBB_HORIZON_GUARD: stop-wait */
             uint64_t available = GBB_STATE_TIME_LIMIT - instance->time_half_dots;
             uint64_t step = remaining < available ? remaining : available;
             uint64_t input_deadline = 0u;
@@ -6148,12 +6157,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 if (until_event <= step) step = until_event;
             }
             if (step != 0) {
-                uint64_t next_time = 0u;
-                if (!state_time_project(instance->time_half_dots, step, &next_time)) {
-                    result.reason = GBB_STOP_NO_PROGRESS;
-                    return result;
-                }
-                instance->time_half_dots = next_time;
+                /* step is bounded above by GBB_STATE_TIME_LIMIT - current. */
+                instance->time_half_dots += step;
                 result.consumed_half_dots += step;
                 apply_input_events_now(instance);
             }
@@ -6212,6 +6217,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 result.reason = GBB_STOP_OUTPUT_FULL;
                 return result;
             }
+            /* GBB_HORIZON_GUARD: cpu-stall */
             if (!state_time_fits(instance->time_half_dots, step)) {
                 result.reason = GBB_STOP_NO_PROGRESS;
                 return result;
@@ -6259,6 +6265,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 result.reason = GBB_STOP_OUTPUT_FULL;
                 return result;
             }
+            /* GBB_HORIZON_GUARD: hdma-tick */
             if (!state_time_fits(instance->time_half_dots, 1u)) {
                 result.reason = GBB_STOP_NO_PROGRESS;
                 return result;
@@ -6299,7 +6306,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 result.reason = GBB_STOP_NO_PROGRESS;
                 return result;
             }
-            if (!state_time_fits(instance->time_half_dots, irq_cost)) { result.reason=GBB_STOP_NO_PROGRESS; return result; }
+            /* GBB_HORIZON_GUARD: irq */
             uint64_t irq_target = 0u;
             if (!state_time_project(instance->time_half_dots, irq_cost, &irq_target)) {
                 result.reason = GBB_STOP_NO_PROGRESS;
@@ -6333,6 +6340,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             const uint32_t m_cycle = 8u >> instance->double_speed;
             if (budget_half_dots - result.consumed_half_dots < m_cycle) return result;
             if (!audio_preflight(instance, m_cycle)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
+            /* GBB_HORIZON_GUARD: halt */
             if (!state_time_fits(instance->time_half_dots, m_cycle)) { result.reason=GBB_STOP_NO_PROGRESS; return result; }
             /* HALT samples wake conditions at each machine-cycle boundary.
              * A timer/serial interrupt midway through a long budget must wake
@@ -6379,16 +6387,14 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                     result.reason = GBB_STOP_INVALID_STATE;
                     return result;
                 }
+                /* GBB_HORIZON_GUARD: speed-switch-reservation */
                 if (!state_time_fits(instance->time_half_dots, switch_headroom)) { /* P12-M22 */
                     result.reason = GBB_STOP_NO_PROGRESS;
                     return result;
                 }
             }
         }
-        if (!state_time_fits(instance->time_half_dots, cost)) {
-            result.reason = GBB_STOP_NO_PROGRESS;
-            return result;
-        }
+        /* GBB_HORIZON_GUARD: instruction */
         uint64_t instruction_target = 0u;
         if (!state_time_project(instance->time_half_dots, cost, &instruction_target)) {
             result.reason = GBB_STOP_NO_PROGRESS;
