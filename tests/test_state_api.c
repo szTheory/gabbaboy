@@ -24,11 +24,15 @@ static int state_size_bound(const char *case_name) {
     REQUIRE(total_size == body_size + GBB_STATE_HEADER_BYTES);
     REQUIRE(total_size <= GBB_STATE_HEADER_BYTES + GBB_STATE_MAX_BODY_BYTES);
 
+    size_t untouched = 123u;
+    REQUIRE(!state_descriptor_max_body_size(STATE_FIELDS, 0u, &untouched));
+    REQUIRE(untouched == 123u);
+
     state_field_descriptor mutated[sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0])];
     memcpy(mutated, STATE_FIELDS, sizeof(mutated));
     mutated[0].wire_width = 8u;
     mutated[0].max_count = SIZE_MAX;
-    size_t untouched = 123u;
+    untouched = 123u;
     REQUIRE(!state_descriptor_max_body_size(mutated, field_count, &untouched));
     REQUIRE(untouched == 123u);
 

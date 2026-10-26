@@ -309,12 +309,30 @@ struct gbb_instance {
                 raise ContractError(f"wrong inventory mutant diagnostic: {error}") from error
         else:
             raise ContractError(f"inventory mutant survived: {expected}")
+    duplicate_member = base.replace("uint8_t root;", "uint8_t root;\n uint8_t root;")
+    try:
+        flattened_instance(duplicate_member, "")
+    except ContractError as error:
+        if "duplicate member declaration root" not in str(error):
+            raise ContractError(f"wrong duplicate-member diagnostic: {error}") from error
+    else:
+        raise ContractError("duplicate member mutant survived")
     try:
         flattened_instance("struct gbb_instance {};", "")
     except ContractError:
         pass
     else:
         raise ContractError("empty inventory mutant survived")
+    for empty_or_duplicate in (
+        "static state_field_descriptor STATE_FIELDS[] = {};",
+        'static state_field_descriptor STATE_FIELDS[] = {{ 0u, "x", 1u, 1u }, { 1u, "x", 1u, 1u }};'
+    ):
+        try:
+            parse_state_fields(empty_or_duplicate)
+        except ContractError:
+            pass
+        else:
+            raise ContractError("empty or duplicate STATE_FIELDS mutant survived")
     audio_stub = """#define GBB_AUDIO_SAMPLE_RATE 1
 #define GBB_AUDIO_CLOCK_HALF_DOTS 2
 _Static_assert(GBB_AUDIO_SAMPLE_RATE < GBB_AUDIO_CLOCK_HALF_DOTS, "sample rate");
