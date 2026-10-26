@@ -4994,6 +4994,124 @@ set_tests_properties(state_identity state_codec_matrix state_canonical state_sem
 set_tests_properties(state_field_census state_field_census_controls PROPERTIES TIMEOUT 30)
 set_tests_properties(state_codec_mutant_controls PROPERTIES TIMEOUT 60)
 
+# White-box state-load tests seed valid ownership with different receiving RTC,
+# RAM, palette and observer histories. They compile the production core in one TU
+# so the tests can prove exact lazy-RTC restoration without a private public API.
+add_executable(test_state_internal test_state_internal.c)
+target_include_directories(test_state_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_state_internal PRIVATE c_std_17)
+set_target_properties(test_state_internal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_observers COMMAND test_state_internal state_observers)
+add_test(NAME state_rtc_palette COMMAND test_state_internal state_rtc_palette)
+set_tests_properties(state_observers state_rtc_palette PROPERTIES TIMEOUT 60)
+
+# Each observer/RTC mutant is a disposable core-source copy. Its named contract
+# test must fail on the intended assertion while the unrelated size/save control
+# passes, so a broken mutant cannot masquerade as semantic evidence.
+set(GBB_STATE_INTERNAL_CORE_SOURCE "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_STATE_INTERNAL_CORE_SOURCE}")
+file(READ "${GBB_STATE_INTERNAL_CORE_SOURCE}" gbb_state_internal_core_text)
+function(gbb_state_internal_mutant name failing_case failing_regex control_case anchor replacement)
+  set(text "${gbb_state_internal_core_text}")
+  set(anchor_text "${anchor}")
+  set(replacement_text "${replacement}")
+  string(FIND "${text}" "${anchor_text}" first)
+  string(FIND "${text}" "${anchor_text}" last REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL last)
+    message(FATAL_ERROR "State internal mutant ${name}: anchor must occur exactly once (first=${first}, last=${last})")
+  endif()
+  string(REPLACE "${anchor_text}" "${replacement_text}" text "${text}")
+  set(source "${CMAKE_CURRENT_BINARY_DIR}/state_internal_mutant_${name}.c")
+  file(WRITE "${source}" "${text}")
+  set(target "test_state_internal_mutant_${name}")
+  add_executable(${target} test_state_internal.c)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE "GBB_CORE_SOURCE_PATH=\"${source}\"")
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME state_observer_mutant_${name}
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  add_test(NAME state_observer_mutant_${name}_control
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;${control_case}"
+      -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=state_control
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  set_tests_properties(state_observer_mutant_${name} state_observer_mutant_${name}_control
+    PROPERTIES TIMEOUT 30)
+endfunction()
+
+gbb_state_internal_mutant(palette_omitted state_rtc_palette same_palette state_control
+  [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
+            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=]
+  [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
+            if (strcmp(field->path, "compat_rgb555") == 0) {
+                offset += count * field->wire_width;
+                continue;
+            }
+            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=])
+gbb_state_internal_mutant(catch_up_on_load state_rtc_palette same_rtc state_control
+  [=[static void state_apply_observers(gbb_instance *instance, uint8_t old_rumble,
+                                  int battery_changed) {]=]
+  [=[static void state_apply_observers(gbb_instance *instance, uint8_t old_rumble,
+                                  int battery_changed) {
+    (void)gbb_rtc_catch_up(instance, 1);]=])
+gbb_state_internal_mutant(raw_rtc_equality state_observers "battery_generation == 7u" state_control
+  [=[rtc_sync(&old_projected, instance->time_half_dots);
+    rtc_sync(&saved_projected, saved_time);]=]
+  [=[/* mutant: compare unprojected raw RTC representations */]=])
+gbb_state_internal_mutant(battery_bump_duplicate state_observers "battery_generation == 8u" state_control
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;]=]
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX) {
+        ++instance->battery_generation;
+        ++instance->battery_generation;
+    }]=])
+gbb_state_internal_mutant(battery_bump_missing state_observers "battery_generation == 8u" state_control
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;]=]
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX) { /* mutant: omitted observer bump */ }]=])
+gbb_state_internal_mutant(rumble_bump_duplicate state_observers "rumble_changes == 6u" state_control
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)
+        ++instance->cart.rumble_changes;]=]
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX) {
+        ++instance->cart.rumble_changes;
+        ++instance->cart.rumble_changes;
+    }]=])
+gbb_state_internal_mutant(rumble_bump_missing state_observers "rumble_changes == 6u" state_control
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)
+        ++instance->cart.rumble_changes;]=]
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX) { /* mutant: omitted observer bump */ }]=])
+gbb_state_internal_mutant(battery_observer_serialized state_observers "memcmp\\(saved, counter_variant" state_control
+  [=[if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;]=]
+  [=[if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;
+    if (strcmp(field->path, "frame_generation") == 0) {
+        *out_value = instance->frame_generation + instance->battery_generation;
+        return 1;
+    }]=])
+gbb_state_internal_mutant(rumble_observer_serialized state_observers "memcmp\\(saved, counter_variant" state_control
+  [=[if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;]=]
+  [=[if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;
+    if (strcmp(field->path, "frame_generation") == 0) {
+        *out_value = instance->frame_generation + instance->cart.rumble_changes;
+        return 1;
+    }]=])
+gbb_state_internal_mutant(battery_bump_wrap state_observers "battery_generation == UINT64_MAX" state_control
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX)]=]
+  [=[if (battery_changed && instance->cart.has_battery)]=])
+gbb_state_internal_mutant(rumble_bump_wrap state_observers "rumble_changes == UINT64_MAX" state_control
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)]=]
+  [=[if (old_rumble != instance->cart.rumble_on)]=])
+
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times

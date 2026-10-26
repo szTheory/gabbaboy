@@ -274,6 +274,17 @@ loaded ROM SHA-256, profile, execution mode and release version. The ordered
 64-byte header, body contract, semantic limits and CRC are specified in
 [`state-format.md`](state-format.md).
 
+Loading a state restores the RTC's raw live and latched registers, latch-edge
+state, subsecond phase and emulated-time anchor exactly. It reads no host clock
+and does not call `gbb_rtc_catch_up`. A host opening a save should load the ROM,
+optionally import a battery image and apply its chosen clock catch-up, then load
+the state; the state replaces the machine RAM and RTC values. This leaves the
+battery image format unchanged. Battery-generation and rumble-change counters
+remain local to the receiving instance: a load increments battery generation
+once only if the projected RAM-plus-RTC battery bytes change, and increments
+rumble changes once only if the motor line changes. Both counters saturate at
+`UINT64_MAX`; repeated identical loads add no observer changes.
+
 Null arguments return `GBB_INVALID_ARGUMENT`. After pointer validation,
 `gbb_state_size` and `gbb_save_state` return `GBB_STATE_NO_ROM` if no ROM is
 loaded. Load validation reports short/bad magic as `GBB_STATE_BAD_FORMAT`, an

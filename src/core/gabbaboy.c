@@ -4719,6 +4719,48 @@ static void state_project_cart_from_body(const gbb_instance *instance,
             cart->rtc_l[i] = (uint8_t)value;
 }
 
+/* Compare the battery-visible image without changing either lazy RTC
+ * representation. Battery bytes contain RAM and the RTC block's live/latched
+ * registers, subsecond phase and latch edge; rtc_synced_at is only the emulated
+ * projection anchor and is intentionally absent from that image. */
+/* MODEL: BOTH GATE-00 basis="state restore compares the receiving battery image at each emulated instant" */
+static int state_battery_equal_projected(const gbb_instance *instance,
+                                         const uint8_t *body, size_t body_size) {
+    if (instance == NULL || body == NULL || !instance->cart.has_battery) return 1;
+    if (instance->cartridge_ram_size != 0u) {
+        const state_field_descriptor *ram = state_field_by_path("cartridge_ram");
+        if (ram == NULL || instance->cartridge_ram == NULL) return 0;
+        const size_t offset = state_body_field_offset(instance, ram);
+        if (offset == SIZE_MAX || instance->cartridge_ram_size > body_size ||
+            offset > body_size - instance->cartridge_ram_size ||
+            memcmp(instance->cartridge_ram, body + offset, instance->cartridge_ram_size) != 0)
+            return 0;
+    }
+    if (!instance->cart.has_timer) return 1;
+
+    cart_state old_projected = instance->cart;
+    cart_state saved_projected = instance->cart;
+    uint64_t saved_time = 0u;
+    if (!state_source_raw(instance, body, body_size, "time_half_dots", 0u, &saved_time))
+        return 0;
+    state_project_cart_from_body(instance, body, body_size, &saved_projected);
+    rtc_sync(&old_projected, instance->time_half_dots);
+    rtc_sync(&saved_projected, saved_time);
+    return rtc_fields_equal(&old_projected, &saved_projected);
+}
+
+/* Host observer histories are receiving-instance state. They follow a successful
+ * machine apply exactly once and saturate instead of wrapping. */
+/* MODEL: BOTH GATE-00 basis="state load updates receiver-local battery and rumble observers" */
+static void state_apply_observers(gbb_instance *instance, uint8_t old_rumble,
+                                  int battery_changed) {
+    if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)
+        ++instance->cart.rumble_changes;
+    if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;
+}
+
 /* MODEL: BOTH GATE-00 basis="state API validates the current profile-bound instance" */
 gbb_error gbb_state_size(const gbb_instance *instance, size_t *out_size) {
     if (instance == NULL || out_size == NULL) return GBB_INVALID_ARGUMENT;
@@ -4803,31 +4845,10 @@ gbb_error gbb_load_state(gbb_instance *instance, const uint8_t *bytes,
     const uint8_t *body = bytes + GBB_STATE_HEADER_BYTES;
     if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;
 
-    const int old_rumble = instance->cart.rumble_on;
-    int battery_changed = 0;
-    if (instance->cart.has_battery) {
-        const state_field_descriptor *ram_field = state_field_by_path("cartridge_ram");
-        const size_t ram_offset = state_body_field_offset(instance, ram_field);
-        if (instance->cartridge_ram_size != 0u &&
-            (ram_offset == SIZE_MAX || memcmp(instance->cartridge_ram, body + ram_offset,
-                                               instance->cartridge_ram_size) != 0))
-            battery_changed = 1;
-        if (instance->cart.has_timer) {
-            cart_state old_projected = instance->cart;
-            cart_state new_projected = instance->cart;
-            uint64_t old_time = instance->time_half_dots, new_time = 0u;
-            (void)state_raw_from_body(instance, body, body_size, "time_half_dots", 0u, &new_time);
-            state_project_cart_from_body(instance, body, body_size, &new_projected);
-            rtc_sync(&old_projected, old_time);
-            rtc_sync(&new_projected, new_time);
-            if (!rtc_fields_equal(&old_projected, &new_projected)) battery_changed = 1;
-        }
-    }
+    const uint8_t old_rumble = instance->cart.rumble_on;
+    const int battery_changed = !state_battery_equal_projected(instance, body, body_size);
     state_apply(instance, body, body_size);
-    if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)
-        ++instance->cart.rumble_changes;
-    if (battery_changed && instance->cart.has_battery && instance->battery_generation != UINT64_MAX)
-        ++instance->battery_generation;
+    state_apply_observers(instance, old_rumble, battery_changed);
     return GBB_OK;
 }
 
