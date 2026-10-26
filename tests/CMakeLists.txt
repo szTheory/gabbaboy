@@ -5008,6 +5008,19 @@ add_test(NAME state_refusal_controls COMMAND test_state_internal state_refusal_c
 set_tests_properties(state_observers state_rtc_palette state_refusal state_refusal_controls
   PROPERTIES TIMEOUT 60)
 
+# Every run mode shares the operational time-horizon scheduler. These white-box
+# cases seed genuine codec-valid boundary states and exercise the independent
+# STOP, stall, HDMA, IRQ, HALT, instruction and reservation paths.
+add_executable(test_state_horizon test_state_horizon.c)
+target_include_directories(test_state_horizon PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_state_horizon PRIVATE c_std_17)
+set_target_properties(test_state_horizon PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_horizon COMMAND test_state_horizon horizon_matrix)
+add_test(NAME state_horizon_wrappers COMMAND test_state_horizon horizon_wrappers)
+add_test(NAME state_horizon_sentinels COMMAND test_state_horizon horizon_sentinels)
+set_tests_properties(state_horizon state_horizon_wrappers state_horizon_sentinels
+  PROPERTIES TIMEOUT 30)
+
 # Each observer/RTC mutant is a disposable core-source copy. Its named contract
 # test must fail on the intended assertion while the unrelated size/save control
 # passes, so a broken mutant cannot masquerade as semantic evidence.
