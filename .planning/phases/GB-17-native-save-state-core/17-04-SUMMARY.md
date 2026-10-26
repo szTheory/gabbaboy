@@ -13,12 +13,12 @@ provides:
   - Complete accepted-state horizon closure matrix and immutable branch-specific guard mutations
 affects: [state-persistence, CGB timing, acceptance]
 actuals:
-  tokens: 22401
+  tokens: 22675.5
   tasks: 3
-  commits: 7
-commits: 7
+  commits: 9
+commits: 9
 plan_head_before: 207e7bc0688ec78f4164d1a52f67a8d3586d2206
-plan_head_after: f64a798539b517604db3c522e689f56416e7df5c
+plan_head_after: 95302423da0aa4bd7ce060621c4b262e28675b2a
 tech-stack:
   added: []
   patterns:
@@ -43,9 +43,37 @@ key-decisions:
   - "Use one checked `state_time_fits` predicate for the 2^62 limit while preserving the separately validated UINT64_MAX timer sentinel."
   - "Keep the full audio phase and ring-head closure space; split it into fixture-linked CTest shards within the normal per-test timeout."
 requirements-completed: [STATE-02, STATE-03]
-duration: 50min
+coverage:
+  - id: D1
+    description: "Every native run wrapper and independently advancing branch respects the shared 2^62 horizon while retaining transactional refusal and valid timer sentinel behavior."
+    requirement: STATE-02
+    human_judgment: false
+    verification:
+      - kind: unit
+        ref: "state_horizon, state_horizon_wrappers, and state_horizon_sentinels at immutable revision f64a798539b517604db3c522e689f56416e7df5c."
+        status: pass
+      - kind: integration
+        ref: "Affected CGB speed-switch, HDMA, partition, model-gate, and test-budget selection passed 126/126 at immutable revision f64a798539b517604db3c522e689f56416e7df5c."
+        status: pass
+  - id: D2
+    description: "Ordinary event and borrowed-span admission is capped without partial mutation, equal-time ordering changes, or loss of save/load closure."
+    requirement: STATE-03
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "state_horizon_events, state_horizon_closure, state_canonical, and state_audio_bound at immutable revision f64a798539b517604db3c522e689f56416e7df5c; the fixture-linked closure gate covered all 5,644 audio-phase/ring-head combinations."
+        status: pass
+  - id: D3
+    description: "Every independent horizon/admission guard has a witnessed immutable semantic mutation and unrelated codec control, including under the project sanitizer configuration."
+    requirement: STATE-03
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "verify-state-horizon.py at immutable revision 95302423da0aa4bd7ce060621c4b262e28675b2a: all 14 semantic mutants exit 1 and controls exit 0 in normal and sanitizer=true runs; sanitizer self-test passes with control leak detection enabled."
+        status: pass
+duration: 63min
 started: 2026-10-26T18:30:21-04:00
-completed: 2026-10-26
+completed: 2026-10-26T19:33:05-04:00
 status: complete
 ---
 
@@ -55,9 +83,9 @@ status: complete
 
 ## Performance
 
-- **Duration:** 50 min
+- **Duration:** 63 min
 - **Started:** 2026-10-26T18:30:21-04:00
-- **Completed:** 2026-10-26T19:20:28-04:00
+- **Completed:** 2026-10-26T19:33:05-04:00
 - **Tasks:** 3
 - **Files modified:** 11
 
@@ -71,10 +99,12 @@ status: complete
 
 ## Verification
 
-- `cmake --preset phase1` and `cmake --build --preset phase1` passed at `f64a798539b517604db3c522e689f56416e7df5c`.
+- `cmake --preset phase1` and `cmake --build --preset phase1` passed at `f64a798539b517604db3c522e689f56416e7df5c`; the build was repeated successfully after the checker-only fix at `95302423da0aa4bd7ce060621c4b262e28675b2a`.
 - Task 1 selector `state_(horizon|horizon_wrappers|horizon_sentinels)` passed 3/3.
 - Task 2 selector `state_(horizon_events|horizon_closure|canonical|audio_bound)` passed 19/19. Fixture selection ran all 16 closure tests; each shard completed in about 18–22 seconds, and the run reported all 5,644 phase/head cases with no omitted shard cases.
-- Task 3 selector `state_horizon_(mutants|mutant_controls)` passed 2/2. The checker report at the immutable revision records 14/14 intended mutant failures, each with semantic exit 1 and unrelated control exit 0; no compile or setup failure counted as a kill. AppleClang 21 and the configured Debug `-O2` test build were used; sanitizers were disabled in this build.
+- Task 3 selector `state_horizon_(mutants|mutant_controls)` passed 2/2 at both `f64a798539b517604db3c522e689f56416e7df5c` and `95302423da0aa4bd7ce060621c4b262e28675b2a`. The immutable checker report records 14/14 intended mutant failures, each with semantic exit 1 and unrelated control exit 0; no compile or setup failure counted as a kill. The normal build used AppleClang 21 and the configured Debug `-O2` test build.
+- The corrected immutable checker and controls passed 2/2 in the Linux sanitizer container at `95302423da0aa4bd7ce060621c4b262e28675b2a`, configured with `GABBABOY_ENABLE_SANITIZERS=ON` and the project ASan/UBSan flags. The CTest properties used the existing sanitizer timeout multiplier (180 seconds); the checker report recorded `sanitizer=true`, all 14 semantic exits as 1, and all control exits as 0. The sanitizer self-test passed 1/1. Leak detection remains enabled for passing controls; the expected-failing mutant child disables only LSan because its intentional early assertion return bypasses teardown, while ASan/UBSan remain enabled.
+- A full sanitizer closure run was attempted in the local `linux/amd64` container under `arm64` emulation. Eight closure shards reached the existing 180-second CTest timeout; this is recorded as an emulation runtime limit, not as a semantic failure. The timeout policy was not changed, and the native hosted sanitizer closure is pending the phase orchestrator's exact-head CI. Normal full closure remains green at `f64a798539b517604db3c522e689f56416e7df5c`.
 - The affected CGB/speed-switch/HDMA/partition, model-gate and test-budget selection passed 126/126, including `cgb_speed_headroom`, the M22 omitted-reservation mutant and control, `cgb_hdma_resource_bounds`, and speed stall/device-state controls. `dmg_baseline` passed 1/1.
 - The Task 1, Task 2 and Task 3 JUnit RED records each returned `RED_EVIDENCE_OK`; semantic inspection confirmed stop-wait cap crossing, borrowed-span cap+1 acceptance, and the deliberately removed stop-wait guard respectively. Task 1/2 evidence was regenerated from their immutable pre-GREEN commits without changing earlier records.
 - `git diff --check` passed. The full project CTest suite is left to the phase orchestrator's post-wave run.
@@ -88,8 +118,9 @@ status: complete
 5. **Task 3 RED: Witness independent horizon branches** — `0da6bfb`.
 6. **Authorized legacy fixture migration** — `8d8ab04`.
 7. **Task 3 GREEN: Close the operational state horizon** — `f64a798`.
+8. **Checker fix: Keep sanitizer mutant failures semantic** — `9530242`.
 
-The persisted plan ledger measured seven commits from `207e7bc0688ec78f4164d1a52f67a8d3586d2206` through `f64a798539b517604db3c522e689f56416e7df5c`. The realized diff contained 89,604 characters, or 22,401 estimate tokens.
+The persisted plan ledger measured nine commits from `207e7bc0688ec78f4164d1a52f67a8d3586d2206` through `95302423da0aa4bd7ce060621c4b262e28675b2a`, including the initial summary-only record. The realized implementation diff measured 90,702 characters, or 22,675.5 estimate tokens.
 
 ## TDD Gate Compliance
 
@@ -98,7 +129,7 @@ The persisted plan ledger measured seven commits from `207e7bc0688ec78f4164d1a52
 - **Task 2 RED:** The immutable pre-GREEN commit `96ef0cd` ran `state_horizon_events` and failed the intended borrowed-span cap-plus-one admission assertion. `build/state_horizon_events_task2_red.json` passed `check tdd-red-evidence` with `RED_EVIDENCE_OK`.
 - **Task 2 GREEN:** Event/span admission, equal-time event ordering, all accepted-state closure cases, canonical save/load, and audio-bound controls pass at `f64a798`.
 - **Task 3 RED:** The branch-specific missing-stop-wait-guard mutation emitted its witness and failed the named semantic assertion; `build/state_horizon_guard-red.json` passed `check tdd-red-evidence` with `RED_EVIDENCE_OK`.
-- **Task 3 GREEN:** All 14 immutable guard mutants are semantically rejected and all unrelated controls pass at `f64a798`.
+- **Task 3 GREEN:** All 14 immutable guard mutants are semantically rejected and all unrelated controls pass at `f64a798`. The sanitizer checker follow-up at `9530242` preserves those semantic kills with ASan/UBSan active and leak detection enabled on passing controls.
 
 ## Files Created/Modified
 
@@ -130,10 +161,21 @@ The persisted plan ledger measured seven commits from `207e7bc0688ec78f4164d1a52
 - **Files modified:** `tests/test_cgb_hdma_internal.c`, `tests/test_cgb_speed_internal.c`, `tests/CMakeLists.txt`, `cmake/P12Mutants.cmake`, and `17-04-PLAN.md`.
 - **Commit:** `8d8ab04`.
 
+**2. [Rule 1 - Bug] Keep intentional sanitizer mutant failures distinguishable from leak reports**
+
+- **Found during:** Task 3 sanitizer verification.
+- **Issue:** A semantically failing mutation intentionally returns at its assertion before the test fixture can destroy the machine, so LeakSanitizer reported the expected early exit as a non-TAP failure and obscured whether the named guard was killed.
+- **Fix:** Disabled leak detection only in the expected-failing mutant child when sanitizer compile flags are present. ASan/UBSan remain enabled, and leak detection stays enabled for the passing control; the checker self-test verifies semantic failure recognition.
+- **Files modified:** `tests/scripts/verify-state-horizon.py`.
+- **Verification:** Immutable normal and sanitizer mutant/control CTests pass 2/2, with 14/14 semantic mutant exits 1, all controls 0, and sanitizer self-test 1/1.
+- **Commit:** `9530242`.
+
+The local full sanitizer closure attempt remains environment-limited by eight 180-second timeouts under amd64-on-arm64 emulation; native hosted sanitizer closure is pending. No timeout, test case, or acceptance criterion was weakened.
+
 No authentication gates, new stubs, skipped tests, or security-relevant trust surfaces were introduced.
 
 ## Self-Check: PASSED
 
 - `17-04-SUMMARY.md` exists at the required phase path.
-- All seven plan commits (`1e544f6`, `1b744c8`, `96ef0cd`, `84c2159`, `0da6bfb`, `8d8ab04`, and `f64a798`) exist and are ancestors of `HEAD`.
+- All eight implementation commits (`1e544f6`, `1b744c8`, `96ef0cd`, `84c2159`, `0da6bfb`, `8d8ab04`, `f64a798`, and `9530242`) plus the initial summary record `971180e` exist and are ancestors of `HEAD`.
 - The `summary_coverage` CTest passed 1/1 for this block-schema coverage.
