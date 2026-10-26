@@ -10,12 +10,12 @@ provides:
   - Installed C and C++ state clients and the documented wire/API contract
 affects: [17-02, native-integration, state-format]
 actuals:
-  tokens: 47026
+  tokens: 47651
   tasks: 3
-  commits: 8
-commits: 8
+  commits: 10
+commits: 10
 plan_head_before: f530a99aab986d0f42a42fa14115981a76f8b78f
-plan_head_after: 04e37bcc0786893f26d26ee78a71673b87546e64
+plan_head_after: 6b69a3579fd0f6e89b47ca4942954a1596e24dfb
 tech-stack:
   added: []
   patterns:
@@ -68,7 +68,7 @@ coverage:
     human_judgment: false
     verification:
       - kind: e2e
-        ref: "state_tracer --rev 04e37bcc0786893f26d26ee78a71673b87546e64; state_bytes=189176, prefix_audio=572, future_audio=1144"
+        ref: "state_tracer --rev 6b69a3579fd0f6e89b47ca4942954a1596e24dfb; state_bytes=189176, prefix_audio=572, future_audio=1144"
         status: pass
   - id: D4
     description: "The qualified instance inventory and writable-global scan reject seeded missing-treatment, nested-field and global mutants."
@@ -86,7 +86,17 @@ coverage:
       - kind: unit
         ref: "state_format_contract at immutable source 04e37bcc0786893f26d26ee78a71673b87546e64; docs_control=pass, version_controls=8, CRC=CBF43926"
         status: pass
-duration: 37min
+  - id: D6
+    description: "Git-less source archives configure and build as unqualified while state evidence rejects absent or unresolved immutable revisions; a selected tracer regenerates its receipt before use."
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "At immutable source 6b69a3579fd0f6e89b47ca4942954a1596e24dfb, state_revision_controls and acceptance_dense_input_controls passed; the archive core compiled with GBB_BUILD_REVISION=unknown and GBB_BUILD_QUALIFIED=0."
+        status: pass
+      - kind: integration
+        ref: "After deleting state-precodec-proof.json, ctest --test-dir build -R '^state_tracer$' -j8 --output-on-failure --no-tests=error ran state_precodec_gate first and passed 2/2 at 6b69a3579fd0f6e89b47ca4942954a1596e24dfb."
+        status: pass
+duration: 47min
 completed: 2026-10-26
 status: complete
 ---
@@ -97,9 +107,9 @@ status: complete
 
 ## Performance
 
-- **Duration:** 37 min
+- **Duration:** 47 min
 - **Started:** 2026-10-26T19:50:48Z
-- **Completed:** 2026-10-26T20:27:09Z
+- **Completed:** 2026-10-26T20:37:40Z
 - **Tasks:** 3
 - **Files modified:** 12
 
@@ -114,8 +124,9 @@ status: complete
 1. **Task 1: Pre-codec proof gates** - `2c29a35`, `004bd45`, `dbe7d1a`.
 2. **Task 2: Versioned codec and installed tracer** - `1ce81ff`, `c2d0a7c`, `a29906d`.
 3. **Task 3: Installed C/C++ clients and format docs** - `bffa064`, `04e37bc`.
+4. **Post-summary regression follow-up** - `6b69a35`.
 
-The production codec is in `c2d0a7c797942a0decffc73c328c718dfa440a0e`. The final immutable verification head is `04e37bcc0786893f26d26ee78a71673b87546e64`; its pre-codec receipt binds source, descriptor/range/constants and proof-input digests, and records passing negative controls.
+The production codec is in `c2d0a7c797942a0decffc73c328c718dfa440a0e`. Core verification passed at immutable head `04e37bcc0786893f26d26ee78a71673b87546e64`. Follow-up CMake and test-harness fixes are in immutable head `6b69a3579fd0f6e89b47ca4942954a1596e24dfb`; its regenerated pre-codec receipt binds source, descriptor/range/constants and proof-input digests, and records passing negative controls.
 
 ## Files Created/Modified
 
@@ -164,6 +175,7 @@ The production codec is in `c2d0a7c797942a0decffc73c328c718dfa440a0e`. The final
 
 - The pre-codec receipt initially named the Task 2 implementation revision. The installed tracer correctly rejected it after Task 3 advanced HEAD. Reran `state_precodec_gate` at final head `04e37bcc0786893f26d26ee78a71673b87546e64`; the receipt and tracer then passed at the same immutable revision.
 - The first installed C client run found the missing entry jump, and the next C++ run exposed the helper return convention. Both harness faults were fixed in the Task 3 commit and both installed tests pass.
+- The post-wave suite exposed two harness regressions: a Git-less disposable source copy was rejected during CMake configure, and `state_tracer` could run before its receipt-producing gate. Commit `6b69a35` restores unqualified archive builds while keeping state evidence revision checks fail-closed, adds explicit missing/unknown/nonexistent revision controls, and wires a CTest fixture from `state_precodec_gate` to `state_tracer`. The `phase1` configure/build passed; the parallel regression selection passed 4/4, and a clean-receipt `-R '^state_tracer$' -j8` run passed 2/2 with the gate first.
 
 ## User Setup Required
 
@@ -176,9 +188,9 @@ Plan 17-01 is complete. Phase 17 remains active; planned follow-on Plan 17-02 ex
 ## Self-Check: PASSED
 
 - Summary, format documentation, contract checker and proof executable exist.
-- All eight task commits are ancestors of final implementation head `04e37bcc0786893f26d26ee78a71673b87546e64`; the plan ledger measures exactly eight commits.
-- The final immutable-head verification set passed 13/13, including installed clients, docs negative control, inventory/global negative controls, pre-codec receipt, tracer and `dmg_baseline`.
-- `verify-summary-coverage.py --file` passed with five entries, and OpenGSD classified all five as auto-covered.
+- All ten commits measured from the persisted plan ledger are ancestors of implementation head `6b69a3579fd0f6e89b47ca4942954a1596e24dfb`; this includes the original summary record and the follow-up regression fix.
+- The original immutable-head verification set passed 13/13 at `04e37bcc0786893f26d26ee78a71673b87546e64`, including installed clients, docs negative control, inventory/global negative controls, pre-codec receipt, tracer and `dmg_baseline`. At follow-up head `6b69a3579fd0f6e89b47ca4942954a1596e24dfb`, the phase1 build passed, the parallel regression selection passed 4/4, and isolated tracer selection regenerated its deleted receipt and passed 2/2.
+- `verify-summary-coverage.py --file` passed with six entries, and OpenGSD classified all six as auto-covered.
 
 ---
 *Phase: GB-17-native-save-state-core*
