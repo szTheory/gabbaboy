@@ -1,8 +1,8 @@
 # Phase 17 continuation
 
-Completed stage: **Phase 17 execution, waves 1–3 of 11 locally verified**. Plans 17-01/02/03 are committed; full post-wave suite passes 1299/1299 at `1df0b1e`. Draft PR #130 is open; its earlier `032ea01` required CI is red. Phase qualification and publication remain unclaimed.
+Completed stage: **Phase 17 execution, waves 1–3 of 11 locally verified**. Plans 17-01/02/03 are committed; full post-wave suite passes 1299/1299 at `1df0b1e`. Hosted integration fixes are in `38a86f2`; full local suite at `9d710b2` passes1299/1299. Draft PR #130 requires fresh successful current-revision hosted checks. Phase qualification and publication remain unclaimed.
 
-Next stage: **Phase 17 — Native Save State Core, hosted integration correction before wave 4 / plan 17-04**. Fix missing C++ `<cstdint>`, portable nm/readonly-relocation/ASan symbol classification and standalone performance harness release defines. Logs are in ignored `build/17-pr130-ci-failures.log`; package failures are upstream exact-head gate failures. Keep negative controls fail-closed and refresh required hosted checks after correction. The next feature phase is **18 — Player Save Slots and Host Contract**, after this phase and owner choice.
+Next stage: **Phase 17 — Native Save State Core, wave 4 / plan 17-04**. The prior C++ include, section-aware global scan and standalone perf version failures are locally corrected. Do not treat earlier failed hosted runs as current evidence; push/rerun current exact-head required checks. The next feature phase is **18 — Player Save Slots and Host Contract**, after this phase and owner choice.
 
 Exact next command: `/gsd-execute-phase 17`
 
