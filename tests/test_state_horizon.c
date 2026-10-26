@@ -367,6 +367,289 @@ static int horizon_sentinels(void) {
     return 1;
 }
 
+static int horizon_event_admission(void) {
+    gbb_instance *machine = new_machine(GBB_PROFILE_DMG_CPU_B);
+    gbb_instance *target = new_machine(GBB_PROFILE_DMG_CPU_B);
+    REQUIRE_CASE(machine != NULL && target != NULL, "fixture: event admission machines");
+    seed_time(machine, TEST_HORIZON - 2u);
+    const gbb_input_event boundary[] = {
+        {TEST_HORIZON - 1u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A},
+        {TEST_HORIZON, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_A}
+    };
+    REQUIRE_CASE(gbb_queue_events(machine, boundary, 2u) == GBB_OK,
+                 "horizon discrepancy: cap-minus-one and cap events rejected");
+    REQUIRE_CASE(machine->input_event_count == 2u &&
+                 memcmp(machine->input_events, boundary, sizeof(boundary)) == 0,
+                 "horizon discrepancy: event order changed on admission");
+    const gbb_instance before_cap_plus_one = *machine;
+    const gbb_input_event cap_plus_one = {
+        TEST_HORIZON + 1u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_B
+    };
+    const gbb_error over_cap = gbb_queue_events(machine, &cap_plus_one, 1u);
+    if (over_cap != GBB_INVALID_EVENT) {
+        fprintf(stderr, "ordinary event cap+1 actual error=%d count=%zu\n",
+                (int)over_cap, machine->input_event_count);
+        return fail_case("horizon discrepancy: ordinary-event cap+1 admitted");
+    }
+    REQUIRE_CASE(memcmp(&before_cap_plus_one, machine, sizeof(before_cap_plus_one)) == 0,
+                 "horizon discrepancy: rejected event changed the queue");
+    const gbb_input_event before_current = {
+        TEST_HORIZON - 3u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_B
+    };
+    REQUIRE_CASE(gbb_queue_events(machine, &before_current, 1u) == GBB_INVALID_EVENT &&
+                 memcmp(&before_cap_plus_one, machine, sizeof(before_cap_plus_one)) == 0,
+                 "horizon discrepancy: before-current event was not transactional");
+    uint8_t *state = NULL;
+    size_t state_size = 0u;
+    REQUIRE_CASE(save_snapshot(machine, &state, &state_size),
+                 "closure discrepancy: accepted cap event queue cannot be saved");
+    REQUIRE_CASE(gbb_load_state(target, state, state_size) == GBB_OK &&
+                 target->input_event_count == 2u &&
+                 memcmp(target->input_events, boundary, sizeof(boundary)) == 0,
+                 "closure discrepancy: loaded event order changed");
+    free(state);
+    gbb_destroy(target);
+    gbb_destroy(machine);
+
+    machine = new_machine(GBB_PROFILE_DMG_CPU_B);
+    REQUIRE_CASE(machine != NULL, "fixture: full event queue machine");
+    seed_time(machine, TEST_HORIZON);
+    gbb_input_event full[GBB_INPUT_EVENT_CAPACITY];
+    for (size_t i = 0u; i < GBB_INPUT_EVENT_CAPACITY; ++i)
+        full[i] = (gbb_input_event){TEST_HORIZON, GBB_INPUT_BUTTON_PRESS,
+                                   (uint8_t)(i % 8u)};
+    REQUIRE_CASE(gbb_queue_events(machine, full, GBB_INPUT_EVENT_CAPACITY) == GBB_OK,
+                 "horizon discrepancy: full queue at cap rejected");
+    const gbb_instance full_before = *machine;
+    REQUIRE_CASE(gbb_queue_events(machine, full, 1u) == GBB_EVENT_QUEUE_FULL &&
+                 memcmp(&full_before, machine, sizeof(full_before)) == 0,
+                 "horizon discrepancy: full queue admission changed state");
+    const gbb_instance empty_before = *machine;
+    REQUIRE_CASE(gbb_queue_events(machine, NULL, 0u) == GBB_OK &&
+                 memcmp(&empty_before, machine, sizeof(empty_before)) == 0,
+                 "horizon discrepancy: empty event batch changed state");
+    gbb_destroy(machine);
+    return 1;
+}
+
+static int horizon_span_admission(void) {
+    gbb_instance *machine = new_machine(GBB_PROFILE_DMG_CPU_B);
+    REQUIRE_CASE(machine != NULL, "fixture: borrowed span machine");
+    seed_time(machine, TEST_HORIZON - 2u);
+    size_t cursor = 0u;
+    const gbb_input_event over_cap_event = {
+        TEST_HORIZON + 1u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A
+    };
+    const gbb_accept_input_span over_cap = {&over_cap_event, 1u, &cursor};
+    const gbb_instance before = *machine;
+    const gbb_run_result rejected = gbb_accept_run_diagnostic(
+        machine, 8u, &over_cap, NULL, 0u, NULL, 0u);
+    REQUIRE_CASE(rejected.reason == GBB_STOP_INVALID_STATE &&
+                 rejected.consumed_half_dots == 0u && cursor == 0u &&
+                 memcmp(&before, machine, sizeof(before)) == 0,
+                 "horizon discrepancy: borrowed span cap+1 admitted or mutated");
+
+    gbb_audio_frame frames[1] = {{0}};
+    size_t frame_count = SIZE_MAX;
+    const gbb_run_result rejected_audio = gbb_accept_run_audio(
+        machine, 8u, &over_cap, frames, 1u, &frame_count);
+    REQUIRE_CASE(rejected_audio.reason == GBB_STOP_INVALID_STATE &&
+                 rejected_audio.consumed_half_dots == 0u && frame_count == 0u &&
+                 cursor == 0u && memcmp(&before, machine, sizeof(before)) == 0,
+                 "horizon discrepancy: audio span cap+1 admitted or mutated");
+
+    const gbb_input_event past_event = {
+        TEST_HORIZON - 3u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A
+    };
+    const gbb_accept_input_span stale = {&past_event, 1u, &cursor};
+    const gbb_run_result stale_result = gbb_accept_run_diagnostic(
+        machine, 8u, &stale, NULL, 0u, NULL, 0u);
+    REQUIRE_CASE(stale_result.reason == GBB_STOP_INVALID_STATE && cursor == 0u &&
+                 memcmp(&before, machine, sizeof(before)) == 0,
+                 "horizon discrepancy: span suffix before current time admitted");
+
+    const gbb_input_event reversed_events[] = {
+        {TEST_HORIZON, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A},
+        {TEST_HORIZON - 1u, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_A}
+    };
+    const gbb_accept_input_span reversed = {reversed_events, 2u, &cursor};
+    const gbb_run_result reversed_result = gbb_accept_run_diagnostic(
+        machine, 8u, &reversed, NULL, 0u, NULL, 0u);
+    REQUIRE_CASE(reversed_result.reason == GBB_STOP_INVALID_STATE && cursor == 0u &&
+                 memcmp(&before, machine, sizeof(before)) == 0,
+                 "horizon discrepancy: reversed span admitted");
+
+    const gbb_accept_input_span too_many = {NULL, SIZE_MAX, &cursor};
+    const gbb_run_result count_overflow = gbb_accept_run_diagnostic(
+        machine, 8u, &too_many, NULL, 0u, NULL, 0u);
+    REQUIRE_CASE(count_overflow.reason == GBB_STOP_INVALID_STATE && cursor == 0u &&
+                 memcmp(&before, machine, sizeof(before)) == 0,
+                 "horizon discrepancy: overflowing span extent admitted");
+    gbb_destroy(machine);
+
+    machine = new_machine(GBB_PROFILE_DMG_CPU_B);
+    REQUIRE_CASE(machine != NULL, "fixture: same-time span machine");
+    machine->pc = 0x0200u;
+    seed_time(machine, TEST_HORIZON - 8u);
+    machine->serial_active = 1u;
+    machine->serial_control = 0u;
+    machine->serial_data = 0u;
+    machine->serial_bits = 0u;
+    const gbb_input_event same_time[] = {
+        {TEST_HORIZON - 9u, GBB_INPUT_SERIAL_EDGE, 0u},
+        {TEST_HORIZON, GBB_INPUT_SERIAL_EDGE, 1u},
+        {TEST_HORIZON, GBB_INPUT_SERIAL_EDGE, 0u}
+    };
+    cursor = 1u; /* The historical prefix remains in caller-owned span order. */
+    const gbb_accept_input_span ordered = {same_time, 3u, &cursor};
+    const gbb_run_result accepted = gbb_accept_run_diagnostic(
+        machine, 8u, &ordered, NULL, 0u, NULL, 0u);
+    REQUIRE_CASE(accepted.reason == GBB_STOP_BUDGET &&
+                 accepted.consumed_half_dots == 8u &&
+                 machine->time_half_dots == TEST_HORIZON && cursor == 3u &&
+                 machine->serial_data == 2u && machine->serial_bits == 2u,
+                 "horizon discrepancy: same-time span order or CPU collision changed");
+    uint8_t *after = NULL;
+    size_t after_size = 0u;
+    REQUIRE_CASE(save_snapshot(machine, &after, &after_size),
+                 "closure discrepancy: same-time span result cannot be saved");
+    REQUIRE_CASE(gbb_load_state(machine, after, after_size) == GBB_OK,
+                 "closure discrepancy: same-time span result cannot be reloaded");
+    uint8_t *roundtrip = NULL;
+    size_t roundtrip_size = 0u;
+    REQUIRE_CASE(save_snapshot(machine, &roundtrip, &roundtrip_size) &&
+                 roundtrip_size == after_size &&
+                 memcmp(after, roundtrip, after_size) == 0,
+                 "closure discrepancy: same-time span resave changed bytes");
+    free(roundtrip);
+    free(after);
+    gbb_destroy(machine);
+    return 1;
+}
+
+static int horizon_events(void) {
+    return horizon_event_admission() && horizon_span_admission();
+}
+
+static int compare_u64(const void *left, const void *right) {
+    const uint64_t a = *(const uint64_t *)left;
+    const uint64_t b = *(const uint64_t *)right;
+    return a < b ? -1 : a > b ? 1 : 0;
+}
+
+static int horizon_closure(void) {
+    gbb_instance *machine = new_machine(GBB_PROFILE_DMG_CPU_B);
+    REQUIRE_CASE(machine != NULL, "fixture: closure machine");
+    size_t state_size = 0u;
+    REQUIRE_CASE(gbb_state_size(machine, &state_size) == GBB_OK,
+                 "fixture: closure state size");
+    uint8_t *baseline = NULL;
+    uint8_t *before = (uint8_t *)malloc(state_size);
+    uint8_t *after = (uint8_t *)malloc(state_size);
+    uint8_t *roundtrip = (uint8_t *)malloc(state_size);
+    uint8_t *blocked = (uint8_t *)malloc(state_size);
+    REQUIRE_CASE(before != NULL && after != NULL && roundtrip != NULL && blocked != NULL &&
+                 save_snapshot(machine, &baseline, &state_size),
+                 "fixture: allocate closure state buffers");
+
+    uint64_t phases[4096];
+    size_t phase_count = 0u;
+    phases[phase_count++] = 0u;
+    phases[phase_count++] = GBB_AUDIO_CLOCK_HALF_DOTS - 1u;
+    for (uint64_t completed = 0u; completed < GBB_AUDIO_EVENT_TAPS; ++completed) {
+        const uint64_t base = completed * GBB_AUDIO_CLOCK_HALF_DOTS;
+        const uint64_t first_quotient = base / GBB_AUDIO_SAMPLE_RATE + 1u;
+        const uint64_t last_quotient =
+            (base + GBB_AUDIO_CLOCK_HALF_DOTS - 1u) / GBB_AUDIO_SAMPLE_RATE;
+        for (uint64_t quotient = first_quotient; quotient <= last_quotient; ++quotient) {
+            const uint64_t phase = quotient * GBB_AUDIO_SAMPLE_RATE - base;
+            if (phase < GBB_AUDIO_CLOCK_HALF_DOTS) phases[phase_count++] = phase;
+        }
+    }
+    /* Every phase at which one of the next eight bounded ticks can consume an
+     * audio sample, plus the adjacent values, is a separate transition class. */
+    for (uint64_t samples = 1u; samples <= 8u; ++samples) {
+        const uint64_t boundary = GBB_AUDIO_CLOCK_HALF_DOTS -
+                                  samples * GBB_AUDIO_SAMPLE_RATE;
+        if (boundary > 0u) phases[phase_count++] = boundary - 1u;
+        phases[phase_count++] = boundary;
+        if (boundary + 1u < GBB_AUDIO_CLOCK_HALF_DOTS)
+            phases[phase_count++] = boundary + 1u;
+    }
+    qsort(phases, phase_count, sizeof(phases[0]), compare_u64);
+    size_t unique_phases = 0u;
+    for (size_t i = 0u; i < phase_count; ++i)
+        if (unique_phases == 0u || phases[i] != phases[unique_phases - 1u])
+            phases[unique_phases++] = phases[i];
+
+    const gbb_input_event_kind kinds[] = {
+        GBB_INPUT_BUTTON_PRESS, GBB_INPUT_BUTTON_RELEASE
+    };
+    gbb_input_event queue[GBB_INPUT_EVENT_CAPACITY];
+    for (size_t i = 0u; i < GBB_INPUT_EVENT_CAPACITY; ++i)
+        queue[i] = (gbb_input_event){TEST_HORIZON, kinds[i & 1u], (uint8_t)(i % 8u)};
+    const uint8_t heads[] = {0u, GBB_AUDIO_EVENT_TAPS - 1u};
+    for (size_t h = 0u; h < sizeof(heads) / sizeof(heads[0]); ++h) {
+        const uint8_t head = heads[h];
+        for (size_t p = 0u; p < unique_phases; ++p) {
+            const uint64_t phase = phases[p];
+            REQUIRE_CASE(phase < GBB_AUDIO_CLOCK_HALF_DOTS,
+                         "fixture: generated audio phase outside accepted domain");
+            REQUIRE_CASE(gbb_load_state(machine, baseline, state_size) == GBB_OK,
+                         "closure discrepancy: baseline reload failed");
+            seed_time(machine, TEST_HORIZON - 8u);
+            machine->pc = 0x0200u;
+            machine->audio_event_head = head;
+            machine->apu_sample_phase = phase;
+            for (size_t offset = 0u; offset < GBB_AUDIO_EVENT_TAPS; ++offset) {
+                const size_t slot = (offset + head) % GBB_AUDIO_EVENT_TAPS;
+                const uint64_t completed = GBB_AUDIO_EVENT_TAPS - 1u - offset;
+                const uint64_t past =
+                    (completed * GBB_AUDIO_CLOCK_HALF_DOTS + phase) /
+                    GBB_AUDIO_SAMPLE_RATE;
+                REQUIRE_CASE(past <= UINT64_MAX /
+                             GBB_STATE_AUDIO_MAX_EDGE_CONTRIBUTION,
+                             "fixture: ring boundary multiplication overflow");
+                const int64_t limit = (int64_t)(past *
+                    GBB_STATE_AUDIO_MAX_EDGE_CONTRIBUTION);
+                machine->audio_event_ring[0][slot] = limit;
+                machine->audio_event_ring[1][slot] = -limit;
+                REQUIRE_CASE(state_audio_ring_slot_valid(head, slot, phase, limit) &&
+                             state_audio_ring_slot_valid(head, slot, phase, -limit),
+                             "fixture: generated ring boundary rejected by validator");
+            }
+            REQUIRE_CASE(gbb_queue_events(machine, queue, GBB_INPUT_EVENT_CAPACITY) == GBB_OK,
+                         "closure discrepancy: full equal-time queue rejected");
+            REQUIRE_CASE(gbb_save_state(machine, before, state_size) == GBB_OK,
+                         "closure discrepancy: hostile accepted boundary state cannot save");
+            const gbb_run_result progress = gbb_run(machine, 8u, NULL, 0u);
+            REQUIRE_CASE(progress.reason == GBB_STOP_BUDGET &&
+                         progress.consumed_half_dots == 8u &&
+                         machine->time_half_dots == TEST_HORIZON &&
+                         machine->input_event_count == 0u,
+                         "closure discrepancy: bounded operation did not reach exact cap");
+            REQUIRE_CASE(gbb_save_state(machine, after, state_size) == GBB_OK &&
+                         gbb_load_state(machine, after, state_size) == GBB_OK &&
+                         gbb_save_state(machine, roundtrip, state_size) == GBB_OK &&
+                         memcmp(after, roundtrip, state_size) == 0,
+                         "closure discrepancy: exact-cap save/load/resave changed bytes");
+            const gbb_run_result stopped = gbb_run(machine, 8u, NULL, 0u);
+            REQUIRE_CASE(stopped.reason == GBB_STOP_NO_PROGRESS &&
+                         stopped.consumed_half_dots == 0u &&
+                         gbb_save_state(machine, blocked, state_size) == GBB_OK &&
+                         memcmp(after, blocked, state_size) == 0,
+                         "closure discrepancy: cap state escaped on the next bounded step");
+        }
+    }
+    free(blocked);
+    free(roundtrip);
+    free(after);
+    free(before);
+    free(baseline);
+    gbb_destroy(machine);
+    return 1;
+}
+
 static int horizon_matrix(void) {
     return horizon_stop_wait() && horizon_cpu_stall() && horizon_hdma_tick() &&
            horizon_irq() && horizon_halt() && horizon_instruction() &&
@@ -392,6 +675,10 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "horizon_exact_fit") == 0) passed = horizon_exact_fit();
     else if (strcmp(argv[1], "horizon_wrappers") == 0) passed = horizon_wrappers();
     else if (strcmp(argv[1], "horizon_sentinels") == 0) passed = horizon_sentinels();
+    else if (strcmp(argv[1], "horizon_events") == 0) passed = horizon_events();
+    else if (strcmp(argv[1], "horizon_event_admission") == 0) passed = horizon_event_admission();
+    else if (strcmp(argv[1], "horizon_span_admission") == 0) passed = horizon_span_admission();
+    else if (strcmp(argv[1], "horizon_closure") == 0) passed = horizon_closure();
     else return 2;
     if (passed) printf("ok 1 - %s\n", argv[1]);
     else printf("not ok 1 - %s\n  ---\n  message: %s\n  ...\n", argv[1], failed_reason);

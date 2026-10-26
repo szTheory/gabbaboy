@@ -1278,6 +1278,8 @@ state_observer_mutant_rumble_bump_wrap
 state_observer_mutant_rumble_bump_wrap_control
 state_rtc_palette
 state_horizon
+state_horizon_closure
+state_horizon_events
 state_horizon_sentinels
 state_horizon_wrappers
 state_refusal

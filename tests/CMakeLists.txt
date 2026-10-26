@@ -5018,8 +5018,12 @@ set_target_properties(test_state_horizon PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME state_horizon COMMAND test_state_horizon horizon_matrix)
 add_test(NAME state_horizon_wrappers COMMAND test_state_horizon horizon_wrappers)
 add_test(NAME state_horizon_sentinels COMMAND test_state_horizon horizon_sentinels)
+add_test(NAME state_horizon_events COMMAND test_state_horizon horizon_events)
+add_test(NAME state_horizon_closure COMMAND test_state_horizon horizon_closure)
 set_tests_properties(state_horizon state_horizon_wrappers state_horizon_sentinels
+  state_horizon_events
   PROPERTIES TIMEOUT 30)
+set_tests_properties(state_horizon_closure PROPERTIES TIMEOUT 60)
 
 # Each observer/RTC mutant is a disposable core-source copy. Its named contract
 # test must fail on the intended assertion while the unrelated size/save control

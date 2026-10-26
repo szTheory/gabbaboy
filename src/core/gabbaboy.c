@@ -3947,7 +3947,6 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
                            size_t count) {
     if (instance == NULL || (events == NULL && count != 0)) return GBB_INVALID_ARGUMENT;
     if (count == 0) return GBB_OK;
-    if (instance->time_half_dots > GBB_STATE_TIME_LIMIT) return GBB_INVALID_EVENT;
     if (instance->input_event_count > GBB_INPUT_EVENT_CAPACITY ||
         count > GBB_INPUT_EVENT_CAPACITY - instance->input_event_count)
         return GBB_EVENT_QUEUE_FULL;
@@ -4893,7 +4892,6 @@ static int validate_accept_input_span(const gbb_instance *instance,
     if (instance == NULL || span == NULL || span->cursor == NULL ||
         span->count > GBB_ACCEPT_INPUT_SPAN_MAX_EVENTS ||
         (span->events == NULL && span->count != 0u) ||
-        instance->time_half_dots > GBB_STATE_TIME_LIMIT ||
         instance->input_event_count != 0u || instance->accept_input_span != NULL)
         return 0;
     if (span->count > SIZE_MAX / sizeof(*span->events)) return 0;
@@ -4914,8 +4912,7 @@ static int validate_accept_input_span(const gbb_instance *instance,
     uint64_t previous = 0u;
     for (size_t i = 0; i < span->count; ++i) {
         const gbb_input_event *event = &span->events[i];
-        if (!input_event_valid(event) || event->at_half_dots > GBB_STATE_TIME_LIMIT ||
-            (i != 0u && event->at_half_dots < previous) ||
+        if (!input_event_valid(event) || (i != 0u && event->at_half_dots < previous) ||
             (i >= *span->cursor && event->at_half_dots < instance->time_half_dots))
             return 0;
         previous = event->at_half_dots;
