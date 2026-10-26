@@ -768,6 +768,14 @@ typedef struct {
     state_storage_kind storage;
 } state_field_descriptor;
 
+typedef struct {
+    const char *qualified_id;
+    size_t offset;
+    size_t count;
+    uint8_t width;
+    state_field_treatment treatment;
+} state_field_record;
+
 static const state_field_descriptor STATE_FIELDS[] = {
     { 0u, "cartridge_ram", 1u, GBB_STATE_MAX_CARTRIDGE_RAM_BYTES, 0u, 1u, STATE_VALUE_U8, STATE_STORAGE_CARTRIDGE_RAM },
     { 1u, "cart.rom_bank_lo", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rom_bank_lo)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
@@ -4221,9 +4229,12 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (strcmp(field->path, "wram_bank") == 0) return raw >= 1u && raw <= 7u;
     if (strcmp(field->path, "svbk") == 0) return raw <= 7u;
     if (strcmp(field->path, "key1_armed") == 0) return raw <= 1u;
-    if (strcmp(field->path, "bcps") == 0 || strcmp(field->path, "ocps") == 0)
-        return (raw & 0x40u) == 0u;
+    /* BCPS/OCPS retain the post-boot $40 read-as-one bit and preserve all written
+     * index/autoincrement bits. Their consumers mask the palette address to 6 bits. */
+    if (strcmp(field->path, "bcps") == 0 || strcmp(field->path, "ocps") == 0) return 1;
     if (strcmp(field->path, "opri") == 0) return raw <= 1u;
+    if (strcmp(field->path, "ppu_fifo") == 0)
+        return raw == UINT8_MAX || raw < GBB_FRAME_WIDTH;
     if (strcmp(field->path, "ppu_dot") == 0) return raw < GBB_DOTS_PER_LINE;
     if (strcmp(field->path, "ppu_half_phase") == 0 || strcmp(field->path, "ppu_stat_line") == 0 ||
         strcmp(field->path, "ppu_window_started") == 0 ||
@@ -4233,11 +4244,16 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (strcmp(field->path, "ppu_fifo_count") == 0) return raw <= GBB_PPU_FIFO_CAPACITY;
     if (strcmp(field->path, "ppu_fetch_stage") == 0) return raw <= 3u;
     if (strcmp(field->path, "ppu_fetch_phase") == 0) return raw <= 1u;
+    if (strcmp(field->path, "ppu_fetch_enqueued") == 0)
+        return raw <= GBB_FRAME_WIDTH + 7u;
+    if (strcmp(field->path, "ppu_transfer_age") == 0) return raw <= 12u;
     if (strcmp(field->path, "ppu_output_x") == 0) return raw <= GBB_FRAME_WIDTH;
     if (strcmp(field->path, "ppu_scroll_discard") == 0 ||
         strcmp(field->path, "ppu_fine_scroll") == 0) return raw <= 7u;
+    if (strcmp(field->path, "ppu_selected_objects") == 0) return raw < 40u;
     if (strcmp(field->path, "ppu_selected_object_count") == 0) return raw <= GBB_LINE_OBJECT_LIMIT;
     if (strcmp(field->path, "ppu_scan_index") == 0) return raw <= 40u;
+    if (strcmp(field->path, "ppu_window_line") == 0) return raw <= GBB_FRAME_HEIGHT;
     if (strcmp(field->path, "dma_active") == 0 || strcmp(field->path, "dma_start_pending") == 0 ||
         strcmp(field->path, "dma_cpu_blocked") == 0) return raw <= 1u;
     if (strcmp(field->path, "dma_index") == 0) return raw <= GBB_OAM_BYTES;
@@ -4246,8 +4262,9 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (strcmp(field->path, "hdma.active") == 0 ||
         strcmp(field->path, "hdma.pending_hblank") == 0) return raw <= 1u;
     if (strcmp(field->path, "hdma.byte_index") == 0) return raw < 16u;
-    if (strcmp(field->path, "hdma.byte_phase") == 0) return raw <= 1u;
-    if (strcmp(field->path, "hdma.destination_cursor") == 0) return raw <= 0x1FFFu;
+    if (strcmp(field->path, "hdma.byte_phase") == 0) return raw <= 3u;
+    if (strcmp(field->path, "hdma.destination_cursor") == 0)
+        return raw == 0u || (raw >= 0x8000u && raw <= 0xA000u);
     if (strcmp(field->path, "hdma.blocks_remaining") == 0) return raw <= 128u;
     if (strcmp(field->path, "ime_delay") == 0) return raw <= 2u;
     if (strcmp(field->path, "tac") == 0) return raw <= 7u;
@@ -4264,6 +4281,15 @@ static int state_field_value_valid(const gbb_instance *instance,
         return raw <= 1u;
     if (strcmp(field->path, "timer_reloaded_at") == 0)
         return raw == UINT64_MAX || raw <= (UINT64_C(1) << 62);
+    if (strcmp(field->path, "timer_reload_remaining") == 0) return raw <= 4u;
+    if (strcmp(field->path, "serial_edge_remaining") == 0) return raw <= 512u;
+    if (strcmp(field->path, "serial_control") == 0)
+        return raw <= 1u || raw == 0x7Eu || raw == 0x7Fu || raw == 0x80u || raw == 0x81u;
+    if (strcmp(field->path, "joypad_select") == 0) return (raw & ~0x30u) == 0u;
+    if (strcmp(field->path, "interrupt_flags") == 0) return (raw & ~0x1Fu) == 0u;
+    if (strcmp(field->path, "ie") == 0)
+        return instance->profile == GBB_PROFILE_CGB_CPU_E || (raw & ~0x1Fu) == 0u;
+    if (strcmp(field->path, "stat") == 0) return (raw & ~0x78u) == 0u;
     if (strcmp(field->path, "time_half_dots") == 0 ||
         strcmp(field->path, "frame_completion_half_dots") == 0 ||
         strcmp(field->path, "instruction_start_half_dots") == 0 ||
@@ -4282,17 +4308,20 @@ static int state_field_value_valid(const gbb_instance *instance,
         strcmp(field->path, "apu_pulse[].sweep_shadow") == 0) return raw <= 2047u;
     if (strcmp(field->path, "apu_pulse[].length") == 0) return raw <= 64u;
     if (strcmp(field->path, "apu_pulse[].sweep") == 0) return raw <= 0x7Fu;
-    if (strcmp(field->path, "apu_pulse[].envelope") == 0) return (raw & 7u) == 0u;
-    if (strcmp(field->path, "apu_pulse[].control") == 0) return (raw & 0x38u) == 0u;
+    if (strcmp(field->path, "apu_pulse[].control") == 0) return (raw & ~0x47u) == 0u;
     if (strcmp(field->path, "apu_wave.dac") == 0) return raw == 0u || raw == 0x80u;
-    if (strcmp(field->path, "apu_wave.level") == 0) return raw <= 3u;
-    if (strcmp(field->path, "apu_wave.control") == 0) return (raw & 0x38u) == 0u;
+    if (strcmp(field->path, "apu_wave.level") == 0) return (raw & ~0x60u) == 0u;
+    if (strcmp(field->path, "apu_wave.control") == 0) return (raw & ~0x47u) == 0u;
     if (strcmp(field->path, "apu_wave.position") == 0) return raw <= 31u;
     if (strcmp(field->path, "apu_wave.length") == 0) return raw <= 256u;
-    if (strcmp(field->path, "apu_noise.envelope") == 0) return (raw & 7u) == 0u;
+    if (strcmp(field->path, "apu_wave.timer") == 0) return raw <= 4096u;
+    if (strcmp(field->path, "apu_pulse[].timer") == 0) return raw <= 8192u;
     if (strcmp(field->path, "apu_noise.volume") == 0) return raw <= 15u;
     if (strcmp(field->path, "apu_noise.envelope_timer") == 0) return raw <= 8u;
     if (strcmp(field->path, "apu_noise.length") == 0) return raw <= 64u;
+    if (strcmp(field->path, "apu_noise.length_reg") == 0) return raw <= 0x3Fu;
+    if (strcmp(field->path, "apu_noise.control") == 0) return raw == 0u || raw == 0x40u;
+    if (strcmp(field->path, "apu_noise.timer") == 0) return raw <= (UINT32_C(8) << 15);
     if (strcmp(field->path, "apu_noise.lfsr") == 0) return raw <= 0x7FFFu;
     (void)index;
     return 1;
@@ -4373,8 +4402,41 @@ static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
     return offset == required;
 }
 
+/* MODEL: BOTH GATE-00 basis="state validation checks bound mapper identity without emulating hardware" */
+static int state_mapper_registers_valid(const gbb_instance *instance,
+                                        const uint8_t *body, size_t body_size) {
+    uint64_t rom_lo = 0u, rom_hi = 0u, ram_bank = 0u, ram_enabled = 0u;
+    uint64_t mbc1_mode = 0u, rumble_on = 0u;
+    if (!state_source_raw(instance, body, body_size, "cart.rom_bank_lo", 0u, &rom_lo) ||
+        !state_source_raw(instance, body, body_size, "cart.rom_bank_hi", 0u, &rom_hi) ||
+        !state_source_raw(instance, body, body_size, "cart.ram_bank", 0u, &ram_bank) ||
+        !state_source_raw(instance, body, body_size, "cart.ram_enabled", 0u, &ram_enabled) ||
+        !state_source_raw(instance, body, body_size, "cart.mbc1_mode", 0u, &mbc1_mode) ||
+        !state_source_raw(instance, body, body_size, "cart.rumble_on", 0u, &rumble_on)) return 0;
+    const size_t rom_banks = instance->rom_size / 0x4000u;
+    if (rom_banks == 0u || rumble_on > 1u || ram_enabled > 1u || mbc1_mode > 1u) return 0;
+    switch (instance->cart.kind) {
+    case CART_ROM_ONLY:
+        return rom_lo == 1u && rom_hi == 0u && ram_bank == 0u &&
+               ram_enabled == 0u && mbc1_mode == 0u && rumble_on == 0u;
+    case CART_MBC1:
+        return rom_lo <= 0x1Fu && rom_hi <= 3u && ram_bank == 0u &&
+               mbc1_mode <= 1u && rumble_on == 0u;
+    case CART_MBC2:
+        return rom_lo < rom_banks && rom_hi == 0u && ram_bank == 0u &&
+               mbc1_mode == 0u && rumble_on == 0u;
+    case CART_MBC3:
+        return rom_lo < rom_banks && rom_hi == 0u && mbc1_mode == 0u && rumble_on == 0u;
+    case CART_MBC5:
+        return rom_hi <= 1u && ram_bank <= (instance->cart.has_rumble ? 7u : 15u) &&
+               mbc1_mode == 0u && (instance->cart.has_rumble || rumble_on == 0u);
+    default:
+        return 0;
+    }
+}
+
 /* MODEL: BOTH GATE-00 basis="state validation checks bound profile identity without emulating hardware" */
-static int state_cross_fields_valid(const gbb_instance *instance,
+static int state_validate_relations(const gbb_instance *instance,
                                     const uint8_t *body, size_t body_size) {
     if (instance == NULL || !instance->loaded || instance->accept_input_span != NULL ||
         instance->audio_run_active || instance->cartridge_ram_size > GBB_STATE_MAX_CARTRIDGE_RAM_BYTES ||
@@ -4413,6 +4475,86 @@ static int state_cross_fields_valid(const gbb_instance *instance,
         (instance->profile == GBB_PROFILE_CGB_CPU_E &&
          instance->exec_mode != GBB_MODE_CGB && instance->exec_mode != GBB_MODE_CGB_DMG_COMPAT))
         return 0;
+    if (!state_mapper_registers_valid(instance, body, body_size)) return 0;
+    uint64_t ppu_stalled = 0u, ppu_enqueued = 0u, ppu_fine_scroll = 0u;
+    uint64_t ppu_transfer = 0u, ppu_stall = 0u, div = 0u, divider_counter = 0u;
+    uint64_t tac = 0u, timer_signal = 0u, timer_pending = 0u, timer_remaining = 0u;
+    uint64_t serial_active = 0u, serial_control = 0u, serial_remaining = 0u, serial_bits = 0u;
+    uint64_t hdma_mode = 0u, hdma_active = 0u, hdma_pending = 0u, hdma_blocks = 0u;
+    uint64_t hdma_phase = 0u, hdma_source = 0u, hdma_destination = 0u;
+    uint64_t svbk = 0u, wram_bank = 0u, vram_bank = 0u, key1_armed = 0u;
+    uint64_t double_speed = 0u, cpu_stall = 0u, cpu_stall_time = 0u, switch_pending = 0u;
+#define STATE_RELATION_READ(path, target) \
+    if (!state_source_raw(instance, body, body_size, (path), 0u, &(target))) return 0
+    STATE_RELATION_READ("ppu_objects_stalled", ppu_stalled);
+    STATE_RELATION_READ("ppu_fetch_enqueued", ppu_enqueued);
+    STATE_RELATION_READ("ppu_fine_scroll", ppu_fine_scroll);
+    STATE_RELATION_READ("ppu_transfer_age", ppu_transfer);
+    STATE_RELATION_READ("ppu_mode3_stall", ppu_stall);
+    STATE_RELATION_READ("div", div);
+    STATE_RELATION_READ("divider_counter", divider_counter);
+    STATE_RELATION_READ("tac", tac);
+    STATE_RELATION_READ("timer_signal", timer_signal);
+    STATE_RELATION_READ("timer_reload_pending", timer_pending);
+    STATE_RELATION_READ("timer_reload_remaining", timer_remaining);
+    STATE_RELATION_READ("serial_active", serial_active);
+    STATE_RELATION_READ("serial_control", serial_control);
+    STATE_RELATION_READ("serial_edge_remaining", serial_remaining);
+    STATE_RELATION_READ("serial_bits", serial_bits);
+    STATE_RELATION_READ("hdma.mode", hdma_mode);
+    STATE_RELATION_READ("hdma.active", hdma_active);
+    STATE_RELATION_READ("hdma.pending_hblank", hdma_pending);
+    STATE_RELATION_READ("hdma.blocks_remaining", hdma_blocks);
+    STATE_RELATION_READ("hdma.byte_phase", hdma_phase);
+    STATE_RELATION_READ("hdma.source_cursor", hdma_source);
+    STATE_RELATION_READ("hdma.destination_cursor", hdma_destination);
+    STATE_RELATION_READ("svbk", svbk);
+    STATE_RELATION_READ("wram_bank", wram_bank);
+    STATE_RELATION_READ("vram_bank", vram_bank);
+    STATE_RELATION_READ("key1_armed", key1_armed);
+    STATE_RELATION_READ("double_speed", double_speed);
+    STATE_RELATION_READ("cpu_stall_kind", cpu_stall);
+    STATE_RELATION_READ("cpu_stall_half_dots", cpu_stall_time);
+    STATE_RELATION_READ("stop_switch_pending", switch_pending);
+#undef STATE_RELATION_READ
+    static const uint8_t timer_taps[4] = {9u, 3u, 5u, 7u};
+    const uint64_t expected_timer_signal = (tac & 4u) != 0u
+        ? ((divider_counter >> timer_taps[tac & 3u]) & 1u) : 0u;
+    if (div != (divider_counter >> 8) || timer_signal != expected_timer_signal) return 0;
+    if ((timer_pending == 0u && timer_remaining != 0u) ||
+        (timer_pending != 0u && (timer_remaining == 0u || timer_remaining > 4u))) return 0;
+    if (ppu_enqueued > GBB_FRAME_WIDTH + ppu_fine_scroll || ppu_transfer > 12u ||
+        ppu_stall > 11u || (ppu_stalled >> selected_count) != 0u) return 0;
+    for (size_t i = 0u; i < GBB_LINE_OBJECT_LIMIT; ++i) {
+        uint64_t selected = 0u;
+        if (!state_source_raw(instance, body, body_size, "ppu_selected_objects", i, &selected) ||
+            selected >= 40u) return 0;
+    }
+    if (serial_active != 0u) {
+        if ((serial_control & 0x80u) == 0u || serial_bits >= 8u ||
+            ((serial_control & 1u) != 0u && (serial_remaining == 0u || serial_remaining > 512u)) ||
+            ((serial_control & 1u) == 0u && serial_remaining != 0u)) return 0;
+    } else if (serial_remaining != 0u || (serial_control & 0x80u) != 0u) {
+        return 0;
+    }
+    if ((hdma_active != 0u && (hdma_mode == 0u || hdma_blocks == 0u || hdma_pending != 0u)) ||
+        (hdma_pending != 0u && (hdma_mode == 0u || hdma_active != 0u || hdma_blocks == 0u)) ||
+        (hdma_active == 0u && (hdma_byte != 0u || hdma_phase != 0u)) ||
+        ((hdma_active != 0u || hdma_pending != 0u) &&
+         (instance->profile != GBB_PROFILE_CGB_CPU_E || instance->exec_mode != GBB_MODE_CGB)) ||
+        (hdma_active != 0u && (hdma_destination > 0x9FF0u || hdma_source > UINT16_MAX - 15u)))
+        return 0;
+    if ((hdma_active != 0u || hdma_pending != 0u) &&
+        (((hdma_source & 0x0Fu) != 0u) || ((hdma_destination & 0x0Fu) != 0u))) return 0;
+    if (hdma_active != 0u) {
+        for (unsigned i = 0u; i < 16u; ++i)
+            if (!hdma_source_valid(instance, (uint16_t)(hdma_source + i))) return 0;
+    }
+    if (wram_bank != (svbk == 0u ? 1u : svbk)) return 0;
+    if (instance->profile == GBB_PROFILE_DMG_CPU_B &&
+        (double_speed != 0u || key1_armed != 0u || vram_bank != 0u || wram_bank != 1u ||
+         svbk != 0u || cpu_stall != GBB_STALL_NONE || cpu_stall_time != 0u ||
+         switch_pending != 0u)) return 0;
     if (!instance->cart.has_timer) {
         uint64_t v = 0u;
         static const char *const rtc_paths[] = {
@@ -4454,16 +4596,27 @@ static int state_cross_fields_valid(const gbb_instance *instance,
     return 1;
 }
 
-/* MODEL: BOTH GATE-00 basis="state validation checks the same format contract for both profiles" */
-static int state_validate(const gbb_instance *instance, const uint8_t *body,
-                          size_t body_size) {
+/* MODEL: BOTH GATE-00 basis="state field validation is read-only and preserves profile state" */
+static int state_validate_fields(const gbb_instance *instance, const uint8_t *body,
+                                 size_t body_size) {
     if (instance == NULL) return 0;
     size_t expected = 0u;
     if (!state_walk(instance, NULL, NULL, 0u, STATE_WALK_SIZE, &expected)) return 0;
     const state_walk_mode mode = body == NULL ? STATE_WALK_VALIDATE_LIVE : STATE_WALK_VALIDATE_BODY;
     if (body != NULL && body_size != expected) return 0;
-    return state_walk(instance, NULL, body, body == NULL ? expected : body_size, mode, NULL) &&
-           state_cross_fields_valid(instance, body, body == NULL ? expected : body_size);
+    return state_walk(instance, NULL, body, body == NULL ? expected : body_size, mode, NULL);
+}
+
+/* MODEL: BOTH GATE-00 basis="state validation checks the same format contract for both profiles" */
+static int state_validate(const gbb_instance *instance, const uint8_t *body,
+                          size_t body_size) {
+    if (instance == NULL) return 0;
+    size_t expected = 0u;
+    if (!state_walk(instance, NULL, NULL, 0u, STATE_WALK_SIZE, &expected) ||
+        (body != NULL && body_size != expected)) return 0;
+    const size_t validated_size = body == NULL ? expected : body_size;
+    return state_validate_fields(instance, body, validated_size) &&
+           state_validate_relations(instance, body, validated_size);
 }
 
 /* MODEL: BOTH GATE-00 basis="state restore copies validated profile-bound fields" */
@@ -4484,6 +4637,22 @@ static size_t state_body_field_offset(const gbb_instance *instance,
         offset += elements * field->wire_width;
     }
     return SIZE_MAX;
+}
+
+/* MODEL: BOTH GATE-00 basis="state field census records the explicit wire descriptor without mutation" */
+static int state_record_field(const gbb_instance *instance, size_t descriptor_index,
+                              state_field_record *record) {
+    if (instance == NULL || record == NULL ||
+        descriptor_index >= sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0])) return 0;
+    const state_field_descriptor *field = &STATE_FIELDS[descriptor_index];
+    const size_t offset = state_body_field_offset(instance, field);
+    if (offset == SIZE_MAX) return 0;
+    record->qualified_id = field->path;
+    record->offset = offset;
+    record->count = state_field_count_for_instance(instance, field);
+    record->width = field->wire_width;
+    record->treatment = STATE_TREAT_SERIALIZE;
+    return 1;
 }
 
 /* MODEL: BOTH GATE-00 basis="state projection reads serialized cartridge state without emulation" */

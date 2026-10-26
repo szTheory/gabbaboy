@@ -147,6 +147,25 @@ static size_t test_field_offset(const gbb_instance *instance, const char *path) 
     return field == NULL ? SIZE_MAX : state_body_field_offset(instance, field);
 }
 
+static int test_state_field_census(const gbb_instance *instance) {
+    const size_t descriptor_count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+    size_t expected_offset = 0u;
+    if (descriptor_count != 198u) return 0;
+    for (size_t i = 0u; i < descriptor_count; ++i) {
+        state_field_record record = {0};
+        if (!state_record_field(instance, i, &record) || record.qualified_id == NULL ||
+            strcmp(record.qualified_id, STATE_FIELDS[i].path) != 0 ||
+            record.offset != expected_offset || record.width != STATE_FIELDS[i].wire_width ||
+            record.count != state_field_count_for_instance(instance, &STATE_FIELDS[i]) ||
+            record.treatment != STATE_TREAT_SERIALIZE ||
+            record.count > (SIZE_MAX - expected_offset) / record.width) return 0;
+        expected_offset += record.count * record.width;
+    }
+    size_t body_size = 0u;
+    return state_walk(instance, NULL, NULL, 0u, STATE_WALK_SIZE, &body_size) &&
+           expected_offset == body_size;
+}
+
 static void test_rechecksum(uint8_t *state, size_t total_size) {
     uint32_t crc = state_crc32_update(UINT32_MAX, state, 60u);
     crc = state_crc32_update(crc, state + TEST_STATE_HEADER_BYTES,
@@ -195,6 +214,7 @@ static int state_identity(void) {
     REQUIRE_CASE("state_identity", gbb_load_rom(target_b, rom_b, TEST_ROM_BYTES) == GBB_OK);
     REQUIRE_CASE("state_identity", state_sha256_test_calls == 3u &&
                                     state_sha256_test_bytes == 3u * TEST_ROM_BYTES);
+    REQUIRE_CASE("state_identity", test_state_field_census(source));
 
     const gbb_run_result source_prefix = gbb_run(source, 40000u, NULL, 0u);
     const gbb_run_result target_a_prefix = gbb_run(target_a, 40000u, NULL, 0u);
@@ -416,6 +436,182 @@ static int state_matrix_case(gbb_profile profile, uint8_t cgb_flag, gbb_exec_mod
     return ok;
 }
 
+typedef enum {
+    STATE_SIZE_TIMER_RELOAD = 0,
+    STATE_SIZE_SERIAL_EDGE,
+    STATE_SIZE_OAM_DMA,
+    STATE_SIZE_PPU_FETCH,
+    STATE_SIZE_INPUT_EVENT,
+    STATE_SIZE_HDMA_BLOCK
+} state_size_boundary;
+
+static int test_state_size_boundary(gbb_instance *instance, size_t expected_size,
+                                    state_size_boundary boundary) {
+    gbb_instance *saved = malloc(sizeof(*saved));
+    if (saved == NULL) return 0;
+    memcpy(saved, instance, sizeof(*saved));
+    switch (boundary) {
+    case STATE_SIZE_TIMER_RELOAD:
+        instance->tac = 0u;
+        instance->divider_counter = 0u;
+        instance->div = 0u;
+        instance->timer_signal = 0;
+        instance->timer_reload_pending = 1;
+        instance->timer_reload_remaining = 4u;
+        break;
+    case STATE_SIZE_SERIAL_EDGE:
+        instance->serial_control = 0x81u;
+        instance->serial_active = 1;
+        instance->serial_bits = 3u;
+        instance->serial_edge_remaining = 1u;
+        break;
+    case STATE_SIZE_OAM_DMA:
+        instance->dma_register = 0xC0u;
+        instance->dma_page = 0xC0u;
+        instance->dma_active = 1;
+        instance->dma_start_pending = 0;
+        instance->dma_cpu_blocked = 1;
+        instance->dma_index = GBB_OAM_BYTES - 1u;
+        instance->dma_phase = GBB_T_PER_M - 1u;
+        break;
+    case STATE_SIZE_PPU_FETCH:
+        instance->ppu_mode = 3u;
+        instance->ppu_transfer_age = 11u;
+        instance->ppu_fetch_enqueued = GBB_FRAME_WIDTH;
+        instance->ppu_fifo_head = 0u;
+        instance->ppu_fifo_count = 1u;
+        instance->ppu_fifo[0] = 0u;
+        instance->ppu_selected_object_count = 1u;
+        instance->ppu_selected_objects[0] = 39u;
+        instance->ppu_objects_stalled = 1u;
+        break;
+    case STATE_SIZE_INPUT_EVENT:
+        instance->input_event_count = 1u;
+        instance->input_events[0] = (gbb_input_event){
+            .at_half_dots = instance->time_half_dots,
+            .kind = GBB_INPUT_BUTTON_PRESS,
+            .value = GBB_BUTTON_START
+        };
+        break;
+    case STATE_SIZE_HDMA_BLOCK:
+        instance->hdma.mode = 2u;
+        instance->hdma.active = 1u;
+        instance->hdma.pending_hblank = 0u;
+        instance->hdma.blocks_remaining = 1u;
+        instance->hdma.byte_index = 15u;
+        instance->hdma.byte_phase = 3u;
+        instance->hdma.source_cursor = 0x0200u;
+        instance->hdma.destination_cursor = 0x8000u;
+        instance->hdma.block_vram_bank = instance->vram_bank;
+        break;
+    }
+    size_t observed = 0u;
+    const int valid = gbb_state_size(instance, &observed) == GBB_OK &&
+                      observed == expected_size;
+    memcpy(instance, saved, sizeof(*saved));
+    free(saved);
+    return valid;
+}
+
+static int test_control_flow_size(gbb_stop_reason expected_reason,
+                                  const uint8_t *program, size_t program_size) {
+    uint8_t *rom = calloc(TEST_ROM_BYTES, 1u);
+    gbb_instance *instance = NULL;
+    if (rom == NULL) return 0;
+    test_build_rom(rom, 0x00u, 0u);
+    memcpy(rom + 0x200u, program, program_size);
+    test_header_checksum(rom);
+    int ok = gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) == GBB_OK &&
+             gbb_load_rom(instance, rom, TEST_ROM_BYTES) == GBB_OK;
+    size_t before = 0u, after = 0u;
+    if (ok) ok = gbb_state_size(instance, &before) == GBB_OK;
+    if (ok) ok = gbb_run(instance, 4096u, NULL, 0u).reason == expected_reason;
+    if (ok) ok = gbb_state_size(instance, &after) == GBB_OK && after == before;
+    if (instance != NULL) gbb_destroy(instance);
+    free(rom);
+    return ok;
+}
+
+static int test_state_boundary_sizes(void) {
+    static const uint8_t halt_loop[] = {0x76u, 0x18u, 0xFDu};
+    static const uint8_t stop[] = {0x10u, 0x00u};
+    static const uint8_t lockup[] = {0xD3u};
+    if (!test_control_flow_size(GBB_STOP_HALTED_IDLE, halt_loop, sizeof(halt_loop)) ||
+        !test_control_flow_size(GBB_STOP_STOPPED, stop, sizeof(stop)) ||
+        !test_control_flow_size(GBB_STOP_LOCKUP, lockup, sizeof(lockup))) return 0;
+
+    uint8_t *rom = calloc(TEST_ROM_BYTES, 1u);
+    gbb_instance *dmg = NULL, *cgb = NULL;
+    int ok = rom != NULL &&
+             gbb_create(GBB_PROFILE_DMG_CPU_B, &dmg) == GBB_OK &&
+             gbb_create(GBB_PROFILE_CGB_CPU_E, &cgb) == GBB_OK;
+    size_t dmg_size = 0u, cgb_size = 0u;
+    if (ok) {
+        test_build_rom(rom, 0x00u, 0u);
+        ok = gbb_load_rom(dmg, rom, TEST_ROM_BYTES) == GBB_OK &&
+             gbb_state_size(dmg, &dmg_size) == GBB_OK;
+    }
+    if (ok) {
+        test_build_rom(rom, 0x00u, 0x80u);
+        ok = gbb_load_rom(cgb, rom, TEST_ROM_BYTES) == GBB_OK &&
+             gbb_state_size(cgb, &cgb_size) == GBB_OK;
+    }
+    static const state_size_boundary dmg_boundaries[] = {
+        STATE_SIZE_TIMER_RELOAD, STATE_SIZE_SERIAL_EDGE, STATE_SIZE_OAM_DMA,
+        STATE_SIZE_PPU_FETCH, STATE_SIZE_INPUT_EVENT
+    };
+    for (size_t i = 0u; ok && i < sizeof(dmg_boundaries) / sizeof(dmg_boundaries[0]); ++i)
+        ok = test_state_size_boundary(dmg, dmg_size, dmg_boundaries[i]);
+    if (ok) ok = test_state_size_boundary(cgb, cgb_size, STATE_SIZE_HDMA_BLOCK);
+    if (ok) ok = gbb_reset(dmg) == GBB_OK;
+    size_t reset_size = 0u;
+    if (ok) ok = gbb_state_size(dmg, &reset_size) == GBB_OK && reset_size == dmg_size;
+    if (dmg != NULL) gbb_destroy(dmg);
+    if (cgb != NULL) gbb_destroy(cgb);
+    free(rom);
+    return ok;
+}
+
+static int state_field_census_instance(gbb_instance **out_instance) {
+    uint8_t *rom = calloc(TEST_ROM_BYTES, 1u);
+    if (rom == NULL) return 0;
+    test_build_rom(rom, 0x1Eu, 0x80u);
+    rom[0x149u] = 0x04u; /* MBC5 128 KiB RAM: maximum dynamic leading field. */
+    test_header_checksum(rom);
+    const gbb_error created = gbb_create(GBB_PROFILE_CGB_CPU_E, out_instance);
+    const gbb_error loaded = created == GBB_OK
+        ? gbb_load_rom(*out_instance, rom, TEST_ROM_BYTES) : created;
+    free(rom);
+    return loaded == GBB_OK;
+}
+
+static int test_full_field_census(void) {
+    gbb_instance *instance = NULL;
+    const int ok = state_field_census_instance(&instance) &&
+                   instance->cartridge_ram_size == GBB_STATE_MAX_CARTRIDGE_RAM_BYTES &&
+                   test_state_field_census(instance);
+    if (instance != NULL) gbb_destroy(instance);
+    return ok;
+}
+
+static int emit_state_field_census(void) {
+    gbb_instance *instance = NULL;
+    if (!state_field_census_instance(&instance)) return 1;
+    const size_t count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+    printf("order|qualified_id|offset|max_count|wire_width|treatment\n");
+    for (size_t i = 0u; i < count; ++i) {
+        state_field_record record = {0};
+        if (!state_record_field(instance, i, &record)) {
+            gbb_destroy(instance);
+            return 1;
+        }
+        printf("%u|%s|%zu|%zu|%u|serialize\n", STATE_FIELDS[i].order,
+               record.qualified_id, record.offset, record.count, record.width);
+    }
+    gbb_destroy(instance);
+    return count == 198u ? 0 : 1;
+}
+
 static int state_codec_matrix(void) {
     static const struct {
         uint8_t type;
@@ -445,13 +641,23 @@ static int state_codec_matrix(void) {
             ++completed;
         }
     }
+    if (!test_state_boundary_sizes()) {
+        fprintf(stderr, "FAIL state_codec_matrix stable size at a CPU/device boundary\n");
+        return 1;
+    }
+    if (!test_full_field_census()) {
+        fprintf(stderr, "FAIL state_codec_matrix maximum-RAM field census\n");
+        return 1;
+    }
     printf("state_codec_matrix pass categories=%zu mappers=5 profiles=2 modes=3\n", completed);
     return completed == 15u ? 0 : 1;
 }
 
 int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "state_field_census") == 0)
+        return emit_state_field_census();
     if (argc != 2) {
-        fprintf(stderr, "usage: test_state_codec state_identity|state_codec_matrix\n");
+        fprintf(stderr, "usage: test_state_codec state_identity|state_codec_matrix|state_field_census\n");
         return 2;
     }
     if (strcmp(argv[1], "state_identity") == 0) return state_identity();
