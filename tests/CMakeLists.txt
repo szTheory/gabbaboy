@@ -5164,6 +5164,70 @@ gbb_state_refusal_mutant(save_tail_write
     out_bytes[total_size] = 0u;
     return GBB_OK;]=])
 
+# Allocation/hash instrumentation includes the production core with allocator
+# wrappers and the private SHA call counter. The contract CTest validates every
+# relevant source against its immutable revision before invoking the probe.
+add_executable(test_state_alloc test_state_alloc.c)
+target_include_directories(test_state_alloc PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_state_alloc PRIVATE c_std_17)
+target_compile_definitions(test_state_alloc PRIVATE
+  "GBB_STATE_SOURCE_REV=\"${GBB_STATE_SOURCE_REV}\"")
+set_target_properties(test_state_alloc PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_purity
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --purity --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --probe "$<TARGET_FILE:test_state_alloc>")
+add_test(NAME state_purity_controls COMMAND test_state_alloc state_purity_controls)
+set_tests_properties(state_purity state_purity_controls PROPERTIES TIMEOUT 30)
+
+function(gbb_state_alloc_mutant name anchor replacement)
+  set(text "${gbb_state_internal_core_text}")
+  string(FIND "${text}" "${anchor}" first)
+  string(FIND "${text}" "${anchor}" last REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL last)
+    message(FATAL_ERROR "State allocation mutant ${name}: anchor must occur exactly once (first=${first}, last=${last})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${text}")
+  set(source "${CMAKE_CURRENT_BINARY_DIR}/state_alloc_mutant_${name}.c")
+  file(WRITE "${source}" "${text}")
+  set(target "test_state_alloc_mutant_${name}")
+  add_executable(${target} test_state_alloc.c)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE
+    "GBB_CORE_SOURCE_PATH=\"${source}\""
+    "GBB_STATE_SOURCE_REV=\"${GBB_STATE_SOURCE_REV}\"")
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME state_purity_mutant_${name}
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_purity"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=state_purity failure"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  add_test(NAME state_purity_mutant_${name}_control
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_purity_controls"
+      -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=state_purity_controls
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  set_tests_properties(state_purity_mutant_${name} state_purity_mutant_${name}_control
+    PROPERTIES TIMEOUT 30)
+endfunction()
+
+set(GBB_STATE_SAVE_SUCCESS_ANCHOR
+  [=[state_put_u32(header + 60u, crc);
+    return GBB_OK;]=])
+gbb_state_alloc_mutant(allocation_in_save ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
+  [=[void *state_probe_allocation = malloc(1u);
+    free(state_probe_allocation);
+    state_put_u32(header + 60u, crc);
+    return GBB_OK;]=])
+gbb_state_alloc_mutant(hash_in_save ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
+  [=[uint8_t state_probe_hash[32];
+    state_sha256(out_bytes, total_size, state_probe_hash);
+    state_put_u32(header + 60u, crc);
+    return GBB_OK;]=])
+gbb_state_alloc_mutant(save_overwrites_tail ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
+  [=[state_put_u32(header + 60u, crc);
+    out_bytes[total_size] = 0u;
+    return GBB_OK;]=])
+
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times

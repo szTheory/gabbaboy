@@ -861,6 +861,61 @@ def revision_controls_self_test(root: Path) -> None:
     print("state revision controls pass missing=refused unknown=refused missing_object=refused")
 
 
+def verify_live_revision_file(relative: str, immutable: str, live: str) -> None:
+    if live != immutable:
+        raise ContractError(f"live {relative} differs from immutable --rev")
+
+
+def purity_contract_self_test() -> None:
+    verify_live_revision_file("self-test", "immutable source", "immutable source")
+    try:
+        verify_live_revision_file("self-test", "immutable source", "changed working tree")
+    except ContractError as error:
+        if "differs from immutable --rev" not in str(error):
+            raise ContractError(f"purity revision negative control reported the wrong error: {error}") from error
+    else:
+        raise ContractError("purity working-tree mismatch negative control survived")
+    print("state purity contract control pass working_tree_mismatch=refused")
+
+
+def run_purity(args: argparse.Namespace, root: Path) -> None:
+    if args.probe is None or not args.probe.is_file():
+        raise ContractError("--purity requires --probe PATH")
+    if not re.fullmatch(r"[0-9a-f]{40}", args.rev):
+        raise ContractError("--rev must be a resolved immutable 40-hex commit")
+    relatives = (
+        "src/core/gabbaboy.c",
+        "include/gabbaboy/gabbaboy.h",
+        "tests/test_state_alloc.c",
+        "tests/CMakeLists.txt",
+        "tests/expected-tests.txt",
+        "tests/scripts/verify-state-contract.py",
+    )
+    for relative in relatives:
+        immutable = git_show(root, args.rev, relative)
+        live_path = root / relative
+        if not live_path.is_file():
+            raise ContractError(f"live source file is missing: {relative}")
+        verify_live_revision_file(relative, immutable, live_path.read_text())
+
+    revision = run([str(args.probe), "--source-revision"], cwd=root)
+    if revision.returncode != 0 or revision.stdout.strip() != f"source_revision={args.rev}":
+        raise ContractError(
+            f"purity probe revision does not match immutable --rev {args.rev}: "
+            f"exit={revision.returncode} output={revision.stdout}{revision.stderr}")
+    result = run([str(args.probe), "state_purity"], cwd=root)
+    if result.returncode != 0:
+        raise ContractError(
+            f"immutable purity probe failed ({result.returncode}): {result.stdout}{result.stderr}")
+    controls = run([str(args.probe), "state_purity_controls"], cwd=root)
+    if controls.returncode != 0:
+        raise ContractError(
+            f"immutable purity probe controls failed ({controls.returncode}): "
+            f"{controls.stdout}{controls.stderr}")
+    print(f"state purity pass source={args.rev} probe_sha256={sha256_file(args.probe)} "
+          f"result={result.stdout.strip()} controls={controls.stdout.strip()}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inventory", action="store_true")
@@ -870,7 +925,8 @@ def main() -> int:
     parser.add_argument("--precodec", action="store_true")
     parser.add_argument("--format-contract", action="store_true")
     parser.add_argument("--tracer", action="store_true")
-    parser.add_argument("--control", choices=("inventory", "field-census", "globals", "revision", "all"), default="all")
+    parser.add_argument("--purity", action="store_true")
+    parser.add_argument("--control", choices=("inventory", "field-census", "globals", "revision", "purity", "all"), default="all")
     parser.add_argument("--rev", required=False)
     parser.add_argument("--library", type=Path)
     parser.add_argument("--build-dir", type=Path, default=Path("build"))
@@ -878,6 +934,7 @@ def main() -> int:
     parser.add_argument("--version-module", type=Path)
     parser.add_argument("--api", type=Path)
     parser.add_argument("--census-exe", type=Path)
+    parser.add_argument("--probe", type=Path)
     parser.add_argument("--rom", type=Path)
     parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--nm", default=os.environ.get("CMAKE_NM", "nm"))
@@ -896,6 +953,8 @@ def main() -> int:
                 globals_self_test(args.nm, args.cc)
             if args.control in ("revision", "all"):
                 revision_controls_self_test(root)
+            if args.control in ("purity", "all"):
+                purity_contract_self_test()
             print(f"state contract controls pass control={args.control}")
             return 0
         if args.rev is None:
@@ -924,7 +983,10 @@ def main() -> int:
         if args.tracer:
             run_tracer(args, root, core, header)
             return 0
-        raise ContractError("select --inventory, --field-census, --globals, --self-test, --precodec or --tracer")
+        if args.purity:
+            run_purity(args, root)
+            return 0
+        raise ContractError("select --inventory, --field-census, --globals, --self-test, --precodec, --tracer or --purity")
     except (ContractError, OSError) as error:
         print(f"state contract failure: {error}", file=sys.stderr)
         return 1
