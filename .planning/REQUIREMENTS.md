@@ -95,6 +95,19 @@ Each requirement names the automated check that proves it (D-105). Every check c
   - A v0.3.0 support ledger scopes the save-state and host-contract claims by model, corpus and platform.
   - Consumer, package, fuzz and perf-gate receipts are bound to the tag.
 
+## Inherited Phase 17 obligations (in addition to STATE-01..06)
+
+These are the existing D-112/Phase 16 handoff obligations, made explicit during Phase 17 discussion. They do not change the 17 feature-requirement total or authorize additional phases. Acceptance is in Phase 17 ROADMAP criteria 6–8 and [17-CONTEXT.md](phases/GB-17-native-save-state-core/17-CONTEXT.md).
+
+| Obligation | Phase | Required automated evidence |
+|------------|-------|-----------------------------|
+| RM-026, RM-029 | 17 | Successful advisory paired-timing receipt through actual producers/consumers; blocking Ir and separate realtime floor; immutable-base limit/pin ratchets and intended negatives |
+| RM-028 | 17 | Generated historical disclosure; production-path API-shaped attach/manifest/publish-decision/retry replay; checked version-window content rule; omission/tamper/stale controls |
+| RM-030 | 17 | All WR-01..05 and IN-01..04 fixes; wired review-approval/nightly gates with their specified eight/six mutants and immutable boundary checks |
+| RM-027 | 19 entry blocker | Replace six release-bound timeout citations with verified tree-equality evidence before VERSION exceeds 0.2.1; not closed by Phase 17 discussion |
+
+Phase 17 planning retains a 12-plan cap, at most 11 primary plans and one reserved gap slot. RM-024/025 remain parked. Failure to fit mandatory work requires a concrete rescope before execution.
+
 ## Future Requirements
 
 These are deferred and tracked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md):
