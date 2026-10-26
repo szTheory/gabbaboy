@@ -147,8 +147,8 @@ static int state_rtc_palette(void) {
     source->cart.rumble_changes = 13u;
     size_t state_size = 0u;
     REQUIRE_CASE(case_name, gbb_state_size(source, &state_size) == GBB_OK);
-    uint8_t *saved = malloc(state_size);
-    uint8_t *resaved = malloc(state_size);
+    uint8_t *saved = malloc(state_size + 1u);
+    uint8_t *resaved = malloc(state_size + 1u);
     REQUIRE_CASE(case_name, saved != NULL && resaved != NULL);
     REQUIRE_CASE(case_name, gbb_save_state(source, saved, state_size) == GBB_OK);
     const uint64_t hash_calls = state_sha256_test_calls;
@@ -464,7 +464,7 @@ static int state_refusal(void) {
     REQUIRE_CASE(case_name, state_snapshot_init(&empty_snapshot, empty));
     size_t size = 0u;
     REQUIRE_CASE(case_name, gbb_state_size(source, &size) == GBB_OK);
-    uint8_t *saved = malloc(size);
+    uint8_t *saved = malloc(size + 1u);
     uint8_t *mutant = malloc(size + 1u);
     REQUIRE_CASE(case_name, saved != NULL && mutant != NULL);
     REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK);
@@ -637,7 +637,7 @@ static int state_control(void) {
     if (machine == NULL) return 1;
     size_t size = 0u;
     int ok = gbb_state_size(machine, &size) == GBB_OK;
-    uint8_t *state = ok ? malloc(size) : NULL;
+    uint8_t *state = ok ? malloc(size + 1u) : NULL;
     ok = ok && state != NULL && gbb_save_state(machine, state, size) == GBB_OK;
     free(state);
     gbb_destroy(machine);

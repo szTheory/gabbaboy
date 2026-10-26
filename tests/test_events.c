@@ -1,6 +1,7 @@
 #include "gabbaboy/gabbaboy.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static const char *active_case = "unknown";
@@ -231,18 +232,39 @@ static int event_external_serial_edges(void) {
 }
 
 static int event_time_overflow(void) {
+    const uint64_t event_time_limit = UINT64_C(1) << 62;
     const uint8_t p[] = {0x10,0x00,0xF0,0x04};
     gbb_instance *m = load_program(p, sizeof(p)); REQUIRE(m != NULL);
     gbb_run_result r = gbb_run(m, 8, NULL, 0);
     REQUIRE(r.reason == GBB_STOP_STOPPED);
-    const gbb_input_event wake = {UINT64_MAX, GBB_INPUT_STOP_WAKE, 1};
+    const gbb_input_event wake = {event_time_limit, GBB_INPUT_STOP_WAKE, 1};
     REQUIRE(gbb_queue_events(m, &wake, 1) == GBB_OK);
-    r = gbb_run(m, UINT64_MAX - 8u, NULL, 0);
-    REQUIRE(r.reason == GBB_STOP_NO_PROGRESS && r.consumed_half_dots == UINT64_MAX - 8u);
-    const gbb_input_event past = {UINT64_MAX - 1u, GBB_INPUT_SERIAL_EDGE, 1};
-    REQUIRE(gbb_queue_events(m, &past, 1) == GBB_INVALID_EVENT);
-    r = gbb_run(m, 32, NULL, 0);
-    REQUIRE(r.reason == GBB_STOP_INVALID_STATE && r.consumed_half_dots == 0);
+    r = gbb_run(m, event_time_limit - 8u, NULL, 0);
+    REQUIRE(r.reason == GBB_STOP_NO_PROGRESS &&
+            r.consumed_half_dots == event_time_limit - 8u);
+
+    size_t state_size = 0u;
+    REQUIRE(gbb_state_size(m, &state_size) == GBB_OK);
+    uint8_t *before = malloc(state_size);
+    uint8_t *after = malloc(state_size);
+    REQUIRE(before != NULL && after != NULL);
+    REQUIRE(gbb_save_state(m, before, state_size) == GBB_OK);
+
+    const gbb_input_event over_limit = {event_time_limit + 1u, GBB_INPUT_SERIAL_EDGE, 1};
+    REQUIRE(gbb_queue_events(m, &over_limit, 1) == GBB_INVALID_EVENT);
+    REQUIRE(gbb_save_state(m, after, state_size) == GBB_OK);
+    REQUIRE(memcmp(before, after, state_size) == 0);
+    const gbb_input_event uint64_max = {UINT64_MAX, GBB_INPUT_SERIAL_EDGE, 1};
+    REQUIRE(gbb_queue_events(m, &uint64_max, 1) == GBB_INVALID_EVENT);
+    REQUIRE(gbb_save_state(m, after, state_size) == GBB_OK);
+    REQUIRE(memcmp(before, after, state_size) == 0);
+
+    r = gbb_run(m, 32u, NULL, 0u);
+    REQUIRE(r.reason == GBB_STOP_NO_PROGRESS && r.consumed_half_dots == 0u);
+    REQUIRE(gbb_save_state(m, after, state_size) == GBB_OK);
+    REQUIRE(memcmp(before, after, state_size) == 0);
+    free(after);
+    free(before);
     gbb_destroy(m);
     return 0;
 }

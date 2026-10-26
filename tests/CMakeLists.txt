@@ -5101,7 +5101,7 @@ gbb_state_internal_mutant(palette_omitted state_rtc_palette same_palette state_c
             if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=]
   [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
             if (strcmp(field->path, "compat_rgb555") == 0) {
-                offset += count * field->wire_width;
+                offset += field->wire_width;
                 continue;
             }
             if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=])

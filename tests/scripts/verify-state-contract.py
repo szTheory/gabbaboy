@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -386,9 +387,9 @@ def objdump_symbol_records(objdump_text: str) -> list[dict[str, str]]:
             section_match = re.match(r"^\s*(\d+)\s+(\S+)\s+[0-9A-Fa-f]{4,}\s", line)
             if section_match:
                 index = int(section_match.group(1))
-                if "coff" in current_format:
-                    # LLVM's COFF section table is zero-based; COFF symbol
-                    # section numbers are one-based.
+                if current_format.startswith(("coff", "pe-", "pei-")):
+                    # LLVM COFF and GNU BFD PE/PEI section tables are zero-based;
+                    # symbol section numbers are one-based.
                     index += 1
                 section_names[index] = section_match.group(2)
             continue
@@ -426,12 +427,24 @@ def objdump_symbol_records(objdump_text: str) -> list[dict[str, str]]:
                 records.append({"object": current_object, "section": section, "symbol": symbol,
                                 "kind": "section"})
             continue
-        if section != "*COM*" and "O" not in symbol_flags.split():
+        if section != "*COM*" and "O" not in symbol_flags.split() and \
+                not is_writable_tls_section(section):
             continue
         records.append({"object": current_object, "section": section, "symbol": symbol,
                         "kind": "common" if section == "*COM*" else "object",
                         "address": parts[0]})
     return records
+
+
+def is_writable_tls_section(section: str) -> bool:
+    lowered = section.lower()
+    if "," in lowered:
+        segment, subsection = (item.strip("_") for item in lowered.split(",", 1))
+        return segment in {"data", "data_const"} and subsection in {
+            "thread_data", "thread_bss", "tdata", "tbss"
+        }
+    return bool(re.fullmatch(r"\.(?:tdata|tbss|tcommon|tls)(?:[.$].*)?", lowered) or
+                lowered.startswith(".gnu.linkonce.t."))
 
 
 def is_sanitizer_metadata_section(section: str) -> bool:
@@ -679,6 +692,22 @@ SYMBOL TABLE:
 [17](sec  4)(fl 0x00)(ty   0)(scl   2)(nx 0) 0x00000000 _const_relocated_pointer
 [18](sec  5)(fl 0x00)(ty   0)(scl   3)(nx 0) 0x00000000 _seed_tls
 """
+    gnu_pei = """core.obj: file format pei-x86-64
+
+Sections:
+  0 .text 00000010 0000000000000000 0000000000000000 00000000 2**2
+  1 .data 00000008 0000000000000000 0000000000000000 00000010 2**2
+  2 .bss 00000004 0000000000000000 0000000000000000 00000018 2**2
+  3 .rdata 00000010 0000000000000000 0000000000000000 0000001c 2**2
+  4 .tls$ 00000008 0000000000000000 0000000000000000 0000002c 2**2
+
+SYMBOL TABLE:
+[  1](sec  1)(fl 0x00)(ty  20)(scl   2)(nx 0) 0x00000000 read_globals
+[  2](sec  2)(fl 0x00)(ty   0)(scl   3)(nx 0) 0x00000004 _seed_static
+[  3](sec  2)(fl 0x00)(ty   0)(scl   2)(nx 0) 0x00000000 _seed_external
+[  4](sec  4)(fl 0x00)(ty   0)(scl   2)(nx 0) 0x00000000 _const_relocated_pointer
+[  5](sec  5)(fl 0x00)(ty   0)(scl   3)(nx 0) 0x00000000 _seed_tls
+"""
     sanitizer_name_lookalike = """core.o: file format elf64-x86-64
 SYMBOL TABLE:
 0000000000000000 *COM* 0000000000000004 ____asan_globals_registered
@@ -689,9 +718,11 @@ SYMBOL TABLE:
     assert_symbol_control("COFF", coff, {"_seed_external", "_seed_static", "_seed_tls"})
     assert_symbol_control("LLVM COFF", llvm_coff,
                           {"_seed_static", "_seed_external", "_seed_common", "_seed_tls"})
+    assert_symbol_control("GNU PEI", gnu_pei,
+                          {"_seed_static", "_seed_external", "_seed_tls"})
     assert_symbol_control("ordinary sanitizer-name lookalike", sanitizer_name_lookalike,
                           {"____asan_globals_registered"})
-    print("state object-section controls pass formats=Mach-O,GNU-ELF,LLVM-ELF,COFF const-relocations=accepted sanitizer-metadata=isolated")
+    print("state object-section controls pass formats=Mach-O,GNU-ELF,LLVM-ELF,COFF,GNU-PEI const-relocations=accepted sanitizer-metadata=isolated")
 
 
 def globals_self_test(objdump: str, cc: str) -> None:
@@ -719,6 +750,28 @@ def globals_self_test(objdump: str, cc: str) -> None:
             raise ContractError("object control missed the seeded thread-local writable global")
         if any("gbb_seed_ro" in name for name in symbols):
             raise ContractError("object control misclassified immutable storage or const-pointer relocation")
+
+        clang = shutil.which("clang")
+        if clang:
+            cross_obj = root / "globals-cross-elf.o"
+            cross_compile = run([clang, "--target=x86_64-unknown-linux-gnu", "-c",
+                                 str(source), "-o", str(cross_obj)])
+            if cross_compile.returncode != 0:
+                raise ContractError(f"cross-target ELF global control compile failed: {cross_compile.stderr.strip()}")
+            cross_inspect = run([objdump, "-h", "-t", str(cross_obj)])
+            if cross_inspect.returncode != 0:
+                raise ContractError(f"cross-target ELF objdump control failed: {cross_inspect.stderr.strip()}")
+            tls_line = next((line for line in cross_inspect.stdout.splitlines()
+                             if "gbb_seed_tls" in line and ".tdata" in line), None)
+            if tls_line is None:
+                raise ContractError("cross-target ELF control did not emit the seeded TLS symbol in .tdata")
+            tls_parts = tls_line.split()
+            tls_section_index = tls_parts.index(".tdata")
+            if "O" in tls_parts[1:tls_section_index]:
+                raise ContractError("cross-target ELF TLS control no longer exercises a symbol row without O")
+            cross_symbols = writable_symbols(cross_inspect.stdout)
+            if not any("gbb_seed_tls" in name for name in cross_symbols):
+                raise ContractError("object control missed cross-target TLS symbol without the O flag")
 
         asan_compile = run(shlex.split(cc) + ["-fsanitize=address", "-c", str(source), "-o", str(obj)])
         if asan_compile.returncode == 0:
