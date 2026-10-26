@@ -4934,14 +4934,14 @@ add_test(NAME state_inventory
     --inventory --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 add_test(NAME state_inventory_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
-    --self-test --control inventory --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
+    --self-test --control inventory --objdump "${CMAKE_OBJDUMP}" --cc "${CMAKE_C_COMPILER}")
 add_test(NAME state_globals
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
     --globals --library "$<TARGET_FILE:gabbaboy_core>" --rev "${GBB_STATE_SOURCE_REV}"
-    --repo "${PROJECT_SOURCE_DIR}" --nm "${CMAKE_NM}")
+    --repo "${PROJECT_SOURCE_DIR}" --objdump "${CMAKE_OBJDUMP}")
 add_test(NAME state_globals_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
-    --self-test --control globals --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
+    --self-test --control globals --objdump "${CMAKE_OBJDUMP}" --cc "${CMAKE_C_COMPILER}")
 add_test(NAME state_revision_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
     --self-test --control revision --repo "${PROJECT_SOURCE_DIR}")
@@ -4950,7 +4950,7 @@ add_test(NAME state_precodec_gate
     --precodec --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
     --build-dir "${PROJECT_BINARY_DIR}"
     --output "${PROJECT_BINARY_DIR}/state-precodec-proof.json"
-    --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
+    --objdump "${CMAKE_OBJDUMP}" --cc "${CMAKE_C_COMPILER}")
 set_tests_properties(state_size_bound state_audio_bound state_format_contract
   state_inventory state_inventory_controls state_globals state_globals_controls state_revision_controls
   state_precodec_gate PROPERTIES TIMEOUT 30)

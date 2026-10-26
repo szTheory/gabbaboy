@@ -23,7 +23,7 @@ ROMS=(tracer libbet visible-demo)
 # first hosted gate run's ratio margin; override with GBB_SEED_ITERS_PER_HALF_DOT when resizing.
 SEED_ITERS_PER_HALF_DOT=${GBB_SEED_ITERS_PER_HALF_DOT:-2}
 SEED_ANCHOR='static void advance_devices_to(gbb_instance *m, uint64_t target) {'
-BUILD_COMMAND='cc -std=c17 -O3 -DNDEBUG -I$REV/include $HARNESS $REV/src/core/*.c'
+BUILD_COMMAND='cmake -S $REV -B $BUILD -DCMAKE_BUILD_TYPE=Release; validate CMAKE_PROJECT_VERSION with cmake/StateVersion.cmake; cc -std=c17 -O3 -DNDEBUG -DGBB_STATE_RELEASE_MAJOR=$MAJOR -DGBB_STATE_RELEASE_MINOR=$MINOR -DGBB_STATE_RELEASE_PATCH=$PATCH -I$REV/include $HARNESS $REV/src/core/*.c'
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/gbb-perf-gate.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
@@ -44,11 +44,34 @@ check_rom_pins() {
   done
 }
 
-# build_measure TREE HARNESS OUT: one fixed compiler command for every tree (the Release flags CMake uses for
-# gcc), so an Ir delta reflects src/ alone.
+validated_release_triplet() {
+  local tree=$1 configure_dir=$2 revision=$3 output
+  cmake -S "$tree" -B "$configure_dir" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    -DGABBABOY_BUILD_PLAYER=OFF >"$configure_dir.log" 2>&1 || {
+      cat "$configure_dir.log" >&2
+      fail harness-version-configure-failed "CMake could not resolve source version for $tree"
+    }
+  output=$(python3 -I "$ROOT/tests/scripts/verify-state-contract.py" \
+    --state-release-from-cache "$configure_dir/CMakeCache.txt" \
+    --version-module "$ROOT/cmake/StateVersion.cmake" --cmake cmake \
+    --rev "$revision" --repo "$ROOT") ||
+    fail harness-version-invalid "StateVersion.cmake rejected the release version in $tree"
+  [[ "$output" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+    fail harness-version-invalid "validated source release triplet was malformed for $tree"
+  echo "$output"
+}
+
+# build_measure TREE HARNESS OUT: configure the source tree to obtain its own project version,
+# validate it through StateVersion.cmake, then keep one fixed compiler command for every tree.
 build_measure() {
-  cc -std=c17 -O3 -DNDEBUG -I"$1/include" "$2" "$1"/src/core/*.c -o "$3" ||
-    fail harness-build-failed "build failed for $1"
+  local tree=$1 harness=$2 out=$3 revision=$4 configure_dir="$WORK/cmake-measure-$(basename "$1")" triplet major minor patch
+  rm -rf "$configure_dir" "$configure_dir.log"
+  triplet=$(validated_release_triplet "$tree" "$configure_dir" "$revision")
+  IFS=. read -r major minor patch <<<"$triplet"
+  cc -std=c17 -O3 -DNDEBUG \
+    -DGBB_STATE_RELEASE_MAJOR="$major" -DGBB_STATE_RELEASE_MINOR="$minor" \
+    -DGBB_STATE_RELEASE_PATCH="$patch" -I"$tree/include" "$harness" "$tree"/src/core/*.c -o "$out" ||
+    fail harness-build-failed "build failed for $tree"
 }
 
 require_valgrind() {
@@ -97,9 +120,9 @@ evaluate_tree() {
     fail workload-digest-mismatch "v0.2.0 is not $V020_EXPECTED"
   rm -rf "$WORK/base-tree" "$WORK/base" "$WORK/head"
   mkdir -p "$WORK/base-tree"
-  git -C "$ROOT" archive v0.2.0 src include | tar -x -C "$WORK/base-tree"
-  build_measure "$WORK/base-tree" "$ROOT/tests/measure_core.c" "$WORK/base-measure"
-  build_measure "$head_tree" "$ROOT/tests/measure_core.c" "$WORK/head-measure"
+  git -C "$ROOT" archive v0.2.0 CMakeLists.txt cmake src include | tar -x -C "$WORK/base-tree"
+  build_measure "$WORK/base-tree" "$ROOT/tests/measure_core.c" "$WORK/base-measure" "$V020_EXPECTED"
+  build_measure "$head_tree" "$ROOT/tests/measure_core.c" "$WORK/head-measure" "$(git -C "$ROOT" rev-parse HEAD)"
   collect "$WORK/base" "$WORK/base-measure" 1
   collect "$WORK/head" "$WORK/head-measure" 2
   local args=(--evaluate --limits "$LIMITS" --base "$WORK/base" --head "$WORK/head")
@@ -134,7 +157,7 @@ seeded_tree() {
   local mode=$1 tree="$WORK/seeded-tree" file count
   rm -rf "$tree"
   mkdir -p "$tree"
-  cp -R "$ROOT/src" "$ROOT/include" "$tree/"
+  cp -R "$ROOT/CMakeLists.txt" "$ROOT/cmake" "$ROOT/src" "$ROOT/include" "$tree/"
   file="$tree/src/core/gabbaboy.c"
   count=$(grep -Fxc -- "$SEED_ANCHOR" "$file" || true)
   [[ "$count" == 1 ]] || fail seeded-anchor-missing "the definition anchor matched $count lines, expected 1"
@@ -189,10 +212,17 @@ adapt_harness() {
 # build_revision SHA: extract src and include of that revision and build the adapted harness against them.
 build_revision() {
   local sha=$1 tree="$WORK/rev-$1"
+  local configure_dir="$WORK/cmake-revision-$1" triplet major minor patch
   rm -rf "$tree"
   mkdir -p "$tree"
-  git -C "$ROOT" archive "$sha" src include | tar -x -C "$tree"
-  cc -std=c17 -O3 -DNDEBUG -I"$tree/include" "$WORK/measure_core_dmg.c" "$tree"/src/core/*.c -o "$tree/measure" ||
+  git -C "$ROOT" archive "$sha" CMakeLists.txt cmake src include | tar -x -C "$tree"
+  rm -rf "$configure_dir" "$configure_dir.log"
+  triplet=$(validated_release_triplet "$tree" "$configure_dir" "$sha")
+  IFS=. read -r major minor patch <<<"$triplet"
+  cc -std=c17 -O3 -DNDEBUG \
+    -DGBB_STATE_RELEASE_MAJOR="$major" -DGBB_STATE_RELEASE_MINOR="$minor" \
+    -DGBB_STATE_RELEASE_PATCH="$patch" -I"$tree/include" \
+    "$WORK/measure_core_dmg.c" "$tree"/src/core/*.c -o "$tree/measure" ||
     fail harness-build-failed "revision $sha did not build with the adapted harness"
 }
 

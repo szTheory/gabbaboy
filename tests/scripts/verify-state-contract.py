@@ -351,24 +351,186 @@ def verify_inventory(core: str, header: str) -> dict[str, object]:
     return {"members": classified, "fields": fields, "rules": len(treatments)}
 
 
-def writable_symbols(nm_text: str) -> list[str]:
-    writable: list[str] = []
-    for line in nm_text.splitlines():
-        if re.search(r"\(__DATA\s*,\s*__(?:data|bss|common|thread_data|thread_bss)\)", line):
-            writable.append(line.split()[-1])
+def objdump_symbol_records(objdump_text: str) -> list[dict[str, str]]:
+    """Read object symbols with their section and object-file provenance.
+
+    GNU and LLVM objdump use the same symbol-table shape for ELF and COFF. LLVM's
+    Mach-O output also names the segment and section on each symbol row. Keeping
+    those coordinates is necessary: nm's one-letter ELF classes collapse
+    `.data.rel.ro` into D even for compiler-emitted const relocation tables.
+    """
+    records: list[dict[str, str]] = []
+    current_object = "<object>"
+    current_format = ""
+    in_symbol_table = False
+    in_sections = False
+    section_names: dict[int, str] = {}
+    for line in objdump_text.splitlines():
+        format_match = re.match(r"^(.*?):\s+file format\s+(\S+)", line.strip())
+        if format_match:
+            current_object = format_match.group(1)
+            current_format = format_match.group(2).lower()
+            in_symbol_table = False
+            in_sections = False
+            section_names = {}
             continue
-        match = re.search(r"\s([BbCcDdGgSs])\s+([^\s]+)$", line)
-        if match:
-            writable.append(match.group(2))
+        if line.strip() == "Sections:":
+            in_sections = True
+            in_symbol_table = False
+            continue
+        if line.strip() == "SYMBOL TABLE:":
+            in_symbol_table = True
+            in_sections = False
+            continue
+        if in_sections:
+            section_match = re.match(r"^\s*(\d+)\s+(\S+)\s+[0-9A-Fa-f]{4,}\s", line)
+            if section_match:
+                index = int(section_match.group(1))
+                if "coff" in current_format:
+                    # LLVM's COFF section table is zero-based; COFF symbol
+                    # section numbers are one-based.
+                    index += 1
+                section_names[index] = section_match.group(2)
+            continue
+        if not in_symbol_table:
+            continue
+        coff_match = re.match(
+            r"^\[\s*\d+\]\(sec\s+(-?\d+)\).*?\(ty\s+(\d+)\).*?\s(\S+)\s*$", line)
+        if coff_match:
+            section_index, symbol_type, symbol = (int(coff_match.group(1)),
+                                                   int(coff_match.group(2)),
+                                                   coff_match.group(3))
+            section = section_names.get(section_index)
+            if section_index <= 0 or section is None or symbol_type != 0 or symbol == section:
+                continue
+            records.append({"object": current_object, "section": section, "symbol": symbol,
+                            "kind": "object", "address": ""})
+            continue
+        parts = line.split()
+        if len(parts) < 3 or not re.fullmatch(r"[0-9A-Fa-f]+", parts[0]):
+            continue
+        section_index = next((index for index, token in enumerate(parts[1:], start=1)
+                              if token in {"*COM*", "*ABS*", "*UND*", "asan_globals", "asan_liveness"} or
+                              token.startswith(".") or
+                              re.fullmatch(r"__[A-Za-z0-9_$]+,__?[A-Za-z0-9_$.-]+", token)), None)
+        if section_index is None or section_index == len(parts) - 1:
+            continue
+        section = parts[section_index]
+        symbol = parts[-1]
+        symbol_flags = " ".join(parts[1:section_index])
+        if section == "*UND*" or "F" in symbol_flags.split():
+            continue
+        if symbol == section:
+            # Section symbols (for example, `.data`) are not file-scope objects.
+            if is_sanitizer_metadata_section(section):
+                records.append({"object": current_object, "section": section, "symbol": symbol,
+                                "kind": "section"})
+            continue
+        if section != "*COM*" and "O" not in symbol_flags.split():
+            continue
+        records.append({"object": current_object, "section": section, "symbol": symbol,
+                        "kind": "common" if section == "*COM*" else "object",
+                        "address": parts[0]})
+    return records
+
+
+def is_sanitizer_metadata_section(section: str) -> bool:
+    lowered = section.lower()
+    return ("asan_globals" in lowered or "asan_liveness" in lowered or
+            lowered.startswith(".asan$") or lowered.startswith("asan$"))
+
+
+def is_readonly_relocation_section(section: str) -> bool:
+    lowered = section.lower()
+    if "," in lowered:
+        segment, subsection = lowered.split(",", 1)
+        segment = segment.strip("_")
+        subsection = subsection.strip("_")
+        return segment in {"data", "data_const"} and subsection == "const"
+    return lowered == ".data.rel.ro" or lowered.startswith(".data.rel.ro.")
+
+
+def is_known_readonly_section(section: str) -> bool:
+    lowered = section.lower()
+    if "," in lowered:
+        segment, _ = lowered.split(",", 1)
+        return segment.strip("_") in {"text", "text_const", "data_const", "const", "ld"}
+    return lowered.startswith((
+        ".rodata", ".rdata", ".text", ".debug", ".zdebug", ".eh_frame", ".note",
+        ".comment", ".llvm", ".stab", ".init_array", ".fini_array", ".CRT$",
+        ".pdata", ".xdata", ".drectve", ".ARM.attributes", ".gnu.attributes",
+    ))
+
+
+def writable_symbols(objdump_text: str) -> list[str]:
+    records = objdump_symbol_records(objdump_text)
+    sanitizer_objects = {record["object"] for record in records
+                         if is_sanitizer_metadata_section(record["section"])}
+    named_symbols = {(record["object"], record["section"], record.get("address"))
+                     for record in records if record["kind"] == "object" and
+                     not re.fullmatch(r"ltmp[0-9]+", record["symbol"])}
+    writable: list[str] = []
+    for record in records:
+        section = record["section"]
+        symbol = record["symbol"]
+        lowered = section.lower()
+        if record["kind"] == "section":
+            continue
+        if "," in section and re.fullmatch(r"ltmp[0-9]+", symbol) and \
+                (record["object"], section, record.get("address")) in named_symbols:
+            # LLVM's Mach-O assembler emits local ltmp labels beside the named
+            # object at the same location; they are not separate C globals.
+            continue
+        if is_sanitizer_metadata_section(section):
+            continue
+        normalized_symbol = symbol.strip("_").lower()
+        if record["object"] in sanitizer_objects and (
+                normalized_symbol == "asan_globals_registered" or
+                normalized_symbol.startswith(("asan_global_", "asan_binder_", "odr_asan_gen_"))):
+            # These exact names are emitted into a unit that carries the
+            # compiler's dedicated ASan metadata section. The structural section
+            # requirement prevents a user global with a coincidental name from
+            # being exempted in an ordinary object.
+            continue
+        if record["kind"] == "common":
+            writable.append(symbol)
+            continue
+        if is_readonly_relocation_section(section) or is_known_readonly_section(section):
+            continue
+        if "," in lowered:
+            segment, subsection = (item.strip("_") for item in lowered.split(",", 1))
+            if segment == "data" and subsection in {"mod_init_func", "mod_term_func"}:
+                continue
+            if segment == "data" and subsection in {
+                "data", "bss", "common", "thread_data", "thread_bss", "tdata", "tbss"
+            }:
+                writable.append(symbol)
+            elif segment == "data_const" and subsection in {"data", "bss", "thread_data", "thread_bss"}:
+                writable.append(symbol)
+            elif segment in {"data", "data_const"}:
+                # Unknown allocated data sections fail closed until classified.
+                writable.append(symbol)
+            continue
+        if re.fullmatch(r"\.(?:data|bss|sdata|sbss|tdata|tbss|tcommon|tls|common)(?:\..*)?", lowered) or \
+                lowered.startswith((".gnu.linkonce.d.", ".gnu.linkonce.b.", ".tls$")):
+            writable.append(symbol)
+        elif not is_known_readonly_section(section):
+            # An object symbol in an unrecognized section is not silently treated
+            # as immutable. This also catches toolchain-specific writable sections.
+            writable.append(symbol)
     return sorted(set(writable))
 
 
-def verify_nm(nm: str, library: Path) -> dict[str, object]:
+def verify_object_symbols(objdump: str, library: Path) -> dict[str, object]:
     if not library.is_file():
         raise ContractError(f"core library does not exist: {library}")
-    result = run([nm, "-a", "-m", str(library)])
+    result = run([objdump, "-h", "-t", str(library)])
     if result.returncode != 0:
-        raise ContractError(f"nm could not inspect {library}: {result.stderr.strip()}")
+        raise ContractError(f"objdump could not inspect {library}: {result.stderr.strip()}")
+    if "file format" not in result.stdout or "SYMBOL TABLE:" not in result.stdout:
+        raise ContractError(f"objdump did not provide object format and symbol-table evidence for {library}")
+    if not objdump_symbol_records(result.stdout):
+        raise ContractError(f"objdump reported no object symbols for {library}")
     symbols = writable_symbols(result.stdout)
     if symbols:
         raise ContractError("writable file-scope core symbol(s): " + ", ".join(symbols))
@@ -458,24 +620,118 @@ if (m->apu_sample_phase >= GBB_AUDIO_CLOCK_HALF_DOTS) audio_process_sample(m);
         raise ContractError("extra-edge schedule mutant survived")
 
 
-def globals_self_test(nm: str, cc: str) -> None:
-    with tempfile.TemporaryDirectory(prefix="gabbaboy-state-nm-") as temp:
+def assert_symbol_control(label: str, objdump_text: str, expected: set[str]) -> None:
+    actual = set(writable_symbols(objdump_text))
+    if actual != expected:
+        raise ContractError(f"{label} section classification mismatch: expected {sorted(expected)}, got {sorted(actual)}")
+
+
+def objdump_format_controls_self_test() -> None:
+    mach_o = """/tmp/core.o: file format mach-o arm64
+SYMBOL TABLE:
+0000000000000000 g O __DATA,__data _seed_external
+0000000000000004 l O __DATA,__bss _seed_static
+0000000000000008 l O __DATA,__thread_data _seed_tls
+000000000000000c g O __DATA,__const _const_relocated_pointer
+0000000000000010 l O __DATA,__asan_globals ___asan_global_seed
+0000000000000014 l O __DATA,__asan_liveness ___asan_binder_seed
+0000000000000018 *COM* 0000000000000004 .hidden ____asan_globals_registered
+"""
+    gnu_elf = """core.o: file format elf64-x86-64
+SYMBOL TABLE:
+0000000000000000 g O .data 0000000000000004 seed_external
+0000000000000004 l O .bss 0000000000000004 seed_static
+0000000000000008 g O .tdata 0000000000000004 seed_tls
+000000000000000c l O .rodata 0000000000000008 const_table
+0000000000000014 l O .data.rel.ro.local 0000000000000010 const_pointer_table
+"""
+    llvm_elf_asan = """core.o: file format elf64-x86-64
+SYMBOL TABLE:
+0000000000000000 g O .data 0000000000000004 seed_external
+0000000000000004 l O .tbss 0000000000000004 seed_tls
+0000000000000008 l O .data.rel.ro.STATE_FIELDS 0000000000000010 STATE_FIELDS
+0000000000000018 l O .asan_globals 0000000000000020 __asan_global_seed
+0000000000000038 l O .asan_liveness 0000000000000008 __asan_binder_seed
+0000000000000040 *COM* 0000000000000004 ____asan_globals_registered
+"""
+    coff = """core.obj: file format pe-x86-64
+SYMBOL TABLE:
+00000000 g O .data 00000004 _seed_external
+00000004 l O .bss 00000004 _seed_static
+00000008 g O .tls$ 00000004 _seed_tls
+0000000c l O .rdata$const 00000008 _const_relocated_pointer
+00000014 l O .ASAN$GL 00000020 __asan_global_seed
+"""
+    llvm_coff = """core.obj: file format coff-x86-64
+
+Sections:
+  0 .text 00000010 0000000000000000 TEXT
+  1 .data 00000008 0000000000000000 DATA
+  2 .bss 00000004 0000000000000000 BSS
+  3 .rdata 00000010 0000000000000000 DATA
+  4 .tls$ 00000008 0000000000000000 DATA
+
+SYMBOL TABLE:
+[13](sec  1)(fl 0x00)(ty  20)(scl   2)(nx 0) 0x00000000 read_globals
+[14](sec  2)(fl 0x00)(ty   0)(scl   3)(nx 0) 0x00000004 _seed_static
+[15](sec  2)(fl 0x00)(ty   0)(scl   2)(nx 0) 0x00000000 _seed_external
+[16](sec  3)(fl 0x00)(ty   0)(scl   2)(nx 0) 0x00000000 _seed_common
+[17](sec  4)(fl 0x00)(ty   0)(scl   2)(nx 0) 0x00000000 _const_relocated_pointer
+[18](sec  5)(fl 0x00)(ty   0)(scl   3)(nx 0) 0x00000000 _seed_tls
+"""
+    sanitizer_name_lookalike = """core.o: file format elf64-x86-64
+SYMBOL TABLE:
+0000000000000000 *COM* 0000000000000004 ____asan_globals_registered
+"""
+    assert_symbol_control("Mach-O", mach_o, {"_seed_external", "_seed_static", "_seed_tls"})
+    assert_symbol_control("GNU ELF", gnu_elf, {"seed_external", "seed_static", "seed_tls"})
+    assert_symbol_control("LLVM ELF with ASan", llvm_elf_asan, {"seed_external", "seed_tls"})
+    assert_symbol_control("COFF", coff, {"_seed_external", "_seed_static", "_seed_tls"})
+    assert_symbol_control("LLVM COFF", llvm_coff,
+                          {"_seed_static", "_seed_external", "_seed_common", "_seed_tls"})
+    assert_symbol_control("ordinary sanitizer-name lookalike", sanitizer_name_lookalike,
+                          {"____asan_globals_registered"})
+    print("state object-section controls pass formats=Mach-O,GNU-ELF,LLVM-ELF,COFF const-relocations=accepted sanitizer-metadata=isolated")
+
+
+def globals_self_test(objdump: str, cc: str) -> None:
+    objdump_format_controls_self_test()
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-state-symbols-") as temp:
         root = Path(temp)
         source, obj = root / "globals.c", root / "globals.o"
-        source.write_text("int gbb_seed_global = 1; static volatile int gbb_seed_static = 3; const int gbb_seed_ro = 2; int gbb_seed_read(void) { return gbb_seed_static; }\n")
+        source.write_text(
+            "int gbb_seed_global = 1; static volatile int gbb_seed_static = 3; "
+            "_Thread_local int gbb_seed_tls = 4; const int gbb_seed_ro = 2; "
+            "const int * const gbb_seed_ro_ptr = &gbb_seed_ro; "
+            "int gbb_seed_read(void) { return gbb_seed_static + gbb_seed_tls; }\n")
         compile_result = run(shlex.split(cc) + ["-c", str(source), "-o", str(obj)])
         if compile_result.returncode != 0:
             raise ContractError(f"global negative-control compile failed: {compile_result.stderr.strip()}")
-        nm_result = run([nm, "-a", "-m", str(obj)])
-        if nm_result.returncode != 0:
-            raise ContractError(f"nm global negative-control failed: {nm_result.stderr.strip()}")
-        symbols = writable_symbols(nm_result.stdout)
+        inspect = run([objdump, "-h", "-t", str(obj)])
+        if inspect.returncode != 0:
+            raise ContractError(f"objdump global negative-control failed: {inspect.stderr.strip()}")
+        symbols = writable_symbols(inspect.stdout)
         if not any("gbb_seed_global" in name for name in symbols):
-            raise ContractError("nm control missed the seeded external writable global")
+            raise ContractError("object control missed the seeded external writable global")
         if not any("gbb_seed_static" in name for name in symbols):
-            raise ContractError("nm control missed the seeded file-static writable global")
+            raise ContractError("object control missed the seeded file-static writable global")
+        if not any("gbb_seed_tls" in name for name in symbols):
+            raise ContractError("object control missed the seeded thread-local writable global")
         if any("gbb_seed_ro" in name for name in symbols):
-            raise ContractError("nm control misclassified immutable read-only storage")
+            raise ContractError("object control misclassified immutable storage or const-pointer relocation")
+
+        asan_compile = run(shlex.split(cc) + ["-fsanitize=address", "-c", str(source), "-o", str(obj)])
+        if asan_compile.returncode == 0:
+            asan_inspect = run([objdump, "-h", "-t", str(obj)])
+            if asan_inspect.returncode != 0:
+                raise ContractError(f"objdump sanitizer control failed: {asan_inspect.stderr.strip()}")
+            symbols = writable_symbols(asan_inspect.stdout)
+            for expected in ("gbb_seed_global", "gbb_seed_static", "gbb_seed_tls"):
+                if not any(expected in name for name in symbols):
+                    raise ContractError(f"sanitizer object control missed writable source symbol {expected}")
+            if any("asan_globals_registered" in name or "asan_global_" in name or
+                   "asan_binder_" in name for name in symbols):
+                raise ContractError("sanitizer compiler metadata was misclassified as core mutable storage")
 
 
 def sha256_file(path: Path) -> str:
@@ -597,13 +853,13 @@ def verify_state_documentation_negative_control(state_format: str, cartridge_sav
     raise ContractError("state documentation magic negative control survived")
 
 
-def version_component_self_test(cmake: str, module: Path) -> None:
+def version_component_self_test(cmake: str, module: Path, root: Path, rev: str) -> None:
     if not module.is_file():
         raise ContractError(f"state release version helper is missing: {module}")
     with tempfile.TemporaryDirectory(prefix="gabbaboy-state-version-") as temp:
-        root = Path(temp)
+        control_root = Path(temp)
         escaped_module = str(module.resolve()).replace("\\", "\\\\").replace('"', '\\"')
-        project = root / "CMakeLists.txt"
+        project = control_root / "CMakeLists.txt"
         project.write_text(
             "cmake_minimum_required(VERSION 3.25)\n"
             "project(StateVersionControl NONE)\n"
@@ -614,16 +870,68 @@ def version_component_self_test(cmake: str, module: Path) -> None:
         valid = ("0.2.1", "65535.65535.65535")
         invalid = ("-1.0.0", "1.0", "1.0.0.1", "1.a.0", "65536.0.0", "1.65536.0")
         for version in valid:
-            result = run([cmake, "-S", str(root), "-B", str(root / ("valid-" + version.replace(".", "-"))),
+            result = run([cmake, "-S", str(control_root), "-B", str(control_root / ("valid-" + version.replace(".", "-"))),
                           f"-DGBB_VERSION_UNDER_TEST={version}"])
             expected_line = "state version parsed=" + version
             if result.returncode != 0 or expected_line not in result.stdout:
                 raise ContractError(f"valid state version control failed for {version}: {result.stdout}{result.stderr}")
         for version in invalid:
-            result = run([cmake, "-S", str(root), "-B", str(root / ("invalid-" + re.sub(r"[^A-Za-z0-9]+", "-", version))),
+            result = run([cmake, "-S", str(control_root), "-B", str(control_root / ("invalid-" + re.sub(r"[^A-Za-z0-9]+", "-", version))),
                           f"-DGBB_VERSION_UNDER_TEST={version}"])
             if result.returncode == 0 or "GabbaBoy state release version" not in result.stdout + result.stderr:
                 raise ContractError(f"invalid state version control survived for {version}: {result.stdout}{result.stderr}")
+        cache = control_root / "project" / "CMakeCache.txt"
+        cache.parent.mkdir()
+        cache.write_text("CMAKE_PROJECT_VERSION:STATIC=0.2.1\n")
+        if state_release_from_cmake_cache(cache, module, cmake, root, rev) != ("0", "2", "1"):
+            raise ContractError("CMake cache release triplet control returned the wrong version")
+        cache.write_text("CMAKE_PROJECT_VERSION:STATIC=0.2.1.4\n")
+        try:
+            state_release_from_cmake_cache(cache, module, cmake, root, rev)
+        except ContractError:
+            pass
+        else:
+            raise ContractError("CMake cache invalid release version control survived")
+
+
+def state_release_from_cmake_cache(cache: Path, module: Path, cmake: str,
+                                   root: Path, rev: str) -> tuple[str, str, str]:
+    if not cache.is_file():
+        raise ContractError(f"CMake cache is missing: {cache}")
+    if not module.is_file():
+        raise ContractError(f"state release version helper is missing: {module}")
+    immutable_cmake = git_show(root, rev, "CMakeLists.txt")
+    immutable_version = re.search(r"^project\(GabbaBoy VERSION ([^\s)]+)", immutable_cmake, re.M)
+    if immutable_version is None:
+        raise ContractError("immutable CMakeLists.txt has no GabbaBoy project version")
+    cache_text = cache.read_text(errors="replace")
+    match = re.search(r"^CMAKE_PROJECT_VERSION:STATIC=(.*)$", cache_text, re.M)
+    if match is None or not match.group(1):
+        raise ContractError(f"CMake cache has no CMAKE_PROJECT_VERSION: {cache}")
+    if match.group(1) != immutable_version.group(1):
+        raise ContractError(
+            f"CMake cache release version {match.group(1)} differs from immutable --rev {rev} "
+            f"version {immutable_version.group(1)}")
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-state-cache-version-") as temp:
+        root = Path(temp)
+        project = root / "CMakeLists.txt"
+        project.write_text(
+            "cmake_minimum_required(VERSION 3.25)\n"
+            "project(StateVersionCacheProbe NONE)\n"
+            'include("${GBB_STATE_VERSION_MODULE}")\n'
+            'gbb_parse_state_release_version("${GBB_PROJECT_VERSION_UNDER_TEST}" GBB_MAJOR GBB_MINOR GBB_PATCH)\n'
+            'message(STATUS "GBB_STATE_RELEASE_TRIPLET=${GBB_MAJOR}.${GBB_MINOR}.${GBB_PATCH}")\n')
+        result = run([cmake, "-S", str(root), "-B", str(root / "build"),
+                      f"-DGBB_STATE_VERSION_MODULE={module.resolve()}",
+                      f"-DGBB_PROJECT_VERSION_UNDER_TEST={match.group(1)}"])
+        if result.returncode != 0:
+            raise ContractError(
+                f"CMake rejected source release version {match.group(1)} using StateVersion.cmake: "
+                f"{result.stdout}{result.stderr}")
+        parsed = re.search(r"GBB_STATE_RELEASE_TRIPLET=([0-9]+)\.([0-9]+)\.([0-9]+)", result.stdout)
+        if parsed is None:
+            raise ContractError("StateVersion.cmake did not report a validated release triplet")
+        return parsed.group(1), parsed.group(2), parsed.group(3)
 
 
 def run_format_contract(args: argparse.Namespace, root: Path, core: str, header: str) -> None:
@@ -634,13 +942,13 @@ def run_format_contract(args: argparse.Namespace, root: Path, core: str, header:
     verify_state_documentation_negative_control(state_format, cartridge_saves)
     if args.version_module is None or args.api is None or args.rom is None or args.cmake is None:
         raise ContractError("--format-contract requires --version-module, --api, --rom and --cmake")
-    version_component_self_test(args.cmake, args.version_module)
+    version_component_self_test(args.cmake, args.version_module, root, args.rev)
     if not args.api.is_file():
         raise ContractError(f"format proof executable is missing: {args.api}")
     result = run([str(args.api), "format_contract", str(args.rom)], cwd=root)
     if result.returncode != 0:
         raise ContractError(f"format proof executable failed ({result.returncode}): {result.stdout}{result.stderr}")
-    print(f"state format contract pass source={args.rev} docs_control=pass version_controls=8 api={result.stdout.strip() or 'pass'}")
+    print(f"state format contract pass source={args.rev} docs_control=pass version_controls=10 api={result.stdout.strip() or 'pass'}")
 
 
 def run_tracer(args: argparse.Namespace, root: Path, core: str, header: str) -> None:
@@ -805,7 +1113,7 @@ def run_precodec(args: argparse.Namespace, root: Path) -> None:
         raise ContractError("live core source differs from the immutable --rev")
     verify_inventory(core, header)
     library = args.build_dir / "libgabbaboy_core.a"
-    nm_receipt = verify_nm(args.nm, library)
+    object_receipt = verify_object_symbols(args.objdump, library)
     api = args.build_dir / "tests" / "test_state_api"
     if not api.is_file():
         raise ContractError(f"proof executable is missing: {api}")
@@ -816,7 +1124,7 @@ def run_precodec(args: argparse.Namespace, root: Path) -> None:
             raise ContractError(f"{case} proof executable failed ({result.returncode}): {result.stdout}{result.stderr}")
         proof_results[case] = result.stdout.strip() or "pass"
     self_test = run([sys.executable, str(root / "tests/scripts/verify-state-contract.py"),
-                     "--self-test", "--control", "all", "--nm", args.nm, "--cc", args.cc], cwd=root)
+                     "--self-test", "--control", "all", "--objdump", args.objdump, "--cc", args.cc], cwd=root)
     if self_test.returncode != 0:
         raise ContractError(f"inventory/global negative controls failed: {self_test.stdout}{self_test.stderr}")
     source_hash, descriptor_hash, input_hash = source_digest(root, args.rev)
@@ -835,7 +1143,7 @@ def run_precodec(args: argparse.Namespace, root: Path) -> None:
         "cmake_generator": generator_match.group(1) if generator_match else "unknown",
         "c_compiler": compiler_match.group(1) if compiler_match else "unknown",
         "library": str(library.relative_to(root)) if library.is_relative_to(root) else library.name,
-        "library_sha256": nm_receipt["library_sha256"],
+        "library_sha256": object_receipt["library_sha256"],
         "proof_results": proof_results,
         "negative_controls": "pass",
     }
@@ -844,7 +1152,7 @@ def run_precodec(args: argparse.Namespace, root: Path) -> None:
     print(f"state pre-codec proof pass source={args.rev} descriptors={descriptor_hash} executable={receipt['proof_executable_sha256']}")
 
 
-def revision_controls_self_test(root: Path) -> None:
+def revision_controls_self_test(root: Path, cmake: str) -> None:
     script = Path(__file__).resolve()
     cases = (
         ([], "an immutable --rev is required"),
@@ -858,6 +1166,18 @@ def revision_controls_self_test(root: Path) -> None:
             raise ContractError(
                 f"state evidence revision control did not reject {revision_args or ['missing --rev']}: "
                 f"exit={result.returncode} output={result.stdout}{result.stderr}")
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-state-release-revision-") as temp:
+        cache = Path(temp) / "CMakeCache.txt"
+        cache.write_text("CMAKE_PROJECT_VERSION:STATIC=0.2.1\n")
+        shared_args = ["--state-release-from-cache", str(cache), "--version-module",
+                       str(root / "cmake/StateVersion.cmake"), "--cmake", cmake,
+                       "--repo", str(root)]
+        for revision_args, expected in cases:
+            result = run([sys.executable, str(script), *shared_args, *revision_args], cwd=root)
+            if result.returncode != 1 or expected not in result.stdout + result.stderr:
+                raise ContractError(
+                    f"release-version checker did not fail closed for {revision_args or ['missing --rev']}: "
+                    f"exit={result.returncode} output={result.stdout}{result.stderr}")
     print("state revision controls pass missing=refused unknown=refused missing_object=refused")
 
 
@@ -926,6 +1246,7 @@ def main() -> int:
     parser.add_argument("--format-contract", action="store_true")
     parser.add_argument("--tracer", action="store_true")
     parser.add_argument("--purity", action="store_true")
+    parser.add_argument("--state-release-from-cache", type=Path)
     parser.add_argument("--control", choices=("inventory", "field-census", "globals", "revision", "purity", "all"), default="all")
     parser.add_argument("--rev", required=False)
     parser.add_argument("--library", type=Path)
@@ -937,22 +1258,31 @@ def main() -> int:
     parser.add_argument("--probe", type=Path)
     parser.add_argument("--rom", type=Path)
     parser.add_argument("--cmake", default="cmake")
-    parser.add_argument("--nm", default=os.environ.get("CMAKE_NM", "nm"))
+    parser.add_argument("--objdump", default=os.environ.get("CMAKE_OBJDUMP", "objdump"))
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
     parser.add_argument("--generator", default="")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     args = parser.parse_args()
     root = args.repo.resolve()
     try:
+        if args.state_release_from_cache is not None:
+            if args.rev is None:
+                raise ContractError("an immutable --rev is required")
+            if args.version_module is None:
+                raise ContractError("--state-release-from-cache requires --version-module PATH")
+            version = state_release_from_cmake_cache(args.state_release_from_cache,
+                                                     args.version_module, args.cmake, root, args.rev)
+            print(".".join(version))
+            return 0
         if args.self_test:
             if args.control in ("inventory", "all"):
                 inventory_self_test()
             if args.control in ("field-census", "all"):
                 field_census_self_test()
             if args.control in ("globals", "all"):
-                globals_self_test(args.nm, args.cc)
+                globals_self_test(args.objdump, args.cc)
             if args.control in ("revision", "all"):
-                revision_controls_self_test(root)
+                revision_controls_self_test(root, args.cmake)
             if args.control in ("purity", "all"):
                 purity_contract_self_test()
             print(f"state contract controls pass control={args.control}")
@@ -971,7 +1301,7 @@ def main() -> int:
         if args.globals:
             if args.library is None:
                 raise ContractError("--globals requires --library PATH")
-            result = verify_nm(args.nm, args.library)
+            result = verify_object_symbols(args.objdump, args.library)
             print(f"state globals pass library_sha256={result['library_sha256']}")
             return 0
         if args.precodec:
