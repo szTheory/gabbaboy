@@ -4965,12 +4965,34 @@ target_include_directories(test_state_codec PRIVATE
   "${PROJECT_SOURCE_DIR}/src/accept")
 target_compile_features(test_state_codec PRIVATE c_std_17)
 set_target_properties(test_state_codec PROPERTIES C_EXTENSIONS OFF)
+add_executable(test_state_codec_override test_state_codec.c)
+target_include_directories(test_state_codec_override PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/core"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_codec_override PRIVATE c_std_17)
+target_compile_definitions(test_state_codec_override PRIVATE GBB_TEST_CGB_PCM_WRITABLE=1)
+set_target_properties(test_state_codec_override PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME state_identity COMMAND test_state_codec state_identity)
 add_test(NAME state_codec_matrix COMMAND test_state_codec state_codec_matrix)
 add_test(NAME state_canonical COMMAND test_state_codec state_canonical)
 add_test(NAME state_semantic_bounds COMMAND test_state_codec state_semantic_bounds)
+add_test(NAME state_override_isolation COMMAND test_state_codec_override state_override_isolation)
+add_test(NAME state_field_census
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --field-census --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --census-exe "$<TARGET_FILE:test_state_codec>")
+add_test(NAME state_field_census_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --self-test --control field-census)
+add_test(NAME state_codec_mutant_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-mutants.py"
+    --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}" --cc "${CMAKE_C_COMPILER}")
 set_tests_properties(state_identity state_codec_matrix state_canonical state_semantic_bounds
+  state_override_isolation
   PROPERTIES TIMEOUT 60)
+set_tests_properties(state_field_census state_field_census_controls PROPERTIES TIMEOUT 30)
+set_tests_properties(state_codec_mutant_controls PROPERTIES TIMEOUT 60)
 
 gabbaboy_verify_registered_tests()
 

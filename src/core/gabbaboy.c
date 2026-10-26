@@ -4224,7 +4224,8 @@ static int state_field_value_valid(const gbb_instance *instance,
             : index == 2u ? raw <= 0x1Fu : index == 4u ? (raw & 0x3Eu) == 0u : 1);
     if (strcmp(field->path, "cart.rtc_sub") == 0) return raw <= RTC_SUB_MASK;
     if (strcmp(field->path, "f") == 0) return (raw & 0x0Fu) == 0u;
-    if (strcmp(field->path, "vram_bank") == 0 || strcmp(field->path, "block_vram_bank") == 0)
+    if (strcmp(field->path, "vram_bank") == 0 ||
+        strcmp(field->path, "hdma.block_vram_bank") == 0)
         return raw <= 1u;
     if (strcmp(field->path, "wram_bank") == 0) return raw >= 1u && raw <= 7u;
     if (strcmp(field->path, "svbk") == 0) return raw <= 7u;
@@ -4261,6 +4262,9 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (strcmp(field->path, "hdma.mode") == 0) return raw <= 2u;
     if (strcmp(field->path, "hdma.active") == 0 ||
         strcmp(field->path, "hdma.pending_hblank") == 0) return raw <= 1u;
+    if (strcmp(field->path, "hdma.source_low") == 0 ||
+        strcmp(field->path, "hdma.destination_low") == 0) return (raw & 0x0Fu) == 0u;
+    if (strcmp(field->path, "hdma.destination_high") == 0) return raw <= 0x1Fu;
     if (strcmp(field->path, "hdma.byte_index") == 0) return raw < 16u;
     if (strcmp(field->path, "hdma.byte_phase") == 0) return raw <= 3u;
     if (strcmp(field->path, "hdma.destination_cursor") == 0)
@@ -4329,7 +4333,7 @@ static int state_field_value_valid(const gbb_instance *instance,
 
 typedef enum {
     STATE_WALK_SIZE = 0, STATE_WALK_ENCODE, STATE_WALK_VALIDATE_LIVE,
-    STATE_WALK_VALIDATE_BODY, STATE_WALK_APPLY
+    STATE_WALK_VALIDATE_BODY
 } state_walk_mode;
 
 /* MODEL: BOTH GATE-00 basis="state traversal preserves profile-specific machine state" */
@@ -4353,8 +4357,7 @@ static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
         return 1;
     }
     if (mode == STATE_WALK_ENCODE && (mutable_body == NULL || body_size != required)) return 0;
-    if ((mode == STATE_WALK_VALIDATE_BODY || mode == STATE_WALK_APPLY) &&
-        (read_body == NULL || body_size != required)) return 0;
+    if (mode == STATE_WALK_VALIDATE_BODY && (read_body == NULL || body_size != required)) return 0;
 
     size_t offset = 0u;
     uint64_t head_raw = 0u, phase = 0u;
@@ -4379,7 +4382,7 @@ static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
             }
             if (strncmp(field->path, "input_events[].", 15u) == 0) {
                 uint64_t active_count = 0u;
-                const int from_body = mode == STATE_WALK_VALIDATE_BODY || mode == STATE_WALK_APPLY;
+                const int from_body = mode == STATE_WALK_VALIDATE_BODY;
                 if (!state_source_raw(instance, from_body ? read_body : NULL,
                                       from_body ? body_size : 0u,
                                       "input_event_count", 0u, &active_count)) return 0;
@@ -4393,8 +4396,6 @@ static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
                     !state_field_value_valid(instance, field, i, raw, (uint8_t)head_raw, phase)) return 0;
             if (mode == STATE_WALK_VALIDATE_BODY && !unused_event_slot &&
                     !state_field_value_valid(instance, field, i, raw, (uint8_t)head_raw, phase)) return 0;
-            if (mode == STATE_WALK_APPLY &&
-                    !state_store_host_value((gbb_instance *)(uintptr_t)instance, field, i, raw)) return 0;
             if (mode == STATE_WALK_ENCODE) state_put_u64(mutable_body + offset, raw, field->wire_width);
             offset += field->wire_width;
         }
@@ -4621,7 +4622,51 @@ static int state_validate(const gbb_instance *instance, const uint8_t *body,
 
 /* MODEL: BOTH GATE-00 basis="state restore copies validated profile-bound fields" */
 static void state_apply(gbb_instance *instance, const uint8_t *body, size_t body_size) {
-    (void)state_walk(instance, NULL, body, body_size, STATE_WALK_APPLY, NULL);
+    size_t offset = 0u;
+    const size_t field_count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+    for (size_t f = 0u; f < field_count; ++f) {
+        const state_field_descriptor *field = &STATE_FIELDS[f];
+        const size_t count = state_field_count_for_instance(instance, field);
+        for (size_t i = 0u; i < count; ++i) {
+            const uint64_t raw = state_get_u64(body + offset, field->wire_width);
+            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {
+                instance->cartridge_ram[i] = (uint8_t)raw;
+            } else {
+                uint8_t *address = (uint8_t *)(void *)instance + field->offset + i * field->stride;
+                switch (field->kind) {
+                case STATE_VALUE_U8: { const uint8_t v = (uint8_t)raw; memcpy(address, &v, sizeof(v)); break; }
+                case STATE_VALUE_U16: { const uint16_t v = (uint16_t)raw; memcpy(address, &v, sizeof(v)); break; }
+                case STATE_VALUE_U32: { const uint32_t v = (uint32_t)raw; memcpy(address, &v, sizeof(v)); break; }
+                case STATE_VALUE_U64: { const uint64_t v = raw; memcpy(address, &v, sizeof(v)); break; }
+                case STATE_VALUE_I32: {
+                    const uint32_t bits = (uint32_t)raw;
+                    int32_t value;
+                    if (bits <= (uint32_t)INT32_MAX) value = (int32_t)bits;
+                    else value = -1 - (int32_t)(UINT32_MAX - bits);
+                    memcpy(address, &value, sizeof(value));
+                    break;
+                }
+                case STATE_VALUE_I64: {
+                    int64_t value;
+                    if (raw <= (uint64_t)INT64_MAX) value = (int64_t)raw;
+                    else value = -1 - (int64_t)(UINT64_MAX - raw);
+                    memcpy(address, &value, sizeof(value));
+                    break;
+                }
+                case STATE_VALUE_BOOL: { const int v = (int)raw; memcpy(address, &v, sizeof(v)); break; }
+                case STATE_VALUE_COUNT: { const size_t v = (size_t)raw; memcpy(address, &v, sizeof(v)); break; }
+                case STATE_VALUE_EVENT_KIND: {
+                    const gbb_input_event_kind v = (gbb_input_event_kind)raw;
+                    memcpy(address, &v, sizeof(v));
+                    break;
+                }
+                default: break;
+                }
+            }
+            offset += field->wire_width;
+        }
+    }
+    (void)body_size;
 }
 
 /* MODEL: BOTH GATE-00 basis="state body offsets follow the instance's declared field layout" */

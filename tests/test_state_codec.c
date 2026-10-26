@@ -16,6 +16,8 @@
 #define TEST_ROM_BYTES 0x8000u
 #define TEST_STATE_HEADER_BYTES 64u
 
+static int same_run_result(gbb_run_result a, gbb_run_result b);
+
 static void test_header_checksum(uint8_t *rom) {
     uint8_t checksum = 0u;
     for (size_t i = 0x134u; i <= 0x14Cu; ++i)
@@ -204,9 +206,15 @@ static int test_write_body_field(const gbb_instance *instance, uint8_t *state,
     return 1;
 }
 
-static int test_load_rejects_unchanged(gbb_instance *target, const uint8_t *saved,
-                                       size_t size, const char *path, size_t index,
-                                       uint64_t value) {
+typedef struct {
+    const char *path;
+    size_t index;
+    uint64_t value;
+} test_state_edit;
+
+static int test_load_rejects_mutations(gbb_instance *target, const uint8_t *saved,
+                                       size_t size, const test_state_edit *edits,
+                                       size_t edit_count) {
     uint8_t *mutant = malloc(size);
     uint8_t *backup = malloc(sizeof(*target));
     if (mutant == NULL || backup == NULL) {
@@ -215,15 +223,48 @@ static int test_load_rejects_unchanged(gbb_instance *target, const uint8_t *save
     }
     memcpy(mutant, saved, size);
     memcpy(backup, target, sizeof(*target));
-    const int wrote = test_write_body_field(target, mutant, path, index, value);
+    int wrote = 1;
+    for (size_t i = 0u; i < edit_count; ++i)
+        if (!test_write_body_field(target, mutant, edits[i].path, edits[i].index,
+                                   edits[i].value)) wrote = 0;
     if (wrote) test_rechecksum(mutant, size);
     const gbb_error got = wrote ? gbb_load_state(target, mutant, size) : GBB_INVALID_ARGUMENT;
     const int unchanged = memcmp(backup, target, sizeof(*target)) == 0;
-    if (got != GBB_STATE_INVALID_CONTENT || !unchanged)
-        fprintf(stderr, "semantic field=%s[%zu] value=0x%llx result=%d unchanged=%d\n",
-                path, index, (unsigned long long)value, (int)got, unchanged);
+    if (got != GBB_STATE_INVALID_CONTENT || !unchanged) {
+        fprintf(stderr, "semantic mutation result=%d unchanged=%d", (int)got, unchanged);
+        for (size_t i = 0u; i < edit_count; ++i)
+            fprintf(stderr, " %s[%zu]=0x%llx", edits[i].path, edits[i].index,
+                    (unsigned long long)edits[i].value);
+        fputc('\n', stderr);
+    }
     free(backup); free(mutant);
     return wrote && got == GBB_STATE_INVALID_CONTENT && unchanged;
+}
+
+static int test_load_rejects_unchanged(gbb_instance *target, const uint8_t *saved,
+                                       size_t size, const char *path, size_t index,
+                                       uint64_t value) {
+    const test_state_edit edit = {path, index, value};
+    return test_load_rejects_mutations(target, saved, size, &edit, 1u);
+}
+
+static int test_load_rejects_header_unchanged(gbb_instance *target, const uint8_t *saved,
+                                              size_t size, size_t offset, uint8_t value,
+                                              gbb_error expected) {
+    uint8_t *mutant = malloc(size);
+    uint8_t *backup = malloc(sizeof(*target));
+    if (mutant == NULL || backup == NULL) {
+        free(mutant); free(backup);
+        return 0;
+    }
+    memcpy(mutant, saved, size);
+    memcpy(backup, target, sizeof(*target));
+    mutant[offset] = value;
+    test_rechecksum(mutant, size);
+    const gbb_error got = gbb_load_state(target, mutant, size);
+    const int unchanged = memcmp(backup, target, sizeof(*target)) == 0;
+    free(backup); free(mutant);
+    return got == expected && unchanged;
 }
 
 static int test_make_state(gbb_profile profile, uint8_t cgb_flag, uint8_t cartridge_type,
@@ -237,9 +278,19 @@ static int test_make_state(gbb_profile profile, uint8_t cgb_flag, uint8_t cartri
              gbb_load_rom(*target, rom, TEST_ROM_BYTES) == GBB_OK &&
              gbb_state_size(*source, state_size) == GBB_OK;
     free(rom);
-    if (!ok) return 0;
+    if (!ok) {
+        if (*source != NULL) gbb_destroy(*source);
+        if (*target != NULL) gbb_destroy(*target);
+        *source = NULL; *target = NULL;
+        return 0;
+    }
     *saved = malloc(*state_size);
-    return *saved != NULL;
+    if (*saved == NULL) {
+        gbb_destroy(*source); gbb_destroy(*target);
+        *source = NULL; *target = NULL;
+        return 0;
+    }
+    return 1;
 }
 
 static int test_canonical_queue_count(size_t event_count) {
@@ -294,6 +345,14 @@ static int test_canonical_queue_count(size_t event_count) {
                     memcmp(saved, resaved, size) == 0, event_count);
         ok = load_error == GBB_OK && save_error == GBB_OK && memcmp(saved, resaved, size) == 0;
     }
+    if (ok) {
+        const gbb_run_result source_run = gbb_run(source, 12000u, NULL, 0u);
+        const gbb_run_result target_run = gbb_run(target, 12000u, NULL, 0u);
+        ok = same_run_result(source_run, target_run) &&
+             gbb_save_state(source, saved, size) == GBB_OK &&
+             gbb_save_state(target, resaved, size) == GBB_OK &&
+             memcmp(saved, resaved, size) == 0;
+    }
     if (!ok) fprintf(stderr, "canonical queue count=%zu failed\n", event_count);
     free(resaved); free(saved);
     if (source != NULL) gbb_destroy(source);
@@ -302,10 +361,6 @@ static int test_canonical_queue_count(size_t event_count) {
 }
 
 static int state_canonical(void) {
-    REQUIRE_CASE("state_canonical", test_canonical_queue_count(0u));
-    REQUIRE_CASE("state_canonical", test_canonical_queue_count(1u));
-    REQUIRE_CASE("state_canonical", test_canonical_queue_count(GBB_INPUT_EVENT_CAPACITY));
-
     gbb_instance *source = NULL, *target = NULL;
     uint8_t *saved = NULL, *resaved = NULL;
     size_t size = 0u;
@@ -329,6 +384,9 @@ static int state_canonical(void) {
     source->ocps = 0xD0u;
     REQUIRE_CASE("state_canonical", gbb_save_state(source, saved, size) == GBB_OK);
     size_t offset = test_element_offset(source, "ppu_dot", 0u);
+    if (offset == SIZE_MAX || saved[64u + offset] != 0x23u ||
+        saved[64u + offset + 1u] != 0x01u)
+        fprintf(stderr, "wire endian guard: ppu_dot must encode 0x0123 as 23 01\n");
     REQUIRE_CASE("state_canonical", offset != SIZE_MAX && saved[64u + offset] == 0x23u &&
                                     saved[64u + offset + 1u] == 0x01u);
     offset = test_element_offset(source, "ppu_object_tiles_fetched", 0u);
@@ -344,12 +402,63 @@ static int state_canonical(void) {
                                     "apu_pulse[].envelope", 0u, 0xF3u));
     test_rechecksum(saved, size);
     resaved = malloc(size);
+    int accepted_bytes_exact = resaved != NULL &&
+        gbb_load_state(target, saved, size) == GBB_OK &&
+        gbb_save_state(target, resaved, size) == GBB_OK &&
+        memcmp(saved, resaved, size) == 0;
+    if (!accepted_bytes_exact)
+        fprintf(stderr, "normalization guard: accepted apu_pulse[].envelope bytes must resave unchanged\n");
+    REQUIRE_CASE("state_canonical", accepted_bytes_exact);
+    free(resaved); free(saved); gbb_destroy(source); gbb_destroy(target);
+    source = NULL; target = NULL; saved = NULL; resaved = NULL; size = 0u;
+    REQUIRE_CASE("state_canonical", test_canonical_queue_count(0u));
+    REQUIRE_CASE("state_canonical", test_canonical_queue_count(1u));
+    REQUIRE_CASE("state_canonical", test_canonical_queue_count(GBB_INPUT_EVENT_CAPACITY));
+    REQUIRE_CASE("state_canonical", test_make_state(GBB_PROFILE_DMG_CPU_B, 0u, 0x10u,
+                                                      &source, &target, &saved, &size));
+    REQUIRE_CASE("state_canonical", state_store_host_value(source,
+        state_field_by_path("cart.ram_bank"), 0u, 0xFFu));
+    resaved = malloc(size);
     REQUIRE_CASE("state_canonical", resaved != NULL &&
+                                    gbb_save_state(source, saved, size) == GBB_OK &&
                                     gbb_load_state(target, saved, size) == GBB_OK &&
+                                    gbb_save_state(target, resaved, size) == GBB_OK &&
+                                    memcmp(saved, resaved, size) == 0);
+    const gbb_run_result selector_source_run = gbb_run(source, 128u, NULL, 0u);
+    const gbb_run_result selector_target_run = gbb_run(target, 128u, NULL, 0u);
+    REQUIRE_CASE("state_canonical", same_run_result(selector_source_run, selector_target_run) &&
+                                    gbb_save_state(source, saved, size) == GBB_OK &&
                                     gbb_save_state(target, resaved, size) == GBB_OK &&
                                     memcmp(saved, resaved, size) == 0);
     free(resaved); free(saved); gbb_destroy(source); gbb_destroy(target);
     puts("state_canonical pass queues=0,1,64 widths=1,2,4,8 MBC2=512 audio=continued");
+    return 0;
+}
+
+static int state_override_isolation(void) {
+    gbb_instance *source = NULL, *target = NULL;
+    uint8_t *source_bytes = NULL, *target_bytes = NULL;
+    size_t source_size = 0u, target_size = 0u;
+    REQUIRE_CASE("state_override_isolation", test_make_state(GBB_PROFILE_CGB_CPU_E, 0x80u,
+        0x00u, &source, &target, &source_bytes, &source_size));
+    write8(source, 0xFF76u, 0xA5u);
+    write8(source, 0xFF77u, 0x5Au);
+#if GBB_TEST_CGB_PCM_WRITABLE
+    REQUIRE_CASE("state_override_isolation", source->apu_pcm_test_override_valid == 3u &&
+        source->apu_pcm_test_override[0] == 0xA5u &&
+        source->apu_pcm_test_override[1] == 0x5Au);
+#endif
+    REQUIRE_CASE("state_override_isolation", test_state_field_census(source));
+    REQUIRE_CASE("state_override_isolation", gbb_state_size(source, &source_size) == GBB_OK &&
+        gbb_state_size(target, &target_size) == GBB_OK && source_size == target_size);
+    target_bytes = malloc(target_size);
+    REQUIRE_CASE("state_override_isolation", target_bytes != NULL &&
+        gbb_save_state(source, source_bytes, source_size) == GBB_OK &&
+        gbb_save_state(target, target_bytes, target_size) == GBB_OK &&
+        memcmp(source_bytes, target_bytes, source_size) == 0);
+    free(target_bytes); free(source_bytes);
+    gbb_destroy(source); gbb_destroy(target);
+    puts("state override isolation pass: test-only PCM values do not enter the wire state");
     return 0;
 }
 
@@ -364,7 +473,14 @@ static int state_semantic_bounds(void) {
     static const struct { const char *path; size_t index; uint64_t value; } cgb_invalid[] = {
         {"hdma.source_low", 0u, 0x01u},
         {"hdma.destination_high", 0u, 0x20u},
+        {"hdma.destination_low", 0u, 0x01u},
+        {"hdma.mode", 0u, 3u},
+        {"hdma.blocks_remaining", 0u, 129u},
         {"hdma.byte_phase", 0u, 4u},
+        {"hdma.block_vram_bank", 0u, 2u},
+        {"hdma.destination_cursor", 0u, 0x7FFFu},
+        {"dma_index", 0u, GBB_OAM_BYTES + 1u},
+        {"dma_phase", 0u, GBB_T_PER_M},
         {"ppu_selected_objects", 0u, 40u},
         {"timer_reload_remaining", 0u, 5u},
         {"serial_edge_remaining", 0u, 513u},
@@ -380,12 +496,84 @@ static int state_semantic_bounds(void) {
         {"apu_pulse[].control", 0u, 0x80u},
         {"input_events[].value", 0u, 1u},
         {"input_event_count", 0u, GBB_INPUT_EVENT_CAPACITY + 1u},
-        {"time_half_dots", 0u, (UINT64_C(1) << 62) + 1u},
-        {"ppu_objects_stalled", 0u, 1u}
+        {"time_half_dots", 0u, (UINT64_C(1) << 62) + 1u}
     };
     for (size_t i = 0u; i < sizeof(cgb_invalid) / sizeof(cgb_invalid[0]); ++i)
         REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
             cgb_invalid[i].path, cgb_invalid[i].index, cgb_invalid[i].value));
+    for (size_t i = 0u; i < 12u; ++i)
+        REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "compat_rgb555", i, 0x8000u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "rgb_working", GBB_FRAME_PIXELS - 1u, 0x8000u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "frame_completed", 0u, 4u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "bg_cram", 1u, 0x80u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "obj_cram", 1u, 0x80u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "ime", 0u, 2u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "f", 0u, 0x0Fu));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "ime_delay", 0u, 3u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "div", 0u, 1u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "ppu_objects_stalled", 0u, 1u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "timer_reload_pending", 0u, 2u));
+    const test_state_edit invalid_wake[] = {
+        {"input_event_count", 0u, 1u},
+        {"input_events[].at_half_dots", 0u, 0u},
+        {"input_events[].kind", 0u, GBB_INPUT_STOP_WAKE},
+        {"input_events[].value", 0u, 2u}
+    };
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_mutations(target, saved, size,
+                                    invalid_wake, sizeof(invalid_wake) / sizeof(invalid_wake[0])));
+    const test_state_edit unordered_events[] = {
+        {"input_event_count", 0u, 2u},
+        {"input_events[].at_half_dots", 0u, 2u},
+        {"input_events[].kind", 0u, GBB_INPUT_BUTTON_PRESS},
+        {"input_events[].value", 0u, 0u},
+        {"input_events[].at_half_dots", 1u, 1u},
+        {"input_events[].kind", 1u, GBB_INPUT_BUTTON_PRESS},
+        {"input_events[].value", 1u, 0u}
+    };
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_mutations(target, saved, size,
+                                    unordered_events, sizeof(unordered_events) / sizeof(unordered_events[0])));
+    const test_state_edit invalid_timer_relation[] = {
+        {"timer_reload_pending", 0u, 1u}, {"timer_reload_remaining", 0u, 0u}
+    };
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_mutations(target, saved, size,
+                                    invalid_timer_relation,
+                                    sizeof(invalid_timer_relation) / sizeof(invalid_timer_relation[0])));
+    const test_state_edit invalid_serial_relation[] = {
+        {"serial_active", 0u, 1u}, {"serial_control", 0u, 0u},
+        {"serial_edge_remaining", 0u, 512u}
+    };
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_mutations(target, saved, size,
+                                    invalid_serial_relation,
+                                    sizeof(invalid_serial_relation) / sizeof(invalid_serial_relation[0])));
+    const test_state_edit invalid_hdma_source[] = {
+        {"hdma.mode", 0u, 2u}, {"hdma.active", 0u, 1u},
+        {"hdma.pending_hblank", 0u, 0u}, {"hdma.blocks_remaining", 0u, 1u},
+        {"hdma.source_cursor", 0u, 0x8000u}, {"hdma.destination_cursor", 0u, 0x8000u}
+    };
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_mutations(target, saved, size,
+                                    invalid_hdma_source,
+                                    sizeof(invalid_hdma_source) / sizeof(invalid_hdma_source[0])));
+    const test_state_edit invalid_hdma_destination[] = {
+        {"hdma.mode", 0u, 2u}, {"hdma.active", 0u, 1u},
+        {"hdma.pending_hblank", 0u, 0u}, {"hdma.blocks_remaining", 0u, 1u},
+        {"hdma.source_cursor", 0u, 0x0000u}, {"hdma.destination_cursor", 0u, 0xA000u}
+    };
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_mutations(target, saved, size,
+                                    invalid_hdma_destination,
+                                    sizeof(invalid_hdma_destination) / sizeof(invalid_hdma_destination[0])));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_header_unchanged(target, saved,
+                                    size, 18u, 1u, GBB_STATE_INVALID_CONTENT));
     gbb_destroy(source); gbb_destroy(target); free(saved);
 
     source = NULL; target = NULL; saved = NULL; size = 0u;
@@ -402,6 +590,26 @@ static int state_semantic_bounds(void) {
     REQUIRE_CASE("state_semantic_bounds", gbb_save_state(source, saved, size) == GBB_OK);
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "cartridge_ram", 0u, 0x0Fu));
+    gbb_destroy(source); gbb_destroy(target); free(saved);
+
+    source = NULL; target = NULL; saved = NULL; size = 0u;
+    REQUIRE_CASE("state_semantic_bounds", test_make_state(GBB_PROFILE_DMG_CPU_B, 0u, 0x03u,
+                                                            &source, &target, &saved, &size));
+    REQUIRE_CASE("state_semantic_bounds", gbb_save_state(source, saved, size) == GBB_OK);
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "cart.rom_bank_hi", 0u, 4u));
+    gbb_destroy(source); gbb_destroy(target); free(saved);
+
+    source = NULL; target = NULL; saved = NULL; size = 0u;
+    REQUIRE_CASE("state_semantic_bounds", test_make_state(GBB_PROFILE_DMG_CPU_B, 0u, 0x10u,
+                                                            &source, &target, &saved, &size));
+    REQUIRE_CASE("state_semantic_bounds", gbb_save_state(source, saved, size) == GBB_OK);
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "cart.rtc_dh", 0u, 2u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "cart.rtc_s", 0u, 0x40u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "cart.rtc_sub", 0u, RTC_SUB_MASK + 1u));
     gbb_destroy(source); gbb_destroy(target); free(saved);
     puts("state_semantic_bounds pass checksum=valid refusal=non-mutating");
     return 0;
@@ -658,6 +866,31 @@ static int state_matrix_case(gbb_profile profile, uint8_t cgb_flag, gbb_exec_mod
     return ok;
 }
 
+static int test_state_exact_roundtrip(gbb_instance *instance, size_t state_size) {
+    uint8_t *saved = malloc(state_size);
+    uint8_t *resaved = malloc(state_size);
+    gbb_instance *target = malloc(sizeof(*target));
+    if (saved == NULL || resaved == NULL || target == NULL) {
+        free(saved); free(resaved); free(target);
+        return 0;
+    }
+    memcpy(target, instance, sizeof(*target));
+    int ok = gbb_save_state(instance, saved, state_size) == GBB_OK &&
+             gbb_load_state(target, saved, state_size) == GBB_OK &&
+             gbb_save_state(target, resaved, state_size) == GBB_OK &&
+             memcmp(saved, resaved, state_size) == 0;
+    if (ok) {
+        const gbb_run_result source_future = gbb_run(instance, 128u, NULL, 0u);
+        const gbb_run_result target_future = gbb_run(target, 128u, NULL, 0u);
+        ok = same_run_result(source_future, target_future) &&
+             gbb_save_state(instance, saved, state_size) == GBB_OK &&
+             gbb_save_state(target, resaved, state_size) == GBB_OK &&
+             memcmp(saved, resaved, state_size) == 0;
+    }
+    free(target); free(resaved); free(saved);
+    return ok;
+}
+
 typedef enum {
     STATE_SIZE_TIMER_RELOAD = 0,
     STATE_SIZE_SERIAL_EDGE,
@@ -729,7 +962,8 @@ static int test_state_size_boundary(gbb_instance *instance, size_t expected_size
     }
     size_t observed = 0u;
     const int valid = gbb_state_size(instance, &observed) == GBB_OK &&
-                      observed == expected_size;
+                      observed == expected_size &&
+                      test_state_exact_roundtrip(instance, expected_size);
     memcpy(instance, saved, sizeof(*saved));
     free(saved);
     return valid;
@@ -749,6 +983,7 @@ static int test_control_flow_size(gbb_stop_reason expected_reason,
     if (ok) ok = gbb_state_size(instance, &before) == GBB_OK;
     if (ok) ok = gbb_run(instance, 4096u, NULL, 0u).reason == expected_reason;
     if (ok) ok = gbb_state_size(instance, &after) == GBB_OK && after == before;
+    if (ok) ok = test_state_exact_roundtrip(instance, after);
     if (instance != NULL) gbb_destroy(instance);
     free(rom);
     return ok;
@@ -879,13 +1114,14 @@ int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "state_field_census") == 0)
         return emit_state_field_census();
     if (argc != 2) {
-        fprintf(stderr, "usage: test_state_codec state_identity|state_codec_matrix|state_canonical|state_semantic_bounds|state_field_census\n");
+        fprintf(stderr, "usage: test_state_codec state_identity|state_codec_matrix|state_canonical|state_semantic_bounds|state_override_isolation|state_field_census\n");
         return 2;
     }
     if (strcmp(argv[1], "state_identity") == 0) return state_identity();
     if (strcmp(argv[1], "state_codec_matrix") == 0) return state_codec_matrix();
     if (strcmp(argv[1], "state_canonical") == 0) return state_canonical();
     if (strcmp(argv[1], "state_semantic_bounds") == 0) return state_semantic_bounds();
+    if (strcmp(argv[1], "state_override_isolation") == 0) return state_override_isolation();
     fprintf(stderr, "unknown state codec case: %s\n", argv[1]);
     return 2;
 }

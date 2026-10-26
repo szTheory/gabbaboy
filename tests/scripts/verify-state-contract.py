@@ -207,6 +207,103 @@ def parse_state_fields(core: str) -> list[dict[str, str]]:
     return result
 
 
+def parse_census_rows(text: str, *, source: str) -> list[tuple[int, str, int, int, int, str]]:
+    rows: list[tuple[int, str, int, int, int, str]] = []
+    for line in text.splitlines():
+        if not line.startswith("|"):
+            continue
+        columns = [column.strip() for column in line.strip().strip("|").split("|")]
+        if len(columns) != 6 or not columns[0].isdigit():
+            continue
+        try:
+            order = int(columns[0])
+            path = columns[1].strip("`")
+            offset, count, width = int(columns[2]), int(columns[3]), int(columns[4])
+        except ValueError as error:
+            raise ContractError(f"unparsed {source} field census row: {line}") from error
+        rows.append((order, path, offset, count, width, columns[5]))
+    if len(rows) != 198:
+        raise ContractError(f"{source} field census must have 198 data rows, found {len(rows)}")
+    if [row[0] for row in rows] != list(range(198)):
+        raise ContractError(f"{source} field census order must be consecutive from zero")
+    if len({row[1] for row in rows}) != len(rows):
+        raise ContractError(f"{source} field census contains duplicate qualified ids")
+    return rows
+
+
+def verify_field_census_document(document: str, executable_output: str) -> None:
+    marker = "## Field census and accepted domains"
+    start = document.find(marker)
+    if start < 0:
+        raise ContractError("state-format.md is missing the field census section")
+    end = document.find("\n## ", start + len(marker))
+    section = document[start:] if end < 0 else document[start:end]
+    required_header = "| Order | Qualified id | Offset | Max count | Width | Treatment |"
+    if required_header not in section:
+        raise ContractError("state-format.md field census has the wrong column contract")
+    documented = parse_census_rows(section, source="documented")
+    emitted = parse_census_rows(executable_output, source="state_record_field")
+    if documented != emitted:
+        mismatch = next((index for index, pair in enumerate(zip(documented, emitted))
+                         if pair[0] != pair[1]), None)
+        if mismatch is None:
+            mismatch = min(len(documented), len(emitted))
+        expected = documented[mismatch] if mismatch < len(documented) else "<missing>"
+        actual = emitted[mismatch] if mismatch < len(emitted) else "<missing>"
+        raise ContractError(f"documented field census differs at row {mismatch}: document={expected}, executable={actual}")
+
+
+def field_census_self_test() -> None:
+    rows = [(index, f"field_{index}", index * 4, 1, 4, "serialize")
+            for index in range(198)]
+    def render(items: list[tuple[int, str, int, int, int, str]]) -> str:
+        return "\n".join(f"| {order} | `{path}` | {offset} | {count} | {width} | {treatment} |"
+                         for order, path, offset, count, width, treatment in items)
+    document = "## Field census and accepted domains\n\n" \
+               "| Order | Qualified id | Offset | Max count | Width | Treatment |\n" \
+               "|---:|---|---:|---:|---:|---|\n" + render(rows)
+    verify_field_census_document(document, render(rows))
+    bad_width = list(rows)
+    bad_width[93] = (*bad_width[93][:4], 8, bad_width[93][5])
+    try:
+        verify_field_census_document(document, render(bad_width))
+    except ContractError as error:
+        if "differs at row 93" not in str(error):
+            raise ContractError(f"wrong census width-control diagnostic: {error}") from error
+    else:
+        raise ContractError("field census width negative control survived")
+    omitted = render(rows[:-1])
+    try:
+        verify_field_census_document(document, omitted)
+    except ContractError as error:
+        if "must have 198 data rows" not in str(error):
+            raise ContractError(f"wrong census omission-control diagnostic: {error}") from error
+    else:
+        raise ContractError("field census omission negative control survived")
+
+
+def run_field_census(args: argparse.Namespace, root: Path, core: str) -> None:
+    live_sources = (
+        ("src/core/gabbaboy.c", core),
+        ("tests/test_state_codec.c", git_show(root, args.rev, "tests/test_state_codec.c")),
+        ("tests/CMakeLists.txt", git_show(root, args.rev, "tests/CMakeLists.txt")),
+    )
+    for relative, immutable in live_sources:
+        path = root / relative
+        if not path.is_file() or path.read_text() != immutable:
+            raise ContractError(f"live {relative} differs from immutable --rev")
+    document = git_show(root, args.rev, "docs/state-format.md")
+    if (root / "docs/state-format.md").read_text() != document:
+        raise ContractError("live docs/state-format.md differs from immutable --rev")
+    if args.census_exe is None or not args.census_exe.is_file():
+        raise ContractError("--field-census requires --census-exe PATH")
+    emitted = run([str(args.census_exe), "state_field_census"], cwd=root)
+    if emitted.returncode != 0:
+        raise ContractError(f"immutable state census executable failed ({emitted.returncode}): {emitted.stdout}{emitted.stderr}")
+    verify_field_census_document(document, emitted.stdout)
+    print(f"state field census pass source={args.rev} rows=198 executable_sha256={sha256_file(args.census_exe)}")
+
+
 def verify_audio_edge_schedule(core: str) -> None:
     begin = core.find("STATE_AUDIO_EDGE_BOUND_BEGIN")
     end = core.find("STATE_AUDIO_EDGE_BOUND_END", begin + 1)
@@ -764,18 +861,20 @@ def revision_controls_self_test(root: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inventory", action="store_true")
+    parser.add_argument("--field-census", action="store_true")
     parser.add_argument("--globals", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--precodec", action="store_true")
     parser.add_argument("--format-contract", action="store_true")
     parser.add_argument("--tracer", action="store_true")
-    parser.add_argument("--control", choices=("inventory", "globals", "revision", "all"), default="all")
+    parser.add_argument("--control", choices=("inventory", "field-census", "globals", "revision", "all"), default="all")
     parser.add_argument("--rev", required=False)
     parser.add_argument("--library", type=Path)
     parser.add_argument("--build-dir", type=Path, default=Path("build"))
     parser.add_argument("--output", type=Path, default=Path("build/state-precodec-proof.json"))
     parser.add_argument("--version-module", type=Path)
     parser.add_argument("--api", type=Path)
+    parser.add_argument("--census-exe", type=Path)
     parser.add_argument("--rom", type=Path)
     parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--nm", default=os.environ.get("CMAKE_NM", "nm"))
@@ -788,6 +887,8 @@ def main() -> int:
         if args.self_test:
             if args.control in ("inventory", "all"):
                 inventory_self_test()
+            if args.control in ("field-census", "all"):
+                field_census_self_test()
             if args.control in ("globals", "all"):
                 globals_self_test(args.nm, args.cc)
             if args.control in ("revision", "all"):
@@ -801,6 +902,9 @@ def main() -> int:
         if args.inventory:
             result = verify_inventory(core, header)
             print(f"state inventory pass members={len(result['members'])} fields={len(result['fields'])}")
+            return 0
+        if args.field_census:
+            run_field_census(args, root, core)
             return 0
         if args.globals:
             if args.library is None:
@@ -817,7 +921,7 @@ def main() -> int:
         if args.tracer:
             run_tracer(args, root, core, header)
             return 0
-        raise ContractError("select --inventory, --globals, --self-test, --precodec or --tracer")
+        raise ContractError("select --inventory, --field-census, --globals, --self-test, --precodec or --tracer")
     except (ContractError, OSError) as error:
         print(f"state contract failure: {error}", file=sys.stderr)
         return 1
