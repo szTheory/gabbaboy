@@ -29,6 +29,7 @@ key-files:
   created:
     - tests/scripts/verify-state-horizon.py
   modified:
+    - tests/test_events.c
     - src/core/gabbaboy.c
     - include/gabbaboy/gabbaboy.h
     - tests/test_state_horizon.c
@@ -179,3 +180,7 @@ No authentication gates, new stubs, skipped tests, or security-relevant trust su
 - `17-04-SUMMARY.md` exists at the required phase path.
 - All eight implementation commits (`1e544f6`, `1b744c8`, `96ef0cd`, `84c2159`, `0da6bfb`, `8d8ab04`, `f64a798`, and `9530242`) plus the initial summary record `971180e` exist and are ancestors of `HEAD`.
 - The `summary_coverage` CTest passed 1/1 for this block-schema coverage.
+
+## Post-wave event fixture correction
+
+The full post-wave suite at `d23d92f` passed 1320/1321; `event_time_overflow` still expected an event near UINT64_MAX to be admitted. Integration commit `7c1b86f` migrates `tests/test_events.c` to the adopted cap without changing core behavior: a valid STOP wake reaches 2^62, later and UINT64_MAX timestamps refuse without serialized-state change, and the next timed operation returns no progress with zero consumption and unchanged state. The event case and related classifier/mutation controls passed 14/14 in both normal and Linux ASan/UBSan builds at that commit. The original plan ledger above is unchanged; this is subsequent integration evidence. Windows remains subject to current hosted checks. The declared plan file registry includes this necessary legacy-test migration.
