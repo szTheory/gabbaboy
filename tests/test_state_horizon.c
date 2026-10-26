@@ -338,6 +338,7 @@ static int horizon_sentinels(void) {
     REQUIRE_CASE(gbb_load_state(target, state, state_size) == GBB_OK &&
                  target->timer_reloaded_at == UINT64_MAX,
                  "horizon discrepancy: valid UINT64_MAX timer sentinel rejected");
+    target->pc = 0x0200u;
     const int blocked = branch_no_progress("horizon discrepancy: sentinel continuation",
                                            target, 8u);
     REQUIRE_CASE(blocked, "horizon discrepancy: sentinel continuation");

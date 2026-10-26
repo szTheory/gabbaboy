@@ -159,6 +159,7 @@ static void state_sha256(const uint8_t *bytes, size_t length, uint8_t digest[32]
 #define GBB_AUDIO_SAMPLE_RATE UINT64_C(48000)
 #define GBB_AUDIO_EVENT_PHASES 8u
 #define GBB_AUDIO_EVENT_TAPS 16u
+#define GBB_STATE_TIME_LIMIT (UINT64_C(1) << 62)
 #define GBB_AUDIO_HPF_Q15 32648
 /* Pan Docs maps each DAC to -1..1 (unit = 16384 here) and sums four channels,
  * so a side spans +/-4 units; NR50 then scales it by (volume+1)/8. One s16
@@ -606,6 +607,18 @@ struct gbb_instance {
     uint16_t diagnostic_pc;
     uint8_t diagnostic_opcode;
 };
+
+/* MODEL: BOTH GATE-00 basis="the persisted ordinary time horizon is model-independent" */
+static int state_time_fits(uint64_t now, uint64_t delta) {
+    return now <= GBB_STATE_TIME_LIMIT && delta <= GBB_STATE_TIME_LIMIT - now;
+}
+
+/* MODEL: BOTH GATE-00 basis="checked clock projection is model-independent" */
+static int state_time_project(uint64_t now, uint64_t delta, uint64_t *out) {
+    if (out == NULL || !state_time_fits(now, delta)) return 0;
+    *out = now + delta;
+    return 1;
+}
 
 /* STATE_FIELD_TREATMENT is the fail-closed inventory policy. The checker expands
  * every nested and conditional member path and requires one most-specific rule.
@@ -1394,12 +1407,14 @@ static void ppu_update_stat_line(gbb_instance *m) {
 
 /* MODEL: BOTH GATE-00 basis=diagnostics-only */
 static void observe_bus(gbb_instance *m, uint64_t offset, uint16_t address, uint8_t access, uint8_t value) {
-    if (access == 1) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_READ, m->time_half_dots + offset, address, value);
-    else if (access == 2) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_WRITE, m->time_half_dots + offset, address, value);
+    uint64_t timestamp = 0u;
+    if (!state_time_project(m->time_half_dots, offset, &timestamp)) return;
+    if (access == 1) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_READ, timestamp, address, value);
+    else if (access == 2) diagnostic_add(m, GBB_DIAGNOSTIC_BUS_WRITE, timestamp, address, value);
     if (m->test_events != NULL && m->test_event_count < m->test_event_capacity) {
         gbb_test_bus_event *event = &m->test_events[m->test_event_count++];
         memset(event, 0, sizeof(*event));
-        event->time_half_dots = m->time_half_dots + offset;
+        event->time_half_dots = timestamp;
         event->address = address;
         event->access = access;
         event->value = value;
@@ -2601,6 +2616,12 @@ static void advance_devices_to(gbb_instance *m, uint64_t target);
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static uint8_t bus_read(gbb_instance *m, uint16_t address, uint64_t offset) {
+    const uint64_t delta = offset >> m->double_speed;
+    if (!state_time_fits(m->instruction_start_half_dots, delta)) {
+        m->bus_unsupported = 1;
+        m->bus_unsupported_address = address;
+        return 0xFFu;
+    }
     advance_devices_to(m, m->instruction_start_half_dots + (offset >> m->double_speed)); /* P12-M18 */ /* bus-read */
     uint8_t value = read8(m, address);
     observe_bus(m, 0, address, 1, value);
@@ -3024,6 +3045,12 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void bus_write(gbb_instance *m, uint16_t address, uint8_t value, uint64_t offset) {
+    const uint64_t delta = offset >> m->double_speed;
+    if (!state_time_fits(m->instruction_start_half_dots, delta)) {
+        m->bus_unsupported = 1;
+        m->bus_unsupported_address = address;
+        return;
+    }
     uint64_t timestamp = m->instruction_start_half_dots + (offset >> m->double_speed); /* P12-M18 */ /* bus-write */
     /* TMA feeds the reload when the write shares its exact reload timestamp. */
     if (address == 0xFF06 && m->timer_reload_pending && timestamp >= m->time_half_dots &&
@@ -3810,6 +3837,8 @@ static void apu_sequencer_clock(gbb_instance *m) {
 
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void advance_devices_to(gbb_instance *m, uint64_t target) {
+    if (m->time_half_dots > GBB_STATE_TIME_LIMIT || target > GBB_STATE_TIME_LIMIT ||
+        target < m->time_half_dots) return;
     while (m->time_half_dots < target) {
         ++m->time_half_dots;
         apply_input_events_now(m);
@@ -3918,14 +3947,17 @@ gbb_error gbb_queue_events(gbb_instance *instance, const gbb_input_event *events
                            size_t count) {
     if (instance == NULL || (events == NULL && count != 0)) return GBB_INVALID_ARGUMENT;
     if (count == 0) return GBB_OK;
-    if (count > GBB_INPUT_EVENT_CAPACITY - instance->input_event_count)
+    if (instance->time_half_dots > GBB_STATE_TIME_LIMIT) return GBB_INVALID_EVENT;
+    if (instance->input_event_count > GBB_INPUT_EVENT_CAPACITY ||
+        count > GBB_INPUT_EVENT_CAPACITY - instance->input_event_count)
         return GBB_EVENT_QUEUE_FULL;
     uint64_t previous = instance->time_half_dots;
     if (instance->input_event_count != 0)
         previous = instance->input_events[instance->input_event_count - 1].at_half_dots;
     for (size_t i = 0; i < count; ++i) {
         const gbb_input_event *event = &events[i];
-        if (event->at_half_dots < instance->time_half_dots || event->at_half_dots < previous ||
+        if (event->at_half_dots > GBB_STATE_TIME_LIMIT ||
+            event->at_half_dots < instance->time_half_dots || event->at_half_dots < previous ||
             !input_event_valid(event))
             return GBB_INVALID_EVENT;
         previous = event->at_half_dots;
@@ -4284,7 +4316,7 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (strcmp(field->path, "stop_switch_pending") == 0 || strcmp(field->path, "double_speed") == 0)
         return raw <= 1u;
     if (strcmp(field->path, "timer_reloaded_at") == 0)
-        return raw == UINT64_MAX || raw <= (UINT64_C(1) << 62);
+        return raw == UINT64_MAX || raw <= GBB_STATE_TIME_LIMIT;
     if (strcmp(field->path, "timer_reload_remaining") == 0) return raw <= 4u;
     if (strcmp(field->path, "serial_edge_remaining") == 0) return raw <= 512u;
     if (strcmp(field->path, "serial_control") == 0)
@@ -4299,7 +4331,7 @@ static int state_field_value_valid(const gbb_instance *instance,
         strcmp(field->path, "instruction_start_half_dots") == 0 ||
         strcmp(field->path, "cart.rtc_synced_at") == 0 ||
         strcmp(field->path, "input_events[].at_half_dots") == 0)
-        return raw <= (UINT64_C(1) << 62);
+        return raw <= GBB_STATE_TIME_LIMIT;
     if (strcmp(field->path, "apu_sample_phase") == 0) return raw < GBB_AUDIO_CLOCK_HALF_DOTS;
     if (strcmp(field->path, "audio_event_head") == 0) return raw < GBB_AUDIO_EVENT_TAPS;
     if (strcmp(field->path, "apu_power") == 0) return raw <= 1u;
@@ -4454,7 +4486,7 @@ static int state_validate_relations(const gbb_instance *instance,
         !state_source_raw(instance, body, body_size, "input_event_count", 0u, &input_count) ||
         !state_source_raw(instance, body, body_size, "apu_sample_phase", 0u, &sample_phase) ||
         !state_source_raw(instance, body, body_size, "audio_event_head", 0u, &audio_head)) return 0;
-    if (time > (UINT64_C(1) << 62) || instruction_start > time || frame_time > time ||
+    if (time > GBB_STATE_TIME_LIMIT || instruction_start > time || frame_time > time ||
         rtc_anchor > time || (timer_anchor != UINT64_MAX && timer_anchor > time) ||
         sample_phase >= GBB_AUDIO_CLOCK_HALF_DOTS || audio_head >= GBB_AUDIO_EVENT_TAPS ||
         input_count > GBB_INPUT_EVENT_CAPACITY) return 0;
@@ -4861,6 +4893,7 @@ static int validate_accept_input_span(const gbb_instance *instance,
     if (instance == NULL || span == NULL || span->cursor == NULL ||
         span->count > GBB_ACCEPT_INPUT_SPAN_MAX_EVENTS ||
         (span->events == NULL && span->count != 0u) ||
+        instance->time_half_dots > GBB_STATE_TIME_LIMIT ||
         instance->input_event_count != 0u || instance->accept_input_span != NULL)
         return 0;
     if (span->count > SIZE_MAX / sizeof(*span->events)) return 0;
@@ -4881,7 +4914,8 @@ static int validate_accept_input_span(const gbb_instance *instance,
     uint64_t previous = 0u;
     for (size_t i = 0; i < span->count; ++i) {
         const gbb_input_event *event = &span->events[i];
-        if (!input_event_valid(event) || (i != 0u && event->at_half_dots < previous) ||
+        if (!input_event_valid(event) || event->at_half_dots > GBB_STATE_TIME_LIMIT ||
+            (i != 0u && event->at_half_dots < previous) ||
             (i >= *span->cursor && event->at_half_dots < instance->time_half_dots))
             return 0;
         previous = event->at_half_dots;
@@ -5060,7 +5094,9 @@ static int audio_preflight(const gbb_instance *m, uint64_t half_dots) {
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
 static void advance_devices(gbb_instance *m, uint64_t half_dots) {
-    advance_devices_to(m, m->time_half_dots + half_dots);
+    uint64_t target = 0u;
+    if (state_time_project(m->time_half_dots, half_dots, &target))
+        advance_devices_to(m, target);
 }
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static void set_hl(gbb_instance *m, uint16_t value) { m->h = (uint8_t)(value >> 8); m->l = (uint8_t)value; }
@@ -5886,7 +5922,10 @@ static void enter_interrupt(gbb_instance *m, unsigned bit) {
     m->ime = 0;
     m->ime_delay = 0;
     /* Device deadlines at the acknowledge phase precede the IF bus write. */
-    advance_devices_to(m, m->instruction_start_half_dots + (8u >> m->double_speed));
+    uint64_t acknowledge_target = 0u;
+    if (!state_time_project(m->instruction_start_half_dots, 8u >> m->double_speed,
+                            &acknowledge_target)) return;
+    advance_devices_to(m, acknowledge_target);
     m->interrupt_flags = (uint8_t)(m->interrupt_flags & (uint8_t)~mask);
     observe_bus(m, 0, 0xFF0F, 2, (uint8_t)(0xE0u | m->interrupt_flags));
     /* MODEL: BOTH GATE-63 basis="no SM83 opcode difference" -- interrupt entry timing is a CPU trait */
@@ -5970,7 +6009,7 @@ static int hdma_start_headroom_available(const gbb_instance *m, uint8_t value,
     const uint64_t blocks = (uint64_t)(value & 0x7Fu) + 1u;
     if (blocks > (UINT64_MAX - operation_cost) / UINT64_C(64)) return 0;
     const uint64_t required = operation_cost + blocks * UINT64_C(64);
-    return UINT64_MAX - m->time_half_dots >= required;
+    return state_time_fits(m->time_half_dots, required);
 }
 
 /* MODEL: BOTH GATE-00 basis="model-neutral function; see its branch gates" */
@@ -6090,6 +6129,10 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                                        gbb_trace_record *trace, size_t trace_capacity) {
     gbb_run_result result={0, GBB_STOP_BUDGET, 0, 0, 0, 0};
     if (instance == NULL || !instance->loaded || (trace == NULL && trace_capacity != 0)) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+    if (instance->time_half_dots > GBB_STATE_TIME_LIMIT) {
+        result.reason = GBB_STOP_INVALID_STATE;
+        return result;
+    }
     if (GBB_P13_MUT(53) && instance->hdma.active)
         instance->hdma.byte_phase = 0u; /* P13-05-M14: run boundary drops byte remainder */
     if (budget_half_dots != 0) apply_input_events_now(instance);
@@ -6097,7 +6140,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         if (instance->locked) { result.reason=GBB_STOP_LOCKUP; result.lockup_pc=instance->lockup_pc; result.lockup_opcode=instance->lockup_opcode; return result; }
         if (instance->stopped) {
             uint64_t remaining = budget_half_dots - result.consumed_half_dots;
-            uint64_t available = UINT64_MAX - instance->time_half_dots;
+            uint64_t available = GBB_STATE_TIME_LIMIT - instance->time_half_dots;
             uint64_t step = remaining < available ? remaining : available;
             uint64_t input_deadline = 0u;
             if (next_input_deadline(instance, &input_deadline)) {
@@ -6105,13 +6148,18 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 if (until_event <= step) step = until_event;
             }
             if (step != 0) {
-                instance->time_half_dots += step;
+                uint64_t next_time = 0u;
+                if (!state_time_project(instance->time_half_dots, step, &next_time)) {
+                    result.reason = GBB_STOP_NO_PROGRESS;
+                    return result;
+                }
+                instance->time_half_dots = next_time;
                 result.consumed_half_dots += step;
                 apply_input_events_now(instance);
             }
             if (instance->stopped) {
-                result.reason = step < remaining && instance->time_half_dots == UINT64_MAX
-                    ? GBB_STOP_INVALID_STATE : GBB_STOP_STOPPED;
+                result.reason = step < remaining && instance->time_half_dots == GBB_STATE_TIME_LIMIT
+                    ? GBB_STOP_NO_PROGRESS : GBB_STOP_STOPPED;
                 return result;
             }
             if (result.consumed_half_dots == budget_half_dots) {
@@ -6128,21 +6176,25 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 (instance->ie & instance->interrupt_flags & 0x1Fu) != 0; /* P12-M16 */
             const uint32_t quantum = 8u >> instance->double_speed;
             const uint32_t stall_phase = instance->cpu_stall_half_dots % quantum;
+            const int speed_switch_wake =
+                instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending;
             if (instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH && wake_pending) { /* P12-M13 */
-                if (GBB_P13_MUT(50)) { /* P13-05-M11: IRQ wake loses admitted DMA */
-                    instance->hdma.active = 0u;
-                    instance->hdma.pending_hblank = 0u;
-                    instance->hdma.blocks_remaining = 0u;
-                }
                 if (stall_phase == 0u) {
+                    if (GBB_P13_MUT(50)) { /* P13-05-M11: IRQ wake loses admitted DMA */
+                        instance->hdma.active = 0u;
+                        instance->hdma.pending_hblank = 0u;
+                        instance->hdma.blocks_remaining = 0u;
+                    }
                     instance->cpu_stall_kind = GBB_STALL_NONE;
                     instance->cpu_stall_half_dots = 0u;
                     speed_switch_apply_realign(instance);
                     continue;
                 }
             }
-            const int hdma_active = instance->hdma.active != 0u;
+            const int drop_hdma_for_wake = speed_switch_wake && GBB_P13_MUT(50);
+            const int hdma_active = !drop_hdma_for_wake && instance->hdma.active != 0u;
             const int hdma_pending_at_boundary =
+                !drop_hdma_for_wake &&
                 instance->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
                 instance->hdma.pending_hblank && stall_phase == 0u;
             const uint32_t to_boundary = stall_phase == 0u ? quantum : stall_phase;
@@ -6160,8 +6212,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 result.reason = GBB_STOP_OUTPUT_FULL;
                 return result;
             }
-            if (UINT64_MAX - instance->time_half_dots < step) {
-                result.reason = GBB_STOP_INVALID_STATE;
+            if (!state_time_fits(instance->time_half_dots, step)) {
+                result.reason = GBB_STOP_NO_PROGRESS;
                 return result;
             }
             if (instance->diagnostic_output != NULL &&
@@ -6175,6 +6227,11 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 instance->bus_unsupported = 0;
                 result.reason = GBB_STOP_UNSUPPORTED_BUS;
                 return result;
+            }
+            if (drop_hdma_for_wake) {
+                instance->hdma.active = 0u;
+                instance->hdma.pending_hblank = 0u;
+                instance->hdma.blocks_remaining = 0u;
             }
             gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
             if (instance->diagnostic_output != NULL) {
@@ -6202,8 +6259,8 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                 result.reason = GBB_STOP_OUTPUT_FULL;
                 return result;
             }
-            if (UINT64_MAX - instance->time_half_dots < 1u) {
-                result.reason = GBB_STOP_INVALID_STATE;
+            if (!state_time_fits(instance->time_half_dots, 1u)) {
+                result.reason = GBB_STOP_NO_PROGRESS;
                 return result;
             }
             if (instance->diagnostic_output != NULL &&
@@ -6239,10 +6296,15 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             if (irq_cost > budget_half_dots - result.consumed_half_dots) return result;
             if (!audio_preflight(instance, irq_cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
             if (!hdma_stack_push_headroom_available(instance, instance->pc, irq_cost)) {
-                result.reason = GBB_STOP_INVALID_STATE;
+                result.reason = GBB_STOP_NO_PROGRESS;
                 return result;
             }
-            if (UINT64_MAX - instance->time_half_dots < irq_cost) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            if (!state_time_fits(instance->time_half_dots, irq_cost)) { result.reason=GBB_STOP_NO_PROGRESS; return result; }
+            uint64_t irq_target = 0u;
+            if (!state_time_project(instance->time_half_dots, irq_cost, &irq_target)) {
+                result.reason = GBB_STOP_NO_PROGRESS;
+                return result;
+            }
             gbb_diagnostic_record operation[GBB_DIAGNOSTIC_OPERATION_RESERVE];
             if (instance->diagnostic_output != NULL &&
                 instance->diagnostic_output_capacity - instance->diagnostic_output_count < GBB_DIAGNOSTIC_OPERATION_RESERVE) {
@@ -6251,7 +6313,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             diagnostic_begin(instance, operation, instance->pc, 0);
             instance->instruction_start_half_dots = instance->time_half_dots;
             enter_interrupt(instance, interrupt);
-            advance_devices_to(instance, instance->instruction_start_half_dots + irq_cost);
+            advance_devices_to(instance, irq_target);
             diagnostic_commit(instance);
             result.consumed_half_dots += irq_cost;
             /* The entry push can itself hit a deferred register; report it at this boundary. */
@@ -6271,7 +6333,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
             const uint32_t m_cycle = 8u >> instance->double_speed;
             if (budget_half_dots - result.consumed_half_dots < m_cycle) return result;
             if (!audio_preflight(instance, m_cycle)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
-            if (UINT64_MAX - instance->time_half_dots < m_cycle) { result.reason=GBB_STOP_INVALID_STATE; return result; }
+            if (!state_time_fits(instance->time_half_dots, m_cycle)) { result.reason=GBB_STOP_NO_PROGRESS; return result; }
             /* HALT samples wake conditions at each machine-cycle boundary.
              * A timer/serial interrupt midway through a long budget must wake
              * at the same boundary as it does through shorter run calls. */
@@ -6305,7 +6367,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         if (cost > budget_half_dots-result.consumed_half_dots) return result;
         if (!audio_preflight(instance, cost)) { result.reason=GBB_STOP_OUTPUT_FULL; return result; }
         if (!hdma_instruction_headroom_available(instance, opcode, cost)) {
-            result.reason = GBB_STOP_INVALID_STATE;
+            result.reason = GBB_STOP_NO_PROGRESS;
             return result;
         }
         if (opcode == 0x10u) {
@@ -6317,10 +6379,19 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
                     result.reason = GBB_STOP_INVALID_STATE;
                     return result;
                 }
+                if (!state_time_fits(instance->time_half_dots, switch_headroom)) { /* P12-M22 */
+                    result.reason = GBB_STOP_NO_PROGRESS;
+                    return result;
+                }
             }
         }
-        if (UINT64_MAX - instance->time_half_dots < cost) {
-            result.reason = GBB_STOP_INVALID_STATE;
+        if (!state_time_fits(instance->time_half_dots, cost)) {
+            result.reason = GBB_STOP_NO_PROGRESS;
+            return result;
+        }
+        uint64_t instruction_target = 0u;
+        if (!state_time_project(instance->time_half_dots, cost, &instruction_target)) {
+            result.reason = GBB_STOP_NO_PROGRESS;
             return result;
         }
         if (trace != NULL && result.trace_count == trace_capacity) { result.reason=GBB_STOP_TRACE_FULL; return result; }
@@ -6335,7 +6406,7 @@ static gbb_run_result gbb_run_internal(gbb_instance *instance, uint64_t budget_h
         instance->instruction_start_half_dots = instance->time_half_dots;
         diagnostic_begin(instance, operation, instance->pc, opcode);
         execute(instance,cost);
-        advance_devices_to(instance, instance->instruction_start_half_dots + cost);
+        advance_devices_to(instance, instruction_target);
         if (instance->dma_start_pending) dma_start(instance);
         if (consume_halt_bug) {
             if (!keeps_control_target) instance->pc=(uint16_t)(instance->pc-1u);
