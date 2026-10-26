@@ -628,8 +628,24 @@ endforeach()
 
 # CGB profile API (CGB-01): probe/info contract, the $143 x profile matrix, the PGB rejection and
 # probe/load parity with a skewed-validator negative control.
+add_library(gabbaboy_core_probe_parity STATIC EXCLUDE_FROM_ALL
+  "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")
+target_include_directories(gabbaboy_core_probe_parity PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_probe_parity PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_probe_parity PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_probe_parity PRIVATE
+  GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
+  GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+# The parity matrix loads every accepted multi-megabyte case so the real loader and probe remain
+# compared for the complete matrix. Build this exact core source with normal release optimization
+# in Debug trees; repeated production SHA-256 and ROM-copy work must fit the normal test budget.
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|IntelLLVM")
+  target_compile_options(gabbaboy_core_probe_parity PRIVATE "$<$<CONFIG:Debug>:-O2>")
+elseif(MSVC)
+  target_compile_options(gabbaboy_core_probe_parity PRIVATE "$<$<CONFIG:Debug>:/O2>")
+endif()
 add_executable(test_cgb_profile test_cgb_profile.c)
-target_link_libraries(test_cgb_profile PRIVATE GabbaBoy::core)
+target_link_libraries(test_cgb_profile PRIVATE gabbaboy_core_probe_parity)
 target_compile_features(test_cgb_profile PRIVATE c_std_17)
 set_target_properties(test_cgb_profile PROPERTIES C_EXTENSIONS OFF)
 foreach(case probe_tracer info_no_rom info_after_load info_reset_constant info_failed_load_unchanged
@@ -2679,6 +2695,20 @@ function(gbb_add_model_gate_test name code regex)
   set_tests_properties(${name} PROPERTIES TIMEOUT 60)
 endfunction()
 
+function(gbb_add_model_gate_count_test name regex)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_MODEL_GATE_SCANNER}" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -DGBB_EXPECT_MIN_KEY=functions
+      -DGBB_EXPECT_MIN_VALUE=126
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+
 # Tracer corpus: two tagged functions, a matching doc, and a copy whose GATE-01 class is wrong.
 file(MAKE_DIRECTORY "${GBB_MODEL_GATE_DIR}")
 set(GBB_MODEL_GATE_TRACER_SOURCE [=[
@@ -2711,9 +2741,9 @@ gbb_add_model_gate_test(model_gates_tracer_pass 0 "model-gates pass functions=2"
 gbb_add_model_gate_test(model_gates_tracer_doc_mismatch 1 "gate-doc-mismatch"
   --source "${GBB_MODEL_GATE_DIR}/tracer.c" --doc "${GBB_MODEL_GATE_DIR}/tracer-bad.md")
 # The real core and the real gate table (Plan 10-02): every function and model-differing branch is tagged.
-gbb_add_model_gate_test(model_gates 0 "model-gates pass functions=1[2-9][0-9] gates=")
-gbb_add_model_gate_test(model_gates_selftest 0
-  "model-gates self-test pass mutants=[1-9][0-9]* functions=1[2-9][0-9]" --self-test)
+gbb_add_model_gate_count_test(model_gates "model-gates pass functions=[0-9]+ gates=")
+gbb_add_model_gate_count_test(model_gates_selftest
+  "model-gates self-test pass mutants=[1-9][0-9]* functions=[0-9]+" --self-test)
 
 # Real-file negative controls (Plan 10-02). Each mutant is a configure-time copy of the real source or
 # doc under build/model-gates/real, with its anchor asserted to occur exactly once (forward and
@@ -4921,9 +4951,10 @@ add_test(NAME state_precodec_gate
     --build-dir "${PROJECT_BINARY_DIR}"
     --output "${PROJECT_BINARY_DIR}/state-precodec-proof.json"
     --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
-set_tests_properties(state_size_bound state_audio_bound state_format_contract state_tracer
+set_tests_properties(state_size_bound state_audio_bound state_format_contract
   state_inventory state_inventory_controls state_globals state_globals_controls state_revision_controls
-  state_precodec_gate PROPERTIES TIMEOUT 180)
+  state_precodec_gate PROPERTIES TIMEOUT 30)
+set_tests_properties(state_tracer PROPERTIES TIMEOUT 60)
 set_tests_properties(state_precodec_gate PROPERTIES FIXTURES_SETUP gbb_state_precodec_receipt)
 set_tests_properties(state_tracer PROPERTIES FIXTURES_REQUIRED gbb_state_precodec_receipt)
 

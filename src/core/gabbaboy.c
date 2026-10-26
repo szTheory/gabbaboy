@@ -23,10 +23,12 @@ static const uint32_t state_sha256_k[64] = {
     0x748f82eeu,0x78a5636fu,0x84c87814u,0x8cc70208u,0x90befffau,0xa4506cebu,0xbef9a3f7u,0xc67178f2u
 };
 
+/* MODEL: BOTH GATE-00 basis="state persistence preserves profile identity without emulating hardware" */
 static uint32_t state_sha256_rotr(uint32_t value, unsigned bits) {
     return (value >> bits) | (value << (32u - bits));
 }
 
+/* MODEL: BOTH GATE-00 basis="state persistence preserves profile identity without emulating hardware" */
 static void state_sha256_transform(state_sha256_ctx *ctx, const uint8_t block[64]) {
     uint32_t words[64];
     for (unsigned i = 0u; i < 16u; ++i) {
@@ -56,6 +58,7 @@ static void state_sha256_transform(state_sha256_ctx *ctx, const uint8_t block[64
     ctx->h[4] += e; ctx->h[5] += f; ctx->h[6] += g; ctx->h[7] += h;
 }
 
+/* MODEL: BOTH GATE-00 basis="state persistence preserves profile identity without emulating hardware" */
 static void state_sha256(const uint8_t *bytes, size_t length, uint8_t digest[32]) {
     state_sha256_ctx ctx = {
         { 0x6a09e667u,0xbb67ae85u,0x3c6ef372u,0xa54ff53au,
@@ -957,6 +960,7 @@ static const state_field_descriptor STATE_FIELDS[] = {
     { 197u, "audio_hpf_output", 4u, 2u, offsetof(gbb_instance, audio_hpf_output), sizeof(int32_t), STATE_VALUE_I32, STATE_STORAGE_INSTANCE },
 };
 
+/* MODEL: BOTH GATE-00 basis="state descriptor bounds are profile-neutral metadata checks" */
 static int state_descriptor_max_body_size(const state_field_descriptor *fields, size_t count,
                                           size_t *body_size_out) {
     const size_t descriptor_count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
@@ -980,6 +984,7 @@ static int state_descriptor_max_body_size(const state_field_descriptor *fields, 
     return 1;
 }
 
+/* MODEL: BOTH GATE-00 basis="state descriptor bounds are profile-neutral metadata checks" */
 static int state_descriptor_max_total_size(const state_field_descriptor *fields, size_t count,
                                            size_t *total_size_out) {
     size_t body_size = 0u;
@@ -991,14 +996,17 @@ static int state_descriptor_max_total_size(const state_field_descriptor *fields,
     return *total_size_out <= GBB_STATE_HEADER_BYTES + GBB_STATE_MAX_BODY_BYTES;
 }
 
+/* MODEL: BOTH GATE-00 basis="audio state validity checks preserve identical stored samples" */
 static uint64_t state_audio_magnitude(int64_t value) {
     return value >= 0 ? (uint64_t)value : (uint64_t)(-(value + 1)) + UINT64_C(1);
 }
 
+/* MODEL: BOTH GATE-00 basis="audio state validity checks preserve identical stored samples" */
 static int state_audio_mix_level_valid(int32_t value) {
     return value >= GBB_STATE_AUDIO_MIX_MIN && value <= GBB_STATE_AUDIO_MIX_MAX;
 }
 
+/* MODEL: BOTH GATE-00 basis="audio state validity checks preserve identical stored samples" */
 static int state_audio_hpf_history_valid(int32_t input, int32_t output) {
     return input >= INT16_MIN && input <= INT16_MAX &&
            output >= INT16_MIN && output <= INT16_MAX;
@@ -1009,6 +1017,7 @@ static int state_audio_hpf_history_valid(int32_t input, int32_t output) {
  * since its last clear. The current phase tightens that prefix; the remaining k+1
  * intervals before its next clear complete a maximum lifetime of 2797 half-dots.
  */
+/* MODEL: BOTH GATE-00 basis="audio state validity checks preserve identical stored samples" */
 static int state_audio_ring_slot_valid(uint8_t head, size_t slot, uint64_t phase,
                                        int64_t value) {
     if (head >= GBB_AUDIO_EVENT_TAPS || slot >= GBB_AUDIO_EVENT_TAPS ||
@@ -3916,11 +3925,13 @@ static int ranges_overlap(uintptr_t a, size_t a_size, uintptr_t b, size_t b_size
     return a < b + b_size && b < a + a_size;
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static void state_encode_i64(int64_t value, uint8_t out[8]) {
     const uint64_t bits = (uint64_t)value;
     for (unsigned i = 0u; i < 8u; ++i) out[i] = (uint8_t)(bits >> (i * 8u));
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static int state_decode_i64(const uint8_t bytes[8], int64_t *out_value) {
     if (bytes == NULL || out_value == NULL) return 0;
     uint64_t raw = 0u;
@@ -3935,6 +3946,7 @@ static int state_decode_i64(const uint8_t bytes[8], int64_t *out_value) {
     return 1;
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static int state_bits_to_i32(uint32_t raw, int32_t *out_value) {
     if (out_value == NULL) return 0;
     if (raw <= (uint32_t)INT32_MAX) {
@@ -3947,6 +3959,7 @@ static int state_bits_to_i32(uint32_t raw, int32_t *out_value) {
     return 1;
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire integrity is profile-independent" */
 static uint32_t state_crc32_update(uint32_t crc, const uint8_t *bytes, size_t length) {
     for (size_t i = 0u; i < length; ++i) {
         crc ^= bytes[i];
@@ -3956,39 +3969,47 @@ static uint32_t state_crc32_update(uint32_t crc, const uint8_t *bytes, size_t le
     return crc;
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire integrity is profile-independent" */
 static uint32_t state_crc32(const uint8_t *bytes, size_t length) {
     if (bytes == NULL && length != 0u) return 0u;
     return state_crc32_update(UINT32_MAX, bytes, length) ^ UINT32_MAX;
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static uint16_t state_get_u16(const uint8_t *bytes) {
     return (uint16_t)((uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8));
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static uint32_t state_get_u32(const uint8_t *bytes) {
     return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
            ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static uint64_t state_get_u64(const uint8_t *bytes, uint8_t width) {
     uint64_t value = 0u;
     for (uint8_t i = 0u; i < width; ++i) value |= (uint64_t)bytes[i] << (i * 8u);
     return value;
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static void state_put_u16(uint8_t *bytes, uint16_t value) {
     bytes[0] = (uint8_t)value;
     bytes[1] = (uint8_t)(value >> 8);
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static void state_put_u32(uint8_t *bytes, uint32_t value) {
     for (unsigned i = 0u; i < 4u; ++i) bytes[i] = (uint8_t)(value >> (i * 8u));
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
 static void state_put_u64(uint8_t *bytes, uint64_t value, uint8_t width) {
     for (uint8_t i = 0u; i < width; ++i) bytes[i] = (uint8_t)(value >> (i * 8u));
 }
 
+/* MODEL: BOTH GATE-00 basis="state descriptor lookup preserves the bound profile layout" */
 static const state_field_descriptor *state_field_by_path(const char *path) {
     const size_t count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
     for (size_t i = 0u; i < count; ++i)
@@ -3996,6 +4017,7 @@ static const state_field_descriptor *state_field_by_path(const char *path) {
     return NULL;
 }
 
+/* MODEL: BOTH GATE-00 basis="state descriptor counts preserve the bound cartridge layout" */
 static size_t state_field_count_for_instance(const gbb_instance *instance,
                                              const state_field_descriptor *field) {
     if (field->storage == STATE_STORAGE_CARTRIDGE_RAM)
@@ -4003,6 +4025,7 @@ static size_t state_field_count_for_instance(const gbb_instance *instance,
     return field->max_count;
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire traversal preserves profile-bound guest fields" */
 static int state_host_value(const gbb_instance *instance,
                             const state_field_descriptor *field,
                             size_t index, uint64_t *out_value) {
@@ -4043,6 +4066,7 @@ static int state_host_value(const gbb_instance *instance,
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire traversal preserves profile-bound guest fields" */
 static int state_store_host_value(gbb_instance *instance,
                                   const state_field_descriptor *field,
                                   size_t index, uint64_t raw) {
@@ -4089,6 +4113,7 @@ static int state_store_host_value(gbb_instance *instance,
     }
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire traversal preserves profile-bound guest fields" */
 static int state_raw_from_body(const gbb_instance *instance, const uint8_t *body,
                                size_t body_size, const char *path, size_t index,
                                uint64_t *out_raw) {
@@ -4113,11 +4138,13 @@ static int state_raw_from_body(const gbb_instance *instance, const uint8_t *body
     return 0;
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire traversal preserves profile-bound guest fields" */
 static int state_raw_from_instance(const gbb_instance *instance, const char *path,
                                    size_t index, uint64_t *out_raw) {
     return state_host_value(instance, state_field_by_path(path), index, out_raw);
 }
 
+/* MODEL: BOTH GATE-00 basis="state wire traversal preserves profile-bound guest fields" */
 static int state_source_raw(const gbb_instance *instance, const uint8_t *body,
                             size_t body_size, const char *path, size_t index,
                             uint64_t *out_raw) {
@@ -4125,6 +4152,7 @@ static int state_source_raw(const gbb_instance *instance, const uint8_t *body,
                         : state_raw_from_body(instance, body, body_size, path, index, out_raw);
 }
 
+/* MODEL: BOTH GATE-00 basis="state validation preserves profile-specific machine state" */
 static int state_field_value_valid(const gbb_instance *instance,
                                    const state_field_descriptor *field,
                                    size_t index, uint64_t raw,
@@ -4266,6 +4294,7 @@ typedef enum {
     STATE_WALK_VALIDATE_BODY, STATE_WALK_APPLY
 } state_walk_mode;
 
+/* MODEL: BOTH GATE-00 basis="state traversal preserves profile-specific machine state" */
 static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
                       const uint8_t *read_body, size_t body_size,
                       state_walk_mode mode, size_t *computed_size) {
@@ -4335,6 +4364,7 @@ static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
     return offset == required;
 }
 
+/* MODEL: BOTH GATE-00 basis="state validation checks bound profile identity without emulating hardware" */
 static int state_cross_fields_valid(const gbb_instance *instance,
                                     const uint8_t *body, size_t body_size) {
     if (instance == NULL || !instance->loaded || instance->accept_input_span != NULL ||
@@ -4415,6 +4445,7 @@ static int state_cross_fields_valid(const gbb_instance *instance,
     return 1;
 }
 
+/* MODEL: BOTH GATE-00 basis="state validation checks the same format contract for both profiles" */
 static int state_validate(const gbb_instance *instance, const uint8_t *body,
                           size_t body_size) {
     if (instance == NULL) return 0;
@@ -4426,10 +4457,12 @@ static int state_validate(const gbb_instance *instance, const uint8_t *body,
            state_cross_fields_valid(instance, body, body == NULL ? expected : body_size);
 }
 
+/* MODEL: BOTH GATE-00 basis="state restore copies validated profile-bound fields" */
 static void state_apply(gbb_instance *instance, const uint8_t *body, size_t body_size) {
     (void)state_walk(instance, NULL, body, body_size, STATE_WALK_APPLY, NULL);
 }
 
+/* MODEL: BOTH GATE-00 basis="state body offsets follow the instance's declared field layout" */
 static size_t state_body_field_offset(const gbb_instance *instance,
                                       const state_field_descriptor *wanted) {
     size_t offset = 0u;
@@ -4444,6 +4477,7 @@ static size_t state_body_field_offset(const gbb_instance *instance,
     return SIZE_MAX;
 }
 
+/* MODEL: BOTH GATE-00 basis="state projection reads serialized cartridge state without emulation" */
 static void state_project_cart_from_body(const gbb_instance *instance,
                                          const uint8_t *body, size_t body_size,
                                          cart_state *cart) {
@@ -4462,6 +4496,7 @@ static void state_project_cart_from_body(const gbb_instance *instance,
             cart->rtc_l[i] = (uint8_t)value;
 }
 
+/* MODEL: BOTH GATE-00 basis="state API validates the current profile-bound instance" */
 gbb_error gbb_state_size(const gbb_instance *instance, size_t *out_size) {
     if (instance == NULL || out_size == NULL) return GBB_INVALID_ARGUMENT;
     if (!instance->loaded) return GBB_STATE_NO_ROM;
@@ -4473,6 +4508,7 @@ gbb_error gbb_state_size(const gbb_instance *instance, size_t *out_size) {
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis="state API serializes profile-bound state without changing hardware behavior" */
 gbb_error gbb_save_state(const gbb_instance *instance, uint8_t *out_bytes,
                          size_t capacity_bytes) {
     if (instance == NULL || out_bytes == NULL) return GBB_INVALID_ARGUMENT;
@@ -4510,6 +4546,7 @@ gbb_error gbb_save_state(const gbb_instance *instance, uint8_t *out_bytes,
     return GBB_OK;
 }
 
+/* MODEL: BOTH GATE-00 basis="state API restores only matching profile-bound state" */
 gbb_error gbb_load_state(gbb_instance *instance, const uint8_t *bytes,
                          size_t size_bytes) {
     if (instance == NULL || bytes == NULL) return GBB_INVALID_ARGUMENT;
