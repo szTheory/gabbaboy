@@ -1,6 +1,6 @@
 ---
 phase: 16-tune-up-and-v0-2-debt-closure
-verified: 2026-10-26T15:00:00Z
+verified: 2026-10-26T17:00:00Z
 status: passed
 score: 5/5 must-haves verified
 covered_files:
@@ -28,14 +28,9 @@ covered_files:
   - tests/scripts/verify-support-ledger.py
   - tests/scripts/verify-test-budget.py
   - tests/scripts/verify-v03-dispositions.py
-covered_digest: "v3:sha256:b18ee4509326555f7f0f841567c6c795f4adb95d0ece42c66218ed29792cf2de"
+covered_digest: "v3:sha256:d7e63dc291a9e474232da0d15c508029d96b65ac36ba65919850e421d971125c"
 behavior_unverified: 0
 overrides_applied: 0
-advisory:
-  - finding: "ci.yml run 40346420094 on the boundary commit 92364c7 was still in progress at verification (perf-gate, linux-asan-ubsan, player-gate, changes green; native and cmake-floor jobs running)"
-    category: other
-    reason: "A local pass is not proof of a remote revision. The boundary PR #126 was already merged with its required checks; confirm the main run finishes green before releasing."
-    evidence_status: "run pending"
 ---
 
 # Phase 16: Tune-up and v0.2 Debt Closure Verification Report
@@ -43,9 +38,9 @@ advisory:
 **Phase Goal:** v0.3 feature work starts from a clean, fast and honest baseline: v0.2 records archived, Phase 8 verifiers in CTest, performance and CI budgets gated, planning hygiene machine-checked, `v0.2.1` published.
 **Verified:** 2026-10-26
 **Status:** passed
-**Re-verification:** No, initial verification
+**Re-verification:** Yes, at final head be4cee8 (prior report stale: 16-07-SUMMARY.md gained two trailing boundary_sha lines)
 
-Evidence was gathered from a detached worktree at boundary commit 92364c78ac00, freshly configured (Release). Nothing was taken from SUMMARY claims.
+Re-verified at head be4cee8 (no src/include/tests/scripts/.github change since 92364c7; only planning docs differ). `ctest -L planning` 35/35 passed; 12 named tests re-run and passed (no_phase_paths(+controls), phase8_closure/player_contract, perf_gate_controls, perf_gate_canned_ir_over_limit, test_budget_controls, classify_changes_src_rejected, ledger_freeze, plan_cap, state_size, v02_support_ledger). Disposition check at rev 92364c7 re-run: pass rows=26 pending=0 closed=6 owner_accepted=7. Orchestrator facts accepted: full phase1 ctest 1234/1234; ci.yml run 40346420094 on 92364c7 success; ci/fixture-repro/release-please on be4cee8 success. v0.2.1 re-read: not draft, published 2026-10-26T13:52:06Z. Only GB-16-* remains under .planning/phases/.
 
 ## Goal Achievement
 
@@ -65,7 +60,7 @@ Evidence was gathered from a detached worktree at boundary commit 92364c78ac00, 
 
 - `ctest -L planning`: 35/35 passed on an unbuilt tree.
 - Named perf/ledger/budget/policy/disposition/adoption set: 23/23 passed.
-- Full CTest suite (1234 tests) enumerated but not run in this verification; the ASan lanes were not rebuilt locally.
+- Full suite 1234/1234 passed per orchestrator at be4cee8; sanitizer lane covered by green CI.
 
 ### Requirements Coverage
 
@@ -78,7 +73,7 @@ Evidence was gathered from a detached worktree at boundary commit 92364c78ac00, 
 | TUNE-05 | SATISFIED | Hygiene CTests pass. |
 | TUNE-06 | SATISFIED | v0.2.1 published live, PRs closed, dispositions pass at the boundary rev. |
 
-All six IDs appear in plan frontmatter and in REQUIREMENTS.md; no orphans. REQUIREMENTS.md still shows them as `Pending` in the traceability table (lines 13-31 unchecked, 122-127); the orchestrator should flip them when closing the phase.
+All six IDs appear in plan frontmatter and in REQUIREMENTS.md; no orphans. REQUIREMENTS.md now marks all six Complete.
 
 ### Cross-cutting
 
@@ -89,11 +84,11 @@ All six IDs appear in plan frontmatter and in REQUIREMENTS.md; no orphans. REQUI
 
 None blocking. D-112 discloses the owner-waived gap rounds and the post-tag fix chain (#123, #124, #125); these are recorded, not hidden.
 
-### Advisories (non-blocking)
+### Advisories (resolved)
 
-1. Main CI on the boundary commit was still running at verification time (see frontmatter). Check that it finishes green.
-2. Issue #122 (v0.2.1 performance review) is still OPEN even though its decision is recorded in `16-perf-review-decision.json`. Consider closing it.
-3. REQUIREMENTS.md traceability still reads Pending for TUNE-01..06.
+1. Boundary CI run finished green (run 40346420094 success).
+2. Issue #122 is CLOSED.
+3. REQUIREMENTS.md marks TUNE-01..06 Complete (checkboxes and traceability).
 
 ### Human Verification Required
 

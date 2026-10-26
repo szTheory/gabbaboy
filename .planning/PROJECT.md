@@ -102,11 +102,12 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 - ✓ Release hardening and milestone debt closure without republishing v0.2.0: closeout scan and disposition ledgers, point-in-time boundary verifiers, automated UAT closure and Nyquist validation 82/82 (EVID-02, SHIP-09..11 re-verified) — Phase 15.1; the twelve LIM rows remain owner decisions. All 28 v0.2 requirements validated — v0.2.
 
+- ✓ Tune-up and v0.2 debt closure: v0.2 phase records archived behind a phase-path lint, Phase 8 verifiers in CTest, a cumulative DMG Ir performance gate against v0.2.0, CI budget and planning-hygiene checks, and the v0.2.1 patch release (TUNE-01..06). Phase 16: goal verification 5/5, automated UAT 51/51, security 0 open threats. Two release gates that 16-07 planned were replaced by one-time checks under D-112; building them is an RM-030 item that must be done before the next release.
+
 ### Active
 
 v0.3 Save States & Host Contract. The full list with REQ-IDs is in [REQUIREMENTS.md](REQUIREMENTS.md).
 
-- [ ] Tune-up: v0.2 debt, archivable phase records, a cumulative performance gate, CI hygiene, and the v0.2.1 patch release
 - [ ] STATE-01: transactional, versioned native save states with exact continuation equivalence
 - [ ] Player save slots over the public state API
 - [ ] INT-01a: a host-process runner contract (raw `.sav`, SIGTERM save-and-exit, exit codes)
@@ -181,4 +182,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-24 at v0.3 Save States & Host Contract kickoff.
+Last updated: 2026-10-26 after Phase 16.
