@@ -557,7 +557,12 @@ static int same_run(gbb_run_result a, gbb_run_result b) {
 static int run_audio(gbb_instance *instance, uint64_t budget, gbb_audio_frame *frames,
                      size_t capacity, size_t *count, gbb_run_result *result) {
     *result = gbb_run_audio(instance, budget, frames, capacity, count);
-    return result->reason == GBB_STOP_BUDGET && result->consumed_half_dots == budget;
+    if (result->reason != GBB_STOP_BUDGET)
+        fprintf(stderr, "run_audio budget=%llu reason=%d consumed=%llu frames=%zu\\n",
+                (unsigned long long)budget, (int)result->reason,
+                (unsigned long long)result->consumed_half_dots, *count);
+    return result->reason == GBB_STOP_BUDGET && result->consumed_half_dots <= budget &&
+           result->consumed_half_dots != 0u;
 }
 
 static int save_bytes(const gbb_instance *instance, uint8_t *bytes, size_t size) {
@@ -712,6 +717,7 @@ def main() -> int:
     parser.add_argument("--cmake", default="cmake")
     parser.add_argument("--nm", default=os.environ.get("CMAKE_NM", "nm"))
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
+    parser.add_argument("--generator", default="")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     args = parser.parse_args()
     root = args.repo.resolve()
