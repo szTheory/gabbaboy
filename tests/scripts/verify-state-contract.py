@@ -210,9 +210,12 @@ def parse_state_fields(core: str) -> list[dict[str, str]]:
 def parse_census_rows(text: str, *, source: str) -> list[tuple[int, str, int, int, int, str]]:
     rows: list[tuple[int, str, int, int, int, str]] = []
     for line in text.splitlines():
-        if not line.startswith("|"):
+        if line.startswith("|"):
+            columns = [column.strip() for column in line.strip().strip("|").split("|")]
+        elif source == "state_record_field" and "|" in line:
+            columns = [column.strip() for column in line.split("|")]
+        else:
             continue
-        columns = [column.strip() for column in line.strip().strip("|").split("|")]
         if len(columns) != 6 or not columns[0].isdigit():
             continue
         try:

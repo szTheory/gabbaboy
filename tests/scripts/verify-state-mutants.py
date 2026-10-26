@@ -77,7 +77,7 @@ def check_killed(exe: Path, case: str, diagnostic: str, label: str) -> str:
         raise MutantError(f"{label} mutant survived {case}: {output}")
     if diagnostic not in output:
         raise MutantError(f"{label} mutant failed outside its intended assertion; expected {diagnostic!r}: {output}")
-    return output.strip().splitlines()[-1]
+    return next(line for line in output.splitlines() if diagnostic in line)
 
 
 def main() -> int:
@@ -120,9 +120,12 @@ def main() -> int:
                 "if (0 && (div != (divider_counter >> 8) || timer_signal != expected_timer_signal)) return 0;",
                 "skipped-cross-field-check")
 
-            endian_anchor = "for (uint8_t i = 0u; i < width; ++i) bytes[i] = (uint8_t)(value >> (i * 8u));"
+            endian_anchor = "if (mode == STATE_WALK_ENCODE) state_put_u64(mutable_body + offset, raw, field->wire_width);"
             endian_mutant = replace_once(core, endian_anchor,
-                "for (uint8_t i = 0u; i < width; ++i) bytes[i] = (uint8_t)(value >> ((width - 1u - i) * 8u));",
+                "if (mode == STATE_WALK_ENCODE) {\n"
+                "                for (unsigned wire_byte = 0u; wire_byte < field->wire_width; ++wire_byte)\n"
+                "                    mutable_body[offset + wire_byte] = (uint8_t)(raw >> ((field->wire_width - 1u - wire_byte) * 8u));\n"
+                "            }",
                 "big-endian-native-write")
 
             census_anchor = ('    { 197u, "audio_hpf_output", 4u, 2u, offsetof(gbb_instance, audio_hpf_output), sizeof(int32_t), STATE_VALUE_I32, STATE_STORAGE_INSTANCE },\n};')
