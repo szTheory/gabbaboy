@@ -109,6 +109,19 @@ coverage:
       - kind: integration
         ref: "Parallel CTest selection passed 26/26 at e9a13af264f02ca9a0e8c4a1e75a5e568ee1ee14, including cgb_probe_parity in 9.46s; it asserts >100,000 entries and calls the real loader for every entry."
         status: pass
+  - id: D8
+    description: "Hosted native builds inspect writable storage by object section across Mach-O, GNU/LLVM ELF and COFF, accept const relocation tables, retain external/static/TLS global controls, and compile perf probes with per-revision validated release components."
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "At immutable commit 38a86f212093033a9541f1fb0fb681c21f6986c7, state_globals_controls passed synthetic Mach-O/GNU-ELF/LLVM-ELF/COFF cases, including const relocations, TLS globals, ASan metadata and an ordinary ASan-name lookalike; the compiler-generated Mach-O ASan fixture retained real writable globals."
+        status: pass
+      - kind: integration
+        ref: "The focused CTest selection passed 7/7 at 38a86f212093033a9541f1fb0fb681c21f6986c7; state_precodec_gate wrote a receipt bound to that commit with negative_controls=pass, and its fixture ran before state_tracer."
+        status: pass
+      - kind: integration
+        ref: "run-perf-gate.sh --attribution-dry-run passed for immutable source 38a86f212093033a9541f1fb0fb681c21f6986c7 and historical v0.2.0 ab301aa69b1f085050fd66bf7b1378863a0821f2; each CMake project version matched its immutable CMakeLists.txt and passed cmake/StateVersion.cmake validation."
+        status: pass
 duration: 61min
 completed: 2026-10-26
 status: complete
@@ -191,6 +204,7 @@ The production codec is in `c2d0a7c797942a0decffc73c328c718dfa440a0e`. Core veri
 - The first installed C client run found the missing entry jump, and the next C++ run exposed the helper return convention. Both harness faults were fixed in the Task 3 commit and both installed tests pass.
 - The post-wave suite exposed two harness regressions: a Git-less disposable source copy was rejected during CMake configure, and `state_tracer` could run before its receipt-producing gate. Commit `6b69a35` restores unqualified archive builds while keeping state evidence revision checks fail-closed, adds explicit missing/unknown/nonexistent revision controls, and wires a CTest fixture from `state_precodec_gate` to `state_tracer`. The `phase1` configure/build passed; the parallel regression selection passed 4/4, and a clean-receipt `-R '^state_tracer$' -j8` run passed 2/2 with the gate first.
 - The next full suite found untagged profile-neutral state helpers, a stale 120–199 model-gate count regex, 180-second state test limits, and a 60-second parity timeout. Commit `e9a13af` tags the 37 state functions with GATE-00 and specific neutral bases, checks the 126-function lower bound without an upper cap, gives state tests 30-second normal limits (60 seconds for the installed tracer), and compiles the same core source at `-O2` for the full parity matrix in Debug builds. The matrix still calls the real loader for every accepted and rejected entry; one selected PGB/bad-checksum case now witnesses the intentionally wrong precedence without repeating the 4.3 GiB full matrix. The isolated test passed in 11.05 seconds; the parallel targeted suite passed 26/26, with parity in 9.46 seconds.
+- PR 130's hosted integration run found three portability regressions. Follow-up commit `38a86f2` adds `<cstdint>` to the public C++ consumer, replaces Mach-only `nm -m` parsing with object-and-section-aware `objdump -h -t` classification and synthetic Mach-O/ELF/COFF controls, and preserves const relocation and sanitizer metadata handling without broad writable-symbol exemptions. The perf harness now configures each archived source tree, binds `CMAKE_PROJECT_VERSION` to immutable `--rev`, validates the release triplet through `cmake/StateVersion.cmake`, and supplies those exact values to standalone compiler invocations; the historical v0.2.0 baseline and seeded source tree include the CMake files needed for that check. After committing, the phase1 build passed and the focused CTest selection passed 7/7. Current and v0.2.0 attribution dry-runs both passed. Remote CI for this correction remains for the orchestrator to run against the exact commit.
 
 ## User Setup Required
 
@@ -204,8 +218,10 @@ Plan 17-01 is complete. Phase 17 remains active; planned follow-on Plan 17-02 ex
 
 - Summary, format documentation, contract checker and proof executable exist.
 - All twelve commits measured from the persisted plan ledger are ancestors of implementation head `e9a13af264f02ca9a0e8c4a1e75a5e568ee1ee14`; this includes the original summary record and both regression fixes.
+- Hosted integration follow-up `38a86f212093033a9541f1fb0fb681c21f6986c7` is recorded separately from the original plan ledger, is an ancestor of current HEAD, and matches `build/state-precodec-proof.json` source_commit with negative controls passing.
 - The original immutable-head verification set passed 13/13 at `04e37bcc0786893f26d26ee78a71673b87546e64`. The archive/tracer regression controls passed at `6b69a3579fd0f6e89b47ca4942954a1596e24dfb`. At `e9a13af264f02ca9a0e8c4a1e75a5e568ee1ee14`, the phase1 build passed and the combined parallel targeted selection passed 26/26, including all model-gate controls, the budget check, all state checks with fixture ordering, and the complete probe/load parity matrix.
-- `verify-summary-coverage.py --file` passed with seven entries, and OpenGSD classified all seven as auto-covered.
+- After the hosted correction commit, the phase1 build and focused selection passed at immutable head `38a86f212093033a9541f1fb0fb681c21f6986c7`; current and v0.2.0 perf attribution dry-runs also passed with immutable source-version validation.
+- `verify-summary-coverage.py --file` passed with eight entries, and OpenGSD classified all eight as auto-covered.
 
 ---
 *Phase: GB-17-native-save-state-core*
