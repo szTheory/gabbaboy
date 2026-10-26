@@ -23,6 +23,11 @@ static const uint32_t state_sha256_k[64] = {
     0x748f82eeu,0x78a5636fu,0x84c87814u,0x8cc70208u,0x90befffau,0xa4506cebu,0xbef9a3f7u,0xc67178f2u
 };
 
+#if defined(GBB_TEST_STATE_HASH_COUNTER)
+static uint64_t state_sha256_test_calls;
+static uint64_t state_sha256_test_bytes;
+#endif
+
 /* MODEL: BOTH GATE-00 basis="state persistence preserves profile identity without emulating hardware" */
 static uint32_t state_sha256_rotr(uint32_t value, unsigned bits) {
     return (value >> bits) | (value << (32u - bits));
@@ -60,6 +65,10 @@ static void state_sha256_transform(state_sha256_ctx *ctx, const uint8_t block[64
 
 /* MODEL: BOTH GATE-00 basis="state persistence preserves profile identity without emulating hardware" */
 static void state_sha256(const uint8_t *bytes, size_t length, uint8_t digest[32]) {
+#if defined(GBB_TEST_STATE_HASH_COUNTER)
+    ++state_sha256_test_calls;
+    state_sha256_test_bytes += (uint64_t)length;
+#endif
     state_sha256_ctx ctx = {
         { 0x6a09e667u,0xbb67ae85u,0x3c6ef372u,0xa54ff53au,
           0x510e527fu,0x9b05688cu,0x1f83d9abu,0x5be0cd19u },

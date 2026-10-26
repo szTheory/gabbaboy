@@ -4958,6 +4958,17 @@ set_tests_properties(state_tracer PROPERTIES TIMEOUT 60)
 set_tests_properties(state_precodec_gate PROPERTIES FIXTURES_SETUP gbb_state_precodec_receipt)
 set_tests_properties(state_tracer PROPERTIES FIXTURES_REQUIRED gbb_state_precodec_receipt)
 
+add_executable(test_state_codec test_state_codec.c)
+target_include_directories(test_state_codec PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/core"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_codec PRIVATE c_std_17)
+set_target_properties(test_state_codec PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_identity COMMAND test_state_codec state_identity)
+add_test(NAME state_codec_matrix COMMAND test_state_codec state_codec_matrix)
+set_tests_properties(state_identity state_codec_matrix PROPERTIES TIMEOUT 60)
+
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times

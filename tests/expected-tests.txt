@@ -1241,6 +1241,8 @@ state_globals
 state_globals_controls
 state_inventory
 state_inventory_controls
+state_identity
+state_codec_matrix
 state_precodec_gate
 state_revision_controls
 state_size_bound
