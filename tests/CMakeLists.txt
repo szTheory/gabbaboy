@@ -4873,7 +4873,9 @@ execute_process(
 string(LENGTH "${GBB_STATE_SOURCE_REV}" GBB_STATE_SOURCE_REV_LENGTH)
 if(NOT GBB_STATE_REV_RESULT EQUAL 0 OR NOT GBB_STATE_SOURCE_REV_LENGTH EQUAL 40 OR
    NOT GBB_STATE_SOURCE_REV MATCHES "^[0-9a-f]+$")
-  message(FATAL_ERROR "Cannot bind state source checks to an immutable commit: ${GBB_STATE_REV_ERROR}")
+  set(GBB_STATE_SOURCE_REV "unknown")
+  message(STATUS
+    "State evidence CTests remain registered with an unresolved revision and will fail closed when invoked")
 endif()
 set(GBB_STATE_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-contract.py")
 add_executable(test_state_api test_state_api.c)
@@ -4910,6 +4912,9 @@ add_test(NAME state_globals
 add_test(NAME state_globals_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
     --self-test --control globals --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
+add_test(NAME state_revision_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --self-test --control revision --repo "${PROJECT_SOURCE_DIR}")
 add_test(NAME state_precodec_gate
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
     --precodec --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
@@ -4917,8 +4922,10 @@ add_test(NAME state_precodec_gate
     --output "${PROJECT_BINARY_DIR}/state-precodec-proof.json"
     --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
 set_tests_properties(state_size_bound state_audio_bound state_format_contract state_tracer
-  state_inventory state_inventory_controls state_globals state_globals_controls
+  state_inventory state_inventory_controls state_globals state_globals_controls state_revision_controls
   state_precodec_gate PROPERTIES TIMEOUT 180)
+set_tests_properties(state_precodec_gate PROPERTIES FIXTURES_SETUP gbb_state_precodec_receipt)
+set_tests_properties(state_tracer PROPERTIES FIXTURES_REQUIRED gbb_state_precodec_receipt)
 
 gabbaboy_verify_registered_tests()
 

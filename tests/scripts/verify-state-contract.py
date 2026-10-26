@@ -744,6 +744,23 @@ def run_precodec(args: argparse.Namespace, root: Path) -> None:
     print(f"state pre-codec proof pass source={args.rev} descriptors={descriptor_hash} executable={receipt['proof_executable_sha256']}")
 
 
+def revision_controls_self_test(root: Path) -> None:
+    script = Path(__file__).resolve()
+    cases = (
+        ([], "an immutable --rev is required"),
+        (["--rev", "unknown"], "--rev must be a resolved immutable 40-hex commit"),
+        (["--rev", "0" * 40], "git show "),
+    )
+    for revision_args, expected in cases:
+        result = run([sys.executable, str(script), "--inventory", "--repo", str(root), *revision_args],
+                     cwd=root)
+        if result.returncode != 1 or expected not in result.stdout + result.stderr:
+            raise ContractError(
+                f"state evidence revision control did not reject {revision_args or ['missing --rev']}: "
+                f"exit={result.returncode} output={result.stdout}{result.stderr}")
+    print("state revision controls pass missing=refused unknown=refused missing_object=refused")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inventory", action="store_true")
@@ -752,7 +769,7 @@ def main() -> int:
     parser.add_argument("--precodec", action="store_true")
     parser.add_argument("--format-contract", action="store_true")
     parser.add_argument("--tracer", action="store_true")
-    parser.add_argument("--control", choices=("inventory", "globals", "all"), default="all")
+    parser.add_argument("--control", choices=("inventory", "globals", "revision", "all"), default="all")
     parser.add_argument("--rev", required=False)
     parser.add_argument("--library", type=Path)
     parser.add_argument("--build-dir", type=Path, default=Path("build"))
@@ -773,6 +790,8 @@ def main() -> int:
                 inventory_self_test()
             if args.control in ("globals", "all"):
                 globals_self_test(args.nm, args.cc)
+            if args.control in ("revision", "all"):
+                revision_controls_self_test(root)
             print(f"state contract controls pass control={args.control}")
             return 0
         if args.rev is None:
