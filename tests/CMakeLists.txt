@@ -5015,15 +5015,40 @@ add_executable(test_state_horizon test_state_horizon.c)
 target_include_directories(test_state_horizon PRIVATE "${PROJECT_SOURCE_DIR}/include")
 target_compile_features(test_state_horizon PRIVATE c_std_17)
 set_target_properties(test_state_horizon PROPERTIES C_EXTENSIONS OFF)
+# The closure matrix exhausts the audio ring's distinct persisted phase bounds;
+# keep the same source and full case set, but optimize this state-validation
+# translation unit in Debug builds so the normal 60-second budget covers it.
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|IntelLLVM")
+  target_compile_options(test_state_horizon PRIVATE "$<$<CONFIG:Debug>:-O2>")
+elseif(MSVC)
+  target_compile_options(test_state_horizon PRIVATE "$<$<CONFIG:Debug>:/O2>")
+endif()
 add_test(NAME state_horizon COMMAND test_state_horizon horizon_matrix)
 add_test(NAME state_horizon_wrappers COMMAND test_state_horizon horizon_wrappers)
 add_test(NAME state_horizon_sentinels COMMAND test_state_horizon horizon_sentinels)
 add_test(NAME state_horizon_events COMMAND test_state_horizon horizon_events)
-add_test(NAME state_horizon_closure COMMAND test_state_horizon horizon_closure)
+# The complete phase-equivalence matrix exceeded 60 seconds as one case and as
+# four concurrent shards. These balanced shards retain every case within the
+# standard per-test limit, including under the normal parallel CTest run.
+math(EXPR GBB_HORIZON_CLOSURE_SHARDS "16 - 1")
+add_test(NAME state_horizon_closure
+  COMMAND test_state_horizon horizon_closure 0 16)
+set(GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES "")
+foreach(shard RANGE 1 ${GBB_HORIZON_CLOSURE_SHARDS})
+  add_test(NAME "state_horizon_closure_${shard}"
+    COMMAND test_state_horizon horizon_closure ${shard} 16)
+  set(fixture "gabbaboy_horizon_closure_${shard}")
+  list(APPEND GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES "${fixture}")
+  set_tests_properties("state_horizon_closure_${shard}"
+    PROPERTIES FIXTURES_SETUP "${fixture}" TIMEOUT 60)
+endforeach()
 set_tests_properties(state_horizon state_horizon_wrappers state_horizon_sentinels
   state_horizon_events
   PROPERTIES TIMEOUT 30)
-set_tests_properties(state_horizon_closure PROPERTIES TIMEOUT 60)
+set_tests_properties(state_horizon_closure PROPERTIES
+  FIXTURES_SETUP gabbaboy_horizon_closure_0
+  FIXTURES_REQUIRED "${GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES}"
+  TIMEOUT 60)
 
 # Each observer/RTC mutant is a disposable core-source copy. Its named contract
 # test must fail on the intended assertion while the unrelated size/save control

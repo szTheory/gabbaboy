@@ -84,6 +84,30 @@ invariants; RTC state is zero for cartridges without a timer. Ordinary emulated
 times are at most `2^62`; `timer_reloaded_at` may also use `UINT64_MAX` as its
 validated sentinel.
 
+## Run horizon and input-event order
+
+The ordinary master-time clock, saved frame and instruction anchors, RTC
+anchor, queued event timestamps, and borrowed acceptance-span timestamps share
+the inclusive `2^62` half-dot limit. `gbb_queue_events` rejects a batch
+containing a timestamp above that limit without changing the existing queue.
+Acceptance spans are validated as a whole before a run begins: their events
+must be valid and time ordered, their unconsumed suffix cannot precede the
+instance clock, and neither a timestamp nor the instance clock may exceed the
+limit. Entries before the span cursor are historical and are not replayed.
+
+Equal-time events retain caller order. At run entry, events at the current
+timestamp are applied before another CPU fetch. While devices advance, the
+clock reaches an event timestamp, the event batch is applied in its original
+order, and then timer, serial, audio, DMA and PPU work for that half-dot runs.
+This ordering also applies at exactly `2^62`, so events at the cap can be
+delivered without allowing a later clock-advancing operation to cross it.
+STOP may consume a partial wait up to the cap. Instructions, interrupt entry,
+HALT ticks, DMA ticks and CPU-stall ticks remain atomic: if their complete
+reservation does not fit, the run returns `GBB_STOP_NO_PROGRESS` without
+starting that operation. A live clock already above the cap returns
+`GBB_STOP_INVALID_STATE` before mutation. Exact-cap states remain eligible for
+save, load and resave.
+
 Signed values use an explicit modulo-`2^64` representation rather than dumping
 native signed objects. The decoder reconstructs negative values as
 `-1 - (UINT64_MAX - encoded)`, after checking that the magnitude is representable;

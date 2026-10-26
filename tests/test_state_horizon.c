@@ -492,7 +492,8 @@ static int horizon_span_admission(void) {
     machine->pc = 0x0200u;
     seed_time(machine, TEST_HORIZON - 8u);
     machine->serial_active = 1u;
-    machine->serial_control = 0u;
+    machine->serial_control = 0x80u;
+    machine->serial_edge_remaining = 0u;
     machine->serial_data = 0u;
     machine->serial_bits = 0u;
     const gbb_input_event same_time[] = {
@@ -537,7 +538,15 @@ static int compare_u64(const void *left, const void *right) {
     return a < b ? -1 : a > b ? 1 : 0;
 }
 
-static int horizon_closure(void) {
+static int add_phase(uint64_t *phases, size_t *count, size_t capacity, uint64_t value) {
+    if (phases == NULL || count == NULL || *count >= capacity) return 0;
+    phases[(*count)++] = value;
+    return 1;
+}
+
+static int horizon_closure(size_t shard, size_t shard_count) {
+    if (shard_count == 0u || shard >= shard_count)
+        return fail_case("fixture: invalid closure shard");
     gbb_instance *machine = new_machine(GBB_PROFILE_DMG_CPU_B);
     REQUIRE_CASE(machine != NULL, "fixture: closure machine");
     size_t state_size = 0u;
@@ -554,8 +563,12 @@ static int horizon_closure(void) {
 
     uint64_t phases[4096];
     size_t phase_count = 0u;
-    phases[phase_count++] = 0u;
-    phases[phase_count++] = GBB_AUDIO_CLOCK_HALF_DOTS - 1u;
+    REQUIRE_CASE(add_phase(phases, &phase_count,
+                           sizeof(phases) / sizeof(phases[0]), 0u) &&
+                 add_phase(phases, &phase_count,
+                           sizeof(phases) / sizeof(phases[0]),
+                           GBB_AUDIO_CLOCK_HALF_DOTS - 1u),
+                 "fixture: audio phase matrix capacity");
     for (uint64_t completed = 0u; completed < GBB_AUDIO_EVENT_TAPS; ++completed) {
         const uint64_t base = completed * GBB_AUDIO_CLOCK_HALF_DOTS;
         const uint64_t first_quotient = base / GBB_AUDIO_SAMPLE_RATE + 1u;
@@ -563,7 +576,10 @@ static int horizon_closure(void) {
             (base + GBB_AUDIO_CLOCK_HALF_DOTS - 1u) / GBB_AUDIO_SAMPLE_RATE;
         for (uint64_t quotient = first_quotient; quotient <= last_quotient; ++quotient) {
             const uint64_t phase = quotient * GBB_AUDIO_SAMPLE_RATE - base;
-            if (phase < GBB_AUDIO_CLOCK_HALF_DOTS) phases[phase_count++] = phase;
+            if (phase < GBB_AUDIO_CLOCK_HALF_DOTS)
+                REQUIRE_CASE(add_phase(phases, &phase_count,
+                                       sizeof(phases) / sizeof(phases[0]), phase),
+                             "fixture: audio phase matrix capacity");
         }
     }
     /* Every phase at which one of the next eight bounded ticks can consume an
@@ -571,10 +587,17 @@ static int horizon_closure(void) {
     for (uint64_t samples = 1u; samples <= 8u; ++samples) {
         const uint64_t boundary = GBB_AUDIO_CLOCK_HALF_DOTS -
                                   samples * GBB_AUDIO_SAMPLE_RATE;
-        if (boundary > 0u) phases[phase_count++] = boundary - 1u;
-        phases[phase_count++] = boundary;
+        if (boundary > 0u)
+            REQUIRE_CASE(add_phase(phases, &phase_count,
+                                   sizeof(phases) / sizeof(phases[0]), boundary - 1u),
+                         "fixture: audio phase matrix capacity");
+        REQUIRE_CASE(add_phase(phases, &phase_count,
+                               sizeof(phases) / sizeof(phases[0]), boundary),
+                     "fixture: audio phase matrix capacity");
         if (boundary + 1u < GBB_AUDIO_CLOCK_HALF_DOTS)
-            phases[phase_count++] = boundary + 1u;
+            REQUIRE_CASE(add_phase(phases, &phase_count,
+                                   sizeof(phases) / sizeof(phases[0]), boundary + 1u),
+                         "fixture: audio phase matrix capacity");
     }
     qsort(phases, phase_count, sizeof(phases[0]), compare_u64);
     size_t unique_phases = 0u;
@@ -589,9 +612,13 @@ static int horizon_closure(void) {
     for (size_t i = 0u; i < GBB_INPUT_EVENT_CAPACITY; ++i)
         queue[i] = (gbb_input_event){TEST_HORIZON, kinds[i & 1u], (uint8_t)(i % 8u)};
     const uint8_t heads[] = {0u, GBB_AUDIO_EVENT_TAPS - 1u};
+    size_t case_index = 0u;
+    size_t case_count = 0u;
     for (size_t h = 0u; h < sizeof(heads) / sizeof(heads[0]); ++h) {
         const uint8_t head = heads[h];
         for (size_t p = 0u; p < unique_phases; ++p) {
+            if (case_index++ % shard_count != shard) continue;
+            ++case_count;
             const uint64_t phase = phases[p];
             REQUIRE_CASE(phase < GBB_AUDIO_CLOCK_HALF_DOTS,
                          "fixture: generated audio phase outside accepted domain");
@@ -641,6 +668,14 @@ static int horizon_closure(void) {
                          "closure discrepancy: cap state escaped on the next bounded step");
         }
     }
+    const size_t total_cases = unique_phases * (sizeof(heads) / sizeof(heads[0]));
+    const size_t expected_cases = total_cases / shard_count +
+        (shard < total_cases % shard_count ? 1u : 0u);
+    REQUIRE_CASE(case_count == expected_cases,
+                 "fixture: closure shard omitted or duplicated phase/head cases");
+    printf("# closure witness: shard=%zu/%zu cases=%zu phase_classes=%zu heads=%zu\n",
+           shard, shard_count, case_count, unique_phases,
+           sizeof(heads) / sizeof(heads[0]));
     free(blocked);
     free(roundtrip);
     free(after);
@@ -658,7 +693,7 @@ static int horizon_matrix(void) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 2) return 2;
+    if (argc < 2) return 2;
     failed_reason = "unclassified horizon failure";
     printf("TAP version 13\n1..1\n");
     int passed = 0;
@@ -678,7 +713,19 @@ int main(int argc, char **argv) {
     else if (strcmp(argv[1], "horizon_events") == 0) passed = horizon_events();
     else if (strcmp(argv[1], "horizon_event_admission") == 0) passed = horizon_event_admission();
     else if (strcmp(argv[1], "horizon_span_admission") == 0) passed = horizon_span_admission();
-    else if (strcmp(argv[1], "horizon_closure") == 0) passed = horizon_closure();
+    else if (strcmp(argv[1], "horizon_closure") == 0) {
+        if (argc == 2) passed = horizon_closure(0u, 1u);
+        else if (argc == 4) {
+            char *end_shard = NULL;
+            char *end_count = NULL;
+            const unsigned long shard = strtoul(argv[2], &end_shard, 10);
+            const unsigned long count = strtoul(argv[3], &end_count, 10);
+            if (end_shard == argv[2] || *end_shard != '\0' ||
+                end_count == argv[3] || *end_count != '\0' ||
+                shard > SIZE_MAX || count > SIZE_MAX) return 2;
+            passed = horizon_closure((size_t)shard, (size_t)count);
+        } else return 2;
+    }
     else return 2;
     if (passed) printf("ok 1 - %s\n", argv[1]);
     else printf("not ok 1 - %s\n  ---\n  message: %s\n  ...\n", argv[1], failed_reason);
