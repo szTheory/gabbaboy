@@ -135,8 +135,20 @@ The plan ledger measured three implementation commits from `032ea013aeaa8a65d8ed
 
 None. The existing load validation and save bounds already met Tasks 2 and 3; this plan added the requested whole-instance and instrumentation evidence without changing those production paths.
 
+## Integration Follow-up
+
+The Phase 17 wave review exposed four test and checker integration defects. At immutable integration revision `7c1b86f953dc467a1c2c82bea66d386600f79090`, the palette omission mutant now consumes one palette wire element per iteration while omitting its application; successful save fixtures reserve a guard byte so the tail-write mutant reaches the dedicated output-tail assertion; the global checker recognizes writable TLS symbols without objdump's optional `O` flag and maps GNU BFD PE/PEI zero-based sections correctly; and the event boundary test reaches the ordinary-time cap through a valid STOP wake.
+
+- Normal focused CTest passed 14/14, including immutable `state_globals`, parser format controls, revision controls, state allocation/hash purity, the whole-instance refusal and observer cases, the palette and tail-write mutants with passing unrelated controls, and the cap-relative event test.
+- A fresh Linux Docker build with `GABBABOY_ENABLE_SANITIZERS=ON` passed the same 14/14 focused CTests with the project's shared 3x timeout multiplier. ASan/UBSan remained enabled; passing mutant controls completed cleanly.
+- The host Clang cross-target ELF fixture confirmed the `.tdata` TLS row without `O` is classified writable. GNU PEI section-table coverage, including the relocated `.rdata` control, passed in both focused runs.
+- Windows execution was not available locally; no local Windows result is claimed.
+
+The original three-task plan ledger above remains historical. The integration correction is an additional commit: `7c1b86f` (`test(17-03): repair save-state integration controls`).
+
 ## Self-Check: PASSED
 
 - Summary file exists at the required phase path.
 - Implementation commits `7841efd`, `39e1586`, and `30f2151` exist and are ancestors of the implementation head.
+- Integration follow-up commit `7c1b86f` exists and is an ancestor of the current head.
 - The `summary_coverage` CTest passes for the block-schema coverage entries in this file.
