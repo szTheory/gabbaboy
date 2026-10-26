@@ -4967,7 +4967,10 @@ target_compile_features(test_state_codec PRIVATE c_std_17)
 set_target_properties(test_state_codec PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME state_identity COMMAND test_state_codec state_identity)
 add_test(NAME state_codec_matrix COMMAND test_state_codec state_codec_matrix)
-set_tests_properties(state_identity state_codec_matrix PROPERTIES TIMEOUT 60)
+add_test(NAME state_canonical COMMAND test_state_codec state_canonical)
+add_test(NAME state_semantic_bounds COMMAND test_state_codec state_semantic_bounds)
+set_tests_properties(state_identity state_codec_matrix state_canonical state_semantic_bounds
+  PROPERTIES TIMEOUT 60)
 
 gabbaboy_verify_registered_tests()
 

@@ -1236,6 +1236,7 @@ plan_cap
 lessons_unique_ids
 state_size
 state_audio_bound
+state_canonical
 state_format_contract
 state_globals
 state_globals_controls
@@ -1243,6 +1244,7 @@ state_inventory
 state_inventory_controls
 state_identity
 state_codec_matrix
+state_semantic_bounds
 state_precodec_gate
 state_revision_controls
 state_size_bound
