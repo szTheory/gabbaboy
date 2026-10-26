@@ -10,25 +10,25 @@ Each requirement names the automated check that proves it (D-105). Every check c
 
 ### Tune-up (v0.2 debt and delivery hygiene)
 
-- [ ] **TUNE-01**: No test or CTest entry reads from `.planning/phases`.
+- [x] **TUNE-01**: No test or CTest entry reads from `.planning/phases`.
   - A lint CTest fails on a seeded phase path.
   - The v0.2 phase records are archived to `milestones/v0.2-phases/`, and the full suite passes afterwards.
-- [ ] **TUNE-02**: The Phase 8 contract verifiers are registered in CTest and pass. Each rejects a seeded defect.
-- [ ] **TUNE-03**: A cumulative DMG performance gate on a named Linux hosted Release build:
+- [x] **TUNE-02**: The Phase 8 contract verifiers are registered in CTest and pass. Each rejects a seeded defect.
+- [x] **TUNE-03**: A cumulative DMG performance gate on a named Linux hosted Release build:
   - an instruction-count proxy measured against the `v0.2.0` tag, plus a realtime multiple with headroom for later PPU work;
   - the gate fails on a seeded regression;
   - an attribution receipt assigns the v0.2 slowdown to phase merges, closing LIM-PERF-REVIEW.
-- [ ] **TUNE-04**: CI stays inside its budget, enforced by checks:
+- [x] **TUNE-04**: CI stays inside its budget, enforced by checks:
   - a per-test time budget;
   - the ASan stall replay is split or moved to a scheduled lane, with a bounded PR replay that keeps a negative control;
   - every job's timeout cites the run it doubles, and jobs run at no more than 60% of their limit;
   - a planning-only lane behind one required aggregator check, whose classifier rejects `src/` or `tests/` changes as a negative control.
-- [ ] **TUNE-05**: Planning hygiene is machine-checked:
+- [x] **TUNE-05**: Planning hygiene is machine-checked:
   - a CTest compares each phase's plan count with its ROADMAP cap (negative control: an over-cap fixture);
   - a LESSONS id uniqueness test, with the current duplicates renumbered;
   - STATE.md stays under a size bound;
   - the stale Playstead statements in README, `docs/native-integration.md` and PRECEDENT are corrected.
-- [ ] **TUNE-06**: The v0.2 release debt is closed:
+- [x] **TUNE-06**: The v0.2 release debt is closed:
   - a new versioned support ledger for post-`v0.2.0` source passes `--check-current`, without rewriting `v0.2.0`;
   - the hosted rehearsal and trusted judge are green at the exact head;
   - `v0.2.1` is published from release-please PR #75;
@@ -119,12 +119,12 @@ These are deferred and tracked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTON
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TUNE-01 | Phase 16 | Pending |
-| TUNE-02 | Phase 16 | Pending |
-| TUNE-03 | Phase 16 | Pending |
-| TUNE-04 | Phase 16 | Pending |
-| TUNE-05 | Phase 16 | Pending |
-| TUNE-06 | Phase 16 | Pending |
+| TUNE-01 | Phase 16 | Complete |
+| TUNE-02 | Phase 16 | Complete |
+| TUNE-03 | Phase 16 | Complete |
+| TUNE-04 | Phase 16 | Complete |
+| TUNE-05 | Phase 16 | Complete |
+| TUNE-06 | Phase 16 | Complete |
 | STATE-01 | Phase 17 | Pending |
 | STATE-02 | Phase 17 | Pending |
 | STATE-03 | Phase 17 | Pending |
