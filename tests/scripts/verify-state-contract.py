@@ -455,6 +455,48 @@ def verify_public_state_contract(header: str, core: str) -> None:
         raise ContractError("state codec implementation is missing: " + ", ".join(missing))
 
 
+def verify_state_documentation(state_format: str, cartridge_saves: str) -> None:
+    state_format = re.sub(r"\s+", " ", state_format)
+    cartridge_saves = re.sub(r"\s+", " ", cartridge_saves)
+    required_format_claims = (
+        "| 0 | 4 | Magic | ASCII `GBBS` |",
+        "| 4 | 2 | Format version | `1` |",
+        "| 6 | 2 | Header size | `64` |",
+        "| 20 | 32 | ROM identity | SHA-256 of the complete loaded ROM |",
+        "| 60 | 4 | CRC-32 | CRC described below |",
+        "The check value for ASCII `123456789` is `0xCBF43926`.",
+        "198 typed descriptors",
+        "maximum admitted descriptor body is 320184 bytes",
+        "maximum emitted state is 320248 bytes",
+        "`GBB_STATE_INVALID_CONTENT`",
+        "externally serialized",
+        "does not allocate memory or hash the ROM per call",
+    )
+    missing = [claim for claim in required_format_claims if claim not in state_format]
+    if missing:
+        raise ContractError("state-format.md is missing contract claim: " + missing[0])
+    required_battery_claims = (
+        "## Native machine states",
+        "[`state-format.md`](state-format.md)",
+        "buffers must remain valid during the call and must not overlap the instance",
+        "The API has no filesystem access",
+    )
+    missing = [claim for claim in required_battery_claims if claim not in cartridge_saves]
+    if missing:
+        raise ContractError("cartridge-and-saves.md is missing state API claim: " + missing[0])
+
+
+def verify_state_documentation_negative_control(state_format: str, cartridge_saves: str) -> None:
+    mutant = state_format.replace("ASCII `GBBS`", "ASCII `GBBX`", 1)
+    if mutant == state_format:
+        raise ContractError("state documentation magic mutant was not seeded")
+    try:
+        verify_state_documentation(mutant, cartridge_saves)
+    except ContractError:
+        return
+    raise ContractError("state documentation magic negative control survived")
+
+
 def version_component_self_test(cmake: str, module: Path) -> None:
     if not module.is_file():
         raise ContractError(f"state release version helper is missing: {module}")
@@ -486,6 +528,10 @@ def version_component_self_test(cmake: str, module: Path) -> None:
 
 def run_format_contract(args: argparse.Namespace, root: Path, core: str, header: str) -> None:
     verify_public_state_contract(header, core)
+    state_format = git_show(root, args.rev, "docs/state-format.md")
+    cartridge_saves = git_show(root, args.rev, "docs/cartridge-and-saves.md")
+    verify_state_documentation(state_format, cartridge_saves)
+    verify_state_documentation_negative_control(state_format, cartridge_saves)
     if args.version_module is None or args.api is None or args.rom is None or args.cmake is None:
         raise ContractError("--format-contract requires --version-module, --api, --rom and --cmake")
     version_component_self_test(args.cmake, args.version_module)
@@ -494,7 +540,7 @@ def run_format_contract(args: argparse.Namespace, root: Path, core: str, header:
     result = run([str(args.api), "format_contract", str(args.rom)], cwd=root)
     if result.returncode != 0:
         raise ContractError(f"format proof executable failed ({result.returncode}): {result.stdout}{result.stderr}")
-    print(f"state format contract pass source={args.rev} version_controls=8 api={result.stdout.strip() or 'pass'}")
+    print(f"state format contract pass source={args.rev} docs_control=pass version_controls=8 api={result.stdout.strip() or 'pass'}")
 
 
 def run_tracer(args: argparse.Namespace, root: Path, core: str, header: str) -> None:
