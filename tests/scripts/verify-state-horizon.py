@@ -269,6 +269,20 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def sanitizer_mutant_environment(compiler_flags: Sequence[str]) -> dict[str, str] | None:
+    if not any("sanitize=address" in flag for flag in compiler_flags):
+        return None
+    environment = os.environ.copy()
+    options = [option for option in environment.get("ASAN_OPTIONS", "").split(":")
+               if option and not option.startswith("detect_leaks=")]
+    # A mutant intentionally returns at its failing assertion before fixture cleanup.
+    # Keep ASan/UBSan enabled, but disable LSan for that one expected-failing process;
+    # the unrelated passing control still runs with leak detection enabled.
+    options.append("detect_leaks=0")
+    environment["ASAN_OPTIONS"] = ":".join(options)
+    return environment
+
+
 def apply_mutant(source: str, mutant: Mutant) -> str:
     changed = source
     for index, replacement in enumerate(mutant.edits, start=1):
@@ -303,6 +317,10 @@ def self_test_helpers() -> None:
         except HorizonCheckError:
             continue
         raise HorizonCheckError("self-test: missing or duplicate guard anchor was accepted")
+    sanitizer_env = sanitizer_mutant_environment(
+        ["-fsanitize=address,undefined"])
+    if sanitizer_env is None or "detect_leaks=0" not in sanitizer_env.get("ASAN_OPTIONS", ""):
+        raise HorizonCheckError("self-test: expected failing mutant did not disable LSan")
     try:
         check_semantic_rejection(0, "# horizon witness: stop-wait\n", MUTANTS[0])
     except HorizonCheckError:
@@ -444,7 +462,8 @@ def build_and_run(revision: str, base: Path, source_root: Path,
             f"{mutant.name}: mutant compile failed and cannot count as a kill\n"
             f"{build.stdout}{build.stderr}"
         )
-    semantic = run([str(binary), mutant.case], cwd=source_root, timeout=30)
+    semantic = run([str(binary), mutant.case], cwd=source_root, timeout=30,
+                   env=sanitizer_mutant_environment(compiler_flags))
     semantic_output = semantic.stdout + semantic.stderr
     check_semantic_rejection(semantic.returncode, semantic_output, mutant)
     control = run([str(binary), CONTROL_CASE], cwd=source_root, timeout=30)
