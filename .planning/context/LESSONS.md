@@ -908,3 +908,11 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** the grep above lists 9 consumer files at v0.2 close; `ctest` over the affected tests passes with phase directories in place.
 - **Source:** v0.2 `/gsd-complete-milestone`.
 - **Status:** Adopted. Follow-up: move the helpers into `tests/`, then archive the v0.2 phase records.
+
+### GB-GSD-027 / 2026-10-26 / Record post-merge boundary facts outside the verifier's covered files
+
+- **Cause and evidence:** Plan 16-07 told the orchestrator to append `boundary_sha` to `16-07-SUMMARY.md` after the boundary PR merged. The verifier had already fingerprinted that SUMMARY into `16-VERIFICATION.md` (`covered_digest`). The appended lines changed nothing else (no source, test or workflow change between `92364c7` and `be4cee8`), yet `verification.status` read `stale` at verify-work and `phase uat-passed --require-verification` blocked. That forced a full verifier re-run whose only finding was the same pass.
+- **Remedy:** Write post-merge facts (the boundary SHA, merge commits, hosted run ids) only to `continue.md`, the UAT `## Automated Evidence` prose, or STATE.md, none of which the verifier covers. Never write them to a `*-SUMMARY.md`, `*-PLAN.md` or other file listed in `covered_files`. If a plan needs one in a covered file, write it before dispatching the verifier. A SHA that cannot exist yet belongs in `continue.md`.
+- **Applies when:** Writing a plan's closing tasks or an orchestrator handoff that records facts known only after a merge.
+- **Verification:** At Phase 16 verify-work, `verification.status` returned `stale` with `16-07-SUMMARY.md` as the only covered change. After the verifier re-ran, it returned `passed` (digest `d7e63dc2…`). Check at the next verify-work: `verification.status` on the unmodified report reads `passed`, not `stale`.
+- **Source:** Phase 16 `/gsd-verify-work`, owner automation directive (reduce toil).
