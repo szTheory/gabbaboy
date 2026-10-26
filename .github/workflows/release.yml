@@ -1204,6 +1204,7 @@ jobs:
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
       INPUT_RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
+      RETRY: ${{ inputs.retry }}
     steps:
       # This job holds the only write token for the evidence. It executes no tagged code; the one checkout is the
       # trusted workflow revision, whose recovery judge decides from live state before any write.
@@ -1247,6 +1248,22 @@ jobs:
           [[ "$corpus" -le 1 && "$sidecar" -le 1 && "$corpus" == "$sidecar" ]] || { echo "Corpus receipt and support sidecar are duplicated or only partially attached." >&2; exit 1; }
           fuzz=$(present v02-fuzz-receipt.json); performance=$(present v02-performance-receipt.json)
           [[ "$fuzz" -le 1 && "$performance" -le 1 ]] || { echo "Draft has duplicate campaign or performance receipts." >&2; exit 1; }
+          # A retry rebuilds the corpus receipt and sidecar with per-run identity (nonce, run id, timestamps), so their bytes
+          # can never equal the ones a failed earlier attempt already attached, and the campaign and performance receipts
+          # follow the newest CI and rehearsal runs. On a retry the attached bytes are the qualified bytes: they replace the
+          # regenerated copies here (never the other way round, and nothing is uploaded or replaced by this block). They are
+          # still judged against the tag source by --check-v02-evidence in the platform manifest and final gates.
+          if [[ "${RETRY:-}" == true ]]; then
+            for pair in "build/evidence-corpus support-ledger.json" "build/evidence-corpus cgb-corpus-receipt.json" "build/evidence-fuzz v02-fuzz-receipt.json" "build/evidence-performance v02-performance-receipt.json"; do
+              read -r dir name <<<"$pair"
+              if [[ "$(present "$name")" == 1 ]]; then
+                mkdir -p "$RUNNER_TEMP/attached-$name"
+                gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir "$RUNNER_TEMP/attached-$name"
+                test -s "$RUNNER_TEMP/attached-$name/$name"
+                cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"
+              fi
+            done
+          fi
           # Recovery is decided from independently read live state BEFORE any evidence write: an attachment whose bytes
           # differ from the retained producer bytes, a concurrent release writer or a stale attempt stops here.
           python3 -I trusted/.github/scripts/verify-published-release-assets.py --inventory "$RUNNER_TEMP/expected-inventory.json" build/evidence-corpus/support-ledger.json build/evidence-corpus/cgb-corpus-receipt.json build/evidence-fuzz/v02-fuzz-receipt.json build/evidence-performance/v02-performance-receipt.json
