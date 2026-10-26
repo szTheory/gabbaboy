@@ -1235,5 +1235,12 @@ phase8_player_contract_wrong_boundary
 plan_cap
 lessons_unique_ids
 state_size
+state_audio_bound
+state_globals
+state_globals_controls
+state_inventory
+state_inventory_controls
+state_precodec_gate
+state_size_bound
 planning_hygiene_controls
 playstead_docs

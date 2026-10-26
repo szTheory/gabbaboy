@@ -4861,6 +4861,51 @@ endforeach()
 # before the inventory check and before the sanitizer timeout scaling below.
 include("${PROJECT_SOURCE_DIR}/tests/cmake/areas.cmake")
 
+# Phase 17 pre-codec state gate. The source revision is captured at configure time
+# and every checker reads it with git show; it never falls back to the live tree.
+execute_process(
+  COMMAND git rev-parse HEAD
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  RESULT_VARIABLE GBB_STATE_REV_RESULT
+  OUTPUT_VARIABLE GBB_STATE_SOURCE_REV
+  ERROR_VARIABLE GBB_STATE_REV_ERROR
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(LENGTH "${GBB_STATE_SOURCE_REV}" GBB_STATE_SOURCE_REV_LENGTH)
+if(NOT GBB_STATE_REV_RESULT EQUAL 0 OR NOT GBB_STATE_SOURCE_REV_LENGTH EQUAL 40 OR
+   NOT GBB_STATE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+  message(FATAL_ERROR "Cannot bind state source checks to an immutable commit: ${GBB_STATE_REV_ERROR}")
+endif()
+set(GBB_STATE_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-contract.py")
+add_executable(test_state_api test_state_api.c)
+target_include_directories(test_state_api PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_api PRIVATE c_std_17)
+set_target_properties(test_state_api PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_size_bound COMMAND test_state_api size_bound)
+add_test(NAME state_audio_bound COMMAND test_state_api audio_bound)
+add_test(NAME state_inventory
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --inventory --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+add_test(NAME state_inventory_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --self-test --control inventory --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
+add_test(NAME state_globals
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --globals --library "$<TARGET_FILE:gabbaboy_core>" --rev "${GBB_STATE_SOURCE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}" --nm "${CMAKE_NM}")
+add_test(NAME state_globals_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --self-test --control globals --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
+add_test(NAME state_precodec_gate
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --precodec --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --build-dir "${PROJECT_BINARY_DIR}"
+    --output "${PROJECT_BINARY_DIR}/state-precodec-proof.json"
+    --nm "${CMAKE_NM}" --cc "${CMAKE_C_COMPILER}")
+set_tests_properties(state_size_bound state_audio_bound state_inventory state_inventory_controls
+  state_globals state_globals_controls state_precodec_gate PROPERTIES TIMEOUT 60)
+
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times
