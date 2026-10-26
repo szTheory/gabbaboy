@@ -66,6 +66,8 @@
  * unit samples and the (volume+1) multiplier (1..8) is divided by 16.
  * Without this headroom one full-volume channel at NR50=$77 was 3.5x s16. */
 #define GBB_AUDIO_MIX_HEADROOM_DIV 16
+_Static_assert(GBB_AUDIO_SAMPLE_RATE < GBB_AUDIO_CLOCK_HALF_DOTS,
+               "one half-dot can emit at most one audio sample");
 typedef struct {
     uint8_t sweep, duty_length, envelope, frequency_low, control;
     uint16_t length, frequency, timer, sweep_shadow;
@@ -501,6 +503,410 @@ struct gbb_instance {
     uint16_t diagnostic_pc;
     uint8_t diagnostic_opcode;
 };
+
+/* STATE_FIELD_TREATMENT is the fail-closed inventory policy. The checker expands
+ * every nested and conditional member path and requires one most-specific rule.
+ * A serialized rule is also required to have a matching ordered wire descriptor.
+ */
+typedef enum {
+    STATE_TREAT_SERIALIZE = 1,
+    STATE_TREAT_DERIVE,
+    STATE_TREAT_RESET,
+    STATE_TREAT_EXCLUDE
+} state_field_treatment;
+
+typedef struct {
+    const char *pattern;
+    state_field_treatment treatment;
+    const char *reason;
+} state_field_treatment_rule;
+
+static const state_field_treatment_rule STATE_FIELD_TREATMENT[] = {
+    { "rom", STATE_TREAT_EXCLUDE, "ROM bytes are immutable loaded identity and are hashed once at replacement." },
+    { "rom_size", STATE_TREAT_DERIVE, "ROM length is fixed by the loaded identity." },
+    { "cartridge_ram", STATE_TREAT_SERIALIZE, "Serialize the pointed-to battery RAM bytes, never the pointer." },
+    { "cartridge_ram_size", STATE_TREAT_DERIVE, "RAM length is derived from the validated cartridge header." },
+    { "battery_generation", STATE_TREAT_EXCLUDE, "Host battery observer history remains local to the receiving instance." },
+    { "cart.*", STATE_TREAT_SERIALIZE, "Mutable mapper, rumble and RTC machine state." },
+    { "cart.kind", STATE_TREAT_DERIVE, "Mapper kind is derived from the matching loaded cartridge identity." },
+    { "cart.ram_window_mapped", STATE_TREAT_DERIVE, "RAM aperture capability is derived from the matching loaded cartridge." },
+    { "cart.has_battery", STATE_TREAT_DERIVE, "Battery capability is derived from the matching loaded cartridge." },
+    { "cart.has_timer", STATE_TREAT_DERIVE, "RTC capability is derived from the matching loaded cartridge." },
+    { "cart.has_rumble", STATE_TREAT_DERIVE, "Rumble capability is derived from the matching loaded cartridge." },
+    { "cart.rumble_changes", STATE_TREAT_EXCLUDE, "Host rumble observer history remains local to the receiving instance." },
+    { "wram", STATE_TREAT_SERIALIZE, "All eight WRAM banks are mutable guest memory." },
+    { "hram", STATE_TREAT_SERIALIZE, "HRAM is mutable guest memory." },
+    { "vram", STATE_TREAT_SERIALIZE, "Both VRAM banks are mutable guest memory." },
+    { "vram_bank", STATE_TREAT_SERIALIZE, "Current CGB VRAM bank affects later accesses." },
+    { "wram_bank", STATE_TREAT_SERIALIZE, "Current CGB WRAM bank affects later accesses." },
+    { "svbk", STATE_TREAT_SERIALIZE, "Raw SVBK register state affects subsequent reads." },
+    { "key1_armed", STATE_TREAT_SERIALIZE, "Prepared speed switch affects later CPU timing." },
+    { "bcps", STATE_TREAT_SERIALIZE, "BG palette index and auto-increment state." },
+    { "ocps", STATE_TREAT_SERIALIZE, "OBJ palette index and auto-increment state." },
+    { "ff*", STATE_TREAT_SERIALIZE, "CGB scratch and disconnected IR register state." },
+    { "double_speed", STATE_TREAT_SERIALIZE, "Current CPU speed affects later device timing." },
+    { "cpu_stall_*", STATE_TREAT_SERIALIZE, "In-flight speed-switch stall state affects continuation." },
+    { "stop_switch_pending", STATE_TREAT_SERIALIZE, "Pending STOP speed-switch transition." },
+    { "bg_cram", STATE_TREAT_SERIALIZE, "Complete BG palette RAM, including inactive entries." },
+    { "obj_cram", STATE_TREAT_SERIALIZE, "Complete OBJ palette RAM, including inactive entries." },
+    { "opri", STATE_TREAT_SERIALIZE, "Stored CGB object-priority register state." },
+    { "oam", STATE_TREAT_SERIALIZE, "Mutable OAM bytes." },
+    { "frame_*", STATE_TREAT_SERIALIZE, "Both frame buffers and their output metadata affect observable continuation." },
+    { "rgb_*", STATE_TREAT_SERIALIZE, "Both CGB frame buffers, including the inactive profile pair." },
+    { "compat_rgb555", STATE_TREAT_SERIALIZE, "All twelve instance-owned compatibility palette values." },
+    { "ppu_*", STATE_TREAT_SERIALIZE, "PPU pipeline, FIFO and in-flight fetch state." },
+    { "dma_*", STATE_TREAT_SERIALIZE, "OAM DMA registers and in-flight transfer state." },
+    { "hdma.*", STATE_TREAT_SERIALIZE, "CGB HDMA registers and in-flight transfer state." },
+    { "lcdc", STATE_TREAT_SERIALIZE, "LCD control state affects later PPU behavior." },
+    { "scy", STATE_TREAT_SERIALIZE, "Background vertical scroll register." },
+    { "scx", STATE_TREAT_SERIALIZE, "Background horizontal scroll register." },
+    { "ly", STATE_TREAT_SERIALIZE, "Current PPU line state." },
+    { "lyc", STATE_TREAT_SERIALIZE, "LY comparison register." },
+    { "bgp", STATE_TREAT_SERIALIZE, "DMG BG palette register." },
+    { "obp0", STATE_TREAT_SERIALIZE, "DMG OBJ0 palette register." },
+    { "obp1", STATE_TREAT_SERIALIZE, "DMG OBJ1 palette register." },
+    { "wy", STATE_TREAT_SERIALIZE, "Window Y register." },
+    { "wx", STATE_TREAT_SERIALIZE, "Window X register." },
+    { "joypad_*", STATE_TREAT_SERIALIZE, "Current joypad selection and buttons affect reads and interrupts." },
+    { "a", STATE_TREAT_SERIALIZE, "CPU accumulator." },
+    { "f", STATE_TREAT_SERIALIZE, "CPU flags." },
+    { "b", STATE_TREAT_SERIALIZE, "CPU register B." },
+    { "c", STATE_TREAT_SERIALIZE, "CPU register C." },
+    { "d", STATE_TREAT_SERIALIZE, "CPU register D." },
+    { "e", STATE_TREAT_SERIALIZE, "CPU register E." },
+    { "h", STATE_TREAT_SERIALIZE, "CPU register H." },
+    { "l", STATE_TREAT_SERIALIZE, "CPU register L." },
+    { "div", STATE_TREAT_SERIALIZE, "Visible divider register." },
+    { "stat", STATE_TREAT_SERIALIZE, "Visible LCD status register." },
+    { "tima", STATE_TREAT_SERIALIZE, "Timer counter." },
+    { "tma", STATE_TREAT_SERIALIZE, "Timer modulo." },
+    { "tac", STATE_TREAT_SERIALIZE, "Timer control." },
+    { "ie", STATE_TREAT_SERIALIZE, "Interrupt enable register." },
+    { "interrupt_flags", STATE_TREAT_SERIALIZE, "Pending interrupt flags." },
+    { "ime_delay", STATE_TREAT_SERIALIZE, "Delayed interrupt enable state." },
+    { "ime", STATE_TREAT_SERIALIZE, "Interrupt master enable state." },
+    { "divider_*", STATE_TREAT_SERIALIZE, "Divider edge detector and phase state." },
+    { "timer_*", STATE_TREAT_SERIALIZE, "Timer reload and edge state, including the validated timestamp sentinel." },
+    { "instruction_start_half_dots", STATE_TREAT_SERIALIZE, "In-flight instruction timing anchor." },
+    { "serial_*", STATE_TREAT_SERIALIZE, "Disconnected serial transfer registers and remaining edge state." },
+    { "bus_unsupported*", STATE_TREAT_SERIALIZE, "Deferred unsupported-bus result is pending machine control state." },
+    { "halted", STATE_TREAT_SERIALIZE, "CPU HALT state." },
+    { "stopped", STATE_TREAT_SERIALIZE, "CPU STOP state." },
+    { "halt_bug", STATE_TREAT_SERIALIZE, "Pending HALT bug affects the next opcode fetch." },
+    { "pc", STATE_TREAT_SERIALIZE, "CPU program counter." },
+    { "sp", STATE_TREAT_SERIALIZE, "CPU stack pointer." },
+    { "time_half_dots", STATE_TREAT_SERIALIZE, "Master emulated-time anchor." },
+    { "input_events*.*", STATE_TREAT_SERIALIZE, "All sixty-four timestamped event slots preserve order and unused-slot canonical form." },
+    { "input_event_count", STATE_TREAT_SERIALIZE, "Number of pending input events." },
+    { "accept_input_span", STATE_TREAT_EXCLUDE, "Borrowed acceptance-run input pointer is not valid at a public API boundary." },
+    { "lockup_pc", STATE_TREAT_SERIALIZE, "Locked-opcode address." },
+    { "lockup_opcode", STATE_TREAT_SERIALIZE, "Locked opcode byte." },
+    { "locked", STATE_TREAT_SERIALIZE, "CPU lockup state." },
+    { "apu_*", STATE_TREAT_SERIALIZE, "APU registers, channels, sample phase and digital synthesis state." },
+    { "apu_pcm_test_override*", STATE_TREAT_EXCLUDE, "Conditional test-only PCM override is not production machine state." },
+    { "audio_*", STATE_TREAT_SERIALIZE, "Audio ring, current mix and high-pass history affect later PCM." },
+    { "audio_frames", STATE_TREAT_EXCLUDE, "Caller-owned audio output pointer is not serialized." },
+    { "audio_frame_capacity", STATE_TREAT_EXCLUDE, "Caller output capacity is host-side run bookkeeping." },
+    { "audio_frame_count", STATE_TREAT_EXCLUDE, "Caller output cursor is host-side run bookkeeping." },
+    { "audio_run_active", STATE_TREAT_RESET, "A public save call cannot overlap a run; the adapter flag is inactive at return." },
+    { "test_*", STATE_TREAT_EXCLUDE, "Test observer storage and counters are not machine state." },
+    { "loaded", STATE_TREAT_DERIVE, "Loaded status is derived from the validated ROM identity." },
+    { "profile", STATE_TREAT_DERIVE, "Destination profile is checked as header identity and retained locally." },
+    { "exec_mode", STATE_TREAT_DERIVE, "Execution mode is checked as header identity and retained locally." },
+    { "cgb_flag", STATE_TREAT_DERIVE, "CGB header byte is derived from the matching loaded ROM." },
+    { "cgb_support", STATE_TREAT_DERIVE, "CGB support classification is derived from the matching loaded ROM." },
+    { "cartridge_type", STATE_TREAT_DERIVE, "Cartridge type is derived from the matching loaded ROM." },
+    { "diagnostic_*", STATE_TREAT_EXCLUDE, "Diagnostic observers and borrowed output are host-side only." }
+};
+
+/* STATE_FIELDS is the adopted body wire order. Counts describe maxima, including
+ * every queue/frame buffer; no host structure size participates in the wire size.
+ */
+#define GBB_STATE_MAX_BODY_BYTES 524288u
+#define GBB_STATE_HEADER_BYTES 64u
+#define GBB_STATE_MAX_CARTRIDGE_RAM_BYTES 131072u
+#define GBB_STATE_AUDIO_MIX_MIN INT32_C(-32768)
+#define GBB_STATE_AUDIO_MIX_MAX INT32_C(28672)
+#define GBB_STATE_AUDIO_MAX_DELTA UINT64_C(61440)
+#define GBB_STATE_AUDIO_MAX_COEFFICIENT_DELTA UINT64_C(32767)
+#define GBB_STATE_AUDIO_MAX_EDGE_CONTRIBUTION UINT64_C(2013204480)
+#define GBB_STATE_AUDIO_MAX_EDGE_TICKS \
+    ((UINT64_C(16) * GBB_AUDIO_CLOCK_HALF_DOTS + GBB_AUDIO_SAMPLE_RATE - UINT64_C(1)) / \
+     GBB_AUDIO_SAMPLE_RATE)
+typedef struct {
+    uint32_t order;
+    const char *path;
+    uint8_t wire_width;
+    size_t max_count;
+} state_field_descriptor;
+
+static const state_field_descriptor STATE_FIELDS[] = {
+    { 0u, "cartridge_ram", 1u, GBB_STATE_MAX_CARTRIDGE_RAM_BYTES },
+    { 1u, "cart.rom_bank_lo", 1u, 1u },
+    { 2u, "cart.rom_bank_hi", 1u, 1u },
+    { 3u, "cart.ram_bank", 1u, 1u },
+    { 4u, "cart.ram_enabled", 1u, 1u },
+    { 5u, "cart.mbc1_mode", 1u, 1u },
+    { 6u, "cart.rumble_on", 1u, 1u },
+    { 7u, "cart.rtc_s", 1u, 1u },
+    { 8u, "cart.rtc_m", 1u, 1u },
+    { 9u, "cart.rtc_h", 1u, 1u },
+    { 10u, "cart.rtc_dl", 1u, 1u },
+    { 11u, "cart.rtc_dh", 1u, 1u },
+    { 12u, "cart.rtc_l", 1u, 5u },
+    { 13u, "cart.rtc_latch_prev", 1u, 1u },
+    { 14u, "cart.rtc_sub", 4u, 1u },
+    { 15u, "cart.rtc_synced_at", 8u, 1u },
+    { 16u, "wram", 1u, (GBB_WRAM_BANKS * GBB_WRAM_BANK_SIZE) },
+    { 17u, "hram", 1u, 127u },
+    { 18u, "vram", 1u, (GBB_VRAM_BANKS * GBB_VRAM_BANK_SIZE) },
+    { 19u, "oam", 1u, GBB_OAM_BYTES },
+    { 20u, "vram_bank", 1u, 1u },
+    { 21u, "wram_bank", 1u, 1u },
+    { 22u, "svbk", 1u, 1u },
+    { 23u, "key1_armed", 1u, 1u },
+    { 24u, "bcps", 1u, 1u },
+    { 25u, "ocps", 1u, 1u },
+    { 26u, "ff56", 1u, 1u },
+    { 27u, "ff72", 1u, 1u },
+    { 28u, "ff73", 1u, 1u },
+    { 29u, "ff74", 1u, 1u },
+    { 30u, "ff75", 1u, 1u },
+    { 31u, "double_speed", 1u, 1u },
+    { 32u, "cpu_stall_kind", 1u, 1u },
+    { 33u, "stop_switch_pending", 1u, 1u },
+    { 34u, "cpu_stall_half_dots", 4u, 1u },
+    { 35u, "bg_cram", 1u, 64u },
+    { 36u, "obj_cram", 1u, 64u },
+    { 37u, "opri", 1u, 1u },
+    { 38u, "frame_working", 1u, GBB_FRAME_PIXELS },
+    { 39u, "frame_completed", 1u, GBB_FRAME_PIXELS },
+    { 40u, "rgb_working", 2u, GBB_FRAME_PIXELS },
+    { 41u, "rgb_completed", 2u, GBB_FRAME_PIXELS },
+    { 42u, "compat_rgb555", 2u, 12u },
+    { 43u, "frame_generation", 8u, 1u },
+    { 44u, "frame_completion_half_dots", 8u, 1u },
+    { 45u, "ppu_dot", 2u, 1u },
+    { 46u, "ppu_half_phase", 1u, 1u },
+    { 47u, "ppu_mode", 1u, 1u },
+    { 48u, "ppu_stat_line", 1u, 1u },
+    { 49u, "ppu_fifo", 1u, GBB_PPU_FIFO_CAPACITY },
+    { 50u, "ppu_fifo_head", 1u, 1u },
+    { 51u, "ppu_fifo_count", 1u, 1u },
+    { 52u, "ppu_fetch_stage", 1u, 1u },
+    { 53u, "ppu_fetch_phase", 1u, 1u },
+    { 54u, "ppu_fetch_enqueued", 2u, 1u },
+    { 55u, "ppu_transfer_age", 1u, 1u },
+    { 56u, "ppu_output_x", 1u, 1u },
+    { 57u, "ppu_scroll_discard", 1u, 1u },
+    { 58u, "ppu_fine_scroll", 1u, 1u },
+    { 59u, "ppu_mode3_stall", 1u, 1u },
+    { 60u, "ppu_window_started", 1u, 1u },
+    { 61u, "ppu_transfer_complete", 1u, 1u },
+    { 62u, "ppu_objects_stalled", 2u, 1u },
+    { 63u, "ppu_object_tiles_fetched", 4u, 1u },
+    { 64u, "ppu_selected_objects", 1u, GBB_LINE_OBJECT_LIMIT },
+    { 65u, "ppu_selected_y", 1u, GBB_LINE_OBJECT_LIMIT },
+    { 66u, "ppu_selected_x", 1u, GBB_LINE_OBJECT_LIMIT },
+    { 67u, "ppu_selected_tile", 1u, GBB_LINE_OBJECT_LIMIT },
+    { 68u, "ppu_selected_attributes", 1u, GBB_LINE_OBJECT_LIMIT },
+    { 69u, "ppu_selected_object_count", 1u, 1u },
+    { 70u, "ppu_scan_index", 1u, 1u },
+    { 71u, "ppu_window_line", 1u, 1u },
+    { 72u, "ppu_window_line_drawn", 1u, 1u },
+    { 73u, "lcdc", 1u, 1u },
+    { 74u, "scy", 1u, 1u },
+    { 75u, "scx", 1u, 1u },
+    { 76u, "ly", 1u, 1u },
+    { 77u, "lyc", 1u, 1u },
+    { 78u, "bgp", 1u, 1u },
+    { 79u, "obp0", 1u, 1u },
+    { 80u, "obp1", 1u, 1u },
+    { 81u, "wy", 1u, 1u },
+    { 82u, "wx", 1u, 1u },
+    { 83u, "dma_register", 1u, 1u },
+    { 84u, "dma_page", 1u, 1u },
+    { 85u, "dma_pending_page", 1u, 1u },
+    { 86u, "dma_index", 1u, 1u },
+    { 87u, "dma_phase", 1u, 1u },
+    { 88u, "dma_active", 1u, 1u },
+    { 89u, "dma_start_pending", 1u, 1u },
+    { 90u, "dma_cpu_blocked", 1u, 1u },
+    { 91u, "hdma.mode", 1u, 1u },
+    { 92u, "hdma.active", 1u, 1u },
+    { 93u, "hdma.pending_hblank", 1u, 1u },
+    { 94u, "hdma.blocks_remaining", 2u, 1u },
+    { 95u, "hdma.byte_index", 1u, 1u },
+    { 96u, "hdma.byte_phase", 1u, 1u },
+    { 97u, "hdma.source_cursor", 2u, 1u },
+    { 98u, "hdma.destination_cursor", 4u, 1u },
+    { 99u, "hdma.block_vram_bank", 1u, 1u },
+    { 100u, "hdma.source_high", 1u, 1u },
+    { 101u, "hdma.source_low", 1u, 1u },
+    { 102u, "hdma.destination_high", 1u, 1u },
+    { 103u, "hdma.destination_low", 1u, 1u },
+    { 104u, "hdma.control_readback", 1u, 1u },
+    { 105u, "joypad_select", 1u, 1u },
+    { 106u, "joypad_buttons", 1u, 1u },
+    { 107u, "a", 1u, 1u },
+    { 108u, "f", 1u, 1u },
+    { 109u, "b", 1u, 1u },
+    { 110u, "c", 1u, 1u },
+    { 111u, "d", 1u, 1u },
+    { 112u, "e", 1u, 1u },
+    { 113u, "h", 1u, 1u },
+    { 114u, "l", 1u, 1u },
+    { 115u, "div", 1u, 1u },
+    { 116u, "stat", 1u, 1u },
+    { 117u, "tima", 1u, 1u },
+    { 118u, "tma", 1u, 1u },
+    { 119u, "tac", 1u, 1u },
+    { 120u, "ie", 1u, 1u },
+    { 121u, "interrupt_flags", 1u, 1u },
+    { 122u, "ime_delay", 1u, 1u },
+    { 123u, "ime", 1u, 1u },
+    { 124u, "divider_phase", 1u, 1u },
+    { 125u, "divider_counter", 2u, 1u },
+    { 126u, "timer_signal", 1u, 1u },
+    { 127u, "timer_reload_pending", 1u, 1u },
+    { 128u, "timer_reload_remaining", 1u, 1u },
+    { 129u, "timer_reloaded_at", 8u, 1u },
+    { 130u, "instruction_start_half_dots", 8u, 1u },
+    { 131u, "serial_data", 1u, 1u },
+    { 132u, "serial_control", 1u, 1u },
+    { 133u, "serial_bits", 1u, 1u },
+    { 134u, "serial_edge_remaining", 2u, 1u },
+    { 135u, "serial_active", 1u, 1u },
+    { 136u, "bus_unsupported", 1u, 1u },
+    { 137u, "bus_unsupported_address", 2u, 1u },
+    { 138u, "halted", 1u, 1u },
+    { 139u, "stopped", 1u, 1u },
+    { 140u, "halt_bug", 1u, 1u },
+    { 141u, "pc", 2u, 1u },
+    { 142u, "sp", 2u, 1u },
+    { 143u, "time_half_dots", 8u, 1u },
+    { 144u, "input_event_count", 1u, 1u },
+    { 145u, "input_events[].at_half_dots", 8u, GBB_INPUT_EVENT_CAPACITY },
+    { 146u, "input_events[].kind", 1u, GBB_INPUT_EVENT_CAPACITY },
+    { 147u, "input_events[].value", 1u, GBB_INPUT_EVENT_CAPACITY },
+    { 148u, "lockup_pc", 2u, 1u },
+    { 149u, "lockup_opcode", 1u, 1u },
+    { 150u, "locked", 1u, 1u },
+    { 151u, "apu_nr50", 1u, 1u },
+    { 152u, "apu_nr51", 1u, 1u },
+    { 153u, "apu_power", 1u, 1u },
+    { 154u, "apu_sequencer_step", 1u, 1u },
+    { 155u, "apu_pulse[].sweep", 1u, 2u },
+    { 156u, "apu_pulse[].duty_length", 1u, 2u },
+    { 157u, "apu_pulse[].envelope", 1u, 2u },
+    { 158u, "apu_pulse[].frequency_low", 1u, 2u },
+    { 159u, "apu_pulse[].control", 1u, 2u },
+    { 160u, "apu_pulse[].length", 2u, 2u },
+    { 161u, "apu_pulse[].frequency", 2u, 2u },
+    { 162u, "apu_pulse[].timer", 2u, 2u },
+    { 163u, "apu_pulse[].sweep_shadow", 2u, 2u },
+    { 164u, "apu_pulse[].phase", 1u, 2u },
+    { 165u, "apu_pulse[].volume", 1u, 2u },
+    { 166u, "apu_pulse[].envelope_timer", 1u, 2u },
+    { 167u, "apu_pulse[].sweep_timer", 1u, 2u },
+    { 168u, "apu_pulse[].enabled", 1u, 2u },
+    { 169u, "apu_pulse[].sweep_enabled", 1u, 2u },
+    { 170u, "apu_pulse[].sweep_negate_used", 1u, 2u },
+    { 171u, "apu_wave.dac", 1u, 1u },
+    { 172u, "apu_wave.length_reg", 1u, 1u },
+    { 173u, "apu_wave.level", 1u, 1u },
+    { 174u, "apu_wave.frequency_low", 1u, 1u },
+    { 175u, "apu_wave.control", 1u, 1u },
+    { 176u, "apu_wave.sample_buffer", 1u, 1u },
+    { 177u, "apu_wave.ram", 1u, 16u },
+    { 178u, "apu_wave.position", 1u, 1u },
+    { 179u, "apu_wave.length", 2u, 1u },
+    { 180u, "apu_wave.timer", 2u, 1u },
+    { 181u, "apu_wave.enabled", 1u, 1u },
+    { 182u, "apu_noise.length_reg", 1u, 1u },
+    { 183u, "apu_noise.envelope", 1u, 1u },
+    { 184u, "apu_noise.polynomial", 1u, 1u },
+    { 185u, "apu_noise.control", 1u, 1u },
+    { 186u, "apu_noise.volume", 1u, 1u },
+    { 187u, "apu_noise.envelope_timer", 1u, 1u },
+    { 188u, "apu_noise.length", 2u, 1u },
+    { 189u, "apu_noise.lfsr", 2u, 1u },
+    { 190u, "apu_noise.timer", 4u, 1u },
+    { 191u, "apu_noise.enabled", 1u, 1u },
+    { 192u, "apu_sample_phase", 8u, 1u },
+    { 193u, "audio_event_ring", 8u, (2u * GBB_AUDIO_EVENT_TAPS) },
+    { 194u, "audio_event_head", 1u, 1u },
+    { 195u, "audio_mix_level", 4u, 2u },
+    { 196u, "audio_hpf_input", 4u, 2u },
+    { 197u, "audio_hpf_output", 4u, 2u },
+};
+
+static int state_descriptor_max_body_size(const state_field_descriptor *fields, size_t count,
+                                          size_t *body_size_out) {
+    const size_t descriptor_count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+    if (fields == NULL || body_size_out == NULL || descriptor_count == 0u ||
+        count != descriptor_count)
+        return 0;
+    size_t total = 0u;
+    for (size_t i = 0u; i < count; ++i) {
+        if (fields[i].order != i ||
+            (fields[i].wire_width != 1u && fields[i].wire_width != 2u &&
+             fields[i].wire_width != 4u && fields[i].wire_width != 8u) ||
+            fields[i].max_count == 0u ||
+            fields[i].max_count > SIZE_MAX / fields[i].wire_width)
+            return 0;
+        const size_t field_bytes = fields[i].max_count * fields[i].wire_width;
+        if (field_bytes > GBB_STATE_MAX_BODY_BYTES - total)
+            return 0;
+        total += field_bytes;
+    }
+    *body_size_out = total;
+    return 1;
+}
+
+static int state_descriptor_max_total_size(const state_field_descriptor *fields, size_t count,
+                                           size_t *total_size_out) {
+    size_t body_size = 0u;
+    if (total_size_out == NULL ||
+        !state_descriptor_max_body_size(fields, count, &body_size) ||
+        body_size > SIZE_MAX - GBB_STATE_HEADER_BYTES)
+        return 0;
+    *total_size_out = body_size + GBB_STATE_HEADER_BYTES;
+    return *total_size_out <= GBB_STATE_HEADER_BYTES + GBB_STATE_MAX_BODY_BYTES;
+}
+
+static uint64_t state_audio_magnitude(int64_t value) {
+    return value >= 0 ? (uint64_t)value : (uint64_t)(-(value + 1)) + UINT64_C(1);
+}
+
+static int state_audio_mix_level_valid(int32_t value) {
+    return value >= GBB_STATE_AUDIO_MIX_MIN && value <= GBB_STATE_AUDIO_MIX_MAX;
+}
+
+static int state_audio_hpf_history_valid(int32_t input, int32_t output) {
+    return input >= INT16_MIN && input <= INT16_MAX &&
+           output >= INT16_MIN && output <= INT16_MAX;
+}
+
+/* The event ring is a 16-output-sample queue, but edges can arrive every half-dot.
+ * For slot offset k from the head, at most (15-k) sample intervals have elapsed
+ * since its last clear. The current phase tightens that prefix; the remaining k+1
+ * intervals before its next clear complete a maximum lifetime of 2797 half-dots.
+ */
+static int state_audio_ring_slot_valid(uint8_t head, size_t slot, uint64_t phase,
+                                       int64_t value) {
+    if (head >= GBB_AUDIO_EVENT_TAPS || slot >= GBB_AUDIO_EVENT_TAPS ||
+        phase >= GBB_AUDIO_CLOCK_HALF_DOTS)
+        return 0;
+    const size_t offset = (slot + GBB_AUDIO_EVENT_TAPS - head) % GBB_AUDIO_EVENT_TAPS;
+    const uint64_t completed = (uint64_t)(GBB_AUDIO_EVENT_TAPS - 1u - offset);
+    const uint64_t past_ticks =
+        (completed * GBB_AUDIO_CLOCK_HALF_DOTS + phase) / GBB_AUDIO_SAMPLE_RATE;
+    if (past_ticks > UINT64_MAX / GBB_STATE_AUDIO_MAX_EDGE_CONTRIBUTION)
+        return 0;
+    const uint64_t limit = past_ticks * GBB_STATE_AUDIO_MAX_EDGE_CONTRIBUTION;
+    return state_audio_magnitude(value) <= limit;
+}
 
 /* MODEL: BOTH GATE-00 basis=host-side-mixing */
 static int16_t audio_saturate_s16(int64_t value) {
@@ -3335,6 +3741,9 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                                                    (feedback << 6));
             }
         }
+        /* STATE_AUDIO_EDGE_BOUND_BEGIN: one mix evaluation per half-dot; one
+         * possible edge per channel and half-dot, followed by at most one consume.
+         */
         m->apu_sample_phase += GBB_AUDIO_SAMPLE_RATE;
         int32_t left, right;
         audio_current_mix(m, &left, &right);
@@ -3352,6 +3761,7 @@ static void advance_devices_to(gbb_instance *m, uint64_t target) {
                 m->audio_frame_count < m->audio_frame_capacity)
                 m->audio_frames[m->audio_frame_count++] = frame;
         }
+        /* STATE_AUDIO_EDGE_BOUND_END */
         if (GBB_P13_MUT(52)) hdma_advance_half_dot(m); /* P13-05-M13: shifted collision order */
         if (cpu_tick) dma_advance_half_dot(m); /* P12-M14 */
         if (!GBB_P13_MUT(52))
