@@ -1,12 +1,12 @@
 # Phase 17 continuation
 
-Completed stage: **Phase 17 planning** — research, pattern mapping, 11 executable plans / 32 tasks / 11 serialized waves, validation strategy, GitHub API coverage matrix and four-source audit. Independent plan checking passed after one review-fix round, with no unresolved findings. This does not claim implementation, Phase 17 qualification or publication.
+Completed stage: **Phase 17 execution, wave 1 of 11**. Plan 17-01 is committed and its full post-wave suite passes 1249/1249 at `6507d7f`. See `17-01-SUMMARY.md` for immutable codec/API, proof, installed continuation and integration evidence. Phase 17 qualification and publication remain unclaimed.
 
-Next stage: **Phase 17 — Native Save State Core, execution**.
+Next stage: **Phase 17 — Native Save State Core, wave 2 / plan 17-02**. The next feature phase remains **18 — Player Save Slots and Host Contract**, after this phase's execution/verification and owner choice.
 
 Exact next command: `/gsd-execute-phase 17`
 
-Read `17-SOURCE-AUDIT.md`, `17-PLAN-CHECK.md`, `17-CONTEXT.md`, `17-RESEARCH.md`, `17-PATTERNS.md`, `17-VALIDATION.md` and `17-01-PLAN.md`. Reuse the recorded decisions. The first plan orders pre-codec inventory/global/size/audio proofs, then the complete shared codec/API/SHA, then installed C/C++ clients. Permanent all-wrapper horizon closure and field/corpus continuation remain execution work. Validation stays draft until those checks run.
+Read `17-01-SUMMARY.md`, `17-02-PLAN.md` and the existing source audit/context/research/patterns/validation. Reuse recorded decisions; do not repeat completed plan 17-01. Preserve model-gate tags on every new core function and the test-budget policy. The precodec receipt is a CTest fixture for the tracer; evidence checks still require an immutable revision while Git-free archive builds remain unqualified. The full parity loader matrix is retained with a parity-only optimized test core. Later mapper/semantic/horizon/corpus/hosted qualification remains ordered execution work.
 
 All six STATE requirements and RM-026/028/029/030 are mapped. Eleven primary plans retain one gap slot within the cap of 12; at most two review-fix rounds and one gap round apply. A concrete scope/correctness/security overrun requires rescope, never omission or a seed. RM-027 remains a named Phase 19 entry blocker; RM-024/025 remain parked.
 
