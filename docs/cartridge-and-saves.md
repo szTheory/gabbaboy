@@ -261,6 +261,32 @@ data. The runnable installed C example in
 a temporary-file replacement; it is not the SDL player's checksummed envelope
 or a general-purpose save manager.
 
+## Native machine states
+
+`gbb_state_size`, `gbb_save_state` and `gbb_load_state` transfer a complete
+versioned machine state through caller-owned buffers. This includes the
+machine's cartridge RAM and RTC state and is separate from the battery API's
+raw RAM/clock image. Query the exact size, provide a stable buffer of at least
+that capacity to save, and provide exactly that many bytes to load. A short
+save destination returns `GBB_BUFFER_TOO_SMALL` without writing; a rejected
+load validates the whole input before mutation. State bytes are tied to the
+loaded ROM SHA-256, profile, execution mode and release version. The ordered
+64-byte header, body contract, semantic limits and CRC are specified in
+[`state-format.md`](state-format.md).
+
+Null arguments return `GBB_INVALID_ARGUMENT`. After pointer validation,
+`gbb_state_size` and `gbb_save_state` return `GBB_STATE_NO_ROM` if no ROM is
+loaded. Load validation reports short/bad magic as `GBB_STATE_BAD_FORMAT`, an
+unsupported format/header/release/behavior version as
+`GBB_STATE_UNSUPPORTED_VERSION`, then checks ROM presence, machine identity,
+exact size, CRC and content in order (`GBB_STATE_NO_ROM`,
+`GBB_STATE_IDENTITY_MISMATCH`, `GBB_STATE_SIZE_MISMATCH`,
+`GBB_STATE_CORRUPT`, `GBB_STATE_INVALID_CONTENT`). Size and save outputs stay
+untouched on failure. Calls on one instance must be externally serialized;
+buffers must remain valid during the call and must not overlap the instance.
+The API has no filesystem access, does not allocate or hash per call, and does
+not synchronize threads for the caller.
+
 ## Rumble line query
 
 MBC5 rumble types `$1C`–`$1E` expose the motor line through

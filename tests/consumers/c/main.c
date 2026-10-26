@@ -4,6 +4,230 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define STATE_ASSERT_ERROR(name, value) _Static_assert((name) == (value), #name " changed value")
+STATE_ASSERT_ERROR(GBB_OK, 0);
+STATE_ASSERT_ERROR(GBB_INVALID_ARGUMENT, 1);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_PROFILE, 2);
+STATE_ASSERT_ERROR(GBB_INVALID_ROM, 3);
+STATE_ASSERT_ERROR(GBB_ROM_TRUNCATED, 4);
+STATE_ASSERT_ERROR(GBB_ROM_TOO_LARGE, 5);
+STATE_ASSERT_ERROR(GBB_ROM_SIZE_MISMATCH, 6);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_CARTRIDGE, 7);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_CARTRIDGE_VARIANT, 8);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_ROM_SIZE, 9);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_RAM_SIZE, 10);
+STATE_ASSERT_ERROR(GBB_NO_BATTERY, 11);
+STATE_ASSERT_ERROR(GBB_BUFFER_TOO_SMALL, 12);
+STATE_ASSERT_ERROR(GBB_BATTERY_SIZE_MISMATCH, 13);
+STATE_ASSERT_ERROR(GBB_OUT_OF_MEMORY, 14);
+STATE_ASSERT_ERROR(GBB_EVENT_QUEUE_FULL, 15);
+STATE_ASSERT_ERROR(GBB_INVALID_EVENT, 16);
+STATE_ASSERT_ERROR(GBB_FRAME_NOT_READY, 17);
+STATE_ASSERT_ERROR(GBB_NO_RUMBLE, 18);
+STATE_ASSERT_ERROR(GBB_NO_RTC, 19);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_EXECUTION_MODE, 20);
+STATE_ASSERT_ERROR(GBB_STATE_NO_ROM, 21);
+STATE_ASSERT_ERROR(GBB_STATE_BAD_FORMAT, 22);
+STATE_ASSERT_ERROR(GBB_STATE_UNSUPPORTED_VERSION, 23);
+STATE_ASSERT_ERROR(GBB_STATE_IDENTITY_MISMATCH, 24);
+STATE_ASSERT_ERROR(GBB_STATE_SIZE_MISMATCH, 25);
+STATE_ASSERT_ERROR(GBB_STATE_CORRUPT, 26);
+STATE_ASSERT_ERROR(GBB_STATE_INVALID_CONTENT, 27);
+#undef STATE_ASSERT_ERROR
+
+static gbb_error (*const state_size_api)(const gbb_instance *, size_t *) = gbb_state_size;
+static gbb_error (*const save_state_api)(const gbb_instance *, uint8_t *, size_t) = gbb_save_state;
+static gbb_error (*const load_state_api)(gbb_instance *, const uint8_t *, size_t) = gbb_load_state;
+
+static uint32_t state_smoke_crc_update(uint32_t crc, const uint8_t *bytes, size_t length) {
+    for (size_t i = 0u; i < length; ++i) {
+        crc ^= bytes[i];
+        for (unsigned bit = 0u; bit < 8u; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1u) != 0u ? UINT32_C(0xEDB88320) : 0u);
+    }
+    return crc;
+}
+
+static void state_smoke_rechecksum(uint8_t *bytes, size_t total_size) {
+    uint32_t crc = state_smoke_crc_update(UINT32_MAX, bytes, 60u);
+    crc = state_smoke_crc_update(crc, bytes + 64u, total_size - 64u) ^ UINT32_MAX;
+    for (unsigned i = 0u; i < 4u; ++i) bytes[60u + i] = (uint8_t)(crc >> (i * 8u));
+}
+
+static int state_smoke_same_run(gbb_run_result left, gbb_run_result right) {
+    return left.consumed_half_dots == right.consumed_half_dots && left.reason == right.reason &&
+           left.trace_count == right.trace_count && left.diagnostic_count == right.diagnostic_count &&
+           left.lockup_pc == right.lockup_pc && left.lockup_opcode == right.lockup_opcode;
+}
+
+static int state_smoke_run_audio(gbb_instance *instance, uint64_t budget,
+                                 gbb_audio_frame *frames, size_t capacity,
+                                 size_t *count, gbb_run_result *result) {
+    *result = gbb_run_audio(instance, budget, frames, capacity, count);
+    return result->reason == GBB_STOP_BUDGET && result->consumed_half_dots <= budget &&
+           result->consumed_half_dots != 0u;
+}
+
+static int state_smoke_refusal(gbb_instance *instance, const uint8_t *bytes, size_t length,
+                               size_t state_size, gbb_error expected) {
+    uint8_t *before = malloc(state_size);
+    uint8_t *after = malloc(state_size);
+    int unchanged = 0;
+    if (before != NULL && after != NULL &&
+        save_state_api(instance, before, state_size) == GBB_OK &&
+        load_state_api(instance, bytes, length) == expected &&
+        save_state_api(instance, after, state_size) == GBB_OK &&
+        memcmp(before, after, state_size) == 0) unchanged = 1;
+    free(before);
+    free(after);
+    return unchanged;
+}
+
+/* Public-only installed state API, exact errors/signatures and continuation smoke. */
+static int state_api_smoke(void) {
+    enum { ROM_BYTES = 32768, STATE_HEADER_BYTES = 64, AUDIO_CAPACITY = 2048 };
+    static const uint8_t program[] = {
+        0x21u, 0x00u, 0xC0u, 0x3Eu, 0x5Au, 0x77u, 0x23u,
+        0x3Eu, 0xA5u, 0x77u, 0x18u, 0xFEu
+    };
+    uint8_t rom[ROM_BYTES] = {0};
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;
+    memcpy(rom + 0x150u, program, sizeof(program));
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+
+    gbb_instance *source = NULL, *target = NULL;
+    gbb_audio_frame prefix_source[AUDIO_CAPACITY], prefix_target[AUDIO_CAPACITY];
+    gbb_audio_frame future_source[AUDIO_CAPACITY], future_target[AUDIO_CAPACITY];
+    size_t prefix_source_count = 0u, prefix_target_count = 0u;
+    size_t future_source_count = 0u, future_target_count = 0u;
+    gbb_run_result prefix_source_run = {0}, prefix_target_run = {0};
+    gbb_run_result future_source_run = {0}, future_target_run = {0};
+    uint8_t no_rom_output[STATE_HEADER_BYTES + 4u];
+    size_t output_size = 731u;
+    uint8_t *snapshot = NULL, *mutated = NULL, *expected = NULL, *actual = NULL;
+    size_t state_size = 0u, target_size = 0u;
+    int passed = 0;
+    int stage = 1;
+
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &source) != GBB_OK ||
+        gbb_create(GBB_PROFILE_DMG_CPU_B, &target) != GBB_OK) goto done;
+    if (state_size_api(source, &output_size) != GBB_STATE_NO_ROM || output_size != 731u ||
+        state_size_api(source, NULL) != GBB_INVALID_ARGUMENT) goto done;
+    memset(no_rom_output, 0xA5, sizeof(no_rom_output));
+    if (save_state_api(source, no_rom_output, sizeof(no_rom_output)) != GBB_STATE_NO_ROM) goto done;
+    for (size_t i = 0u; i < sizeof(no_rom_output); ++i)
+        if (no_rom_output[i] != 0xA5u) goto done;
+    if (load_state_api(source, no_rom_output, STATE_HEADER_BYTES - 1u) != GBB_STATE_BAD_FORMAT ||
+        load_state_api(source, NULL, STATE_HEADER_BYTES) != GBB_INVALID_ARGUMENT) goto done;
+
+    stage = 2;
+    if (gbb_load_rom(source, rom, sizeof(rom)) != GBB_OK ||
+        gbb_load_rom(target, rom, sizeof(rom)) != GBB_OK) goto done;
+    if (state_size_api(source, &state_size) != GBB_OK || state_size <= STATE_HEADER_BYTES ||
+        state_size_api(target, &target_size) != GBB_OK || target_size != state_size) goto done;
+    snapshot = malloc(state_size);
+    mutated = malloc(state_size);
+    expected = malloc(state_size);
+    actual = malloc(state_size);
+    if (snapshot == NULL || mutated == NULL || expected == NULL || actual == NULL) goto done;
+
+    memset(mutated, 0xA5, state_size);
+    if (save_state_api(source, mutated, state_size - 1u) != GBB_BUFFER_TOO_SMALL) goto done;
+    for (size_t i = 0u; i < state_size; ++i)
+        if (mutated[i] != 0xA5u) goto done;
+    stage = 3;
+    if (!state_smoke_run_audio(source, UINT64_C(100000), prefix_source, AUDIO_CAPACITY,
+                               &prefix_source_count, &prefix_source_run)) {
+        fprintf(stderr, "state prefix source failed reason=%d consumed=%llu count=%zu\n",
+                prefix_source_run.reason, (unsigned long long)prefix_source_run.consumed_half_dots,
+                prefix_source_count); goto done;
+    }
+    if (!state_smoke_run_audio(target, UINT64_C(100000), prefix_target, AUDIO_CAPACITY,
+                               &prefix_target_count, &prefix_target_run)) {
+        fprintf(stderr, "state prefix target failed reason=%d consumed=%llu count=%zu\n",
+                prefix_target_run.reason, (unsigned long long)prefix_target_run.consumed_half_dots,
+                prefix_target_count); goto done;
+    }
+    if (!state_smoke_same_run(prefix_source_run, prefix_target_run) ||
+        prefix_source_count != prefix_target_count ||
+        memcmp(prefix_source, prefix_target, prefix_source_count * sizeof(prefix_source[0])) != 0) {
+        fprintf(stderr, "state prefix twins diverged\n"); goto done;
+    }
+    if (gbb_peek_ram(source, 0xC000u) != 0x5Au || gbb_peek_ram(source, 0xC001u) != 0xA5u) {
+        fprintf(stderr, "state prefix guest marker mismatch: %02X %02X\n",
+                gbb_peek_ram(source, 0xC000u), gbb_peek_ram(source, 0xC001u)); goto done;
+    }
+
+    stage = 4;
+    memset(mutated, 0xA5, state_size + 0u);
+    if (save_state_api(source, mutated, state_size) != GBB_OK ||
+        memcmp(mutated, "GBBS", 4u) != 0) goto done;
+    memcpy(snapshot, mutated, state_size);
+    {
+        uint8_t tail[8];
+        uint8_t *with_tail = malloc(state_size + sizeof(tail));
+        if (with_tail == NULL) goto done;
+        memset(with_tail, 0xA5, state_size + sizeof(tail));
+        if (save_state_api(source, with_tail, state_size + sizeof(tail)) != GBB_OK) {
+            free(with_tail); goto done;
+        }
+        for (size_t i = state_size; i < state_size + sizeof(tail); ++i)
+            if (with_tail[i] != 0xA5u) { free(with_tail); goto done; }
+        free(with_tail);
+    }
+
+    stage = 5;
+    if (!state_smoke_refusal(target, snapshot, state_size - 1u, state_size, GBB_STATE_SIZE_MISMATCH))
+        goto done;
+    memcpy(mutated, snapshot, state_size); mutated[0] = (uint8_t)'X';
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_BAD_FORMAT)) goto done;
+    memcpy(mutated, snapshot, state_size); mutated[4] = 2u;
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_UNSUPPORTED_VERSION)) goto done;
+    memcpy(mutated, snapshot, state_size); mutated[20] ^= 1u;
+    mutated[52] = 0u; mutated[53] = 0u; mutated[54] = 0u; mutated[55] = 0u;
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_IDENTITY_MISMATCH)) goto done;
+    memcpy(mutated, snapshot, state_size); mutated[STATE_HEADER_BYTES] ^= 1u;
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_CORRUPT)) goto done;
+    memcpy(mutated, snapshot, state_size); mutated[18] = 1u;
+    state_smoke_rechecksum(mutated, state_size);
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_INVALID_CONTENT)) goto done;
+
+    stage = 6;
+    if (!state_smoke_run_audio(source, UINT64_C(200000), future_source, AUDIO_CAPACITY,
+                               &future_source_count, &future_source_run) ||
+        !state_smoke_run_audio(target, UINT64_C(200000), future_target, AUDIO_CAPACITY,
+                               &future_target_count, &future_target_run) ||
+        !state_smoke_same_run(future_source_run, future_target_run) ||
+        future_source_count != future_target_count ||
+        memcmp(future_source, future_target, future_source_count * sizeof(future_source[0])) != 0 ||
+        save_state_api(source, expected, state_size) != GBB_OK ||
+        save_state_api(target, actual, state_size) != GBB_OK || memcmp(expected, actual, state_size) != 0)
+        goto done;
+
+    stage = 7;
+    if (gbb_reset(target) != GBB_OK || load_state_api(target, snapshot, state_size) != GBB_OK ||
+        state_size_api(target, &target_size) != GBB_OK || target_size != state_size ||
+        !state_smoke_run_audio(target, UINT64_C(200000), future_target, AUDIO_CAPACITY,
+                               &future_target_count, &future_target_run) ||
+        !state_smoke_same_run(future_source_run, future_target_run) ||
+        future_source_count != future_target_count ||
+        memcmp(future_source, future_target, future_source_count * sizeof(future_source[0])) != 0 ||
+        save_state_api(target, actual, state_size) != GBB_OK || memcmp(expected, actual, state_size) != 0)
+        goto done;
+    printf("state_api_smoke pass bytes=%zu prefix_audio=%zu future_audio=%zu\n",
+           state_size, prefix_source_count, future_source_count);
+    passed = 1;
+
+done:
+    if (!passed) fprintf(stderr, "state_api_smoke failed at stage=%d state_size=%zu\n", stage, state_size);
+    free(snapshot); free(mutated); free(expected); free(actual);
+    gbb_destroy(source); gbb_destroy(target);
+    return passed ? 0 : 1;
+}
+
 static int battery_api_smoke(void) {
     enum { ROM_BYTES = 32768, RAM_BYTES = 8192 };
     uint8_t rom[ROM_BYTES] = {0};
@@ -646,7 +870,15 @@ int main(int argc, char **argv) {
     free(trace);
     free(diagnostics);
     if (!passed) fprintf(stderr, "C consumer API smoke failed (error=%d, stop=%d, frame=%d)\n", error, result.reason, frame_error);
-    if (!passed || battery_api_smoke() != 0) {
+    if (!passed) {
+        fprintf(stderr, "C consumer public core API smoke failed\n");
+        return 1;
+    }
+    if (state_api_smoke() != 0) {
+        fprintf(stderr, "C consumer public state API smoke failed\n");
+        return 1;
+    }
+    if (battery_api_smoke() != 0) {
         fprintf(stderr, "C consumer public battery API smoke failed\n");
         return 1;
     }
