@@ -1,17 +1,17 @@
 # Phase 17 continuation
 
-Completed stage: **Phase 17 discussion** — three parallel advisory tracks and one adversarial synthesis pass are reconciled in `17-CONTEXT.md`, with D-113 and explicit roadmap/traceability updates. Implementation, planning and Phase 17 qualification have not started. Local artifact/route verification is recorded with this handoff; it is not save-state behavior evidence.
+Completed stage: **Phase 17 planning** — research, pattern mapping, 11 executable plans / 32 tasks / 11 serialized waves, validation strategy, GitHub API coverage matrix and four-source audit. Independent plan checking passed after one review-fix round, with no unresolved findings. This does not claim implementation, Phase 17 qualification or publication.
 
-Next stage: **Phase 17 — Native Save State Core, planning**.
+Next stage: **Phase 17 — Native Save State Core, execution**.
 
-Exact next command: `/gsd-plan-phase 17`
+Exact next command: `/gsd-execute-phase 17`
 
-Read `17-CONTEXT.md` and the adopted decision entry in `.planning/context/DECISIONS.md`. Reuse `.planning/research/v0.3/` rather than rerun a broad survey. Research the concrete token/header, SHA reuse, all-path time-horizon, observer/canonicality and pre-tag replay gaps recorded in the context.
+Read `17-SOURCE-AUDIT.md`, `17-PLAN-CHECK.md`, `17-CONTEXT.md`, `17-RESEARCH.md`, `17-PATTERNS.md`, `17-VALIDATION.md` and `17-01-PLAN.md`. Reuse the recorded decisions. The first plan orders pre-codec inventory/global/size/audio proofs, then the complete shared codec/API/SHA, then installed C/C++ clients. Permanent all-wrapper horizon closure and field/corpus continuation remain execution work. Validation stays draft until those checks run.
 
-All six STATE requirements and RM-026/028/029/030 are mandatory within the 12-plan cap. RM-027 is still a Phase 19 entry blocker. RM-024/025 remain parked. A cap overrun or unresolved correctness/security issue requires a concrete rescope, not an automatic waiver or a seed.
+All six STATE requirements and RM-026/028/029/030 are mapped. Eleven primary plans retain one gap slot within the cap of 12; at most two review-fix rounds and one gap round apply. A concrete scope/correctness/security overrun requires rescope, never omission or a seed. RM-027 remains a named Phase 19 entry blocker; RM-024/025 remain parked.
 
-Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false. The next feature phase after Phase 17 remains **18 — Player Save Slots and Host Contract**; do not start it from this handoff.
+Both `workflow.auto_advance` and `workflow._auto_chain_active` stay false. The next feature phase is **18 — Player Save Slots and Host Contract**, after Phase 17 execution/verification and owner choice. No automatic advance.
 
-The owner's `.planning/config.json` edits remain uncommitted. Resolve model and effort from that configuration for future dispatch; current work used explicit role resolution instead of stale static agent frontmatter.
+The owner's pre-existing `.planning/config.json` edits remain uncommitted and unchanged by planning. Models/effort were passed explicitly from project configuration rather than stale installed static frontmatter.
 
-Discussion verification: the one-off artifact/route contract passed with intended failing controls, all referenced local paths resolved, the four scoped planning CTests (`plan_cap`, `lessons_unique_ids`, `state_size`, `planning_hygiene_controls`) passed, runtime STATE strict validation/ROADMAP validation reported no warnings, and `git diff --check` passed. The contract also checks that the owner's config bytes are unchanged and no PLANs were created. These checks concern discussion artifacts only; the core/full suite and hosted release were not requalified.
+Planning verification: all 11 structure/frontmatter checks pass; all 32 verification commands have failing directions, the path probe reports no findings (commands are outside its recognized target forms, not proof they ran), decision coverage is 25/25 and post-planning coverage 31/31. Independent review checks the unrecognized CMake commands. The four scoped CTests (`plan_cap`, `lessons_unique_ids`, `state_size`, `planning_hygiene_controls`) passed. STATE strict validation and ROADMAP validation reported no warnings. The artifact/route contract passed with controls for missing research, wrong continuation route, enabled auto-advance and missing roadmap plan; a stripped task verification is detected by runtime task flags/warnings. Configuration hash and unchanged source/test/workflow scope checks passed; `git diff --check` passed. No implementation/full-core suite, hosted state campaign, cross-platform state bytes or release is claimed.

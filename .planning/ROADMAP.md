@@ -129,7 +129,41 @@ Plans:
   7. The support-ledger generator renders the required historical performance disclosure without hand edits, and a control rejects its omission. Pre-tag replay invokes the production attach/manifest/publish-decision/retry code with captured, sanitized real API-shaped data, including non-git workspaces and check-run shapes; tampered, partial and stale evidence fails. A checked version-window input/regeneration/freeze rule protects reviewed content from release-please regeneration (RM-028).
   8. All WR-01..05 and IN-01..04 from the Phase 16 review are fixed with intended negative controls, including producer/workflow/event/source binding, historical tag identity, duplicate manifests, budget/cap ratchets and retry/check-app/nightly/perf/HDMA controls. The D-112 `--review-approval` and `--nightly-gate` paths run in CTest and the applicable production gates, rejecting their eight and six specified mutants respectively; point-in-time boundary checks remain immutable (RM-030). RM-027 final timeout citations remain a named Phase 19 entry blocker.
 
-**Plans**: TBD
+**Plans**: 0/11 complete (11 primary plans; one gap slot retained)
+
+Plans:
+**Wave 1**
+- [ ] 17-01-PLAN.md — Establish a production state API with pre-codec completeness checks and an installed continuation tracer.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 17-02-PLAN.md — Expand the proven codec to strong identity and canonical validation across every mapper and hardware mode.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 17-03-PLAN.md — Guarantee whole-instance refusal, bounded buffers and exact RAM/RTC/palette restoration with local observers.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 17-04-PLAN.md — Make the 2^62 horizon closed across every public run, diagnostic/audio, event and peripheral path.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 17-05-PLAN.md — Prove complete continuation with the admitted corpus, fresh poisoned destinations and field-specific omissions.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 17-06-PLAN.md — Qualify canonical platform bytes and semantic hostile-state fuzzing in existing consumer/package/CI lanes.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 17-07-PLAN.md — Make paired timing advisory end to end while keeping deterministic Ir and realtime limits blocking.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 17-08-PLAN.md — Generate complete support disclosures and protect the future version-PR content window with managed inputs.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 17-09-PLAN.md — Rehearse the actual attach/manifest/final-decision/retry lifecycle using bounded sanitized captured GitHub responses.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [ ] 17-10-PLAN.md — Close every remaining Phase 16 WR/IN finding with intended controls on production gates.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [ ] 17-11-PLAN.md — Enforce deterministic exception approval and nightly evidence in CTest and real release gates, then produce final-head evidence.
 
 ### Phase 18: Player Save Slots and Host Contract
 
@@ -165,13 +199,13 @@ Plans:
 |-----------|--------|-------|--------|---------|
 | v0.1 Limited DMG Preview | 7 | 64/64 | Complete | 2026-10-10 |
 | v0.2 Color & Cartridge Breadth | 10 | 170/170 | Complete | 2026-10-24 |
-| v0.3 Save States & Host Contract | 4 | 0/TBD (cap 38) | In progress | — |
+| v0.3 Save States & Host Contract | 4 | 7/18 planned (cap 38) | In progress | — |
 
 **v0.3 execution order:** 16 → 17 → 18 → 19
 
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
 | 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
-| 17. Native Save State Core | 0/TBD | 12 | Not started | - |
+| 17. Native Save State Core | 0/11 | 12 | Planned | - |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |
