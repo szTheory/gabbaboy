@@ -4081,7 +4081,7 @@ set_tests_properties(cgb_speed_m28_normal_unchanged_control PROPERTIES TIMEOUT 6
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 9 stall_budget_unbounded
   cgb_speed_budget_semantics "run\.consumed_half_dots == expected_consumed|run\.consumed_half_dots <= budget")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 22 switch_headroom_omitted
-  cgb_speed_headroom "GBB_STOP_INVALID_STATE|memcmp")
+  cgb_speed_headroom "GBB_STOP_NO_PROGRESS|memcmp")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped_never
   cgb_speed_never_stopped "GBB_STOP_STOPPED|machine->stopped")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen_never
