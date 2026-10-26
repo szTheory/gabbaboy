@@ -184,3 +184,6 @@ None.
 ---
 *Phase: 16-tune-up-and-v0-2-debt-closure*
 *Completed: 2026-10-26*
+
+boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba
+(Recorded by the orchestrator after the boundary PR #126 merged; `verify-v03-dispositions.py --check ... --rev 92364c78ac002b8e199ca7e6cad4130701fe98ba` passes: rows=26 pending=0 closed=6.)

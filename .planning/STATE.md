@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.3
 milestone_name: Save States & Host Contract
-current_phase: 16
-current_phase_name: Tune-up and v0.2 Debt Closure
-current_plan: 7
-status: executing
-stopped_at: Completed 16-06-PLAN.md (merged in #114)
-last_updated: "2026-10-25T12:00:00.000Z"
-last_activity: 2026-10-25
-last_activity_desc: Phase 16 execution started
-state_head: 337c170f7954ae3e5145b329f50cbfbcf6b708c7
+current_phase: 17
+current_phase_name: Native Save State Core
+status: verifying
+stopped_at: Phase 16 executed and goal-verified; verify-work 16 next
+last_updated: "2026-10-26T15:18:04.754Z"
+last_activity: 2026-10-26
+last_activity_desc: Phase 16 executed (v0.2.1 published), goal verification passed
+state_head: 92364c78ac002b8e199ca7e6cad4130701fe98ba
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 6
-  percent: 0
+  completed_plans: 7
+  percent: 25
+current_plan: 7
 ---
 
 # Project State
@@ -26,19 +26,19 @@ progress:
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 16 — Tune-up and v0.2 Debt Closure
+**Current focus:** Phase 16 verification (verify-work), then Phase 17 — Native Save State Core
 
 ## Current Position
 
-Phase: 16 (Tune-up and v0.2 Debt Closure) — EXECUTING
+Phase: 16 (Tune-up and v0.2 Debt Closure) — EXECUTED, goal verification passed
 Plan: 7 of 7
-Status: Executing Phase 16
-Last activity: 2026-10-25 — 16-01..16-06 merged (#104-#107, #109, #112, #114); planning-lane fix #110 and parallel native CTest #111 merged
+Status: Awaiting `/gsd-verify-work 16`
+Last activity: 2026-10-26 — v0.2.1 published (tag at b93137f, release 2026-10-26T13:52:06Z, 22 assets, readback PASS); PRs #78-#92 closed; boundary PR #126 merged as `92364c7`
 
-Completed stage: **Phase 16 planning** — [16-RESEARCH.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-RESEARCH.md), [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md), [16-PATTERNS.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-PATTERNS.md) and plans 16-01..16-07 (TUNE-01..06 and D-01..D-33 covered). Owner accepted at plan-phase: token estimates over the advisory budget and the 16-01 19-file scope exception. Phase 16 is not executed. Prior stage: **Phase 16 discussion (context gathered)**. [16-CONTEXT.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-CONTEXT.md) locks D-01..D-33: release-last, 7 target plans (cap 8), no src/ change, owner decisions D-13 (accept +8.3% perf with attribution, seed RM-023), D-29 (pin both v0.2.0 ledger digests; #93 append disclosed) and D-07 (TUNE-01 live-phase carve-out as disclosed interpretation).
+Completed stage: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
 
-Next phase: **16 — Tune-up and v0.2 Debt Closure** (planned; execution next).
-Exact next command: `/gsd-execute-phase 16`.
+Next stage: **Phase 16 verification**. Exact next command: `/gsd-verify-work 16`.
+Then: `/gsd-secure-phase 16` (security enforcement is on and no SECURITY.md exists yet) before advancing; then Phase **17 — Native Save State Core** via `/gsd-discuss-phase 17`, entering with RM-026..RM-030 (RM-030 WR-01 is a security finding and must be in Phase 17 scope).
 Stop here; nothing auto-advances. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false.
 
 ## Accumulated Context
@@ -79,12 +79,14 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-25T03:42:34.087Z
-**Stopped at:** Completed 16-06-PLAN.md; 16-07 (v0.2.1 release) next within Phase 16
-**Resume file:** None
+**Last session:** 2026-10-26T15:20:00.000Z
+**Stopped at:** Phase 16 executed and goal-verified; next `/gsd-verify-work 16`
+**Resume file:** [.planning/phases/GB-16-tune-up-and-v0-2-debt-closure/continue.md](phases/GB-16-tune-up-and-v0-2-debt-closure/continue.md)
 
-Completed stage: **v0.3 milestone initialization** (requirements and roadmap). Next phase: **16 — Tune-up and v0.2 Debt Closure**. Exact next command: `/gsd-discuss-phase 16`. Both automatic advance flags stay false.
+Completed stage: **Phase 16 execution** (goal verification passed). Next stage: **Phase 16 verification**. Exact next command: `/gsd-verify-work 16`. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
-- Discuss Phase 16 (Tune-up and v0.2 Debt Closure) with /gsd-discuss-phase 16
+- Verify Phase 16 (zero-UAT closure) with /gsd-verify-work 16
+- Then run /gsd-secure-phase 16 (security enforcement on, no SECURITY.md yet)
+- Then discuss Phase 17 (Native Save State Core) with /gsd-discuss-phase 17, entering with RM-026..RM-030

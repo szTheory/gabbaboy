@@ -62,7 +62,7 @@ Milestone-wide rules:
 - **Phase stop.** Each phase ends with evidence and one named next command; nothing auto-advances.
 - **Scope limits.** Save states are same-version-only before 1.0 (D-106). INT-01b (RM-020), RTC footer interop (RM-021), BESS (RM-022) and libretro (RM-009) are out of scope.
 
-- [ ] **Phase 16: Tune-up and v0.2 Debt Closure** - Archive v0.2 phase records behind a lint, wire the Phase 8 verifiers, add the perf gate and CI/planning hygiene checks, and ship v0.2.1
+- [x] **Phase 16: Tune-up and v0.2 Debt Closure** - Archive v0.2 phase records behind a lint, wire the Phase 8 verifiers, add the perf gate and CI/planning hygiene checks, and ship v0.2.1 (completed 2026-10-26)
 - [ ] **Phase 17: Native Save State Core** - Public `gbb_state_size`/`gbb_save_state`/`gbb_load_state` with exact continuation, transactional bounded loads, machine-checked completeness and portable canonical bytes
 - [ ] **Phase 18: Player Save Slots and Host Contract** - Numbered state slots in the SDL player and a `--rom`/`--save-dir` runner with atomic raw `.sav`, SIGTERM save-and-exit, an exit-code table and declared save-format ids
 - [ ] **Phase 19: Qualified v0.3.0 Release** - Publish `v0.3.0` from its exact tag after a green exact-tag rehearsal, with a scoped support ledger and tag-bound receipts
@@ -82,7 +82,7 @@ Milestone-wide rules:
   4. Planning hygiene CTests reject an over-cap phase fixture against the ROADMAP `**Plan cap**` lines, a duplicated LESSONS id (current duplicates renumbered) and an oversized STATE.md, and a docs check rejects the stale Playstead statements now corrected in README, `docs/native-integration.md` and PRECEDENT.
   5. A new versioned support ledger for post-`v0.2.0` source passes `--check-current` while a check rejects any change to the `v0.2.0` ledger bytes; the hosted rehearsal and trusted judge are green at the exact head; `v0.2.1` is published from release-please PR #75 and its release readback reconciles; PRs #78–92 are closed as superseded and the D-106 LIM dispositions are recorded.
 
-**Plans**: 6/7 plans executed (cap 8; one slot kept for the single gap round)
+**Plans**: 7/7 plans complete (cap 8; one slot kept for the single gap round)
 
 Plans:
 **Wave 1**
@@ -104,7 +104,7 @@ Plans:
 - [x] 16-06-PLAN.md — v0.2.0 ledger freeze, version-agnostic release checks, review path, v0.3 disposition record (TUNE-06)
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 16-07-PLAN.md — v0.2.1 release window, publication and readback, PR #78-92 closures, boundary commit (TUNE-06)
+- [x] 16-07-PLAN.md — v0.2.1 release window, publication and readback, PR #78-92 closures, boundary commit (TUNE-06)
 
 **Cross-cutting constraints:**
 - git diff --quiet <plan base> HEAD -- src include holds (D-04).
@@ -164,7 +164,7 @@ Plans:
 
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
-| 16. Tune-up and v0.2 Debt Closure | 6/7 | 8 | Planned | - |
+| 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
 | 17. Native Save State Core | 0/TBD | 12 | Not started | - |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |

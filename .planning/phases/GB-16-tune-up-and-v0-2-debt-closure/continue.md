@@ -12,3 +12,6 @@ Boundary: the squash commit of the boundary pull request that carries this file.
 Open owner items: none for Phase 16. Phase 17 entry reading: FUTURE-MILESTONES RM-026..RM-029 (advisory wall-clock gate, Phase 19 entry blocker, release-tooling items, wall-clock noise) and D-112.
 
 Both auto flags stay false; nothing auto-advances. Do not start Phase 17 until the owner chooses.
+
+boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba
+(Recorded by the orchestrator after the boundary PR #126 merged; `verify-v03-dispositions.py --check ... --rev 92364c78ac002b8e199ca7e6cad4130701fe98ba` passes: rows=26 pending=0 closed=6.)
