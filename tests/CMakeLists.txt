@@ -5003,7 +5003,10 @@ target_compile_features(test_state_internal PRIVATE c_std_17)
 set_target_properties(test_state_internal PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME state_observers COMMAND test_state_internal state_observers)
 add_test(NAME state_rtc_palette COMMAND test_state_internal state_rtc_palette)
-set_tests_properties(state_observers state_rtc_palette PROPERTIES TIMEOUT 60)
+add_test(NAME state_refusal COMMAND test_state_internal state_refusal)
+add_test(NAME state_refusal_controls COMMAND test_state_internal state_refusal_controls)
+set_tests_properties(state_observers state_rtc_palette state_refusal state_refusal_controls
+  PROPERTIES TIMEOUT 60)
 
 # Each observer/RTC mutant is a disposable core-source copy. Its named contract
 # test must fail on the intended assertion while the unrelated size/save control
@@ -5111,6 +5114,55 @@ gbb_state_internal_mutant(battery_bump_wrap state_observers "battery_generation 
 gbb_state_internal_mutant(rumble_bump_wrap state_observers "rumble_changes == UINT64_MAX" state_control
   [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)]=]
   [=[if (old_rumble != instance->cart.rumble_on)]=])
+
+# Refusal mutants exercise the whole-instance/RAM oracle and exact output extent.
+function(gbb_state_refusal_mutant name anchor replacement)
+  set(text "${gbb_state_internal_core_text}")
+  string(FIND "${text}" "${anchor}" first)
+  string(FIND "${text}" "${anchor}" last REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL last)
+    message(FATAL_ERROR "State refusal mutant ${name}: anchor must occur exactly once (first=${first}, last=${last})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${text}")
+  set(source "${CMAKE_CURRENT_BINARY_DIR}/state_refusal_mutant_${name}.c")
+  file(WRITE "${source}" "${text}")
+  set(target "test_state_refusal_mutant_${name}")
+  add_executable(${target} test_state_internal.c)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE "GBB_CORE_SOURCE_PATH=\"${source}\"")
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME state_refusal_mutant_${name}
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_refusal"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL state_refusal"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  add_test(NAME state_refusal_mutant_${name}_control
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_control"
+      -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=state_control
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  set_tests_properties(state_refusal_mutant_${name} state_refusal_mutant_${name}_control
+    PROPERTIES TIMEOUT 30)
+endfunction()
+
+gbb_state_refusal_mutant(apply_before_validation
+  [=[if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;]=]
+  [=[state_apply(instance, body, body_size);
+    if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;]=])
+gbb_state_refusal_mutant(counter_on_invalid_content
+  [=[if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;]=]
+  [=[if (!state_validate(instance, body, body_size)) {
+        ++instance->battery_generation;
+        return GBB_STATE_INVALID_CONTENT;
+    }]=])
+gbb_state_refusal_mutant(short_save_prefix_write
+  [=[if (capacity_bytes < total_size) return GBB_BUFFER_TOO_SMALL;]=]
+  [=[if (capacity_bytes < total_size) { out_bytes[0] = 'G'; return GBB_BUFFER_TOO_SMALL; }]=])
+gbb_state_refusal_mutant(save_tail_write
+  [=[state_put_u32(header + 60u, crc);
+    return GBB_OK;]=]
+  [=[state_put_u32(header + 60u, crc);
+    out_bytes[total_size] = 0u;
+    return GBB_OK;]=])
 
 gabbaboy_verify_registered_tests()
 

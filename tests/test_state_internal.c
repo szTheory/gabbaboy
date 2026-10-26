@@ -330,6 +330,304 @@ static int state_observers(void) {
     return 0;
 }
 
+typedef struct {
+    gbb_instance raw;
+    uint8_t *rom;
+    uint8_t *ram;
+} state_instance_snapshot;
+
+static int state_snapshot_init(state_instance_snapshot *snapshot,
+                               const gbb_instance *instance) {
+    memset(snapshot, 0, sizeof(*snapshot));
+    snapshot->rom = instance->rom_size == 0u ? NULL : malloc(instance->rom_size);
+    snapshot->ram = instance->cartridge_ram_size == 0u ? NULL :
+                    malloc(instance->cartridge_ram_size);
+    if ((instance->rom_size != 0u && snapshot->rom == NULL) ||
+        (instance->cartridge_ram_size != 0u && snapshot->ram == NULL)) {
+        free(snapshot->rom);
+        free(snapshot->ram);
+        memset(snapshot, 0, sizeof(*snapshot));
+        return 0;
+    }
+    return 1;
+}
+
+static void state_snapshot_capture(state_instance_snapshot *snapshot,
+                                   const gbb_instance *instance) {
+    memcpy(&snapshot->raw, instance, sizeof(*instance));
+    if (instance->rom_size != 0u) memcpy(snapshot->rom, instance->rom, instance->rom_size);
+    if (instance->cartridge_ram_size != 0u)
+        memcpy(snapshot->ram, instance->cartridge_ram, instance->cartridge_ram_size);
+}
+
+static int state_snapshot_matches(const state_instance_snapshot *snapshot,
+                                  const gbb_instance *instance) {
+    return memcmp(&snapshot->raw, instance, sizeof(*instance)) == 0 &&
+           (instance->rom_size == 0u ||
+            memcmp(snapshot->rom, instance->rom, instance->rom_size) == 0) &&
+           (instance->cartridge_ram_size == 0u ||
+            memcmp(snapshot->ram, instance->cartridge_ram,
+                   instance->cartridge_ram_size) == 0);
+}
+
+static void state_internal_rechecksum(uint8_t *state, size_t total_size) {
+    uint32_t crc = state_crc32_update(UINT32_MAX, state, 60u);
+    crc = state_crc32_update(crc, state + TEST_STATE_HEADER_BYTES,
+                             total_size - TEST_STATE_HEADER_BYTES) ^ UINT32_MAX;
+    state_put_u32(state + 60u, crc);
+}
+
+static int state_internal_write_field(const gbb_instance *instance, uint8_t *state,
+                                      const char *path, uint64_t value) {
+    const state_field_descriptor *field = state_field_by_path(path);
+    if (field == NULL || field->wire_width > 8u) return 0;
+    const size_t offset = state_body_field_offset(instance, field);
+    if (offset == SIZE_MAX || offset > SIZE_MAX - TEST_STATE_HEADER_BYTES) return 0;
+    state_put_u64(state + TEST_STATE_HEADER_BYTES + offset, value, field->wire_width);
+    return 1;
+}
+
+static void state_snapshot_destroy(state_instance_snapshot *snapshot) {
+    free(snapshot->rom);
+    free(snapshot->ram);
+    memset(snapshot, 0, sizeof(*snapshot));
+}
+
+static int state_expect_refusal(state_instance_snapshot *snapshot,
+                                gbb_instance *instance, const uint8_t *bytes,
+                                size_t size, gbb_error expected) {
+    if (instance == NULL)
+        return gbb_load_state(instance, bytes, size) == expected;
+    state_snapshot_capture(snapshot, instance);
+    const gbb_error got = gbb_load_state(instance, bytes, size);
+    const int unchanged = state_snapshot_matches(snapshot, instance);
+    if (got != expected || !unchanged) {
+        fprintf(stderr, "state refusal got=%d expected=%d unchanged=%d size=%zu\n",
+                (int)got, (int)expected, unchanged, size);
+        return 0;
+    }
+    return 1;
+}
+
+static int state_expect_refusal_unchanged(const state_instance_snapshot *snapshot,
+                                          gbb_instance *instance,
+                                          const uint8_t *bytes, size_t size,
+                                          gbb_error expected) {
+    const gbb_error got = gbb_load_state(instance, bytes, size);
+    const int unchanged = state_snapshot_matches(snapshot, instance);
+    if (got != expected || !unchanged) {
+        fprintf(stderr, "state refusal got=%d expected=%d unchanged=%d size=%zu\n",
+                (int)got, (int)expected, unchanged, size);
+        return 0;
+    }
+    return 1;
+}
+
+static int state_refusal_controls(void) {
+    const char *case_name = "state_refusal_controls";
+    uint8_t rom[TEST_ROM_BYTES];
+    build_rom(rom, 0x10u, 0u);
+    gbb_instance *target = new_machine(rom, GBB_PROFILE_CGB_CPU_E);
+    REQUIRE_CASE(case_name, target != NULL && target->cartridge_ram_size != 0u);
+    state_instance_snapshot snapshot;
+    REQUIRE_CASE(case_name, state_snapshot_init(&snapshot, target));
+    state_snapshot_capture(&snapshot, target);
+    target->battery_generation ^= UINT64_C(1);
+    REQUIRE_CASE(case_name, !state_snapshot_matches(&snapshot, target));
+    memcpy(target, &snapshot.raw, sizeof(*target));
+    target->cartridge_ram[0] ^= 1u;
+    REQUIRE_CASE(case_name, !state_snapshot_matches(&snapshot, target));
+    memcpy(target, &snapshot.raw, sizeof(*target));
+    memcpy(target->cartridge_ram, snapshot.ram, target->cartridge_ram_size);
+    REQUIRE_CASE(case_name, state_snapshot_matches(&snapshot, target));
+    state_snapshot_destroy(&snapshot);
+    gbb_destroy(target);
+    puts("state_refusal_controls pass instance_and_owned_ram_sensitive");
+    return 0;
+}
+
+static int state_refusal(void) {
+    const char *case_name = "state_refusal";
+    uint8_t rom[TEST_ROM_BYTES];
+    build_rom(rom, 0x10u, 0u);
+    gbb_instance *source = new_machine(rom, GBB_PROFILE_CGB_CPU_E);
+    gbb_instance *target = new_machine(rom, GBB_PROFILE_CGB_CPU_E);
+    gbb_instance *empty = NULL;
+    REQUIRE_CASE(case_name, source != NULL && target != NULL);
+    REQUIRE_CASE(case_name, gbb_create(GBB_PROFILE_CGB_CPU_E, &empty) == GBB_OK);
+    fill_ram(target, 0xD3u);
+    target->battery_generation = 0x1020304050607080u;
+    target->cart.rumble_changes = 0x8877665544332211u;
+    state_instance_snapshot snapshot;
+    state_instance_snapshot empty_snapshot;
+    REQUIRE_CASE(case_name, state_snapshot_init(&snapshot, target));
+    REQUIRE_CASE(case_name, state_snapshot_init(&empty_snapshot, empty));
+    size_t size = 0u;
+    REQUIRE_CASE(case_name, gbb_state_size(source, &size) == GBB_OK);
+    uint8_t *saved = malloc(size);
+    uint8_t *mutant = malloc(size + 1u);
+    REQUIRE_CASE(case_name, saved != NULL && mutant != NULL);
+    REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK);
+
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, NULL, saved, size,
+                                                  GBB_INVALID_ARGUMENT));
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, NULL, size,
+                                                  GBB_INVALID_ARGUMENT));
+    state_snapshot_capture(&snapshot, target);
+    for (size_t truncated = 0u; truncated < size; ++truncated) {
+        const gbb_error expected = truncated < TEST_STATE_HEADER_BYTES ?
+                                   GBB_STATE_BAD_FORMAT : GBB_STATE_SIZE_MISMATCH;
+        REQUIRE_CASE(case_name, state_expect_refusal_unchanged(&snapshot, target, saved,
+                                                                truncated, expected));
+    }
+
+    memcpy(mutant, saved, size);
+    mutant[0] ^= 1u;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_BAD_FORMAT));
+    static const size_t version_offsets[] = {4u, 6u, 8u, 10u, 12u, 14u};
+    for (size_t i = 0u; i < sizeof(version_offsets) / sizeof(version_offsets[0]); ++i) {
+        memcpy(mutant, saved, size);
+        const size_t offset = version_offsets[i];
+        state_put_u16(mutant + offset,
+                      (uint16_t)(state_get_u16(mutant + offset) + 1u));
+        REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                      GBB_STATE_UNSUPPORTED_VERSION));
+    }
+    memcpy(mutant, saved, size);
+    mutant[16] = GBB_PROFILE_DMG_CPU_B;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_IDENTITY_MISMATCH));
+    memcpy(mutant, saved, size);
+    mutant[17] = GBB_MODE_CGB;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_IDENTITY_MISMATCH));
+    /* Magic precedes version; version precedes no-ROM. */
+    memcpy(mutant, saved, size);
+    state_put_u16(mutant + 4u, (uint16_t)(GBB_STATE_FORMAT_VERSION + 1u));
+    REQUIRE_CASE(case_name, state_expect_refusal(&empty_snapshot, empty, mutant, size,
+                                                  GBB_STATE_UNSUPPORTED_VERSION));
+    REQUIRE_CASE(case_name, state_expect_refusal(&empty_snapshot, empty, saved, size,
+                                                  GBB_STATE_NO_ROM));
+    memcpy(mutant, saved, size);
+    mutant[20] ^= 1u;
+    state_put_u32(mutant + 52u, 0u);
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_IDENTITY_MISMATCH));
+
+    /* A correct-identity state with a wrong declared or supplied length is
+     * rejected before checksum and semantic content are consulted. */
+    memcpy(mutant, saved, size);
+    state_put_u32(mutant + 56u, (uint32_t)(size + 1u));
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_SIZE_MISMATCH));
+    memcpy(mutant, saved, size);
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size - 1u,
+                                                  GBB_STATE_SIZE_MISMATCH));
+    memcpy(mutant, saved, size);
+    mutant[size] = 0xA7u;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size + 1u,
+                                                  GBB_STATE_SIZE_MISMATCH));
+
+    memcpy(mutant, saved, size);
+    mutant[TEST_STATE_HEADER_BYTES + 1u] ^= 1u;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_CORRUPT));
+    memcpy(mutant, saved, size);
+    mutant[18] = 1u;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_CORRUPT));
+    memcpy(mutant, saved, size);
+    mutant[18] = 1u;
+    state_internal_rechecksum(mutant, size);
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_INVALID_CONTENT));
+    /* A CRC-valid relationship violation complements the range-domain checks. */
+    memcpy(mutant, saved, size);
+    REQUIRE_CASE(case_name, state_internal_write_field(target, mutant,
+                                                       "timer_reload_pending", 1u));
+    REQUIRE_CASE(case_name, state_internal_write_field(target, mutant,
+                                                       "timer_reload_remaining", 0u));
+    state_internal_rechecksum(mutant, size);
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_INVALID_CONTENT));
+    /* CRC-valid boolean-domain failure is late enough to catch apply-first. */
+    memcpy(mutant, saved, size);
+    REQUIRE_CASE(case_name, state_internal_write_field(target, mutant, "cart.ram_enabled", 2u));
+    state_internal_rechecksum(mutant, size);
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_INVALID_CONTENT));
+    /* CRC failure wins over that same invalid body; content follows CRC. */
+    mutant[60] ^= 1u;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_CORRUPT));
+
+    /* Compound precedence edges independently exercise format, no-ROM,
+     * identity, size, CRC and semantic validation. */
+    memcpy(mutant, saved, size);
+    mutant[0] = 'X';
+    state_put_u16(mutant + 4u, (uint16_t)(GBB_STATE_FORMAT_VERSION + 1u));
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_BAD_FORMAT));
+    memcpy(mutant, saved, size);
+    state_put_u16(mutant + 4u, (uint16_t)(GBB_STATE_FORMAT_VERSION + 1u));
+    state_put_u32(mutant + 52u, 0u);
+    REQUIRE_CASE(case_name, state_expect_refusal(&empty_snapshot, empty, mutant, size,
+                                                  GBB_STATE_UNSUPPORTED_VERSION));
+    memcpy(mutant, saved, size);
+    mutant[20] ^= 1u;
+    mutant[TEST_STATE_HEADER_BYTES] ^= 1u;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_IDENTITY_MISMATCH));
+    memcpy(mutant, saved, size);
+    state_put_u32(mutant + 56u, (uint32_t)(size + 7u));
+    mutant[18] = 1u;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_SIZE_MISMATCH));
+    memcpy(mutant, saved, size);
+    mutant[18] = 1u;
+    mutant[TEST_STATE_HEADER_BYTES] ^= 1u;
+    REQUIRE_CASE(case_name, state_expect_refusal(&snapshot, target, mutant, size,
+                                                  GBB_STATE_CORRUPT));
+
+    /* Error paths preserve poisoned size output and every output byte. */
+    size_t poisoned_size = SIZE_MAX - 11u;
+    state_snapshot_capture(&snapshot, target);
+    REQUIRE_CASE(case_name, gbb_state_size(target, NULL) == GBB_INVALID_ARGUMENT);
+    REQUIRE_CASE(case_name, state_snapshot_matches(&snapshot, target));
+    REQUIRE_CASE(case_name, gbb_state_size(NULL, &poisoned_size) == GBB_INVALID_ARGUMENT &&
+                            poisoned_size == SIZE_MAX - 11u);
+    REQUIRE_CASE(case_name, gbb_state_size(empty, &poisoned_size) == GBB_STATE_NO_ROM &&
+                            poisoned_size == SIZE_MAX - 11u);
+    uint8_t *out = malloc(size + 16u);
+    REQUIRE_CASE(case_name, out != NULL);
+    memset(out, 0x5Au, size + 16u);
+    state_snapshot_capture(&snapshot, target);
+    REQUIRE_CASE(case_name, gbb_save_state(target, out, size - 1u) == GBB_BUFFER_TOO_SMALL);
+    REQUIRE_CASE(case_name, state_snapshot_matches(&snapshot, target));
+    for (size_t i = 0u; i < size + 16u; ++i)
+        REQUIRE_CASE(case_name, out[i] == 0x5Au);
+    REQUIRE_CASE(case_name, gbb_save_state(target, NULL, size) == GBB_INVALID_ARGUMENT);
+    REQUIRE_CASE(case_name, gbb_save_state(NULL, out, size) == GBB_INVALID_ARGUMENT);
+    REQUIRE_CASE(case_name, gbb_save_state(empty, out, size + 16u) == GBB_STATE_NO_ROM);
+    for (size_t i = 0u; i < size + 16u; ++i)
+        REQUIRE_CASE(case_name, out[i] == 0x5Au);
+    REQUIRE_CASE(case_name, gbb_save_state(target, out, size + 16u) == GBB_OK);
+    for (size_t i = size; i < size + 16u; ++i)
+        REQUIRE_CASE(case_name, out[i] == 0x5Au);
+
+    free(out);
+    free(mutant);
+    free(saved);
+    state_snapshot_destroy(&empty_snapshot);
+    state_snapshot_destroy(&snapshot);
+    gbb_destroy(empty);
+    gbb_destroy(target);
+    gbb_destroy(source);
+    puts("state_refusal pass precedence=ordered whole_instance_ram=unchanged output=bounded");
+    return 0;
+}
+
 /* Unrelated smoke control for mutation builds: the state size/save path stays
  * usable when a load-only observer or RTC policy is mutated. */
 static int state_control(void) {
@@ -352,6 +650,8 @@ int main(int argc, char **argv) {
     if (argc != 2) return 2;
     if (strcmp(argv[1], "state_rtc_palette") == 0) return state_rtc_palette();
     if (strcmp(argv[1], "state_observers") == 0) return state_observers();
+    if (strcmp(argv[1], "state_refusal") == 0) return state_refusal();
+    if (strcmp(argv[1], "state_refusal_controls") == 0) return state_refusal_controls();
     if (strcmp(argv[1], "state_control") == 0) return state_control();
     fprintf(stderr, "unknown state internal case: %s\n", argv[1]);
     return 2;
