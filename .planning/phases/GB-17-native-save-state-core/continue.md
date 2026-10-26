@@ -1,12 +1,12 @@
 # Phase 17 continuation
 
-Completed stage: **Phase 17 execution, wave 1 of 11**. Plan 17-01 is committed and its full post-wave suite passes 1249/1249 at `6507d7f`. See `17-01-SUMMARY.md` for immutable codec/API, proof, installed continuation and integration evidence. Phase 17 qualification and publication remain unclaimed.
+Completed stage: **Phase 17 execution, waves 1–2 of 11**. Plans 17-01/02 are committed; the full post-wave suite passes 1257/1257 at `d8743de`. See both summaries for immutable codec/API, identity, semantic validation, census, installed continuation and mutation evidence. Phase qualification and publication remain unclaimed.
 
-Next stage: **Phase 17 — Native Save State Core, wave 2 / plan 17-02**. The next feature phase remains **18 — Player Save Slots and Host Contract**, after this phase's execution/verification and owner choice.
+Next stage: **Phase 17 — Native Save State Core, wave 3 / plan 17-03**. The next feature phase is **18 — Player Save Slots and Host Contract**, after Phase 17 execution/verification and owner choice.
 
 Exact next command: `/gsd-execute-phase 17`
 
-Read `17-01-SUMMARY.md`, `17-02-PLAN.md` and the existing source audit/context/research/patterns/validation. Reuse recorded decisions; do not repeat completed plan 17-01. Preserve model-gate tags on every new core function and the test-budget policy. The precodec receipt is a CTest fixture for the tracer; evidence checks still require an immutable revision while Git-free archive builds remain unqualified. The full parity loader matrix is retained with a parity-only optimized test core. Later mapper/semantic/horizon/corpus/hosted qualification remains ordered execution work.
+Read `17-01-SUMMARY.md`, `17-02-SUMMARY.md`, `17-03-PLAN.md` and the existing source audit/context/research/patterns/validation. Reuse recorded decisions; do not repeat completed plans 17-01/02. Preserve model-gate tags on every new core function and the test-budget policy. The precodec receipt is a CTest fixture for the tracer; evidence checks still require an immutable revision while Git-free archive builds remain unqualified. The full parity loader matrix is retained with a parity-only optimized test core. Later mapper/semantic/horizon/corpus/hosted qualification remains ordered execution work.
 
 All six STATE requirements and RM-026/028/029/030 are mapped. Eleven primary plans retain one gap slot within the cap of 12; at most two review-fix rounds and one gap round apply. A concrete scope/correctness/security overrun requires rescope, never omission or a seed. RM-027 remains a named Phase 19 entry blocker; RM-024/025 remain parked.
 

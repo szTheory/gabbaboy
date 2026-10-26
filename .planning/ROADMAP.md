@@ -136,7 +136,7 @@ Plans:
 - [x] 17-01-PLAN.md — Establish a production state API with pre-codec completeness checks and an installed continuation tracer.
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 17-02-PLAN.md — Expand the proven codec to strong identity and canonical validation across every mapper and hardware mode.
+- [x] 17-02-PLAN.md — Expand the proven codec to strong identity and canonical validation across every mapper and hardware mode.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 17-03-PLAN.md — Guarantee whole-instance refusal, bounded buffers and exact RAM/RTC/palette restoration with local observers.
@@ -206,6 +206,6 @@ Plans:
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
 | 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
-| 17. Native Save State Core | 1/11 | 12 | Planned | - |
+| 17. Native Save State Core | 2/11 | 12 | Planned | - |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |
