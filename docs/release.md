@@ -219,7 +219,7 @@ attempt. See [`preview.md`](preview.md) for controls and player behavior.
 
 ## Support and troubleshooting
 
-The versioned [support ledger](support/v0.2.0.md) records the bootless
+The versioned [support ledger](support/v0.2.1.md) records the bootless
 DMG-CPU-B and CGB-CPU-E software models, the cartridge and save matrix, the
 CGB test-ROM corpus rows, exclusions, and known issues; the earlier
 [v0.1.0 ledger](support/v0.1.0.md) remains the record for that release. The
