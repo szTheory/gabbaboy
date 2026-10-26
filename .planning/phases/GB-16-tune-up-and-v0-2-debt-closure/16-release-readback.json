@@ -1,0 +1,168 @@
+{
+ "tag": "v0.2.1",
+ "tag_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+ "tag_tree": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca",
+ "is_draft": false,
+ "is_prerelease": false,
+ "release_id": 423802899,
+ "published_at": "2026-10-26T13:52:06Z",
+ "url": "https://github.com/szTheory/gabbaboy/releases/tag/v0.2.1",
+ "assets": [
+  {
+   "name": "SHA256SUMS",
+   "id": 678318721,
+   "size": 1926,
+   "digest": "sha256:9150a3ff9311bcf314993f4418bc3c1129c6f51681987071737ae83fd0f55fc5"
+  },
+  {
+   "name": "build-receipt.json",
+   "id": 676763014,
+   "size": 1008,
+   "digest": "sha256:c42855a2a8efe7559aeba5f1fdbf00954ffd5e5aa4b703a70360430cc5789750"
+  },
+  {
+   "name": "candidate-platform-manifest.json",
+   "id": 676899346,
+   "size": 4677,
+   "digest": "sha256:2ddf24e1ddc2715cea49ba9aad1133f7cfc78ed9fc8f3dbc734a7a579a54acb4"
+  },
+  {
+   "name": "candidate-receipt.json",
+   "id": 676763713,
+   "size": 3363,
+   "digest": "sha256:737b97212376d6f404f125a39ff09de43220092e94ede42c5f453a2ab6f02045"
+  },
+  {
+   "name": "cgb-corpus-receipt.json",
+   "id": 676898064,
+   "size": 1469831,
+   "digest": "sha256:d1102c2c807d51ac1bedba92a3ffcc04f2c139146a6d64bf0ca256ccc6a73173"
+  },
+  {
+   "name": "gabbaboy-build-receipt-macos-arm64.json",
+   "id": 676768951,
+   "size": 340,
+   "digest": "sha256:a3a7e5eac786e0eea27cfd65ed3a4597290056745b2d7e60fa0f11a5f3cfb179"
+  },
+  {
+   "name": "gabbaboy-build-receipt-windows-x64.json",
+   "id": 676771088,
+   "size": 427,
+   "digest": "sha256:2de129f51c68d256948fa90421876ca6b80e11be688ee0947dcbddc513866250"
+  },
+  {
+   "name": "gabbaboy-core-linux-x64.tar.gz",
+   "id": 676763092,
+   "size": 151040,
+   "digest": "sha256:f3bcaf050cd02e218bb801b4b525429d5ea7edf548f15cf6e55444eb0b30ddb7"
+  },
+  {
+   "name": "gabbaboy-core-macos-arm64.tar.gz",
+   "id": 676768845,
+   "size": 124574,
+   "digest": "sha256:8586f269fa08b436a7fd1ddcf6ba520e3bf4b77a2a3f099305cddf25363d7b70"
+  },
+  {
+   "name": "gabbaboy-core-macos-arm64.tar.gz.sha256",
+   "id": 676768917,
+   "size": 65,
+   "digest": "sha256:5185dccbd3761df3bc2aca3c70eae111c7034928399caf302e36be433dac99f1"
+  },
+  {
+   "name": "gabbaboy-core-windows-x64.tar.gz",
+   "id": 676770966,
+   "size": 146155,
+   "digest": "sha256:5461f69a5206fa213f7fd11f5a92426dd662991aedc7cca7a0947e47efa597eb"
+  },
+  {
+   "name": "gabbaboy-core-windows-x64.tar.gz.sha256",
+   "id": 676771035,
+   "size": 65,
+   "digest": "sha256:2001ed1363eec919cca72da9a88f554ae53717539b92bd2f32f6d9e1d8f51f4c"
+  },
+  {
+   "name": "gabbaboy-notices.txt",
+   "id": 676763152,
+   "size": 1078,
+   "digest": "sha256:9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9"
+  },
+  {
+   "name": "gabbaboy-preview-macos-arm64-build-receipt.json",
+   "id": 676769087,
+   "size": 1060,
+   "digest": "sha256:5cd543457d5df7e671475b64d97ab7355410a330994ef3b454a4ec80bb7190b2"
+  },
+  {
+   "name": "gabbaboy-preview-macos-arm64.tar.gz",
+   "id": 676769011,
+   "size": 1154778,
+   "digest": "sha256:cdd6f6863455ac439bfa117683759af4db660f86ff59cdb47e2ac25e0ae06bc5"
+  },
+  {
+   "name": "release-receipt.json",
+   "id": 678318833,
+   "size": 6244,
+   "digest": "sha256:8a113b89bfbb41a701d6b87f5f94babbe413b4208a371be65bf51dd077a9a40a"
+  },
+  {
+   "name": "source-archive-receipt.json",
+   "id": 676763487,
+   "size": 5574,
+   "digest": "sha256:7d97ae0c46777ffdcdc446cf41f541b600ca7fe24422542cb0757fe7b0aa130a"
+  },
+  {
+   "name": "source-receipt.json",
+   "id": 676762835,
+   "size": 2173,
+   "digest": "sha256:44b827beefabb56c2da7211489ffc191b5e792b9c8e16b1de7f1631b524bf9ac"
+  },
+  {
+   "name": "support-ledger.json",
+   "id": 676897964,
+   "size": 32607,
+   "digest": "sha256:1ba0a15f7ada6768c969dcc1a30952a24f2edbac303b03262cddef5fe6bf6a83"
+  },
+  {
+   "name": "v02-consumer-receipt.json",
+   "id": 676763329,
+   "size": 2041,
+   "digest": "sha256:2d1e1e269bd254e3bcf41eeff180acb299150ca0c837d71b87e03e082d83e979"
+  },
+  {
+   "name": "v02-fuzz-receipt.json",
+   "id": 676898396,
+   "size": 6880,
+   "digest": "sha256:7f8820600a708ab0b617e75238e93b05aa80977df32cb4f9dc43b27165270d72"
+  },
+  {
+   "name": "v02-performance-receipt.json",
+   "id": 676898468,
+   "size": 32416,
+   "digest": "sha256:cfff9a73fdf31a9f42d04680adb3abd52ccb124e81ae67eca6e9e242654b3545"
+  }
+ ],
+ "reconciliation": {
+  "verifier": ".github/scripts/verify-published-release-assets.py",
+  "result": "PASS: published release asset IDs, names, and digests match the qualified inventory",
+  "compared_with": "the draft asset listing saved before the final receipts were attached (same ids and digests)",
+  "asset_count": 22
+ },
+ "release_run": {
+  "workflow": "release-please.yml",
+  "run_id": 40332345735,
+  "event": "workflow_dispatch",
+  "retry": true,
+  "head_sha": "113b98c03e88f20ea5f90d9b56a22d9999ab2666",
+  "conclusion": "success",
+  "final_publish_job_id": 121611518121
+ },
+ "attach_v02_evidence": {
+  "run_id": 40332345735,
+  "job_id": 121611023707,
+  "head_sha": "113b98c03e88f20ea5f90d9b56a22d9999ab2666",
+  "conclusion": "success",
+  "started_at": "2026-10-26T13:50:30Z",
+  "completed_at": "2026-10-26T13:50:54Z",
+  "duration_seconds": 24
+ }
+}

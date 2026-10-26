@@ -3,11 +3,38 @@
  "plan": "16-06",
  "scope": "v0.3 Phase 16 carry-over dispositions (D-33)",
  "audit_source": ".planning/milestones/v0.2-MILESTONE-AUDIT.md at 02776e5",
- "receipts": null,
+ "receipts": {
+  "tag": "v0.2.1",
+  "tag_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+  "rehearsal_run": {
+   "id": 40257161612,
+   "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+   "head_tree": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca",
+   "conclusion": "success"
+  },
+  "trusted_judge": {
+   "id": 121367397151,
+   "conclusion": "success"
+  },
+  "nightly_asan_run": {
+   "id": 40245698754,
+   "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+   "head_tree": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca",
+   "conclusion": "success"
+  },
+  "release_readback": {
+   "path": ".planning/phases/GB-16-tune-up-and-v0-2-debt-closure/16-release-readback.json",
+   "sha256": "7ef2214f3b5df5118fb3793374767868b20dc174535dd071f98e3684bc0826e3"
+  },
+  "pr_closures": {
+   "path": ".planning/phases/GB-16-tune-up-and-v0-2-debt-closure/16-pr-closures.json",
+   "sha256": "b89ef62b806bb4c9b1c1e5cc6e6ec1de2d9174de5c013a59f9b553d5b7853ab5"
+  }
+ },
  "rows": [
   {
    "id": "LIM-SUPPORT-LEDGER-PIN",
-   "status": "pending-release",
+   "status": "closed",
    "decision": "D-106",
    "title": "docs/support/v0.2.0.md pins digests of files that Phase 15.1 changed, so a release ledger for the post-0.2.0 source is needed (a new versioned ledger, never a rewrite of v0.2.0.md)",
    "evidence": [
@@ -19,7 +46,7 @@
     "ctest:support_ledger_binding_controls"
    ],
    "owner_accepted": false,
-   "basis": "Phase 16 D-28/D-29: the v0.2.0 bytes are frozen by two digests and the checks bind to the tree version; v0.2.1.md is generated from the version PR tree in the D-31 window.",
+   "basis": "Phase 16 D-28/D-29: the v0.2.0 bytes are frozen by two digests and the checks bind to the tree version; v0.2.1.md is generated from the version PR tree in the D-31 window. Closed by D-112 at the Phase 16 boundary with the tag-bound receipts of v0.2.1.",
    "closure_requires": [
     "rehearsal_run",
     "trusted_judge",
@@ -29,7 +56,7 @@
   },
   {
    "id": "LIM-PERF-REVIEW",
-   "status": "pending-release",
+   "status": "closed",
    "decision": "D-106",
    "title": "The paired hosted wall-clock measurement fires the review trigger and stays pending until a receipt-bound independent review decision is recorded (this record never creates one)",
    "evidence": [
@@ -42,7 +69,7 @@
     "run:40166530630"
    ],
    "owner_accepted": false,
-   "basis": "Phase 16 D-13/D-17/D-30: no performance fix lands in Phase 16; the attribution receipt and the Ir gate are the evidence, and the owner records the review for the exact v0.2.1 measurement.",
+   "basis": "Phase 16 D-13/D-17/D-30: no performance fix lands in Phase 16; the attribution receipt and the Ir gate are the evidence, and the owner records the review for the exact v0.2.1 measurement. Closed by D-112 at the Phase 16 boundary with the tag-bound receipts of v0.2.1.",
    "closure_requires": [
     "rehearsal_run",
     "trusted_judge",
@@ -52,7 +79,7 @@
   },
   {
    "id": "LIM-REHEARSAL-FAILED",
-   "status": "pending-release",
+   "status": "closed",
    "decision": "D-110",
    "title": "The hosted release rehearsal has never been green on the current tree; it is not a required check and is never counted as a pass",
    "evidence": [
@@ -62,7 +89,7 @@
     "ctest:workflow_policy_controls"
    ],
    "owner_accepted": false,
-   "basis": "Phase 16 D-31: a green exact-tag rehearsal on rehearsal/v0.2.1 at the version PR head, bound to the squash commit by tree equality.",
+   "basis": "Phase 16 D-31: a green exact-tag rehearsal on rehearsal/v0.2.1 at the version PR head, bound to the squash commit by tree equality. Closed by D-112 at the Phase 16 boundary with the tag-bound receipts of v0.2.1.",
    "closure_requires": [
     "rehearsal_run",
     "trusted_judge",
@@ -72,7 +99,7 @@
   },
   {
    "id": "LIM-TRUSTED-JUDGE",
-   "status": "pending-release",
+   "status": "closed",
    "decision": "D-110",
    "title": "The trusted rehearsal judge has never run green on the host, so its default-branch trust split is untested",
    "evidence": [
@@ -81,7 +108,7 @@
     "ctest:workflow_policy_check"
    ],
    "owner_accepted": false,
-   "basis": "Phase 16 D-31 and D-110: the judge row in .github/ci-timeouts.json stays release_bound until a green rehearsal exists.",
+   "basis": "Phase 16 D-31 and D-110: the judge row in .github/ci-timeouts.json stays release_bound until a green rehearsal exists. Closed by D-112 at the Phase 16 boundary with the tag-bound receipts of v0.2.1.",
    "closure_requires": [
     "rehearsal_run",
     "trusted_judge",
@@ -91,7 +118,7 @@
   },
   {
    "id": "PR-78-92-SUPERSEDED",
-   "status": "pending-release",
+   "status": "closed",
    "decision": "D-106",
    "title": "Open PRs #78-#92 (the v0.2 verification refresh stack) close as superseded by #93 and the v0.2 archive",
    "evidence": [
@@ -99,7 +126,7 @@
     ".planning/milestones/v0.2-MILESTONE-AUDIT.md"
    ],
    "owner_accepted": false,
-   "basis": "Phase 16 D-32: PR #93 (09805f3) and the archive location are named in each closing comment; none of the PRs touches src/ or include/.",
+   "basis": "Phase 16 D-32: PR #93 (09805f3) and the archive location are named in each closing comment; none of the PRs touches src/ or include/. Closed by D-112 at the Phase 16 boundary with the tag-bound receipts of v0.2.1.",
    "closure_requires": [
     "pr_closures"
    ]

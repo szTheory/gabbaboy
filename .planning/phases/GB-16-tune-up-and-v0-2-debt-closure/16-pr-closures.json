@@ -1,0 +1,252 @@
+{
+ "prs": [
+  {
+   "number": 78,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:10Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/78#issuecomment-6417743477",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/STATE.md",
+    ".planning/context/DECISIONS.md",
+    ".planning/context/LESSONS.md",
+    ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/verify-uat-contract.py",
+    ".planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/15-UAT.md",
+    ".planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/continue.md",
+    "AGENTS.md",
+    "tests/scripts/verify-uat-closure.py"
+   ]
+  },
+  {
+   "number": 79,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:14Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/79#issuecomment-6417744986",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/context/LESSONS.md",
+    ".planning/phases/GB-15-cgb-acceptance-support-ledger-and-v0-2-0-release/continue.md",
+    ".planning/v0.2-INTEGRATION-AUDIT.md",
+    ".planning/v0.2-MILESTONE-AUDIT.md",
+    ".planning/verify-v02-milestone-audit.py"
+   ]
+  },
+  {
+   "number": 80,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:18Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/80#issuecomment-6417746338",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/context/LESSONS.md",
+    ".planning/phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VALIDATION.md",
+    "tests/acceptance/CMakeLists.txt",
+    "tests/scripts/verify-stall-report.py"
+   ]
+  },
+  {
+   "number": 81,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:22Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/81#issuecomment-6417747724",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/STATE.md",
+    ".planning/phases/GB-11-cgb-colour-rendering-and-player-colour/11-15-SUMMARY.md",
+    ".planning/phases/GB-13-cgb-hdma/13-12-SUMMARY.md",
+    ".planning/quick/261020-hr8-reconcile-phase-11-and-13-summary-comple/261020-hr8-PLAN.md",
+    ".planning/quick/261020-hr8-reconcile-phase-11-and-13-summary-comple/261020-hr8-SUMMARY.md",
+    ".planning/quick/261020-hr8-reconcile-phase-11-and-13-summary-comple/verify-reconciliation.py"
+   ]
+  },
+  {
+   "number": 82,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:26Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/82#issuecomment-6417749435",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/v0.2-INTEGRATION-AUDIT.md",
+    ".planning/v0.2-MILESTONE-AUDIT.md",
+    ".planning/verify-v02-milestone-audit.py"
+   ]
+  },
+  {
+   "number": 83,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:30Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/83#issuecomment-6417750748",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/STATE.md",
+    ".planning/phases/GB-07-dmg-game-acceptance-and-regression-baseline/07-VERIFICATION.md"
+   ]
+  },
+  {
+   "number": 84,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:34Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/84#issuecomment-6417752110",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/STATE.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md",
+    "tests/scripts/verify-phase8-player-contract.py"
+   ]
+  },
+  {
+   "number": 85,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:38Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/85#issuecomment-6417753448",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/STATE.md",
+    ".planning/phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-REFRESH-GATES.md",
+    ".planning/phases/GB-09-mbc3-deterministic-rtc-and-cartridge-persistence/09-VERIFICATION.md",
+    "tests/test_instance_concurrency.c"
+   ]
+  },
+  {
+   "number": 86,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:42Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/86#issuecomment-6417754912",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/context/LESSONS.md",
+    ".planning/phases/GB-10-cgb-profile-banking-and-register-visibility/10-REFRESH-GATES.md",
+    ".planning/phases/GB-10-cgb-profile-banking-and-register-visibility/10-VERIFICATION.md",
+    "cmake/PreviewPackageSmoke.cmake",
+    "tests/scripts/reproduce-mooneye-cgb.sh",
+    "tests/scripts/test-reproduce-mooneye-cgb-guard.sh"
+   ]
+  },
+  {
+   "number": 87,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:46Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/87#issuecomment-6417756333",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/phases/GB-11-cgb-colour-rendering-and-player-colour/11-REFRESH-GATES.md",
+    ".planning/phases/GB-11-cgb-colour-rendering-and-player-colour/11-UAT.md",
+    ".planning/phases/GB-11-cgb-colour-rendering-and-player-colour/11-VERIFICATION.md"
+   ]
+  },
+  {
+   "number": 88,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:50Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/88#issuecomment-6417757774",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/context/LESSONS.md",
+    ".planning/phases/GB-12-cgb-double-speed/12-REFRESH-GATES.md",
+    ".planning/phases/GB-12-cgb-double-speed/12-UAT.md",
+    ".planning/phases/GB-12-cgb-double-speed/12-VERIFICATION.md",
+    ".planning/phases/GB-12-cgb-double-speed/continue.md"
+   ]
+  },
+  {
+   "number": 89,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:54Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/89#issuecomment-6417759173",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/context/LESSONS.md",
+    ".planning/phases/GB-13-cgb-hdma/13-REFRESH-GATES.md",
+    ".planning/phases/GB-13-cgb-hdma/13-UAT.md",
+    ".planning/phases/GB-13-cgb-hdma/13-VERIFICATION.md",
+    ".planning/phases/GB-13-cgb-hdma/continue.md",
+    ".planning/research/INDEX.md"
+   ]
+  },
+  {
+   "number": 90,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:54:58Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/90#issuecomment-6417760624",
+   "changed_paths": [
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-REFRESH-EVIDENCE.md",
+    ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-REFRESH-GATES.md",
+    ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-UAT.md",
+    ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/14-VERIFICATION.md",
+    ".planning/phases/GB-14-cgb-e-model-qualification-and-corpus/continue.md",
+    ".planning/state.json"
+   ]
+  },
+  {
+   "number": 91,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:55:02Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/91#issuecomment-6417761964",
+   "changed_paths": [
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-01-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-02-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-03-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-04-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-05-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-06-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-07-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-08-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-09-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-10-SUMMARY.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-PACKAGE-REFRESH-EVIDENCE.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-PACKAGE-REFRESH-GATES.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-UAT.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/08-VERIFICATION.md",
+    ".planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/continue.md",
+    ".planning/state.json",
+    "tests/scripts/verify-phase8-closure-contract.py"
+   ]
+  },
+  {
+   "number": 92,
+   "state": "CLOSED",
+   "closed_at": "2026-10-26T13:55:06Z",
+   "comment_url": "https://github.com/szTheory/gabbaboy/pull/92#issuecomment-6417763449",
+   "changed_paths": [
+    ".planning/.continue-here.md",
+    ".planning/PROJECT.md",
+    ".planning/ROADMAP.md",
+    ".planning/STATE.md",
+    ".planning/phases/GB-12-cgb-double-speed/12-METADATA-REFRESH-EVIDENCE.md",
+    ".planning/phases/GB-12-cgb-double-speed/12-REFRESH-GATES.md",
+    ".planning/phases/GB-12-cgb-double-speed/12-UAT.md",
+    ".planning/phases/GB-12-cgb-double-speed/12-VERIFICATION.md",
+    ".planning/phases/GB-12-cgb-double-speed/continue.md",
+    ".planning/state.json"
+   ]
+  }
+ ]
+}
