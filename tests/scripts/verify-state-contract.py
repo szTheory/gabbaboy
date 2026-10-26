@@ -497,6 +497,155 @@ def run_format_contract(args: argparse.Namespace, root: Path, core: str, header:
     print(f"state format contract pass source={args.rev} version_controls=8 api={result.stdout.strip() or 'pass'}")
 
 
+def run_tracer(args: argparse.Namespace, root: Path, core: str, header: str) -> None:
+    source_file = root / "src/core/gabbaboy.c"
+    header_file = root / "include/gabbaboy/gabbaboy.h"
+    if source_file.read_text() != core or header_file.read_text() != header:
+        raise ContractError("installed tracer source differs from immutable --rev")
+    verified = verify_inventory(core, header)
+    source_hash, descriptor_hash, input_hash = source_digest(root, args.rev)
+    receipt_path = args.build_dir / "state-precodec-proof.json"
+    if not receipt_path.is_file():
+        raise ContractError("state_precodec_gate receipt is missing before installed tracer")
+    receipt = json.loads(receipt_path.read_text())
+    if (receipt.get("source_commit") != args.rev or
+            receipt.get("descriptor_range_constants_sha256") != descriptor_hash or
+            receipt.get("core_source_sha256") != source_hash or
+            receipt.get("proof_input_sha256") != input_hash or
+            receipt.get("negative_controls") != "pass"):
+        raise ContractError("pre-codec receipt is stale or does not bind the installed tracer revision")
+    if not verified["fields"]:
+        raise ContractError("installed tracer has no immutable state field inventory")
+    if args.rom is None or not args.rom.is_file():
+        raise ContractError("--tracer requires the original ROM-only DMG fixture")
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-state-tracer-") as temp:
+        temp_root = Path(temp)
+        prefix = temp_root / "prefix"
+        install = run([args.cmake, "--install", str(args.build_dir), "--prefix", str(prefix)], cwd=root)
+        if install.returncode != 0:
+            raise ContractError(f"temporary install failed ({install.returncode}): {install.stdout}{install.stderr}")
+        installed_header = prefix / "include/gabbaboy/gabbaboy.h"
+        installed_config = prefix / "lib/cmake/GabbaBoy/GabbaBoyConfig.cmake"
+        if not installed_header.is_file() or not installed_config.is_file():
+            raise ContractError("temporary install lacks the public header or exported package config")
+        client_source = temp_root / "client.c"
+        client_source.write_text(r'''#include <gabbaboy/gabbaboy.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define REQUIRE(x) do { if (!(x)) { fprintf(stderr, "tracer:%d: %s\\n", __LINE__, #x); return 1; } } while (0)
+
+static uint8_t *read_file(const char *path, size_t *out_size) {
+    FILE *file = fopen(path, "rb");
+    if (!file || fseek(file, 0, SEEK_END) != 0) { if (file) fclose(file); return NULL; }
+    long length = ftell(file);
+    if (length < 0 || fseek(file, 0, SEEK_SET) != 0) { fclose(file); return NULL; }
+    uint8_t *bytes = (uint8_t *)malloc((size_t)length);
+    if (!bytes || fread(bytes, 1, (size_t)length, file) != (size_t)length) {
+        free(bytes); fclose(file); return NULL;
+    }
+    fclose(file); *out_size = (size_t)length; return bytes;
+}
+
+static int same_run(gbb_run_result a, gbb_run_result b) {
+    return a.consumed_half_dots == b.consumed_half_dots && a.reason == b.reason &&
+           a.trace_count == b.trace_count && a.diagnostic_count == b.diagnostic_count &&
+           a.lockup_pc == b.lockup_pc && a.lockup_opcode == b.lockup_opcode;
+}
+
+static int run_audio(gbb_instance *instance, uint64_t budget, gbb_audio_frame *frames,
+                     size_t capacity, size_t *count, gbb_run_result *result) {
+    *result = gbb_run_audio(instance, budget, frames, capacity, count);
+    return result->reason == GBB_STOP_BUDGET && result->consumed_half_dots == budget;
+}
+
+static int save_bytes(const gbb_instance *instance, uint8_t *bytes, size_t size) {
+    return gbb_save_state(instance, bytes, size) == GBB_OK;
+}
+
+int main(int argc, char **argv) {
+    REQUIRE(argc == 2);
+    size_t rom_size = 0;
+    uint8_t *rom = read_file(argv[1], &rom_size);
+    REQUIRE(rom != NULL);
+    gbb_instance *source = NULL, *target = NULL;
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &source) == GBB_OK);
+    REQUIRE(gbb_create(GBB_PROFILE_DMG_CPU_B, &target) == GBB_OK);
+    REQUIRE(gbb_load_rom(source, rom, rom_size) == GBB_OK);
+    REQUIRE(gbb_load_rom(target, rom, rom_size) == GBB_OK);
+    gbb_audio_frame prefix_a[2048], prefix_b[2048], future_a[2048], future_b[2048];
+    size_t prefix_a_count = 0, prefix_b_count = 0, future_a_count = 0, future_b_count = 0;
+    gbb_run_result prefix_a_result, prefix_b_result, future_a_result, future_b_result;
+    REQUIRE(run_audio(source, 100000u, prefix_a, 2048u, &prefix_a_count, &prefix_a_result));
+    REQUIRE(run_audio(target, 100000u, prefix_b, 2048u, &prefix_b_count, &prefix_b_result));
+    REQUIRE(same_run(prefix_a_result, prefix_b_result));
+    REQUIRE(prefix_a_count == prefix_b_count &&
+            memcmp(prefix_a, prefix_b, prefix_a_count * sizeof(prefix_a[0])) == 0);
+    REQUIRE(prefix_a_count != 0u && gbb_peek_ram(source, 0xC000u) == 0x5Au &&
+            gbb_peek_ram(source, 0xC001u) == 0xA5u);
+    size_t state_size = 0;
+    REQUIRE(gbb_state_size(source, &state_size) == GBB_OK && state_size >= 64u);
+    size_t target_size = 0;
+    REQUIRE(gbb_state_size(target, &target_size) == GBB_OK && target_size == state_size);
+    uint8_t *snapshot = (uint8_t *)malloc(state_size);
+    uint8_t *expected = (uint8_t *)malloc(state_size);
+    uint8_t *actual = (uint8_t *)malloc(state_size);
+    REQUIRE(snapshot && expected && actual);
+    REQUIRE(save_bytes(source, snapshot, state_size));
+    REQUIRE(run_audio(source, 200000u, future_a, 2048u, &future_a_count, &future_a_result));
+    REQUIRE(save_bytes(source, expected, state_size));
+    REQUIRE(run_audio(target, 200000u, future_b, 2048u, &future_b_count, &future_b_result));
+    REQUIRE(same_run(future_a_result, future_b_result));
+    REQUIRE(future_a_count == future_b_count &&
+            memcmp(future_a, future_b, future_a_count * sizeof(future_a[0])) == 0);
+    REQUIRE(save_bytes(target, actual, state_size) && memcmp(expected, actual, state_size) == 0);
+
+    REQUIRE(gbb_reset(target) == GBB_OK);
+    REQUIRE(gbb_load_state(target, snapshot, state_size) == GBB_OK);
+    REQUIRE(run_audio(target, 200000u, future_b, 2048u, &future_b_count, &future_b_result));
+    REQUIRE(same_run(future_a_result, future_b_result));
+    REQUIRE(future_a_count == future_b_count &&
+            memcmp(future_a, future_b, future_a_count * sizeof(future_a[0])) == 0);
+    REQUIRE(save_bytes(target, actual, state_size) && memcmp(expected, actual, state_size) == 0);
+    printf("installed state tracer pass state_bytes=%zu prefix_audio=%zu future_audio=%zu\\n",
+           state_size, prefix_a_count, future_a_count);
+    free(snapshot); free(expected); free(actual); free(rom);
+    gbb_destroy(source); gbb_destroy(target);
+    return 0;
+}
+''')
+        cmake_lists = temp_root / "CMakeLists.txt"
+        cmake_lists.write_text(
+            "cmake_minimum_required(VERSION 3.25)\n"
+            "project(GabbaBoyInstalledStateTracer LANGUAGES C)\n"
+            "find_package(GabbaBoy CONFIG REQUIRED)\n"
+            "add_executable(state_tracer_client client.c)\n"
+            "target_link_libraries(state_tracer_client PRIVATE GabbaBoy::core)\n"
+            "target_compile_features(state_tracer_client PRIVATE c_std_17)\n"
+            "set_target_properties(state_tracer_client PROPERTIES C_EXTENSIONS OFF)\n"
+        )
+        build_dir = temp_root / "client-build"
+        configure_cmd = [args.cmake, "-S", str(temp_root), "-B", str(build_dir),
+                         "-DCMAKE_PREFIX_PATH=" + str(prefix),
+                         "-DCMAKE_C_COMPILER=" + args.cc]
+        if args.generator:
+            configure_cmd.extend(["-G", args.generator])
+        configured = run(configure_cmd, cwd=root)
+        if configured.returncode != 0:
+            raise ContractError(f"installed client configure failed ({configured.returncode}): {configured.stdout}{configured.stderr}")
+        built = run([args.cmake, "--build", str(build_dir)], cwd=root)
+        if built.returncode != 0:
+            raise ContractError(f"installed client build failed ({built.returncode}): {built.stdout}{built.stderr}")
+        exe = build_dir / "state_tracer_client"
+        if os.name == "nt":
+            exe = exe.with_suffix(".exe")
+        traced = run([str(exe), str(args.rom.resolve())], cwd=root)
+        if traced.returncode != 0:
+            raise ContractError(f"installed continuation tracer failed ({traced.returncode}): {traced.stdout}{traced.stderr}")
+        print(f"state installed tracer pass source={args.rev} receipt={receipt_path.relative_to(root)} output={traced.stdout.strip()}")
+
+
 def run_precodec(args: argparse.Namespace, root: Path) -> None:
     core = git_show(root, args.rev, "src/core/gabbaboy.c")
     header = git_show(root, args.rev, "include/gabbaboy/gabbaboy.h")
@@ -595,7 +744,8 @@ def main() -> int:
             run_format_contract(args, root, core, header)
             return 0
         if args.tracer:
-            raise ContractError("--tracer is implemented with the installed API in the next plan task")
+            run_tracer(args, root, core, header)
+            return 0
         raise ContractError("select --inventory, --globals, --self-test, --precodec or --tracer")
     except (ContractError, OSError) as error:
         print(f"state contract failure: {error}", file=sys.stderr)

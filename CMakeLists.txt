@@ -1,6 +1,17 @@
 cmake_minimum_required(VERSION 3.25)
 project(GabbaBoy VERSION 0.2.1 LANGUAGES C) # x-release-please-version
 
+include(cmake/StateVersion.cmake)
+gbb_parse_state_release_version(
+  "${PROJECT_VERSION}"
+  GBB_STATE_RELEASE_MAJOR
+  GBB_STATE_RELEASE_MINOR
+  GBB_STATE_RELEASE_PATCH)
+add_compile_definitions(
+  GBB_STATE_RELEASE_MAJOR=${GBB_STATE_RELEASE_MAJOR}
+  GBB_STATE_RELEASE_MINOR=${GBB_STATE_RELEASE_MINOR}
+  GBB_STATE_RELEASE_PATCH=${GBB_STATE_RELEASE_PATCH})
+
 option(GABBABOY_ENABLE_SANITIZERS
   "Enable AddressSanitizer and UndefinedBehaviorSanitizer on Linux" OFF)
 if(GABBABOY_ENABLE_SANITIZERS)

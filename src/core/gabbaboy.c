@@ -5,6 +5,94 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+    uint32_t h[8];
+    uint64_t bits;
+    uint8_t block[64];
+    size_t used;
+} state_sha256_ctx;
+
+static const uint32_t state_sha256_k[64] = {
+    0x428a2f98u,0x71374491u,0xb5c0fbcfu,0xe9b5dba5u,0x3956c25bu,0x59f111f1u,0x923f82a4u,0xab1c5ed5u,
+    0xd807aa98u,0x12835b01u,0x243185beu,0x550c7dc3u,0x72be5d74u,0x80deb1feu,0x9bdc06a7u,0xc19bf174u,
+    0xe49b69c1u,0xefbe4786u,0x0fc19dc6u,0x240ca1ccu,0x2de92c6fu,0x4a7484aau,0x5cb0a9dcu,0x76f988dau,
+    0x983e5152u,0xa831c66du,0xb00327c8u,0xbf597fc7u,0xc6e00bf3u,0xd5a79147u,0x06ca6351u,0x14292967u,
+    0x27b70a85u,0x2e1b2138u,0x4d2c6dfcu,0x53380d13u,0x650a7354u,0x766a0abbu,0x81c2c92eu,0x92722c85u,
+    0xa2bfe8a1u,0xa81a664bu,0xc24b8b70u,0xc76c51a3u,0xd192e819u,0xd6990624u,0xf40e3585u,0x106aa070u,
+    0x19a4c116u,0x1e376c08u,0x2748774cu,0x34b0bcb5u,0x391c0cb3u,0x4ed8aa4au,0x5b9cca4fu,0x682e6ff3u,
+    0x748f82eeu,0x78a5636fu,0x84c87814u,0x8cc70208u,0x90befffau,0xa4506cebu,0xbef9a3f7u,0xc67178f2u
+};
+
+static uint32_t state_sha256_rotr(uint32_t value, unsigned bits) {
+    return (value >> bits) | (value << (32u - bits));
+}
+
+static void state_sha256_transform(state_sha256_ctx *ctx, const uint8_t block[64]) {
+    uint32_t words[64];
+    for (unsigned i = 0u; i < 16u; ++i) {
+        const unsigned at = i * 4u;
+        words[i] = ((uint32_t)block[at] << 24) | ((uint32_t)block[at + 1u] << 16) |
+                   ((uint32_t)block[at + 2u] << 8) | block[at + 3u];
+    }
+    for (unsigned i = 16u; i < 64u; ++i) {
+        const uint32_t x = words[i - 15u];
+        const uint32_t y = words[i - 2u];
+        const uint32_t s0 = state_sha256_rotr(x, 7u) ^ state_sha256_rotr(x, 18u) ^ (x >> 3);
+        const uint32_t s1 = state_sha256_rotr(y, 17u) ^ state_sha256_rotr(y, 19u) ^ (y >> 10);
+        words[i] = words[i - 16u] + s0 + words[i - 7u] + s1;
+    }
+    uint32_t a = ctx->h[0], b = ctx->h[1], c = ctx->h[2], d = ctx->h[3];
+    uint32_t e = ctx->h[4], f = ctx->h[5], g = ctx->h[6], h = ctx->h[7];
+    for (unsigned i = 0u; i < 64u; ++i) {
+        const uint32_t s1 = state_sha256_rotr(e, 6u) ^ state_sha256_rotr(e, 11u) ^ state_sha256_rotr(e, 25u);
+        const uint32_t choose = (e & f) ^ (~e & g);
+        const uint32_t temp1 = h + s1 + choose + state_sha256_k[i] + words[i];
+        const uint32_t s0 = state_sha256_rotr(a, 2u) ^ state_sha256_rotr(a, 13u) ^ state_sha256_rotr(a, 22u);
+        const uint32_t majority = (a & b) ^ (a & c) ^ (b & c);
+        const uint32_t temp2 = s0 + majority;
+        h = g; g = f; f = e; e = d + temp1; d = c; c = b; b = a; a = temp1 + temp2;
+    }
+    ctx->h[0] += a; ctx->h[1] += b; ctx->h[2] += c; ctx->h[3] += d;
+    ctx->h[4] += e; ctx->h[5] += f; ctx->h[6] += g; ctx->h[7] += h;
+}
+
+static void state_sha256(const uint8_t *bytes, size_t length, uint8_t digest[32]) {
+    state_sha256_ctx ctx = {
+        { 0x6a09e667u,0xbb67ae85u,0x3c6ef372u,0xa54ff53au,
+          0x510e527fu,0x9b05688cu,0x1f83d9abu,0x5be0cd19u },
+        0u, { 0u }, 0u
+    };
+    ctx.bits = (uint64_t)length * 8u;
+    while (length != 0u) {
+        size_t copy = sizeof(ctx.block) - ctx.used;
+        if (copy > length) copy = length;
+        memcpy(ctx.block + ctx.used, bytes, copy);
+        ctx.used += copy;
+        bytes += copy;
+        length -= copy;
+        if (ctx.used == sizeof(ctx.block)) {
+            state_sha256_transform(&ctx, ctx.block);
+            ctx.used = 0u;
+        }
+    }
+    ctx.block[ctx.used++] = 0x80u;
+    if (ctx.used > 56u) {
+        memset(ctx.block + ctx.used, 0, sizeof(ctx.block) - ctx.used);
+        state_sha256_transform(&ctx, ctx.block);
+        ctx.used = 0u;
+    }
+    memset(ctx.block + ctx.used, 0, 56u - ctx.used);
+    for (unsigned i = 0u; i < 8u; ++i)
+        ctx.block[63u - i] = (uint8_t)(ctx.bits >> (i * 8u));
+    state_sha256_transform(&ctx, ctx.block);
+    for (unsigned i = 0u; i < 8u; ++i) {
+        digest[i * 4u] = (uint8_t)(ctx.h[i] >> 24);
+        digest[i * 4u + 1u] = (uint8_t)(ctx.h[i] >> 16);
+        digest[i * 4u + 2u] = (uint8_t)(ctx.h[i] >> 8);
+        digest[i * 4u + 3u] = (uint8_t)ctx.h[i];
+    }
+}
+
 #ifndef GBB_P13_MUT
 #define GBB_P13_MUT(n) 0u
 #endif
@@ -140,6 +228,8 @@ typedef struct {
     uint32_t rtc_sub;
     uint64_t rtc_synced_at;
 } cart_state;
+
+static int rtc_fields_equal(const cart_state *a, const cart_state *b);
 
 typedef struct {
     uint8_t type;
@@ -371,6 +461,7 @@ typedef struct gbb_test_dma_event gbb_test_dma_event;
 struct gbb_instance {
     uint8_t *rom;
     size_t rom_size;
+    uint8_t rom_sha256[32];
     uint8_t *cartridge_ram;
     size_t cartridge_ram_size;
     uint64_t battery_generation;
@@ -524,6 +615,7 @@ typedef struct {
 static const state_field_treatment_rule STATE_FIELD_TREATMENT[] = {
     { "rom", STATE_TREAT_EXCLUDE, "ROM bytes are immutable loaded identity and are hashed once at replacement." },
     { "rom_size", STATE_TREAT_DERIVE, "ROM length is fixed by the loaded identity." },
+    { "rom_sha256", STATE_TREAT_DERIVE, "Complete ROM identity is hashed once after successful validation and allocation." },
     { "cartridge_ram", STATE_TREAT_SERIALIZE, "Serialize the pointed-to battery RAM bytes, never the pointer." },
     { "cartridge_ram_size", STATE_TREAT_DERIVE, "RAM length is derived from the validated cartridge header." },
     { "battery_generation", STATE_TREAT_EXCLUDE, "Host battery observer history remains local to the receiving instance." },
@@ -625,6 +717,16 @@ static const state_field_treatment_rule STATE_FIELD_TREATMENT[] = {
 #define GBB_STATE_MAX_BODY_BYTES 524288u
 #define GBB_STATE_HEADER_BYTES 64u
 #define GBB_STATE_MAX_CARTRIDGE_RAM_BYTES 131072u
+#define GBB_STATE_FORMAT_VERSION 1u
+#define GBB_STATE_BEHAVIOR_VERSION 1u
+#if !defined(GBB_STATE_RELEASE_MAJOR) || !defined(GBB_STATE_RELEASE_MINOR) || \
+    !defined(GBB_STATE_RELEASE_PATCH)
+#error "CMake must define the validated GabbaBoy state release version"
+#endif
+_Static_assert(GBB_STATE_RELEASE_MAJOR <= UINT16_MAX &&
+               GBB_STATE_RELEASE_MINOR <= UINT16_MAX &&
+               GBB_STATE_RELEASE_PATCH <= UINT16_MAX,
+               "state release components must fit the wire format");
 #define GBB_STATE_AUDIO_MIX_MIN INT32_C(-32768)
 #define GBB_STATE_AUDIO_MIX_MAX INT32_C(28672)
 #define GBB_STATE_AUDIO_MAX_DELTA UINT64_C(61440)
@@ -633,212 +735,226 @@ static const state_field_treatment_rule STATE_FIELD_TREATMENT[] = {
 #define GBB_STATE_AUDIO_MAX_EDGE_TICKS \
     ((UINT64_C(16) * GBB_AUDIO_CLOCK_HALF_DOTS + GBB_AUDIO_SAMPLE_RATE - UINT64_C(1)) / \
      GBB_AUDIO_SAMPLE_RATE)
+typedef enum {
+    STATE_VALUE_U8 = 1, STATE_VALUE_U16, STATE_VALUE_U32, STATE_VALUE_U64,
+    STATE_VALUE_I32, STATE_VALUE_I64, STATE_VALUE_BOOL, STATE_VALUE_COUNT,
+    STATE_VALUE_EVENT_KIND
+} state_value_kind;
+
+typedef enum {
+    STATE_STORAGE_INSTANCE = 0, STATE_STORAGE_CARTRIDGE_RAM
+} state_storage_kind;
+
 typedef struct {
     uint32_t order;
     const char *path;
     uint8_t wire_width;
     size_t max_count;
+    size_t offset;
+    size_t stride;
+    state_value_kind kind;
+    state_storage_kind storage;
 } state_field_descriptor;
 
 static const state_field_descriptor STATE_FIELDS[] = {
-    { 0u, "cartridge_ram", 1u, GBB_STATE_MAX_CARTRIDGE_RAM_BYTES },
-    { 1u, "cart.rom_bank_lo", 1u, 1u },
-    { 2u, "cart.rom_bank_hi", 1u, 1u },
-    { 3u, "cart.ram_bank", 1u, 1u },
-    { 4u, "cart.ram_enabled", 1u, 1u },
-    { 5u, "cart.mbc1_mode", 1u, 1u },
-    { 6u, "cart.rumble_on", 1u, 1u },
-    { 7u, "cart.rtc_s", 1u, 1u },
-    { 8u, "cart.rtc_m", 1u, 1u },
-    { 9u, "cart.rtc_h", 1u, 1u },
-    { 10u, "cart.rtc_dl", 1u, 1u },
-    { 11u, "cart.rtc_dh", 1u, 1u },
-    { 12u, "cart.rtc_l", 1u, 5u },
-    { 13u, "cart.rtc_latch_prev", 1u, 1u },
-    { 14u, "cart.rtc_sub", 4u, 1u },
-    { 15u, "cart.rtc_synced_at", 8u, 1u },
-    { 16u, "wram", 1u, (GBB_WRAM_BANKS * GBB_WRAM_BANK_SIZE) },
-    { 17u, "hram", 1u, 127u },
-    { 18u, "vram", 1u, (GBB_VRAM_BANKS * GBB_VRAM_BANK_SIZE) },
-    { 19u, "oam", 1u, GBB_OAM_BYTES },
-    { 20u, "vram_bank", 1u, 1u },
-    { 21u, "wram_bank", 1u, 1u },
-    { 22u, "svbk", 1u, 1u },
-    { 23u, "key1_armed", 1u, 1u },
-    { 24u, "bcps", 1u, 1u },
-    { 25u, "ocps", 1u, 1u },
-    { 26u, "ff56", 1u, 1u },
-    { 27u, "ff72", 1u, 1u },
-    { 28u, "ff73", 1u, 1u },
-    { 29u, "ff74", 1u, 1u },
-    { 30u, "ff75", 1u, 1u },
-    { 31u, "double_speed", 1u, 1u },
-    { 32u, "cpu_stall_kind", 1u, 1u },
-    { 33u, "stop_switch_pending", 1u, 1u },
-    { 34u, "cpu_stall_half_dots", 4u, 1u },
-    { 35u, "bg_cram", 1u, 64u },
-    { 36u, "obj_cram", 1u, 64u },
-    { 37u, "opri", 1u, 1u },
-    { 38u, "frame_working", 1u, GBB_FRAME_PIXELS },
-    { 39u, "frame_completed", 1u, GBB_FRAME_PIXELS },
-    { 40u, "rgb_working", 2u, GBB_FRAME_PIXELS },
-    { 41u, "rgb_completed", 2u, GBB_FRAME_PIXELS },
-    { 42u, "compat_rgb555", 2u, 12u },
-    { 43u, "frame_generation", 8u, 1u },
-    { 44u, "frame_completion_half_dots", 8u, 1u },
-    { 45u, "ppu_dot", 2u, 1u },
-    { 46u, "ppu_half_phase", 1u, 1u },
-    { 47u, "ppu_mode", 1u, 1u },
-    { 48u, "ppu_stat_line", 1u, 1u },
-    { 49u, "ppu_fifo", 1u, GBB_PPU_FIFO_CAPACITY },
-    { 50u, "ppu_fifo_head", 1u, 1u },
-    { 51u, "ppu_fifo_count", 1u, 1u },
-    { 52u, "ppu_fetch_stage", 1u, 1u },
-    { 53u, "ppu_fetch_phase", 1u, 1u },
-    { 54u, "ppu_fetch_enqueued", 2u, 1u },
-    { 55u, "ppu_transfer_age", 1u, 1u },
-    { 56u, "ppu_output_x", 1u, 1u },
-    { 57u, "ppu_scroll_discard", 1u, 1u },
-    { 58u, "ppu_fine_scroll", 1u, 1u },
-    { 59u, "ppu_mode3_stall", 1u, 1u },
-    { 60u, "ppu_window_started", 1u, 1u },
-    { 61u, "ppu_transfer_complete", 1u, 1u },
-    { 62u, "ppu_objects_stalled", 2u, 1u },
-    { 63u, "ppu_object_tiles_fetched", 4u, 1u },
-    { 64u, "ppu_selected_objects", 1u, GBB_LINE_OBJECT_LIMIT },
-    { 65u, "ppu_selected_y", 1u, GBB_LINE_OBJECT_LIMIT },
-    { 66u, "ppu_selected_x", 1u, GBB_LINE_OBJECT_LIMIT },
-    { 67u, "ppu_selected_tile", 1u, GBB_LINE_OBJECT_LIMIT },
-    { 68u, "ppu_selected_attributes", 1u, GBB_LINE_OBJECT_LIMIT },
-    { 69u, "ppu_selected_object_count", 1u, 1u },
-    { 70u, "ppu_scan_index", 1u, 1u },
-    { 71u, "ppu_window_line", 1u, 1u },
-    { 72u, "ppu_window_line_drawn", 1u, 1u },
-    { 73u, "lcdc", 1u, 1u },
-    { 74u, "scy", 1u, 1u },
-    { 75u, "scx", 1u, 1u },
-    { 76u, "ly", 1u, 1u },
-    { 77u, "lyc", 1u, 1u },
-    { 78u, "bgp", 1u, 1u },
-    { 79u, "obp0", 1u, 1u },
-    { 80u, "obp1", 1u, 1u },
-    { 81u, "wy", 1u, 1u },
-    { 82u, "wx", 1u, 1u },
-    { 83u, "dma_register", 1u, 1u },
-    { 84u, "dma_page", 1u, 1u },
-    { 85u, "dma_pending_page", 1u, 1u },
-    { 86u, "dma_index", 1u, 1u },
-    { 87u, "dma_phase", 1u, 1u },
-    { 88u, "dma_active", 1u, 1u },
-    { 89u, "dma_start_pending", 1u, 1u },
-    { 90u, "dma_cpu_blocked", 1u, 1u },
-    { 91u, "hdma.mode", 1u, 1u },
-    { 92u, "hdma.active", 1u, 1u },
-    { 93u, "hdma.pending_hblank", 1u, 1u },
-    { 94u, "hdma.blocks_remaining", 2u, 1u },
-    { 95u, "hdma.byte_index", 1u, 1u },
-    { 96u, "hdma.byte_phase", 1u, 1u },
-    { 97u, "hdma.source_cursor", 2u, 1u },
-    { 98u, "hdma.destination_cursor", 4u, 1u },
-    { 99u, "hdma.block_vram_bank", 1u, 1u },
-    { 100u, "hdma.source_high", 1u, 1u },
-    { 101u, "hdma.source_low", 1u, 1u },
-    { 102u, "hdma.destination_high", 1u, 1u },
-    { 103u, "hdma.destination_low", 1u, 1u },
-    { 104u, "hdma.control_readback", 1u, 1u },
-    { 105u, "joypad_select", 1u, 1u },
-    { 106u, "joypad_buttons", 1u, 1u },
-    { 107u, "a", 1u, 1u },
-    { 108u, "f", 1u, 1u },
-    { 109u, "b", 1u, 1u },
-    { 110u, "c", 1u, 1u },
-    { 111u, "d", 1u, 1u },
-    { 112u, "e", 1u, 1u },
-    { 113u, "h", 1u, 1u },
-    { 114u, "l", 1u, 1u },
-    { 115u, "div", 1u, 1u },
-    { 116u, "stat", 1u, 1u },
-    { 117u, "tima", 1u, 1u },
-    { 118u, "tma", 1u, 1u },
-    { 119u, "tac", 1u, 1u },
-    { 120u, "ie", 1u, 1u },
-    { 121u, "interrupt_flags", 1u, 1u },
-    { 122u, "ime_delay", 1u, 1u },
-    { 123u, "ime", 1u, 1u },
-    { 124u, "divider_phase", 1u, 1u },
-    { 125u, "divider_counter", 2u, 1u },
-    { 126u, "timer_signal", 1u, 1u },
-    { 127u, "timer_reload_pending", 1u, 1u },
-    { 128u, "timer_reload_remaining", 1u, 1u },
-    { 129u, "timer_reloaded_at", 8u, 1u },
-    { 130u, "instruction_start_half_dots", 8u, 1u },
-    { 131u, "serial_data", 1u, 1u },
-    { 132u, "serial_control", 1u, 1u },
-    { 133u, "serial_bits", 1u, 1u },
-    { 134u, "serial_edge_remaining", 2u, 1u },
-    { 135u, "serial_active", 1u, 1u },
-    { 136u, "bus_unsupported", 1u, 1u },
-    { 137u, "bus_unsupported_address", 2u, 1u },
-    { 138u, "halted", 1u, 1u },
-    { 139u, "stopped", 1u, 1u },
-    { 140u, "halt_bug", 1u, 1u },
-    { 141u, "pc", 2u, 1u },
-    { 142u, "sp", 2u, 1u },
-    { 143u, "time_half_dots", 8u, 1u },
-    { 144u, "input_event_count", 1u, 1u },
-    { 145u, "input_events[].at_half_dots", 8u, GBB_INPUT_EVENT_CAPACITY },
-    { 146u, "input_events[].kind", 1u, GBB_INPUT_EVENT_CAPACITY },
-    { 147u, "input_events[].value", 1u, GBB_INPUT_EVENT_CAPACITY },
-    { 148u, "lockup_pc", 2u, 1u },
-    { 149u, "lockup_opcode", 1u, 1u },
-    { 150u, "locked", 1u, 1u },
-    { 151u, "apu_nr50", 1u, 1u },
-    { 152u, "apu_nr51", 1u, 1u },
-    { 153u, "apu_power", 1u, 1u },
-    { 154u, "apu_sequencer_step", 1u, 1u },
-    { 155u, "apu_pulse[].sweep", 1u, 2u },
-    { 156u, "apu_pulse[].duty_length", 1u, 2u },
-    { 157u, "apu_pulse[].envelope", 1u, 2u },
-    { 158u, "apu_pulse[].frequency_low", 1u, 2u },
-    { 159u, "apu_pulse[].control", 1u, 2u },
-    { 160u, "apu_pulse[].length", 2u, 2u },
-    { 161u, "apu_pulse[].frequency", 2u, 2u },
-    { 162u, "apu_pulse[].timer", 2u, 2u },
-    { 163u, "apu_pulse[].sweep_shadow", 2u, 2u },
-    { 164u, "apu_pulse[].phase", 1u, 2u },
-    { 165u, "apu_pulse[].volume", 1u, 2u },
-    { 166u, "apu_pulse[].envelope_timer", 1u, 2u },
-    { 167u, "apu_pulse[].sweep_timer", 1u, 2u },
-    { 168u, "apu_pulse[].enabled", 1u, 2u },
-    { 169u, "apu_pulse[].sweep_enabled", 1u, 2u },
-    { 170u, "apu_pulse[].sweep_negate_used", 1u, 2u },
-    { 171u, "apu_wave.dac", 1u, 1u },
-    { 172u, "apu_wave.length_reg", 1u, 1u },
-    { 173u, "apu_wave.level", 1u, 1u },
-    { 174u, "apu_wave.frequency_low", 1u, 1u },
-    { 175u, "apu_wave.control", 1u, 1u },
-    { 176u, "apu_wave.sample_buffer", 1u, 1u },
-    { 177u, "apu_wave.ram", 1u, 16u },
-    { 178u, "apu_wave.position", 1u, 1u },
-    { 179u, "apu_wave.length", 2u, 1u },
-    { 180u, "apu_wave.timer", 2u, 1u },
-    { 181u, "apu_wave.enabled", 1u, 1u },
-    { 182u, "apu_noise.length_reg", 1u, 1u },
-    { 183u, "apu_noise.envelope", 1u, 1u },
-    { 184u, "apu_noise.polynomial", 1u, 1u },
-    { 185u, "apu_noise.control", 1u, 1u },
-    { 186u, "apu_noise.volume", 1u, 1u },
-    { 187u, "apu_noise.envelope_timer", 1u, 1u },
-    { 188u, "apu_noise.length", 2u, 1u },
-    { 189u, "apu_noise.lfsr", 2u, 1u },
-    { 190u, "apu_noise.timer", 4u, 1u },
-    { 191u, "apu_noise.enabled", 1u, 1u },
-    { 192u, "apu_sample_phase", 8u, 1u },
-    { 193u, "audio_event_ring", 8u, (2u * GBB_AUDIO_EVENT_TAPS) },
-    { 194u, "audio_event_head", 1u, 1u },
-    { 195u, "audio_mix_level", 4u, 2u },
-    { 196u, "audio_hpf_input", 4u, 2u },
-    { 197u, "audio_hpf_output", 4u, 2u },
+    { 0u, "cartridge_ram", 1u, GBB_STATE_MAX_CARTRIDGE_RAM_BYTES, 0u, 1u, STATE_VALUE_U8, STATE_STORAGE_CARTRIDGE_RAM },
+    { 1u, "cart.rom_bank_lo", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rom_bank_lo)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 2u, "cart.rom_bank_hi", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rom_bank_hi)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 3u, "cart.ram_bank", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, ram_bank)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 4u, "cart.ram_enabled", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, ram_enabled)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 5u, "cart.mbc1_mode", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, mbc1_mode)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 6u, "cart.rumble_on", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rumble_on)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 7u, "cart.rtc_s", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_s)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 8u, "cart.rtc_m", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_m)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 9u, "cart.rtc_h", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_h)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 10u, "cart.rtc_dl", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_dl)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 11u, "cart.rtc_dh", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_dh)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 12u, "cart.rtc_l", 1u, 5u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_l)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 13u, "cart.rtc_latch_prev", 1u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_latch_prev)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 14u, "cart.rtc_sub", 4u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_sub)), sizeof(uint32_t), STATE_VALUE_U32, STATE_STORAGE_INSTANCE },
+    { 15u, "cart.rtc_synced_at", 8u, 1u, (offsetof(gbb_instance, cart) + offsetof(cart_state, rtc_synced_at)), sizeof(uint64_t), STATE_VALUE_U64, STATE_STORAGE_INSTANCE },
+    { 16u, "wram", 1u, (GBB_WRAM_BANKS * GBB_WRAM_BANK_SIZE), offsetof(gbb_instance, wram), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 17u, "hram", 1u, 127u, offsetof(gbb_instance, hram), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 18u, "vram", 1u, (GBB_VRAM_BANKS * GBB_VRAM_BANK_SIZE), offsetof(gbb_instance, vram), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 19u, "oam", 1u, GBB_OAM_BYTES, offsetof(gbb_instance, oam), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 20u, "vram_bank", 1u, 1u, offsetof(gbb_instance, vram_bank), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 21u, "wram_bank", 1u, 1u, offsetof(gbb_instance, wram_bank), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 22u, "svbk", 1u, 1u, offsetof(gbb_instance, svbk), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 23u, "key1_armed", 1u, 1u, offsetof(gbb_instance, key1_armed), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 24u, "bcps", 1u, 1u, offsetof(gbb_instance, bcps), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 25u, "ocps", 1u, 1u, offsetof(gbb_instance, ocps), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 26u, "ff56", 1u, 1u, offsetof(gbb_instance, ff56), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 27u, "ff72", 1u, 1u, offsetof(gbb_instance, ff72), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 28u, "ff73", 1u, 1u, offsetof(gbb_instance, ff73), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 29u, "ff74", 1u, 1u, offsetof(gbb_instance, ff74), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 30u, "ff75", 1u, 1u, offsetof(gbb_instance, ff75), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 31u, "double_speed", 1u, 1u, offsetof(gbb_instance, double_speed), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 32u, "cpu_stall_kind", 1u, 1u, offsetof(gbb_instance, cpu_stall_kind), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 33u, "stop_switch_pending", 1u, 1u, offsetof(gbb_instance, stop_switch_pending), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 34u, "cpu_stall_half_dots", 4u, 1u, offsetof(gbb_instance, cpu_stall_half_dots), sizeof(uint32_t), STATE_VALUE_U32, STATE_STORAGE_INSTANCE },
+    { 35u, "bg_cram", 1u, 64u, offsetof(gbb_instance, bg_cram), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 36u, "obj_cram", 1u, 64u, offsetof(gbb_instance, obj_cram), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 37u, "opri", 1u, 1u, offsetof(gbb_instance, opri), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 38u, "frame_working", 1u, GBB_FRAME_PIXELS, offsetof(gbb_instance, frame_working), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 39u, "frame_completed", 1u, GBB_FRAME_PIXELS, offsetof(gbb_instance, frame_completed), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 40u, "rgb_working", 2u, GBB_FRAME_PIXELS, offsetof(gbb_instance, rgb_working), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 41u, "rgb_completed", 2u, GBB_FRAME_PIXELS, offsetof(gbb_instance, rgb_completed), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 42u, "compat_rgb555", 2u, 12u, offsetof(gbb_instance, compat_rgb555), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 43u, "frame_generation", 8u, 1u, offsetof(gbb_instance, frame_generation), sizeof(uint64_t), STATE_VALUE_U64, STATE_STORAGE_INSTANCE },
+    { 44u, "frame_completion_half_dots", 8u, 1u, offsetof(gbb_instance, frame_completion_half_dots), sizeof(uint64_t), STATE_VALUE_U64, STATE_STORAGE_INSTANCE },
+    { 45u, "ppu_dot", 2u, 1u, offsetof(gbb_instance, ppu_dot), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 46u, "ppu_half_phase", 1u, 1u, offsetof(gbb_instance, ppu_half_phase), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 47u, "ppu_mode", 1u, 1u, offsetof(gbb_instance, ppu_mode), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 48u, "ppu_stat_line", 1u, 1u, offsetof(gbb_instance, ppu_stat_line), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 49u, "ppu_fifo", 1u, GBB_PPU_FIFO_CAPACITY, offsetof(gbb_instance, ppu_fifo), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 50u, "ppu_fifo_head", 1u, 1u, offsetof(gbb_instance, ppu_fifo_head), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 51u, "ppu_fifo_count", 1u, 1u, offsetof(gbb_instance, ppu_fifo_count), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 52u, "ppu_fetch_stage", 1u, 1u, offsetof(gbb_instance, ppu_fetch_stage), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 53u, "ppu_fetch_phase", 1u, 1u, offsetof(gbb_instance, ppu_fetch_phase), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 54u, "ppu_fetch_enqueued", 2u, 1u, offsetof(gbb_instance, ppu_fetch_enqueued), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 55u, "ppu_transfer_age", 1u, 1u, offsetof(gbb_instance, ppu_transfer_age), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 56u, "ppu_output_x", 1u, 1u, offsetof(gbb_instance, ppu_output_x), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 57u, "ppu_scroll_discard", 1u, 1u, offsetof(gbb_instance, ppu_scroll_discard), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 58u, "ppu_fine_scroll", 1u, 1u, offsetof(gbb_instance, ppu_fine_scroll), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 59u, "ppu_mode3_stall", 1u, 1u, offsetof(gbb_instance, ppu_mode3_stall), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 60u, "ppu_window_started", 1u, 1u, offsetof(gbb_instance, ppu_window_started), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 61u, "ppu_transfer_complete", 1u, 1u, offsetof(gbb_instance, ppu_transfer_complete), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 62u, "ppu_objects_stalled", 2u, 1u, offsetof(gbb_instance, ppu_objects_stalled), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 63u, "ppu_object_tiles_fetched", 4u, 1u, offsetof(gbb_instance, ppu_object_tiles_fetched), sizeof(uint32_t), STATE_VALUE_U32, STATE_STORAGE_INSTANCE },
+    { 64u, "ppu_selected_objects", 1u, GBB_LINE_OBJECT_LIMIT, offsetof(gbb_instance, ppu_selected_objects), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 65u, "ppu_selected_y", 1u, GBB_LINE_OBJECT_LIMIT, offsetof(gbb_instance, ppu_selected_y), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 66u, "ppu_selected_x", 1u, GBB_LINE_OBJECT_LIMIT, offsetof(gbb_instance, ppu_selected_x), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 67u, "ppu_selected_tile", 1u, GBB_LINE_OBJECT_LIMIT, offsetof(gbb_instance, ppu_selected_tile), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 68u, "ppu_selected_attributes", 1u, GBB_LINE_OBJECT_LIMIT, offsetof(gbb_instance, ppu_selected_attributes), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 69u, "ppu_selected_object_count", 1u, 1u, offsetof(gbb_instance, ppu_selected_object_count), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 70u, "ppu_scan_index", 1u, 1u, offsetof(gbb_instance, ppu_scan_index), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 71u, "ppu_window_line", 1u, 1u, offsetof(gbb_instance, ppu_window_line), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 72u, "ppu_window_line_drawn", 1u, 1u, offsetof(gbb_instance, ppu_window_line_drawn), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 73u, "lcdc", 1u, 1u, offsetof(gbb_instance, lcdc), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 74u, "scy", 1u, 1u, offsetof(gbb_instance, scy), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 75u, "scx", 1u, 1u, offsetof(gbb_instance, scx), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 76u, "ly", 1u, 1u, offsetof(gbb_instance, ly), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 77u, "lyc", 1u, 1u, offsetof(gbb_instance, lyc), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 78u, "bgp", 1u, 1u, offsetof(gbb_instance, bgp), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 79u, "obp0", 1u, 1u, offsetof(gbb_instance, obp0), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 80u, "obp1", 1u, 1u, offsetof(gbb_instance, obp1), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 81u, "wy", 1u, 1u, offsetof(gbb_instance, wy), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 82u, "wx", 1u, 1u, offsetof(gbb_instance, wx), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 83u, "dma_register", 1u, 1u, offsetof(gbb_instance, dma_register), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 84u, "dma_page", 1u, 1u, offsetof(gbb_instance, dma_page), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 85u, "dma_pending_page", 1u, 1u, offsetof(gbb_instance, dma_pending_page), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 86u, "dma_index", 1u, 1u, offsetof(gbb_instance, dma_index), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 87u, "dma_phase", 1u, 1u, offsetof(gbb_instance, dma_phase), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 88u, "dma_active", 1u, 1u, offsetof(gbb_instance, dma_active), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 89u, "dma_start_pending", 1u, 1u, offsetof(gbb_instance, dma_start_pending), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 90u, "dma_cpu_blocked", 1u, 1u, offsetof(gbb_instance, dma_cpu_blocked), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 91u, "hdma.mode", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, mode)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 92u, "hdma.active", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, active)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 93u, "hdma.pending_hblank", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, pending_hblank)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 94u, "hdma.blocks_remaining", 2u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, blocks_remaining)), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 95u, "hdma.byte_index", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, byte_index)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 96u, "hdma.byte_phase", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, byte_phase)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 97u, "hdma.source_cursor", 2u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, source_cursor)), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 98u, "hdma.destination_cursor", 4u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, destination_cursor)), sizeof(uint32_t), STATE_VALUE_U32, STATE_STORAGE_INSTANCE },
+    { 99u, "hdma.block_vram_bank", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, block_vram_bank)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 100u, "hdma.source_high", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, source_high)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 101u, "hdma.source_low", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, source_low)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 102u, "hdma.destination_high", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, destination_high)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 103u, "hdma.destination_low", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, destination_low)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 104u, "hdma.control_readback", 1u, 1u, (offsetof(gbb_instance, hdma) + offsetof(hdma_state, control_readback)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 105u, "joypad_select", 1u, 1u, offsetof(gbb_instance, joypad_select), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 106u, "joypad_buttons", 1u, 1u, offsetof(gbb_instance, joypad_buttons), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 107u, "a", 1u, 1u, offsetof(gbb_instance, a), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 108u, "f", 1u, 1u, offsetof(gbb_instance, f), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 109u, "b", 1u, 1u, offsetof(gbb_instance, b), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 110u, "c", 1u, 1u, offsetof(gbb_instance, c), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 111u, "d", 1u, 1u, offsetof(gbb_instance, d), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 112u, "e", 1u, 1u, offsetof(gbb_instance, e), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 113u, "h", 1u, 1u, offsetof(gbb_instance, h), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 114u, "l", 1u, 1u, offsetof(gbb_instance, l), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 115u, "div", 1u, 1u, offsetof(gbb_instance, div), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 116u, "stat", 1u, 1u, offsetof(gbb_instance, stat), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 117u, "tima", 1u, 1u, offsetof(gbb_instance, tima), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 118u, "tma", 1u, 1u, offsetof(gbb_instance, tma), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 119u, "tac", 1u, 1u, offsetof(gbb_instance, tac), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 120u, "ie", 1u, 1u, offsetof(gbb_instance, ie), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 121u, "interrupt_flags", 1u, 1u, offsetof(gbb_instance, interrupt_flags), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 122u, "ime_delay", 1u, 1u, offsetof(gbb_instance, ime_delay), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 123u, "ime", 1u, 1u, offsetof(gbb_instance, ime), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 124u, "divider_phase", 1u, 1u, offsetof(gbb_instance, divider_phase), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 125u, "divider_counter", 2u, 1u, offsetof(gbb_instance, divider_counter), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 126u, "timer_signal", 1u, 1u, offsetof(gbb_instance, timer_signal), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 127u, "timer_reload_pending", 1u, 1u, offsetof(gbb_instance, timer_reload_pending), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 128u, "timer_reload_remaining", 1u, 1u, offsetof(gbb_instance, timer_reload_remaining), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 129u, "timer_reloaded_at", 8u, 1u, offsetof(gbb_instance, timer_reloaded_at), sizeof(uint64_t), STATE_VALUE_U64, STATE_STORAGE_INSTANCE },
+    { 130u, "instruction_start_half_dots", 8u, 1u, offsetof(gbb_instance, instruction_start_half_dots), sizeof(uint64_t), STATE_VALUE_U64, STATE_STORAGE_INSTANCE },
+    { 131u, "serial_data", 1u, 1u, offsetof(gbb_instance, serial_data), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 132u, "serial_control", 1u, 1u, offsetof(gbb_instance, serial_control), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 133u, "serial_bits", 1u, 1u, offsetof(gbb_instance, serial_bits), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 134u, "serial_edge_remaining", 2u, 1u, offsetof(gbb_instance, serial_edge_remaining), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 135u, "serial_active", 1u, 1u, offsetof(gbb_instance, serial_active), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 136u, "bus_unsupported", 1u, 1u, offsetof(gbb_instance, bus_unsupported), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 137u, "bus_unsupported_address", 2u, 1u, offsetof(gbb_instance, bus_unsupported_address), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 138u, "halted", 1u, 1u, offsetof(gbb_instance, halted), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 139u, "stopped", 1u, 1u, offsetof(gbb_instance, stopped), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 140u, "halt_bug", 1u, 1u, offsetof(gbb_instance, halt_bug), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 141u, "pc", 2u, 1u, offsetof(gbb_instance, pc), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 142u, "sp", 2u, 1u, offsetof(gbb_instance, sp), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 143u, "time_half_dots", 8u, 1u, offsetof(gbb_instance, time_half_dots), sizeof(uint64_t), STATE_VALUE_U64, STATE_STORAGE_INSTANCE },
+    { 144u, "input_event_count", 1u, 1u, offsetof(gbb_instance, input_event_count), sizeof(size_t), STATE_VALUE_COUNT, STATE_STORAGE_INSTANCE },
+    { 145u, "input_events[].at_half_dots", 8u, GBB_INPUT_EVENT_CAPACITY, (offsetof(gbb_instance, input_events) + offsetof(gbb_input_event, at_half_dots)), sizeof(gbb_input_event), STATE_VALUE_U64, STATE_STORAGE_INSTANCE },
+    { 146u, "input_events[].kind", 1u, GBB_INPUT_EVENT_CAPACITY, (offsetof(gbb_instance, input_events) + offsetof(gbb_input_event, kind)), sizeof(gbb_input_event), STATE_VALUE_EVENT_KIND, STATE_STORAGE_INSTANCE },
+    { 147u, "input_events[].value", 1u, GBB_INPUT_EVENT_CAPACITY, (offsetof(gbb_instance, input_events) + offsetof(gbb_input_event, value)), sizeof(gbb_input_event), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 148u, "lockup_pc", 2u, 1u, offsetof(gbb_instance, lockup_pc), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 149u, "lockup_opcode", 1u, 1u, offsetof(gbb_instance, lockup_opcode), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 150u, "locked", 1u, 1u, offsetof(gbb_instance, locked), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 151u, "apu_nr50", 1u, 1u, offsetof(gbb_instance, apu_nr50), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 152u, "apu_nr51", 1u, 1u, offsetof(gbb_instance, apu_nr51), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 153u, "apu_power", 1u, 1u, offsetof(gbb_instance, apu_power), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 154u, "apu_sequencer_step", 1u, 1u, offsetof(gbb_instance, apu_sequencer_step), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 155u, "apu_pulse[].sweep", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, sweep)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 156u, "apu_pulse[].duty_length", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, duty_length)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 157u, "apu_pulse[].envelope", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, envelope)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 158u, "apu_pulse[].frequency_low", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, frequency_low)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 159u, "apu_pulse[].control", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, control)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 160u, "apu_pulse[].length", 2u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, length)), sizeof(apu_pulse_channel), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 161u, "apu_pulse[].frequency", 2u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, frequency)), sizeof(apu_pulse_channel), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 162u, "apu_pulse[].timer", 2u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, timer)), sizeof(apu_pulse_channel), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 163u, "apu_pulse[].sweep_shadow", 2u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, sweep_shadow)), sizeof(apu_pulse_channel), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 164u, "apu_pulse[].phase", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, phase)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 165u, "apu_pulse[].volume", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, volume)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 166u, "apu_pulse[].envelope_timer", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, envelope_timer)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 167u, "apu_pulse[].sweep_timer", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, sweep_timer)), sizeof(apu_pulse_channel), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 168u, "apu_pulse[].enabled", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, enabled)), sizeof(apu_pulse_channel), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 169u, "apu_pulse[].sweep_enabled", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, sweep_enabled)), sizeof(apu_pulse_channel), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 170u, "apu_pulse[].sweep_negate_used", 1u, 2u, (offsetof(gbb_instance, apu_pulse) + offsetof(apu_pulse_channel, sweep_negate_used)), sizeof(apu_pulse_channel), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 171u, "apu_wave.dac", 1u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, dac)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 172u, "apu_wave.length_reg", 1u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, length_reg)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 173u, "apu_wave.level", 1u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, level)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 174u, "apu_wave.frequency_low", 1u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, frequency_low)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 175u, "apu_wave.control", 1u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, control)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 176u, "apu_wave.sample_buffer", 1u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, sample_buffer)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 177u, "apu_wave.ram", 1u, 16u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, ram)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 178u, "apu_wave.position", 1u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, position)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 179u, "apu_wave.length", 2u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, length)), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 180u, "apu_wave.timer", 2u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, timer)), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 181u, "apu_wave.enabled", 1u, 1u, (offsetof(gbb_instance, apu_wave) + offsetof(apu_wave_channel, enabled)), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 182u, "apu_noise.length_reg", 1u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, length_reg)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 183u, "apu_noise.envelope", 1u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, envelope)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 184u, "apu_noise.polynomial", 1u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, polynomial)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 185u, "apu_noise.control", 1u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, control)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 186u, "apu_noise.volume", 1u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, volume)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 187u, "apu_noise.envelope_timer", 1u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, envelope_timer)), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 188u, "apu_noise.length", 2u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, length)), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 189u, "apu_noise.lfsr", 2u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, lfsr)), sizeof(uint16_t), STATE_VALUE_U16, STATE_STORAGE_INSTANCE },
+    { 190u, "apu_noise.timer", 4u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, timer)), sizeof(uint32_t), STATE_VALUE_U32, STATE_STORAGE_INSTANCE },
+    { 191u, "apu_noise.enabled", 1u, 1u, (offsetof(gbb_instance, apu_noise) + offsetof(apu_noise_channel, enabled)), sizeof(int), STATE_VALUE_BOOL, STATE_STORAGE_INSTANCE },
+    { 192u, "apu_sample_phase", 8u, 1u, offsetof(gbb_instance, apu_sample_phase), sizeof(uint64_t), STATE_VALUE_U64, STATE_STORAGE_INSTANCE },
+    { 193u, "audio_event_ring", 8u, (2u * GBB_AUDIO_EVENT_TAPS), offsetof(gbb_instance, audio_event_ring), sizeof(int64_t), STATE_VALUE_I64, STATE_STORAGE_INSTANCE },
+    { 194u, "audio_event_head", 1u, 1u, offsetof(gbb_instance, audio_event_head), sizeof(uint8_t), STATE_VALUE_U8, STATE_STORAGE_INSTANCE },
+    { 195u, "audio_mix_level", 4u, 2u, offsetof(gbb_instance, audio_mix_level), sizeof(int32_t), STATE_VALUE_I32, STATE_STORAGE_INSTANCE },
+    { 196u, "audio_hpf_input", 4u, 2u, offsetof(gbb_instance, audio_hpf_input), sizeof(int32_t), STATE_VALUE_I32, STATE_STORAGE_INSTANCE },
+    { 197u, "audio_hpf_output", 4u, 2u, offsetof(gbb_instance, audio_hpf_output), sizeof(int32_t), STATE_VALUE_I32, STATE_STORAGE_INSTANCE },
 };
 
 static int state_descriptor_max_body_size(const state_field_descriptor *fields, size_t count,
@@ -3800,6 +3916,661 @@ static int ranges_overlap(uintptr_t a, size_t a_size, uintptr_t b, size_t b_size
     return a < b + b_size && b < a + a_size;
 }
 
+static void state_encode_i64(int64_t value, uint8_t out[8]) {
+    const uint64_t bits = (uint64_t)value;
+    for (unsigned i = 0u; i < 8u; ++i) out[i] = (uint8_t)(bits >> (i * 8u));
+}
+
+static int state_decode_i64(const uint8_t bytes[8], int64_t *out_value) {
+    if (bytes == NULL || out_value == NULL) return 0;
+    uint64_t raw = 0u;
+    for (unsigned i = 0u; i < 8u; ++i) raw |= (uint64_t)bytes[i] << (i * 8u);
+    if (raw <= (uint64_t)INT64_MAX) {
+        *out_value = (int64_t)raw;
+        return 1;
+    }
+    const uint64_t distance = UINT64_MAX - raw;
+    if (distance > (uint64_t)INT64_MAX) return 0;
+    *out_value = -1 - (int64_t)distance;
+    return 1;
+}
+
+static int state_bits_to_i32(uint32_t raw, int32_t *out_value) {
+    if (out_value == NULL) return 0;
+    if (raw <= (uint32_t)INT32_MAX) {
+        *out_value = (int32_t)raw;
+        return 1;
+    }
+    const uint32_t distance = UINT32_MAX - raw;
+    if (distance > (uint32_t)INT32_MAX) return 0;
+    *out_value = -1 - (int32_t)distance;
+    return 1;
+}
+
+static uint32_t state_crc32_update(uint32_t crc, const uint8_t *bytes, size_t length) {
+    for (size_t i = 0u; i < length; ++i) {
+        crc ^= bytes[i];
+        for (unsigned bit = 0u; bit < 8u; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1u) != 0u ? UINT32_C(0xEDB88320) : 0u);
+    }
+    return crc;
+}
+
+static uint32_t state_crc32(const uint8_t *bytes, size_t length) {
+    if (bytes == NULL && length != 0u) return 0u;
+    return state_crc32_update(UINT32_MAX, bytes, length) ^ UINT32_MAX;
+}
+
+static uint16_t state_get_u16(const uint8_t *bytes) {
+    return (uint16_t)((uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8));
+}
+
+static uint32_t state_get_u32(const uint8_t *bytes) {
+    return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
+           ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+}
+
+static uint64_t state_get_u64(const uint8_t *bytes, uint8_t width) {
+    uint64_t value = 0u;
+    for (uint8_t i = 0u; i < width; ++i) value |= (uint64_t)bytes[i] << (i * 8u);
+    return value;
+}
+
+static void state_put_u16(uint8_t *bytes, uint16_t value) {
+    bytes[0] = (uint8_t)value;
+    bytes[1] = (uint8_t)(value >> 8);
+}
+
+static void state_put_u32(uint8_t *bytes, uint32_t value) {
+    for (unsigned i = 0u; i < 4u; ++i) bytes[i] = (uint8_t)(value >> (i * 8u));
+}
+
+static void state_put_u64(uint8_t *bytes, uint64_t value, uint8_t width) {
+    for (uint8_t i = 0u; i < width; ++i) bytes[i] = (uint8_t)(value >> (i * 8u));
+}
+
+static const state_field_descriptor *state_field_by_path(const char *path) {
+    const size_t count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+    for (size_t i = 0u; i < count; ++i)
+        if (strcmp(STATE_FIELDS[i].path, path) == 0) return &STATE_FIELDS[i];
+    return NULL;
+}
+
+static size_t state_field_count_for_instance(const gbb_instance *instance,
+                                             const state_field_descriptor *field) {
+    if (field->storage == STATE_STORAGE_CARTRIDGE_RAM)
+        return instance->cartridge_ram_size;
+    return field->max_count;
+}
+
+static int state_host_value(const gbb_instance *instance,
+                            const state_field_descriptor *field,
+                            size_t index, uint64_t *out_value) {
+    if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;
+    if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {
+        if (instance->cartridge_ram == NULL) return 0;
+        *out_value = instance->cartridge_ram[index];
+        return 1;
+    }
+    if (field->stride != 0u && index > (SIZE_MAX - field->offset) / field->stride)
+        return 0;
+    const uint8_t *address = (const uint8_t *)(const void *)instance +
+                             field->offset + index * field->stride;
+    switch (field->kind) {
+    case STATE_VALUE_U8: { uint8_t v; memcpy(&v, address, sizeof(v)); *out_value = v; return 1; }
+    case STATE_VALUE_U16: { uint16_t v; memcpy(&v, address, sizeof(v)); *out_value = v; return 1; }
+    case STATE_VALUE_U32: { uint32_t v; memcpy(&v, address, sizeof(v)); *out_value = v; return 1; }
+    case STATE_VALUE_U64: { uint64_t v; memcpy(&v, address, sizeof(v)); *out_value = v; return 1; }
+    case STATE_VALUE_I32: { int32_t v; memcpy(&v, address, sizeof(v)); *out_value = (uint32_t)v; return 1; }
+    case STATE_VALUE_I64: { int64_t v; memcpy(&v, address, sizeof(v)); *out_value = (uint64_t)v; return 1; }
+    case STATE_VALUE_BOOL: {
+        int v; memcpy(&v, address, sizeof(v));
+        if (v < 0) return 0;
+        *out_value = (uint64_t)v;
+        return 1;
+    }
+    case STATE_VALUE_COUNT: {
+        size_t v; memcpy(&v, address, sizeof(v)); *out_value = (uint64_t)v; return 1;
+    }
+    case STATE_VALUE_EVENT_KIND: {
+        gbb_input_event_kind v; memcpy(&v, address, sizeof(v));
+        if ((int)v < 0) return 0;
+        *out_value = (uint64_t)(unsigned)v;
+        return 1;
+    }
+    default: return 0;
+    }
+}
+
+static int state_store_host_value(gbb_instance *instance,
+                                  const state_field_descriptor *field,
+                                  size_t index, uint64_t raw) {
+    if (instance == NULL || field == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;
+    if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {
+        if (instance->cartridge_ram == NULL) return 0;
+        instance->cartridge_ram[index] = (uint8_t)raw;
+        return 1;
+    }
+    if (field->stride != 0u && index > (SIZE_MAX - field->offset) / field->stride)
+        return 0;
+    uint8_t *address = (uint8_t *)(void *)instance + field->offset + index * field->stride;
+    switch (field->kind) {
+    case STATE_VALUE_U8: { const uint8_t v = (uint8_t)raw; memcpy(address, &v, sizeof(v)); return 1; }
+    case STATE_VALUE_U16: { const uint16_t v = (uint16_t)raw; memcpy(address, &v, sizeof(v)); return 1; }
+    case STATE_VALUE_U32: { const uint32_t v = (uint32_t)raw; memcpy(address, &v, sizeof(v)); return 1; }
+    case STATE_VALUE_U64: { const uint64_t v = raw; memcpy(address, &v, sizeof(v)); return 1; }
+    case STATE_VALUE_I32: {
+        int32_t v;
+        if (!state_bits_to_i32((uint32_t)raw, &v)) return 0;
+        memcpy(address, &v, sizeof(v)); return 1;
+    }
+    case STATE_VALUE_I64: {
+        uint8_t bytes[8]; int64_t v;
+        state_put_u64(bytes, raw, 8u);
+        if (!state_decode_i64(bytes, &v)) return 0;
+        memcpy(address, &v, sizeof(v)); return 1;
+    }
+    case STATE_VALUE_BOOL: {
+        if (raw > 1u) return 0;
+        const int v = (int)raw; memcpy(address, &v, sizeof(v)); return 1;
+    }
+    case STATE_VALUE_COUNT: {
+        if (raw > SIZE_MAX) return 0;
+        const size_t v = (size_t)raw; memcpy(address, &v, sizeof(v)); return 1;
+    }
+    case STATE_VALUE_EVENT_KIND: {
+        if (raw > (uint64_t)GBB_INPUT_BUTTON_RELEASE) return 0;
+        const gbb_input_event_kind v = (gbb_input_event_kind)raw;
+        memcpy(address, &v, sizeof(v)); return 1;
+    }
+    default: return 0;
+    }
+}
+
+static int state_raw_from_body(const gbb_instance *instance, const uint8_t *body,
+                               size_t body_size, const char *path, size_t index,
+                               uint64_t *out_raw) {
+    const state_field_descriptor *wanted = state_field_by_path(path);
+    if (wanted == NULL || body == NULL || out_raw == NULL ||
+        index >= state_field_count_for_instance(instance, wanted)) return 0;
+    size_t offset = 0u;
+    const size_t fields = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+    for (size_t i = 0u; i < fields; ++i) {
+        const state_field_descriptor *field = &STATE_FIELDS[i];
+        const size_t count = state_field_count_for_instance(instance, field);
+        if (field == wanted) {
+            if (index > (SIZE_MAX - offset) / field->wire_width) return 0;
+            offset += index * field->wire_width;
+            if (offset > body_size || field->wire_width > body_size - offset) return 0;
+            *out_raw = state_get_u64(body + offset, field->wire_width);
+            return 1;
+        }
+        if (count > (SIZE_MAX - offset) / field->wire_width) return 0;
+        offset += count * field->wire_width;
+    }
+    return 0;
+}
+
+static int state_raw_from_instance(const gbb_instance *instance, const char *path,
+                                   size_t index, uint64_t *out_raw) {
+    return state_host_value(instance, state_field_by_path(path), index, out_raw);
+}
+
+static int state_source_raw(const gbb_instance *instance, const uint8_t *body,
+                            size_t body_size, const char *path, size_t index,
+                            uint64_t *out_raw) {
+    return body == NULL ? state_raw_from_instance(instance, path, index, out_raw)
+                        : state_raw_from_body(instance, body, body_size, path, index, out_raw);
+}
+
+static int state_field_value_valid(const gbb_instance *instance,
+                                   const state_field_descriptor *field,
+                                   size_t index, uint64_t raw,
+                                   uint8_t audio_head, uint64_t sample_phase) {
+    const uint64_t maximum = field->wire_width == 8u ? UINT64_MAX
+        : ((UINT64_C(1) << (field->wire_width * 8u)) - 1u);
+    if (raw > maximum) return 0;
+    if (field->kind == STATE_VALUE_BOOL && raw > 1u) return 0;
+    if (field->kind == STATE_VALUE_COUNT && raw > GBB_INPUT_EVENT_CAPACITY) return 0;
+    if (field->kind == STATE_VALUE_EVENT_KIND &&
+        (raw < (uint64_t)GBB_INPUT_STOP_WAKE || raw > (uint64_t)GBB_INPUT_BUTTON_RELEASE)) return 0;
+    if (field->kind == STATE_VALUE_I64) {
+        uint8_t encoded[8]; int64_t value;
+        state_put_u64(encoded, raw, 8u);
+        if (!state_decode_i64(encoded, &value)) return 0;
+        if (strcmp(field->path, "audio_event_ring") != 0) return 0;
+        const uint64_t phase = sample_phase;
+        return state_audio_ring_slot_valid(audio_head, index % GBB_AUDIO_EVENT_TAPS, phase, value);
+    }
+    if (field->kind == STATE_VALUE_I32) {
+        int32_t value;
+        if (!state_bits_to_i32((uint32_t)raw, &value)) return 0;
+        if (strcmp(field->path, "audio_mix_level") == 0)
+            return state_audio_mix_level_valid(value);
+        if (strcmp(field->path, "audio_hpf_input") == 0 ||
+            strcmp(field->path, "audio_hpf_output") == 0)
+            return value >= INT16_MIN && value <= INT16_MAX;
+        return 0;
+    }
+    if (strcmp(field->path, "frame_working") == 0 ||
+        strcmp(field->path, "frame_completed") == 0) return raw <= 3u;
+    if (strcmp(field->path, "rgb_working") == 0 ||
+        strcmp(field->path, "rgb_completed") == 0 ||
+        strcmp(field->path, "compat_rgb555") == 0) return raw <= 0x7FFFu;
+    if ((strcmp(field->path, "bg_cram") == 0 || strcmp(field->path, "obj_cram") == 0) &&
+        (index & 1u) != 0u) return (raw & 0x80u) == 0u;
+    if (strcmp(field->path, "cartridge_ram") == 0 && instance->cart.kind == CART_MBC2)
+        return (raw & 0xF0u) == 0xF0u;
+    if (strcmp(field->path, "cart.ram_enabled") == 0 ||
+        strcmp(field->path, "cart.rumble_on") == 0 ||
+        strcmp(field->path, "cart.mbc1_mode") == 0 ||
+        strcmp(field->path, "cart.rtc_latch_prev") == 0) {
+        if (strcmp(field->path, "cart.rtc_latch_prev") == 0) return 1;
+        return raw <= 1u;
+    }
+    if (strcmp(field->path, "cart.rtc_s") == 0 ||
+        strcmp(field->path, "cart.rtc_m") == 0) return raw <= 0x3Fu;
+    if (strcmp(field->path, "cart.rtc_h") == 0) return raw <= 0x1Fu;
+    if (strcmp(field->path, "cart.rtc_dh") == 0) return (raw & 0x3Eu) == 0u;
+    if (strcmp(field->path, "cart.rtc_l") == 0)
+        return index < 5u && (index == 0u || index == 1u ? raw <= 0x3Fu
+            : index == 2u ? raw <= 0x1Fu : index == 4u ? (raw & 0x3Eu) == 0u : 1);
+    if (strcmp(field->path, "cart.rtc_sub") == 0) return raw <= RTC_SUB_MASK;
+    if (strcmp(field->path, "f") == 0) return (raw & 0x0Fu) == 0u;
+    if (strcmp(field->path, "vram_bank") == 0 || strcmp(field->path, "block_vram_bank") == 0)
+        return raw <= 1u;
+    if (strcmp(field->path, "wram_bank") == 0) return raw >= 1u && raw <= 7u;
+    if (strcmp(field->path, "svbk") == 0) return raw <= 7u;
+    if (strcmp(field->path, "key1_armed") == 0) return raw <= 1u;
+    if (strcmp(field->path, "bcps") == 0 || strcmp(field->path, "ocps") == 0)
+        return (raw & 0x40u) == 0u;
+    if (strcmp(field->path, "opri") == 0) return raw <= 1u;
+    if (strcmp(field->path, "ppu_dot") == 0) return raw < GBB_DOTS_PER_LINE;
+    if (strcmp(field->path, "ppu_half_phase") == 0 || strcmp(field->path, "ppu_stat_line") == 0 ||
+        strcmp(field->path, "ppu_window_started") == 0 ||
+        strcmp(field->path, "ppu_transfer_complete") == 0) return raw <= 1u;
+    if (strcmp(field->path, "ppu_mode") == 0) return raw <= 3u;
+    if (strcmp(field->path, "ppu_fifo_head") == 0) return raw < GBB_PPU_FIFO_CAPACITY;
+    if (strcmp(field->path, "ppu_fifo_count") == 0) return raw <= GBB_PPU_FIFO_CAPACITY;
+    if (strcmp(field->path, "ppu_fetch_stage") == 0) return raw <= 3u;
+    if (strcmp(field->path, "ppu_fetch_phase") == 0) return raw <= 1u;
+    if (strcmp(field->path, "ppu_output_x") == 0) return raw <= GBB_FRAME_WIDTH;
+    if (strcmp(field->path, "ppu_scroll_discard") == 0 ||
+        strcmp(field->path, "ppu_fine_scroll") == 0) return raw <= 7u;
+    if (strcmp(field->path, "ppu_selected_object_count") == 0) return raw <= GBB_LINE_OBJECT_LIMIT;
+    if (strcmp(field->path, "ppu_scan_index") == 0) return raw <= 40u;
+    if (strcmp(field->path, "dma_active") == 0 || strcmp(field->path, "dma_start_pending") == 0 ||
+        strcmp(field->path, "dma_cpu_blocked") == 0) return raw <= 1u;
+    if (strcmp(field->path, "dma_index") == 0) return raw <= GBB_OAM_BYTES;
+    if (strcmp(field->path, "dma_phase") == 0) return raw < GBB_T_PER_M;
+    if (strcmp(field->path, "hdma.mode") == 0) return raw <= 2u;
+    if (strcmp(field->path, "hdma.active") == 0 ||
+        strcmp(field->path, "hdma.pending_hblank") == 0) return raw <= 1u;
+    if (strcmp(field->path, "hdma.byte_index") == 0) return raw < 16u;
+    if (strcmp(field->path, "hdma.byte_phase") == 0) return raw <= 1u;
+    if (strcmp(field->path, "hdma.destination_cursor") == 0) return raw <= 0x1FFFu;
+    if (strcmp(field->path, "hdma.blocks_remaining") == 0) return raw <= 128u;
+    if (strcmp(field->path, "ime_delay") == 0) return raw <= 2u;
+    if (strcmp(field->path, "tac") == 0) return raw <= 7u;
+    if (strcmp(field->path, "divider_phase") == 0) return raw < GBB_HALF_DOTS_PER_T_NORMAL;
+    if (strcmp(field->path, "timer_reload_pending") == 0 ||
+        strcmp(field->path, "timer_signal") == 0 || strcmp(field->path, "serial_active") == 0 ||
+        strcmp(field->path, "bus_unsupported") == 0 || strcmp(field->path, "halted") == 0 ||
+        strcmp(field->path, "stopped") == 0 || strcmp(field->path, "halt_bug") == 0 ||
+        strcmp(field->path, "locked") == 0 || strcmp(field->path, "apu_wave.enabled") == 0 ||
+        strcmp(field->path, "apu_noise.enabled") == 0) return raw <= 1u;
+    if (strcmp(field->path, "serial_bits") == 0) return raw <= 8u;
+    if (strcmp(field->path, "cpu_stall_kind") == 0) return raw <= GBB_STALL_SWITCH_REALIGN;
+    if (strcmp(field->path, "stop_switch_pending") == 0 || strcmp(field->path, "double_speed") == 0)
+        return raw <= 1u;
+    if (strcmp(field->path, "timer_reloaded_at") == 0)
+        return raw == UINT64_MAX || raw <= (UINT64_C(1) << 62);
+    if (strcmp(field->path, "time_half_dots") == 0 ||
+        strcmp(field->path, "frame_completion_half_dots") == 0 ||
+        strcmp(field->path, "instruction_start_half_dots") == 0 ||
+        strcmp(field->path, "cart.rtc_synced_at") == 0 ||
+        strcmp(field->path, "input_events[].at_half_dots") == 0)
+        return raw <= (UINT64_C(1) << 62);
+    if (strcmp(field->path, "apu_sample_phase") == 0) return raw < GBB_AUDIO_CLOCK_HALF_DOTS;
+    if (strcmp(field->path, "audio_event_head") == 0) return raw < GBB_AUDIO_EVENT_TAPS;
+    if (strcmp(field->path, "apu_power") == 0) return raw <= 1u;
+    if (strcmp(field->path, "apu_sequencer_step") == 0) return raw <= 7u;
+    if (strcmp(field->path, "apu_pulse[].phase") == 0) return raw <= 7u;
+    if (strcmp(field->path, "apu_pulse[].volume") == 0) return raw <= 15u;
+    if (strcmp(field->path, "apu_pulse[].envelope_timer") == 0 ||
+        strcmp(field->path, "apu_pulse[].sweep_timer") == 0) return raw <= 8u;
+    if (strcmp(field->path, "apu_pulse[].frequency") == 0 ||
+        strcmp(field->path, "apu_pulse[].sweep_shadow") == 0) return raw <= 2047u;
+    if (strcmp(field->path, "apu_pulse[].length") == 0) return raw <= 64u;
+    if (strcmp(field->path, "apu_pulse[].sweep") == 0) return raw <= 0x7Fu;
+    if (strcmp(field->path, "apu_pulse[].envelope") == 0) return (raw & 7u) == 0u;
+    if (strcmp(field->path, "apu_pulse[].control") == 0) return (raw & 0x38u) == 0u;
+    if (strcmp(field->path, "apu_wave.dac") == 0) return raw == 0u || raw == 0x80u;
+    if (strcmp(field->path, "apu_wave.level") == 0) return raw <= 3u;
+    if (strcmp(field->path, "apu_wave.control") == 0) return (raw & 0x38u) == 0u;
+    if (strcmp(field->path, "apu_wave.position") == 0) return raw <= 31u;
+    if (strcmp(field->path, "apu_wave.length") == 0) return raw <= 256u;
+    if (strcmp(field->path, "apu_noise.envelope") == 0) return (raw & 7u) == 0u;
+    if (strcmp(field->path, "apu_noise.volume") == 0) return raw <= 15u;
+    if (strcmp(field->path, "apu_noise.envelope_timer") == 0) return raw <= 8u;
+    if (strcmp(field->path, "apu_noise.length") == 0) return raw <= 64u;
+    if (strcmp(field->path, "apu_noise.lfsr") == 0) return raw <= 0x7FFFu;
+    (void)index;
+    return 1;
+}
+
+typedef enum {
+    STATE_WALK_SIZE = 0, STATE_WALK_ENCODE, STATE_WALK_VALIDATE_LIVE,
+    STATE_WALK_VALIDATE_BODY, STATE_WALK_APPLY
+} state_walk_mode;
+
+static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
+                      const uint8_t *read_body, size_t body_size,
+                      state_walk_mode mode, size_t *computed_size) {
+    if (instance == NULL) return 0;
+    const size_t field_count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+    size_t required = 0u;
+    for (size_t f = 0u; f < field_count; ++f) {
+        const state_field_descriptor *field = &STATE_FIELDS[f];
+        const size_t count = state_field_count_for_instance(instance, field);
+        if (count > field->max_count || count > (SIZE_MAX - required) / field->wire_width)
+            return 0;
+        required += count * field->wire_width;
+    }
+    if (required > GBB_STATE_MAX_BODY_BYTES) return 0;
+    if (mode == STATE_WALK_SIZE) {
+        if (computed_size == NULL) return 0;
+        *computed_size = required;
+        return 1;
+    }
+    if (mode == STATE_WALK_ENCODE && (mutable_body == NULL || body_size != required)) return 0;
+    if ((mode == STATE_WALK_VALIDATE_BODY || mode == STATE_WALK_APPLY) &&
+        (read_body == NULL || body_size != required)) return 0;
+
+    size_t offset = 0u;
+    uint64_t head_raw = 0u, phase = 0u;
+    if (mode == STATE_WALK_VALIDATE_LIVE || mode == STATE_WALK_VALIDATE_BODY) {
+        if (mode == STATE_WALK_VALIDATE_BODY) {
+            if (!state_raw_from_body(instance, read_body, body_size, "audio_event_head", 0u, &head_raw) ||
+                !state_raw_from_body(instance, read_body, body_size, "apu_sample_phase", 0u, &phase)) return 0;
+        } else if (!state_raw_from_instance(instance, "audio_event_head", 0u, &head_raw) ||
+                   !state_raw_from_instance(instance, "apu_sample_phase", 0u, &phase)) return 0;
+        if (head_raw >= GBB_AUDIO_EVENT_TAPS || phase >= GBB_AUDIO_CLOCK_HALF_DOTS) return 0;
+    }
+    for (size_t f = 0u; f < field_count; ++f) {
+        const state_field_descriptor *field = &STATE_FIELDS[f];
+        const size_t count = state_field_count_for_instance(instance, field);
+        for (size_t i = 0u; i < count; ++i) {
+            uint64_t raw = 0u;
+            int unused_event_slot = 0;
+            if (mode == STATE_WALK_ENCODE || mode == STATE_WALK_VALIDATE_LIVE) {
+                if (!state_host_value(instance, field, i, &raw)) return 0;
+            } else {
+                raw = state_get_u64(read_body + offset, field->wire_width);
+            }
+            if (strncmp(field->path, "input_events[].", 15u) == 0) {
+                uint64_t active_count = 0u;
+                const int from_body = mode == STATE_WALK_VALIDATE_BODY || mode == STATE_WALK_APPLY;
+                if (!state_source_raw(instance, from_body ? read_body : NULL,
+                                      from_body ? body_size : 0u,
+                                      "input_event_count", 0u, &active_count)) return 0;
+                if (i >= active_count) {
+                    unused_event_slot = 1;
+                    if (mode == STATE_WALK_VALIDATE_BODY && raw != 0u) return 0;
+                    if (mode == STATE_WALK_ENCODE || mode == STATE_WALK_VALIDATE_LIVE) raw = 0u;
+                }
+            }
+            if (mode == STATE_WALK_VALIDATE_LIVE && !unused_event_slot &&
+                    !state_field_value_valid(instance, field, i, raw, (uint8_t)head_raw, phase)) return 0;
+            if (mode == STATE_WALK_VALIDATE_BODY && !unused_event_slot &&
+                    !state_field_value_valid(instance, field, i, raw, (uint8_t)head_raw, phase)) return 0;
+            if (mode == STATE_WALK_APPLY &&
+                    !state_store_host_value((gbb_instance *)(uintptr_t)instance, field, i, raw)) return 0;
+            if (mode == STATE_WALK_ENCODE) state_put_u64(mutable_body + offset, raw, field->wire_width);
+            offset += field->wire_width;
+        }
+    }
+    return offset == required;
+}
+
+static int state_cross_fields_valid(const gbb_instance *instance,
+                                    const uint8_t *body, size_t body_size) {
+    if (instance == NULL || !instance->loaded || instance->accept_input_span != NULL ||
+        instance->audio_run_active || instance->cartridge_ram_size > GBB_STATE_MAX_CARTRIDGE_RAM_BYTES ||
+        (instance->cartridge_ram_size != 0u && instance->cartridge_ram == NULL)) return 0;
+    uint64_t time = 0u, instruction_start = 0u, frame_time = 0u;
+    uint64_t rtc_anchor = 0u, timer_anchor = 0u, input_count = 0u;
+    uint64_t sample_phase = 0u, audio_head = 0u;
+    if (!state_source_raw(instance, body, body_size, "time_half_dots", 0u, &time) ||
+        !state_source_raw(instance, body, body_size, "instruction_start_half_dots", 0u, &instruction_start) ||
+        !state_source_raw(instance, body, body_size, "frame_completion_half_dots", 0u, &frame_time) ||
+        !state_raw_from_instance(instance, "cart.rtc_synced_at", 0u, &rtc_anchor)) return 0;
+    if (body != NULL && !state_source_raw(instance, body, body_size, "cart.rtc_synced_at", 0u, &rtc_anchor)) return 0;
+    if (!state_source_raw(instance, body, body_size, "timer_reloaded_at", 0u, &timer_anchor) ||
+        !state_source_raw(instance, body, body_size, "input_event_count", 0u, &input_count) ||
+        !state_source_raw(instance, body, body_size, "apu_sample_phase", 0u, &sample_phase) ||
+        !state_source_raw(instance, body, body_size, "audio_event_head", 0u, &audio_head)) return 0;
+    if (time > (UINT64_C(1) << 62) || instruction_start > time || frame_time > time ||
+        rtc_anchor > time || (timer_anchor != UINT64_MAX && timer_anchor > time) ||
+        sample_phase >= GBB_AUDIO_CLOCK_HALF_DOTS || audio_head >= GBB_AUDIO_EVENT_TAPS ||
+        input_count > GBB_INPUT_EVENT_CAPACITY) return 0;
+    uint64_t dot = 0u, phase = 0u, head = 0u, fifo_count = 0u;
+    uint64_t selected_count = 0u, dma_index = 0u, hdma_byte = 0u;
+    if (!state_source_raw(instance, body, body_size, "ppu_dot", 0u, &dot) ||
+        !state_source_raw(instance, body, body_size, "ppu_half_phase", 0u, &phase) ||
+        !state_source_raw(instance, body, body_size, "ppu_fifo_head", 0u, &head) ||
+        !state_source_raw(instance, body, body_size, "ppu_fifo_count", 0u, &fifo_count) ||
+        !state_source_raw(instance, body, body_size, "ppu_selected_object_count", 0u, &selected_count) ||
+        !state_source_raw(instance, body, body_size, "dma_index", 0u, &dma_index) ||
+        !state_source_raw(instance, body, body_size, "hdma.byte_index", 0u, &hdma_byte)) return 0;
+    if (dot >= GBB_DOTS_PER_LINE || phase > 1u || head >= GBB_PPU_FIFO_CAPACITY ||
+        fifo_count > GBB_PPU_FIFO_CAPACITY || selected_count > GBB_LINE_OBJECT_LIMIT ||
+        dma_index > GBB_OAM_BYTES || hdma_byte >= 16u) return 0;
+    if (instance->profile != GBB_PROFILE_DMG_CPU_B && instance->profile != GBB_PROFILE_CGB_CPU_E)
+        return 0;
+    if ((instance->profile == GBB_PROFILE_DMG_CPU_B && instance->exec_mode != GBB_MODE_DMG) ||
+        (instance->profile == GBB_PROFILE_CGB_CPU_E &&
+         instance->exec_mode != GBB_MODE_CGB && instance->exec_mode != GBB_MODE_CGB_DMG_COMPAT))
+        return 0;
+    if (!instance->cart.has_timer) {
+        uint64_t v = 0u;
+        static const char *const rtc_paths[] = {
+            "cart.rtc_s", "cart.rtc_m", "cart.rtc_h", "cart.rtc_dl", "cart.rtc_dh",
+            "cart.rtc_sub", "cart.rtc_synced_at"
+        };
+        for (size_t i = 0u; i < sizeof(rtc_paths) / sizeof(rtc_paths[0]); ++i)
+            if (!state_source_raw(instance, body, body_size, rtc_paths[i], 0u, &v) || v != 0u)
+                return 0;
+        for (size_t i = 0u; i < 5u; ++i)
+            if (!state_source_raw(instance, body, body_size, "cart.rtc_l", i, &v) || v != 0u)
+                return 0;
+    }
+    if (!instance->cart.has_rumble) {
+        uint64_t rumble = 0u;
+        if (!state_source_raw(instance, body, body_size, "cart.rumble_on", 0u, &rumble) || rumble != 0u)
+            return 0;
+    }
+    uint64_t previous = time;
+    for (size_t i = 0u; i < GBB_INPUT_EVENT_CAPACITY; ++i) {
+        uint64_t at = 0u, kind = 0u, value = 0u;
+        if (!state_source_raw(instance, body, body_size, "input_events[].at_half_dots", i, &at) ||
+            !state_source_raw(instance, body, body_size, "input_events[].kind", i, &kind) ||
+            !state_source_raw(instance, body, body_size, "input_events[].value", i, &value)) return 0;
+        if (i >= input_count) {
+            if (body != NULL && (at != 0u || kind != 0u || value != 0u)) return 0;
+            continue;
+        }
+        if (at < time || (i != 0u && at < previous) || kind < GBB_INPUT_STOP_WAKE ||
+            kind > GBB_INPUT_BUTTON_RELEASE) return 0;
+        if ((kind == GBB_INPUT_STOP_WAKE && value != 1u) ||
+            (kind == GBB_INPUT_SERIAL_EDGE && value > 1u) ||
+            ((kind == GBB_INPUT_BUTTON_PRESS || kind == GBB_INPUT_BUTTON_RELEASE) &&
+             value > GBB_BUTTON_START)) return 0;
+        previous = at;
+    }
+    if (instance->cart.kind == CART_MBC2 && instance->cartridge_ram_size != MBC2_RAM_BYTES)
+        return 0;
+    return 1;
+}
+
+static int state_validate(const gbb_instance *instance, const uint8_t *body,
+                          size_t body_size) {
+    if (instance == NULL) return 0;
+    size_t expected = 0u;
+    if (!state_walk(instance, NULL, NULL, 0u, STATE_WALK_SIZE, &expected)) return 0;
+    const state_walk_mode mode = body == NULL ? STATE_WALK_VALIDATE_LIVE : STATE_WALK_VALIDATE_BODY;
+    if (body != NULL && body_size != expected) return 0;
+    return state_walk(instance, NULL, body, body == NULL ? expected : body_size, mode, NULL) &&
+           state_cross_fields_valid(instance, body, body == NULL ? expected : body_size);
+}
+
+static void state_apply(gbb_instance *instance, const uint8_t *body, size_t body_size) {
+    (void)state_walk(instance, NULL, body, body_size, STATE_WALK_APPLY, NULL);
+}
+
+static size_t state_body_field_offset(const gbb_instance *instance,
+                                      const state_field_descriptor *wanted) {
+    size_t offset = 0u;
+    const size_t count = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+    for (size_t i = 0u; i < count; ++i) {
+        const state_field_descriptor *field = &STATE_FIELDS[i];
+        if (field == wanted) return offset;
+        const size_t elements = state_field_count_for_instance(instance, field);
+        if (elements > (SIZE_MAX - offset) / field->wire_width) return SIZE_MAX;
+        offset += elements * field->wire_width;
+    }
+    return SIZE_MAX;
+}
+
+static void state_project_cart_from_body(const gbb_instance *instance,
+                                         const uint8_t *body, size_t body_size,
+                                         cart_state *cart) {
+    uint64_t value = 0u;
+    if (state_raw_from_body(instance, body, body_size, "cart.rtc_s", 0u, &value)) cart->rtc_s = (uint8_t)value;
+    if (state_raw_from_body(instance, body, body_size, "cart.rtc_m", 0u, &value)) cart->rtc_m = (uint8_t)value;
+    if (state_raw_from_body(instance, body, body_size, "cart.rtc_h", 0u, &value)) cart->rtc_h = (uint8_t)value;
+    if (state_raw_from_body(instance, body, body_size, "cart.rtc_dl", 0u, &value)) cart->rtc_dl = (uint8_t)value;
+    if (state_raw_from_body(instance, body, body_size, "cart.rtc_dh", 0u, &value)) cart->rtc_dh = (uint8_t)value;
+    if (state_raw_from_body(instance, body, body_size, "cart.rtc_latch_prev", 0u, &value))
+        cart->rtc_latch_prev = (uint8_t)value;
+    if (state_raw_from_body(instance, body, body_size, "cart.rtc_sub", 0u, &value)) cart->rtc_sub = (uint32_t)value;
+    if (state_raw_from_body(instance, body, body_size, "cart.rtc_synced_at", 0u, &value)) cart->rtc_synced_at = value;
+    for (size_t i = 0u; i < 5u; ++i)
+        if (state_raw_from_body(instance, body, body_size, "cart.rtc_l", i, &value))
+            cart->rtc_l[i] = (uint8_t)value;
+}
+
+gbb_error gbb_state_size(const gbb_instance *instance, size_t *out_size) {
+    if (instance == NULL || out_size == NULL) return GBB_INVALID_ARGUMENT;
+    if (!instance->loaded) return GBB_STATE_NO_ROM;
+    size_t body_size = 0u;
+    if (!state_walk(instance, NULL, NULL, 0u, STATE_WALK_SIZE, &body_size) ||
+        body_size > UINT32_MAX - GBB_STATE_HEADER_BYTES ||
+        !state_validate(instance, NULL, 0u)) return GBB_STATE_INVALID_CONTENT;
+    *out_size = GBB_STATE_HEADER_BYTES + body_size;
+    return GBB_OK;
+}
+
+gbb_error gbb_save_state(const gbb_instance *instance, uint8_t *out_bytes,
+                         size_t capacity_bytes) {
+    if (instance == NULL || out_bytes == NULL) return GBB_INVALID_ARGUMENT;
+    if (!instance->loaded) return GBB_STATE_NO_ROM;
+    size_t body_size = 0u;
+    if (!state_walk(instance, NULL, NULL, 0u, STATE_WALK_SIZE, &body_size) ||
+        body_size > UINT32_MAX - GBB_STATE_HEADER_BYTES ||
+        !state_validate(instance, NULL, 0u)) return GBB_STATE_INVALID_CONTENT;
+    const size_t total_size = GBB_STATE_HEADER_BYTES + body_size;
+    if (capacity_bytes < total_size) return GBB_BUFFER_TOO_SMALL;
+    if (ranges_overlap((uintptr_t)(void *)out_bytes, total_size,
+                       (uintptr_t)(const void *)instance, sizeof(*instance)))
+        return GBB_INVALID_ARGUMENT;
+
+    uint8_t *header = out_bytes;
+    memcpy(header, "GBBS", 4u);
+    state_put_u16(header + 4u, GBB_STATE_FORMAT_VERSION);
+    state_put_u16(header + 6u, GBB_STATE_HEADER_BYTES);
+    state_put_u16(header + 8u, GBB_STATE_RELEASE_MAJOR);
+    state_put_u16(header + 10u, GBB_STATE_RELEASE_MINOR);
+    state_put_u16(header + 12u, GBB_STATE_RELEASE_PATCH);
+    state_put_u16(header + 14u, GBB_STATE_BEHAVIOR_VERSION);
+    header[16] = instance->profile;
+    header[17] = instance->exec_mode;
+    header[18] = 0u; header[19] = 0u;
+    memcpy(header + 20u, instance->rom_sha256, sizeof(instance->rom_sha256));
+    state_put_u32(header + 52u, (uint32_t)body_size);
+    state_put_u32(header + 56u, (uint32_t)total_size);
+    state_put_u32(header + 60u, 0u);
+    if (!state_walk(instance, header + GBB_STATE_HEADER_BYTES, NULL, body_size,
+                    STATE_WALK_ENCODE, NULL)) return GBB_STATE_INVALID_CONTENT;
+    uint32_t crc = state_crc32_update(UINT32_MAX, header, 60u);
+    crc = state_crc32_update(crc, header + GBB_STATE_HEADER_BYTES, body_size) ^ UINT32_MAX;
+    state_put_u32(header + 60u, crc);
+    return GBB_OK;
+}
+
+gbb_error gbb_load_state(gbb_instance *instance, const uint8_t *bytes,
+                         size_t size_bytes) {
+    if (instance == NULL || bytes == NULL) return GBB_INVALID_ARGUMENT;
+    if (size_bytes < GBB_STATE_HEADER_BYTES) return GBB_STATE_BAD_FORMAT;
+    if (memcmp(bytes, "GBBS", 4u) != 0) return GBB_STATE_BAD_FORMAT;
+    if (state_get_u16(bytes + 4u) != GBB_STATE_FORMAT_VERSION ||
+        state_get_u16(bytes + 6u) != GBB_STATE_HEADER_BYTES ||
+        state_get_u16(bytes + 8u) != GBB_STATE_RELEASE_MAJOR ||
+        state_get_u16(bytes + 10u) != GBB_STATE_RELEASE_MINOR ||
+        state_get_u16(bytes + 12u) != GBB_STATE_RELEASE_PATCH ||
+        state_get_u16(bytes + 14u) != GBB_STATE_BEHAVIOR_VERSION)
+        return GBB_STATE_UNSUPPORTED_VERSION;
+    if (!instance->loaded) return GBB_STATE_NO_ROM;
+    if (bytes[16] != instance->profile || bytes[17] != instance->exec_mode ||
+        memcmp(bytes + 20u, instance->rom_sha256, sizeof(instance->rom_sha256)) != 0)
+        return GBB_STATE_IDENTITY_MISMATCH;
+    size_t body_size = 0u;
+    if (!state_walk(instance, NULL, NULL, 0u, STATE_WALK_SIZE, &body_size) ||
+        body_size > GBB_STATE_MAX_BODY_BYTES || body_size > UINT32_MAX - GBB_STATE_HEADER_BYTES ||
+        state_get_u32(bytes + 52u) != body_size ||
+        state_get_u32(bytes + 56u) != GBB_STATE_HEADER_BYTES + body_size ||
+        size_bytes != GBB_STATE_HEADER_BYTES + body_size)
+        return GBB_STATE_SIZE_MISMATCH;
+    if (ranges_overlap((uintptr_t)(const void *)bytes, size_bytes,
+                       (uintptr_t)(void *)instance, sizeof(*instance)))
+        return GBB_INVALID_ARGUMENT;
+    uint32_t crc = state_crc32_update(UINT32_MAX, bytes, 60u);
+    crc = state_crc32_update(crc, bytes + GBB_STATE_HEADER_BYTES, body_size) ^ UINT32_MAX;
+    if (crc != state_get_u32(bytes + 60u)) return GBB_STATE_CORRUPT;
+    if (bytes[18] != 0u || bytes[19] != 0u) return GBB_STATE_INVALID_CONTENT;
+    const uint8_t *body = bytes + GBB_STATE_HEADER_BYTES;
+    if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;
+
+    const int old_rumble = instance->cart.rumble_on;
+    int battery_changed = 0;
+    if (instance->cart.has_battery) {
+        const state_field_descriptor *ram_field = state_field_by_path("cartridge_ram");
+        const size_t ram_offset = state_body_field_offset(instance, ram_field);
+        if (instance->cartridge_ram_size != 0u &&
+            (ram_offset == SIZE_MAX || memcmp(instance->cartridge_ram, body + ram_offset,
+                                               instance->cartridge_ram_size) != 0))
+            battery_changed = 1;
+        if (instance->cart.has_timer) {
+            cart_state old_projected = instance->cart;
+            cart_state new_projected = instance->cart;
+            uint64_t old_time = instance->time_half_dots, new_time = 0u;
+            (void)state_raw_from_body(instance, body, body_size, "time_half_dots", 0u, &new_time);
+            state_project_cart_from_body(instance, body, body_size, &new_projected);
+            rtc_sync(&old_projected, old_time);
+            rtc_sync(&new_projected, new_time);
+            if (!rtc_fields_equal(&old_projected, &new_projected)) battery_changed = 1;
+        }
+    }
+    state_apply(instance, body, body_size);
+    if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)
+        ++instance->cart.rumble_changes;
+    if (battery_changed && instance->cart.has_battery && instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;
+    return GBB_OK;
+}
+
 /* Validate the complete immutable span before attaching it to the instance or
  * allowing any guest state to change. Events before cursor are historical; the
  * remaining suffix must not precede the instance's current clock. */
@@ -4200,10 +4971,13 @@ gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_si
         }
         memset(new_ram, 0xFF, info.ram_size);
     }
+    uint8_t new_rom_sha256[32];
+    state_sha256(copy, rom_size, new_rom_sha256);
     free(instance->rom);
     free(instance->cartridge_ram);
     instance->rom = copy;
     instance->rom_size = rom_size;
+    memcpy(instance->rom_sha256, new_rom_sha256, sizeof(instance->rom_sha256));
     instance->cartridge_ram = new_ram;
     instance->cartridge_ram_size = info.ram_size;
     instance->battery_generation = 0u;
