@@ -1,0 +1,8 @@
+{
+ "run_id": 40245698754,
+ "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+ "conclusion": "success",
+ "replay_job_conclusion": "success",
+ "source": "gh run view 40245698754 --json headSha,status,conclusion,jobs",
+ "note": "operator-dispatched nightly-asan on rehearsal/v0.2.1 at the rehearsed head (D-19 implementation amendments, D-112)"
+}

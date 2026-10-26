@@ -131,3 +131,7 @@ fixtures/magentests/SOURCES.md text eol=lf
 fixtures/magentests/ELIGIBILITY.md text eol=lf
 
 fixtures/magentests/*.gbc binary
+# Phase 16 release receipts are pinned by SHA-256 in the v0.3 disposition record and read from the working tree by
+# v03_dispositions; they must hash identically on Windows checkouts (basename patterns avoid spelling the phases path).
+16-release-readback.json text eol=lf
+16-pr-closures.json text eol=lf
