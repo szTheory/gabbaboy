@@ -378,7 +378,9 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         return 2;
     }
     if (prefix.reason == GBB_STOP_UNSUPPORTED_BUS && source->bus_unsupported == 0 &&
-        source->bus_unsupported_address != 0u) {
+        source->bus_unsupported_address != 0u &&
+        (strcmp(case_id, "generated:bus_unsupported:dmg") == 0 ||
+         strcmp(case_id, "generated:bus_unsupported:cgb") == 0)) {
         printf("constant-witness case=%s id=bus_unsupported value=0 consumer_result=%d address=%04x\n",
             case_id, (int)prefix.reason, (unsigned)source->bus_unsupported_address);
     }
