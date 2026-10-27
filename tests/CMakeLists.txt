@@ -5054,6 +5054,13 @@ add_test(NAME state_fork_census_controls
     --repo "${PROJECT_SOURCE_DIR}" --self-test)
 set_tests_properties(state_fork_census state_fork_census_controls PROPERTIES
   TIMEOUT 30 FIXTURES_REQUIRED gbb_state_fork_matrix_complete)
+add_test(NAME state_fork_mutant_controls
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/test-state-fork-mutant-controls.py"
+    "${GBB_STATE_FORK_CHECKER}" "${PROJECT_SOURCE_DIR}" "${GBB_STATE_SOURCE_REV}"
+    "${GBB_STATE_FORK_REPORT}")
+set_tests_properties(state_fork_mutant_controls PROPERTIES
+  TIMEOUT 30 FIXTURES_REQUIRED gbb_state_fork_matrix_complete)
 
 # Every run mode shares the operational time-horizon scheduler. These white-box
 # cases seed genuine codec-valid boundary states and exercise the independent

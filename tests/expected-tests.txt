@@ -1257,6 +1257,7 @@ state_fork_matrix_shard_12
 state_fork_matrix_shard_13
 state_fork_matrix_shard_14
 state_fork_matrix_shard_15
+state_fork_mutant_controls
 state_globals
 state_globals_controls
 state_inventory
