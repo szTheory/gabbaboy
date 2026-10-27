@@ -605,7 +605,43 @@ static uint64_t observer_delta(uint64_t before, uint64_t after) {
     return after >= before ? after - before : UINT64_MAX - before + after + 1u;
 }
 
+static uint32_t state_bytes_crc(const uint8_t *bytes, size_t size) {
+    uint32_t crc = state_crc32_update(UINT32_MAX, bytes, 60u);
+    return state_crc32_update(crc, bytes + FORK_STATE_HEADER_BYTES,
+        size - FORK_STATE_HEADER_BYTES) ^ UINT32_MAX;
+}
+
+static int source_state_accepts_override(gbb_instance *probe,
+                                         const uint8_t *source_state,
+                                         size_t state_size,
+                                         const gbb_instance *source,
+                                         const state_field_descriptor *field,
+                                         size_t index, uint64_t value) {
+    uint8_t *trial = (uint8_t *)malloc(state_size);
+    if (trial == NULL) return 0;
+    memcpy(trial, source_state, state_size);
+    const size_t count = state_field_count_for_instance(source, field);
+    const size_t field_offset = state_body_field_offset(source, field);
+    const size_t item_offset = field_offset == SIZE_MAX || index >= count ||
+        index > (SIZE_MAX - field_offset) / field->wire_width
+        ? SIZE_MAX : field_offset + index * field->wire_width;
+    if (item_offset == SIZE_MAX || item_offset > state_size - FORK_STATE_HEADER_BYTES ||
+        field->wire_width > state_size - FORK_STATE_HEADER_BYTES - item_offset) {
+        free(trial);
+        return 0;
+    }
+    state_put_u64(trial + FORK_STATE_HEADER_BYTES + item_offset, value,
+                  field->wire_width);
+    state_put_u32(trial + 60u, state_bytes_crc(trial, state_size));
+    const int accepted = gbb_load_state(probe, trial, state_size) == GBB_OK;
+    free(trial);
+    return accepted;
+}
+
 static uint64_t poison_value(const gbb_instance *source,
+                             gbb_instance *probe,
+                             const uint8_t *source_state,
+                             size_t state_size,
                              const state_field_descriptor *field,
                              size_t index, uint64_t value) {
     uint64_t proposed;
@@ -617,6 +653,8 @@ static uint64_t poison_value(const gbb_instance *source,
         strcmp(field->path, "cart.rtc_synced_at") == 0) proposed = 0u;
     else if (strcmp(field->path, "cart.rtc_sub") == 0)
         proposed = value == 1u ? 2u : 1u;
+    else if (strcmp(field->path, "divider_counter") == 0)
+        proposed = value ^ UINT64_C(1);
     else if (strcmp(field->path, "compat_rgb555") == 0)
         proposed = (value ^ UINT64_C(0x1111)) & 0x7FFFu;
     else switch (field->wire_width) {
@@ -628,8 +666,19 @@ static uint64_t poison_value(const gbb_instance *source,
     }
     const uint8_t audio_head = (uint8_t)source->audio_event_head;
     const uint64_t sample_phase = source->apu_sample_phase;
+    size_t complete_state_trials = 0u;
+    const size_t count = state_field_count_for_instance(source, field);
     if (proposed != value && state_field_value_valid(source, field, index,
-            proposed, audio_head, sample_phase)) return proposed;
+            proposed, audio_head, sample_phase)) {
+        /* Check at most four scalar alternatives through the public loader against
+         * the complete source state. Arrays use the per-element validator below;
+         * loading the full state once per array element would make the census
+         * unbounded without improving the cross-field proof. */
+        if (count != 1u) return proposed;
+        ++complete_state_trials;
+        if (source_state_accepts_override(probe, source_state, state_size,
+                source, field, index, proposed)) return proposed;
+    }
 
     /* Prefer an alternate legal representation when a width-based poison falls
      * outside a hardware field's accepted domain (VBK, KEY1 and mapper lines). */
@@ -641,19 +690,32 @@ static uint64_t poison_value(const gbb_instance *source,
     };
     for (size_t i = 0u; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
         if (candidates[i] != value && state_field_value_valid(source, field, index,
-                candidates[i], audio_head, sample_phase)) return candidates[i];
+                candidates[i], audio_head, sample_phase)) {
+            if (count != 1u) return candidates[i];
+            if (complete_state_trials >= 4u) break;
+            ++complete_state_trials;
+            if (source_state_accepts_override(probe, source_state, state_size,
+                    source, field, index, candidates[i])) return candidates[i];
+        }
     }
     if (field->wire_width == 1u) {
         for (uint64_t candidate = 0u; candidate <= UINT8_MAX; ++candidate) {
             if (candidate != value && state_field_value_valid(source, field, index,
-                    candidate, audio_head, sample_phase)) return candidate;
+                    candidate, audio_head, sample_phase)) {
+                if (count != 1u) return candidate;
+                if (complete_state_trials >= 4u) break;
+                ++complete_state_trials;
+                if (source_state_accepts_override(probe, source_state, state_size,
+                        source, field, index, candidate)) return candidate;
+            }
         }
     }
     return proposed;
 }
 
-static int poison_serialized_storage(gbb_instance *target,
-                                     const gbb_instance *source) {
+static int poison_serialized_storage(gbb_instance *target, gbb_instance *probe,
+                                     const gbb_instance *source,
+                                     const uint8_t *source_state, size_t state_size) {
     const size_t fields = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
     for (size_t f = 0u; f < fields; ++f) {
         state_field_record record = {0};
@@ -667,7 +729,8 @@ static int poison_serialized_storage(gbb_instance *target,
             uint64_t actual = 0u;
             const int read_ok = state_host_value(source, &STATE_FIELDS[f], i, &actual);
             const int store_ok = read_ok && state_store_host_value(target,
-                &STATE_FIELDS[f], i, poison_value(source, &STATE_FIELDS[f], i, actual));
+                &STATE_FIELDS[f], i, poison_value(source, probe, source_state,
+                    state_size, &STATE_FIELDS[f], i, actual));
             if (!read_ok || !store_ok) {
                 fprintf(stderr, "state-fork poison failure: id=%s index=%zu raw=%016llx\n",
                     record.qualified_id, i, (unsigned long long)actual);
@@ -872,7 +935,7 @@ static int state_fork_case(const char *case_id, const char *rom_path,
     uint64_t old_rumble_changes = 0u;
     target->battery_generation = 11u;
     target->cart.rumble_changes = 17u;
-    if (!poison_serialized_storage(target, source)) {
+    if (!poison_serialized_storage(target, baseline, source, saved, state_size)) {
         fprintf(stderr, "state-fork setup failure: poison: %s\n", case_id);
         free(target_final); free(source_final); free(saved);
         gbb_destroy(target); gbb_destroy(source);

@@ -1079,9 +1079,10 @@
       "expected_observations": [
         "final-canonical-state-bytes",
         "post-load-canonical-state-bytes-or-save-status",
-        "run-result"
+        "pcm"
       ],
-      "field": "apu_sample_phase"
+      "field": "apu_sample_phase",
+      "observation_rationale": "At the accepted_dma_phase DMG cut, omitting the sample phase changes the two bounded PCM slices and final canonical bytes; the run-result remains equal."
     },
     {
       "case": "accept:libbet-cgb-progress",
@@ -1172,11 +1173,11 @@
     {
       "case": "generated:apu_fields:cgb",
       "expected_observations": [
-        "final-canonical-state-bytes",
         "pcm",
         "post-load-canonical-state-bytes-or-save-status"
       ],
-      "field": "apu_wave.sample_buffer"
+      "field": "apu_wave.sample_buffer",
+      "observation_rationale": "At the apu_fields CGB cut, the omitted sample buffer changes bounded PCM; it is consumed and reconverges before the final state comparison, so final canonical bytes remain equal."
     },
     {
       "case": "generated:apu_fields:cgb",
@@ -1629,11 +1630,11 @@
     {
       "case": "generated:apu_fields:cgb",
       "expected_observations": [
-        "final-canonical-state-bytes",
         "frame-and-metadata",
         "post-load-canonical-state-bytes-or-save-status"
       ],
-      "field": "frame_completion_half_dots"
+      "field": "frame_completion_half_dots",
+      "observation_rationale": "At the apu_fields CGB cut, omission changes the frame completion metadata observed in the bounded continuation; the timing field is normalized before the final canonical save, so final bytes remain equal."
     },
     {
       "case": "generated:apu_fields:cgb",
