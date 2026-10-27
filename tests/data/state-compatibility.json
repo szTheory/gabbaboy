@@ -1,0 +1,95 @@
+{
+  "dispositions": [
+    {
+      "accepted": true,
+      "affected_semantics": [
+        "canonical serialized bytes for DMG, CGB compatibility, and native CGB fixtures"
+      ],
+      "approval_basis": "Delegated phase orchestrator approval under AGENTS.md routine in-phase authorization; the phase owner delegated this exact initial 0.2.1 baseline decision on 2026-10-26.",
+      "approved_by": "delegated-phase-orchestrator",
+      "base_revision": "5ca03b394f2a3e0640f69d94e5eda5622753b36c",
+      "base_state_release_exists": false,
+      "decision": "Introduce the first canonical state pin baseline at the existing 0.2.1 release. The prior mainline commit has no state format or behavior declarations; this disposition records that absence and does not claim arbitrary unreleased builds interoperate.",
+      "decision_refs": [
+        "AGENTS.md#Workflow-contract",
+        ".planning/phases/GB-17-native-save-state-core/17-RESEARCH.md#D-01",
+        ".planning/phases/GB-17-native-save-state-core/17-06-PLAN.md#Task-1",
+        ".planning/phases/GB-17-native-save-state-core/17-06-PLAN.md#Task-3"
+      ],
+      "evidence": {
+        "description": "Independent 17-05 continuation evidence covers 153 corpus cases, 198 serialized fields, and 14 model-applicable in-flight categories; it establishes the implemented state contract without inferring semantic equivalence for other commits.",
+        "revision": "f192100c4cc89427575f32785a4221bfca7337d7",
+        "summary_path": ".planning/phases/GB-17-native-save-state-core/17-05-SUMMARY.md"
+      },
+      "id": "initial-state-pin-mainline-base",
+      "kind": "pre-first-state-release-evolution",
+      "new_golden_sha256": "ab3ef83a47e33005218fe2f2b9acb3150c16caf972800c6babb82aa2263b06b1",
+      "old_golden_sha256": null,
+      "rationale": "The immutable mainline base has no state-golden pin, format token, or behavior token. It still declares application release 0.2.1. The 0.2.1 canonical pins establish the first state baseline and do not promise compatibility among arbitrary unreleased builds.",
+      "tokens_after": {
+        "behavior_version": 1,
+        "format_version": 1,
+        "release": {
+          "major": 0,
+          "minor": 2,
+          "patch": 1
+        }
+      },
+      "tokens_before": {
+        "behavior_version": null,
+        "format_version": null,
+        "release": {
+          "major": 0,
+          "minor": 2,
+          "patch": 1
+        }
+      }
+    },
+    {
+      "accepted": true,
+      "affected_semantics": [
+        "canonical serialized bytes for DMG, CGB compatibility, and native CGB fixtures"
+      ],
+      "approval_basis": "Delegated phase orchestrator approval under AGENTS.md routine in-phase authorization; the phase owner delegated this exact initial 0.2.1 baseline decision on 2026-10-26.",
+      "approved_by": "delegated-phase-orchestrator",
+      "base_revision": "f192100c4cc89427575f32785a4221bfca7337d7",
+      "base_state_release_exists": false,
+      "decision": "Introduce the first canonical state pin baseline at the existing 0.2.1 release. The phase branch entry already declares format and behavior tokens 1, but has no golden pins or state release; this does not claim arbitrary unreleased builds interoperate.",
+      "decision_refs": [
+        "AGENTS.md#Workflow-contract",
+        ".planning/phases/GB-17-native-save-state-core/17-RESEARCH.md#D-01",
+        ".planning/phases/GB-17-native-save-state-core/17-06-PLAN.md#Task-1",
+        ".planning/phases/GB-17-native-save-state-core/17-06-PLAN.md#Task-3"
+      ],
+      "evidence": {
+        "description": "Independent 17-05 continuation evidence covers 153 corpus cases, 198 serialized fields, and 14 model-applicable in-flight categories; it establishes the implemented state contract without inferring semantic equivalence for other commits.",
+        "revision": "f192100c4cc89427575f32785a4221bfca7337d7",
+        "summary_path": ".planning/phases/GB-17-native-save-state-core/17-05-SUMMARY.md"
+      },
+      "id": "initial-state-pin-phase-entry-base",
+      "kind": "pre-first-state-release-evolution",
+      "new_golden_sha256": "ab3ef83a47e33005218fe2f2b9acb3150c16caf972800c6babb82aa2263b06b1",
+      "old_golden_sha256": null,
+      "rationale": "The immutable phase-entry base has no state-golden pin but has the already implemented release 0.2.1, format 1, and behavior 1 tokens. This explicit initial pin disposition does not broaden the same-version contract to arbitrary unreleased builds.",
+      "tokens_after": {
+        "behavior_version": 1,
+        "format_version": 1,
+        "release": {
+          "major": 0,
+          "minor": 2,
+          "patch": 1
+        }
+      },
+      "tokens_before": {
+        "behavior_version": 1,
+        "format_version": 1,
+        "release": {
+          "major": 0,
+          "minor": 2,
+          "patch": 1
+        }
+      }
+    }
+  ],
+  "schema": "state-compatibility-v1"
+}

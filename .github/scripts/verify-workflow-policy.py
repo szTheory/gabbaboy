@@ -1287,6 +1287,12 @@ CI_REQUIRED = (
     "cmake --build --preset phase1-asan",
     "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --fast",
 )
+STATE_PIN_NATIVE_JOBS = {
+    "native-linux": ("linux-x64", "state-pins-linux"),
+    "native-macos": ("macos-arm64", "state-pins-macos"),
+    "native-windows": ("windows-x64", "state-pins-windows"),
+}
+STATE_PIN_TEST_COMMAND = "ctest --test-dir build -R '^state_portable_pins$' --output-on-failure --no-tests=error"
 # The ASan inventory runs in two jobs apart from the fuzz campaign, which keeps its pinned 45-minute bound. Their
 # exact filters are complementary, and each checks exactly its slice of the expected inventory (LESSONS GB-CI-010).
 _ASAN_SHARD_BUILD = ("cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=", "cmake --build --preset phase1-asan")
@@ -1612,6 +1618,83 @@ def check_ci(root: Path) -> None:
             require_call(name, shard, shard_job, command)
     for command, var, conditional in CI_STATUS_CALLS:
         require_call(name, "linux-sanitizers", job, command, conditional=conditional, errexit_off=True, status_var=var)
+    _check_state_pin_native_jobs(root, tree)
+
+
+def _check_state_pin_native_jobs(root: Path, tree: dict) -> None:
+    """Require immutable-base state pins and installed package consumers on each existing native OS lane."""
+    workflow = "ci"
+    expected_path = root / "tests/expected-tests.txt"
+    try:
+        expected_tests = set(expected_path.read_text(encoding="utf-8").splitlines())
+    except OSError as error:
+        raise Reject("state-pin-inventory", "tests/expected-tests.txt is unavailable") from error
+    required_inventory = {"state_portable_pins", "state_pin_controls", "installed_consumer_c",
+                          "installed_consumer_cpp", "preview_package_smoke"}
+    if not required_inventory <= expected_tests:
+        raise Reject("state-pin-inventory", "expected test inventory omits a state pin control or installed consumer")
+
+    for job_id, (platform, artifact_prefix) in STATE_PIN_NATIVE_JOBS.items():
+        job = _require_job(workflow, tree, job_id)
+        checkout = _checkouts(job)
+        if len(checkout) != 1 or str(checkout[0].get("with", {}).get("fetch-depth")) != "0":
+            raise Reject("state-pin-base", f"ci.{job_id} must fetch full history for an immutable PR/push base")
+        base_steps = [step for step in job.get("steps", []) if step.get("id") == "state_pin_base"]
+        if len(base_steps) != 1:
+            raise Reject("state-pin-base", f"ci.{job_id} must resolve exactly one immutable state pin base")
+        base_step = base_steps[0]
+        base_env = base_step.get("env", {})
+        base_run = str(base_step.get("run", ""))
+        for key, expression in (("EVENT_NAME", "${{ github.event_name }}"),
+                                ("PR_BASE", "${{ github.event.pull_request.base.sha }}"),
+                                ("PUSH_BEFORE", "${{ github.event.before }}")):
+            if base_env.get(key) != expression:
+                raise Reject("state-pin-base", f"ci.{job_id} state pin base must read the immutable PR/push event SHA")
+        if any(token not in base_run for token in
+               ('if [ "$EVENT_NAME" = "pull_request" ]; then', 'base="$PR_BASE"', 'test -n "$base"',
+                'elif [ "$EVENT_NAME" = "push" ]; then', 'base="$PUSH_BEFORE"',
+                'if [ -z "${base//0/}" ]; then', "base=$(git merge-base HEAD origin/main)",
+                'git cat-file -e "${base}^{commit}"', 'echo "base=$base" >> "$GITHUB_OUTPUT"')):
+            raise Reject("state-pin-base", f"ci.{job_id} state pin base must resolve and validate the event base")
+        configure = [step for step in job.get("steps", []) if step.get("name") == "Configure"]
+        if len(configure) != 1 or configure[0].get("env", {}).get("STATE_PIN_BASE") != \
+                "${{ steps.state_pin_base.outputs.base }}":
+            raise Reject("state-pin-base", f"ci.{job_id} Configure must consume the resolved immutable base")
+        configure_run = str(configure[0].get("run", ""))
+        if job_id == "native-windows":
+            base_arg = '-DGBB_STATE_PIN_BASE_REV="$env:STATE_PIN_BASE"'
+        else:
+            base_arg = '-DGBB_STATE_PIN_BASE_REV="$STATE_PIN_BASE"'
+        if base_arg not in configure_run:
+            raise Reject("state-pin-base", f"ci.{job_id} Configure must pass the event base into the pin ratchet")
+
+        pin_steps = [step for step in job.get("steps", [])
+                     if step.get("name") == "Run state pins against the immutable event base"]
+        if len(pin_steps) != 1 or STATE_PIN_TEST_COMMAND not in str(pin_steps[0].get("run", "")):
+            raise Reject("state-pin-target", f"ci.{job_id} must execute the compiled state_portable_pins target")
+        pin_env = pin_steps[0].get("env", {})
+        if pin_env.get("GBB_STATE_PIN_RECEIPT") != "${{ github.workspace }}/build/state-pin-receipt.json" or \
+                pin_env.get("GBB_STATE_PLATFORM") != platform:
+            raise Reject("state-pin-receipt", f"ci.{job_id} must write a path-free, platform-labelled pin receipt")
+        require_call(workflow, job_id, job, STATE_PIN_TEST_COMMAND)
+
+        uploads = [step for step in _artifact_steps(job, "upload")
+                   if str(step.get("with", {}).get("name", "")).startswith(artifact_prefix + "-")]
+        if len(uploads) != 1:
+            raise Reject("state-pin-receipt", f"ci.{job_id} must retain exactly one platform pin receipt")
+        upload = uploads[0]
+        details = upload.get("with", {})
+        if upload.get("if") != "always()" or details.get("path") != "build/state-pin-receipt.json" or \
+                details.get("if-no-files-found") != "error" or str(details.get("retention-days")) != "7" or \
+                "${{ github.run_id }}" not in details.get("name", "") or \
+                "${{ github.run_attempt }}" not in details.get("name", ""):
+            raise Reject("state-pin-receipt", f"ci.{job_id} pin receipt artifact must be run-scoped and retained")
+
+        require_call(workflow, job_id, job, "cmake --install build --prefix build/package-prefix")
+        require_call(workflow, job_id, job, "ctest --test-dir build")
+        require_call(workflow, job_id, job, "bash .github/scripts/verify-test-inventory.sh",
+                     contains=("tests/expected-tests.txt", "--installed"),
+                     allow_always=(job_id == "native-linux"))
 
 
 PERF_ATTRIBUTION_COMMANDS = (
@@ -2118,7 +2201,7 @@ def _copy_fixture(root: Path, target: Path) -> None:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
-    for extra in (LEDGER_PATH, "CMakeLists.txt"):
+    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt"):
         if (root / extra).is_file():
             (target / extra).parent.mkdir(parents=True, exist_ok=True)
             (target / extra).write_bytes((root / extra).read_bytes())
@@ -2221,6 +2304,16 @@ def _mutations():
            "planning-lane-condition"),
         _m("heavy job runs for kind planning", "ci.yml", "  native-windows:\n", "kind == 'full'", "kind == 'planning'", "planning-lane-condition"),
         _m("heavy job stops needing changes", "ci.yml", "  cmake-floor-3-25-3:\n", "    needs: changes\n", "", "planning-lane-condition"),
+        _m("native macOS state pin lane is missing", "ci.yml", "", "  native-macos:\n", "  native-macos-disabled:\n", "workflow-job-missing"),
+        _m("native state pin ratchet uses its own source as the base", "ci.yml", "  native-linux:\n",
+           '-DGBB_STATE_PIN_BASE_REV="$STATE_PIN_BASE"', '-DGBB_STATE_PIN_BASE_REV="$GITHUB_SHA"',
+           "state-pin-base"),
+        _m("ordinary push state pin base bypasses its event before SHA", "ci.yml", "  native-linux:\n",
+           'base="$PUSH_BEFORE"', 'base=$(git merge-base HEAD origin/main)', "state-pin-base"),
+        _m("native state pin target is replaced by its controls test", "ci.yml", "  native-linux:\n",
+           "state_portable_pins", "state_pin_controls", "state-pin-target"),
+        _m("native installed consumer route drops its inventory gate", "ci.yml", "  native-linux:\n",
+           "--installed", "", "required-command-not-executed"),
         _m("required-native loses if: always()", "ci.yml", "  required-native:\n", "    if: always()\n", "", "workflow-dependency"),
         _m("required-native stops waiting for planning-checks", "ci.yml", "  required-native:\n", "      - planning-checks\n", "", "workflow-dependency"),
         _m("required-native stops reading the classification", "ci.yml", "  required-native:\n",
@@ -2245,9 +2338,9 @@ def _mutations():
         _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
            'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
            "required-command-not-executed"),
-        _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "  native-linux:\n",
+        _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "      - name: Resolve the per-test budget base commit\n",
            ' || ! git cat-file -e "${base}^{commit}"; then', "; then", "budget-base-fallback"),
-        _m("ci budget base stops failing closed", "ci.yml", "  native-linux:\n",
+        _m("ci budget base stops failing closed", "ci.yml", "      - name: Resolve the per-test budget base commit\n",
            '          git cat-file -e "${base}^{commit}"\n          echo', "          echo", "budget-base-fallback"),
         _m("nightly gains a pull_request trigger", "nightly-asan.yml", "", "  workflow_dispatch:\n",
            "  workflow_dispatch:\n  pull_request:\n", "workflow-trigger"),

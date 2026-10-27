@@ -93,13 +93,13 @@ def state_tokens(repo, revision):
     version = re.search(r"(?m)^project\(GabbaBoy\s+VERSION\s+(\d+)\.(\d+)\.(\d+)\s+LANGUAGES\s+C\)", cmake)
     format_match = re.search(r"(?m)^#define\s+GBB_STATE_FORMAT_VERSION\s+(\d+)u?\s*$", core)
     behavior_match = re.search(r"(?m)^#define\s+GBB_STATE_BEHAVIOR_VERSION\s+(\d+)u?\s*$", core)
-    if not version or not format_match or not behavior_match:
-        reject("state-token-source", "release, format or behavior tokens are not explicit in source")
+    if not version or bool(format_match) != bool(behavior_match):
+        reject("state-token-source", "release token is absent or only one state compatibility token is declared")
     tokens = {
         "release": {"major": int(version.group(1)), "minor": int(version.group(2)),
                     "patch": int(version.group(3))},
-        "format_version": int(format_match.group(1)),
-        "behavior_version": int(behavior_match.group(1)),
+        "format_version": int(format_match.group(1)) if format_match else None,
+        "behavior_version": int(behavior_match.group(1)) if behavior_match else None,
     }
     if any(component > 65535 for component in tokens["release"].values()):
         reject("state-token-source", "release token exceeds the portable header width")
@@ -148,17 +148,25 @@ def load_optional_commit_json(repo, revision, path, what):
     return None if text is None else parse_json_text(text, what)
 
 
-def verify_evidence(repo, base_revision, evidence):
+def verify_evidence(repo, base_revision, evidence, current_revision=None, initial=False):
     if not isinstance(evidence, dict) or set(evidence) != {"revision", "summary_path", "description"}:
         reject("disposition-evidence", "continuation evidence must identify a revision, summary and description")
     evidence_revision = immutable_revision(repo, evidence["revision"])
     if evidence["summary_path"] != EVIDENCE_PATH or not isinstance(evidence["description"], str) or \
             not evidence["description"].strip():
         reject("disposition-evidence", "continuation evidence must cite the completed snapshot-fork summary")
+    evidence_base = base_revision if not initial else current_revision
     ancestor = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor",
-                               evidence_revision, base_revision], capture_output=True)
+                               evidence_revision, evidence_base], capture_output=True)
     if ancestor.returncode != 0:
-        reject("disposition-evidence-stale", "continuation evidence is not present at the immutable base")
+        message = ("continuation evidence is not present before the immutable base" if not initial
+                   else "initial continuation evidence is not present at the selected source revision")
+        reject("disposition-evidence-stale", message)
+    if initial:
+        base_before_evidence = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor",
+                                               base_revision, evidence_revision], capture_output=True)
+        if base_before_evidence.returncode != 0:
+            reject("disposition-evidence-stale", "initial evidence is not descended from the selected pre-state base")
     summary = source_file(repo, evidence_revision, EVIDENCE_PATH)
     required_claims = ("status: complete", "198 serialized fields", "14 in-flight categories")
     if any(claim not in summary for claim in required_claims):
@@ -180,25 +188,37 @@ def validate_compatibility(repo, base_revision, current_revision, base_golden,
     if len(matches) != 1:
         reject("compatibility-missing", "changed pins or tokens need one exact immutable-base disposition")
     row = matches[0]
-    required = {"id", "kind", "accepted", "approved_by", "decision", "rationale",
+    required = {"id", "kind", "accepted", "approved_by", "approval_basis", "decision_refs",
+                "decision", "rationale",
                 "base_revision", "old_golden_sha256", "new_golden_sha256", "tokens_before",
                 "tokens_after", "affected_semantics", "evidence"}
     if row.get("kind") == "pre-first-state-release-evolution":
         required |= {"base_state_release_exists"}
     else:
         required |= {"required_token"}
+    approver = row.get("approved_by")
     if set(row) != required or row.get("accepted") is not True or \
-            row.get("approved_by") != "phase-owner" or not row.get("id") or \
+            approver not in ("phase-owner", "delegated-phase-orchestrator") or not row.get("id") or \
+            not isinstance(row.get("approval_basis"), str) or not row["approval_basis"].strip() or \
+            (approver == "delegated-phase-orchestrator" and "AGENTS.md" not in row["approval_basis"]) or \
+            not isinstance(row.get("decision_refs"), list) or not row["decision_refs"] or \
+            any(not isinstance(item, str) or not item.strip() for item in row["decision_refs"]) or \
             not isinstance(row.get("decision"), str) or not row["decision"].strip() or \
             not isinstance(row.get("rationale"), str) or not row["rationale"].strip() or \
             not isinstance(row.get("affected_semantics"), list) or not row["affected_semantics"]:
         reject("compatibility-disposition", "disposition is incomplete or has no explicit phase-owner acceptance")
-    verify_evidence(repo, base_revision, row["evidence"])
+    verify_evidence(repo, base_revision, row["evidence"], current_revision=current_revision,
+                    initial=row["kind"] == "pre-first-state-release-evolution")
 
     if row["kind"] == "pre-first-state-release-evolution":
+        no_prior_tokens = base_tokens["format_version"] is None and base_tokens["behavior_version"] is None
+        unchanged_existing_tokens = (base_tokens["format_version"] is not None and
+                                     base_tokens["behavior_version"] is not None and
+                                     base_tokens == current_tokens)
         if row["base_state_release_exists"] is not False or old_sha is not None or \
-                base_tokens != current_tokens:
-            reject("compatibility-pre-release", "unchanged tokens are allowed only for the first explicit pre-release baseline")
+                not (no_prior_tokens or unchanged_existing_tokens) or \
+                base_tokens["release"] != current_tokens["release"]:
+            reject("compatibility-pre-release", "initial state baseline needs no prior pins and either absent or unchanged state tokens")
         if current_tokens["release"] != {"major": 0, "minor": 2, "patch": 1}:
             reject("compatibility-pre-release", "pre-first-release evolution cannot relabel the 0.2.1 pins")
     elif row["kind"] in ("format-change", "behavior-change", "release-change"):
@@ -247,6 +267,8 @@ def verify_snapshot(repo, source_revision, base_revision, actual):
     if base_golden_text is not None:
         base_golden = validate_pin_document(parse_json_text(base_golden_text, "base state-goldens"), "base pins")
     base_tokens = state_tokens(repo, base_revision)
+    if base_golden is not None and document_tokens(base_golden) != base_tokens:
+        reject("base-token-mismatch", "immutable base pins differ from its declared release/format/behavior tokens")
     changed = base_golden != current_golden or base_tokens != current_tokens
     if not changed:
         return {"source_revision": source_revision, "base_revision": base_revision,
@@ -275,7 +297,43 @@ def check_command(repo, source_revision, base_revision, executable):
     result = verify_snapshot(repo, source_revision, base_revision, actual)
     return {**result, "source_input_sha256": source_input_digest(repo, source_revision),
             "compiled_executable_sha256": digest_bytes(open(executable, "rb").read()),
-            "fixture_count": len(actual["fixtures"])}
+            "fixture_count": len(actual["fixtures"]),
+            "fixtures": [{key: row[key] for key in
+                          ("id", "profile", "mode", "cartridge", "fixture", "state_size",
+                           "rom_sha256", "state_sha256")} for row in actual["fixtures"]]}
+
+
+def write_receipt(path, platform, result):
+    if not isinstance(platform, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", platform):
+        reject("receipt-platform", "receipt platform must be a short portable label")
+    receipt = {
+        "schema": "state-pin-receipt-v1",
+        "platform": platform,
+        "source_revision": result["source_revision"],
+        "base_revision": result["base_revision"],
+        "golden_sha256": result["golden_sha256"],
+        "source_input_sha256": result["source_input_sha256"],
+        "compiled_executable_sha256": result["compiled_executable_sha256"],
+        "fixture_count": result["fixture_count"],
+        "fixtures": result["fixtures"],
+    }
+    target = os.path.abspath(path)
+    parent = os.path.dirname(target)
+    if not os.path.isdir(parent):
+        reject("receipt-output", "receipt parent directory must already exist")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                                         dir=parent, prefix=".state-pin-receipt-",
+                                         delete=False) as handle:
+            temporary = handle.name
+            json.dump(receipt, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temporary, target)
+    except OSError:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
+        reject("receipt-output", "could not atomically write the state-pin receipt")
 
 
 def write_git_file(repo, path, content):
@@ -321,21 +379,29 @@ def fixture_pin_document():
     }
 
 
-def initial_disposition(base_revision, golden, evidence_revision):
+def initial_disposition(base_revision, golden, evidence_revision, tokens_before=None,
+                        tokens_after=None):
+    if tokens_after is None:
+        tokens_after = {"release": {"major": 0, "minor": 2, "patch": 1},
+                        "format_version": 1, "behavior_version": 1}
+    if tokens_before is None:
+        tokens_before = tokens_after
     return {
         "id": "initial-state-pin-baseline",
         "kind": "pre-first-state-release-evolution",
         "accepted": True,
-        "approved_by": "phase-owner",
-        "decision": "D-02 explicitly permits documented byte evolution before the first state release",
+        "approved_by": "delegated-phase-orchestrator",
+        "approval_basis": "Delegated orchestrator approval under AGENTS.md routine in-phase authorization for the initial 0.2.1 state baseline.",
+        "decision_refs": [".planning/phases/GB-17-native-save-state-core/17-RESEARCH.md#D-01",
+                          ".planning/phases/GB-17-native-save-state-core/17-06-PLAN.md#Task-1",
+                          ".planning/phases/GB-17-native-save-state-core/17-06-PLAN.md#Task-3"],
+        "decision": "D-01 permits a documented initial baseline before the first state release; this creates the first pins at the existing release version.",
         "rationale": "These 0.2.1 pins establish the initial portable baseline; they do not imply compatibility among arbitrary unreleased builds or infer semantic equivalence.",
         "base_revision": base_revision,
         "old_golden_sha256": None,
         "new_golden_sha256": digest_json(golden),
-        "tokens_before": {"release": {"major": 0, "minor": 2, "patch": 1},
-                           "format_version": 1, "behavior_version": 1},
-        "tokens_after": {"release": {"major": 0, "minor": 2, "patch": 1},
-                          "format_version": 1, "behavior_version": 1},
+        "tokens_before": tokens_before,
+        "tokens_after": tokens_after,
         "affected_semantics": ["canonical serialized bytes for DMG, CGB compatibility, and native CGB fixtures"],
         "base_state_release_exists": False,
         "evidence": {"revision": evidence_revision, "summary_path": EVIDENCE_PATH,
@@ -350,11 +416,13 @@ def self_test():
         os.makedirs(repo)
         subprocess.run(["git", "-C", repo, "init", "-q", "-b", "main"], check=True)
         write_git_file(repo, "CMakeLists.txt", "project(GabbaBoy VERSION 0.2.1 LANGUAGES C)\n")
+        write_git_file(repo, "src/core/gabbaboy.c", "/* no state support declared at this base */\n")
+        base_revision = commit_fixture(repo, "synthetic pre-state base")
         write_git_file(repo, "src/core/gabbaboy.c",
                        "#define GBB_STATE_FORMAT_VERSION 1u\n#define GBB_STATE_BEHAVIOR_VERSION 1u\n")
         summary = "---\nstatus: complete\n---\nSnapshot forks cover 198 serialized fields and 14 in-flight categories.\n"
         write_git_file(repo, EVIDENCE_PATH, summary)
-        base_revision = commit_fixture(repo, "synthetic base")
+        state_support_base = commit_fixture(repo, "synthetic state support without pins")
         golden = fixture_pin_document()
         write_git_file(repo, GOLDEN_PATH, json.dumps(golden, indent=2, sort_keys=True) + "\n")
         no_disposition_revision = commit_fixture(repo, "pins without disposition")
@@ -374,14 +442,28 @@ def self_test():
         rejected("missing pre-release disposition", "compatibility-missing",
                  lambda: verify_snapshot(repo, no_disposition_revision, base_revision, actual))
 
+        current_tokens = document_tokens(golden)
         compatibility = {"schema": "state-compatibility-v1", "dispositions": [
-            initial_disposition(base_revision, golden, base_revision)]}
+            initial_disposition(base_revision, golden, state_support_base,
+                                {"release": {"major": 0, "minor": 2, "patch": 1},
+                                 "format_version": None, "behavior_version": None}, current_tokens),
+            initial_disposition(state_support_base, golden, state_support_base,
+                                current_tokens, current_tokens)]}
         write_git_file(repo, COMPATIBILITY_PATH, json.dumps(compatibility, indent=2, sort_keys=True) + "\n")
         accepted_revision = commit_fixture(repo, "explicit pre-release disposition")
         verified = verify_snapshot(repo, accepted_revision, base_revision, actual)
         if verified["golden_sha256"] != digest_json(golden):
             reject("self-test-failed", "explicit pre-release disposition lost its pin digest")
         controls += 1
+        verify_snapshot(repo, accepted_revision, state_support_base, actual)
+        controls += 1
+
+        missing_basis = json.loads(json.dumps(compatibility))
+        missing_basis["dispositions"][0]["approval_basis"] = " "
+        write_git_file(repo, COMPATIBILITY_PATH, json.dumps(missing_basis, indent=2, sort_keys=True) + "\n")
+        missing_basis_revision = commit_fixture(repo, "delegated disposition without approval basis")
+        rejected("delegated approval without basis", "compatibility-disposition",
+                 lambda: verify_snapshot(repo, missing_basis_revision, base_revision, actual))
 
         altered_actual = json.loads(json.dumps(actual))
         altered_actual["fixtures"][0]["state_sha256"] = "0" * 64
@@ -402,8 +484,13 @@ def self_test():
                        json.dumps(compatibility, indent=2, sort_keys=True) + "\n")
         accepted_revision = commit_fixture(repo, "restore accepted baseline after relabel control")
 
+        subprocess.run(["git", "-C", repo, "checkout", "-qb", "evidence-side", accepted_revision],
+                       check=True)
+        write_git_file(repo, "unrelated-evidence.txt", "separate evidence branch\n")
+        unrelated_evidence = commit_fixture(repo, "unrelated evidence branch")
+        subprocess.run(["git", "-C", repo, "checkout", "-q", "main"], check=True)
         stale_compatibility = json.loads(json.dumps(compatibility))
-        stale_compatibility["dispositions"][0]["evidence"]["revision"] = accepted_revision
+        stale_compatibility["dispositions"][0]["evidence"]["revision"] = unrelated_evidence
         write_git_file(repo, COMPATIBILITY_PATH,
                        json.dumps(stale_compatibility, indent=2, sort_keys=True) + "\n")
         stale_revision = commit_fixture(repo, "stale evidence disposition")
@@ -425,7 +512,9 @@ def self_test():
 
         same_token_row = {
             "id": "bad-same-token-change", "kind": "format-change", "accepted": True,
-            "approved_by": "phase-owner", "decision": "format changed", "rationale": "test control",
+            "approved_by": "phase-owner", "approval_basis": "explicit synthetic owner approval",
+            "decision_refs": ["self-test:owner-approval"], "decision": "format changed",
+            "rationale": "test control",
             "base_revision": accepted_revision, "old_golden_sha256": digest_json(base_golden),
             "new_golden_sha256": digest_json(changed_golden),
             "tokens_before": document_tokens(base_golden), "tokens_after": document_tokens(changed_golden),
@@ -467,6 +556,35 @@ def self_test():
             reject("self-test-failed", "mutable HEAD revision was accepted")
         controls += 1
 
+        receipt_dir = os.path.join(scratch, "receipts")
+        os.makedirs(receipt_dir)
+        receipt_path = os.path.join(receipt_dir, "state-pin-receipt.json")
+        receipt_result = {
+            "source_revision": no_change_revision,
+            "base_revision": base_revision,
+            "golden_sha256": digest_json(golden),
+            "source_input_sha256": "a" * 64,
+            "compiled_executable_sha256": "b" * 64,
+            "fixture_count": len(golden["fixtures"]),
+            "fixtures": golden["fixtures"],
+        }
+        write_receipt(receipt_path, "linux-x64", receipt_result)
+        with open(receipt_path, encoding="utf-8") as handle:
+            receipt = json.load(handle)
+        if set(receipt) != {"schema", "platform", "source_revision", "base_revision", "golden_sha256",
+                            "source_input_sha256", "compiled_executable_sha256", "fixture_count", "fixtures"} or \
+                receipt["schema"] != "state-pin-receipt-v1" or receipt["fixtures"] != golden["fixtures"]:
+            reject("self-test-failed", "state-pin receipt omitted a required identity or included unexpected fields")
+        controls += 1
+        try:
+            write_receipt(receipt_path, "../private-host-path", receipt_result)
+        except Rejected as error:
+            if error.code != "receipt-platform":
+                reject("self-test-failed", "invalid receipt platform had the wrong diagnostic")
+        else:
+            reject("self-test-failed", "invalid receipt platform was accepted")
+        controls += 1
+
     print("state-pin-controls pass controls=%d" % controls)
 
 
@@ -475,6 +593,8 @@ def main(argv):
     parser.add_argument("--rev")
     parser.add_argument("--base")
     parser.add_argument("--check")
+    parser.add_argument("--receipt")
+    parser.add_argument("--platform")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--repo", default=ROOT)
     options = parser.parse_args(argv)
@@ -485,6 +605,12 @@ def main(argv):
         if not options.rev or not options.base or not options.check:
             reject("usage", "--check requires --rev, --base, and the compiled test_state_codec executable")
         result = check_command(options.repo, options.rev, options.base, options.check)
+        receipt_path = options.receipt or os.environ.get("GBB_STATE_PIN_RECEIPT")
+        platform = options.platform or os.environ.get("GBB_STATE_PLATFORM")
+        if receipt_path:
+            if not platform:
+                reject("receipt-platform", "a receipt requires --platform or GBB_STATE_PLATFORM")
+            write_receipt(receipt_path, platform, result)
         print("state-pins pass revision=%s base=%s fixtures=%d golden_sha256=%s source_input_sha256=%s executable_sha256=%s" %
               (result["source_revision"], result["base_revision"], result["fixture_count"],
                result["golden_sha256"], result["source_input_sha256"],

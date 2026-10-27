@@ -413,3 +413,25 @@ including the installed continuation tests. It does not claim physical-device
 equivalence or acceptance of arbitrary third-party state containers. See
 [`cartridge-and-saves.md`](cartridge-and-saves.md) for the API ownership
 contract and the separate battery persistence formats.
+
+## Portable pins and compatibility dispositions
+
+`tests/baseline/state-goldens-v1.json` pins the canonical bytes for the listed
+synthetic DMG, CGB compatibility, and CGB native fixtures. The pin checker reads
+source and the selected compatibility base by immutable commit ID, then compares
+the compiled codec output with those committed bytes. Native CI passes the
+pull-request base or push parent into that check and retains a path-free receipt
+for each Linux, macOS, and Windows job. Receipts identify the source and base
+commits, the compiled executable digest, the source-input digest, the fixture
+descriptors, and the platform label.
+
+The first state pins establish the initial baseline at release 0.2.1. The
+mainline base used to introduce state support had no format or behavior tokens;
+the Phase 17 entry base had tokens 1 and 1 but no golden pins. The compatibility
+ledger records both cases explicitly. This decision does not promise that
+arbitrary unreleased commits sharing version tokens can exchange states. Later
+pin changes require an exact old/new digest disposition, independent continuation
+evidence present at the immutable base, and the applicable release, format, or
+behavior token change. A local receipt does not qualify Linux, macOS, and Windows
+together; that claim requires receipts from the same hosted source revision.
+Phase 19 regenerates and requalifies the pins when the release becomes 0.3.0.
