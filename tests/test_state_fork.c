@@ -16,6 +16,9 @@ const char *state_fork_mutant_field;
 #define FORK_AUDIO_CAPACITY 2048u
 #define GENERATED_APU_ROM_SIZE 0x8000u
 #define GENERATED_APU_ROM_PATH "@generated/apu_fields"
+#define GENERATED_BUS_ROM_SIZE 0x8000u
+#define GENERATED_MBC1_ROM_SIZE 0x200000u
+#define GENERATED_MBC3_ROM_SIZE 0x8000u
 
 static void set_palette(gbb_compat_palette *palette, uint16_t seed) {
     memset(palette, 0, sizeof(*palette));
@@ -29,8 +32,28 @@ static void set_palette(gbb_compat_palette *palette, uint16_t seed) {
 
 /* Original bounded field-census program. It powers the APU, triggers a
  * negative pulse sweep, and enables noise and wave channels before looping. */
+static void finish_generated_rom(uint8_t *rom, size_t size, uint8_t cgb_flag,
+                                 uint8_t cartridge_type, uint8_t rom_size,
+                                 uint8_t ram_size, const uint8_t *program,
+                                 size_t program_size) {
+    memset(rom, 0, size);
+    rom[0x100u] = 0xC3u;
+    rom[0x101u] = 0x00u;
+    rom[0x102u] = 0x02u;
+    rom[0x143u] = cgb_flag;
+    rom[0x147u] = cartridge_type;
+    rom[0x148u] = rom_size;
+    rom[0x149u] = ram_size;
+    memcpy(rom + 0x200u, program, program_size);
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
 static void build_generated_apu_rom(uint8_t rom[GENERATED_APU_ROM_SIZE]) {
     static const uint8_t program[] = {
+        0x00u,                    /* Put the first synthesis edge off the sample boundary. */
         0x3Eu, 0x80u, 0xE0u, 0x26u, /* NR52: sound on */
         0x3Eu, 0x77u, 0xE0u, 0x24u, /* NR50: full output level */
         0x3Eu, 0xFFu, 0xE0u, 0x25u, /* NR51: route all channels */
@@ -43,25 +66,85 @@ static void build_generated_apu_rom(uint8_t rom[GENERATED_APU_ROM_SIZE]) {
         0x3Eu, 0xF0u, 0xE0u, 0x21u, /* NR42: nonzero noise envelope */
         0x3Eu, 0xF7u, 0xE0u, 0x22u, /* NR43: divisor 112, shift 15 */
         0x3Eu, 0xC0u, 0xE0u, 0x23u, /* NR44: length enabled and trigger */
+        0x3Eu, 0x43u, 0xE0u, 0x1Bu, /* NR31: non-default wave length register */
+        0x3Eu, 0x12u, 0xE0u, 0x30u, /* Wave RAM: packed samples before channel enable */
+        0x3Eu, 0x34u, 0xE0u, 0x31u,
+        0x3Eu, 0x56u, 0xE0u, 0x32u,
+        0x3Eu, 0x78u, 0xE0u, 0x33u,
+        0x3Eu, 0x9Au, 0xE0u, 0x34u,
+        0x3Eu, 0xBCu, 0xE0u, 0x35u,
+        0x3Eu, 0xDEu, 0xE0u, 0x36u,
+        0x3Eu, 0xF0u, 0xE0u, 0x37u,
+        0x3Eu, 0x0Fu, 0xE0u, 0x38u,
+        0x3Eu, 0x1Eu, 0xE0u, 0x39u,
+        0x3Eu, 0x2Du, 0xE0u, 0x3Au,
+        0x3Eu, 0x3Cu, 0xE0u, 0x3Bu,
+        0x3Eu, 0x4Bu, 0xE0u, 0x3Cu,
+        0x3Eu, 0x5Au, 0xE0u, 0x3Du,
+        0x3Eu, 0x69u, 0xE0u, 0x3Eu,
+        0x3Eu, 0x78u, 0xE0u, 0x3Fu,
         0x3Eu, 0x80u, 0xE0u, 0x1Au, /* NR30: wave DAC on */
         0x3Eu, 0x20u, 0xE0u, 0x1Cu, /* NR32: wave output level */
         0x3Eu, 0x34u, 0xE0u, 0x1Du, /* NR33: non-default wave frequency low */
         0x3Eu, 0x87u, 0xE0u, 0x1Eu, /* NR34: trigger wave at frequency 1844 */
         0x18u, 0xFEu               /* JR -2 */
     };
-    memset(rom, 0, GENERATED_APU_ROM_SIZE);
-    rom[0x100u] = 0xC3u;
-    rom[0x101u] = 0x00u;
-    rom[0x102u] = 0x02u;
-    rom[0x143u] = 0x80u; /* CGB capable and DMG compatible. */
-    rom[0x147u] = 0x00u;
-    rom[0x148u] = 0x00u;
-    rom[0x149u] = 0x00u;
-    memcpy(rom + 0x200u, program, sizeof(program));
-    uint8_t checksum = 0u;
-    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
-        checksum = (uint8_t)(checksum - rom[i] - 1u);
-    rom[0x14Du] = checksum;
+    finish_generated_rom(rom, GENERATED_APU_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_bus_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x3Eu, 0x80u, 0xE0u, 0x02u, /* Start internal-clock serial transfer. */
+        0x3Eu, 0x55u, 0xE0u, 0x01u, /* Writes during transfer latch deferred bus state. */
+        0x18u, 0xFEu
+    };
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_mbc1_rom(uint8_t rom[GENERATED_MBC1_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x3Eu, 0x02u, 0xEAu, 0x00u, 0x40u, /* MBC1 upper ROM bank bits. */
+        0x3Eu, 0x01u, 0xEAu, 0x00u, 0x60u, /* MBC1 RAM/ROM banking mode. */
+        0x18u, 0xFEu
+    };
+    finish_generated_rom(rom, GENERATED_MBC1_ROM_SIZE, 0x80u, 0x01u,
+                         0x06u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_mbc3_rtc_rom(uint8_t rom[GENERATED_MBC3_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x3Eu, 0x0Au, 0xEAu, 0x00u, 0x00u, /* Enable RTC register writes. */
+        0x3Eu, 0x08u, 0xEAu, 0x00u, 0x40u, 0x3Eu, 0x3Bu, 0xEAu, 0x00u, 0xA0u,
+        0x3Eu, 0x09u, 0xEAu, 0x00u, 0x40u, 0x3Eu, 0x2Du, 0xEAu, 0x00u, 0xA0u,
+        0x3Eu, 0x0Au, 0xEAu, 0x00u, 0x40u, 0x3Eu, 0x13u, 0xEAu, 0x00u, 0xA0u,
+        0x3Eu, 0x0Bu, 0xEAu, 0x00u, 0x40u, 0x3Eu, 0xAAu, 0xEAu, 0x00u, 0xA0u,
+        0x3Eu, 0x0Cu, 0xEAu, 0x00u, 0x40u, 0x3Eu, 0xC1u, 0xEAu, 0x00u, 0xA0u,
+        0x3Eu, 0x00u, 0xEAu, 0x00u, 0x60u, /* RTC latch edge: 0. */
+        0x3Eu, 0x01u, 0xEAu, 0x00u, 0x60u, /* RTC latch edge: 1. */
+        0x18u, 0xFEu
+    };
+    finish_generated_rom(rom, GENERATED_MBC3_ROM_SIZE, 0x80u, 0x10u,
+                         0x00u, 0x02u, program, sizeof(program));
+}
+
+static int generated_rom(const char *id, uint8_t **out, size_t *size) {
+    *out = NULL;
+    *size = 0u;
+    if (strcmp(id, "apu_fields") == 0) *size = GENERATED_APU_ROM_SIZE;
+    else if (strcmp(id, "bus_unsupported") == 0) *size = GENERATED_BUS_ROM_SIZE;
+    else if (strcmp(id, "mbc1_fields") == 0) *size = GENERATED_MBC1_ROM_SIZE;
+    else if (strcmp(id, "mbc3_rtc_fields") == 0) *size = GENERATED_MBC3_ROM_SIZE;
+    else return 0;
+    uint8_t *rom = (uint8_t *)malloc(*size);
+    if (rom == NULL) return 0;
+    if (strcmp(id, "apu_fields") == 0) build_generated_apu_rom(rom);
+    else if (strcmp(id, "bus_unsupported") == 0) build_generated_bus_rom(rom);
+    else if (strcmp(id, "mbc1_fields") == 0) build_generated_mbc1_rom(rom);
+    else build_generated_mbc3_rtc_rom(rom);
+    *out = rom;
+    return 1;
 }
 
 static void generated_rom_sha256(const uint8_t *rom, size_t size, char out[65]) {
@@ -78,13 +161,8 @@ static void generated_rom_sha256(const uint8_t *rom, size_t size, char out[65]) 
 static int read_file(const char *path, uint8_t **out_bytes, size_t *out_size) {
     *out_bytes = NULL;
     *out_size = 0u;
-    if (strcmp(path, GENERATED_APU_ROM_PATH) == 0) {
-        uint8_t *bytes = (uint8_t *)malloc(GENERATED_APU_ROM_SIZE);
-        if (bytes == NULL) return 0;
-        build_generated_apu_rom(bytes);
-        *out_bytes = bytes;
-        *out_size = GENERATED_APU_ROM_SIZE;
-        return 1;
+    if (strncmp(path, "@generated/", 11u) == 0) {
+        return generated_rom(path + 11u, out_bytes, out_size);
     }
     FILE *file = fopen(path, "rb");
     if (file == NULL || fseek(file, 0, SEEK_END) != 0) {
@@ -298,6 +376,11 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         gbb_destroy(baseline);
         gbb_destroy(source);
         return 2;
+    }
+    if (prefix.reason == GBB_STOP_UNSUPPORTED_BUS && source->bus_unsupported == 0 &&
+        source->bus_unsupported_address != 0u) {
+        printf("constant-witness case=%s id=bus_unsupported value=0 consumer_result=%d address=%04x\n",
+            case_id, (int)prefix.reason, (unsigned)source->bus_unsupported_address);
     }
     const uint64_t source_battery_before = source->battery_generation;
     const uint64_t source_rumble_before = source->cart.rumble_changes;
@@ -633,37 +716,45 @@ int main(int argc, char **argv) {
 #ifdef GBB_STATE_FORK_MUTANT
     const char *mutant_arg = NULL;
     if ((argc == 7 && strcmp(argv[5], "--mutant") == 0) ||
-        (argc == 5 && strcmp(argv[3], "generated_apu_fields") == 0 &&
-         strcmp(argv[4], "--mutant") == 0)) {
+        (argc == 6 && strcmp(argv[4], "--mutant") == 0)) {
         mutant_arg = argv[argc - 1];
         state_fork_mutant_field = mutant_arg;
     }
 #define GBB_FORK_CASE_ARGS \
     (argc == 5 || (argc == 7 && strcmp(argv[5], "--mutant") == 0))
 #define GBB_FORK_GENERATED_ARGS \
-    (argc == 3 || (argc == 5 && strcmp(argv[3], "--mutant") == 0))
+    (argc == 4 || (argc == 6 && strcmp(argv[4], "--mutant") == 0))
 #else
 #define GBB_FORK_CASE_ARGS (argc == 5)
-#define GBB_FORK_GENERATED_ARGS (argc == 3)
+#define GBB_FORK_GENERATED_ARGS (argc == 4)
 #endif
     if (GBB_FORK_CASE_ARGS && strcmp(argv[1], "case") == 0) {
         const gbb_profile profile = strcmp(argv[4], "cgb") == 0
             ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B;
         return state_fork_case(argv[2], argv[3], profile);
     }
-    if (GBB_FORK_GENERATED_ARGS && strcmp(argv[1], "generated_apu_fields") == 0) {
-        const int cgb = strcmp(argv[2], "cgb") == 0;
-        if (!cgb && strcmp(argv[2], "dmg") != 0) return 2;
-        uint8_t rom[GENERATED_APU_ROM_SIZE];
+    if (GBB_FORK_GENERATED_ARGS && strcmp(argv[1], "generated_fields") == 0) {
+        const int cgb = strcmp(argv[3], "cgb") == 0;
+        if (!cgb && strcmp(argv[3], "dmg") != 0) return 2;
+        uint8_t *rom = NULL;
+        size_t rom_size = 0u;
+        if (!generated_rom(argv[2], &rom, &rom_size)) return 2;
         char sha256[65];
-        build_generated_apu_rom(rom);
-        generated_rom_sha256(rom, sizeof(rom), sha256);
-        printf("generated-rom id=apu_fields profile=%s size=%zu sha256=%s\n",
-            cgb ? "cgb" : "dmg", sizeof(rom), sha256);
-        return state_fork_case(cgb ? "generated:apu_fields:cgb" :
-            "generated:apu_fields:dmg", GENERATED_APU_ROM_PATH,
+        generated_rom_sha256(rom, rom_size, sha256);
+        printf("generated-rom id=%s profile=%s size=%zu sha256=%s\n",
+            argv[2], cgb ? "cgb" : "dmg", rom_size, sha256);
+        free(rom);
+        char generated_path[64];
+        const int path_size = snprintf(generated_path, sizeof(generated_path),
+                                       "@generated/%s", argv[2]);
+        if (path_size < 0 || (size_t)path_size >= sizeof(generated_path)) return 2;
+        char generated_case_id[96];
+        const int id_size = snprintf(generated_case_id, sizeof(generated_case_id),
+            "generated:%s:%s", argv[2], cgb ? "cgb" : "dmg");
+        if (id_size < 0 || (size_t)id_size >= sizeof(generated_case_id)) return 2;
+        return state_fork_case(generated_case_id, generated_path,
             cgb ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B);
     }
-    fprintf(stderr, "usage: test_state_fork state_slice_invariance | case ID ROM dmg|cgb [--mutant FIELD] | generated_apu_fields dmg|cgb [--mutant FIELD]\n");
+    fprintf(stderr, "usage: test_state_fork state_slice_invariance | case ID ROM dmg|cgb [--mutant FIELD] | generated_fields ID dmg|cgb [--mutant FIELD]\n");
     return 2;
 }

@@ -275,9 +275,10 @@ def verify_rom(rev: str, repo: Path, case: dict) -> None:
         raise ForkError(f"working fixture missing/stale relative to immutable input: {case['id']}")
 
 
-def parse_runner_output(output: str) -> tuple[list[dict], list[dict]]:
+def parse_runner_output(output: str) -> tuple[list[dict], list[dict], list[dict]]:
     fields: list[dict] = []
     categories: list[dict] = []
+    constants: list[dict] = []
     for line in output.splitlines():
         if line.startswith("field-witness "):
             parts = dict(part.split("=", 1) for part in line.split()[1:] if "=" in part)
@@ -286,7 +287,9 @@ def parse_runner_output(output: str) -> tuple[list[dict], list[dict]]:
             fields.append(parts)
         elif line.startswith("category-witness "):
             categories.append(dict(part.split("=", 1) for part in line.split()[1:] if "=" in part))
-    return fields, categories
+        elif line.startswith("constant-witness "):
+            constants.append(dict(part.split("=", 1) for part in line.split()[1:] if "=" in part))
+    return fields, categories, constants
 
 
 def run_shard(args: argparse.Namespace) -> None:
@@ -304,17 +307,18 @@ def run_shard(args: argparse.Namespace) -> None:
         command = [str(args.test_exe), "case", case["id"], str(args.repo / case["rom"]), case["profile"]]
         proc = subprocess.run(command, cwd=args.repo, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True, check=False)
-        fields, categories = parse_runner_output(proc.stdout)
+        fields, categories, constants = parse_runner_output(proc.stdout)
         if proc.returncode != 0:
             raise ForkError(f"fork case failed id={case['id']} exit={proc.returncode}\n{proc.stdout[-12000:]}")
         results.append({"index": index, **case, "field_witnesses": fields,
                         "category_witnesses": categories,
+                        "constant_witnesses": constants,
                         "stdout_sha256": hashlib.sha256(proc.stdout.encode()).hexdigest()})
     generated_results = []
     if args.shard == 0:
         for fixture in spec.get("generated_field_fixtures", []):
             for profile in fixture.get("profiles", []):
-                proc = subprocess.run([str(args.test_exe), "generated_apu_fields", profile],
+                proc = subprocess.run([str(args.test_exe), "generated_fields", fixture["id"], profile],
                                       cwd=args.repo, stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, check=False)
                 if proc.returncode != 0:
@@ -328,13 +332,13 @@ def run_shard(args: argparse.Namespace) -> None:
                     identity.get("sha256") != fixture.get("sha256") or
                     int(identity.get("size", "0")) != fixture.get("size_bytes")):
                     raise ForkError(f"generated field fixture identity differs from immutable spec: {header}")
-                fields, categories = parse_runner_output(proc.stdout)
+                fields, categories, constants = parse_runner_output(proc.stdout)
                 generated_results.append({
                     "id": f"generated:{fixture['id']}:{profile}",
                     "fixture_id": fixture["id"], "source": fixture["source"],
                     "sha256": fixture["sha256"], "size_bytes": fixture["size_bytes"],
                     "profile": profile, "field_witnesses": fields,
-                    "category_witnesses": categories,
+                    "category_witnesses": categories, "constant_witnesses": constants,
                     "stdout_sha256": hashlib.sha256(proc.stdout.encode()).hexdigest(),
                 })
     report = {
@@ -443,6 +447,9 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
     all_cases = report["cases"] + generated_cases
     actual_witnesses: set[str] = set()
     actual_categories: set[str] = set()
+    actual_constants: set[tuple[str, str]] = set()
+    constant_specs = [item for item in spec.get("constant_dispositions", []) if isinstance(item, dict)]
+    constants_by_path = {item.get("path"): item for item in constant_specs}
     required_categories = {item["id"] for item in spec.get("in_flight_categories", [])}
     for case in all_cases:
         case_id = case.get("id")
@@ -468,10 +475,39 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
             if row.get("case") != case_id or row.get("id") not in required_categories:
                 raise ForkError(f"unknown/misattributed in-flight category witness in {case_id}")
             actual_categories.add(row["id"])
+        for row in case.get("constant_witnesses", []):
+            if row.get("case") != case_id:
+                raise ForkError(f"constant witness is attributed to another case: {case_id}")
+            try:
+                value = int(row["value"])
+                result_code = int(row["consumer_result"])
+                address = int(row["address"], 16)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ForkError(f"malformed constant/consuming-path witness in {case_id}") from exc
+            disposition = constants_by_path.get(row.get("id"))
+            if (disposition is None or value != disposition.get("value") or
+                result_code < 0 or address == 0):
+                raise ForkError(f"constant/consuming-path witness has invalid observation: {case_id}")
+            actual_constants.add((row.get("id", ""), case_id))
     witnessed = set(report.get("field_witnesses", []))
     if witnessed != actual_witnesses:
         raise ForkError("field witness summary differs from case-level observed values")
-    explicit = {item["path"] for item in spec.get("constant_dispositions", []) if isinstance(item, dict) and item.get("path")}
+    explicit = set()
+    for item in constant_specs:
+        path = item.get("path")
+        test_cases = item.get("tests")
+        if (not path or not item.get("invariant") or not isinstance(test_cases, list) or
+            not test_cases or not item.get("consumer")):
+            raise ForkError("constant disposition lacks path, invariant, test or consuming-path evidence")
+        if path in explicit:
+            raise ForkError(f"duplicate constant disposition: {path}")
+        explicit.add(path)
+        if not isinstance(item.get("value"), int):
+            raise ForkError(f"constant disposition lacks an exact invariant value: {path}")
+    allowed_constants = {(item["path"], test_case) for item in constant_specs
+                         for test_case in item["tests"]}
+    if actual_constants != allowed_constants:
+        raise ForkError(f"constant disposition witness mismatch: missing={sorted(allowed_constants-actual_constants)} extra={sorted(actual_constants-allowed_constants)}")
     unknown = (witnessed | explicit) - fields
     if unknown:
         raise ForkError(f"unknown field disposition/witness: {sorted(unknown)[:5]}")

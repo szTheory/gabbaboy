@@ -28,11 +28,44 @@
   "generated_field_fixtures": [
     {
       "id": "apu_fields",
-      "sha256": "5154f91097917fe20bffd5c17c85f1dddd0bf218105c591fd55dfb34461da1ef",
+      "sha256": "214cfda7c16b8b1337859ca4f593b716ccf1895e707a1f6e898d50abb3358b30",
       "size_bytes": 32768,
       "source": "tests/test_state_fork.c:build_generated_apu_rom",
-      "purpose": "Original looping DMG-compatible ROM powers pulse/noise/wave, triggers a negative pulse sweep, and witnesses serialized APU fields at a real public save boundary.",
+      "purpose": "Original looping DMG-compatible ROM powers pulse/noise/wave, triggers a negative pulse sweep, writes all wave RAM bytes, and witnesses serialized APU and resampler fields at a real public save boundary.",
       "profiles": ["dmg", "cgb"]
+    },
+    {
+      "id": "bus_unsupported",
+      "sha256": "397b2f8f029a927d6b0fbebaee64bf0bcbb23b9e95e2c6eb448b731e3b92e92e",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_bus_rom",
+      "purpose": "Original ROM starts a serial transfer then writes the active transfer register, exposing the deferred unsupported-bus result and its consumed latch at the public save boundary.",
+      "profiles": ["dmg", "cgb"]
+    },
+    {
+      "id": "mbc1_fields",
+      "sha256": "e1f399c2d4b2a6b897ca930350ac22725767a4a552a3f56e836327f13ae71478",
+      "size_bytes": 2097152,
+      "source": "tests/test_state_fork.c:build_generated_mbc1_rom",
+      "purpose": "Original 128-bank MBC1 ROM writes upper ROM bank bits and RAM/ROM banking mode before a real public save boundary.",
+      "profiles": ["dmg", "cgb"]
+    },
+    {
+      "id": "mbc3_rtc_fields",
+      "sha256": "2ae48db503230ab38832ce5cd67e7eab72e0f7279c350427c111e6c3d2b8b7fa",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_mbc3_rtc_rom",
+      "purpose": "Original MBC3 timer/RAM ROM writes seconds/minutes/hours/day/flags, performs the 00-to-01 latch sequence, and advances the subsecond anchor before save.",
+      "profiles": ["dmg", "cgb"]
+    }
+  ],
+  "constant_dispositions": [
+    {
+      "path": "bus_unsupported",
+      "value": 0,
+      "invariant": "A guest bus fault is consumed by the public run call that returns GBB_STOP_UNSUPPORTED_BUS before the caller can make a public save; the address remains as ordinary saved context. A receiving target's pre-load latch must still be restored to this zero value.",
+      "tests": ["generated:bus_unsupported:dmg", "generated:bus_unsupported:cgb"],
+      "consumer": "gbb_run_audio clears bus_unsupported when returning the deferred GBB_STOP_UNSUPPORTED_BUS result."
     }
   ],
   "fixture_manifests": [
@@ -93,7 +126,7 @@
     "frame_generation", "dma_phase", "hdma.byte_phase", "hdma.destination_cursor",
     "cpu_stall_half_dots", "apu_sequencer_step", "audio_event_ring", "audio_hpf_input",
     "cart.rom_bank_lo", "cartridge_ram", "cart.rtc_l", "cart.rtc_sub", "cart.rtc_synced_at",
-    "cart.rumble_on"
+    "cart.rumble_on", "bus_unsupported"
   ],
   "mutant_policy": "Every descriptor path with a non-default recorded witness is mutated once. Each mutant skips assignment while preserving one wire-width offset advance per element. A no-witness field needs a model-applicability or constant disposition with consumer evidence; it is not silently omitted."
 }
