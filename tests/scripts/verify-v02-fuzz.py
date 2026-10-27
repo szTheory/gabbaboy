@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import csv
 import hashlib
 import http.client
 import http.server
@@ -36,7 +37,7 @@ EXPECTED_REPOSITORY = "szTheory/gabbaboy"
 EXPECTED_BRANCH = "main"
 EXPECTED_JOB_KEY = "linux-sanitizers"
 EXPECTED_JOB_NAME = "linux-asan-ubsan"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 # Largest SOURCE_FILES blob is tests/CMakeLists.txt (about 289 KB); a hostile commit cannot make us read more.
 MAX_COMMIT_BLOB_BYTES = 8 * 1024 * 1024
 CAMPAIGN_SECONDS = 60
@@ -44,10 +45,13 @@ SOURCE_FILES = (
     "CMakeLists.txt",
     "CMakePresets.json",
     "tests/CMakeLists.txt",
+    "tests/expected-tests.txt",
     "tests/fuzz_core.c",
+    "tests/test_state_codec.c",
     "tests/fuzz/fuzz_core.dict",
     "tests/scripts/run-bounded-fuzz.sh",
     "tests/scripts/verify-v02-fuzz.py",
+    "src/core/gabbaboy.c",
     WORKFLOW,
     "fixtures/tracer/tracer.gb",
     "fixtures/rtc3test/rtc3test.gb",
@@ -100,6 +104,28 @@ SEED_SPECS = (
     ("cgb-hdma", "fixtures/tracer/tracer.gb", "cgb-hdma"),
     ("rtc3test-mbc3-timer-header", "fixtures/rtc3test/rtc3test.gb", "rtc-header"),
     ("mbc3-rtc-continuation-header", "fixtures/mbc3-rtc-continuation/continuation.gb", "rtc-header"),
+)
+STATE_SEED_SPECS = (
+    ("state-header-only", 1, 0, (0, 0, 0, 0)),
+    ("state-late-invalid-field", 0, 1, (0, 0, 0, 0)),
+    ("state-premature-apply", 0, 2, (0xFF, 0, 0, 0)),
+    ("state-cap-sentinel", 2, 3, (0, 0, 0, 0)),
+    ("state-signed-audio", 1, 4, (0x81, 0, 0, 0)),
+    ("state-queue-ordering", 2, 5, (4, 4, 0, 0)),
+    ("state-rtc-palette", 2, 6, (59, 58, 23, 0xFF)),
+    ("state-accepted-closure", 0, 7, (0, 0, 0, 0)),
+)
+STATE_WITNESS_NAMES = (
+    "state-load-target",
+    "header-only-control",
+    "late-invalid-field",
+    "premature-apply-refusal",
+    "no-write-refusal",
+    "cap-sentinel",
+    "signed-audio-edge",
+    "queue-ordering",
+    "rtc-palette",
+    "accepted-state-closure",
 )
 HEX_256 = re.compile(r"^[0-9a-f]{64}$")
 HEX_160 = re.compile(r"^[0-9a-f]{40}$")
@@ -220,6 +246,9 @@ def compiler_contract(build: Path) -> dict[str, object]:
     probe = subprocess.run([str(binary), "-help=1"], text=True, capture_output=True, check=False, timeout=10)
     if "libFuzzer" not in probe.stdout + probe.stderr:
         raise ReceiptError("unsupported fuzz target: binary does not expose libFuzzer runtime")
+    state_binary = build / "tests" / "test_state_fuzz"
+    if not state_binary.is_file() or not os.access(state_binary, os.X_OK):
+        raise ReceiptError("unsupported state fuzz target: matching deterministic binary is unavailable")
     return {
         "label": "clang-18",
         "version": re.sub(r"\s+", " ", first_line[0]).strip()[:160],
@@ -232,6 +261,7 @@ def compiler_contract(build: Path) -> dict[str, object]:
         "cmake_cache_sha256": sha256_file(cache_path),
         "build_ninja_sha256": sha256_file(ninja),
         "binary_sha256": sha256_file(binary),
+        "state_target_binary_sha256": sha256_file(state_binary),
     }
 
 
@@ -299,6 +329,19 @@ def seed_bytes(source: bytes, selector: str) -> bytes:
     return prefix + source[: min(len(source), 512)]
 
 
+def state_seed_bytes(profile: int, scenario: int, payload: tuple[int, int, int, int]) -> bytes:
+    return bytes((0xF0, profile, scenario, *payload))
+
+
+def state_seed_source_digest(label: str, profile: int, scenario: int,
+                             payload: tuple[int, int, int, int]) -> str:
+    descriptor = json.dumps(
+        {"label": label, "profile": profile, "scenario": scenario, "payload": list(payload)},
+        sort_keys=True, separators=(",", ":"),
+    )
+    return sha256_bytes(descriptor.encode("utf-8"))
+
+
 def prepare_seeds(corpus: Path) -> list[dict[str, object]]:
     corpus.mkdir(parents=True, exist_ok=False)
     records: list[dict[str, object]] = []
@@ -314,6 +357,17 @@ def prepare_seeds(corpus: Path) -> list[dict[str, object]]:
             "sha256": sha256_bytes(data),
             "bytes": len(data),
         })
+    for label, profile, scenario, payload in STATE_SEED_SPECS:
+        data = state_seed_bytes(profile, scenario, payload)
+        target = corpus / f"{label}.seed"
+        target.write_bytes(data)
+        records.append({
+            "label": label,
+            "source": "generated:state-semantic-v1",
+            "source_sha256": state_seed_source_digest(label, profile, scenario, payload),
+            "sha256": sha256_bytes(data),
+            "bytes": len(data),
+        })
     return records
 
 
@@ -326,6 +380,15 @@ def expected_seed_records(commit: str | None = None) -> list[dict[str, object]]:
             "label": label,
             "source": source_path,
             "source_sha256": sha256_bytes(source),
+            "sha256": sha256_bytes(data),
+            "bytes": len(data),
+        })
+    for label, profile, scenario, payload in STATE_SEED_SPECS:
+        data = state_seed_bytes(profile, scenario, payload)
+        records.append({
+            "label": label,
+            "source": "generated:state-semantic-v1",
+            "source_sha256": state_seed_source_digest(label, profile, scenario, payload),
             "sha256": sha256_bytes(data),
             "bytes": len(data),
         })
@@ -410,6 +473,148 @@ def diagnostics_from(output: str) -> list[str]:
     return found[:20]
 
 
+def state_witnesses_from_output(output: str) -> list[str]:
+    found = set(re.findall(r"(?m)^state-fuzz-witness: ([a-z0-9-]+)$", output))
+    return sorted(found)
+
+
+def validate_state_witnesses(value: object) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ReceiptError("state semantic witness inventory must be a string list")
+    if len(value) != len(set(value)):
+        raise ReceiptError("state semantic witness inventory contains duplicates")
+    witnesses = set(value)
+    if witnesses == {"header-only-control"}:
+        raise ReceiptError("header-only-only state witness cannot qualify")
+    if "state-load-target" not in witnesses:
+        raise ReceiptError("state fuzz target witness is missing")
+    missing = [name for name in STATE_WITNESS_NAMES if name not in witnesses]
+    if missing:
+        raise ReceiptError(f"state semantic witness missing: {missing[0]}")
+    unexpected = sorted(witnesses - set(STATE_WITNESS_NAMES))
+    if unexpected:
+        raise ReceiptError(f"unknown state semantic witness: {unexpected[0]}")
+    return sorted(witnesses)
+
+
+STATE_FUZZ_CENSUS_FIELDS = {
+    "cart.rtc_s": (131078, 1, 1, "FUZZ_STATE_BODY_OFFSET_RTC_SECONDS"),
+    "cart.rtc_m": (131079, 1, 1, "FUZZ_STATE_BODY_OFFSET_RTC_MINUTES"),
+    "cart.rtc_h": (131080, 1, 1, "FUZZ_STATE_BODY_OFFSET_RTC_HOURS"),
+    "cart.rtc_synced_at": (131093, 1, 8, "FUZZ_STATE_BODY_OFFSET_RTC_SYNC"),
+    "bg_cram": (180558, 64, 1, "FUZZ_STATE_BODY_OFFSET_BG_CRAM"),
+    "timer_reloaded_at": (319123, 1, 8, "FUZZ_STATE_BODY_OFFSET_TIMER_RELOADED"),
+    "instruction_start_half_dots": (319131, 1, 8, "FUZZ_STATE_BODY_OFFSET_INSTRUCTION_START"),
+    "time_half_dots": (319155, 1, 8, "FUZZ_STATE_BODY_OFFSET_TIME"),
+    "input_event_count": (319163, 1, 1, "FUZZ_STATE_BODY_OFFSET_INPUT_COUNT"),
+    "input_events[].at_half_dots": (319164, 64, 8, "FUZZ_STATE_BODY_OFFSET_INPUT_AT"),
+    "input_events[].kind": (319676, 64, 1, "FUZZ_STATE_BODY_OFFSET_INPUT_KIND"),
+    "input_events[].value": (319740, 64, 1, "FUZZ_STATE_BODY_OFFSET_INPUT_VALUE"),
+    "apu_sample_phase": (319895, 1, 8, "FUZZ_STATE_BODY_OFFSET_APU_SAMPLE_PHASE"),
+    "audio_event_ring": (319903, 32, 8, "FUZZ_STATE_BODY_OFFSET_AUDIO_RING"),
+    "audio_event_head": (320159, 1, 1, "FUZZ_STATE_BODY_OFFSET_AUDIO_HEAD"),
+    "audio_hpf_output": (320176, 2, 4, "FUZZ_STATE_BODY_OFFSET_AUDIO_HPF_OUTPUT"),
+}
+STATE_FUZZ_MAX_RAM_OFFSET = 131072
+STATE_FUZZ_FIXTURE_RAM_BYTES = 8192
+
+
+def state_fuzz_controls(revision: str, census_exe: Path,
+                        probe: Path, mutant_probe: Path) -> None:
+    if not HEX_160.fullmatch(revision):
+        raise ReceiptError("state fuzz controls require an immutable full 40-character source SHA")
+    if git_output("rev-parse", "HEAD") != revision:
+        raise ReceiptError("state fuzz control revision is not the current immutable HEAD")
+    if source_manifest(revision, compare_worktree=True) != source_manifest(revision, compare_worktree=False):
+        raise ReceiptError("state fuzz build inputs differ from the immutable source revision")
+    core_source = commit_blob(revision, "src/core/gabbaboy.c").decode("utf-8")
+    fuzz_source = commit_blob(revision, "tests/fuzz_core.c").decode("utf-8")
+    cmake_source = commit_blob(revision, "tests/CMakeLists.txt").decode("utf-8")
+    expected_tests = commit_blob(revision, "tests/expected-tests.txt").decode("utf-8").splitlines()
+    validator_source = commit_blob(revision, VALIDATOR_SOURCE).decode("utf-8")
+    for token in (
+        "gbb_test_instance_bytes_size", "gbb_test_copy_instance_bytes",
+        "memcmp(instance_before, instance_after", "FUZZ_STATE_INSTANCE_BYTES_LIMIT",
+    ):
+        if token not in fuzz_source:
+            raise ReceiptError(f"immutable state fuzz source omits whole-instance oracle: {token}")
+    for token in ("FUZZ_STATE_WITNESS_TARGET", "data[0] == FUZZ_STATE_TAG",
+                  "FUZZ_STATE_OPERATION_LIMIT 16u", "FUZZ_STATE_WIRE_LIMIT 524352u",
+                  "gbb_fuzz_state_one_input"):
+        if token not in fuzz_source:
+            raise ReceiptError(f"immutable state fuzz source omits target or bound: {token}")
+    anchor = "if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;"
+    mutation = "++instance->cart.rumble_changes;"
+    if core_source.count(anchor) != 1 or mutation not in cmake_source:
+        raise ReceiptError("observer-only state refusal mutant is not anchored to one immutable validation point")
+    control_sources = cmake_source + fuzz_source + validator_source
+    for token in ("state_fuzz_observer_mutant", "state_fuzz_mutant", "state_control",
+                  "state-fuzz-witness", "state-fuzz-control"):
+        if token not in control_sources:
+            raise ReceiptError(f"immutable state fuzz control omits its named mutation/control: {token}")
+    for token in (
+        "#define FUZZ_STATE_MAX_RAM_BYTES 131072u",
+        "#define FUZZ_STATE_RAM_BYTES 8192u",
+        "#define FUZZ_STATE_OFFSET_ADJUSTMENT (FUZZ_STATE_MAX_RAM_BYTES - FUZZ_STATE_RAM_BYTES)",
+        "((size_t)(max_ram_offset) - FUZZ_STATE_OFFSET_ADJUSTMENT)",
+        "battery_size == FUZZ_STATE_RAM_BYTES + GBB_RTC_BLOCK_SIZE",
+    ):
+        if token not in fuzz_source:
+            raise ReceiptError(f"immutable fuzz fixture does not prove the complete owned-RAM extent: {token}")
+    if "state_load_fuzz" not in expected_tests or "state_fuzz_controls" not in expected_tests:
+        raise ReceiptError("immutable CTest inventory omits deterministic state fuzz evidence")
+
+    census_result = subprocess.run([str(census_exe), "state_field_census"], text=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                   check=False, timeout=30)
+    if census_result.returncode != 0:
+        raise ReceiptError("compiled state field census failed during state fuzz controls")
+    rows = {row["qualified_id"]: row for row in csv.DictReader(
+        io.StringIO(census_result.stdout), delimiter="|")}
+    adjustment = STATE_FUZZ_MAX_RAM_OFFSET - STATE_FUZZ_FIXTURE_RAM_BYTES
+    for field, (expected_max_offset, expected_count, expected_width, macro) in STATE_FUZZ_CENSUS_FIELDS.items():
+        row = rows.get(field)
+        if row is None or row.get("treatment") != "serialize":
+            raise ReceiptError(f"compiled state census omits fuzzed serialized field: {field}")
+        if (int(row["offset"]), int(row["max_count"]), int(row["wire_width"])) != (
+            expected_max_offset, expected_count, expected_width,
+        ):
+            raise ReceiptError(f"compiled state census changed the semantic field contract: {field}")
+        source_macro = re.search(rf"(?m)^#define {macro} FUZZ_STATE_BODY_OFFSET\((\d+)u\)$", fuzz_source)
+        if not source_macro or int(source_macro.group(1)) != expected_max_offset:
+            raise ReceiptError(f"fuzz semantic byte offset is not census-linked: {field}")
+        if expected_max_offset - adjustment < 0:
+            raise ReceiptError(f"synthetic MBC3 RAM adjustment underflows field offset: {field}")
+
+    baseline = subprocess.run([str(probe)], text=True, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, check=False, timeout=30)
+    if baseline.returncode != 0:
+        raise ReceiptError("deterministic state fuzz target positive control failed")
+    validate_state_witnesses(state_witnesses_from_output(baseline.stdout))
+    if "state-load-fuzz pass" not in baseline.stdout or "state-fuzz-control pass" not in baseline.stdout:
+        raise ReceiptError("deterministic state fuzz target omitted its positive closure control")
+
+    try:
+        mutant = subprocess.run([str(mutant_probe), "state_fuzz_mutant"], text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                check=False, timeout=30)
+    except subprocess.TimeoutExpired as exc:
+        raise ReceiptError("observer-only mutant timed out; timeout is not a semantic kill") from exc
+    expected_discrepancy = "refused state load changed opaque instance bytes or excluded observers"
+    if mutant.returncode != 1 or expected_discrepancy not in mutant.stdout:
+        raise ReceiptError("observer-only mutation failed to trigger the exact whole-instance discrepancy")
+    try:
+        control = subprocess.run([str(mutant_probe), "state_control"], text=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 check=False, timeout=30)
+    except subprocess.TimeoutExpired as exc:
+        raise ReceiptError("observer-only mutant unrelated control timed out") from exc
+    if control.returncode != 0 or "unrelated=accepted-state-closure" not in control.stdout:
+        raise ReceiptError("observer-only mutation did not retain its unrelated accepted-state control")
+    print(f"state-fuzz-controls=pass revision={revision} census_fields={len(STATE_FUZZ_CENSUS_FIELDS)} "
+          "observer_mutant=semantic-kill unrelated_control=pass")
+
+
 def artifact_records(directory: Path) -> list[dict[str, object]]:
     result = []
     if not directory.exists():
@@ -445,6 +650,7 @@ def failed_receipt(receipt_path: Path, reason: str, commit: str | None = None) -
             "synthetic": False,
             "failure": redact_output(reason),
             "arguments": list(FUZZ_ARGS),
+            "state_witnesses": [],
         },
         "minimized_artifacts": [],
         "workflow": workflow_identity(),
@@ -500,6 +706,12 @@ def produce_campaign(build_dir: Path, receipt_path: Path) -> int:
         execution_count = int(counts[-1]) if counts else 0
         minimized = artifact_records(artifacts)
         issues = diagnostics_from(output)
+        state_witnesses = state_witnesses_from_output(output)
+        try:
+            validate_state_witnesses(state_witnesses)
+            state_witness_failure = None
+        except ReceiptError as exc:
+            state_witness_failure = str(exc)
         outcome = "passed"
         failure = None
         if return_code != 0:
@@ -510,6 +722,8 @@ def produce_campaign(build_dir: Path, receipt_path: Path) -> int:
             outcome, failure = "failed", "libFuzzer final statistics contain no nonzero execution count"
         elif issues:
             outcome, failure = "failed", "sanitizer or fuzz-contract diagnostic was emitted"
+        elif state_witness_failure is not None:
+            outcome, failure = "failed", state_witness_failure
         output_digest = sha256_bytes(output.encode("utf-8", errors="replace"))
         payload: dict[str, object] = {
             "schema_version": SCHEMA_VERSION,
@@ -533,6 +747,7 @@ def produce_campaign(build_dir: Path, receipt_path: Path) -> int:
                 "output_sha256": output_digest,
                 "diagnostics": issues,
                 "failure": failure,
+                "state_witnesses": state_witnesses,
             },
             "minimized_artifacts": minimized,
             "workflow": workflow_identity(),
@@ -616,7 +831,8 @@ def validate_receipt(
         raise ReceiptError("receipt compiler is not Clang 18")
     if compiler.get("cmake_compiler_id") != "Clang" or not re.search(r"clang version 18(?:\.|\s)", str(compiler.get("version", "")), re.I):
         raise ReceiptError("receipt does not identify the configured Clang 18 compiler")
-    for field in ("compiler_sha256", "cmake_cache_sha256", "build_ninja_sha256", "binary_sha256"):
+    for field in ("compiler_sha256", "cmake_cache_sha256", "build_ninja_sha256", "binary_sha256",
+                  "state_target_binary_sha256"):
         digest = compiler.get(field)
         if not isinstance(digest, str) or not HEX_256.fullmatch(digest):
             raise ReceiptError(f"receipt compiler/build identity missing valid {field}")
@@ -634,6 +850,7 @@ def validate_receipt(
     seeds = value.get("seeds")
     if not isinstance(seeds, list) or seeds != expected_seed_records(seed_commit):
         raise ReceiptError("seed identities differ from deterministic admitted-fixture seeds")
+    validate_state_witnesses(result.get("state_witnesses"))
     workflow = value.get("workflow")
     if not isinstance(workflow, dict) or workflow.get("workflow_path") != WORKFLOW:
         raise ReceiptError("workflow run/attempt/job identity is missing")
@@ -1206,6 +1423,7 @@ class ReceiptContractTests(unittest.TestCase):
                 "cmake_compiler_id": "Clang", "libfuzzer": True, "asan": True, "ubsan": True,
                 "compiler_sha256": "a" * 64, "cmake_cache_sha256": "b" * 64,
                 "build_ninja_sha256": "c" * 64, "binary_sha256": "d" * 64,
+                "state_target_binary_sha256": "f" * 64,
             },
             "dictionary_sha256": sha256_file(ROOT / "tests/fuzz/fuzz_core.dict"),
             "seeds": expected_seed_records(),
@@ -1214,6 +1432,7 @@ class ReceiptContractTests(unittest.TestCase):
                 "outcome": "passed", "execution_count": 1, "elapsed_seconds": 60,
                 "exit_code": 0, "synthetic": False, "arguments": list(FUZZ_ARGS),
                 "output_sha256": "e" * 64, "diagnostics": [],
+                "state_witnesses": sorted(STATE_WITNESS_NAMES),
             },
             "minimized_artifacts": [],
             "workflow": {
@@ -1737,6 +1956,35 @@ class ReceiptContractTests(unittest.TestCase):
         self.assertEqual(len(source_manifest(git_output("rev-parse", "HEAD"), compare_worktree=False)), len(SOURCE_FILES))
         print("positive-control=source-input-and-bounded-work-contract")
 
+    def test_state_semantic_witness_inventory_controls(self) -> None:
+        complete_log = "\n".join(f"state-fuzz-witness: {name}" for name in STATE_WITNESS_NAMES)
+        self.assertEqual(state_witnesses_from_output(complete_log), sorted(STATE_WITNESS_NAMES))
+        with self.assertRaisesRegex(ReceiptError, "state fuzz target witness is missing"):
+            validate_state_witnesses([name for name in STATE_WITNESS_NAMES if name != "state-load-target"])
+        with self.assertRaisesRegex(ReceiptError, "header-only-only"):
+            validate_state_witnesses(["header-only-control"])
+        with self.assertRaisesRegex(ReceiptError, "state semantic witness missing: rtc-palette"):
+            validate_state_witnesses([name for name in STATE_WITNESS_NAMES if name != "rtc-palette"])
+        print("negative-controls=state-target-omission-header-only-only-deep-category-omission")
+
+    def test_source_bound_receipt_rejects_missing_state_semantic_witnesses(self) -> None:
+        head = git_output("rev-parse", "HEAD")
+        for witnesses, reason in (
+            ([name for name in STATE_WITNESS_NAMES if name != "state-load-target"],
+             "state fuzz target witness is missing"),
+            (["header-only-control"], "header-only-only state witness cannot qualify"),
+            ([name for name in STATE_WITNESS_NAMES if name != "rtc-palette"],
+             "state semantic witness missing: rtc-palette"),
+        ):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory() as directory:
+                payload = json.loads(self.source_bound_receipt(head))
+                payload["result"]["state_witnesses"] = witnesses
+                path = Path(directory) / "state-witness-negative.json"
+                path.write_text(json.dumps(payload), encoding="utf-8")
+                with self.assertRaisesRegex(ReceiptError, re.escape(reason)):
+                    validate_receipt(path, expected_sha=head, source_commit_only=True)
+        print("negative-controls=source-bound-receipt-requires-state-semantic-witnesses")
+
     def test_explicit_source_identity_outranks_runner_sha(self) -> None:
         explicit, runner = "a" * 40, "b" * 40
         saved = {name: os.environ.get(name) for name in ("GBB_SOURCE_SHA", "GITHUB_SHA")}
@@ -1759,14 +2007,14 @@ class ReceiptContractTests(unittest.TestCase):
     def test_rejects_zero_execution_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.verify_rejects(Path(directory) / "zero.json", {
-                "schema_version": 1, "status": "complete", "mode": "explore", "source_sha": git_output("rev-parse", "HEAD"),
+                "schema_version": SCHEMA_VERSION, "status": "complete", "mode": "explore", "source_sha": git_output("rev-parse", "HEAD"),
                 "result": {"synthetic": False, "execution_count": 0},
             }, "executions must be greater than zero")
 
     def test_rejects_unsupported_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.verify_rejects(Path(directory) / "unsupported.json", {
-                "schema_version": 1, "status": "unsupported", "mode": "explore", "source_sha": "a" * 40,
+                "schema_version": SCHEMA_VERSION, "status": "unsupported", "mode": "explore", "source_sha": "a" * 40,
             }, "campaign status unsupported is not complete")
 
     def test_producer_records_unsupported_runtime_without_qualifying(self) -> None:
@@ -1783,19 +2031,19 @@ class ReceiptContractTests(unittest.TestCase):
     def test_rejects_fast_only_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.verify_rejects(Path(directory) / "fast.json", {
-                "schema_version": 1, "status": "complete", "mode": "fast", "source_sha": "a" * 40,
+                "schema_version": SCHEMA_VERSION, "status": "complete", "mode": "fast", "source_sha": "a" * 40,
             }, "campaign mode must be explore")
 
     def test_rejects_fabricated_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.verify_rejects(Path(directory) / "fabricated.json", {
-                "schema_version": 1, "status": "complete", "mode": "explore",
+                "schema_version": SCHEMA_VERSION, "status": "complete", "mode": "explore",
             }, "receipt missing required field source_sha")
 
     def test_rejects_stale_source_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.verify_rejects(Path(directory) / "stale.json", {
-                "schema_version": 1, "status": "complete", "mode": "explore", "source_sha": "a" * 40,
+                "schema_version": SCHEMA_VERSION, "status": "complete", "mode": "explore", "source_sha": "a" * 40,
             }, "stale receipt source SHA")
 
     def source_bound_receipt(self, head: str) -> bytes:
@@ -1842,7 +2090,7 @@ class ReceiptContractTests(unittest.TestCase):
         limits["campaign_seconds"] = 61
         with tempfile.TemporaryDirectory() as directory:
             self.verify_rejects(Path(directory) / "bounds.json", {
-                "schema_version": 1, "status": "complete", "mode": "explore", "source_sha": git_output("rev-parse", "HEAD"),
+                "schema_version": SCHEMA_VERSION, "status": "complete", "mode": "explore", "source_sha": git_output("rev-parse", "HEAD"),
                 "result": {"synthetic": False, "execution_count": 1, "elapsed_seconds": 60,
                            "outcome": "passed", "exit_code": 0, "arguments": list(FUZZ_ARGS),
                            "output_sha256": "b" * 64, "diagnostics": []},
@@ -1852,7 +2100,7 @@ class ReceiptContractTests(unittest.TestCase):
     def test_rejects_synthesized_result(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             self.verify_rejects(Path(directory) / "synthetic.json", {
-                "schema_version": 1, "status": "complete", "mode": "explore", "source_sha": git_output("rev-parse", "HEAD"),
+                "schema_version": SCHEMA_VERSION, "status": "complete", "mode": "explore", "source_sha": git_output("rev-parse", "HEAD"),
                 "result": {"synthetic": True},
             }, "synthetic results are forbidden")
 
@@ -1920,7 +2168,9 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=6 negative_controls={22 + 14 + 5 + 3} rejected_mutations={10 + 14 if result.wasSuccessful() else 0} skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
+    print(f"self-test={state} positive_controls=7 negative_controls={22 + 14 + 5 + 3 + 3 + 3} "
+          f"rejected_mutations={10 + 14 + 3 + 3 if result.wasSuccessful() else 0} "
+          f"skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
     return 0 if result.wasSuccessful() else 1
 
 
@@ -1934,6 +2184,11 @@ def main() -> int:
     parser.add_argument("--build-dir", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--receipt", type=Path, help="receipt output for --produce or positive self-test input")
     parser.add_argument("--self-test", action="store_true", help="run positive and negative production-contract controls")
+    parser.add_argument("--state-self-test", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--rev", help=argparse.SUPPRESS)
+    parser.add_argument("--census-exe", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--probe", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--mutant-probe", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--verify-hosted", action="store_true", help="await and verify exact-source hosted push evidence")
     parser.add_argument("--source-sha", help="full commit SHA required by --verify-hosted")
     parser.add_argument("--run-id", help="claimed campaign run ID that must equal the newest eligible run")
@@ -1948,6 +2203,11 @@ def main() -> int:
     try:
         if args.self_test:
             return self_test(args.receipt)
+        if args.state_self_test:
+            if not args.rev or not args.census_exe or not args.probe or not args.mutant_probe:
+                raise ReceiptError("--state-self-test requires --rev, --census-exe, --probe and --mutant-probe")
+            state_fuzz_controls(args.rev, args.census_exe, args.probe, args.mutant_probe)
+            return 0
         if args.verify_source:
             if not args.source_sha:
                 raise ReceiptError("--verify-source requires --source-sha")

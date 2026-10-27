@@ -6000,6 +6000,20 @@ uint64_t gbb_test_master_time_half_dots(const gbb_instance *m) {
     return m == NULL ? 0u : m->time_half_dots;
 }
 
+/* MODEL: BOTH GATE-00 basis="private test seam copies the complete opaque instance value" */
+size_t gbb_test_instance_bytes_size(void) {
+    return sizeof(gbb_instance);
+}
+
+/* MODEL: BOTH GATE-00 basis="bounded caller-owned test buffer; cartridge RAM is checked separately" */
+gbb_error gbb_test_copy_instance_bytes(const gbb_instance *m, uint8_t *out_bytes,
+                                       size_t capacity) {
+    if (m == NULL || out_bytes == NULL || capacity != sizeof(*m))
+        return GBB_INVALID_ARGUMENT;
+    memcpy(out_bytes, m, sizeof(*m));
+    return GBB_OK;
+}
+
 /* MODEL: BOTH GATE-00 basis="no SM83 opcode difference" */
 static int halt_bug_keeps_control_target(const gbb_instance *m, uint8_t op) {
     if (op == 0xC3 || op == 0xC9 || op == 0xCD || op == 0xD9 || op == 0xE9 || (op & 0xC7u) == 0xC7u) return 1;

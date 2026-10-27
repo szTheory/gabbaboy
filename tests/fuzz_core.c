@@ -18,6 +18,45 @@
 #define FUZZ_CGB_APU_OPERATION_LIMIT 16u
 #define FUZZ_CGB_APU_RUN_LIMIT UINT64_C(8192)
 #define FUZZ_CGB_APU_SLICE_HALF_DOTS UINT64_C(257)
+#define FUZZ_STATE_TAG 0xF0u
+#define FUZZ_STATE_ROM_BYTES 32768u
+#define FUZZ_STATE_RAM_BYTES 8192u
+#define FUZZ_STATE_HEADER_BYTES 64u
+#define FUZZ_STATE_WIRE_LIMIT 524352u
+#define FUZZ_STATE_INSTANCE_BYTES_LIMIT (1024u * 1024u)
+#define FUZZ_STATE_OPERATION_LIMIT 16u
+#define FUZZ_STATE_RUN_HALF_DOT_LIMIT UINT64_C(2048)
+#define FUZZ_STATE_EVENT_CAPACITY 64u
+#define FUZZ_STATE_MAX_RAM_BYTES 131072u
+#define FUZZ_STATE_OFFSET_ADJUSTMENT (FUZZ_STATE_MAX_RAM_BYTES - FUZZ_STATE_RAM_BYTES)
+#define FUZZ_STATE_BODY_OFFSET(max_ram_offset) ((size_t)(max_ram_offset) - FUZZ_STATE_OFFSET_ADJUSTMENT)
+#define FUZZ_STATE_BODY_OFFSET_RTC_SECONDS FUZZ_STATE_BODY_OFFSET(131078u)
+#define FUZZ_STATE_BODY_OFFSET_RTC_MINUTES FUZZ_STATE_BODY_OFFSET(131079u)
+#define FUZZ_STATE_BODY_OFFSET_RTC_HOURS FUZZ_STATE_BODY_OFFSET(131080u)
+#define FUZZ_STATE_BODY_OFFSET_RTC_SYNC FUZZ_STATE_BODY_OFFSET(131093u)
+#define FUZZ_STATE_BODY_OFFSET_BG_CRAM FUZZ_STATE_BODY_OFFSET(180558u)
+#define FUZZ_STATE_BODY_OFFSET_TIMER_RELOADED FUZZ_STATE_BODY_OFFSET(319123u)
+#define FUZZ_STATE_BODY_OFFSET_INSTRUCTION_START FUZZ_STATE_BODY_OFFSET(319131u)
+#define FUZZ_STATE_BODY_OFFSET_TIME FUZZ_STATE_BODY_OFFSET(319155u)
+#define FUZZ_STATE_BODY_OFFSET_INPUT_COUNT FUZZ_STATE_BODY_OFFSET(319163u)
+#define FUZZ_STATE_BODY_OFFSET_INPUT_AT FUZZ_STATE_BODY_OFFSET(319164u)
+#define FUZZ_STATE_BODY_OFFSET_INPUT_KIND FUZZ_STATE_BODY_OFFSET(319676u)
+#define FUZZ_STATE_BODY_OFFSET_INPUT_VALUE FUZZ_STATE_BODY_OFFSET(319740u)
+#define FUZZ_STATE_BODY_OFFSET_APU_SAMPLE_PHASE FUZZ_STATE_BODY_OFFSET(319895u)
+#define FUZZ_STATE_BODY_OFFSET_AUDIO_RING FUZZ_STATE_BODY_OFFSET(319903u)
+#define FUZZ_STATE_BODY_OFFSET_AUDIO_HEAD FUZZ_STATE_BODY_OFFSET(320159u)
+#define FUZZ_STATE_BODY_OFFSET_AUDIO_HPF_OUTPUT FUZZ_STATE_BODY_OFFSET(320176u)
+#define FUZZ_STATE_HORIZON (UINT64_C(1) << 62)
+#define FUZZ_STATE_WITNESS_HEADER_ONLY (1u << 0)
+#define FUZZ_STATE_WITNESS_LATE_INVALID (1u << 1)
+#define FUZZ_STATE_WITNESS_PREMATURE_APPLY (1u << 2)
+#define FUZZ_STATE_WITNESS_NO_WRITE (1u << 3)
+#define FUZZ_STATE_WITNESS_CAP_SENTINEL (1u << 4)
+#define FUZZ_STATE_WITNESS_SIGNED_AUDIO (1u << 5)
+#define FUZZ_STATE_WITNESS_QUEUE_ORDER (1u << 6)
+#define FUZZ_STATE_WITNESS_RTC_PALETTE (1u << 7)
+#define FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE (1u << 8)
+#define FUZZ_STATE_WITNESS_TARGET (1u << 9)
 
 static void fix_checksum(uint8_t rom[32768]) {
     uint8_t checksum = 0u;
@@ -60,6 +99,8 @@ static void contract_failed(const char *what) {
 
 /* Internal test seam, defined by the core and linked into every fuzz target. */
 extern void gbb_test_bank_state(const gbb_instance *, uint8_t *, uint8_t *);
+extern size_t gbb_test_instance_bytes_size(void);
+extern gbb_error gbb_test_copy_instance_bytes(const gbb_instance *, uint8_t *, size_t);
 
 static struct {
     int selected;
@@ -96,6 +137,15 @@ static struct {
     uint64_t consumed_half_dots;
     int terminal;
 } last_apu_observation;
+
+static struct {
+    int selected;
+    uint8_t profile_selector;
+    uint8_t scenario;
+    unsigned operations;
+    uint32_t witness;
+} last_state_observation;
+static uint32_t state_witnesses_seen;
 
 #ifdef GBB_FUZZ_STANDALONE_TEST
 #define GBB_FUZZ_SPEED_MUTATION_DMG_ROUTE 1u
@@ -1042,12 +1092,356 @@ static int last_profile_cgb = -1;
 int gbb_fuzz_core_last_profile_cgb(void) { return last_profile_cgb; }
 #endif
 
+static uint32_t fuzz_state_read_u32le(const uint8_t *bytes) {
+    return (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
+           ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+}
+
+static uint64_t fuzz_state_read_u64le(const uint8_t *bytes) {
+    uint64_t value = 0u;
+    for (unsigned int i = 0u; i < 8u; ++i) value |= (uint64_t)bytes[i] << (8u * i);
+    return value;
+}
+
+static void fuzz_state_write_u32le(uint8_t *bytes, uint32_t value) {
+    for (unsigned int i = 0u; i < 4u; ++i) bytes[i] = (uint8_t)(value >> (8u * i));
+}
+
+static void fuzz_state_write_u64le(uint8_t *bytes, uint64_t value) {
+    for (unsigned int i = 0u; i < 8u; ++i) bytes[i] = (uint8_t)(value >> (8u * i));
+}
+
+static uint32_t fuzz_state_crc32_update(uint32_t crc, const uint8_t *bytes, size_t size) {
+    for (size_t i = 0u; i < size; ++i) {
+        crc ^= bytes[i];
+        for (unsigned int bit = 0u; bit < 8u; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1u) ? UINT32_C(0xEDB88320) : 0u);
+    }
+    return crc;
+}
+
+static int fuzz_state_rechecksum(uint8_t *state, size_t state_size) {
+    if (state == NULL || state_size < FUZZ_STATE_HEADER_BYTES ||
+        state_size > FUZZ_STATE_WIRE_LIMIT) return 0;
+    const uint32_t body_size = fuzz_state_read_u32le(state + 52u);
+    const uint32_t total_size = fuzz_state_read_u32le(state + 56u);
+    if (total_size != state_size || body_size != state_size - FUZZ_STATE_HEADER_BYTES) return 0;
+    uint32_t crc = fuzz_state_crc32_update(UINT32_MAX, state, 60u);
+    crc = fuzz_state_crc32_update(crc, state + FUZZ_STATE_HEADER_BYTES, body_size) ^ UINT32_MAX;
+    fuzz_state_write_u32le(state + 60u, crc);
+    return 1;
+}
+
+static void fuzz_state_mark_witness(uint32_t witness, const char *name) {
+    last_state_observation.witness |= witness;
+    if ((state_witnesses_seen & witness) == 0u) {
+        fprintf(stderr, "state-fuzz-witness: %s\n", name);
+        state_witnesses_seen |= witness;
+    }
+}
+
+#ifdef GBB_FUZZ_STANDALONE_TEST
+void gbb_fuzz_core_state_observation(int *selected, uint8_t *profile_selector,
+                                     uint8_t *scenario, unsigned *operations,
+                                     uint32_t *witness, uint32_t *witnesses_seen) {
+    if (selected != NULL) *selected = last_state_observation.selected;
+    if (profile_selector != NULL) *profile_selector = last_state_observation.profile_selector;
+    if (scenario != NULL) *scenario = last_state_observation.scenario;
+    if (operations != NULL) *operations = last_state_observation.operations;
+    if (witness != NULL) *witness = last_state_observation.witness;
+    if (witnesses_seen != NULL) *witnesses_seen = state_witnesses_seen;
+}
+#endif
+
+/* Format-v1 body offsets are the compiled field-census offsets for a maximum-RAM cartridge,
+ * adjusted to the synthetic MBC3 fixture's 8 KiB RAM. state_fuzz_controls rechecks these against
+ * the private compiled census, so field reordering cannot silently turn semantic mutations shallow. */
+int gbb_fuzz_state_one_input(const uint8_t *data, size_t size) {
+    if (data == NULL || size < 3u || size > FUZZ_INPUT_LIMIT || data[0] != FUZZ_STATE_TAG) return 0;
+
+    memset(&last_state_observation, 0, sizeof(last_state_observation));
+    last_state_observation.selected = 1;
+    uint8_t profile_selector = (uint8_t)(data[1] % 3u);
+    const uint8_t scenario = (uint8_t)(data[2] % 8u);
+    if (scenario == 6u) profile_selector = 2u; /* Palette bytes are exercised in native CGB mode. */
+    last_state_observation.profile_selector = profile_selector;
+    last_state_observation.scenario = scenario;
+    fuzz_state_mark_witness(FUZZ_STATE_WITNESS_TARGET, "state-load-target");
+
+    gbb_instance *machine = NULL;
+    uint8_t rom[FUZZ_STATE_ROM_BYTES];
+    uint8_t *snapshot = NULL, *mutated = NULL, *resaved = NULL;
+    uint8_t *instance_before = NULL, *instance_after = NULL;
+    uint8_t *battery_before = NULL, *battery_after = NULL;
+    size_t state_size = 0u, battery_size = 0u, instance_bytes_size = 0u;
+    uint64_t battery_generation_before = 0u;
+    unsigned int operations = 0u;
+    int ok = 0;
+
+#define FUZZ_STATE_REQUIRE(condition, reason) do { \
+    if (!(condition)) { contract_failed(reason); goto fuzz_state_cleanup; } \
+} while (0)
+#define FUZZ_STATE_OPERATION() do { \
+    ++operations; \
+    FUZZ_STATE_REQUIRE(operations <= FUZZ_STATE_OPERATION_LIMIT, \
+                       "state semantic target exceeded its per-input operation bound"); \
+} while (0)
+
+    memset(rom, 0, sizeof(rom));
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x00u; rom[0x102u] = 0x02u;
+    rom[0x143u] = profile_selector == 2u ? 0x80u : 0x00u;
+    rom[0x147u] = 0x10u; /* MBC3 timer + 8 KiB RAM + battery. */
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = 0x02u;
+    rom[0x200u] = 0x18u; rom[0x201u] = 0xFEu; /* Bounded JR -2 loop. */
+    fix_checksum(rom);
+
+    const gbb_profile profile = profile_selector == 0u
+        ? GBB_PROFILE_DMG_CPU_B : GBB_PROFILE_CGB_CPU_E;
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_create(profile, &machine) == GBB_OK,
+                       "state semantic fixture creation failed");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_load_rom(machine, rom, sizeof(rom)) == GBB_OK,
+                       "state semantic synthetic ROM load failed");
+    FUZZ_STATE_OPERATION();
+    const gbb_run_result initial_run = gbb_run(machine, FUZZ_STATE_RUN_HALF_DOT_LIMIT, NULL, 0u);
+    FUZZ_STATE_REQUIRE(initial_run.consumed_half_dots <= FUZZ_STATE_RUN_HALF_DOT_LIMIT &&
+                       (initial_run.reason == GBB_STOP_BUDGET ||
+                        initial_run.reason == GBB_STOP_HALTED_IDLE),
+                       "state semantic fixture run exceeded its bounded domain");
+
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_state_size(machine, &state_size) == GBB_OK &&
+                       state_size >= FUZZ_STATE_HEADER_BYTES &&
+                       state_size <= FUZZ_STATE_WIRE_LIMIT,
+                       "state semantic fixture size is outside the public wire bound");
+    snapshot = (uint8_t *)malloc(state_size);
+    mutated = (uint8_t *)malloc(state_size);
+    resaved = (uint8_t *)malloc(state_size);
+    FUZZ_STATE_REQUIRE(snapshot != NULL && mutated != NULL && resaved != NULL,
+                       "state semantic fixture buffer allocation failed");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_save_state(machine, snapshot, state_size) == GBB_OK,
+                       "state semantic fixture save failed");
+    instance_bytes_size = gbb_test_instance_bytes_size();
+    FUZZ_STATE_REQUIRE(instance_bytes_size != 0u &&
+                       instance_bytes_size <= FUZZ_STATE_INSTANCE_BYTES_LIMIT,
+                       "state semantic instance snapshot exceeds its one-MiB caller-owned bound");
+    instance_before = (uint8_t *)malloc(instance_bytes_size);
+    instance_after = (uint8_t *)malloc(instance_bytes_size);
+    FUZZ_STATE_REQUIRE(instance_before != NULL && instance_after != NULL,
+                       "state semantic instance snapshot allocation failed");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_test_copy_instance_bytes(machine, instance_before,
+                                                     instance_bytes_size) == GBB_OK,
+                       "state semantic whole-instance snapshot failed");
+    FUZZ_STATE_REQUIRE(fuzz_state_read_u32le(snapshot + 56u) == state_size &&
+                       fuzz_state_read_u32le(snapshot + 52u) ==
+                           state_size - FUZZ_STATE_HEADER_BYTES &&
+                       (uint16_t)(snapshot[4] | ((uint16_t)snapshot[5] << 8)) == 1u,
+                       "state semantic fixture is not the qualified format-v1 body");
+    const size_t body_size = state_size - FUZZ_STATE_HEADER_BYTES;
+    FUZZ_STATE_REQUIRE(FUZZ_STATE_BODY_OFFSET_AUDIO_HPF_OUTPUT + 8u <= body_size &&
+                       FUZZ_STATE_BODY_OFFSET_RTC_SYNC + 8u <= body_size &&
+                       FUZZ_STATE_BODY_OFFSET_BG_CRAM + 2u <= body_size &&
+                       FUZZ_STATE_BODY_OFFSET_INPUT_VALUE + FUZZ_STATE_EVENT_CAPACITY <= body_size,
+                       "state semantic offsets exceed the compiled synthetic state body");
+
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_battery_size(machine, &battery_size) == GBB_OK &&
+                       battery_size == FUZZ_STATE_RAM_BYTES + GBB_RTC_BLOCK_SIZE,
+                       "MBC3 battery image does not cover all 8 KiB of owned RAM and RTC bytes");
+    battery_before = (uint8_t *)malloc(battery_size);
+    battery_after = (uint8_t *)malloc(battery_size);
+    FUZZ_STATE_REQUIRE(battery_before != NULL && battery_after != NULL,
+                       "state semantic battery buffer allocation failed");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_copy_battery(machine, battery_before, battery_size) == GBB_OK,
+                       "state semantic battery snapshot failed");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_battery_generation(machine, &battery_generation_before) == GBB_OK,
+                       "state semantic battery generation query failed");
+
+    memcpy(mutated, snapshot, state_size);
+    uint8_t *body = mutated + FUZZ_STATE_HEADER_BYTES;
+    const uint8_t value0 = size > 3u ? data[3] : 0u;
+    const uint8_t value1 = size > 4u ? data[4] : 0u;
+    const uint8_t value2 = size > 5u ? data[5] : 0u;
+    const uint8_t value3 = size > 6u ? data[6] : 0u;
+    uint8_t expected_refusal = 0u;
+
+    switch (scenario) {
+        case 0u: /* Shallow header-only control: no checksum repair or body change. */
+            mutated[0] ^= 0x80u;
+            expected_refusal = 1u;
+            break;
+        case 1u: /* Late ordinary-time cap violation, with a repaired CRC. */
+            fuzz_state_write_u64le(body + FUZZ_STATE_BODY_OFFSET_TIME,
+                                   FUZZ_STATE_HORIZON + 1u + value0);
+            expected_refusal = 2u;
+            break;
+        case 2u: /* Last-field range failure catches any premature application. */
+            fuzz_state_write_u32le(body + FUZZ_STATE_BODY_OFFSET_AUDIO_HPF_OUTPUT,
+                                   UINT32_C(0x80000000) | ((uint32_t)value0 << 8));
+            expected_refusal = 3u;
+            break;
+        case 3u: /* Accepted exact-cap time plus the validated timer sentinel. */
+            fuzz_state_write_u64le(body + FUZZ_STATE_BODY_OFFSET_TIME, FUZZ_STATE_HORIZON);
+            fuzz_state_write_u64le(body + FUZZ_STATE_BODY_OFFSET_INSTRUCTION_START,
+                                   FUZZ_STATE_HORIZON);
+            fuzz_state_write_u64le(body + FUZZ_STATE_BODY_OFFSET_RTC_SYNC,
+                                   FUZZ_STATE_HORIZON);
+            fuzz_state_write_u64le(body + FUZZ_STATE_BODY_OFFSET_TIMER_RELOADED, UINT64_MAX);
+            break;
+        case 4u: { /* A negative signed event value in a slot with nonzero lifetime. */
+            const uint8_t head = body[FUZZ_STATE_BODY_OFFSET_AUDIO_HEAD] & 0x0Fu;
+            const size_t slot = ((size_t)head + 15u) % 16u;
+            const int64_t edge = -(int64_t)(1u + (value0 & 0x7Fu));
+            fuzz_state_write_u64le(body + FUZZ_STATE_BODY_OFFSET_AUDIO_RING + slot * 8u,
+                                   (uint64_t)edge);
+            break;
+        }
+        case 5u: { /* Equal-time press then release retains caller ordering. */
+            const uint64_t now = fuzz_state_read_u64le(body + FUZZ_STATE_BODY_OFFSET_TIME);
+            FUZZ_STATE_REQUIRE(now <= FUZZ_STATE_HORIZON - 16u,
+                               "state queue fixture has no room for its bounded events");
+            body[FUZZ_STATE_BODY_OFFSET_INPUT_COUNT] = 2u;
+            fuzz_state_write_u64le(body + FUZZ_STATE_BODY_OFFSET_INPUT_AT, now + 8u);
+            fuzz_state_write_u64le(body + FUZZ_STATE_BODY_OFFSET_INPUT_AT + 8u, now + 8u);
+            body[FUZZ_STATE_BODY_OFFSET_INPUT_KIND] = (uint8_t)GBB_INPUT_BUTTON_PRESS;
+            body[FUZZ_STATE_BODY_OFFSET_INPUT_KIND + 1u] = (uint8_t)GBB_INPUT_BUTTON_RELEASE;
+            body[FUZZ_STATE_BODY_OFFSET_INPUT_VALUE] = (uint8_t)(value0 & 7u);
+            body[FUZZ_STATE_BODY_OFFSET_INPUT_VALUE + 1u] = (uint8_t)(value1 & 7u);
+            break;
+        }
+        case 6u: /* MBC3 RTC and native CGB palette state are both semantic fields. */
+            body[FUZZ_STATE_BODY_OFFSET_RTC_SECONDS] = (uint8_t)(value0 % 60u);
+            body[FUZZ_STATE_BODY_OFFSET_RTC_MINUTES] = (uint8_t)(value1 % 60u);
+            body[FUZZ_STATE_BODY_OFFSET_RTC_HOURS] = (uint8_t)(value2 % 24u);
+            body[FUZZ_STATE_BODY_OFFSET_BG_CRAM] = value3;
+            body[FUZZ_STATE_BODY_OFFSET_BG_CRAM + 1u] = (uint8_t)(value0 & 0x7Fu);
+            break;
+        case 7u: /* The saved valid state is still a fuzzed accepted-load closure case. */
+            break;
+    }
+    if (scenario != 0u)
+        FUZZ_STATE_REQUIRE(fuzz_state_rechecksum(mutated, state_size),
+                           "state semantic CRC repair failed");
+
+    FUZZ_STATE_OPERATION();
+    const gbb_error load_result = gbb_load_state(machine, mutated, state_size);
+    if (expected_refusal != 0u) {
+        const gbb_error expected_error = expected_refusal == 1u
+            ? GBB_STATE_BAD_FORMAT : GBB_STATE_INVALID_CONTENT;
+        FUZZ_STATE_REQUIRE(load_result == expected_error,
+                           "state semantic refusal did not reach its intended validator");
+        FUZZ_STATE_OPERATION();
+        FUZZ_STATE_REQUIRE(gbb_test_copy_instance_bytes(machine, instance_after,
+                                                         instance_bytes_size) == GBB_OK &&
+                           memcmp(instance_before, instance_after,
+                                  instance_bytes_size) == 0,
+                           "refused state load changed opaque instance bytes or excluded observers");
+        FUZZ_STATE_OPERATION();
+        FUZZ_STATE_REQUIRE(gbb_save_state(machine, resaved, state_size) == GBB_OK &&
+                           memcmp(snapshot, resaved, state_size) == 0,
+                           "refused state load changed serialized instance state");
+        FUZZ_STATE_OPERATION();
+        FUZZ_STATE_REQUIRE(gbb_copy_battery(machine, battery_after, battery_size) == GBB_OK &&
+                           memcmp(battery_before, battery_after, battery_size) == 0,
+                           "refused state load changed owned battery RAM or RTC data");
+        uint64_t battery_generation_after = 0u;
+        FUZZ_STATE_OPERATION();
+        FUZZ_STATE_REQUIRE(gbb_battery_generation(machine, &battery_generation_after) == GBB_OK &&
+                           battery_generation_after == battery_generation_before,
+                           "refused state load changed battery generation");
+        fuzz_state_mark_witness(FUZZ_STATE_WITNESS_NO_WRITE, "no-write-refusal");
+        if (expected_refusal == 1u)
+            fuzz_state_mark_witness(FUZZ_STATE_WITNESS_HEADER_ONLY, "header-only-control");
+        else if (expected_refusal == 2u)
+            fuzz_state_mark_witness(FUZZ_STATE_WITNESS_LATE_INVALID, "late-invalid-field");
+        else
+            fuzz_state_mark_witness(FUZZ_STATE_WITNESS_PREMATURE_APPLY,
+                                    "premature-apply-refusal");
+        goto fuzz_state_success;
+    }
+
+    FUZZ_STATE_REQUIRE(load_result == GBB_OK,
+                       "accepted semantic state seed was rejected after CRC repair");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_save_state(machine, resaved, state_size) == GBB_OK &&
+                       memcmp(mutated, resaved, state_size) == 0,
+                       "accepted hostile state did not canonical-resave identically");
+
+    if (scenario == 3u) {
+        FUZZ_STATE_REQUIRE(fuzz_state_read_u64le(body + FUZZ_STATE_BODY_OFFSET_TIME) ==
+                               FUZZ_STATE_HORIZON &&
+                           fuzz_state_read_u64le(body + FUZZ_STATE_BODY_OFFSET_TIMER_RELOADED) ==
+                               UINT64_MAX,
+                           "accepted cap/sentinel fixture lost its extreme fields");
+    }
+
+    FUZZ_STATE_OPERATION();
+    const gbb_run_result bounded_run = gbb_run(machine, 32u, NULL, 0u);
+    const int bounded_run_valid = bounded_run.consumed_half_dots <= 32u &&
+                       (scenario == 3u
+                           ? (bounded_run.reason == GBB_STOP_NO_PROGRESS &&
+                              bounded_run.consumed_half_dots == 0u)
+                           : (bounded_run.reason == GBB_STOP_BUDGET ||
+                              bounded_run.reason == GBB_STOP_HALTED_IDLE));
+    if (!bounded_run_valid)
+        fprintf(stderr, "state fuzz run result scenario=%u reason=%u consumed=%llu\n",
+                scenario, (unsigned int)bounded_run.reason,
+                (unsigned long long)bounded_run.consumed_half_dots);
+    FUZZ_STATE_REQUIRE(bounded_run_valid,
+                       "accepted state violated bounded run or exact-cap closure");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_save_state(machine, resaved, state_size) == GBB_OK,
+                       "accepted post-run state save failed");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_load_state(machine, resaved, state_size) == GBB_OK,
+                       "accepted post-run state could not reload");
+    FUZZ_STATE_OPERATION();
+    FUZZ_STATE_REQUIRE(gbb_save_state(machine, mutated, state_size) == GBB_OK &&
+                       memcmp(resaved, mutated, state_size) == 0,
+                       "accepted post-run reload/resave did not close canonically");
+    if (scenario == 3u)
+        fuzz_state_mark_witness(FUZZ_STATE_WITNESS_CAP_SENTINEL, "cap-sentinel");
+    else if (scenario == 4u)
+        fuzz_state_mark_witness(FUZZ_STATE_WITNESS_SIGNED_AUDIO, "signed-audio-edge");
+    else if (scenario == 5u)
+        fuzz_state_mark_witness(FUZZ_STATE_WITNESS_QUEUE_ORDER, "queue-ordering");
+    else if (scenario == 6u)
+        fuzz_state_mark_witness(FUZZ_STATE_WITNESS_RTC_PALETTE, "rtc-palette");
+    fuzz_state_mark_witness(FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE,
+                            "accepted-state-closure");
+
+fuzz_state_success:
+    last_state_observation.operations = operations;
+    ok = 1;
+fuzz_state_cleanup:
+    free(battery_after);
+    free(battery_before);
+    free(instance_after);
+    free(instance_before);
+    free(resaved);
+    free(mutated);
+    free(snapshot);
+    if (machine != NULL) gbb_destroy(machine);
+#undef FUZZ_STATE_OPERATION
+#undef FUZZ_STATE_REQUIRE
+    return ok ? 0 : 1;
+}
+
 int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
     memset(&last_speed_observation, 0, sizeof(last_speed_observation));
+    memset(&last_state_observation, 0, sizeof(last_state_observation));
     last_profile_cgb = -1;
     if (data == NULL || size == 0u || size > FUZZ_INPUT_LIMIT) return 0;
     memset(&last_hdma_observation, 0, sizeof(last_hdma_observation));
     memset(&last_apu_observation, 0, sizeof(last_apu_observation));
+
+    if (data[0] == FUZZ_STATE_TAG) return gbb_fuzz_state_one_input(data, size);
 
     /* data[0] bit 7 selects the profile. Exact 0xD3 selects the APU hostile path; other CGB data
      * with bits 6 or 5 select I/O/palette, while 0x10 in bits 4..6 selects KEY1/STOP. */
@@ -1088,5 +1482,147 @@ int gbb_fuzz_core_one_input(const uint8_t *data, size_t size) {
 #ifndef GBB_FUZZ_STANDALONE_TEST
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     return gbb_fuzz_core_one_input(data, size);
+}
+#endif
+
+#if defined(GBB_FUZZ_STANDALONE_TEST) && defined(GBB_STATE_FUZZ_STANDALONE_MAIN)
+static int run_state_fuzz_snapshot_api_controls(void) {
+    const size_t size = gbb_test_instance_bytes_size();
+    if (size == 0u || size > FUZZ_STATE_INSTANCE_BYTES_LIMIT) {
+        fprintf(stderr, "state snapshot seam size is outside its one-MiB bound\n");
+        return 1;
+    }
+    uint8_t *bytes = (uint8_t *)malloc(size);
+    gbb_instance *machine = NULL;
+    if (bytes == NULL || gbb_create(GBB_PROFILE_DMG_CPU_B, &machine) != GBB_OK) {
+        fprintf(stderr, "state snapshot seam control setup failed\n");
+        free(bytes);
+        gbb_destroy(machine);
+        return 1;
+    }
+    memset(bytes, 0xA5, size);
+    if (gbb_test_copy_instance_bytes(NULL, bytes, size) != GBB_INVALID_ARGUMENT) {
+        fprintf(stderr, "state snapshot seam accepted a NULL instance or wrote on refusal\n");
+        free(bytes);
+        gbb_destroy(machine);
+        return 1;
+    }
+    int unchanged = 1;
+    for (size_t i = 0u; i < size; ++i) unchanged &= bytes[i] == 0xA5u;
+    if (!unchanged ||
+        gbb_test_copy_instance_bytes(machine, NULL, size) != GBB_INVALID_ARGUMENT) {
+        fprintf(stderr, "state snapshot seam accepted a NULL output or wrote on refusal\n");
+        free(bytes);
+        gbb_destroy(machine);
+        return 1;
+    }
+    if (gbb_test_copy_instance_bytes(machine, bytes, size - 1u) != GBB_INVALID_ARGUMENT) {
+        fprintf(stderr, "state snapshot seam accepted a short caller buffer\n");
+        free(bytes);
+        gbb_destroy(machine);
+        return 1;
+    }
+    unchanged = 1;
+    for (size_t i = 0u; i < size; ++i) unchanged &= bytes[i] == 0xA5u;
+    if (!unchanged || gbb_test_copy_instance_bytes(machine, bytes, size) != GBB_OK) {
+        fprintf(stderr, "state snapshot seam violated its caller-buffer contract\n");
+        free(bytes);
+        gbb_destroy(machine);
+        return 1;
+    }
+    free(bytes);
+    gbb_destroy(machine);
+    puts("state-fuzz-control pass bounded_snapshot=null_and_capacity_refusals");
+    return 0;
+}
+
+int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "state_fuzz_mutant") == 0) {
+        const uint8_t seed[] = {FUZZ_STATE_TAG, 0u, 1u, 0u, 0u, 0u, 0u};
+        return gbb_fuzz_core_one_input(seed, sizeof(seed));
+    }
+    if (argc == 2 && strcmp(argv[1], "state_control") == 0) {
+        const uint8_t seed[] = {FUZZ_STATE_TAG, 0u, 7u, 0u, 0u, 0u, 0u};
+        if (gbb_fuzz_core_one_input(seed, sizeof(seed)) != 0 ||
+            (last_state_observation.witness &
+             (FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE | FUZZ_STATE_WITNESS_TARGET)) !=
+                (FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE | FUZZ_STATE_WITNESS_TARGET)) {
+            fprintf(stderr, "state fuzz unrelated accepted-state control failed\n");
+            return 1;
+        }
+        puts("state-fuzz-control pass unrelated=accepted-state-closure");
+        return 0;
+    }
+    if (argc != 1) {
+        fprintf(stderr, "unknown state fuzz control mode\n");
+        return 2;
+    }
+    if (run_state_fuzz_snapshot_api_controls() != 0) return 1;
+    static const struct {
+        uint8_t profile;
+        uint8_t scenario;
+        uint8_t payload[4];
+        uint32_t expected_witness;
+        const char *name;
+    } cases[] = {
+        {1u, 0u, {0u, 0u, 0u, 0u}, FUZZ_STATE_WITNESS_HEADER_ONLY, "header-only control"},
+        {0u, 1u, {0u, 0u, 0u, 0u}, FUZZ_STATE_WITNESS_LATE_INVALID | FUZZ_STATE_WITNESS_NO_WRITE,
+         "late invalid field"},
+        {0u, 2u, {0xFFu, 0u, 0u, 0u}, FUZZ_STATE_WITNESS_PREMATURE_APPLY | FUZZ_STATE_WITNESS_NO_WRITE,
+         "premature-apply refusal"},
+        {2u, 3u, {0u, 0u, 0u, 0u}, FUZZ_STATE_WITNESS_CAP_SENTINEL | FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE,
+         "cap and timer sentinel"},
+        {1u, 4u, {0x81u, 0u, 0u, 0u}, FUZZ_STATE_WITNESS_SIGNED_AUDIO | FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE,
+         "signed audio edge"},
+        {2u, 5u, {4u, 4u, 0u, 0u}, FUZZ_STATE_WITNESS_QUEUE_ORDER | FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE,
+         "equal-time queue ordering"},
+        {2u, 6u, {59u, 58u, 23u, 0xFFu}, FUZZ_STATE_WITNESS_RTC_PALETTE | FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE,
+         "RTC and palette"},
+        {0u, 7u, {0u, 0u, 0u, 0u}, FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE,
+         "accepted load and closure"},
+    };
+    const uint32_t required = FUZZ_STATE_WITNESS_HEADER_ONLY | FUZZ_STATE_WITNESS_LATE_INVALID |
+        FUZZ_STATE_WITNESS_PREMATURE_APPLY | FUZZ_STATE_WITNESS_NO_WRITE |
+        FUZZ_STATE_WITNESS_CAP_SENTINEL | FUZZ_STATE_WITNESS_SIGNED_AUDIO |
+        FUZZ_STATE_WITNESS_QUEUE_ORDER | FUZZ_STATE_WITNESS_RTC_PALETTE |
+        FUZZ_STATE_WITNESS_ACCEPTED_CLOSURE | FUZZ_STATE_WITNESS_TARGET;
+    for (size_t i = 0u; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        const uint8_t seed[] = {FUZZ_STATE_TAG, cases[i].profile, cases[i].scenario,
+                                cases[i].payload[0], cases[i].payload[1],
+                                cases[i].payload[2], cases[i].payload[3]};
+        const int failures_before = gbb_fuzz_core_contract_failures();
+        if (gbb_fuzz_core_one_input(seed, sizeof(seed)) != 0) {
+            fprintf(stderr, "state fuzz seed failed: %s\n", cases[i].name);
+            return 1;
+        }
+        int selected = 0;
+        uint8_t profile = 0u, scenario = 0u;
+        unsigned operations = 0u;
+        uint32_t witness = 0u;
+        gbb_fuzz_core_state_observation(&selected, &profile, &scenario, &operations,
+                                        &witness, NULL);
+        const uint8_t expected_profile = cases[i].scenario == 6u ? 2u : cases[i].profile;
+        if (gbb_fuzz_core_contract_failures() != failures_before || !selected ||
+            profile != expected_profile || scenario != cases[i].scenario ||
+            operations == 0u || operations > FUZZ_STATE_OPERATION_LIMIT ||
+            (witness & (cases[i].expected_witness | FUZZ_STATE_WITNESS_TARGET)) !=
+                (cases[i].expected_witness | FUZZ_STATE_WITNESS_TARGET)) {
+            fprintf(stderr, "state fuzz witness failed: %s selected=%d profile=%u scenario=%u "
+                            "operations=%u witness=0x%X\n", cases[i].name, selected,
+                    profile, scenario, operations, witness);
+            return 1;
+        }
+    }
+    int selected = 1;
+    uint32_t seen = 0u;
+    gbb_fuzz_core_state_observation(&selected, NULL, NULL, NULL, NULL, &seen);
+    if (selected != 1 || (seen & required) != required) {
+        fprintf(stderr, "state fuzz aggregate witness missing: selected=%d seen=0x%X\n",
+                selected, seen);
+        return 1;
+    }
+    printf("state-load-fuzz pass entrypoint=gbb_fuzz_state_one_input semantic_witnesses=9 "
+           "refusal_controls=3 accepted_closures=5 operations_per_input<=16\n");
+    return 0;
 }
 #endif

@@ -1275,6 +1275,8 @@ state_fork_mutants_shard_12
 state_fork_mutants_shard_13
 state_fork_mutants_shard_14
 state_fork_mutants_shard_15
+state_load_fuzz
+state_fuzz_controls
 state_globals
 state_globals_controls
 state_inventory
