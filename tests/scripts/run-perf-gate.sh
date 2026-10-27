@@ -18,6 +18,7 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 LIMITS="$ROOT/tests/baseline/perf-gate-v1.txt"
 CHECKER="$ROOT/tests/scripts/verify-perf-gate.py"
 V020_EXPECTED=ab301aa69b1f085050fd66bf7b1378863a0821f2
+LIMITS_BASE_REV=947d6a9d177af6c04a5f9ea6abcc2c470ab9be57
 ROMS=(tracer libbet visible-demo)
 # Lines added to the seeded patch: about 12 Ir per half-dot. The iteration count per half-dot is sized from the
 # first hosted gate run's ratio margin; override with GBB_SEED_ITERS_PER_HALF_DOT when resizing.
@@ -91,9 +92,30 @@ collect() {
     for ((repeat = 1; repeat <= repeats; repeat++)); do
       cachegrind_run "$bin" "$ROOT/$(limit "rom.$rom.path")" "$dir/$rom.cg.$repeat" >"$dir/$rom.line.$repeat"
     done
-    mv "$dir/$rom.line.1" "$dir/$rom.line"
-    rm -f "$dir"/"$rom".line.[0-9]*
   done
+}
+
+# build_identity BIN REV: hash the exact executable together with its committed source identity,
+# compiler identity, and the fixed command template. The receipt contains only this digest.
+build_identity() {
+  local binary=$1 revision=$2 compiler
+  compiler=$(cc --version | head -n 1)
+  python3 -I - "$binary" "$revision" "$compiler" "$BUILD_COMMAND" <<'PY'
+import hashlib
+import json
+import sys
+
+with open(sys.argv[1], "rb") as executable:
+    binary_sha256 = hashlib.sha256(executable.read()).hexdigest()
+identity = {
+    "binary_sha256": binary_sha256,
+    "source_revision": sys.argv[2],
+    "compiler": sys.argv[3],
+    "build_command": sys.argv[4],
+}
+payload = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+print(hashlib.sha256(payload).hexdigest())
+PY
 }
 
 # timing_set BIN OUTFILE: one discarded warm-up run, then nine timed runs, for every ROM.
@@ -115,17 +137,25 @@ versions() {
 # evaluate_tree HEADTREE [realtime]: builds v0.2.0 and the head tree, collects Ir and runs the evaluator.
 # Prints the evaluator's verdict; returns its exit status.
 evaluate_tree() {
-  local head_tree=$1 with_realtime=$2 status=1 attempt
+  local head_tree=$1 with_realtime=$2 status=1 attempt head_revision base_identity head_identity
   [[ "$(git -C "$ROOT" rev-parse 'v0.2.0^{commit}')" == "$V020_EXPECTED" ]] ||
     fail workload-digest-mismatch "v0.2.0 is not $V020_EXPECTED"
   rm -rf "$WORK/base-tree" "$WORK/base" "$WORK/head"
   mkdir -p "$WORK/base-tree"
   git -C "$ROOT" archive v0.2.0 CMakeLists.txt cmake src include | tar -x -C "$WORK/base-tree"
   build_measure "$WORK/base-tree" "$ROOT/tests/measure_core.c" "$WORK/base-measure" "$V020_EXPECTED"
-  build_measure "$head_tree" "$ROOT/tests/measure_core.c" "$WORK/head-measure" "$(git -C "$ROOT" rev-parse HEAD)"
+  head_revision=$(git -C "$ROOT" rev-parse HEAD)
+  build_measure "$head_tree" "$ROOT/tests/measure_core.c" "$WORK/head-measure" "$head_revision"
+  base_identity=$(build_identity "$WORK/base-measure" "$V020_EXPECTED")
+  head_identity=$(build_identity "$WORK/head-measure" "$head_revision")
   collect "$WORK/base" "$WORK/base-measure" 1
   collect "$WORK/head" "$WORK/head-measure" 2
-  local args=(--evaluate --limits "$LIMITS" --base "$WORK/base" --head "$WORK/head")
+  local args=(--evaluate --limits "$LIMITS" --base "$WORK/base" --head "$WORK/head"
+    --base-rev "$LIMITS_BASE_REV" --source-base-rev "$V020_EXPECTED" --source-head-rev "$head_revision"
+    --build-base-identity "$base_identity" --build-head-identity "$head_identity")
+  if [[ -n "${GBB_PERF_EXCEPTION_RECEIPT:-}" ]]; then
+    args+=(--exception-receipt "$GBB_PERF_EXCEPTION_RECEIPT")
+  fi
   if [[ "$with_realtime" == yes ]]; then
     for attempt in 1 2; do
       timing_set "$WORK/head-measure" "$WORK/realtime.txt"
@@ -145,10 +175,12 @@ evaluate_tree() {
 }
 
 digests_equal() {
-  local rom
+  local rom repeat
   for rom in "${ROMS[@]}"; do
-    [[ "$(grep -o 'correctness_digest_fnv1a64=[0-9a-f]*' "$WORK/base/$rom.line")" == \
-       "$(grep -o 'correctness_digest_fnv1a64=[0-9a-f]*' "$WORK/head/$rom.line")" ]] || return 1
+    for repeat in 1 2; do
+      [[ "$(grep -o 'correctness_digest_fnv1a64=[0-9a-f]*' "$WORK/base/$rom.line.1")" == \
+         "$(grep -o 'correctness_digest_fnv1a64=[0-9a-f]*' "$WORK/head/$rom.line.$repeat")" ]] || return 1
+    done
   done
 }
 

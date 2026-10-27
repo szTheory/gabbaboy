@@ -76,16 +76,27 @@ set(GBB_PERF_GATE_EXTRA_ARGS)
 gbb_add_perf_gate_test(perf_gate_canned_pass 0 "perf-gate pass ratios tracer=1[.]081"
   --evaluate --limits "${GBB_PERF_GATE_LIMITS}"
   --base "${GBB_PERF_GATE_DATA}/base" --head "${GBB_PERF_GATE_DATA}/head-pass"
-  --realtime "${GBB_PERF_GATE_DATA}/realtime-pass.txt")
+  --realtime "${GBB_PERF_GATE_DATA}/realtime-pass.txt"
+  --base-rev 947d6a9d177af6c04a5f9ea6abcc2c470ab9be57)
 gbb_add_perf_gate_test(perf_gate_canned_ir_over_limit 1 "REJECT ir-budget-exceeded"
   --evaluate --limits "${GBB_PERF_GATE_LIMITS}"
-  --base "${GBB_PERF_GATE_DATA}/base" --head "${GBB_PERF_GATE_DATA}/head-over")
+  --base "${GBB_PERF_GATE_DATA}/base" --head "${GBB_PERF_GATE_DATA}/head-over"
+  --base-rev 947d6a9d177af6c04a5f9ea6abcc2c470ab9be57)
 gbb_add_perf_gate_test(perf_gate_canned_realtime_under_floor 1 "REJECT realtime-below-floor"
   --evaluate --limits "${GBB_PERF_GATE_LIMITS}"
   --base "${GBB_PERF_GATE_DATA}/base" --head "${GBB_PERF_GATE_DATA}/head-pass"
-  --realtime "${GBB_PERF_GATE_DATA}/realtime-below-floor.txt")
+  --realtime "${GBB_PERF_GATE_DATA}/realtime-below-floor.txt"
+  --base-rev 947d6a9d177af6c04a5f9ea6abcc2c470ab9be57)
 gbb_add_perf_gate_test(perf_gate_limits_schema 0 "perf-gate limits ok"
-  --check-limits "${GBB_PERF_GATE_LIMITS}" --root "${PROJECT_SOURCE_DIR}")
+  --check-limits "${GBB_PERF_GATE_LIMITS}" --root "${PROJECT_SOURCE_DIR}"
+  --base-rev 947d6a9d177af6c04a5f9ea6abcc2c470ab9be57)
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=5)
+gbb_add_perf_gate_test(perf_limit_ratchet 0 "perf-gate limit-ratchet self-test pass controls=[0-9]+"
+  --self-test-limit-ratchet)
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=3)
+gbb_add_perf_gate_test(perf_repeat_controls 0 "perf-gate repeat-controls self-test pass controls=[0-9]+"
+  --self-test-repeat-controls)
+set(GBB_PERF_GATE_EXTRA_ARGS)
 
 # D-17 attribution receipt (Task 3): the committed hosted receipt is re-derived from git history, so these two
 # controls need the full history and the v0.1.0 and v0.2.0 tags. The minimums are parsed keys of the one
