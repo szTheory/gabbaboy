@@ -606,13 +606,20 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
 
 def self_test(report: dict, spec: dict, source: str, rev: str) -> None:
     corrupted = json.loads(json.dumps(report))
+    category_control_spec = json.loads(json.dumps(spec))
+    for fixture in category_control_spec.get("generated_field_fixtures", []):
+        fixture["required_categories"] = [category for category in fixture.get("required_categories", [])
+                                           if category != "hdma_byte_phase"]
+        for profile, categories in fixture.get("required_categories_by_profile", {}).items():
+            fixture["required_categories_by_profile"][profile] = [
+                category for category in categories if category != "hdma_byte_phase"]
     for case in corrupted.get("cases", []) + corrupted.get("generated_field_cases", []):
         case["category_witnesses"] = [row for row in case.get("category_witnesses", [])
                                        if row.get("id") != "hdma_byte_phase"]
     corrupted["category_witnesses"] = [row for row in corrupted.get("category_witnesses", [])
                                         if row != "hdma_byte_phase"]
     try:
-        validate_report(corrupted, spec, source, rev)
+        validate_report(corrupted, category_control_spec, source, rev)
     except ForkError as exc:
         if "in-flight category lacks" not in str(exc):
             raise ForkError(f"census negative control failed for wrong reason: {exc}") from exc
