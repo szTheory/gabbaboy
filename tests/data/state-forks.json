@@ -1822,9 +1822,7 @@
     },
     {
       "case": "generated:accepted_dma_phase:dmg",
-      "expected_observations": [
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
+      "expected_observations": ["post-load-canonical-save-rejected"],
       "field": "input_event_count",
       "malformed_target_reason": "The accepted_dma_phase DMG cut has a nonzero queued event in slot zero; the state invariant requires unused event slots to be zero, so omitting input_event_count makes the receiver invalid and canonical save rejects it."
     },
