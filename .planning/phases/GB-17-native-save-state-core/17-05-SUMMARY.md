@@ -46,7 +46,7 @@ coverage:
     requirement: STATE-02
     verification:
       - kind: integration
-        ref: "CTest state_fork_matrix, all 16 matrix shards, and state_slice_invariance at immutable revision 64377a4222e4585a888ac5b5217f94a5e31739bb; included in the named fork/census/mutation selection (38/38 passed)."
+        ref: "CTest state_fork_matrix, all 16 matrix shards, and state_slice_invariance at immutable revision a8bcce6018d5a5a404381c6095b9d1456ccc4554; included in the named fork/census/mutation selection (38/38 passed)."
         status: pass
     human_judgment: false
   - id: D2
@@ -54,7 +54,7 @@ coverage:
     requirement: STATE-04
     verification:
       - kind: integration
-        ref: "CTest state_fork_census and state_fork_census_controls at immutable revision 64377a4222e4585a888ac5b5217f94a5e31739bb; 14/14 categories and 198/198 fields, including negative controls, passed."
+        ref: "CTest state_fork_census and state_fork_census_controls at immutable revision a8bcce6018d5a5a404381c6095b9d1456ccc4554; 14/14 categories and 198/198 fields, including negative controls, passed."
         status: pass
     human_judgment: false
   - id: D3
@@ -62,7 +62,7 @@ coverage:
     requirement: STATE-04
     verification:
       - kind: integration
-        ref: "CTest state_fork_mutants, all 16 omission shards, state_fork_mutant_controls, and summary gate at immutable revision 64377a4222e4585a888ac5b5217f94a5e31739bb; included in the 38/38 passing selection."
+        ref: "CTest state_fork_mutants, all 16 omission shards, state_fork_mutant_controls, and summary gate at immutable revision a8bcce6018d5a5a404381c6095b9d1456ccc4554; included in the 38/38 passing selection."
         status: pass
     human_judgment: false
   - id: D4
@@ -70,15 +70,15 @@ coverage:
     requirement: STATE-06
     verification:
       - kind: unit
-        ref: "CTest state_apu_pulse_timer, state_apu_noise_timer, state_semantic_bounds, state_refusal, and state_audio_bound at immutable revision 64377a4222e4585a888ac5b5217f94a5e31739bb; targeted state/APU/audio selection passed 13/13."
+        ref: "CTest state_apu_pulse_timer, state_apu_noise_timer, state_semantic_bounds, state_refusal, and state_audio_bound at immutable revision a8bcce6018d5a5a404381c6095b9d1456ccc4554; targeted state/APU/audio selection passed 13/13."
         status: pass
       - kind: integration
-        ref: "cmake --preset phase1 && cmake --build --preset phase1 at immutable revision 64377a4222e4585a888ac5b5217f94a5e31739bb; build passed."
+        ref: "cmake --preset phase1 && cmake --build --preset phase1 at immutable revision a8bcce6018d5a5a404381c6095b9d1456ccc4554; build passed."
         status: pass
     human_judgment: false
 commits: 9
-plan_head_before: 83351ab901e38bbf32b1e48832fce5ecc7e8d114
-plan_head_after: 64377a4222e4585a888ac5b5217f94a5e31739bb
+plan_head_before: c8f539a42b087418b4f7d182c82a57da2a0c546f
+plan_head_after: a8bcce6018d5a5a404381c6095b9d1456ccc4554
 duration: 69min
 completed: 2026-10-26
 status: complete
@@ -99,7 +99,7 @@ status: complete
 
 ## Verification
 
-- `cmake --preset phase1 && cmake --build --preset phase1` — passed at `64377a4222e4585a888ac5b5217f94a5e31739bb`.
+- `cmake --preset phase1 && cmake --build --preset phase1` — passed at `a8bcce6018d5a5a404381c6095b9d1456ccc4554`.
 - Fork, matrix shards, census, census negative controls, slice invariance, 16 omission shards, mutation summary, and omission negative controls — 38/38 passed.
 - Targeted state, APU pulse/noise, semantic bounds, refusal, observer, RTC/palette, audio-bound, and CGB APU lifecycle tests — 13/13 passed.
 - `dmg_baseline` — passed (1/1).
@@ -111,7 +111,7 @@ status: complete
 ## TDD Gate Compliance
 
 - **RED:** Reachable pulse and noise reload values exposed validator ceilings below values produced by unchanged runtime logic. Assertion evidence was machine-classified and retained only in ignored `build/` files. The absent-mutant-record control also produced a machine-classified assertion RED (`build/state-fork-mutant-control-red.json`): the required record was absent and the checker rejected the manifest. The ordinary snapshot-fork baseline was already green, so no failing behavior was manufactured for that control.
-- **GREEN:** Commits `2a19833` and `64377a4` implement the audited bounds and complete the 198-entry source-copy omission matrix; the positive fork controls, named discrepancy checks, and negative manifest controls pass.
+- **GREEN:** Commits `919de64` and `a8bcce6` implement the audited bounds and complete the 198-entry source-copy omission matrix; the positive fork controls, named discrepancy checks, and negative manifest controls pass.
 - **REFACTOR:** No standalone refactor commit was needed. Follow-up commits tightened model-specific census requirements and bounded shard/control coverage without changing public API or runtime behavior.
 
 ## Decisions Made
@@ -125,9 +125,9 @@ status: complete
 
 ### Owner-authorized correctness and evidence refinements
 
-1. The validator's previous pulse and noise timer ceilings rejected reachable values emitted by unchanged APU reload paths. The exact maxima were derived from assignments and consumers, with exhaustive domain and transactional rejection tests; timing and format stayed unchanged. Committed in `2a19833`.
-2. Model-applicable category evidence required additional generated DMG/CGB cuts and an explicit CGB witness for the globally applicable APU sequencer. Full corpus and category applicability were retained. Committed through `1dd3e95`.
-3. DIV's consuming timed bus read refreshes the cache before sampling FF04, so that omission uses the named immediate load/save canonical-byte discrepancy while still running later output comparisons. The mutation hook is armed only for the target restore. Committed in `64377a4`.
+1. The validator's previous pulse and noise timer ceilings rejected reachable values emitted by unchanged APU reload paths. The exact maxima were derived from assignments and consumers, with exhaustive domain and transactional rejection tests; timing and format stayed unchanged. Committed in `919de64`.
+2. Model-applicable category evidence required additional generated DMG/CGB cuts and an explicit CGB witness for the globally applicable APU sequencer. Full corpus and category applicability were retained. Committed through `1ddb787`.
+3. DIV's consuming timed bus read refreshes the cache before sampling FF04, so that omission uses the named immediate load/save canonical-byte discrepancy while still running later output comparisons. The mutation hook is armed only for the target restore. Committed in `a8bcce6`.
 
 **Total deviations:** 3 owner-authorized correctness/evidence refinements. No scope was removed and no unresolved in-scope correctness finding remains.
 
@@ -136,11 +136,9 @@ status: complete
 - The full local horizon sanitizer selection previously timed out at 180 seconds under emulation. It was not repeated; native hosted evidence remains pending for the orchestrator to inspect.
 - Shared STATE/ROADMAP/REQUIREMENTS tracking remains with the orchestrator as requested; this plan worker changed only its owned implementation files and this summary.
 
-## Privacy and Publication Guard
+## Publication Hygiene
 
-**Do not push the current branch history.** The public base is `bac4694f08d69472c55d4137d356224779153ed7`. Two unpublished commits contain raw RED JSON blobs with host-specific data at `.planning/phases/GB-17-native-save-state-core/17-05-red-evidence.json` and `.planning/phases/GB-17-native-save-state-core/17-05-noise-red-evidence.json`. They were removed from the working tree in `83351ab`; original classified reports remain in ignored `build/`. The parent must replay/sanitize history and refresh immutable revision references before any push. No push was performed.
-
-Original commit sequence from the public base through the current implementation tip: `1d8698b`, `846ced8`, `3300de5`, `6e53c5b`, `2a19833`, `83351ab`, `299a63c`, `513d47d`, `a233da6`, `e951a30`, `00c2e24`, `1dd3e95`, `258208f`, `7756b92`, `64377a4`.
+The unpublished implementation history was replayed in an isolated clone to exclude two raw RED reports. The replay preserved the final tree exactly and byte-checked all owner edits. Every replayed commit was checked for the excluded paths and machine-specific report data; original raw reports and the revision mapping remain ignored under `build/`. All immutable implementation references below name the sanitized history. No raw report was pushed.
 
 ## Next Phase Readiness
 
@@ -149,8 +147,8 @@ Plan 17-05 is complete. Phase 17 remains active; plans 17-06 through 17-11 are s
 ## Self-Check: PASSED
 
 - Summary file exists at the required phase path.
-- All nine commits measured from the persisted Plan 17-05 ledger are ancestors of `plan_head_after` (`64377a4`).
-- The summary's automated coverage entries are block-schema entries with passing unit/integration evidence at immutable revision `64377a4222e4585a888ac5b5217f94a5e31739bb`.
+- All nine commits measured from the persisted Plan 17-05 ledger are ancestors of `plan_head_after` (`a8bcce6`).
+- The summary's automated coverage entries are block-schema entries with passing unit/integration evidence at immutable revision `a8bcce6018d5a5a404381c6095b9d1456ccc4554`.
 - `summary_coverage` passed for this summary (1/1).
 
 ---
