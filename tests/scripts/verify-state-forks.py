@@ -513,6 +513,8 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
     all_cases = report["cases"] + generated_cases
     actual_witnesses: set[str] = set()
     actual_categories: set[str] = set()
+    category_models: dict[str, set[str]] = {}
+    category_modes: dict[str, set[str]] = {}
     actual_constants: set[tuple[str, str]] = set()
     constant_specs = [item for item in spec.get("constant_dispositions", []) if isinstance(item, dict)]
     constants_by_path = {item.get("path"): item for item in constant_specs}
@@ -541,6 +543,8 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
             if row.get("case") != case_id or row.get("id") not in required_categories:
                 raise ForkError(f"unknown/misattributed in-flight category witness in {case_id}")
             actual_categories.add(row["id"])
+            category_models.setdefault(row["id"], set()).add(row.get("model", ""))
+            category_modes.setdefault(row["id"], set()).add(row.get("mode", ""))
         for row in case.get("constant_witnesses", []):
             if row.get("case") != case_id:
                 raise ForkError(f"constant witness is attributed to another case: {case_id}")
@@ -586,6 +590,17 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
     missing_categories = required_categories - observed
     if missing_categories:
         raise ForkError(f"in-flight category lacks save-boundary witness: {sorted(missing_categories)}")
+    for item in spec.get("in_flight_categories", []):
+        category_id = item["id"]
+        applicability = item.get("model", "")
+        models = category_models.get(category_id, set())
+        modes = category_modes.get(category_id, set())
+        if "DMG" in applicability and "CGB" in applicability:
+            if not {"DMG", "CGB"}.issubset(models):
+                raise ForkError(f"in-flight category lacks a model-applicable witness for {category_id}: {sorted(models)}")
+        elif "CGB native" in applicability:
+            if "CGB" not in models or "2" not in modes:
+                raise ForkError(f"in-flight category lacks a native CGB boundary witness for {category_id}")
     return []
 
 

@@ -258,6 +258,24 @@ static void build_generated_native_pipeline_rom(uint8_t rom[GENERATED_BUS_ROM_SI
                          0x00u, 0x00u, program, length);
 }
 
+static void build_generated_dmg_pipeline_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    uint8_t program[96];
+    size_t length = 0u;
+    length = emit_ldh_write(program, length, 0x40u, 0x00u); /* Initialize OAM with LCD off. */
+    length = emit_absolute_write(program, length, 0xFE00u, 16u);
+    length = emit_absolute_write(program, length, 0xFE01u, 16u);
+    length = emit_absolute_write(program, length, 0xFE02u, 1u);
+    length = emit_absolute_write(program, length, 0xFE03u, 0u);
+    length = emit_ldh_write(program, length, 0x43u, 3u); /* Fine-scroll discard. */
+    length = emit_ldh_write(program, length, 0x4Au, 0u); /* Window starts on line zero. */
+    length = emit_ldh_write(program, length, 0x4Bu, 7u); /* Window begins at x zero. */
+    length = emit_ldh_write(program, length, 0x40u, 0xB3u); /* LCD/window/OBJ enabled. */
+    program[length++] = 0x18u;
+    program[length++] = 0xFEu;
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x00u, 0x00u,
+                         0x00u, 0x00u, program, length);
+}
+
 static int generated_rom(const char *id, uint8_t **out, size_t *size) {
     *out = NULL;
     *size = 0u;
@@ -278,7 +296,8 @@ static int generated_rom(const char *id, uint8_t **out, size_t *size) {
              strcmp(id, "native_pipeline_pending") == 0 ||
              strcmp(id, "native_pipeline_scroll") == 0 ||
              strcmp(id, "native_pipeline_stall") == 0 ||
-             strcmp(id, "native_pipeline_fetch") == 0) *size = GENERATED_BUS_ROM_SIZE;
+             strcmp(id, "native_pipeline_fetch") == 0 ||
+             strcmp(id, "dmg_ppu_pipeline") == 0) *size = GENERATED_BUS_ROM_SIZE;
     else return 0;
     uint8_t *rom = (uint8_t *)malloc(*size);
     if (rom == NULL) return 0;
@@ -296,6 +315,7 @@ static int generated_rom(const char *id, uint8_t **out, size_t *size) {
     else if (strcmp(id, "accepted_dma_phase") == 0) build_generated_oam_dma_rom(rom);
     else if (strcmp(id, "accepted_flags") == 0) build_generated_loop_rom(rom, 0xC0u);
     else if (strcmp(id, "joypad_applied") == 0) build_generated_loop_rom(rom, 0x80u);
+    else if (strcmp(id, "dmg_ppu_pipeline") == 0) build_generated_dmg_pipeline_rom(rom);
     else if (strcmp(id, "irq_dma_pending") == 0) build_generated_irq_dma_pending_rom(rom);
     else build_generated_native_pipeline_rom(rom);
     *out = rom;
