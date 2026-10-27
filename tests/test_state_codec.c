@@ -1069,6 +1069,115 @@ static int emit_state_field_census(void) {
     return count == 198u ? 0 : 1;
 }
 
+static void test_print_sha256(const uint8_t digest[32]) {
+    for (size_t i = 0u; i < 32u; ++i) printf("%02x", digest[i]);
+}
+
+static int emit_state_pin_fixture(const char *id, const char *profile_name,
+                                  const char *mode_name, const char *cartridge_name,
+                                  const char *fixture_name, gbb_profile profile,
+                                  uint8_t cgb_flag, uint8_t cartridge_type,
+                                  int hdma_in_flight) {
+    gbb_instance *source = NULL, *target = NULL;
+    uint8_t *saved = NULL;
+    size_t size = 0u;
+    if (!test_make_state(profile, cgb_flag, cartridge_type, &source, &target,
+                         &saved, &size)) return 0;
+
+    gbb_audio_frame audio[4096];
+    size_t audio_count = 0u;
+    const gbb_run_result run = gbb_run_audio(source, 70000u, audio,
+                                              sizeof(audio) / sizeof(audio[0]),
+                                              &audio_count);
+    int ok = run.reason == GBB_STOP_BUDGET && audio_count != 0u;
+    if (ok && hdma_in_flight) {
+        source->hdma.mode = 2u;
+        source->hdma.active = 1u;
+        source->hdma.pending_hblank = 0u;
+        source->hdma.blocks_remaining = 1u;
+        source->hdma.byte_index = 15u;
+        source->hdma.byte_phase = 3u;
+        source->hdma.source_cursor = 0x0200u;
+        source->hdma.destination_cursor = 0x8000u;
+        source->hdma.block_vram_bank = source->vram_bank;
+    }
+
+    uint8_t rom_digest[32], state_digest[32];
+    if (ok) {
+        ok = gbb_save_state(source, saved, size) == GBB_OK;
+        if (ok) {
+            memcpy(rom_digest, saved + 20u, sizeof(rom_digest));
+            state_sha256(saved, size, state_digest);
+        }
+    }
+    if (ok) {
+        printf("    {\"id\":\"%s\",\"profile\":\"%s\",\"mode\":\"%s\","
+               "\"cartridge\":\"%s\",\"fixture\":\"%s\",\"state_size\":%zu,"
+               "\"rom_sha256\":\"", id, profile_name, mode_name,
+               cartridge_name, fixture_name, size);
+        test_print_sha256(rom_digest);
+        printf("\",\"state_sha256\":\"");
+        test_print_sha256(state_digest);
+        printf("\"}%s\n", strcmp(id, "cgb-native-mbc5-hdma-audio") == 0 ? "" : ",");
+    }
+
+    free(saved);
+    gbb_destroy(source);
+    gbb_destroy(target);
+    return ok;
+}
+
+static int emit_state_portable_pins(void) {
+    gbb_instance *instance = NULL;
+    uint8_t *rom = calloc(TEST_ROM_BYTES, 1u);
+    if (rom == NULL || gbb_create(GBB_PROFILE_DMG_CPU_B, &instance) != GBB_OK) {
+        free(rom);
+        if (instance != NULL) gbb_destroy(instance);
+        return 1;
+    }
+    test_build_rom(rom, 0x00u, 0u);
+    int ok = gbb_load_rom(instance, rom, TEST_ROM_BYTES) == GBB_OK;
+    uint8_t *saved = NULL;
+    size_t size = 0u;
+    if (ok) ok = gbb_state_size(instance, &size) == GBB_OK;
+    if (ok) saved = malloc(size);
+    if (ok) ok = saved != NULL && gbb_save_state(instance, saved, size) == GBB_OK;
+    if (!ok) {
+        free(saved); free(rom); gbb_destroy(instance);
+        return 1;
+    }
+    const unsigned int format_version = (unsigned int)saved[4] |
+        ((unsigned int)saved[5] << 8);
+    const unsigned int release_major = (unsigned int)saved[8] |
+        ((unsigned int)saved[9] << 8);
+    const unsigned int release_minor = (unsigned int)saved[10] |
+        ((unsigned int)saved[11] << 8);
+    const unsigned int release_patch = (unsigned int)saved[12] |
+        ((unsigned int)saved[13] << 8);
+    const unsigned int behavior_version = (unsigned int)saved[14] |
+        ((unsigned int)saved[15] << 8);
+    free(saved); free(rom); gbb_destroy(instance);
+
+    printf("{\"schema\":\"state-pin-emission-v1\",\"release\":{"
+           "\"major\":%u,\"minor\":%u,\"patch\":%u},"
+           "\"format_version\":%u,\"behavior_version\":%u,\"fixtures\":[\n",
+           release_major, release_minor, release_patch, format_version,
+           behavior_version);
+    ok = emit_state_pin_fixture("dmg-rom-only", "DMG-CPU-B", "DMG",
+                                "ROM-only", "state-codec-synthetic-v1",
+                                GBB_PROFILE_DMG_CPU_B, 0u, 0x00u, 0) &&
+         emit_state_pin_fixture("cgb-compat-mbc3-rtc-audio", "CGB-CPU-E",
+                                "CGB-DMG-compatibility", "MBC3-RTC-RAM",
+                                "state-codec-synthetic-v1", GBB_PROFILE_CGB_CPU_E,
+                                0u, 0x10u, 0) &&
+         emit_state_pin_fixture("cgb-native-mbc5-hdma-audio", "CGB-CPU-E",
+                                "CGB-native", "MBC5-rumble-RAM",
+                                "state-codec-synthetic-v1", GBB_PROFILE_CGB_CPU_E,
+                                0x80u, 0x1Eu, 1);
+    puts("]}");
+    return ok ? 0 : 1;
+}
+
 static int state_codec_matrix(void) {
     static const struct {
         uint8_t type;
@@ -1113,6 +1222,8 @@ static int state_codec_matrix(void) {
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "state_field_census") == 0)
         return emit_state_field_census();
+    if (argc == 2 && strcmp(argv[1], "state_portable_pins") == 0)
+        return emit_state_portable_pins();
     if (argc != 2) {
         fprintf(stderr, "usage: test_state_codec state_identity|state_codec_matrix|state_canonical|state_semantic_bounds|state_override_isolation|state_field_census\n");
         return 2;

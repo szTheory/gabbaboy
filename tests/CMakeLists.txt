@@ -4994,6 +4994,17 @@ set_tests_properties(state_identity state_codec_matrix state_canonical state_sem
 set_tests_properties(state_field_census state_field_census_controls PROPERTIES TIMEOUT 30)
 set_tests_properties(state_codec_mutant_controls PROPERTIES TIMEOUT 60)
 
+set(GBB_STATE_PIN_BASE_REV "${GBB_STATE_SOURCE_REV}" CACHE STRING
+  "Immutable state-pin compatibility baseline commit")
+add_test(NAME state_portable_pins
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-pins.py"
+    --rev "${GBB_STATE_SOURCE_REV}" --base "${GBB_STATE_PIN_BASE_REV}"
+    --check "$<TARGET_FILE:test_state_codec>" --repo "${PROJECT_SOURCE_DIR}")
+add_test(NAME state_pin_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-pins.py"
+    --self-test)
+set_tests_properties(state_portable_pins state_pin_controls PROPERTIES TIMEOUT 60)
+
 # White-box state-load tests seed valid ownership with different receiving RTC,
 # RAM, palette and observer histories. They compile the production core in one TU
 # so the tests can prove exact lazy-RTC restoration without a private public API.
