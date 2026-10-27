@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -604,10 +605,16 @@ if name == "verify-support-ledger.py":
     if {k: got.get(k) for k in want} != want: die("sidecar differs from the tagged ledger")
 elif name == "verify-v02-performance.py":
     r = load(a[1])
+    disposition = r.get("regression_disposition") or {}
     if r.get("result") != "passed" or r.get("workload", {}).get("id") != "original-wram-tracer-1m-half-dots-v1":
         die("rejected:workload-identity-mismatch")
+    if r.get("schema_version") == 3 and (disposition.get("decision") != "advisory-observation"
+                                           or disposition.get("release_disposition") != "advisory"
+                                           or not (r.get("measurement", {}).get("summary") or {}).get("review_trigger")):
+        die("rejected:advisory-disposition-invalid")
     cand = r.get("source", {}).get("candidate", {})
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
+    if r.get("schema_version") == 3 and cand.get("tree_sha") != tree: die("rejected:candidate-tree-mismatch")
     if "--verify-reuse" in a:  # release reuse rule: the measured tree is the tag's tree
         if opt("--tag-tree") != tree or cand.get("tree_sha") != tree: die("rejected:reuse-tree-mismatch")
     elif cand.get("sha") != head():  # a receipt of another revision is only valid through the reuse rule
@@ -678,8 +685,15 @@ def make_evidence(directory: Path, source: str, repo: Path | None = None) -> Pat
     oid = git(repo or directory.parent / "repo", "rev-parse", "v0.2.0:docs/support/v0.2.0.md")
     write_json(directory / SIDECAR, {"schema_version": 2, "version": "0.2.0", "tag": "v0.2.0", "source_sha": source,
                                      "ledger_blob": oid, "corpus_receipt_sha256": sha256_bytes(corpus)})
-    write_json(directory / PERFORMANCE, {"result": "passed", "workload": {"id": WORKLOAD_ID},
-                                         "source": {"candidate": {"sha": source}}})
+    source_tree = git(repo or directory.parent / "repo", "rev-parse", f"{source}^{{tree}}")
+    write_json(directory / PERFORMANCE, {
+        "schema_version": 3,
+        "result": "passed",
+        "measurement": {"summary": {"review_trigger": True}},
+        "regression_disposition": {"decision": "advisory-observation", "release_disposition": "advisory"},
+        "workload": {"id": WORKLOAD_ID},
+        "source": {"candidate": {"sha": source, "tree_sha": source_tree}},
+    })
     write_json(directory / FUZZ, {"status": "complete", "mode": "explore", "source_sha": source,
                                   "workflow": {"run_id": "4242", "attempt": 1, "event": "push"}})
     archive = directory.parent / "source-archive.tar.gz"
@@ -872,7 +886,8 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
     # A justified reuse of an earlier producer is accepted only when every covered input is identical.
     reuse_dir = base / "reuse"
     shutil.copytree(base / "evidence", reuse_dir)
-    edit(reuse_dir / PERFORMANCE, lambda d: d["source"]["candidate"].update(sha=producer))
+    edit(reuse_dir / PERFORMANCE, lambda d: d["source"]["candidate"].update(
+        sha=producer, tree_sha=producer_tree))
     write_json(reuse_dir / REUSE_FILE, {"performance": {
         "original_producer_sha": producer, "justification": "Only a non-covered notes file changed after the producer."}})
     reuse_args = list(common)
@@ -1026,6 +1041,89 @@ def stage_controls(base: Path) -> tuple[int, int]:
     return positives, rejected
 
 
+def actual_advisory_delivery_controls(base: Path) -> tuple[int, int]:
+    """Carry the real controlled producer receipt through delivery aggregation and its owner verifier."""
+    base.mkdir(parents=True, exist_ok=True)
+    subject = base / "advisory-subject"
+    cloned = subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(subject)],
+                            capture_output=True, text=True, timeout=300)
+    if cloned.returncode != 0:
+        raise SystemExit(f"advisory delivery subject clone failed: {cloned.stderr.strip()}")
+    source = git(subject, "rev-parse", "HEAD")
+    tagged = subprocess.run(["git", "-C", str(subject), "tag", "-f", "v0.2.0", source],
+                            capture_output=True, text=True, timeout=60)
+    if tagged.returncode != 0:
+        raise SystemExit(f"advisory delivery tag fixture failed: {tagged.stderr.strip()}")
+
+    evidence = base / "advisory-evidence"
+    archive = make_evidence(evidence, source, subject)
+    receipt_path = base / "actual-advisory-receipt.json"
+    spec = importlib.util.spec_from_file_location(
+        "_gabbaboy_advisory_producer_test", ROOT / "tests/scripts/verify-v02-performance.py")
+    if spec is None or spec.loader is None:
+        raise SystemExit("cannot load the controlled advisory producer test helper")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+        producer = module.PerformanceReceiptContractTests()
+        produced = producer.run_controlled_producer(receipt_path)
+    finally:
+        sys.modules.pop(spec.name, None)
+    if produced.returncode != 0:
+        raise SystemExit(f"actual advisory producer failed in delivery self-test: {produced.stdout.strip()}")
+    receipt = read_json(receipt_path, "advisory-fixture")
+    if (receipt.get("schema_version") != 3 or receipt.get("result") != "passed"
+            or (receipt.get("regression_disposition") or {}).get("release_disposition") != "advisory"
+            or not (receipt.get("measurement", {}).get("summary") or {}).get("review_trigger")):
+        raise SystemExit("controlled producer did not produce a triggered advisory receipt")
+    write_json(evidence / PERFORMANCE, receipt)
+
+    def consume(directory: Path) -> dict[str, int]:
+        global run_owner
+        saved = run_owner
+        called: set[str] = set()
+
+        def dispatch_owner(name: str, judge_root: Path, source_root: Path, source_sha: str,
+                           validator_root: Path, *args: str) -> None:
+            called.add(name)
+            if name == "performance":
+                saved(name, judge_root, source_root, source_sha, validator_root, *args)
+
+        run_owner = dispatch_owner
+        try:
+            result = check_evidence(directory, "v0.2.0", source, ROOT, subject, archive)
+        finally:
+            run_owner = saved
+        if called != {"ledger", "performance", "fuzz", "archive"}:
+            raise SystemExit(f"delivery aggregate skipped an evidence owner: {sorted(called)}")
+        return result
+
+    result = consume(evidence)
+    if result != {"evidence_families": len(EVIDENCE_NAMES), "reused": 0}:
+        raise SystemExit(f"delivery aggregate changed advisory receipt selection: {result}")
+    positives = 1
+    rejected = 0
+    for label, mutate, expected in (
+            ("malformed advisory disposition", lambda item: item["regression_disposition"].update(
+                release_disposition="accepted-with-disclosed-regression"),
+             "advisory-regression-disposition-invalid"),
+            ("advisory receipt bound to another source tree", lambda item: item["source"]["candidate"].update(
+                tree_sha="0" * 40), "candidate-source-tree-mismatch")):
+        altered = base / (label.replace(" ", "-") + "-evidence")
+        shutil.copytree(evidence, altered)
+        edit(altered / PERFORMANCE, mutate)
+        try:
+            consume(altered)
+        except Reject as error:
+            if error.code != "owner-performance" or expected not in str(error):
+                raise SystemExit(f"delivery rejected {label} for the wrong reason: {error}") from error
+        else:
+            raise SystemExit(f"delivery aggregate accepted {label}")
+        rejected += 1
+    return positives, rejected
+
+
 def run_self_test() -> int:
     with tempfile.TemporaryDirectory(prefix="gb-delivery-selftest.") as name:
         base = Path(name)
@@ -1035,7 +1133,8 @@ def run_self_test() -> int:
         p2, r2 = stage_controls(base / "stage")  # separate tree keeps the fixtures independent
         fixture, producer, source = make_fixture_repo(base / "evidence-fixture")
         p3, r3 = evidence_controls(base / "evidence-fixture", fixture, producer, source)
-        positives, controls = p2 + p3, r2 + r3 + trust_result.testsRun
+        p4, r4 = actual_advisory_delivery_controls(base / "actual-advisory")
+        positives, controls = p2 + p3 + p4, r2 + r3 + r4 + trust_result.testsRun
         # The real owner validators must reject a forged receipt that reaches them through this entry point.
         forged = base / "forged-owner"
         forged.mkdir()

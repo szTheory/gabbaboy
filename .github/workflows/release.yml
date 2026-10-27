@@ -1131,7 +1131,7 @@ jobs:
           retention-days: 7
 
   candidate-performance:
-    name: exact-tag-paired-performance-qualification
+    name: exact-tag-advisory-paired-performance-observation
     needs: [release, candidate]
     if: ${{ always() && needs.candidate.result == 'success' }}
     runs-on: ubuntu-22.04
@@ -1171,6 +1171,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # This receipt reports paired wall-clock timing as advisory evidence. The required CI/rehearsal
+          # cachegrind Ir and realtime gates remain independent blockers, and the owner verifier checks its bindings.
           mkdir -p build
           reused=false
           found=$(find "$RUNNER_TEMP/rehearsal-performance" -name v02-performance-receipt.json)
