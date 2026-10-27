@@ -105,7 +105,7 @@ status: complete
 - **Tasks:** 3
 - **Files modified:** 13, measured from the persisted Plan 17-06 ledger base.
 - **Commits:** 6, measured from f192100 through implementation head fdf7b2a.
-- **Actual token estimate:** 31,859 chars/4 from the zero-context realized diff; the plan estimated 58,000 on the same scale.
+- **Diff-size proxy:** 31,859 chars/4 from the realized diff. This is not measured model-token use and cannot be compared with the plan's raw execution projection, which includes reads, reasoning, and tests; it does not establish plan-envelope or completion evidence.
 
 ## Accomplishments
 
@@ -125,6 +125,16 @@ status: complete
 - `python3 -I tests/scripts/verify-state-pins.py --self-test` — 14 controls passed. Task 2 `state_load_fuzz` and `state_fuzz_controls` — 2/2 passed; `run-bounded-fuzz.sh --self-test` passed with the local runtime reported as unsupported.
 - `ctest --test-dir build -R '^summary_coverage$' --output-on-failure --no-tests=error` — passed 1/1 for this summary's block-schema coverage.
 - The prior full settled-suite result, 1473/1473 at f192100, is baseline evidence only and was not rerun for this plan. Full post-wave and hosted checks remain with the parent executor.
+
+### Post-wave integration repair at `dc897c5`
+
+- `cmake --preset phase1` and builds of `test_state_codec`, `test_state_fuzz`, `test_state_fuzz_observer_mutant`, and `gabbaboy-runner` passed at immutable source `dc897c5`.
+- Selecting only `state_portable_pins` with mainline base `5ca03b394f2a3e0640f69d94e5eda5622753b36c`, then with phase-entry base `f192100c4cc89427575f32785a4221bfca7337d7`, automatically ran the `state_pin_planning` setup fixture; each selection passed 2/2.
+- `acceptance_dense_input_controls`, `no_phase_paths`, `state_pin_controls`, and `state_fuzz_controls` passed 4/4. The Git-free source-copy control configured and built `test_state_codec`; the planning and fuzz CTests and compiled-pin CLI each rejected `unknown` revision.
+- `verify-no-phase-paths.py --check` passed over 515 files with 6 existing allowlist rows. `verify-planning-labels.py --build-dir build` passed for 1,478 tests with 36 planning-labeled tests. `verify-state-pins.py --self-test` passed 20 controls, including omitted/misbound evidence fixtures, invalid immutable phase references, and incomplete summary evidence.
+- `summary_coverage` and `summary_coverage_live` passed 2/2 after this follow-up evidence update.
+- The phase-path scanner remains unchanged and no exception was added. The compiled pin CTest requires the independent, build-free planning-evidence fixture; phase files are resolved from the selected immutable Git tree only.
+- The full suite has not been rerun after these targeted repairs. The parent owns the settled post-wave run and hosted checks; local evidence still does not qualify cross-platform equality.
 
 ## TDD Gate Compliance
 
@@ -152,6 +162,7 @@ status: complete
 1. **Task 2 private snapshot seam:** The earlier canonical and selected-field seams could not prove refusal left local observers and pointer identity untouched. The parent authorized a private-only, caller-buffer snapshot of the complete instance. The separate battery export asserts all 8192 RAM bytes plus the RTC block. This adds no public API or wire fields.
 2. **Task 3 compatibility and receipt binding:** The initial CMake default used source as its own base. CI now uses the actual PR base or push-before SHA; only all-zero new-branch pushes use a validated `origin/main` merge base. The compatibility checker records the mainline base’s absent tokens as `null`, and the phase-entry base’s existing tokens explicitly. The orchestrator delegated this exact initial 0.2.1 disposition under the AGENTS.md in-phase authorization; later changed-pin dispositions still require exact immutable-base evidence and applicable token changes.
 3. **Task 3 pin checker addition:** The task file registry was extended to include `verify-state-pins.py` so platform receipts and the delegated approval basis are generated and validated by the existing ratchet rather than an untracked workflow-only projection.
+4. **Post-wave Git-free integration repair (`dc897c5`):** The configure-time observer mutant is materialized only for a resolved immutable revision. Git-free source copies still configure/build; their registered evidence tests reject `unknown`. The compiled pin gate requires a separate build-free planning-evidence CTest fixture, and logical phase references resolve only inside the selected immutable commit. Negative controls cover fixture omission/misbinding and invalid or incomplete evidence.
 
 **Total deviations:** 3 owner-authorized refinements. No requirement was removed or deferred from the implementation. Hosted qualification remains an explicit evidence limitation, not a local pass claim.
 
@@ -159,7 +170,7 @@ status: complete
 
 - The local toolchain reports that the matching Clang libFuzzer runtime is unavailable. Deterministic state-fuzz controls pass locally; the real campaign must run on the hosted sanitizer lane.
 - The newly wired Linux/macOS/Windows hosted jobs have not run at `fdf7b2a`. Their exact-head receipts and equality are pending; no cross-platform qualification is claimed here.
-- No full-suite run was started because the parent owns the post-wave full-suite and hosted checks. The 1473/1473 result at f192100 remains only the pre-plan baseline.
+- The parent-provided post-wave run at `b8b8bf7` was 1474/1477 with these three integration failures. The targeted repairs and controls now pass; the parent owns the settled full-suite rerun and hosted checks. The 1473/1473 result at f192100 remains only the pre-plan baseline.
 
 ## User Setup Required
 
@@ -174,6 +185,7 @@ Plan 17-06 implementation is complete. Phase 17 remains active and awaits the pa
 - The summary file exists at the required phase path.
 - All six commits measured from the persisted Plan 17-06 base are ancestors of `plan_head_after` `fdf7b2ac91d5db24f77725cc87588d3c57e26eb7`.
 - `summary_coverage` passed 1/1, and coverage entries use the required block schema with automated evidence at immutable implementation revisions.
+- Post-wave integration fix `dc897c5` is present on the plan branch; its fresh targeted evidence is listed above. The summary's diff-size proxy is metadata only.
 - Parent-owned STATE.md, ROADMAP.md, REQUIREMENTS.md, config, and state files remain untouched by this plan execution.
 
 ---
