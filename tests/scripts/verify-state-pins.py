@@ -239,7 +239,7 @@ def verify_snapshot(repo, source_revision, base_revision, actual):
     current_tokens = state_tokens(repo, source_revision)
     if document_tokens(current_golden) != current_tokens:
         reject("release-token-mismatch", "golden release/format/behavior tokens differ from immutable source")
-    if actual != {"schema": "state-pin-emission-v1", **current_golden}:
+    if actual != dict(current_golden, schema="state-pin-emission-v1"):
         reject("pin-mismatch", "compiled canonical state bytes differ from the immutable fixture pins")
 
     base_golden_text = source_file(repo, base_revision, GOLDEN_PATH, allow_missing=True)
@@ -358,7 +358,7 @@ def self_test():
         golden = fixture_pin_document()
         write_git_file(repo, GOLDEN_PATH, json.dumps(golden, indent=2, sort_keys=True) + "\n")
         no_disposition_revision = commit_fixture(repo, "pins without disposition")
-        actual = {"schema": "state-pin-emission-v1", **golden}
+        actual = dict(golden, schema="state-pin-emission-v1")
 
         def rejected(name, code, action):
             nonlocal controls
@@ -393,7 +393,7 @@ def self_test():
         write_git_file(repo, GOLDEN_PATH,
                        json.dumps(relabelled_golden, indent=2, sort_keys=True) + "\n")
         relabelled_revision = commit_fixture(repo, "relabel 0.2.1 pins as 0.3.0")
-        wrong_release = {"schema": "state-pin-emission-v1", **relabelled_golden}
+        wrong_release = dict(relabelled_golden, schema="state-pin-emission-v1")
         rejected("0.3.0 relabel", "release-token-mismatch",
                  lambda: verify_snapshot(repo, relabelled_revision, base_revision, wrong_release))
 
@@ -418,7 +418,7 @@ def self_test():
         changed_golden["fixtures"][0]["state_sha256"] = "4" * 64
         write_git_file(repo, GOLDEN_PATH, json.dumps(changed_golden, indent=2, sort_keys=True) + "\n")
         changed_without_disposition = commit_fixture(repo, "changed pin without token")
-        changed_actual = {"schema": "state-pin-emission-v1", **changed_golden}
+        changed_actual = dict(changed_golden, schema="state-pin-emission-v1")
         rejected("changed pin without disposition", "compatibility-missing",
                  lambda: verify_snapshot(repo, changed_without_disposition, accepted_revision,
                                          changed_actual))
@@ -444,7 +444,7 @@ def self_test():
         write_git_file(repo, GOLDEN_PATH, json.dumps(golden, indent=2, sort_keys=True) + "\n")
         no_change_revision = commit_fixture(repo, "unchanged baseline")
         result = verify_snapshot(repo, no_change_revision, no_change_revision,
-                                 {"schema": "state-pin-emission-v1", **golden})
+                                 dict(golden, schema="state-pin-emission-v1"))
         if result["source_revision"] != no_change_revision:
             reject("self-test-failed", "unchanged pin control used a different immutable revision")
         controls += 1
