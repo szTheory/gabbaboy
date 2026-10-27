@@ -646,6 +646,13 @@ static int source_state_accepts_override(gbb_instance *probe,
 }
 
 static int poison_needs_full_state_probe(const state_field_descriptor *field) {
+#ifdef GBB_STATE_FORK_MUTANT
+    if (state_fork_mutant_field == NULL ||
+        strcmp(state_fork_mutant_field, field->path) != 0) return 0;
+#else
+    (void)field;
+    return 0;
+#endif
     static const char *const paths[] = {
         "cart.rom_bank_lo", "cart.rom_bank_hi", "cart.ram_bank",
         "cart.ram_enabled", "cart.mbc1_mode", "cart.rumble_on",

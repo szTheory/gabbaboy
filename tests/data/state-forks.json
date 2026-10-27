@@ -2356,10 +2356,9 @@
     },
     {
       "case": "generated:timer_reload:cgb",
-      "expected_observations": [
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "timer_signal"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "timer_signal",
+      "malformed_target_reason": "At the timer_reload CGB cut, TAC=5 and divider_counter=0x005C derive timer_signal=1; omitting the derived signal breaks that accepted-state invariant, so canonical save rejects the target."
     },
     {
       "case": "generated:timer_reload:cgb",

@@ -767,6 +767,8 @@ MALFORMED_TARGET_REASONS = {
         "At the timer_reload CGB cut, divider_counter=0x005C and timer_signal=1; TAC value 5 is the only accepted selector in this fixture whose enabled tap is high, so omitting tac causes canonical save rejection.",
     ("timer_reload_pending", "generated:timer_reload:cgb"):
         "At the timer_reload CGB cut, timer_reload_remaining is four; the accepted-state invariant requires a pending reload whenever remaining is nonzero, so omitting timer_reload_pending causes canonical save rejection.",
+    ("timer_signal", "generated:timer_reload:cgb"):
+        "At the timer_reload CGB cut, TAC=5 and divider_counter=0x005C derive timer_signal=1; omitting the derived signal breaks that accepted-state invariant, so canonical save rejects the target.",
     ("wram_bank", "generated:native_pipeline:cgb"):
         "At the native_pipeline CGB cut, the effective WRAM bank is derived from the restored SVBK value; the accepted-state invariant requires wram_bank=(svbk==0 ? 1 : svbk), so omitting the cache assignment causes canonical save rejection.",
     ("svbk", "generated:native_pipeline:cgb"):
