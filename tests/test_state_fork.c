@@ -638,6 +638,27 @@ static int source_state_accepts_override(gbb_instance *probe,
     return accepted;
 }
 
+static int poison_needs_full_state_probe(const state_field_descriptor *field) {
+    static const char *const paths[] = {
+        "cart.rom_bank_lo", "cart.rom_bank_hi", "cart.ram_bank",
+        "cart.ram_enabled", "cart.mbc1_mode", "cart.rumble_on",
+        "div", "divider_counter", "tac", "timer_signal",
+        "serial_active", "serial_control", "serial_bits", "serial_edge_remaining",
+        "hdma.mode", "hdma.active", "hdma.pending_hblank",
+        "hdma.blocks_remaining", "hdma.byte_index", "hdma.byte_phase",
+        "hdma.source_cursor", "hdma.destination_cursor", "hdma.source_low",
+        "hdma.destination_low", "hdma.destination_high",
+        "wram_bank", "svbk", "key1_armed", "double_speed",
+        "cpu_stall_kind", "cpu_stall_half_dots", "stop_switch_pending",
+        "ppu_mode3_stall", "ppu_transfer_age", "ppu_objects_stalled",
+        "ppu_fetch_enqueued", "ppu_fine_scroll", "timer_reload_pending",
+        "timer_reload_remaining", "input_event_count"
+    };
+    for (size_t i = 0u; i < sizeof(paths) / sizeof(paths[0]); ++i)
+        if (strcmp(field->path, paths[i]) == 0) return 1;
+    return 0;
+}
+
 static uint64_t poison_value(const gbb_instance *source,
                              gbb_instance *probe,
                              const uint8_t *source_state,
@@ -670,11 +691,11 @@ static uint64_t poison_value(const gbb_instance *source,
     const size_t count = state_field_count_for_instance(source, field);
     if (proposed != value && state_field_value_valid(source, field, index,
             proposed, audio_head, sample_phase)) {
-        /* Check at most four scalar alternatives through the public loader against
-         * the complete source state. Arrays use the per-element validator below;
-         * loading the full state once per array element would make the census
-         * unbounded without improving the cross-field proof. */
-        if (count != 1u) return proposed;
+        /* Check at most four scalar alternatives for fields with cross-field
+         * relations, using the public loader against the complete source state.
+         * Other fields use their exact per-field validator. Arrays avoid one full
+         * state load per element, which would make the census unbounded. */
+        if (count != 1u || !poison_needs_full_state_probe(field)) return proposed;
         ++complete_state_trials;
         if (source_state_accepts_override(probe, source_state, state_size,
                 source, field, index, proposed)) return proposed;
@@ -691,7 +712,8 @@ static uint64_t poison_value(const gbb_instance *source,
     for (size_t i = 0u; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
         if (candidates[i] != value && state_field_value_valid(source, field, index,
                 candidates[i], audio_head, sample_phase)) {
-            if (count != 1u) return candidates[i];
+            if (count != 1u || !poison_needs_full_state_probe(field))
+                return candidates[i];
             if (complete_state_trials >= 4u) break;
             ++complete_state_trials;
             if (source_state_accepts_override(probe, source_state, state_size,
@@ -702,7 +724,8 @@ static uint64_t poison_value(const gbb_instance *source,
         for (uint64_t candidate = 0u; candidate <= UINT8_MAX; ++candidate) {
             if (candidate != value && state_field_value_valid(source, field, index,
                     candidate, audio_head, sample_phase)) {
-                if (count != 1u) return candidate;
+                if (count != 1u || !poison_needs_full_state_probe(field))
+                    return candidate;
                 if (complete_state_trials >= 4u) break;
                 ++complete_state_trials;
                 if (source_state_accepts_override(probe, source_state, state_size,
