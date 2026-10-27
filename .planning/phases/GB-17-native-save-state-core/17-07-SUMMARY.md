@@ -108,7 +108,7 @@ plan_head_after: 411889324953d20bb3c88c516d3826bc6dfe98bd
 - **Tasks:** 3/3.
 - **Plan files modified:** 11.
 - **Commit ledger:** 8 commits from the persisted plan base to the task head. This shared-branch count includes concurrent Plan 17-05 commits; four Plan 17-07 task commits are listed below.
-- **Actual token estimate:** 24,213, measured as changed-file diff characters divided by four.
+- **Diff-size proxy:** 24,213 changed-file diff characters divided by four, per the summary actuals scale. This is not measured model-token use and is not directly comparable to the plan's raw execution projection.
 
 ## Accomplishments
 
