@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unittest
 
 if not __debug__:
     sys.stderr.write("verify-perf-gate.py must not run with python -O\n")
@@ -881,6 +882,134 @@ def realtime_text(warmup_ns, sample_ns):
     return "\n".join(rows) + "\n"
 
 
+POLICY_BASE_REV = "947d6a9d177af6c04a5f9ea6abcc2c470ab9be57"
+
+
+class PerfGateLimitRatchetTests(unittest.TestCase):
+    def evaluate(self, limits, *, base_rev=POLICY_BASE_REV, realtime=None, exception=None):
+        arguments = ["--evaluate", "--limits", limits, "--base", os.path.join(DATA, "base"),
+                     "--head", os.path.join(DATA, "head-pass")]
+        if base_rev is not None:
+            arguments += ["--base-rev", base_rev]
+        if realtime is not None:
+            arguments += ["--realtime", realtime]
+        if exception is not None:
+            arguments += ["--exception-receipt", exception]
+        return run_cli(arguments)
+
+    def test_unchanged_limits_pass_against_immutable_base(self):
+        rc, out, err = self.evaluate(DEFAULT_LIMITS)
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("perf-gate pass", out)
+
+    def test_unapproved_ir_limit_widening_is_rejected(self):
+        original = read_text(DEFAULT_LIMITS, "limits-schema")
+        with tempfile.TemporaryDirectory(prefix="perf-limit-ratchet-") as scratch:
+            path = os.path.join(scratch, "limits.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(re.sub(r"(?m)^ir_ratio_limit=.*$", "ir_ratio_limit=112/100", original))
+            rc, out, err = self.evaluate(path)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT ir-limit-widening-unapproved", err)
+
+    def test_realtime_floor_cannot_be_changed(self):
+        original = read_text(DEFAULT_LIMITS, "limits-schema")
+        with tempfile.TemporaryDirectory(prefix="perf-limit-floor-ratchet-") as scratch:
+            path = os.path.join(scratch, "limits.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(re.sub(r"(?m)^realtime_floor=.*$", "realtime_floor=3.99", original))
+            rc, out, err = self.evaluate(path, realtime=os.path.join(DATA, "realtime-pass.txt"))
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT ratchet-hard-limit-changed", err)
+
+    def test_unresolved_base_revision_is_rejected(self):
+        rc, out, err = self.evaluate(DEFAULT_LIMITS, base_rev="f" * 40)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT ratchet-base-not-commit", err)
+
+    def test_missing_base_revision_is_rejected(self):
+        rc, out, err = self.evaluate(DEFAULT_LIMITS, base_rev=None)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT ratchet-base-required", err)
+
+    def test_unverified_exception_receipt_does_not_authorize_widening(self):
+        original = read_text(DEFAULT_LIMITS, "limits-schema")
+        with tempfile.TemporaryDirectory(prefix="perf-limit-exception-") as scratch:
+            limits = os.path.join(scratch, "limits.txt")
+            receipt = os.path.join(scratch, "exception.json")
+            with open(limits, "w", encoding="utf-8") as handle:
+                handle.write(re.sub(r"(?m)^ir_ratio_limit=.*$", "ir_ratio_limit=112/100", original))
+            with open(receipt, "w", encoding="utf-8") as handle:
+                handle.write('{"schema":"perf-gate-exception-v0","accepted_cause":"copied prose"}\n')
+            rc, out, err = self.evaluate(limits, exception=receipt)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT exception-receipt-schema", err)
+
+
+class PerfGateRepeatControlsTests(unittest.TestCase):
+    def evaluate_head(self, head):
+        return run_cli(["--evaluate", "--limits", DEFAULT_LIMITS, "--base", os.path.join(DATA, "base"),
+                        "--head", head, "--base-rev", POLICY_BASE_REV])
+
+    def repeated_head(self, directory):
+        copy_tree(os.path.join(DATA, "head-pass"), directory)
+        for rom in ROMS:
+            path = os.path.join(directory, rom + ".line")
+            line = read_text(path, "measure-line-format")
+            for repeat in (1, 2):
+                with open(os.path.join(directory, "%s.line.%d" % (rom, repeat)), "w", encoding="utf-8") as handle:
+                    handle.write(line)
+
+    def test_second_repeat_digest_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="perf-repeat-digest-") as scratch:
+            head = os.path.join(scratch, "head")
+            self.repeated_head(head)
+            path = os.path.join(head, "tracer.line.2")
+            edit(path, "correctness_digest_fnv1a64=4c7a57ff3d50d228",
+                 "correctness_digest_fnv1a64=0000000000000000")
+            rc, out, err = self.evaluate_head(head)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT workload-digest-mismatch", err)
+
+    def test_matching_second_repeat_identity_is_a_passing_control(self):
+        with tempfile.TemporaryDirectory(prefix="perf-repeat-matching-") as scratch:
+            head = os.path.join(scratch, "head")
+            self.repeated_head(head)
+            rc, out, err = self.evaluate_head(head)
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("perf-gate pass", out)
+
+    def test_second_repeat_workload_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="perf-repeat-workload-") as scratch:
+            head = os.path.join(scratch, "head")
+            self.repeated_head(head)
+            path = os.path.join(head, "tracer.line.2")
+            edit(path, "workload=original-wram-tracer-1m-half-dots-v1", "workload=other-workload")
+            rc, out, err = self.evaluate_head(head)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT workload-digest-mismatch", err)
+
+    def test_second_repeat_consumption_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="perf-repeat-consumption-") as scratch:
+            head = os.path.join(scratch, "head")
+            self.repeated_head(head)
+            path = os.path.join(head, "tracer.line.2")
+            edit(path, "consumed_half_dots=1000000", "consumed_half_dots=999999")
+            rc, out, err = self.evaluate_head(head)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT proxy-vacuous", err)
+
+
+def contract_self_test(test_case, label):
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_case)
+    result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2).run(suite)
+    controls = max(0, result.testsRun - 1)
+    if result.wasSuccessful() and controls > 0:
+        print("perf-gate %s self-test pass controls=%d" % (label, controls))
+        return 0
+    return 1
+
+
 def main(argv):
     def option(name):
         if name in argv:
@@ -891,7 +1020,11 @@ def main(argv):
         return None
 
     try:
-        if "--self-test" in argv:
+        if argv == ["--self-test-limit-ratchet"]:
+            return contract_self_test(PerfGateLimitRatchetTests, "limit-ratchet")
+        elif argv == ["--self-test-repeat-controls"]:
+            return contract_self_test(PerfGateRepeatControlsTests, "repeat-controls")
+        elif "--self-test" in argv:
             self_test()
         elif "--check-attribution" in argv:
             _, (revisions, merges, _) = check_attribution(
