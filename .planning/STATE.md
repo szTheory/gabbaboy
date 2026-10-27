@@ -5,18 +5,18 @@ milestone_name: Save States & Host Contract
 current_phase: 17
 current_phase_name: Native Save State Core
 status: executing
-stopped_at: Phase 17 waves 1-5 locally verified; next plan 17-06; hosted integration fixes active
-last_updated: "2026-10-27T01:40:17.653Z"
+stopped_at: Phase 17 plans 1-6 implemented and targeted fixes verified; next plan 17-07; settled suite and hosted qualification pending
+last_updated: "2026-10-27T03:12:32.993Z"
 last_activity: 2026-10-26
-last_activity_desc: Phase 17 waves 1-5 locally verified; 17-06 is next; full suite 1361/1361
-state_head: 87e95c5d37cfc6988e2379a2060a34f08b57e6e5
+last_activity_desc: Phase 17 plans 1-6 implemented; 17-07 is next; settled suite and hosted evidence pending
+state_head: ab8ccf00b8d121c5428c7275a9d919c3f2cdb7b6
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 18
-  completed_plans: 12
+  completed_plans: 13
   percent: 25
-current_plan: 6
+current_plan: 7
 ---
 
 # Project State
@@ -31,15 +31,15 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 ## Current Position
 
 Phase: 17 (Native Save State Core) — EXECUTING
-Plan: 6 of 11
+Plan: 7 of 11
 Status: Executing Phase 17
-Last activity: 2026-10-26 — Wave 5 locally verified at `908d398`; full suite 1361/1361. Next plan: 17-06; hosted integration fixes active.
+Last activity: 2026-10-26 — Plans 17-01..06 implemented. Plan 06 integration controls pass at `dc897c5`; next 17-07. Settled suite and hosted qualification pending.
 
 Prior phase evidence: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
 
 Prior phase evidence: **Phase 16 verification** — [16-UAT.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-UAT.md) closes 51/51 deliverables automatically (zero human checkpoints, `verify-uat-closure.py` 21 controls); full suite 1234/1234 at `be4cee8`; goal verification re-run at the final head `passed` 5/5 (the prior report was stale only because `boundary_sha` was appended to 16-07-SUMMARY.md, LESSONS GB-GSD-027); [16-SECURITY.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-SECURITY.md) `threats_open: 0` (32 threats; T-16-22/T-16-25 owner-accepted under D-112 as AR-16-01/02, gate code added to RM-030).
 
-Completed stage: **Phase 17 execution, waves 1–5 of 11 locally verified**. Plans 17-01..05 provide the codec/API, identity, validation, observers, refusal/purity, operational horizon, and complete snapshot-fork census. Full suite at `908d398`: 1361/1361 pass. Snapshot forks cover 153 corpus cases, 198 serialized fields and 14 model-applicable categories with omission controls. Unpublished raw-report history was sanitized in an isolated clone with identical final tree and unchanged owner edits; all evidence references use sanitized revisions. Hosted checks at `bac4694` exposed executable/sanitizer portability issues and horizon timeouts; integration fixes are active, and no remote-green or merge claim is made. Next stage: **Phase 17 — Native Save State Core, wave 6 / plan 17-06**. Resume command: `/gsd-execute-phase 17`. Six plans and phase qualification remain. The next feature phase is **18 — Player Save Slots and Host Contract**, after Phase 17 execution/verification and owner choice.
+Completed stage: **Phase 17 execution, plans 17-01..06 implemented with targeted evidence**. Last settled full suite at `f192100`: 1473/1473 pass. Post-06 suite at `b8b8bf7`: 1474/1477 pass; Git-free configure, phase references and planning labels are fixed in `dc897c5`, with affected tests and both immutable pin bases passing. Pins cover DMG/CGB compatibility/native modes; semantic fuzz has exact instance/RAM refusal controls, deep witnesses and closure; native CI now binds event bases and receipts. Settled post-fix full suite and current-head hosted qualification remain pending. Hosted fork-test Windows path and unsafe-poison failures at `f192100` are under independent integration repair; no crash counts as a semantic kill. Next stage: **Phase 17 — Native Save State Core, wave 7 / plan 17-07**. Resume command: `/gsd-execute-phase 17`. Five plans and phase qualification remain. Next feature phase: **18 — Player Save Slots and Host Contract**, after Phase 17 execution/verification and owner choice.
 Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at the Phase 17 boundary.
 
 Runtime configuration (2026-10-26): owner switched future OpenGSD work to Codex, retaining the `adaptive` profile. Heavy/opus uses `gpt-6.1-sol` at `high` effort; standard/sonnet and light/haiku use `gpt-6-luna` at `xhigh` effort. Project `.planning/config.json` is authoritative; resolve each role's model and effort before dispatch. This configuration change does not start Phase 17.
@@ -83,11 +83,11 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-27T01:40:17.629Z
-**Stopped at:** Phase 17 waves 1-5 locally verified; next plan 17-06; hosted integration fixes active
+**Last session:** 2026-10-27T03:12:32.966Z
+**Stopped at:** Phase 17 plans 1-6 implemented and targeted fixes verified; next plan 17-07; settled suite and hosted qualification pending
 **Resume file:** .planning/phases/GB-17-native-save-state-core/continue.md
 
-Completed stage: **Phase 17 execution, waves 1–5 locally verified**. Next stage: **Phase 17 — Native Save State Core, wave 6 / plan 17-06**, `/gsd-execute-phase 17`. The next feature phase remains **18 — Player Save Slots and Host Contract**, after Phase 17 execution and verification and an owner-selected handoff. Both automatic advance flags stay false.
+Completed stage: **Phase 17 execution, plans 1–6 implemented with targeted evidence**. Next stage: **Phase 17 — Native Save State Core, wave 7 / plan 17-07**, `/gsd-execute-phase 17`. The next feature phase remains **18 — Player Save Slots and Host Contract**, after Phase 17 execution and verification and an owner-selected handoff. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
