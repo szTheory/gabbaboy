@@ -60,6 +60,48 @@ def load_spec(rev: str, repo: Path) -> tuple[dict, bytes]:
     return spec, raw
 
 
+def fork_mutant_source(source: str) -> str:
+    start = source.find("static void state_apply(gbb_instance *instance, const uint8_t *body, size_t body_size) {")
+    end = source.find("/* MODEL: BOTH GATE-00 basis=\"state body offsets follow the instance's declared field layout\" */", start)
+    if start < 0 or end < 0:
+        raise ForkError("cannot find the immutable state_apply source-copy boundaries")
+    function = source[start:end]
+    assignment_start = function.find("            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {")
+    offset_anchor = "            offset += field->wire_width;"
+    assignment_end = function.find(offset_anchor, assignment_start)
+    if assignment_start < 0 or assignment_end < 0:
+        raise ForkError("cannot find the immutable field-assignment mutation seam")
+    assignment = function[assignment_start:assignment_end]
+    guarded = (
+        "#ifdef GBB_STATE_FORK_MUTANT\n"
+        "            extern const char *state_fork_mutant_field;\n"
+        "            const int omit_assignment = state_fork_mutant_field != NULL &&\n"
+        "                strcmp(field->path, state_fork_mutant_field) == 0;\n"
+        "#else\n"
+        "            const int omit_assignment = 0;\n"
+        "#endif\n"
+        "            if (!omit_assignment) {\n" + assignment + "            }\n"
+    )
+    function = function[:assignment_start] + guarded + function[assignment_end:]
+    return source[:start] + function + source[end:]
+
+
+def materialize_mutant_core(args: argparse.Namespace) -> None:
+    if not args.rev or not args.output:
+        raise ForkError("--materialize-mutant-core needs --rev and --output")
+    if args.rev == "unknown":
+        source = (args.repo / "src/core/gabbaboy.c").read_text(encoding="utf-8")
+        qualified = False
+    else:
+        rev = checked_rev(args.rev, args.repo)
+        source = git_blob(rev, "src/core/gabbaboy.c", args.repo).decode("utf-8")
+        qualified = True
+    mutated = fork_mutant_source(source)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(mutated, encoding="utf-8")
+    print(f"state-fork mutant core materialized qualified={str(qualified).lower()} source_sha256={digest(source.encode())} mutant_sha256={digest(mutated.encode())}")
+
+
 def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list[dict]:
     cases: list[dict] = []
     ids: set[str] = set()
@@ -669,6 +711,200 @@ def check_report(args: argparse.Namespace) -> None:
         self_test(report, spec, source, rev)
 
 
+MUTANT_OBSERVATIONS = {
+    "run-result", "pcm", "frame-and-metadata", "battery-projection-or-generation-delta",
+    "rumble-line-or-counter-delta", "battery-observer-counter", "rumble-observer-counter",
+    "final-canonical-state-bytes", "post-load-canonical-state-bytes-or-save-status",
+}
+
+
+def validate_mutant_manifest(report: dict, spec: dict) -> list[dict]:
+    witnessed = set(report.get("field_witnesses", []))
+    manifest = spec.get("field_mutants")
+    if not isinstance(manifest, list) or not manifest:
+        raise ForkError("field mutation manifest is missing")
+    by_path: dict[str, dict] = {}
+    for item in manifest:
+        if not isinstance(item, dict):
+            raise ForkError("field mutation manifest contains a malformed entry")
+        path, case_id = item.get("field"), item.get("case")
+        observations = item.get("expected_observations")
+        if (not isinstance(path, str) or not isinstance(case_id, str) or
+            not isinstance(observations, list) or not observations or
+            not set(observations).issubset(MUTANT_OBSERVATIONS)):
+            raise ForkError(f"field mutation manifest entry is incomplete: {path}")
+        if path in by_path:
+            raise ForkError(f"field mutation manifest duplicates field: {path}")
+        by_path[path] = item
+    missing = witnessed - set(by_path)
+    extra = set(by_path) - witnessed
+    if missing or extra:
+        raise ForkError(f"field mutation manifest coverage differs from non-default field witnesses: missing={sorted(missing)[:8]} extra={sorted(extra)[:8]}")
+    report_cases = {case.get("id"): case for case in report.get("cases", []) + report.get("generated_field_cases", [])}
+    for path, item in by_path.items():
+        case_id = item["case"]
+        case = report_cases.get(case_id)
+        if case is None:
+            raise ForkError(f"mutant fixture is unexercising or unknown for {path}: {case_id}")
+        rows = [row for row in case.get("field_witnesses", []) if row.get("id") == path]
+        if not any(row.get("discriminator") == "nondefault" and
+                   int(row.get("value", "0"), 16) != int(row.get("default", "0"), 16)
+                   for row in rows):
+            raise ForkError(f"mutant fixture does not witness a non-default {path}: {case_id}")
+    return manifest
+
+
+def mutant_controls(args: argparse.Namespace) -> None:
+    rev = checked_rev(args.rev, args.repo)
+    spec, _ = load_spec(rev, args.repo)
+    source = git_blob(rev, "src/core/gabbaboy.c", args.repo).decode("utf-8")
+    report_path = args.check or (args.build_dir / "state-fork-matrix.json")
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ForkError(f"cannot read fork report {report_path}: {exc}") from exc
+    validate_report(report, spec, source, rev)
+    validate_mutant_manifest(report, spec)
+    missing = json.loads(json.dumps(spec))
+    missing["field_mutants"].pop()
+    try:
+        validate_mutant_manifest(report, missing)
+    except ForkError as exc:
+        if "field mutation manifest coverage differs" not in str(exc):
+            raise ForkError(f"missing-record control failed for wrong reason: {exc}") from exc
+    else:
+        raise ForkError("mutation checker accepted a missing field record")
+    unexercising = json.loads(json.dumps(spec))
+    unexercising["field_mutants"][0]["case"] = "generated:unexercising-control:dmg"
+    try:
+        validate_mutant_manifest(report, unexercising)
+    except ForkError as exc:
+        if "mutant fixture is unexercising or unknown" not in str(exc):
+            raise ForkError(f"unexercising-fixture control failed for wrong reason: {exc}") from exc
+    else:
+        raise ForkError("mutation checker accepted an unexercising fixture")
+    print("state-fork mutant controls pass missing-record=refused unexercising-fixture=refused")
+
+
+def mutant_command(case: dict, test_exe: Path, field: str | None = None) -> list[str]:
+    if "fixture_id" in case:
+        command = [str(test_exe), "generated_fields", case["fixture_id"], case["profile"],
+                   "--budget", str(case["prefix_budget"])]
+    else:
+        command = [str(test_exe), "case", case["id"], case["rom"], case["profile"]]
+    if field is not None:
+        command.extend(["--mutant", field])
+    return command
+
+
+def run_mutant_shard(args: argparse.Namespace) -> None:
+    rev = checked_rev(args.rev, args.repo)
+    spec, spec_raw = load_spec(rev, args.repo)
+    source = git_blob(rev, "src/core/gabbaboy.c", args.repo).decode("utf-8")
+    matrix_path = args.build_dir / "state-fork-matrix.json"
+    try:
+        matrix = json.loads(matrix_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ForkError(f"cannot read fork matrix {matrix_path}: {exc}") from exc
+    validate_report(matrix, spec, source, rev)
+    manifest = validate_mutant_manifest(matrix, spec)
+    if args.shards < 1 or args.shard < 0 or args.shard >= args.shards:
+        raise ForkError("invalid mutant shard coordinates")
+    report_cases = {case.get("id"): case for case in matrix.get("cases", []) + matrix.get("generated_field_cases", [])}
+    rows = []
+    for index, item in enumerate(manifest):
+        if index % args.shards != args.shard:
+            continue
+        field, case_id = item["field"], item["case"]
+        case = report_cases[case_id]
+        normal_command = mutant_command(case, args.control_exe)
+        mutant_command_line = mutant_command(case, args.test_exe, field)
+        try:
+            control = subprocess.run(normal_command, cwd=args.repo, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, check=False, timeout=20)
+            mutant = subprocess.run(mutant_command_line, cwd=args.repo, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, text=True, check=False, timeout=20)
+        except subprocess.TimeoutExpired as exc:
+            raise ForkError(f"mutant/control timeout is not a semantic kill field={field} case={case_id}: {exc}") from exc
+        if control.returncode != 0 or f"state-fork pass case={case_id}" not in control.stdout:
+            raise ForkError(f"unmutated control did not pass field={field} case={case_id} exit={control.returncode}\n{control.stdout[-4000:]}")
+        if mutant.returncode != 1 or "state-fork mismatch" not in mutant.stdout:
+            raise ForkError(f"field omission was not a semantic discrepancy field={field} case={case_id} exit={mutant.returncode}\n{mutant.stdout[-4000:]}")
+        if f"state-fork mutation-applied field={field} case={case_id}" not in mutant.stdout:
+            raise ForkError(f"field omission did not prove the named receiver field retained poison: {field} {case_id}")
+        if ("state-fork setup failure" in mutant.stdout or "state-fork load failure" in mutant.stdout or
+            "state-fork observer failure" in mutant.stdout):
+            raise ForkError(f"field omission failed during setup/load, not continuation comparison: {field} {case_id}\n{mutant.stdout[-4000:]}")
+        observed = sorted({match.group(1) for match in re.finditer(
+            rf"state-fork discrepancy case={re.escape(case_id)} observation=([a-z0-9-]+)", mutant.stdout)})
+        expected = sorted(set(item["expected_observations"]))
+        if not observed or not set(expected).issubset(observed):
+            raise ForkError(f"field omission missed its declared continuation discrepancy field={field} case={case_id}: expected={expected} observed={observed}\n{mutant.stdout[-4000:]}")
+        rows.append({"field": field, "case": case_id, "expected_observations": expected,
+            "observed_observations": observed, "control_exit": control.returncode,
+            "mutant_exit": mutant.returncode,
+            "control_output_sha256": digest(control.stdout.encode()),
+            "mutant_output_sha256": digest(mutant.stdout.encode())})
+    if not args.report:
+        raise ForkError("--mutants needs --report for the shard evidence")
+    args.report.parent.mkdir(parents=True, exist_ok=True)
+    result = {"schema": "gabbaboy-state-fork-mutants-shard-v1", "rev": rev,
+        "spec_sha256": digest(spec_raw), "shard": args.shard, "shards": args.shards,
+        "mutant_core_sha256": digest(args.mutant_core.read_bytes()), "mutants": rows}
+    args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"state-fork mutant shard pass rev={rev} shard={args.shard}/{args.shards} fields={len(rows)}")
+
+
+def mutant_summary(args: argparse.Namespace) -> None:
+    rev = checked_rev(args.rev, args.repo)
+    spec, spec_raw = load_spec(rev, args.repo)
+    source = git_blob(rev, "src/core/gabbaboy.c", args.repo).decode("utf-8")
+    try:
+        matrix = json.loads((args.report_dir / "state-fork-matrix.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ForkError(f"cannot read fork matrix for mutant summary: {exc}") from exc
+    validate_report(matrix, spec, source, rev)
+    manifest = validate_mutant_manifest(matrix, spec)
+    by_manifest = {row["field"]: row for row in manifest}
+    expected_mutant_core = digest(fork_mutant_source(source).encode("utf-8"))
+    combined = []
+    for shard in range(args.shards):
+        path = args.report_dir / f"state-fork-mutants-shard-{shard}.json"
+        try:
+            result = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ForkError(f"cannot read mutant shard {shard}: {exc}") from exc
+        if (result.get("schema") != "gabbaboy-state-fork-mutants-shard-v1" or
+            result.get("rev") != rev or result.get("shard") != shard or
+            result.get("shards") != args.shards or result.get("spec_sha256") != digest(spec_raw) or
+            result.get("mutant_core_sha256") != expected_mutant_core):
+            raise ForkError(f"mutant shard metadata mismatch: {shard}")
+        combined.extend(result.get("mutants", []))
+    paths = [row.get("field") for row in combined]
+    expected = [row.get("field") for row in manifest]
+    if len(paths) != len(set(paths)) or set(paths) != set(expected):
+        raise ForkError(f"mutant coverage differs from immutable manifest: missing={sorted(set(expected)-set(paths))[:8]} extra={sorted(set(paths)-set(expected))[:8]}")
+    for row in combined:
+        field = row.get("field")
+        declared = by_manifest[field]
+        observations = row.get("observed_observations")
+        expected_observations = sorted(set(declared["expected_observations"]))
+        if (row.get("case") != declared.get("case") or
+            row.get("expected_observations") != expected_observations or
+            not isinstance(observations, list) or not set(observations).issubset(MUTANT_OBSERVATIONS) or
+            not set(expected_observations).issubset(observations) or
+            row.get("control_exit") != 0 or row.get("mutant_exit") != 1 or
+            not re.fullmatch(r"[0-9a-f]{64}", str(row.get("control_output_sha256", ""))) or
+            not re.fullmatch(r"[0-9a-f]{64}", str(row.get("mutant_output_sha256", "")))):
+            raise ForkError(f"mutant result differs from its fixture/observation contract: {field}")
+    combined.sort(key=lambda row: row["field"])
+    args.report.parent.mkdir(parents=True, exist_ok=True)
+    result = {"schema": "gabbaboy-state-fork-mutants-v1", "rev": rev,
+        "spec_sha256": digest(spec_raw), "mutant_count": len(combined), "mutants": combined}
+    args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"state-fork mutant summary pass rev={rev} fields={len(combined)}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--rev")
@@ -676,6 +912,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--matrix-shard", action="store_true")
     parser.add_argument("--matrix-summary", action="store_true")
     parser.add_argument("--test-exe", type=Path)
+    parser.add_argument("--control-exe", type=Path)
+    parser.add_argument("--mutant-core", type=Path)
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=16)
     parser.add_argument("--report", type=Path)
@@ -683,17 +921,29 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--check", type=Path)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--mutants", action="store_true")
+    parser.add_argument("--mutant-controls", action="store_true")
+    parser.add_argument("--mutant-summary", action="store_true")
+    parser.add_argument("--materialize-mutant-core", action="store_true")
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--build-dir", type=Path)
     args = parser.parse_args()
     args.repo = args.repo.resolve()
     if args.test_exe:
         args.test_exe = args.test_exe.resolve()
+    if args.control_exe:
+        args.control_exe = args.control_exe.resolve()
+    if args.mutant_core:
+        args.mutant_core = args.mutant_core.resolve()
     if args.report:
         args.report = args.report.resolve()
     if args.report_dir:
         args.report_dir = args.report_dir.resolve()
     if args.check:
         args.check = args.check.resolve()
+    if args.build_dir:
+        args.build_dir = args.build_dir.resolve()
+    if args.output:
+        args.output = args.output.resolve()
     return args
 
 
@@ -708,14 +958,27 @@ def main() -> int:
             if not args.report or not args.report_dir or not args.rev:
                 raise ForkError("--matrix-summary needs --rev, --report and --report-dir")
             matrix_summary(args)
+        elif args.mutant_controls:
+            if not args.rev or (args.check is None and args.build_dir is None):
+                raise ForkError("--mutant-controls needs --rev and --check REPORT or --build-dir")
+            mutant_controls(args)
         elif args.check:
             if not args.rev:
                 raise ForkError("--check needs --rev")
             check_report(args)
+        elif args.materialize_mutant_core:
+            materialize_mutant_core(args)
         elif args.self_test:
             raise ForkError("--self-test must accompany --check REPORT --rev SHA")
         elif args.mutants:
-            raise ForkError("--mutants implementation is not yet available")
+            if not all((args.rev, args.build_dir, args.test_exe,
+                        args.control_exe, args.mutant_core, args.report)):
+                raise ForkError("--mutants needs --rev, --build-dir, --test-exe, --control-exe, --mutant-core and --report")
+            run_mutant_shard(args)
+        elif args.mutant_summary:
+            if not all((args.rev, args.report_dir, args.report)):
+                raise ForkError("--mutant-summary needs --rev, --report-dir and --report")
+            mutant_summary(args)
         else:
             raise ForkError("select --matrix-shard, --matrix-summary, --check, or --mutants")
     except ForkError as exc:

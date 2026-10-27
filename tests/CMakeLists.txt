@@ -5061,6 +5061,49 @@ add_test(NAME state_fork_mutant_controls
     "${GBB_STATE_FORK_REPORT}")
 set_tests_properties(state_fork_mutant_controls PROPERTIES
   TIMEOUT 30 FIXTURES_REQUIRED gbb_state_fork_matrix_complete)
+set(GBB_STATE_FORK_MUTANT_CORE "${PROJECT_BINARY_DIR}/state-fork-mutant-core.c")
+add_custom_command(OUTPUT "${GBB_STATE_FORK_MUTANT_CORE}"
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --materialize-mutant-core --rev "${GBB_STATE_SOURCE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}" --output "${GBB_STATE_FORK_MUTANT_CORE}"
+  DEPENDS "${GBB_STATE_FORK_CHECKER}" "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c"
+  VERBATIM)
+add_custom_target(state_fork_mutant_source DEPENDS "${GBB_STATE_FORK_MUTANT_CORE}")
+add_executable(test_state_fork_mutant test_state_fork.c)
+add_dependencies(test_state_fork_mutant state_fork_mutant_source)
+target_include_directories(test_state_fork_mutant PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/core"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_fork_mutant PRIVATE c_std_17)
+target_compile_definitions(test_state_fork_mutant PRIVATE GBB_STATE_FORK_MUTANT=1
+  "GBB_CORE_SOURCE_PATH=\"${GBB_STATE_FORK_MUTANT_CORE}\"")
+set_target_properties(test_state_fork_mutant PROPERTIES C_EXTENSIONS OFF)
+set(GBB_STATE_FORK_MUTANT_SHARDS 16)
+math(EXPR GBB_STATE_FORK_MUTANT_SHARD_LAST "${GBB_STATE_FORK_MUTANT_SHARDS} - 1")
+foreach(gbb_state_fork_mutant_shard RANGE 0 ${GBB_STATE_FORK_MUTANT_SHARD_LAST})
+  add_test(NAME "state_fork_mutants_shard_${gbb_state_fork_mutant_shard}"
+    COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+      --mutants --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+      --build-dir "${PROJECT_BINARY_DIR}"
+      --test-exe "$<TARGET_FILE:test_state_fork_mutant>"
+      --control-exe "$<TARGET_FILE:test_state_fork>"
+      --mutant-core "${GBB_STATE_FORK_MUTANT_CORE}"
+      --shard ${gbb_state_fork_mutant_shard} --shards ${GBB_STATE_FORK_MUTANT_SHARDS}
+      --report "${PROJECT_BINARY_DIR}/state-fork-mutants-shard-${gbb_state_fork_mutant_shard}.json")
+  set_tests_properties("state_fork_mutants_shard_${gbb_state_fork_mutant_shard}"
+    PROPERTIES TIMEOUT 60 FIXTURES_REQUIRED gbb_state_fork_matrix_complete
+    FIXTURES_SETUP gbb_state_fork_mutant_shards)
+endforeach()
+add_test(NAME state_fork_mutants
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --mutant-summary --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --shards ${GBB_STATE_FORK_MUTANT_SHARDS} --report-dir "${PROJECT_BINARY_DIR}"
+    --report "${PROJECT_BINARY_DIR}/state-fork-mutants.json")
+set_tests_properties(state_fork_mutants PROPERTIES TIMEOUT 30
+  FIXTURES_REQUIRED gbb_state_fork_mutant_shards)
+set_tests_properties(state_fork_mutant_controls PROPERTIES FIXTURES_REQUIRED
+  "gbb_state_fork_matrix_complete;gbb_state_fork_mutant_shards")
 
 # Every run mode shares the operational time-horizon scheduler. These white-box
 # cases seed genuine codec-valid boundary states and exercise the independent

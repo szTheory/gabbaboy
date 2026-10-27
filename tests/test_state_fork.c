@@ -276,6 +276,18 @@ static void build_generated_dmg_pipeline_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]
                          0x00u, 0x00u, program, length);
 }
 
+static void build_generated_div_read_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x21u, 0x00u, 0xC0u, /* HL = work RAM destination. */
+        0x00u,               /* Save immediately before the DIV read. */
+        0xF0u, 0x04u,        /* LDH A,(DIV). */
+        0x22u,               /* Store the observed value and advance HL. */
+        0x18u, 0xF7u          /* Repeat, preserving the first observation at C000. */
+    };
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
 static int generated_rom(const char *id, uint8_t **out, size_t *size) {
     *out = NULL;
     *size = 0u;
@@ -298,6 +310,7 @@ static int generated_rom(const char *id, uint8_t **out, size_t *size) {
              strcmp(id, "native_pipeline_stall") == 0 ||
              strcmp(id, "native_pipeline_fetch") == 0 ||
              strcmp(id, "dmg_ppu_pipeline") == 0) *size = GENERATED_BUS_ROM_SIZE;
+    else if (strcmp(id, "div_read") == 0) *size = GENERATED_BUS_ROM_SIZE;
     else return 0;
     uint8_t *rom = (uint8_t *)malloc(*size);
     if (rom == NULL) return 0;
@@ -316,6 +329,7 @@ static int generated_rom(const char *id, uint8_t **out, size_t *size) {
     else if (strcmp(id, "accepted_flags") == 0) build_generated_loop_rom(rom, 0xC0u);
     else if (strcmp(id, "joypad_applied") == 0) build_generated_loop_rom(rom, 0x80u);
     else if (strcmp(id, "dmg_ppu_pipeline") == 0) build_generated_dmg_pipeline_rom(rom);
+    else if (strcmp(id, "div_read") == 0) build_generated_div_read_rom(rom);
     else if (strcmp(id, "irq_dma_pending") == 0) build_generated_irq_dma_pending_rom(rom);
     else build_generated_native_pipeline_rom(rom);
     *out = rom;
@@ -358,7 +372,14 @@ static int load_seeded_public_state(gbb_instance *instance,
     crc = state_crc32_update(crc, bytes + FORK_STATE_HEADER_BYTES,
         state_size - FORK_STATE_HEADER_BYTES) ^ UINT32_MAX;
     state_put_u32(bytes + 60u, crc);
+#ifdef GBB_STATE_FORK_MUTANT
+    const char *selected_mutant = state_fork_mutant_field;
+    state_fork_mutant_field = NULL;
+#endif
     const gbb_error loaded = gbb_load_state(instance, bytes, state_size);
+#ifdef GBB_STATE_FORK_MUTANT
+    state_fork_mutant_field = selected_mutant;
+#endif
     free(bytes);
     return loaded == GBB_OK;
 }
@@ -382,6 +403,7 @@ static int seed_generated_boundary(const char *case_id, gbb_instance *source) {
     };
     static const fork_state_seed accepted_dma[] = {{"dma_phase", 1u}};
     static const fork_state_seed accepted_hdma_pending[] = {{"hdma.pending_hblank", 1u}};
+    static const fork_state_seed div_read[] = {{"div", 0xACu}, {"divider_counter", 0xAC00u}};
     const fork_state_seed *seeds = NULL;
     size_t seed_count = 0u;
     if (GENERATED_IS("accepted_flags")) {
@@ -396,6 +418,9 @@ static int seed_generated_boundary(const char *case_id, gbb_instance *source) {
     } else if (GENERATED_IS("native_pipeline_pending")) {
         seeds = accepted_hdma_pending;
         seed_count = sizeof(accepted_hdma_pending) / sizeof(accepted_hdma_pending[0]);
+    } else if (GENERATED_IS("div_read")) {
+        seeds = div_read;
+        seed_count = sizeof(div_read) / sizeof(div_read[0]);
     }
     if (seed_count == 0u) return 1;
     if (!load_seeded_public_state(source, seeds, seed_count)) {
@@ -413,7 +438,22 @@ static int seed_generated_boundary(const char *case_id, gbb_instance *source) {
 static int verify_generated_boundary_predicates(const char *case_id,
                                                 const gbb_instance *source,
                                                 gbb_run_result prefix) {
-    if (strncmp(case_id, "generated:key1_switch:",
+    if (strncmp(case_id, "generated:div_read:",
+                sizeof("generated:div_read:") - 1u) == 0) {
+        const uint16_t hl_value = (uint16_t)(((uint16_t)source->h << 8) | source->l);
+        const int passed = source->pc == 0x0204u && hl_value == 0xC000u &&
+            prefix.reason == GBB_STOP_BUDGET && prefix.consumed_half_dots == 64u;
+        if (!passed) {
+            fprintf(stderr, "state-fork boundary predicate failed: %s pc=%04x hl=%04x reason=%d consumed=%llu\n",
+                case_id, (unsigned)source->pc, (unsigned)hl_value, (int)prefix.reason,
+                (unsigned long long)prefix.consumed_half_dots);
+            return 0;
+        }
+        printf("boundary-predicate case=%s id=pc value=%u context=next-instruction-reads-DIV-and-stores-to-work-RAM\n",
+            case_id, (unsigned)source->pc);
+        printf("boundary-predicate case=%s id=hl value=%u context=work-RAM-observation-destination\n",
+            case_id, (unsigned)hl_value);
+    } else if (strncmp(case_id, "generated:key1_switch:",
                 sizeof("generated:key1_switch:") - 1u) == 0) {
         const int passed = source->double_speed == 1u &&
             source->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
@@ -822,6 +862,37 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         gbb_destroy(baseline);
         return 1;
     }
+#ifdef GBB_STATE_FORK_MUTANT
+    if (state_fork_mutant_field != NULL) {
+        const state_field_descriptor *mutated =
+            state_field_by_path(state_fork_mutant_field);
+        int omission_observed = 0;
+        if (mutated != NULL) {
+            const size_t count = state_field_count_for_instance(source, mutated);
+            for (size_t i = 0u; i < count; ++i) {
+                uint64_t expected = 0u, actual = 0u;
+                if (!state_host_value(source, mutated, i, &expected) ||
+                    !state_host_value(target, mutated, i, &actual)) break;
+                if (expected != actual) omission_observed = 1;
+            }
+        }
+        if (!omission_observed) {
+            fprintf(stderr, "state-fork setup failure: field omission did not preserve poison: %s\n",
+                state_fork_mutant_field);
+            free(old_battery); free(target_final); free(source_final); free(saved);
+            gbb_destroy(target); gbb_destroy(source); gbb_destroy(baseline);
+            return 2;
+        }
+        printf("state-fork mutation-applied field=%s case=%s\n", state_fork_mutant_field, case_id);
+    }
+#endif
+    const gbb_error post_load_save_status =
+        gbb_save_state(target, target_final, state_size);
+    const int post_load_canonical_equal = post_load_save_status == GBB_OK &&
+        memcmp(saved, target_final, state_size) == 0;
+    if (!post_load_canonical_equal)
+        fprintf(stderr, "state-fork discrepancy case=%s observation=post-load-canonical-state-bytes-or-save-status\n",
+            case_id);
 
     uint8_t *new_battery = NULL;
     size_t new_battery_size = 0u;
@@ -844,6 +915,10 @@ static int state_fork_case(const char *case_id, const char *rom_path,
     const uint64_t expected_battery_generation = 11u + (battery_changed ? 1u : 0u);
     const uint64_t expected_rumble_changes = 17u +
         (old_rumble_raw != source->cart.rumble_on ? 1u : 0u);
+    if (target->battery_generation != expected_battery_generation)
+        fprintf(stderr, "state-fork discrepancy case=%s observation=battery-observer-counter\n", case_id);
+    if (target->cart.rumble_changes != expected_rumble_changes)
+        fprintf(stderr, "state-fork discrepancy case=%s observation=rumble-observer-counter\n", case_id);
     if (target->battery_generation != expected_battery_generation ||
         target->cart.rumble_changes != expected_rumble_changes) {
         fprintf(stderr, "state-fork mismatch: observer-delta case=%s battery=%llu expected=%llu rumble=%llu expected=%llu\n",
@@ -876,6 +951,9 @@ static int state_fork_case(const char *case_id, const char *rom_path,
             memcmp(source_audio, target_audio, source_count * sizeof(source_audio[0])) == 0;
         const int frame_equal = copy_frame_equal(source, target, profile);
         equal = run_equal && pcm_equal && frame_equal;
+        if (!run_equal) fprintf(stderr, "state-fork discrepancy case=%s observation=run-result\n", case_id);
+        if (!pcm_equal) fprintf(stderr, "state-fork discrepancy case=%s observation=pcm\n", case_id);
+        if (!frame_equal) fprintf(stderr, "state-fork discrepancy case=%s observation=frame-and-metadata\n", case_id);
         if (!equal) fprintf(stderr,
             "state-fork mismatch: immediate case=%s slice=%zu run=%d pcm=%d frame=%d counts=%zu/%zu consumed=%llu/%llu reason=%d/%d\n",
             case_id, slice, run_equal, pcm_equal, frame_equal, source_count,
@@ -922,6 +1000,24 @@ static int state_fork_case(const char *case_id, const char *rom_path,
             (unsigned long long)(target_battery_status == GBB_OK ? observer_delta(target_battery_base, target_battery_generation) : 0u),
             (unsigned long long)(source_rumble_status == GBB_OK ? observer_delta(source_rumble_base, source_rumble_changes) : 0u),
             (unsigned long long)(target_rumble_status == GBB_OK ? observer_delta(target_rumble_base, target_rumble_changes) : 0u));
+        if (!projection_equal) {
+            const int battery_projection_equal = source_battery_status == target_battery_status &&
+                source_battery_size == target_battery_size &&
+                (source_battery_size == 0u ||
+                 memcmp(source_battery, target_battery, source_battery_size) == 0);
+            const int rumble_projection_equal = source_rumble_status == target_rumble_status &&
+                (source_rumble_status != GBB_OK || source_rumble == target_rumble);
+            const int battery_delta_equal = source_battery_status != GBB_OK ||
+                observer_delta(source_battery_base, source_battery_generation) ==
+                observer_delta(target_battery_base, target_battery_generation);
+            const int rumble_delta_equal = source_rumble_status != GBB_OK ||
+                observer_delta(source_rumble_base, source_rumble_changes) ==
+                observer_delta(target_rumble_base, target_rumble_changes);
+            if (!battery_projection_equal || !battery_delta_equal)
+                fprintf(stderr, "state-fork discrepancy case=%s observation=battery-projection-or-generation-delta\n", case_id);
+            if (!rumble_projection_equal || !rumble_delta_equal)
+                fprintf(stderr, "state-fork discrepancy case=%s observation=rumble-line-or-counter-delta\n", case_id);
+        }
         equal = equal && projection_equal;
         free(target_battery); free(source_battery);
     }
@@ -945,9 +1041,11 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         }
     }
     const int final_saved = final_bytes_equal;
+    if (!final_bytes_equal)
+        fprintf(stderr, "state-fork discrepancy case=%s observation=final-canonical-state-bytes\n", case_id);
     if (!final_saved) fprintf(stderr, "state-fork mismatch: final canonical bytes case=%s source_status=%d target_status=%d\n",
         case_id, (int)final_source_save, (int)final_target_save);
-    equal = equal && final_saved;
+    equal = equal && post_load_canonical_equal && final_saved;
     if (!equal) fprintf(stderr, "state-fork mismatch: canonical-state-bytes/output case=%s\n", case_id);
     else printf("state-fork pass case=%s profile=%u mode=%u state_bytes=%zu\n",
         case_id, (unsigned)profile, (unsigned)source->exec_mode, state_size);
