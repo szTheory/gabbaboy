@@ -5011,53 +5011,69 @@ add_test(NAME state_portable_pins
 add_test(NAME state_pin_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-pins.py"
     --self-test)
-set_tests_properties(state_portable_pins state_pin_controls PROPERTIES TIMEOUT 60)
+add_test(NAME state_pin_planning
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-pins.py"
+    --planning-check --rev "${GBB_STATE_SOURCE_REV}" --base "${GBB_STATE_PIN_BASE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(state_portable_pins state_pin_controls state_pin_planning PROPERTIES TIMEOUT 60)
+set_tests_properties(state_pin_planning PROPERTIES LABELS "planning" FIXTURES_SETUP gbb_state_pin_evidence)
+set_tests_properties(state_portable_pins PROPERTIES FIXTURES_REQUIRED gbb_state_pin_evidence)
 
 # The state-fuzz refusal oracle must detect a mutation that changes only the excluded local battery
 # observer. Build the mutant from the configured immutable source revision and retain an unrelated
 # accepted-load control in the same mutant executable.
-set(GBB_STATE_FUZZ_MUTANT_SOURCE "${PROJECT_BINARY_DIR}/state_fuzz_observer_mutant.c")
-execute_process(
-  COMMAND git show "${GBB_STATE_SOURCE_REV}:src/core/gabbaboy.c"
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-  OUTPUT_FILE "${GBB_STATE_FUZZ_MUTANT_SOURCE}"
-  RESULT_VARIABLE GBB_STATE_FUZZ_MUTANT_SOURCE_RESULT
-  ERROR_VARIABLE GBB_STATE_FUZZ_MUTANT_SOURCE_ERROR)
-if(NOT GBB_STATE_FUZZ_MUTANT_SOURCE_RESULT EQUAL 0)
-  message(FATAL_ERROR "Could not materialize immutable state-fuzz mutation source: ${GBB_STATE_FUZZ_MUTANT_SOURCE_ERROR}")
+if(NOT GBB_STATE_SOURCE_REV STREQUAL "unknown")
+  set(GBB_STATE_FUZZ_MUTANT_SOURCE "${PROJECT_BINARY_DIR}/state_fuzz_observer_mutant.c")
+  execute_process(
+    COMMAND git show "${GBB_STATE_SOURCE_REV}:src/core/gabbaboy.c"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    OUTPUT_FILE "${GBB_STATE_FUZZ_MUTANT_SOURCE}"
+    RESULT_VARIABLE GBB_STATE_FUZZ_MUTANT_SOURCE_RESULT
+    ERROR_VARIABLE GBB_STATE_FUZZ_MUTANT_SOURCE_ERROR)
+  if(NOT GBB_STATE_FUZZ_MUTANT_SOURCE_RESULT EQUAL 0)
+    message(FATAL_ERROR "Could not materialize immutable state-fuzz mutation source: ${GBB_STATE_FUZZ_MUTANT_SOURCE_ERROR}")
+  endif()
+  file(READ "${GBB_STATE_FUZZ_MUTANT_SOURCE}" gbb_state_fuzz_mutant_core_text)
+  set(GBB_STATE_FUZZ_MUTANT_ANCHOR
+    "if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;")
+  set(GBB_STATE_FUZZ_MUTANT_REPLACEMENT
+    "if (!state_validate(instance, body, body_size)) {\n        ++instance->cart.rumble_changes;\n        return GBB_STATE_INVALID_CONTENT;\n    }")
+  string(FIND "${gbb_state_fuzz_mutant_core_text}" "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" first)
+  string(FIND "${gbb_state_fuzz_mutant_core_text}" "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" last REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL last)
+    message(FATAL_ERROR "State-fuzz observer mutant anchor must occur exactly once")
+  endif()
+  string(REPLACE "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" "${GBB_STATE_FUZZ_MUTANT_REPLACEMENT}"
+    gbb_state_fuzz_mutant_core_text "${gbb_state_fuzz_mutant_core_text}")
+  file(WRITE "${GBB_STATE_FUZZ_MUTANT_SOURCE}" "${gbb_state_fuzz_mutant_core_text}")
+  add_library(gabbaboy_state_fuzz_observer_mutant STATIC "${GBB_STATE_FUZZ_MUTANT_SOURCE}")
+  target_include_directories(gabbaboy_state_fuzz_observer_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(gabbaboy_state_fuzz_observer_mutant PUBLIC c_std_17)
+  target_compile_definitions(gabbaboy_state_fuzz_observer_mutant PRIVATE
+    GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
+    GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+  set_target_properties(gabbaboy_state_fuzz_observer_mutant PROPERTIES C_EXTENSIONS OFF)
+  add_executable(test_state_fuzz_observer_mutant fuzz_core.c)
+  target_link_libraries(test_state_fuzz_observer_mutant PRIVATE gabbaboy_state_fuzz_observer_mutant)
+  target_compile_features(test_state_fuzz_observer_mutant PRIVATE c_std_17)
+  target_compile_definitions(test_state_fuzz_observer_mutant PRIVATE
+    GBB_FUZZ_STANDALONE_TEST=1 GBB_STATE_FUZZ_STANDALONE_MAIN=1)
+  set_target_properties(test_state_fuzz_observer_mutant PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME state_fuzz_controls
+    COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-fuzz.py"
+      --state-self-test --rev "${GBB_STATE_SOURCE_REV}"
+      --census-exe "$<TARGET_FILE:test_state_codec>"
+      --probe "$<TARGET_FILE:test_state_fuzz>"
+      --mutant-probe "$<TARGET_FILE:test_state_fuzz_observer_mutant>")
+else()
+  # Git-free source archives stay buildable, while any request for qualified fuzz evidence rejects unknown.
+  add_test(NAME state_fuzz_controls
+    COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-fuzz.py"
+      --state-self-test --rev "${GBB_STATE_SOURCE_REV}"
+      --census-exe "${PROJECT_SOURCE_DIR}/tests/fuzz_core.c"
+      --probe "${PROJECT_SOURCE_DIR}/tests/fuzz_core.c"
+      --mutant-probe "${PROJECT_SOURCE_DIR}/tests/fuzz_core.c")
 endif()
-file(READ "${GBB_STATE_FUZZ_MUTANT_SOURCE}" gbb_state_fuzz_mutant_core_text)
-set(GBB_STATE_FUZZ_MUTANT_ANCHOR
-  "if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;")
-set(GBB_STATE_FUZZ_MUTANT_REPLACEMENT
-  "if (!state_validate(instance, body, body_size)) {\n        ++instance->cart.rumble_changes;\n        return GBB_STATE_INVALID_CONTENT;\n    }")
-string(FIND "${gbb_state_fuzz_mutant_core_text}" "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" first)
-string(FIND "${gbb_state_fuzz_mutant_core_text}" "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" last REVERSE)
-if(first EQUAL -1 OR NOT first EQUAL last)
-  message(FATAL_ERROR "State-fuzz observer mutant anchor must occur exactly once")
-endif()
-string(REPLACE "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" "${GBB_STATE_FUZZ_MUTANT_REPLACEMENT}"
-  gbb_state_fuzz_mutant_core_text "${gbb_state_fuzz_mutant_core_text}")
-file(WRITE "${GBB_STATE_FUZZ_MUTANT_SOURCE}" "${gbb_state_fuzz_mutant_core_text}")
-add_library(gabbaboy_state_fuzz_observer_mutant STATIC "${GBB_STATE_FUZZ_MUTANT_SOURCE}")
-target_include_directories(gabbaboy_state_fuzz_observer_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
-target_compile_features(gabbaboy_state_fuzz_observer_mutant PUBLIC c_std_17)
-target_compile_definitions(gabbaboy_state_fuzz_observer_mutant PRIVATE
-  GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
-  GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
-set_target_properties(gabbaboy_state_fuzz_observer_mutant PROPERTIES C_EXTENSIONS OFF)
-add_executable(test_state_fuzz_observer_mutant fuzz_core.c)
-target_link_libraries(test_state_fuzz_observer_mutant PRIVATE gabbaboy_state_fuzz_observer_mutant)
-target_compile_features(test_state_fuzz_observer_mutant PRIVATE c_std_17)
-target_compile_definitions(test_state_fuzz_observer_mutant PRIVATE
-  GBB_FUZZ_STANDALONE_TEST=1 GBB_STATE_FUZZ_STANDALONE_MAIN=1)
-set_target_properties(test_state_fuzz_observer_mutant PROPERTIES C_EXTENSIONS OFF)
-add_test(NAME state_fuzz_controls
-  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-fuzz.py"
-    --state-self-test --rev "${GBB_STATE_SOURCE_REV}"
-    --census-exe "$<TARGET_FILE:test_state_codec>"
-    --probe "$<TARGET_FILE:test_state_fuzz>"
-    --mutant-probe "$<TARGET_FILE:test_state_fuzz_observer_mutant>")
 set_tests_properties(state_fuzz_controls PROPERTIES TIMEOUT 60)
 
 # White-box state-load tests seed valid ownership with different receiving RTC,

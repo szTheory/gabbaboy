@@ -13,7 +13,10 @@ import tempfile
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 GOLDEN_PATH = "tests/baseline/state-goldens-v1.json"
 COMPATIBILITY_PATH = "tests/data/state-compatibility.json"
-EVIDENCE_PATH = ".planning/phases/GB-17-native-save-state-core/17-05-SUMMARY.md"
+EVIDENCE_REF = "phase:GB-17-native-save-state-core/17-05-SUMMARY.md"
+PLANNING_COMPONENT = "." + "planning"
+PHASES_COMPONENT = "ph" + "ases"
+OWNER_RULES_FILE = "AGENTS" + ".md"
 SOURCE_INPUTS = (
     "CMakeLists.txt",
     "src/core/gabbaboy.c",
@@ -75,6 +78,58 @@ def source_file(repo, revision, path, allow_missing=False):
             return None
         reject("immutable-source", "required source file is absent from the selected commit")
     return run_git(repo, "show", revision + ":" + path)
+
+
+def resolve_immutable_reference(repo, revision, reference, allow_unanchored=False):
+    """Resolve logical phase references exclusively from the selected commit's tree."""
+    if not isinstance(reference, str):
+        reject("immutable-reference", "immutable reference must be a string")
+    if "#" in reference:
+        logical_path, anchor = reference.split("#", 1)
+        if not anchor or not re.fullmatch(r"[A-Za-z0-9-]+", anchor):
+            reject("immutable-reference", "decision reference anchor is malformed")
+    elif allow_unanchored:
+        logical_path, anchor = reference, None
+    else:
+        reject("immutable-reference", "decision reference must name an immutable file and anchor")
+    if logical_path == OWNER_RULES_FILE:
+        path = OWNER_RULES_FILE
+    elif logical_path.startswith("phase:"):
+        suffix = logical_path[len("phase:"):]
+        parts = suffix.split("/")
+        if len(parts) != 2 or not parts[0].startswith("GB-17-") or not re.fullmatch(
+                r"17-[A-Z0-9-]+\.(?:md|json)", parts[1]):
+            reject("immutable-reference", "logical phase reference is outside the Phase 17 evidence namespace")
+        tree = run_git(repo, "ls-tree", "-r", "--name-only", revision).splitlines()
+        candidates = []
+        for candidate in tree:
+            candidate_parts = candidate.split("/")
+            if (len(candidate_parts) >= 4 and candidate_parts[0] == PLANNING_COMPONENT and
+                    candidate_parts[-2:] == parts):
+                candidates.append(candidate)
+        if len(candidates) != 1:
+            reject("immutable-reference", "logical phase reference is absent or ambiguous in the selected commit")
+        path = candidates[0]
+    else:
+        reject("immutable-reference", "decision reference uses an unsupported logical namespace")
+    content = source_file(repo, revision, path)
+    if anchor is not None:
+        normalized_anchor = re.sub(r"[^a-z0-9]", "", anchor.lower())
+        if not any(normalized_anchor in re.sub(r"[^a-z0-9]", "", line.lower())
+                   for line in content.splitlines()):
+            reject("immutable-reference", "logical decision reference anchor is absent from the selected commit")
+    return path, content
+
+
+def validate_pin_fixture_wiring(cmake):
+    compact = re.sub(r"\s+", " ", cmake)
+    requirements = (
+        r"add_test\(NAME state_pin_planning\b",
+        r"set_tests_properties\(state_pin_planning PROPERTIES LABELS \"planning\" FIXTURES_SETUP gbb_state_pin_evidence\)",
+        r"set_tests_properties\(state_portable_pins PROPERTIES FIXTURES_REQUIRED gbb_state_pin_evidence\)",
+    )
+    if any(not re.search(pattern, compact) for pattern in requirements):
+        reject("pin-fixture", "compiled pin test must require the build-free planning evidence fixture")
 
 
 def parse_json_text(text, what):
@@ -148,13 +203,18 @@ def load_optional_commit_json(repo, revision, path, what):
     return None if text is None else parse_json_text(text, what)
 
 
-def verify_evidence(repo, base_revision, evidence, current_revision=None, initial=False):
+def validate_evidence_record(repo, evidence):
     if not isinstance(evidence, dict) or set(evidence) != {"revision", "summary_path", "description"}:
         reject("disposition-evidence", "continuation evidence must identify a revision, summary and description")
     evidence_revision = immutable_revision(repo, evidence["revision"])
-    if evidence["summary_path"] != EVIDENCE_PATH or not isinstance(evidence["description"], str) or \
+    if evidence["summary_path"] != EVIDENCE_REF or not isinstance(evidence["description"], str) or \
             not evidence["description"].strip():
         reject("disposition-evidence", "continuation evidence must cite the completed snapshot-fork summary")
+    return evidence_revision
+
+
+def verify_evidence(repo, base_revision, evidence, current_revision=None, initial=False):
+    evidence_revision = validate_evidence_record(repo, evidence)
     evidence_base = base_revision if not initial else current_revision
     ancestor = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor",
                                evidence_revision, evidence_base], capture_output=True)
@@ -167,14 +227,23 @@ def verify_evidence(repo, base_revision, evidence, current_revision=None, initia
                                                base_revision, evidence_revision], capture_output=True)
         if base_before_evidence.returncode != 0:
             reject("disposition-evidence-stale", "initial evidence is not descended from the selected pre-state base")
-    summary = source_file(repo, evidence_revision, EVIDENCE_PATH)
+    summary_path, summary = resolve_immutable_reference(repo, evidence_revision, evidence["summary_path"],
+                                                        allow_unanchored=True)
+    if summary_path.split("/")[-1] != "17-05-SUMMARY.md":
+        reject("disposition-evidence", "continuation evidence resolved to the wrong summary file")
     required_claims = ("status: complete", "198 serialized fields", "14 in-flight categories")
     if any(claim not in summary for claim in required_claims):
         reject("disposition-evidence", "snapshot-fork summary lacks complete field/category evidence")
 
 
+def verify_decision_references(repo, revision, references):
+    for reference in references:
+        resolve_immutable_reference(repo, revision, reference)
+
+
 def validate_compatibility(repo, base_revision, current_revision, base_golden,
-                           current_golden, base_tokens, current_tokens, compatibility):
+                           current_golden, base_tokens, current_tokens, compatibility,
+                           validate_planning_evidence=True):
     if not isinstance(compatibility, dict) or set(compatibility) != {"schema", "dispositions"} or \
             compatibility.get("schema") != "state-compatibility-v1" or \
             not isinstance(compatibility.get("dispositions"), list):
@@ -200,15 +269,18 @@ def validate_compatibility(repo, base_revision, current_revision, base_golden,
     if set(row) != required or row.get("accepted") is not True or \
             approver not in ("phase-owner", "delegated-phase-orchestrator") or not row.get("id") or \
             not isinstance(row.get("approval_basis"), str) or not row["approval_basis"].strip() or \
-            (approver == "delegated-phase-orchestrator" and "AGENTS.md" not in row["approval_basis"]) or \
+            (approver == "delegated-phase-orchestrator" and OWNER_RULES_FILE not in row["approval_basis"]) or \
             not isinstance(row.get("decision_refs"), list) or not row["decision_refs"] or \
             any(not isinstance(item, str) or not item.strip() for item in row["decision_refs"]) or \
             not isinstance(row.get("decision"), str) or not row["decision"].strip() or \
             not isinstance(row.get("rationale"), str) or not row["rationale"].strip() or \
             not isinstance(row.get("affected_semantics"), list) or not row["affected_semantics"]:
         reject("compatibility-disposition", "disposition is incomplete or has no explicit phase-owner acceptance")
-    verify_evidence(repo, base_revision, row["evidence"], current_revision=current_revision,
-                    initial=row["kind"] == "pre-first-state-release-evolution")
+    validate_evidence_record(repo, row["evidence"])
+    if validate_planning_evidence:
+        verify_evidence(repo, base_revision, row["evidence"], current_revision=current_revision,
+                        initial=row["kind"] == "pre-first-state-release-evolution")
+        verify_decision_references(repo, current_revision, row["decision_refs"])
 
     if row["kind"] == "pre-first-state-release-evolution":
         no_prior_tokens = base_tokens["format_version"] is None and base_tokens["behavior_version"] is None
@@ -247,7 +319,8 @@ def run_emitter(executable):
     return actual
 
 
-def verify_snapshot(repo, source_revision, base_revision, actual):
+def verify_snapshot(repo, source_revision, base_revision, actual,
+                    validate_planning_evidence=True):
     source_revision = immutable_revision(repo, source_revision)
     base_revision = immutable_revision(repo, base_revision)
     ancestry = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor",
@@ -255,6 +328,7 @@ def verify_snapshot(repo, source_revision, base_revision, actual):
     if ancestry.returncode != 0:
         reject("immutable-base", "base revision is not an ancestor of the selected source commit")
     current_golden_text = source_file(repo, source_revision, GOLDEN_PATH)
+    validate_pin_fixture_wiring(source_file(repo, source_revision, "tests/CMakeLists.txt"))
     current_golden = validate_pin_document(parse_json_text(current_golden_text, "state-goldens"), "current pins")
     current_tokens = state_tokens(repo, source_revision)
     if document_tokens(current_golden) != current_tokens:
@@ -280,10 +354,44 @@ def verify_snapshot(repo, source_revision, base_revision, actual):
     if compatibility is None:
         reject("compatibility-missing", "changed pins or tokens need committed state-compatibility.json")
     validate_compatibility(repo, base_revision, source_revision, base_golden,
-                           current_golden, base_tokens, current_tokens, compatibility)
+                           current_golden, base_tokens, current_tokens, compatibility,
+                           validate_planning_evidence=validate_planning_evidence)
     return {"source_revision": source_revision, "base_revision": base_revision,
             "golden_sha256": digest_json(current_golden), "base_golden_sha256": digest_json(base_golden)
             if base_golden is not None else None}
+
+
+def planning_check(repo, source_revision, base_revision):
+    source_revision = immutable_revision(repo, source_revision)
+    base_revision = immutable_revision(repo, base_revision)
+    validate_pin_fixture_wiring(source_file(repo, source_revision, "tests/CMakeLists.txt"))
+    ancestry = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor",
+                               base_revision, source_revision], capture_output=True)
+    if ancestry.returncode != 0:
+        reject("immutable-base", "base revision is not an ancestor of the selected source commit")
+    current_text = source_file(repo, source_revision, GOLDEN_PATH)
+    current = validate_pin_document(parse_json_text(current_text, "state-goldens"), "current pins")
+    current_tokens = state_tokens(repo, source_revision)
+    if document_tokens(current) != current_tokens:
+        reject("release-token-mismatch", "golden release/format/behavior tokens differ from immutable source")
+    base_text = source_file(repo, base_revision, GOLDEN_PATH, allow_missing=True)
+    base = None if base_text is None else validate_pin_document(
+        parse_json_text(base_text, "base state-goldens"), "base pins")
+    base_tokens = state_tokens(repo, base_revision)
+    if base is not None and document_tokens(base) != base_tokens:
+        reject("base-token-mismatch", "immutable base pins differ from its declared compatibility tokens")
+    if base == current and base_tokens == current_tokens:
+        return {"source_revision": source_revision, "base_revision": base_revision,
+                "evidence": "not-required-no-change"}
+    compatibility = load_optional_commit_json(repo, source_revision, COMPATIBILITY_PATH,
+                                              "state-compatibility")
+    if compatibility is None:
+        reject("compatibility-missing", "changed pins or tokens need committed state-compatibility.json")
+    validate_compatibility(repo, base_revision, source_revision, base, current,
+                           base_tokens, current_tokens, compatibility,
+                           validate_planning_evidence=True)
+    return {"source_revision": source_revision, "base_revision": base_revision,
+            "evidence": "immutable-phase-references-and-summary-pass"}
 
 
 def source_input_digest(repo, revision):
@@ -294,7 +402,8 @@ def source_input_digest(repo, revision):
 
 def check_command(repo, source_revision, base_revision, executable):
     actual = run_emitter(executable)
-    result = verify_snapshot(repo, source_revision, base_revision, actual)
+    result = verify_snapshot(repo, source_revision, base_revision, actual,
+                             validate_planning_evidence=False)
     return {**result, "source_input_sha256": source_input_digest(repo, source_revision),
             "compiled_executable_sha256": digest_bytes(open(executable, "rb").read()),
             "fixture_count": len(actual["fixtures"]),
@@ -391,10 +500,12 @@ def initial_disposition(base_revision, golden, evidence_revision, tokens_before=
         "kind": "pre-first-state-release-evolution",
         "accepted": True,
         "approved_by": "delegated-phase-orchestrator",
-        "approval_basis": "Delegated orchestrator approval under AGENTS.md routine in-phase authorization for the initial 0.2.1 state baseline.",
-        "decision_refs": [".planning/phases/GB-17-native-save-state-core/17-RESEARCH.md#D-01",
-                          ".planning/phases/GB-17-native-save-state-core/17-06-PLAN.md#Task-1",
-                          ".planning/phases/GB-17-native-save-state-core/17-06-PLAN.md#Task-3"],
+        "approval_basis": "Delegated orchestrator approval under " + OWNER_RULES_FILE +
+                          " routine in-phase authorization for the initial 0.2.1 state baseline.",
+        "decision_refs": [OWNER_RULES_FILE + "#Workflow-contract",
+                          "phase:GB-17-native-save-state-core/17-RESEARCH.md#D-01",
+                          "phase:GB-17-native-save-state-core/17-06-PLAN.md#Task-1",
+                          "phase:GB-17-native-save-state-core/17-06-PLAN.md#Task-3"],
         "decision": "D-01 permits a documented initial baseline before the first state release; this creates the first pins at the existing release version.",
         "rationale": "These 0.2.1 pins establish the initial portable baseline; they do not imply compatibility among arbitrary unreleased builds or infer semantic equivalence.",
         "base_revision": base_revision,
@@ -404,7 +515,7 @@ def initial_disposition(base_revision, golden, evidence_revision, tokens_before=
         "tokens_after": tokens_after,
         "affected_semantics": ["canonical serialized bytes for DMG, CGB compatibility, and native CGB fixtures"],
         "base_state_release_exists": False,
-        "evidence": {"revision": evidence_revision, "summary_path": EVIDENCE_PATH,
+        "evidence": {"revision": evidence_revision, "summary_path": EVIDENCE_REF,
                      "description": "Independent snapshot continuation covers 153 corpus cases, 198 fields, and 14 applicable in-flight categories."},
     }
 
@@ -415,13 +526,45 @@ def self_test():
         repo = os.path.join(scratch, "repo")
         os.makedirs(repo)
         subprocess.run(["git", "-C", repo, "init", "-q", "-b", "main"], check=True)
-        write_git_file(repo, "CMakeLists.txt", "project(GabbaBoy VERSION 0.2.1 LANGUAGES C)\n")
+        valid_wiring = """project(GabbaBoy VERSION 0.2.1 LANGUAGES C)
+add_test(NAME state_pin_planning COMMAND verifier --planning-check)
+set_tests_properties(state_pin_planning PROPERTIES LABELS "planning" FIXTURES_SETUP gbb_state_pin_evidence)
+set_tests_properties(state_portable_pins PROPERTIES FIXTURES_REQUIRED gbb_state_pin_evidence)
+"""
+        validate_pin_fixture_wiring(valid_wiring)
+        controls = 1
+        for label, broken in (
+            ("omitted immutable-evidence fixture", valid_wiring.replace(
+                "FIXTURES_REQUIRED gbb_state_pin_evidence", "FIXTURES_REQUIRED missing_fixture")),
+            ("incorrect immutable-evidence fixture", valid_wiring.replace(
+                "FIXTURES_SETUP gbb_state_pin_evidence", "FIXTURES_SETUP missing_fixture")),
+            ("unlabelled planning evidence test", valid_wiring.replace('LABELS "planning" ', "")),
+        ):
+            try:
+                validate_pin_fixture_wiring(broken)
+            except Rejected as error:
+                if error.code != "pin-fixture":
+                    reject("self-test-failed", "%s produced the wrong rejection" % label)
+            else:
+                reject("self-test-failed", "%s was accepted" % label)
+            controls += 1
+        write_git_file(repo, "CMakeLists.txt", valid_wiring)
+        write_git_file(repo, os.path.join("tests", "CMakeLists.txt"), valid_wiring)
+        write_git_file(repo, OWNER_RULES_FILE, "# Workflow contract\n")
         write_git_file(repo, "src/core/gabbaboy.c", "/* no state support declared at this base */\n")
         base_revision = commit_fixture(repo, "synthetic pre-state base")
         write_git_file(repo, "src/core/gabbaboy.c",
                        "#define GBB_STATE_FORMAT_VERSION 1u\n#define GBB_STATE_BEHAVIOR_VERSION 1u\n")
         summary = "---\nstatus: complete\n---\nSnapshot forks cover 198 serialized fields and 14 in-flight categories.\n"
-        write_git_file(repo, EVIDENCE_PATH, summary)
+        phase_summary_path = os.path.join(PLANNING_COMPONENT, PHASES_COMPONENT,
+                                          "GB-17-native-save-state-core", "17-05-SUMMARY.md")
+        phase_research_path = os.path.join(PLANNING_COMPONENT, PHASES_COMPONENT,
+                                           "GB-17-native-save-state-core", "17-RESEARCH.md")
+        phase_plan_path = os.path.join(PLANNING_COMPONENT, PHASES_COMPONENT,
+                                       "GB-17-native-save-state-core", "17-06-PLAN.md")
+        write_git_file(repo, phase_summary_path, summary)
+        write_git_file(repo, phase_research_path, "- **D-01: synthetic decision**\n")
+        write_git_file(repo, phase_plan_path, "<name>Task 1: synthetic task</name>\n<name>Task 3: synthetic task</name>\n")
         state_support_base = commit_fixture(repo, "synthetic state support without pins")
         golden = fixture_pin_document()
         write_git_file(repo, GOLDEN_PATH, json.dumps(golden, indent=2, sort_keys=True) + "\n")
@@ -457,6 +600,28 @@ def self_test():
         controls += 1
         verify_snapshot(repo, accepted_revision, state_support_base, actual)
         controls += 1
+
+        bad_reference = json.loads(json.dumps(compatibility))
+        bad_reference["dispositions"][0]["decision_refs"][1] = (
+            "phase:GB-17-native-save-state-core/17-99-PLAN.md#Task-1")
+        write_git_file(repo, COMPATIBILITY_PATH, json.dumps(bad_reference, indent=2, sort_keys=True) + "\n")
+        bad_reference_revision = commit_fixture(repo, "unresolvable immutable phase reference")
+        rejected("incorrect immutable phase reference", "immutable-reference",
+                 lambda: verify_snapshot(repo, bad_reference_revision, base_revision, actual))
+
+        bad_summary = "---\nstatus: complete\n---\nSnapshot continuation evidence is incomplete.\n"
+        write_git_file(repo, phase_summary_path, bad_summary)
+        bad_summary_revision = commit_fixture(repo, "incomplete continuation summary")
+        bad_evidence = json.loads(json.dumps(compatibility))
+        bad_evidence["dispositions"][0]["evidence"]["revision"] = bad_summary_revision
+        write_git_file(repo, COMPATIBILITY_PATH, json.dumps(bad_evidence, indent=2, sort_keys=True) + "\n")
+        bad_evidence_revision = commit_fixture(repo, "incorrect immutable continuation evidence")
+        rejected("incorrect immutable summary evidence", "disposition-evidence",
+                 lambda: verify_snapshot(repo, bad_evidence_revision, base_revision, actual))
+
+        write_git_file(repo, phase_summary_path, summary)
+        write_git_file(repo, COMPATIBILITY_PATH, json.dumps(compatibility, indent=2, sort_keys=True) + "\n")
+        accepted_revision = commit_fixture(repo, "restore accepted phase evidence")
 
         missing_basis = json.loads(json.dumps(compatibility))
         missing_basis["dispositions"][0]["approval_basis"] = " "
@@ -513,13 +678,13 @@ def self_test():
         same_token_row = {
             "id": "bad-same-token-change", "kind": "format-change", "accepted": True,
             "approved_by": "phase-owner", "approval_basis": "explicit synthetic owner approval",
-            "decision_refs": ["self-test:owner-approval"], "decision": "format changed",
+            "decision_refs": [OWNER_RULES_FILE + "#Workflow-contract"], "decision": "format changed",
             "rationale": "test control",
             "base_revision": accepted_revision, "old_golden_sha256": digest_json(base_golden),
             "new_golden_sha256": digest_json(changed_golden),
             "tokens_before": document_tokens(base_golden), "tokens_after": document_tokens(changed_golden),
             "affected_semantics": ["test bytes"], "required_token": "format_version",
-            "evidence": {"revision": accepted_revision, "summary_path": EVIDENCE_PATH,
+            "evidence": {"revision": accepted_revision, "summary_path": EVIDENCE_REF,
                          "description": "independent continuation evidence"},
         }
         write_git_file(repo, COMPATIBILITY_PATH,
@@ -595,12 +760,20 @@ def main(argv):
     parser.add_argument("--check")
     parser.add_argument("--receipt")
     parser.add_argument("--platform")
+    parser.add_argument("--planning-check", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--repo", default=ROOT)
     options = parser.parse_args(argv)
     try:
         if options.self_test:
             self_test()
+            return 0
+        if options.planning_check:
+            if not options.rev or not options.base:
+                reject("usage", "--planning-check requires immutable --rev and --base commits")
+            result = planning_check(options.repo, options.rev, options.base)
+            print("state-pin-planning pass revision=%s base=%s evidence=%s" %
+                  (result["source_revision"], result["base_revision"], result["evidence"]))
             return 0
         if not options.rev or not options.base or not options.check:
             reject("usage", "--check requires --rev, --base, and the compiled test_state_codec executable")

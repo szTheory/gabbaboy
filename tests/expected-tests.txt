@@ -1285,6 +1285,7 @@ state_field_census
 state_field_census_controls
 state_portable_pins
 state_pin_controls
+state_pin_planning
 state_identity
 state_codec_matrix
 state_semantic_bounds
