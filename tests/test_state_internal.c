@@ -636,6 +636,9 @@ static int state_apu_pulse_timer(void) {
     gbb_instance *target = new_machine(rom, GBB_PROFILE_CGB_CPU_E);
     REQUIRE_CASE(case_name, source != NULL && target != NULL);
 
+    reset_state(source);
+    REQUIRE_CASE(case_name, source->apu_pulse[0].timer <= 65472u &&
+                            source->apu_pulse[1].timer <= 65472u);
     source->apu_power = 1u;
     source->apu_pulse[0].envelope = 0xF0u;
     uint16_t maximum_reload = 0u;
@@ -648,6 +651,26 @@ static int state_apu_pulse_timer(void) {
         REQUIRE_CASE(case_name, source->apu_pulse[0].timer <= 65472u);
     }
     REQUIRE_CASE(case_name, maximum_reload == 65472u);
+
+    /* Sweep's in-range result 1025 reaches the same maximum reload path. */
+    apu_pulse_channel *pulse = &source->apu_pulse[0];
+    pulse->frequency = 820u;
+    pulse->frequency_low = (uint8_t)820u;
+    pulse->control = (uint8_t)(820u >> 8);
+    pulse->sweep = 0x22u;
+    pulse->sweep_shadow = 820u;
+    pulse->sweep_enabled = 1;
+    pulse->sweep_timer = 1u;
+    source->apu_sequencer_step = 2u;
+    apu_sequencer_clock(source);
+    REQUIRE_CASE(case_name, pulse->frequency == 1025u && pulse->timer == 65472u);
+
+    source->apu_power = 0u;
+    apu_power_off(source);
+    REQUIRE_CASE(case_name, source->apu_pulse[0].timer == 0u &&
+                            source->apu_pulse[1].timer == 0u);
+    source->apu_power = 1u;
+    source->apu_pulse[0].envelope = 0xF0u;
     source->apu_pulse[0].frequency_low = 1u;
     source->apu_pulse[0].control = 4u;
     apu_pulse_trigger(source, 0u);
@@ -682,6 +705,9 @@ static int state_apu_pulse_timer(void) {
     REQUIRE_CASE(case_name, source_count == target_count &&
                             memcmp(source_audio, target_audio,
                                    source_count * sizeof(source_audio[0])) == 0);
+    REQUIRE_CASE(case_name, source->apu_pulse[0].timer < 65472u &&
+                            source->apu_pulse[0].timer <= 65472u &&
+                            target->apu_pulse[0].timer == source->apu_pulse[0].timer);
     REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK &&
                             gbb_save_state(target, resaved, size) == GBB_OK &&
                             memcmp(saved, resaved, size) == 0);
@@ -715,7 +741,13 @@ static int state_apu_noise_timer(void) {
     gbb_instance *target = new_machine(rom, GBB_PROFILE_CGB_CPU_E);
     REQUIRE_CASE(case_name, source != NULL && target != NULL);
 
+    reset_state(source);
+    REQUIRE_CASE(case_name, source->apu_noise.timer <= 7340032u);
+    source->apu_power = 0u;
+    apu_power_off(source);
+    REQUIRE_CASE(case_name, source->apu_noise.timer == 0u);
     uint32_t maximum_reload = 0u;
+    /* NR43 retains all eight bits: divisor 112 and shift 15 are both reachable. */
     for (unsigned polynomial = 0u; polynomial <= UINT8_MAX; ++polynomial) {
         source->apu_noise.polynomial = (uint8_t)polynomial;
         const uint32_t reload = apu_noise_period(&source->apu_noise);
@@ -760,6 +792,15 @@ static int state_apu_noise_timer(void) {
                                    source_count * sizeof(source_audio[0])) == 0);
     REQUIRE_CASE(case_name, source->apu_noise.timer < 7340032u &&
                             target->apu_noise.timer == source->apu_noise.timer);
+    const uint64_t remaining_before_expiry = 7340032u - source_run.consumed_half_dots;
+    const gbb_run_result source_tail = gbb_run(source, 7500000u, NULL, 0u);
+    const gbb_run_result target_tail = gbb_run(target, 7500000u, NULL, 0u);
+    REQUIRE_CASE(case_name, source_tail.reason == GBB_STOP_BUDGET &&
+                            same_run(source_tail, target_tail) &&
+                            source_tail.consumed_half_dots > remaining_before_expiry);
+    REQUIRE_CASE(case_name, source->apu_noise.timer > 0u &&
+                            source->apu_noise.timer <= 7340032u &&
+                            target->apu_noise.timer == source->apu_noise.timer);
     REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK &&
                             gbb_save_state(target, resaved, size) == GBB_OK &&
                             memcmp(saved, resaved, size) == 0);
@@ -781,7 +822,7 @@ static int state_apu_noise_timer(void) {
     free(saved);
     gbb_destroy(target);
     gbb_destroy(source);
-    puts("state_apu_noise_timer pass reload_max=7340032 roundtrip=continuation-equal above_bound=crc-valid-refused unchanged=1");
+    puts("state_apu_noise_timer pass reload_max=7340032 countdown=expiry-reload roundtrip=continuation-equal above_bound=crc-valid-refused unchanged=1");
     return 0;
 }
 
