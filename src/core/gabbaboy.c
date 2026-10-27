@@ -161,6 +161,11 @@ static void state_sha256(const uint8_t *bytes, size_t length, uint8_t digest[32]
 #define GBB_AUDIO_EVENT_TAPS 16u
 #define GBB_STATE_TIME_LIMIT (UINT64_C(1) << 62)
 #define GBB_AUDIO_HPF_Q15 32648
+/* Pulse reloads truncate (2048-frequency)*64 for the 11-bit frequency domain;
+ * the largest reachable value is (2048-1025)*64 = 65472. */
+#define GBB_APU_PULSE_TIMER_MAX 65472u
+/* NR43 permits divisor 112 and shift 15; apu_noise_period multiplies by 2. */
+#define GBB_APU_NOISE_TIMER_MAX (UINT32_C(112) << 16)
 /* Pan Docs maps each DAC to -1..1 (unit = 16384 here) and sums four channels,
  * so a side spans +/-4 units; NR50 then scales it by (volume+1)/8. One s16
  * full scale (32768) must therefore hold 4 units * 8/8, i.e. the product of
@@ -4354,13 +4359,15 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (strcmp(field->path, "apu_wave.position") == 0) return raw <= 31u;
     if (strcmp(field->path, "apu_wave.length") == 0) return raw <= 256u;
     if (strcmp(field->path, "apu_wave.timer") == 0) return raw <= 4096u;
-    if (strcmp(field->path, "apu_pulse[].timer") == 0) return raw <= 8192u;
+    if (strcmp(field->path, "apu_pulse[].timer") == 0)
+        return raw <= GBB_APU_PULSE_TIMER_MAX;
     if (strcmp(field->path, "apu_noise.volume") == 0) return raw <= 15u;
     if (strcmp(field->path, "apu_noise.envelope_timer") == 0) return raw <= 8u;
     if (strcmp(field->path, "apu_noise.length") == 0) return raw <= 64u;
     if (strcmp(field->path, "apu_noise.length_reg") == 0) return raw <= 0x3Fu;
     if (strcmp(field->path, "apu_noise.control") == 0) return raw == 0u || raw == 0x40u;
-    if (strcmp(field->path, "apu_noise.timer") == 0) return raw <= (UINT32_C(8) << 15);
+    if (strcmp(field->path, "apu_noise.timer") == 0)
+        return raw <= GBB_APU_NOISE_TIMER_MAX;
     if (strcmp(field->path, "apu_noise.lfsr") == 0) return raw <= 0x7FFFu;
     (void)index;
     return 1;

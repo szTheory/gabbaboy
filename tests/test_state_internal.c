@@ -637,8 +637,8 @@ static int state_apu_pulse_timer(void) {
     REQUIRE_CASE(case_name, source != NULL && target != NULL);
 
     reset_state(source);
-    REQUIRE_CASE(case_name, source->apu_pulse[0].timer <= 65472u &&
-                            source->apu_pulse[1].timer <= 65472u);
+    REQUIRE_CASE(case_name, source->apu_pulse[0].timer <= GBB_APU_PULSE_TIMER_MAX &&
+                            source->apu_pulse[1].timer <= GBB_APU_PULSE_TIMER_MAX);
     source->apu_power = 1u;
     source->apu_pulse[0].envelope = 0xF0u;
     uint16_t maximum_reload = 0u;
@@ -648,9 +648,9 @@ static int state_apu_pulse_timer(void) {
         apu_pulse_trigger(source, 0u);
         if (source->apu_pulse[0].timer > maximum_reload)
             maximum_reload = source->apu_pulse[0].timer;
-        REQUIRE_CASE(case_name, source->apu_pulse[0].timer <= 65472u);
+        REQUIRE_CASE(case_name, source->apu_pulse[0].timer <= GBB_APU_PULSE_TIMER_MAX);
     }
-    REQUIRE_CASE(case_name, maximum_reload == 65472u);
+    REQUIRE_CASE(case_name, maximum_reload == GBB_APU_PULSE_TIMER_MAX);
 
     /* Sweep's in-range result 1025 reaches the same maximum reload path. */
     apu_pulse_channel *pulse = &source->apu_pulse[0];
@@ -663,7 +663,8 @@ static int state_apu_pulse_timer(void) {
     pulse->sweep_timer = 1u;
     source->apu_sequencer_step = 2u;
     apu_sequencer_clock(source);
-    REQUIRE_CASE(case_name, pulse->frequency == 1025u && pulse->timer == 65472u);
+    REQUIRE_CASE(case_name, pulse->frequency == 1025u &&
+                            pulse->timer == GBB_APU_PULSE_TIMER_MAX);
 
     source->apu_power = 0u;
     apu_power_off(source);
@@ -675,14 +676,16 @@ static int state_apu_pulse_timer(void) {
     source->apu_pulse[0].control = 4u;
     apu_pulse_trigger(source, 0u);
     REQUIRE_CASE(case_name, source->apu_pulse[0].frequency == 1025u &&
-                            source->apu_pulse[0].timer == 65472u);
+                            source->apu_pulse[0].timer == GBB_APU_PULSE_TIMER_MAX);
     size_t size = 0u;
     REQUIRE_CASE(case_name, gbb_state_size(source, &size) == GBB_OK);
     const state_field_descriptor *timer_field = state_field_by_path("apu_pulse[].timer");
     REQUIRE_CASE(case_name, timer_field != NULL &&
-                            state_field_value_valid(source, timer_field, 0u, 65472u,
+                            state_field_value_valid(source, timer_field, 0u,
+                                GBB_APU_PULSE_TIMER_MAX,
                                 source->audio_event_head, source->apu_sample_phase) &&
-                            !state_field_value_valid(source, timer_field, 0u, 65473u,
+                            !state_field_value_valid(source, timer_field, 0u,
+                                GBB_APU_PULSE_TIMER_MAX + 1u,
                                 source->audio_event_head, source->apu_sample_phase));
     uint8_t *saved = malloc(size);
     uint8_t *resaved = malloc(size);
@@ -690,7 +693,7 @@ static int state_apu_pulse_timer(void) {
     REQUIRE_CASE(case_name, saved != NULL && resaved != NULL && above_bound != NULL);
     REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK);
     REQUIRE_CASE(case_name, gbb_load_state(target, saved, size) == GBB_OK);
-    REQUIRE_CASE(case_name, target->apu_pulse[0].timer == 65472u);
+    REQUIRE_CASE(case_name, target->apu_pulse[0].timer == GBB_APU_PULSE_TIMER_MAX);
     REQUIRE_CASE(case_name, gbb_save_state(target, resaved, size) == GBB_OK &&
                             memcmp(saved, resaved, size) == 0);
 
@@ -705,8 +708,8 @@ static int state_apu_pulse_timer(void) {
     REQUIRE_CASE(case_name, source_count == target_count &&
                             memcmp(source_audio, target_audio,
                                    source_count * sizeof(source_audio[0])) == 0);
-    REQUIRE_CASE(case_name, source->apu_pulse[0].timer < 65472u &&
-                            source->apu_pulse[0].timer <= 65472u &&
+    REQUIRE_CASE(case_name, source->apu_pulse[0].timer < GBB_APU_PULSE_TIMER_MAX &&
+                            source->apu_pulse[0].timer <= GBB_APU_PULSE_TIMER_MAX &&
                             target->apu_pulse[0].timer == source->apu_pulse[0].timer);
     REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK &&
                             gbb_save_state(target, resaved, size) == GBB_OK &&
@@ -714,7 +717,8 @@ static int state_apu_pulse_timer(void) {
 
     memcpy(above_bound, saved, size);
     REQUIRE_CASE(case_name, state_internal_write_field(target, above_bound,
-                                                       "apu_pulse[].timer", 65473u));
+                                                       "apu_pulse[].timer",
+                                                       GBB_APU_PULSE_TIMER_MAX + 1u));
     state_internal_rechecksum(above_bound, size);
     state_instance_snapshot snapshot;
     REQUIRE_CASE(case_name, state_snapshot_init(&snapshot, target));
@@ -742,7 +746,7 @@ static int state_apu_noise_timer(void) {
     REQUIRE_CASE(case_name, source != NULL && target != NULL);
 
     reset_state(source);
-    REQUIRE_CASE(case_name, source->apu_noise.timer <= 7340032u);
+    REQUIRE_CASE(case_name, source->apu_noise.timer <= GBB_APU_NOISE_TIMER_MAX);
     source->apu_power = 0u;
     apu_power_off(source);
     REQUIRE_CASE(case_name, source->apu_noise.timer == 0u);
@@ -753,21 +757,23 @@ static int state_apu_noise_timer(void) {
         const uint32_t reload = apu_noise_period(&source->apu_noise);
         if (reload > maximum_reload) maximum_reload = reload;
     }
-    REQUIRE_CASE(case_name, maximum_reload == 7340032u);
+    REQUIRE_CASE(case_name, maximum_reload == GBB_APU_NOISE_TIMER_MAX);
     source->apu_power = 1u;
     write8(source, 0xFF22u, 0xF7u);
     write8(source, 0xFF21u, 0xF0u);
     write8(source, 0xFF23u, 0x80u);
-    REQUIRE_CASE(case_name, source->apu_noise.timer == 7340032u &&
+    REQUIRE_CASE(case_name, source->apu_noise.timer == GBB_APU_NOISE_TIMER_MAX &&
                             source->apu_noise.enabled == 1);
 
     size_t size = 0u;
     REQUIRE_CASE(case_name, gbb_state_size(source, &size) == GBB_OK);
     const state_field_descriptor *timer_field = state_field_by_path("apu_noise.timer");
     REQUIRE_CASE(case_name, timer_field != NULL &&
-                            state_field_value_valid(source, timer_field, 0u, 7340032u,
+                            state_field_value_valid(source, timer_field, 0u,
+                                GBB_APU_NOISE_TIMER_MAX,
                                 source->audio_event_head, source->apu_sample_phase) &&
-                            !state_field_value_valid(source, timer_field, 0u, 7340033u,
+                            !state_field_value_valid(source, timer_field, 0u,
+                                GBB_APU_NOISE_TIMER_MAX + 1u,
                                 source->audio_event_head, source->apu_sample_phase));
     uint8_t *saved = malloc(size);
     uint8_t *resaved = malloc(size);
@@ -775,7 +781,7 @@ static int state_apu_noise_timer(void) {
     REQUIRE_CASE(case_name, saved != NULL && resaved != NULL && above_bound != NULL);
     REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK);
     REQUIRE_CASE(case_name, gbb_load_state(target, saved, size) == GBB_OK);
-    REQUIRE_CASE(case_name, target->apu_noise.timer == 7340032u);
+    REQUIRE_CASE(case_name, target->apu_noise.timer == GBB_APU_NOISE_TIMER_MAX);
     REQUIRE_CASE(case_name, gbb_save_state(target, resaved, size) == GBB_OK &&
                             memcmp(saved, resaved, size) == 0);
 
@@ -790,16 +796,17 @@ static int state_apu_noise_timer(void) {
     REQUIRE_CASE(case_name, source_count == target_count &&
                             memcmp(source_audio, target_audio,
                                    source_count * sizeof(source_audio[0])) == 0);
-    REQUIRE_CASE(case_name, source->apu_noise.timer < 7340032u &&
+    REQUIRE_CASE(case_name, source->apu_noise.timer < GBB_APU_NOISE_TIMER_MAX &&
                             target->apu_noise.timer == source->apu_noise.timer);
-    const uint64_t remaining_before_expiry = 7340032u - source_run.consumed_half_dots;
+    const uint64_t remaining_before_expiry =
+        GBB_APU_NOISE_TIMER_MAX - source_run.consumed_half_dots;
     const gbb_run_result source_tail = gbb_run(source, 7500000u, NULL, 0u);
     const gbb_run_result target_tail = gbb_run(target, 7500000u, NULL, 0u);
     REQUIRE_CASE(case_name, source_tail.reason == GBB_STOP_BUDGET &&
                             same_run(source_tail, target_tail) &&
                             source_tail.consumed_half_dots > remaining_before_expiry);
     REQUIRE_CASE(case_name, source->apu_noise.timer > 0u &&
-                            source->apu_noise.timer <= 7340032u &&
+                            source->apu_noise.timer <= GBB_APU_NOISE_TIMER_MAX &&
                             target->apu_noise.timer == source->apu_noise.timer);
     REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK &&
                             gbb_save_state(target, resaved, size) == GBB_OK &&
@@ -807,7 +814,8 @@ static int state_apu_noise_timer(void) {
 
     memcpy(above_bound, saved, size);
     REQUIRE_CASE(case_name, state_internal_write_field(target, above_bound,
-                                                       "apu_noise.timer", 7340033u));
+                                                       "apu_noise.timer",
+                                                       GBB_APU_NOISE_TIMER_MAX + 1u));
     state_internal_rechecksum(above_bound, size);
     state_instance_snapshot snapshot;
     REQUIRE_CASE(case_name, state_snapshot_init(&snapshot, target));
