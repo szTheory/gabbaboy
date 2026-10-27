@@ -4926,7 +4926,7 @@ add_test(NAME state_format_contract
 add_test(NAME state_tracer
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
     --tracer --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
-    --build-dir "${PROJECT_BINARY_DIR}" --cmake "${CMAKE_COMMAND}"
+    --build-dir "${PROJECT_BINARY_DIR}" --configuration "$<CONFIG>" --cmake "${CMAKE_COMMAND}"
     --cc "${CMAKE_C_COMPILER}" --generator "${CMAKE_GENERATOR}"
     --rom "${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb")
 add_test(NAME state_inventory
@@ -4948,7 +4948,7 @@ add_test(NAME state_revision_controls
 add_test(NAME state_precodec_gate
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
     --precodec --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
-    --build-dir "${PROJECT_BINARY_DIR}"
+    --build-dir "${PROJECT_BINARY_DIR}" --configuration "$<CONFIG>"
     --output "${PROJECT_BINARY_DIR}/state-precodec-proof.json"
     --objdump "${CMAKE_OBJDUMP}" --cc "${CMAKE_C_COMPILER}")
 set_tests_properties(state_size_bound state_audio_bound state_format_contract
@@ -5124,16 +5124,17 @@ add_test(NAME state_horizon COMMAND test_state_horizon horizon_matrix)
 add_test(NAME state_horizon_wrappers COMMAND test_state_horizon horizon_wrappers)
 add_test(NAME state_horizon_sentinels COMMAND test_state_horizon horizon_sentinels)
 add_test(NAME state_horizon_events COMMAND test_state_horizon horizon_events)
-# The complete phase-equivalence matrix exceeded 60 seconds as one case and as
-# four concurrent shards. These balanced shards retain every case within the
-# standard per-test limit, including under the normal parallel CTest run.
-math(EXPR GBB_HORIZON_CLOSURE_SHARDS "16 - 1")
+# Native hosted runs exceeded the standard budgets with 16 shards. Each of
+# these 128 balanced shards retains 44 or 45 of the same 5,644 cases and every
+# production codec comparison; selecting the named gate requires all shards.
+set(GBB_HORIZON_CLOSURE_SHARD_COUNT 128)
+math(EXPR GBB_HORIZON_CLOSURE_SHARDS "${GBB_HORIZON_CLOSURE_SHARD_COUNT} - 1")
 add_test(NAME state_horizon_closure
-  COMMAND test_state_horizon horizon_closure 0 16)
+  COMMAND test_state_horizon horizon_closure 0 ${GBB_HORIZON_CLOSURE_SHARD_COUNT})
 set(GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES "")
 foreach(shard RANGE 1 ${GBB_HORIZON_CLOSURE_SHARDS})
   add_test(NAME "state_horizon_closure_${shard}"
-    COMMAND test_state_horizon horizon_closure ${shard} 16)
+    COMMAND test_state_horizon horizon_closure ${shard} ${GBB_HORIZON_CLOSURE_SHARD_COUNT})
   set(fixture "gabbaboy_horizon_closure_${shard}")
   list(APPEND GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES "${fixture}")
   set_tests_properties("state_horizon_closure_${shard}"
