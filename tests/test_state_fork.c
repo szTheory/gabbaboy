@@ -19,6 +19,7 @@ const char *state_fork_mutant_field;
 #define GENERATED_BUS_ROM_SIZE 0x8000u
 #define GENERATED_MBC1_ROM_SIZE 0x200000u
 #define GENERATED_MBC3_ROM_SIZE 0x8000u
+#define FORK_STATE_HEADER_BYTES 64u
 
 static void set_palette(gbb_compat_palette *palette, uint16_t seed) {
     memset(palette, 0, sizeof(*palette));
@@ -129,6 +130,134 @@ static void build_generated_mbc3_rtc_rom(uint8_t rom[GENERATED_MBC3_ROM_SIZE]) {
                          0x00u, 0x02u, program, sizeof(program));
 }
 
+static void build_generated_stop_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {0x10u, 0x00u, 0x18u, 0xFEu};
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_key1_switch_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x3Eu, 0x01u, 0xE0u, 0x4Du, /* Arm CGB speed switch. */
+        0x10u, 0x00u,               /* STOP consumes the armed switch. */
+        0x18u, 0xFEu
+    };
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0xC0u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_lockup_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {0xD3u}; /* Invalid opcode: stable lockup state. */
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_ei_delay_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {0xFBu, 0x00u, 0x18u, 0xFDu};
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_halt_bug_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x3Eu, 0x01u, 0xE0u, 0x0Fu, /* Set VBlank IF. */
+        0xE0u, 0xFFu,              /* Enable VBlank IE while IME remains clear. */
+        0x76u, 0x00u, 0x18u, 0xFDu /* HALT with pending enabled interrupt. */
+    };
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_oam_dma_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x3Eu, 0xC0u, 0xE0u, 0x46u, /* DMA from initialized work RAM. */
+        0x18u, 0xFEu
+    };
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_irq_dma_pending_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x31u, 0x47u, 0xFFu,        /* IRQ stack first writes to FF46. */
+        0x3Eu, 0x01u, 0xE0u, 0xFFu, /* Enable VBlank. */
+        0xE0u, 0x0Fu,                /* Request VBlank. */
+        0xFBu, 0x00u,                /* Enable IME after the following NOP. */
+        0x18u, 0xFEu
+    };
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_timer_reload_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x3Eu, 0x00u, 0xE0u, 0x04u, /* Reset DIV. */
+        0x3Eu, 0xFFu, 0xE0u, 0x05u, /* Set TIMA one increment before overflow. */
+        0x3Eu, 0x05u, 0xE0u, 0x07u, /* Enable fastest timer tap. */
+        0x18u, 0xFEu
+    };
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0x80u, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static void build_generated_loop_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE], uint8_t cgb_flag) {
+    static const uint8_t program[] = {0x00u, 0x18u, 0xFDu};
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, cgb_flag, 0x00u,
+                         0x00u, 0x00u, program, sizeof(program));
+}
+
+static size_t emit_ldh_write(uint8_t *program, size_t offset,
+                             uint8_t address, uint8_t value) {
+    program[offset++] = 0x3Eu;
+    program[offset++] = value;
+    program[offset++] = 0xE0u;
+    program[offset++] = address;
+    return offset;
+}
+
+static size_t emit_absolute_write(uint8_t *program, size_t offset,
+                                  uint16_t address, uint8_t value) {
+    program[offset++] = 0x3Eu;
+    program[offset++] = value;
+    program[offset++] = 0xEAu;
+    program[offset++] = (uint8_t)address;
+    program[offset++] = (uint8_t)(address >> 8);
+    return offset;
+}
+
+static void build_generated_native_pipeline_rom(uint8_t rom[GENERATED_BUS_ROM_SIZE]) {
+    uint8_t program[256];
+    size_t length = 0u;
+    length = emit_ldh_write(program, length, 0x40u, 0x00u); /* LCD off for OAM initialization. */
+    length = emit_absolute_write(program, length, 0xFE00u, 0u); /* Keep entry zero off-screen. */
+    length = emit_absolute_write(program, length, 0xFE01u, 0u);
+    length = emit_absolute_write(program, length, 0xFE02u, 0u);
+    length = emit_absolute_write(program, length, 0xFE03u, 0u);
+    length = emit_absolute_write(program, length, 0xFE04u, 16u); /* Visible entry one. */
+    length = emit_absolute_write(program, length, 0xFE05u, 16u);
+    length = emit_absolute_write(program, length, 0xFE06u, 1u);
+    length = emit_absolute_write(program, length, 0xFE07u, 0x20u);
+    length = emit_ldh_write(program, length, 0x43u, 3u); /* Fine-scroll discard. */
+    length = emit_ldh_write(program, length, 0x4Au, 0u); /* Window starts on line zero. */
+    length = emit_ldh_write(program, length, 0x4Bu, 7u); /* Window begins at x zero. */
+    length = emit_ldh_write(program, length, 0x56u, 0xC1u); /* RP receiver enabled. */
+    length = emit_ldh_write(program, length, 0x74u, 0x55u); /* Native-only CGB register. */
+    length = emit_ldh_write(program, length, 0x4Du, 1u); /* Keep KEY1 armed at the save boundary. */
+    length = emit_ldh_write(program, length, 0x70u, 3u); /* WRAM bank three. */
+    length = emit_ldh_write(program, length, 0x6Cu, 1u); /* OPRI bit zero. */
+    length = emit_ldh_write(program, length, 0x4Fu, 1u); /* Native VRAM bank one. */
+    length = emit_ldh_write(program, length, 0x51u, 0xC0u); /* HDMA source: WRAM. */
+    length = emit_ldh_write(program, length, 0x52u, 0x20u);
+    length = emit_ldh_write(program, length, 0x53u, 0x01u); /* HDMA destination high bits. */
+    length = emit_ldh_write(program, length, 0x54u, 0x40u);
+    length = emit_ldh_write(program, length, 0x40u, 0xB3u); /* LCD/window/OBJ enabled. */
+    length = emit_ldh_write(program, length, 0x55u, 0x81u); /* Two HBlank blocks. */
+    program[length++] = 0x18u;
+    program[length++] = 0xFEu;
+    finish_generated_rom(rom, GENERATED_BUS_ROM_SIZE, 0xC0u, 0x00u,
+                         0x00u, 0x00u, program, length);
+}
+
 static int generated_rom(const char *id, uint8_t **out, size_t *size) {
     *out = NULL;
     *size = 0u;
@@ -136,14 +265,160 @@ static int generated_rom(const char *id, uint8_t **out, size_t *size) {
     else if (strcmp(id, "bus_unsupported") == 0) *size = GENERATED_BUS_ROM_SIZE;
     else if (strcmp(id, "mbc1_fields") == 0) *size = GENERATED_MBC1_ROM_SIZE;
     else if (strcmp(id, "mbc3_rtc_fields") == 0) *size = GENERATED_MBC3_ROM_SIZE;
+    else if (strcmp(id, "stop_wake") == 0 || strcmp(id, "lockup") == 0 ||
+             strcmp(id, "key1_switch") == 0 ||
+             strcmp(id, "ei_delay") == 0 || strcmp(id, "halt_bug") == 0 ||
+             strcmp(id, "oam_dma") == 0 || strcmp(id, "timer_reload") == 0 ||
+             strcmp(id, "accepted_flags") == 0 || strcmp(id, "accepted_dma_phase") == 0 ||
+             strcmp(id, "joypad_applied") == 0)
+        *size = GENERATED_BUS_ROM_SIZE;
+    else if (strcmp(id, "irq_dma_pending") == 0) *size = GENERATED_BUS_ROM_SIZE;
+    else if (strcmp(id, "native_pipeline") == 0 ||
+             strcmp(id, "native_pipeline_hdma") == 0 ||
+             strcmp(id, "native_pipeline_pending") == 0 ||
+             strcmp(id, "native_pipeline_scroll") == 0 ||
+             strcmp(id, "native_pipeline_stall") == 0 ||
+             strcmp(id, "native_pipeline_fetch") == 0) *size = GENERATED_BUS_ROM_SIZE;
     else return 0;
     uint8_t *rom = (uint8_t *)malloc(*size);
     if (rom == NULL) return 0;
     if (strcmp(id, "apu_fields") == 0) build_generated_apu_rom(rom);
     else if (strcmp(id, "bus_unsupported") == 0) build_generated_bus_rom(rom);
     else if (strcmp(id, "mbc1_fields") == 0) build_generated_mbc1_rom(rom);
-    else build_generated_mbc3_rtc_rom(rom);
+    else if (strcmp(id, "mbc3_rtc_fields") == 0) build_generated_mbc3_rtc_rom(rom);
+    else if (strcmp(id, "stop_wake") == 0) build_generated_stop_rom(rom);
+    else if (strcmp(id, "key1_switch") == 0) build_generated_key1_switch_rom(rom);
+    else if (strcmp(id, "lockup") == 0) build_generated_lockup_rom(rom);
+    else if (strcmp(id, "ei_delay") == 0) build_generated_ei_delay_rom(rom);
+    else if (strcmp(id, "halt_bug") == 0) build_generated_halt_bug_rom(rom);
+    else if (strcmp(id, "oam_dma") == 0) build_generated_oam_dma_rom(rom);
+    else if (strcmp(id, "timer_reload") == 0) build_generated_timer_reload_rom(rom);
+    else if (strcmp(id, "accepted_dma_phase") == 0) build_generated_oam_dma_rom(rom);
+    else if (strcmp(id, "accepted_flags") == 0) build_generated_loop_rom(rom, 0xC0u);
+    else if (strcmp(id, "joypad_applied") == 0) build_generated_loop_rom(rom, 0x80u);
+    else if (strcmp(id, "irq_dma_pending") == 0) build_generated_irq_dma_pending_rom(rom);
+    else build_generated_native_pipeline_rom(rom);
     *out = rom;
+    return 1;
+}
+
+typedef struct {
+    const char *path;
+    uint64_t value;
+} fork_state_seed;
+
+static int load_seeded_public_state(gbb_instance *instance,
+                                    const fork_state_seed *seeds,
+                                    size_t seed_count) {
+    size_t state_size = 0u;
+    if (gbb_state_size(instance, &state_size) != GBB_OK) return 0;
+    uint8_t *bytes = (uint8_t *)malloc(state_size);
+    if (bytes == NULL) return 0;
+    if (gbb_save_state(instance, bytes, state_size) != GBB_OK) {
+        free(bytes);
+        return 0;
+    }
+    for (size_t i = 0u; i < seed_count; ++i) {
+        const state_field_descriptor *field = state_field_by_path(seeds[i].path);
+        if (field == NULL || field->wire_width > 8u ||
+            state_field_count_for_instance(instance, field) != 1u) {
+            free(bytes);
+            return 0;
+        }
+        const size_t offset = state_body_field_offset(instance, field);
+        if (offset == SIZE_MAX || offset > state_size - FORK_STATE_HEADER_BYTES ||
+            field->wire_width > state_size - FORK_STATE_HEADER_BYTES - offset) {
+            free(bytes);
+            return 0;
+        }
+        state_put_u64(bytes + FORK_STATE_HEADER_BYTES + offset,
+                      seeds[i].value, field->wire_width);
+    }
+    uint32_t crc = state_crc32_update(UINT32_MAX, bytes, 60u);
+    crc = state_crc32_update(crc, bytes + FORK_STATE_HEADER_BYTES,
+        state_size - FORK_STATE_HEADER_BYTES) ^ UINT32_MAX;
+    state_put_u32(bytes + 60u, crc);
+    const gbb_error loaded = gbb_load_state(instance, bytes, state_size);
+    free(bytes);
+    return loaded == GBB_OK;
+}
+
+static int seed_generated_boundary(const char *case_id, gbb_instance *source) {
+    const char *generated_id = strncmp(case_id, "generated:", 10u) == 0
+        ? case_id + 10u : "";
+    const char *profile_separator = strchr(generated_id, ':');
+    const size_t generated_id_size = profile_separator == NULL
+        ? strlen(generated_id) : (size_t)(profile_separator - generated_id);
+#define GENERATED_IS(ID) (generated_id_size == sizeof(ID) - 1u && \
+    memcmp(generated_id, ID, sizeof(ID) - 1u) == 0)
+    static const fork_state_seed accepted_flags[] = {
+        {"bus_unsupported", 1u}, {"bus_unsupported_address", 0xFF02u},
+        {"stop_switch_pending", 1u}, {"divider_phase", 1u},
+        {"ppu_half_phase", 1u}
+    };
+    static const fork_state_seed accepted_timer[] = {
+        {"tima", 0u}, {"tma", 0xA5u},
+        {"timer_reload_pending", 1u}, {"timer_reload_remaining", 4u}
+    };
+    static const fork_state_seed accepted_dma[] = {{"dma_phase", 1u}};
+    static const fork_state_seed accepted_hdma_pending[] = {{"hdma.pending_hblank", 1u}};
+    const fork_state_seed *seeds = NULL;
+    size_t seed_count = 0u;
+    if (GENERATED_IS("accepted_flags")) {
+        seeds = accepted_flags;
+        seed_count = sizeof(accepted_flags) / sizeof(accepted_flags[0]);
+    } else if (GENERATED_IS("timer_reload")) {
+        seeds = accepted_timer;
+        seed_count = sizeof(accepted_timer) / sizeof(accepted_timer[0]);
+    } else if (GENERATED_IS("accepted_dma_phase")) {
+        seeds = accepted_dma;
+        seed_count = sizeof(accepted_dma) / sizeof(accepted_dma[0]);
+    } else if (GENERATED_IS("native_pipeline_pending")) {
+        seeds = accepted_hdma_pending;
+        seed_count = sizeof(accepted_hdma_pending) / sizeof(accepted_hdma_pending[0]);
+    }
+    if (seed_count == 0u) return 1;
+    if (!load_seeded_public_state(source, seeds, seed_count)) {
+        fprintf(stderr, "state-fork setup failure: accepted public-state seed refused: %s\n", case_id);
+        return 0;
+    }
+    printf("public-state-seed case=%s origin=crc-valid-public-load fields=", case_id);
+    for (size_t i = 0u; i < seed_count; ++i)
+        printf("%s%s", i == 0u ? "" : ",", seeds[i].path);
+    putchar('\n');
+#undef GENERATED_IS
+    return 1;
+}
+
+static int verify_generated_boundary_predicates(const char *case_id,
+                                                const gbb_instance *source,
+                                                gbb_run_result prefix) {
+    if (strncmp(case_id, "generated:key1_switch:",
+                sizeof("generated:key1_switch:") - 1u) == 0) {
+        const int passed = source->double_speed == 1u &&
+            source->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
+            source->cpu_stall_half_dots > 0u && source->stop_switch_pending == 0u;
+        if (!passed) {
+            fprintf(stderr, "state-fork boundary predicate failed: %s double_speed=%u stall=%u remaining=%u stop_switch_pending=%u\n",
+                case_id, (unsigned)source->double_speed, (unsigned)source->cpu_stall_kind,
+                (unsigned)source->cpu_stall_half_dots, (unsigned)source->stop_switch_pending);
+            return 0;
+        }
+        printf("boundary-predicate case=%s id=stop_switch_pending value=0 context=speed-switch-stall\n",
+               case_id);
+    } else if (strncmp(case_id, "generated:bus_unsupported:",
+                       sizeof("generated:bus_unsupported:") - 1u) == 0) {
+        const int passed = prefix.reason == GBB_STOP_UNSUPPORTED_BUS &&
+            source->bus_unsupported == 0 && source->bus_unsupported_address == 0xFF01u;
+        if (!passed) {
+            fprintf(stderr, "state-fork boundary predicate failed: %s reason=%d bus_unsupported=%d address=%04x\n",
+                case_id, (int)prefix.reason, source->bus_unsupported,
+                (unsigned)source->bus_unsupported_address);
+            return 0;
+        }
+        printf("boundary-predicate case=%s id=bus_unsupported value=0 context=unsupported-bus-return\n",
+               case_id);
+    }
     return 1;
 }
 
@@ -354,7 +629,7 @@ static void emit_inflight_categories(const char *case_id, const gbb_instance *m)
 }
 
 static int state_fork_case(const char *case_id, const char *rom_path,
-                           gbb_profile profile) {
+                           gbb_profile profile, uint64_t prefix_budget) {
     gbb_instance *source = NULL, *target = NULL, *baseline = NULL;
     if (!load_instance(rom_path, profile, &source) ||
         !load_instance(rom_path, profile, &target) ||
@@ -365,24 +640,21 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         fprintf(stderr, "state-fork setup failure: %s\n", case_id);
         return 2;
     }
-    const uint64_t prefix_budget = UINT64_C(140448);
     gbb_audio_frame prefix_audio[FORK_AUDIO_CAPACITY];
     size_t prefix_count = 0u;
     const gbb_run_result prefix = gbb_run_audio(source, prefix_budget,
         prefix_audio, FORK_AUDIO_CAPACITY, &prefix_count);
+    if (strncmp(case_id, "generated:", 10u) == 0)
+        printf("seed-boundary case=%s requested=%llu consumed=%llu reason=%d time=%llu\n",
+            case_id, (unsigned long long)prefix_budget,
+            (unsigned long long)prefix.consumed_half_dots, (int)prefix.reason,
+            (unsigned long long)source->time_half_dots);
     if (prefix.reason == GBB_STOP_INVALID_STATE || prefix.reason == GBB_STOP_NO_PROGRESS) {
         fprintf(stderr, "state-fork setup failure: public prefix did not advance: %s\n", case_id);
         gbb_destroy(target);
         gbb_destroy(baseline);
         gbb_destroy(source);
         return 2;
-    }
-    if (prefix.reason == GBB_STOP_UNSUPPORTED_BUS && source->bus_unsupported == 0 &&
-        source->bus_unsupported_address != 0u &&
-        (strcmp(case_id, "generated:bus_unsupported:dmg") == 0 ||
-         strcmp(case_id, "generated:bus_unsupported:cgb") == 0)) {
-        printf("constant-witness case=%s id=bus_unsupported value=0 consumer_result=%d address=%04x\n",
-            case_id, (int)prefix.reason, (unsigned)source->bus_unsupported_address);
     }
     const uint64_t source_battery_before = source->battery_generation;
     const uint64_t source_rumble_before = source->cart.rumble_changes;
@@ -409,11 +681,39 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         }
     }
     gbb_input_event queued = {0};
-    queued.at_half_dots = source->time_half_dots + UINT64_C(70000);
-    queued.kind = GBB_INPUT_BUTTON_PRESS;
-    queued.value = GBB_BUTTON_A;
+    const int immediate_button = strncmp(case_id, "generated:joypad_applied:",
+        sizeof("generated:joypad_applied:") - 1u) == 0;
+    const int stop_wake = strncmp(case_id, "generated:stop_wake:",
+        sizeof("generated:stop_wake:") - 1u) == 0;
+    queued.at_half_dots = source->time_half_dots +
+        (immediate_button ? 1u : UINT64_C(70000));
+    queued.kind = stop_wake ? GBB_INPUT_STOP_WAKE : GBB_INPUT_BUTTON_PRESS;
+    queued.value = stop_wake ? 1u : GBB_BUTTON_A;
     if (gbb_queue_events(source, &queued, 1u) != GBB_OK) {
         fprintf(stderr, "state-fork setup failure: queued input: %s\n", case_id);
+        gbb_destroy(target);
+        gbb_destroy(baseline);
+        gbb_destroy(source);
+        return 2;
+    }
+    if (immediate_button) {
+        const gbb_run_result input_run = gbb_run(source, 8u, NULL, 0u);
+        if (input_run.consumed_half_dots == 0u ||
+            (source->joypad_buttons & (1u << GBB_BUTTON_A)) == 0u) {
+            fprintf(stderr, "state-fork setup failure: applied joypad event not observed: %s\n", case_id);
+            gbb_destroy(target);
+            gbb_destroy(baseline);
+            gbb_destroy(source);
+            return 2;
+        }
+    }
+    if (!seed_generated_boundary(case_id, source)) {
+        gbb_destroy(target);
+        gbb_destroy(baseline);
+        gbb_destroy(source);
+        return 2;
+    }
+    if (!verify_generated_boundary_predicates(case_id, source, prefix)) {
         gbb_destroy(target);
         gbb_destroy(baseline);
         gbb_destroy(source);
@@ -715,29 +1015,61 @@ static int state_slice_invariance(void) {
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "state_slice_invariance") == 0)
         return state_slice_invariance();
+    if (argc >= 5 && strcmp(argv[1], "case") == 0) {
+        uint64_t prefix_budget = UINT64_C(140448);
+        for (int arg = 5; arg < argc; ++arg) {
+            if (strcmp(argv[arg], "--budget") == 0 && arg + 1 < argc) {
+                uint64_t value = 0u;
+                const char *digits = argv[++arg];
+                if (*digits == '\0') return 2;
+                for (; *digits != '\0'; ++digits) {
+                    if (*digits < '0' || *digits > '9') return 2;
+                    const uint64_t digit = (uint64_t)(*digits - '0');
+                    if (value > (UINT64_MAX - digit) / 10u) return 2;
+                    value = value * 10u + digit;
+                }
+                if (value == 0u) return 2;
+                prefix_budget = value;
+            }
 #ifdef GBB_STATE_FORK_MUTANT
-    const char *mutant_arg = NULL;
-    if ((argc == 7 && strcmp(argv[5], "--mutant") == 0) ||
-        (argc == 6 && strcmp(argv[4], "--mutant") == 0)) {
-        mutant_arg = argv[argc - 1];
-        state_fork_mutant_field = mutant_arg;
-    }
-#define GBB_FORK_CASE_ARGS \
-    (argc == 5 || (argc == 7 && strcmp(argv[5], "--mutant") == 0))
-#define GBB_FORK_GENERATED_ARGS \
-    (argc == 4 || (argc == 6 && strcmp(argv[4], "--mutant") == 0))
-#else
-#define GBB_FORK_CASE_ARGS (argc == 5)
-#define GBB_FORK_GENERATED_ARGS (argc == 4)
+            else if (strcmp(argv[arg], "--mutant") == 0 && arg + 1 < argc &&
+                     state_fork_mutant_field == NULL) {
+                state_fork_mutant_field = argv[++arg];
+            }
 #endif
-    if (GBB_FORK_CASE_ARGS && strcmp(argv[1], "case") == 0) {
+            else return 2;
+        }
         const gbb_profile profile = strcmp(argv[4], "cgb") == 0
             ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B;
-        return state_fork_case(argv[2], argv[3], profile);
+        if (strcmp(argv[4], "cgb") != 0 && strcmp(argv[4], "dmg") != 0) return 2;
+        return state_fork_case(argv[2], argv[3], profile, prefix_budget);
     }
-    if (GBB_FORK_GENERATED_ARGS && strcmp(argv[1], "generated_fields") == 0) {
+    if (argc >= 4 && strcmp(argv[1], "generated_fields") == 0) {
         const int cgb = strcmp(argv[3], "cgb") == 0;
         if (!cgb && strcmp(argv[3], "dmg") != 0) return 2;
+        uint64_t prefix_budget = UINT64_C(140448);
+        for (int arg = 4; arg < argc; ++arg) {
+            if (strcmp(argv[arg], "--budget") == 0 && arg + 1 < argc) {
+                uint64_t value = 0u;
+                const char *digits = argv[++arg];
+                if (*digits == '\0') return 2;
+                for (; *digits != '\0'; ++digits) {
+                    if (*digits < '0' || *digits > '9') return 2;
+                    const uint64_t digit = (uint64_t)(*digits - '0');
+                    if (value > (UINT64_MAX - digit) / 10u) return 2;
+                    value = value * 10u + digit;
+                }
+                if (value == 0u) return 2;
+                prefix_budget = value;
+            }
+#ifdef GBB_STATE_FORK_MUTANT
+            else if (strcmp(argv[arg], "--mutant") == 0 && arg + 1 < argc &&
+                     state_fork_mutant_field == NULL) {
+                state_fork_mutant_field = argv[++arg];
+            }
+#endif
+            else return 2;
+        }
         uint8_t *rom = NULL;
         size_t rom_size = 0u;
         if (!generated_rom(argv[2], &rom, &rom_size)) return 2;
@@ -755,8 +1087,8 @@ int main(int argc, char **argv) {
             "generated:%s:%s", argv[2], cgb ? "cgb" : "dmg");
         if (id_size < 0 || (size_t)id_size >= sizeof(generated_case_id)) return 2;
         return state_fork_case(generated_case_id, generated_path,
-            cgb ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B);
+            cgb ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B, prefix_budget);
     }
-    fprintf(stderr, "usage: test_state_fork state_slice_invariance | case ID ROM dmg|cgb [--mutant FIELD] | generated_fields ID dmg|cgb [--mutant FIELD]\n");
+    fprintf(stderr, "usage: test_state_fork state_slice_invariance | case ID ROM dmg|cgb [--budget HALF_DOTS] [--mutant FIELD] | generated_fields ID dmg|cgb [--budget HALF_DOTS] [--mutant FIELD]\n");
     return 2;
 }

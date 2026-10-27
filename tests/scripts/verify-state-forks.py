@@ -275,10 +275,13 @@ def verify_rom(rev: str, repo: Path, case: dict) -> None:
         raise ForkError(f"working fixture missing/stale relative to immutable input: {case['id']}")
 
 
-def parse_runner_output(output: str) -> tuple[list[dict], list[dict], list[dict]]:
+def parse_runner_output(output: str) -> tuple[list[dict], list[dict], list[dict], list[dict], list[dict], list[dict]]:
     fields: list[dict] = []
     categories: list[dict] = []
     constants: list[dict] = []
+    seed_boundaries: list[dict] = []
+    public_state_seeds: list[dict] = []
+    boundary_predicates: list[dict] = []
     for line in output.splitlines():
         if line.startswith("field-witness "):
             parts = dict(part.split("=", 1) for part in line.split()[1:] if "=" in part)
@@ -289,7 +292,13 @@ def parse_runner_output(output: str) -> tuple[list[dict], list[dict], list[dict]
             categories.append(dict(part.split("=", 1) for part in line.split()[1:] if "=" in part))
         elif line.startswith("constant-witness "):
             constants.append(dict(part.split("=", 1) for part in line.split()[1:] if "=" in part))
-    return fields, categories, constants
+        elif line.startswith("seed-boundary "):
+            seed_boundaries.append(dict(part.split("=", 1) for part in line.split()[1:] if "=" in part))
+        elif line.startswith("public-state-seed "):
+            public_state_seeds.append(dict(part.split("=", 1) for part in line.split()[1:] if "=" in part))
+        elif line.startswith("boundary-predicate "):
+            boundary_predicates.append(dict(part.split("=", 1) for part in line.split()[1:] if "=" in part))
+    return fields, categories, constants, seed_boundaries, public_state_seeds, boundary_predicates
 
 
 def run_shard(args: argparse.Namespace) -> None:
@@ -307,7 +316,7 @@ def run_shard(args: argparse.Namespace) -> None:
         command = [str(args.test_exe), "case", case["id"], str(args.repo / case["rom"]), case["profile"]]
         proc = subprocess.run(command, cwd=args.repo, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True, check=False)
-        fields, categories, constants = parse_runner_output(proc.stdout)
+        fields, categories, constants, _, _, _ = parse_runner_output(proc.stdout)
         if proc.returncode != 0:
             raise ForkError(f"fork case failed id={case['id']} exit={proc.returncode}\n{proc.stdout[-12000:]}")
         results.append({"index": index, **case, "field_witnesses": fields,
@@ -315,32 +324,44 @@ def run_shard(args: argparse.Namespace) -> None:
                         "constant_witnesses": constants,
                         "stdout_sha256": hashlib.sha256(proc.stdout.encode()).hexdigest()})
     generated_results = []
-    if args.shard == 0:
-        for fixture in spec.get("generated_field_fixtures", []):
-            for profile in fixture.get("profiles", []):
-                proc = subprocess.run([str(args.test_exe), "generated_fields", fixture["id"], profile],
-                                      cwd=args.repo, stdout=subprocess.PIPE,
-                                      stderr=subprocess.STDOUT, text=True, check=False)
-                if proc.returncode != 0:
-                    raise ForkError(f"generated field fork failed id={fixture.get('id')} profile={profile} exit={proc.returncode}\n{proc.stdout[-12000:]}")
-                header = next((line for line in proc.stdout.splitlines()
-                               if line.startswith("generated-rom ")), None)
-                if header is None:
-                    raise ForkError(f"generated field fork omitted ROM identity: {fixture.get('id')} {profile}")
-                identity = dict(part.split("=", 1) for part in header.split()[1:] if "=" in part)
-                if (identity.get("id") != fixture.get("id") or identity.get("profile") != profile or
-                    identity.get("sha256") != fixture.get("sha256") or
-                    int(identity.get("size", "0")) != fixture.get("size_bytes")):
-                    raise ForkError(f"generated field fixture identity differs from immutable spec: {header}")
-                fields, categories, constants = parse_runner_output(proc.stdout)
-                generated_results.append({
-                    "id": f"generated:{fixture['id']}:{profile}",
-                    "fixture_id": fixture["id"], "source": fixture["source"],
-                    "sha256": fixture["sha256"], "size_bytes": fixture["size_bytes"],
-                    "profile": profile, "field_witnesses": fields,
-                    "category_witnesses": categories, "constant_witnesses": constants,
-                    "stdout_sha256": hashlib.sha256(proc.stdout.encode()).hexdigest(),
-                })
+    generated_jobs = [(fixture, profile)
+                      for fixture in spec.get("generated_field_fixtures", [])
+                      for profile in fixture.get("profiles", [])]
+    for generated_index, (fixture, profile) in enumerate(generated_jobs):
+        if generated_index % args.shards != args.shard:
+            continue
+        prefix_budget = fixture.get("prefix_budgets", {}).get(profile)
+        if not isinstance(prefix_budget, int) or prefix_budget <= 0:
+            raise ForkError(f"generated fixture lacks a positive profile prefix budget: {fixture.get('id')} {profile}")
+        proc = subprocess.run([str(args.test_exe), "generated_fields", fixture["id"], profile,
+                               "--budget", str(prefix_budget)],
+                              cwd=args.repo, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True, check=False)
+        if proc.returncode != 0:
+            raise ForkError(f"generated field fork failed id={fixture.get('id')} profile={profile} exit={proc.returncode}\n{proc.stdout[-12000:]}")
+        header = next((line for line in proc.stdout.splitlines()
+                       if line.startswith("generated-rom ")), None)
+        if header is None:
+            raise ForkError(f"generated field fork omitted ROM identity: {fixture.get('id')} {profile}")
+        identity = dict(part.split("=", 1) for part in header.split()[1:] if "=" in part)
+        if (identity.get("id") != fixture.get("id") or identity.get("profile") != profile or
+            identity.get("sha256") != fixture.get("sha256") or
+            int(identity.get("size", "0")) != fixture.get("size_bytes")):
+            raise ForkError(f"generated field fixture identity differs from immutable spec: {header}")
+        fields, categories, constants, seeds, public_seeds, boundary_predicates = parse_runner_output(proc.stdout)
+        generated_results.append({
+            "id": f"generated:{fixture['id']}:{profile}",
+            "fixture_id": fixture["id"], "source": fixture["source"],
+            "sha256": fixture["sha256"], "size_bytes": fixture["size_bytes"],
+            "profile": profile, "prefix_budget": prefix_budget,
+            "boundary_origin": fixture.get("boundary_origin"),
+            "boundary_predicate": fixture.get("boundary_predicate"),
+            "seed_boundaries": seeds, "public_state_seeds": public_seeds,
+            "boundary_predicates": boundary_predicates,
+            "field_witnesses": fields,
+            "category_witnesses": categories, "constant_witnesses": constants,
+            "stdout_sha256": hashlib.sha256(proc.stdout.encode()).hexdigest(),
+        })
     report = {
         "schema": "gabbaboy-state-fork-shard-v1", "rev": rev,
         "spec_sha256": digest(spec_raw), "shard": args.shard, "shards": args.shards,
@@ -441,8 +462,51 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
         fixture, profile = expected_generated[case["id"]]
         if (case.get("fixture_id") != fixture["id"] or case.get("profile") != profile or
             case.get("sha256") != fixture["sha256"] or case.get("size_bytes") != fixture["size_bytes"] or
-            case.get("source") != fixture["source"]):
+            case.get("source") != fixture["source"] or
+            case.get("prefix_budget") != fixture.get("prefix_budgets", {}).get(profile) or
+            case.get("boundary_origin") != fixture.get("boundary_origin") or
+            case.get("boundary_predicate") != fixture.get("boundary_predicate")):
             raise ForkError(f"generated field fixture identity/digest mismatch: {case.get('id')}")
+        seed_boundaries = case.get("seed_boundaries", [])
+        if len(seed_boundaries) != 1:
+            raise ForkError(f"generated save boundary lacks one measured public run: {case.get('id')}")
+        seed = seed_boundaries[0]
+        try:
+            requested, consumed, time = (int(seed[key]) for key in ("requested", "consumed", "time"))
+            reason = int(seed["reason"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ForkError(f"malformed generated save-boundary measurement: {case.get('id')}") from exc
+        if (seed.get("case") != case.get("id") or requested != case.get("prefix_budget") or
+            consumed <= 0 or consumed > requested or time != consumed or reason < 0):
+            raise ForkError(f"generated save-boundary measurement differs from fixture contract: {case.get('id')}")
+        expected_seeded = fixture.get("seeded_wire_fields", [])
+        public_seeds = case.get("public_state_seeds", [])
+        if expected_seeded:
+            if (len(public_seeds) != 1 or public_seeds[0].get("case") != case.get("id") or
+                public_seeds[0].get("origin") != "crc-valid-public-load" or
+                public_seeds[0].get("fields", "").split(",") != expected_seeded):
+                raise ForkError(f"generated accepted-state load witness differs from fixture contract: {case.get('id')}")
+        elif public_seeds:
+            raise ForkError(f"unlisted generated accepted-state load in {case.get('id')}")
+        expected_values = fixture.get("required_boundary_values", {})
+        actual_values = {}
+        for row in case.get("boundary_predicates", []):
+            if row.get("case") != case.get("id"):
+                raise ForkError(f"boundary predicate witness is attributed to another case: {case.get('id')}")
+            try:
+                actual_values[row["id"]] = int(row["value"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ForkError(f"malformed boundary predicate witness: {case.get('id')}") from exc
+        if actual_values != expected_values:
+            raise ForkError(f"generated boundary values differ from executable predicate contract in {case.get('id')}")
+        witnessed_fields = {row.get("id") for row in case.get("field_witnesses", [])}
+        missing_fields = set(fixture.get("required_fields", [])) - witnessed_fields
+        if missing_fields:
+            raise ForkError(f"generated boundary predicate fields are unwitnessed in {case.get('id')}: {sorted(missing_fields)}")
+        witnessed_categories = {row.get("id") for row in case.get("category_witnesses", [])}
+        missing_case_categories = set(fixture.get("required_categories", [])) - witnessed_categories
+        if missing_case_categories:
+            raise ForkError(f"generated boundary predicate categories are unwitnessed in {case.get('id')}: {sorted(missing_case_categories)}")
     fields = field_paths_from_source(source)
     all_cases = report["cases"] + generated_cases
     actual_witnesses: set[str] = set()
