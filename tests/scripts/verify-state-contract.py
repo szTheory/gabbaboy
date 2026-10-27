@@ -31,6 +31,112 @@ def run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedP
     return subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
 
 
+def parse_cmake_cache_text(text: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for line in text.splitlines():
+        if line.startswith(("#", "//")):
+            continue
+        match = re.match(r"^([^:#]+):[^=]+=([^\r\n]*)$", line)
+        if match:
+            values[match.group(1)] = match.group(2)
+    return values
+
+
+def read_cmake_cache(build_dir: Path) -> dict[str, str]:
+    cache = build_dir / "CMakeCache.txt"
+    if not cache.is_file():
+        raise ContractError(f"configured CMake cache is missing: {cache}")
+    return parse_cmake_cache_text(cache.read_text(encoding="utf-8", errors="replace"))
+
+
+def cmake_bool(value: str, name: str) -> bool:
+    normalized = value.strip().upper()
+    if normalized in {"ON", "TRUE", "YES", "Y", "1"}:
+        return True
+    if normalized in {"OFF", "FALSE", "NO", "N", "0", ""}:
+        return False
+    raise ContractError(f"CMake cache option {name} has invalid boolean value: {value!r}")
+
+
+def cmake_executable_suffix(cache: dict[str, str], *, host_is_windows: bool | None = None) -> str:
+    if "CMAKE_EXECUTABLE_SUFFIX" in cache:
+        return cache["CMAKE_EXECUTABLE_SUFFIX"]
+    system_name = cache.get("CMAKE_SYSTEM_NAME", "").strip().lower()
+    windows_host = os.name == "nt" if host_is_windows is None else host_is_windows
+    return ".exe" if system_name.startswith("windows") or windows_host else ""
+
+
+def _target_paths(build_dir: Path, relative_paths: list[Path], configuration: str) -> list[Path]:
+    candidates: list[Path] = []
+    for relative in relative_paths:
+        candidates.append(build_dir / relative.parent / configuration / relative.name)
+        candidates.append(build_dir / configuration / relative)
+    return candidates
+
+
+def resolve_cmake_artifact(build_dir: Path, relative_paths: list[Path], cache: dict[str, str],
+                           *, configuration: str = "", label: str) -> tuple[Path, str]:
+    """Find an artifact from a single- or multi-configuration CMake build."""
+    configurations = [item.strip() for item in cache.get("CMAKE_CONFIGURATION_TYPES", "").split(";")
+                     if item.strip()]
+    if not configurations:
+        candidates = [build_dir / relative for relative in relative_paths]
+        found = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if found is None:
+            raise ContractError(f"{label} is missing; checked: {', '.join(map(str, candidates))}")
+        return found, ""
+
+    selected = configuration.strip() or os.environ.get("CTEST_CONFIGURATION_TYPE", "").strip()
+    if selected:
+        if selected not in configurations:
+            raise ContractError(
+                f"CMake configuration {selected!r} is not in CMAKE_CONFIGURATION_TYPES: "
+                f"{', '.join(configurations)}")
+        candidates = _target_paths(build_dir, relative_paths, selected)
+        found = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if found is not None:
+            return found, selected
+        # A multi-config project may explicitly set an output directory that omits
+        # the configuration component. Honor it only after checking the selected
+        # configuration-specific locations.
+        direct = [build_dir / relative for relative in relative_paths]
+        found = next((candidate for candidate in direct if candidate.is_file()), None)
+        if found is not None:
+            return found, selected
+        raise ContractError(f"{label} for configuration {selected} is missing; checked: "
+                            f"{', '.join(map(str, candidates + direct))}")
+
+    matches: list[tuple[Path, str]] = []
+    for candidate_config in configurations:
+        candidates = _target_paths(build_dir, relative_paths, candidate_config)
+        found = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if found is not None:
+            matches.append((found, candidate_config))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise ContractError(f"{label} exists in multiple configurations; pass --configuration: "
+                            f"{', '.join(config for _path, config in matches)}")
+    # Some projects explicitly override output directories in multi-config builds.
+    candidates = [build_dir / relative for relative in relative_paths]
+    found = next((candidate for candidate in candidates if candidate.is_file()), None)
+    if found is not None:
+        return found, ""
+    checked = [str(path) for config in configurations
+               for path in _target_paths(build_dir, relative_paths, config)] + list(map(str, candidates))
+    raise ContractError(f"{label} is missing; checked: {', '.join(checked)}")
+
+
+def installed_consumer_link_options(cache: dict[str, str],
+                                    configured_options: str | None = None) -> str:
+    """Match the package consumer tests: link sanitizer runtimes when the core was instrumented."""
+    if configured_options and configured_options.strip():
+        return configured_options.strip()
+    if cmake_bool(cache.get("GABBABOY_ENABLE_SANITIZERS", "OFF"), "GABBABOY_ENABLE_SANITIZERS"):
+        return "-fsanitize=address,undefined"
+    return ""
+
+
 def git_show(root: Path, rev: str, path: str) -> str:
     if not re.fullmatch(r"[0-9a-f]{40}", rev):
         raise ContractError("--rev must be a resolved immutable 40-hex commit")
@@ -1025,10 +1131,18 @@ def run_tracer(args: argparse.Namespace, root: Path, core: str, header: str) -> 
         raise ContractError("installed tracer has no immutable state field inventory")
     if args.rom is None or not args.rom.is_file():
         raise ContractError("--tracer requires the original ROM-only DMG fixture")
+    cache_values = read_cmake_cache(args.build_dir)
+    _api_path, build_configuration = resolve_cmake_artifact(
+        args.build_dir,
+        [Path("tests") / ("test_state_api" + cmake_executable_suffix(cache_values))],
+        cache_values, configuration=args.configuration, label="pre-codec proof executable")
     with tempfile.TemporaryDirectory(prefix="gabbaboy-state-tracer-") as temp:
         temp_root = Path(temp)
         prefix = temp_root / "prefix"
-        install = run([args.cmake, "--install", str(args.build_dir), "--prefix", str(prefix)], cwd=root)
+        install_command = [args.cmake, "--install", str(args.build_dir), "--prefix", str(prefix)]
+        if build_configuration:
+            install_command.extend(["--config", build_configuration])
+        install = run(install_command, cwd=root)
         if install.returncode != 0:
             raise ContractError(f"temporary install failed ({install.returncode}): {install.stdout}{install.stderr}")
         installed_header = prefix / "include/gabbaboy/gabbaboy.h"
@@ -1143,19 +1257,31 @@ int main(int argc, char **argv) {
                          "-DCMAKE_C_COMPILER=" + args.cc]
         if args.generator:
             configure_cmd.extend(["-G", args.generator])
+        link_options = installed_consumer_link_options(
+            cache_values, os.environ.get("GBB_SANITIZER_LINK_OPTIONS"))
+        if link_options:
+            configure_cmd.append("-DCMAKE_EXE_LINKER_FLAGS=" + link_options)
         configured = run(configure_cmd, cwd=root)
         if configured.returncode != 0:
             raise ContractError(f"installed client configure failed ({configured.returncode}): {configured.stdout}{configured.stderr}")
-        built = run([args.cmake, "--build", str(build_dir)], cwd=root)
+        child_cache = read_cmake_cache(build_dir)
+        build_command = [args.cmake, "--build", str(build_dir)]
+        if build_configuration:
+            build_command.extend(["--config", build_configuration])
+        built = run(build_command, cwd=root)
         if built.returncode != 0:
             raise ContractError(f"installed client build failed ({built.returncode}): {built.stdout}{built.stderr}")
-        exe = build_dir / "state_tracer_client"
-        if os.name == "nt":
-            exe = exe.with_suffix(".exe")
+        exe, _client_configuration = resolve_cmake_artifact(
+            build_dir,
+            [Path("state_tracer_client" + cmake_executable_suffix(child_cache))],
+            child_cache, configuration=build_configuration,
+            label="installed tracer client executable")
         traced = run([str(exe), str(args.rom.resolve())], cwd=root)
         if traced.returncode != 0:
             raise ContractError(f"installed continuation tracer failed ({traced.returncode}): {traced.stdout}{traced.stderr}")
-        print(f"state installed tracer pass source={args.rev} receipt={receipt_path.relative_to(root)} output={traced.stdout.strip()}")
+        receipt_label = (str(receipt_path.relative_to(root)) if receipt_path.is_relative_to(root)
+                         else receipt_path.name)
+        print(f"state installed tracer pass source={args.rev} receipt={receipt_label} output={traced.stdout.strip()}")
 
 
 def run_precodec(args: argparse.Namespace, root: Path) -> None:
@@ -1165,11 +1291,17 @@ def run_precodec(args: argparse.Namespace, root: Path) -> None:
     if not source_file.is_file() or source_file.read_text() != core:
         raise ContractError("live core source differs from the immutable --rev")
     verify_inventory(core, header)
-    library = args.build_dir / "libgabbaboy_core.a"
+    cache_values = read_cmake_cache(args.build_dir)
+    library, build_configuration = resolve_cmake_artifact(
+        args.build_dir,
+        [Path("libgabbaboy_core.a"), Path("gabbaboy_core.lib")],
+        cache_values, configuration=args.configuration, label="core static library")
     object_receipt = verify_object_symbols(args.objdump, library)
-    api = args.build_dir / "tests" / "test_state_api"
-    if not api.is_file():
-        raise ContractError(f"proof executable is missing: {api}")
+    api, build_configuration = resolve_cmake_artifact(
+        args.build_dir,
+        [Path("tests") / ("test_state_api" + cmake_executable_suffix(cache_values))],
+        cache_values, configuration=build_configuration or args.configuration,
+        label="proof executable")
     proof_results: dict[str, str] = {}
     for case in ("size_bound", "audio_bound"):
         result = run([str(api), case], cwd=root)
@@ -1181,10 +1313,6 @@ def run_precodec(args: argparse.Namespace, root: Path) -> None:
     if self_test.returncode != 0:
         raise ContractError(f"inventory/global negative controls failed: {self_test.stdout}{self_test.stderr}")
     source_hash, descriptor_hash, input_hash = source_digest(root, args.rev)
-    cache = args.build_dir / "CMakeCache.txt"
-    cache_text = cache.read_text(errors="replace") if cache.is_file() else ""
-    compiler_match = re.search(r"^CMAKE_C_COMPILER:FILEPATH=(.*)$", cache_text, re.M)
-    generator_match = re.search(r"^CMAKE_GENERATOR:INTERNAL=(.*)$", cache_text, re.M)
     receipt = {
         "schema": 1,
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -1193,8 +1321,8 @@ def run_precodec(args: argparse.Namespace, root: Path) -> None:
         "descriptor_range_constants_sha256": descriptor_hash,
         "proof_input_sha256": input_hash,
         "proof_executable_sha256": sha256_file(api),
-        "cmake_generator": generator_match.group(1) if generator_match else "unknown",
-        "c_compiler": compiler_match.group(1) if compiler_match else "unknown",
+        "cmake_generator": cache_values.get("CMAKE_GENERATOR", "unknown"),
+        "c_compiler": cache_values.get("CMAKE_C_COMPILER", "unknown"),
         "library": str(library.relative_to(root)) if library.is_relative_to(root) else library.name,
         "library_sha256": object_receipt["library_sha256"],
         "proof_results": proof_results,
@@ -1231,7 +1359,79 @@ def revision_controls_self_test(root: Path, cmake: str) -> None:
                 raise ContractError(
                     f"release-version checker did not fail closed for {revision_args or ['missing --rev']}: "
                     f"exit={result.returncode} output={result.stdout}{result.stderr}")
+    build_consumer_controls_self_test()
     print("state revision controls pass missing=refused unknown=refused missing_object=refused")
+
+
+def build_consumer_controls_self_test() -> None:
+    if cmake_executable_suffix({"CMAKE_SYSTEM_NAME": "Windows"}, host_is_windows=False) != ".exe":
+        raise ContractError("Windows executable suffix control failed")
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-state-build-paths-") as temp:
+        root = Path(temp)
+        single = root / "single"
+        single_api = single / "tests" / "test_state_api"
+        single_api.parent.mkdir(parents=True)
+        single_api.write_bytes(b"native executable fixture")
+        single_cache = parse_cmake_cache_text(
+            "CMAKE_BUILD_TYPE:STRING=Debug\nCMAKE_SYSTEM_NAME:STRING=Linux\n")
+        resolved, configuration = resolve_cmake_artifact(
+            single, [Path("tests/test_state_api")], single_cache, label="single-config control")
+        if resolved != single_api or configuration:
+            raise ContractError("single-config executable path control failed")
+
+        multi = root / "multi"
+        debug_api = multi / "tests" / "Debug" / "test_state_api.exe"
+        debug_api.parent.mkdir(parents=True)
+        debug_api.write_bytes(b"Debug executable fixture")
+        multi_cache = parse_cmake_cache_text(
+            "CMAKE_CONFIGURATION_TYPES:STRING=Debug;Release\nCMAKE_SYSTEM_NAME:STRING=Windows\n")
+        resolved, configuration = resolve_cmake_artifact(
+            multi, [Path("tests/test_state_api.exe")], multi_cache, label="multi-config control")
+        if resolved != debug_api or configuration != "Debug":
+            raise ContractError("unique multi-config executable lookup failed")
+        release_api = multi / "tests" / "Release" / "test_state_api.exe"
+        release_api.parent.mkdir(parents=True)
+        release_api.write_bytes(b"Release executable fixture")
+        try:
+            resolve_cmake_artifact(
+                multi, [Path("tests/test_state_api.exe")], multi_cache, label="ambiguous control")
+        except ContractError as error:
+            if "pass --configuration" not in str(error):
+                raise ContractError(f"ambiguous configuration control reported the wrong error: {error}") from error
+        else:
+            raise ContractError("multi-config executable lookup silently selected one of two outputs")
+        selected, configuration = resolve_cmake_artifact(
+            multi, [Path("tests/test_state_api.exe")], multi_cache,
+            configuration="Release", label="selected-config control")
+        if selected != release_api or configuration != "Release":
+            raise ContractError("explicit multi-config executable lookup failed")
+
+        try:
+            resolve_cmake_artifact(
+                multi, [Path("tests/missing.exe")], multi_cache,
+                configuration="Release", label="missing executable control")
+        except ContractError as error:
+            if "missing executable control for configuration Release is missing" not in str(error):
+                raise ContractError(f"missing executable control reported the wrong error: {error}") from error
+        else:
+            raise ContractError("missing executable control was accepted")
+
+    if installed_consumer_link_options({"GABBABOY_ENABLE_SANITIZERS": "OFF"}) != "":
+        raise ContractError("non-sanitized consumer unexpectedly received sanitizer flags")
+    expected_sanitizers = "-fsanitize=address,undefined"
+    if installed_consumer_link_options({"GABBABOY_ENABLE_SANITIZERS": "ON"}) != expected_sanitizers:
+        raise ContractError("sanitized consumer is missing configured sanitizer link flags")
+    if installed_consumer_link_options(
+            {"GABBABOY_ENABLE_SANITIZERS": "OFF"}, "-fsanitize=address,undefined") != expected_sanitizers:
+        raise ContractError("explicit sanitizer link options were not propagated")
+    try:
+        installed_consumer_link_options({"GABBABOY_ENABLE_SANITIZERS": "maybe"})
+    except ContractError as error:
+        if "invalid boolean value" not in str(error):
+            raise ContractError(f"invalid sanitizer cache control reported the wrong error: {error}") from error
+    else:
+        raise ContractError("invalid sanitizer cache value was accepted")
+    print("state build consumer controls pass windows_suffix=resolved multi_config=selected ambiguity=refused sanitizer_link=propagated")
 
 
 def verify_live_revision_file(relative: str, immutable: str, live: str) -> None:
@@ -1314,6 +1514,7 @@ def main() -> int:
     parser.add_argument("--objdump", default=os.environ.get("CMAKE_OBJDUMP", "objdump"))
     parser.add_argument("--cc", default=os.environ.get("CC", "cc"))
     parser.add_argument("--generator", default="")
+    parser.add_argument("--configuration", default="")
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     args = parser.parse_args()
     root = args.repo.resolve()
