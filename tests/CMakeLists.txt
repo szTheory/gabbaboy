@@ -5008,6 +5008,51 @@ add_test(NAME state_refusal_controls COMMAND test_state_internal state_refusal_c
 set_tests_properties(state_observers state_rtc_palette state_refusal state_refusal_controls
   PROPERTIES TIMEOUT 60)
 
+# Public save/load continuation forks use a private descriptor visitor only to poison the
+# receiving instance and emit save-boundary witnesses. All behavior under comparison goes
+# through the public API; no core object is linked a second time.
+add_executable(test_state_fork test_state_fork.c)
+target_include_directories(test_state_fork PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/core"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_fork PRIVATE c_std_17)
+set_target_properties(test_state_fork PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_slice_invariance COMMAND test_state_fork state_slice_invariance)
+set_tests_properties(state_slice_invariance PROPERTIES TIMEOUT 60)
+set(GBB_STATE_FORK_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-forks.py")
+set(GBB_STATE_FORK_REPORT "${PROJECT_BINARY_DIR}/state-fork-matrix.json")
+set(GBB_STATE_FORK_SHARDS 16)
+math(EXPR GBB_STATE_FORK_SHARD_LAST "${GBB_STATE_FORK_SHARDS} - 1")
+foreach(gbb_state_fork_shard RANGE 0 ${GBB_STATE_FORK_SHARD_LAST})
+  add_test(NAME "state_fork_matrix_shard_${gbb_state_fork_shard}"
+    COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+      --matrix-shard --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+      --test-exe "$<TARGET_FILE:test_state_fork>"
+      --shard ${gbb_state_fork_shard} --shards ${GBB_STATE_FORK_SHARDS}
+      --report "${PROJECT_BINARY_DIR}/state-fork-matrix-shard-${gbb_state_fork_shard}.json")
+  set_tests_properties("state_fork_matrix_shard_${gbb_state_fork_shard}"
+    PROPERTIES TIMEOUT 60 FIXTURES_SETUP gbb_state_fork_matrix_shards)
+endforeach()
+add_test(NAME state_fork_matrix
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --matrix-summary --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --shards ${GBB_STATE_FORK_SHARDS} --report-dir "${PROJECT_BINARY_DIR}"
+    --report "${GBB_STATE_FORK_REPORT}")
+set_tests_properties(state_fork_matrix PROPERTIES
+  TIMEOUT 30 FIXTURES_REQUIRED gbb_state_fork_matrix_shards
+  FIXTURES_SETUP gbb_state_fork_matrix_complete)
+add_test(NAME state_fork_census
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --check "${GBB_STATE_FORK_REPORT}" --rev "${GBB_STATE_SOURCE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}")
+add_test(NAME state_fork_census_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --check "${GBB_STATE_FORK_REPORT}" --rev "${GBB_STATE_SOURCE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}" --self-test)
+set_tests_properties(state_fork_census state_fork_census_controls PROPERTIES
+  TIMEOUT 30 FIXTURES_REQUIRED gbb_state_fork_matrix_complete)
+
 # Every run mode shares the operational time-horizon scheduler. These white-box
 # cases seed genuine codec-valid boundary states and exercise the independent
 # STOP, stall, HDMA, IRQ, HALT, instruction and reservation paths.

@@ -1,0 +1,89 @@
+{
+  "schema": "gabbaboy-state-forks-v1",
+  "expected_case_count": 153,
+  "corpus_union": {
+    "fixture_manifest_rom_rows": 147,
+    "acceptance_rows": 6,
+    "oracle_replay_claim": false,
+    "preserve_original_outcomes": true,
+    "note": "The fork matrix covers every ROM row in all 20 admitted fixture manifests plus both existing acceptance lists. Expected failure, pass, prior observation and acceptance negative-control labels remain attached as provenance. Fork equality is snapshot-equivalence; it does not replay the original oracle."
+  },
+  "contract": {
+    "proof": "snapshot-equivalence",
+    "oracle_replay_claim": false,
+    "case_boundary": "deterministic public run budget then save",
+    "same_rom_profile_mode": true,
+    "fresh_target": true,
+    "poison": "all serialized storage through the private descriptor visitor while retaining ownership and identity",
+    "future_observations": [
+      "run-result-fields",
+      "every-pcm-sample",
+      "every-applicable-frame-and-metadata",
+      "projected-battery-bytes",
+      "rumble-line",
+      "final-canonical-state-bytes"
+    ],
+    "observer_history": "compare target-local battery and rumble counter deltas separately"
+  },
+  "fixture_manifests": [
+    {"path": "fixtures/age/manifest.json", "sha256": "52a022327cc9b6eb9df2a6383b77cf8c006fca26e789c757c15dc2c58e1e4791", "rom_rows": 19},
+    {"path": "fixtures/cgb-banking/manifest.json", "sha256": "99777e6c8ea35df41c25dab2c9e68d72ba3e7255bf174373492d7c2dd5d2cb2d", "rom_rows": 2},
+    {"path": "fixtures/cgb-colour/manifest.json", "sha256": "d5ea2b36abb53b9efea4f004bdfaae70dc4e126eb323008e559196adea1854bc", "rom_rows": 6},
+    {"path": "fixtures/cgb-hdma/manifest.json", "sha256": "450a022cf8afdc6d6b061ac6188dc7ebe18c8c6e8871f0a7751bd291963871e6", "rom_rows": 1},
+    {"path": "fixtures/cgb-speed/manifest.json", "sha256": "5306847c203c018e76752be188658182b16a6efa12347eb8048f8c55d6767383", "rom_rows": 2},
+    {"path": "fixtures/libbet/manifest.json", "sha256": "512d1b4de7656795dba07dc81b025593bd57a74288605eac88684da6b744f08a", "rom_rows": 1},
+    {"path": "fixtures/magentests/manifest.json", "sha256": "73478d75c229fee715917e9e415dfd0285944f84cf4c14b65e18e88bc8bf2d77", "rom_rows": 7},
+    {"path": "fixtures/mbc1-continuation/manifest.json", "sha256": "1c25c570be98ece42ff9069635fb07cf4559b578817373ec3bd4d3552e8809d1", "rom_rows": 1},
+    {"path": "fixtures/mbc2-continuation/manifest.json", "sha256": "7dd0f0eada9a87e061b33c020669f52e0cafd2311598e599889e47bd2805d2e5", "rom_rows": 1},
+    {"path": "fixtures/mbc3-rtc-continuation/manifest.json", "sha256": "f92e89fb6466fbcafe448d2eab594baa374f5d8bde7b773dfe78263ddd85838e", "rom_rows": 1},
+    {"path": "fixtures/mbc5-banking/manifest.json", "sha256": "017ff445bbd8d26ff542d556062be030b99c961c8b080009d5f0e15ba70472ad", "rom_rows": 1},
+    {"path": "fixtures/mbc5-continuation/manifest.json", "sha256": "125038120297a6367b561b9c0fa200f9f825c9b96d7a6db402966701a4f83a09", "rom_rows": 1},
+    {"path": "fixtures/mooneye-cgb/manifest.json", "sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9", "rom_rows": 9},
+    {"path": "fixtures/mooneye-mbc/manifest.json", "sha256": "9800c795fcf033abd6bda2e171af6c22d27e745f2b5946fc49bd0f9ce2fb5801", "rom_rows": 15},
+    {"path": "fixtures/mooneye/manifest.json", "sha256": "98a1799b8be9c022ac13467a552890fb12bdd706017e42e12c944ec618d60527", "rom_rows": 3},
+    {"path": "fixtures/rtc3test/manifest.json", "sha256": "796d52f1da3af600e10d0a23c96d6dac7e6f7ff26077d1e29b3ce650da459443", "rom_rows": 1},
+    {"path": "fixtures/samesuite/manifest.json", "sha256": "19334fff5cd1427dff335ad22dba7436f58596bf07d5fd48167e4524e07195eb", "rom_rows": 74},
+    {"path": "fixtures/save-envelope-v1/manifest.json", "sha256": "fb4b85d23251a6d259b372424d8ad440966f3ee01ac3d6b6fd4bc7f7b36bbecc", "rom_rows": 0},
+    {"path": "fixtures/tracer/manifest.json", "sha256": "59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c", "rom_rows": 1},
+    {"path": "fixtures/visible-demo/manifest.json", "sha256": "8c695ef04d4f65e286aa444d0dfbbc98b354b944fef0dc6ac6dc453c264a31a3", "rom_rows": 1}
+  ],
+  "acceptance_lists": [
+    {"path": "tests/acceptance/cases.txt", "sha256": "4a7e99833e28f4cdc43b4a2ab86b8c30ed280fe1fc6fba5242ff72aebcf430a2", "case_rows": 3},
+    {"path": "tests/acceptance/cases-cgb-colour.txt", "sha256": "ce3f1c84b47a71a489c14383f6ee6ce9243dba1c6e29c16d2b769818d6ff70aa", "case_rows": 3}
+  ],
+  "disposition_catalogs": [
+    {"path": "tests/external/cgb-corpus-inventory.json", "sha256": "408814db2442dd4300f5c7ec1dfe51a639336c51e2ade4609cc3ebede78d7803", "case_count": 107, "expected_failure": 82, "pass": 16, "prior_observation": 9},
+    {"path": "tests/external/cgb-apu-dispositions.json", "sha256": "5db26adbb0713547884b2cbdd50e9de31c94e8c359abb0a6f4d0f69046cc6200"},
+    {"path": "tests/external/cgb-hdma-dispositions.json", "sha256": "38a1a6321f5b3e73e2ab6aa32f5b3e37a85add40de1edb6de12767345d62a798"},
+    {"path": "tests/external/cgb-ppu-dispositions.json", "sha256": "638f6e7732dda3276665939e091f7117b9e1102100f97108a229b004ef72aed2"},
+    {"path": "tests/external/cgb-speed-dispositions.json", "sha256": "9a5be5731e4b72be38dbded66dfbed2d15790ee550dbc05c4b3dbe1989dfa8cc"}
+  ],
+  "excluded": [
+    {"path": "tests/acid2/manifest.json", "reason": "Optional local corpus is rights-gated (G1) and its ROM bytes are absent."}
+  ],
+  "in_flight_categories": [
+    {"id": "oam_dma", "predicate": "dma_active && dma_index > 0 && dma_index < 160", "model": "DMG and CGB"},
+    {"id": "hdma_byte_phase", "predicate": "hdma.active && hdma.byte_phase > 0", "model": "CGB native"},
+    {"id": "speed_switch_stall", "predicate": "cpu_stall_kind == SPEED_SWITCH && cpu_stall_half_dots > 0", "model": "CGB native"},
+    {"id": "halt", "predicate": "halted", "model": "DMG and CGB"},
+    {"id": "ei_delay", "predicate": "ime_delay == 1", "model": "DMG and CGB"},
+    {"id": "apu_sequencer", "predicate": "apu_sequencer_step != reset value", "model": "DMG and CGB"},
+    {"id": "rtc_subsecond", "predicate": "cart.has_timer && cart.rtc_sub != 0", "model": "MBC3 timer"},
+    {"id": "partial_frame", "predicate": "ppu_dot != 0 || ppu_fifo_count != 0", "model": "DMG and CGB"},
+    {"id": "timer_reload", "predicate": "timer_reload_pending && timer_reload_remaining > 0", "model": "DMG and CGB"},
+    {"id": "serial", "predicate": "serial_active && serial_bits < 8", "model": "DMG and CGB"},
+    {"id": "queued_input", "predicate": "input_event_count > 0", "model": "DMG and CGB"},
+    {"id": "queued_wake", "predicate": "stopped && input_event_count > 0", "model": "DMG and CGB"},
+    {"id": "ppu_fifo_window", "predicate": "ppu_fifo_count > 0 && ppu_window_started", "model": "CGB and DMG"},
+    {"id": "lockup", "predicate": "locked && lockup_pc/lockup_opcode match the invalid instruction", "model": "DMG and CGB"}
+  ],
+  "required_mutant_fields": [
+    "pc", "ime_delay", "timer_reload_remaining", "serial_edge_remaining", "input_events[].at_half_dots",
+    "ppu_fifo", "ppu_window_started", "frame_working", "frame_completed", "compat_rgb555",
+    "frame_generation", "dma_phase", "hdma.byte_phase", "hdma.destination_cursor",
+    "cpu_stall_half_dots", "apu_sequencer_step", "audio_event_ring", "audio_hpf_input",
+    "cart.rom_bank_lo", "cartridge_ram", "cart.rtc_l", "cart.rtc_sub", "cart.rtc_synced_at",
+    "cart.rumble_on"
+  ],
+  "mutant_policy": "Every descriptor path with a non-default recorded witness is mutated once. Each mutant skips assignment while preserving one wire-width offset advance per element. A no-witness field needs a model-applicability or constant disposition with consumer evidence; it is not silently omitted."
+}
