@@ -94,7 +94,7 @@ status: complete
 
 - Applied one subtraction-safe horizon rule to STOP elapsed time, CPU stalls, HDMA ticks and reservations, IRQ service, HALT, instruction execution, full speed-switch reservation, peripheral projection and target advancement. Over-cap live state refuses without mutation; exact-cap observations and valid timer sentinels remain supported.
 - Bounded ordinary queued timestamps and borrowed acceptance spans, preserving event order at equal timestamps and rejecting invalid spans without changing the machine or caller cursor.
-- Added a complete accepted-state closure matrix over 2,822 audio-phase classes and both ring-head positions. All 5,644 cases load, advance exactly to the cap, save/load/resave canonically, and refuse the next timed operation without state change. The exact named CTest gate selects all 16 linked cases (the root plus 15 shards).
+- Added a complete accepted-state closure matrix over 2,822 audio-phase classes and both ring-head positions. All 5,644 cases load, advance exactly to the cap, save/load/resave canonically, and refuse the next timed operation without state change. The current named CTest gate selects all 128 linked cases (the root plus 127 shards).
 - Added immutable, witnessed missing-guard mutations for every advancing/admission path and every public/acceptance wrapper. Each mutant compiled, failed its intended semantic assertion after the required branch witness, and passed the unrelated codec control.
 - Migrated legacy HDMA and speed-switch near-`UINT64_MAX` fixtures to the adopted 2^62 contract while retaining explicit over-cap invalid/no-mutation checks. Retargeted the existing M22 mutation to the cap-aware full reservation guard.
 
@@ -102,10 +102,10 @@ status: complete
 
 - `cmake --preset phase1` and `cmake --build --preset phase1` passed at `f64a798539b517604db3c522e689f56416e7df5c`; the build was repeated successfully after the checker-only fix at `95302423da0aa4bd7ce060621c4b262e28675b2a`.
 - Task 1 selector `state_(horizon|horizon_wrappers|horizon_sentinels)` passed 3/3.
-- Task 2 selector `state_(horizon_events|horizon_closure|canonical|audio_bound)` passed 19/19. Fixture selection ran all 16 closure tests; each shard completed in about 18–22 seconds, and the run reported all 5,644 phase/head cases with no omitted shard cases.
+- At the original plan revision, Task 2 selector `state_(horizon_events|horizon_closure|canonical|audio_bound)` passed 19/19 and fixture selection ran all 16 closure tests, reporting all 5,644 phase/head cases.
 - Task 3 selector `state_horizon_(mutants|mutant_controls)` passed 2/2 at both `f64a798539b517604db3c522e689f56416e7df5c` and `95302423da0aa4bd7ce060621c4b262e28675b2a`. The immutable checker report records 14/14 intended mutant failures, each with semantic exit 1 and unrelated control exit 0; no compile or setup failure counted as a kill. The normal build used AppleClang 21 and the configured Debug `-O2` test build.
 - The corrected immutable checker and controls passed 2/2 in the Linux sanitizer container at `95302423da0aa4bd7ce060621c4b262e28675b2a`, configured with `GABBABOY_ENABLE_SANITIZERS=ON` and the project ASan/UBSan flags. The CTest properties used the existing sanitizer timeout multiplier (180 seconds); the checker report recorded `sanitizer=true`, all 14 semantic exits as 1, and all control exits as 0. The sanitizer self-test passed 1/1. Leak detection remains enabled for passing controls; the expected-failing mutant child disables only LSan because its intentional early assertion return bypasses teardown, while ASan/UBSan remain enabled.
-- A full sanitizer closure run was attempted in the local `linux/amd64` container under `arm64` emulation. Eight closure shards reached the existing 180-second CTest timeout; this is recorded as an emulation runtime limit, not as a semantic failure. The timeout policy was not changed, and the native hosted sanitizer closure is pending the phase orchestrator's exact-head CI. Normal full closure remains green at `f64a798539b517604db3c522e689f56416e7df5c`.
+- The original 16-way sanitizer closure run in the local `linux/amd64` container under `arm64` emulation had eight shards reach the existing 180-second CTest timeout. This was an emulation runtime limit, not a semantic failure. The timeout policy was not changed; the matrix was split into 128 complete shards in the integration follow-up below.
 - The affected CGB/speed-switch/HDMA/partition, model-gate and test-budget selection passed 126/126, including `cgb_speed_headroom`, the M22 omitted-reservation mutant and control, `cgb_hdma_resource_bounds`, and speed stall/device-state controls. `dmg_baseline` passed 1/1.
 - The Task 1, Task 2 and Task 3 JUnit RED records each returned `RED_EVIDENCE_OK`; semantic inspection confirmed stop-wait cap crossing, borrowed-span cap+1 acceptance, and the deliberately removed stop-wait guard respectively. Task 1/2 evidence was regenerated from their immutable pre-GREEN commits without changing earlier records.
 - `git diff --check` passed. The full project CTest suite is left to the phase orchestrator's post-wave run.
@@ -175,12 +175,24 @@ The local full sanitizer closure attempt remains environment-limited by eight 18
 
 No authentication gates, new stubs, skipped tests, or security-relevant trust surfaces were introduced.
 
-## Self-Check: PASSED
-
-- `17-04-SUMMARY.md` exists at the required phase path.
-- All eight implementation commits (`1e544f6`, `1b744c8`, `96ef0cd`, `84c2159`, `0da6bfb`, `8d8ab04`, `f64a798`, and `9530242`) plus the initial summary record `971180e` exist and are ancestors of `HEAD`.
-- The `summary_coverage` CTest passed 1/1 for this block-schema coverage.
-
 ## Post-wave event fixture correction
 
 The full post-wave suite at `d23d92f` passed 1320/1321; `event_time_overflow` still expected an event near UINT64_MAX to be admitted. Integration commit `7c1b86f` migrates `tests/test_events.c` to the adopted cap without changing core behavior: a valid STOP wake reaches 2^62, later and UINT64_MAX timestamps refuse without serialized-state change, and the next timed operation returns no progress with zero consumption and unchanged state. The event case and related classifier/mutation controls passed 14/14 in both normal and Linux ASan/UBSan builds at that commit. The original plan ledger above is unchanged; this is subsequent integration evidence. Windows remains subject to current hosted checks. The declared plan file registry includes this necessary legacy-test migration.
+
+## Integration Follow-up: closure runtime and native Windows checker
+
+The 16-shard matrix still approached or exceeded hosted normal and sanitizer test limits. Profiling showed that setup was negligible while each case's production save, load, resave, and full serialized-byte comparisons dominated. Commit `7b7e3b2` replaces only the harness baseline reload with an in-memory pristine instance copy. Before every reset, it verifies pointer identity; the fixture also requires that all owned/borrowed external buffers are absent except the immutable ROM. All 5,644 case inputs, production codec saves and loads, resave byte comparisons, post-cap refusal checks, and full-state byte comparisons remain in place.
+
+The same commit fixes the Windows MinGW mutant harness. The prior executable-existence check used an extensionless output name for native GNU-on-Windows, and its source path argument retained C-incompatible backslashes. The checker now expects `.exe` on native Windows, normalizes source paths to forward slashes, and prints compiler command/exit/output diagnostics on build failure. Its self-test covers Windows path and suffix behavior. A live Windows rerun is pending hosted CI.
+
+Commit `bb1f2e8` registers 128 fixture-linked shards and the expected-test inventory. The unchanged exact selector `ctest -R '^state_horizon_closure$'` selects the root plus all 127 fixture shards; `ctest -N` in the separate configured tree listed 128 tests. Representative shards 0, 1, 63, and 127 passed with 45, 45, 44, and 44 cases respectively. An independent partition audit covered 5,644 unique case IDs across all shards and rejected deliberate missing-case and duplicate-case controls.
+
+At immutable code revision `7b7e3b21251f1c2a5ac74817d4afea370f96485e`, normal mutant/control CTests passed 2/2 with 14/14 semantic mutant exits 1 and all unrelated controls exit 0. The Linux ASan/UBSan CTests also passed 2/2 at the same revision with sanitizer enabled; the complete 14-mutant checker finished within its existing 180-second timeout under local amd64-on-arm64 emulation, and its self-test passed. Leak detection remained enabled for passing controls. The parent reports the local full integration selection passed 133/133 with all 128 closure shards; that run used the integration tree whose CMake registration is now committed in `bb1f2e8`. The parent is running the final 1,473-test suite at `bb1f2e8`; its result will be recorded separately.
+
+The original plan ledger and actuals above remain unchanged. This follow-up adds only the test harness/checker fix, shard registration, and verification evidence.
+
+## Self-Check: PASSED
+
+- The summary exists at the required phase path and its block-schema coverage passed `summary_coverage` 1/1 after this update.
+- The plan's implementation commits and subsequent integration commits `7b7e3b2` and `bb1f2e8` are ancestors of `HEAD`.
+- The 128-shard exact CTest selector, four representative shard executions, independent partition negative controls, and normal/sanitizer mutant-control CTests passed as recorded above.
