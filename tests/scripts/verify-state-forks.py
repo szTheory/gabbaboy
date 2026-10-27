@@ -761,10 +761,16 @@ MALFORMED_TARGET_REASONS = {
         "The accepted_dma_phase DMG cut has a nonzero queued event in slot zero; the state invariant requires unused event slots to be zero, so omitting input_event_count makes the receiver invalid and canonical save rejects it.",
     ("serial_control", "generated:bus_unsupported:cgb"):
         "At the bus_unsupported CGB cut, an active external serial transfer has serial_control=0x80 and zero edge countdown; any distinct legal single-field control value breaks the active/control/countdown invariant, so canonical save rejects the omitted target.",
+    ("serial_active", "generated:bus_unsupported:cgb"):
+        "At the bus_unsupported CGB cut, serial_control=0x80 denotes an active external transfer; clearing serial_active while leaving that restored control bit set violates the serial relation, so canonical save rejects the omitted target.",
     ("tac", "generated:timer_reload:cgb"):
         "At the timer_reload CGB cut, divider_counter=0x005C and timer_signal=1; TAC value 5 is the only accepted selector in this fixture whose enabled tap is high, so omitting tac causes canonical save rejection.",
+    ("timer_reload_pending", "generated:timer_reload:cgb"):
+        "At the timer_reload CGB cut, timer_reload_remaining is four; the accepted-state invariant requires a pending reload whenever remaining is nonzero, so omitting timer_reload_pending causes canonical save rejection.",
     ("wram_bank", "generated:native_pipeline:cgb"):
         "At the native_pipeline CGB cut, the effective WRAM bank is derived from the restored SVBK value; the accepted-state invariant requires wram_bank=(svbk==0 ? 1 : svbk), so omitting the cache assignment causes canonical save rejection.",
+    ("svbk", "generated:native_pipeline:cgb"):
+        "At the native_pipeline CGB cut, wram_bank is greater than one and the accepted-state invariant requires it to equal SVBK; raw SVBK zero only aliases effective bank one, so no distinct valid SVBK value exists and canonical save rejects the omitted target.",
 }
 
 

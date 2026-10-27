@@ -633,7 +633,14 @@ static int source_state_accepts_override(gbb_instance *probe,
     state_put_u64(trial + FORK_STATE_HEADER_BYTES + item_offset, value,
                   field->wire_width);
     state_put_u32(trial + 60u, state_bytes_crc(trial, state_size));
+#ifdef GBB_STATE_FORK_MUTANT
+    const int was_armed = state_fork_mutant_armed;
+    state_fork_mutant_armed = 0;
+#endif
     const int accepted = gbb_load_state(probe, trial, state_size) == GBB_OK;
+#ifdef GBB_STATE_FORK_MUTANT
+    state_fork_mutant_armed = was_armed;
+#endif
     free(trial);
     return accepted;
 }
@@ -652,7 +659,7 @@ static int poison_needs_full_state_probe(const state_field_descriptor *field) {
         "cpu_stall_kind", "cpu_stall_half_dots", "stop_switch_pending",
         "ppu_mode3_stall", "ppu_transfer_age", "ppu_objects_stalled",
         "ppu_fetch_enqueued", "ppu_fine_scroll", "timer_reload_pending",
-        "timer_reload_remaining", "input_event_count"
+        "timer_reload_remaining", "input_event_count", "time_half_dots"
     };
     for (size_t i = 0u; i < sizeof(paths) / sizeof(paths[0]); ++i)
         if (strcmp(field->path, paths[i]) == 0) return 1;
@@ -669,8 +676,9 @@ static uint64_t poison_value(const gbb_instance *source,
     if (field->kind == STATE_VALUE_BOOL) proposed = value == 0u ? 1u : 0u;
     else if (field->kind == STATE_VALUE_EVENT_KIND)
         proposed = value == 0u ? 1u : value - 1u;
-    else if (strcmp(field->path, "time_half_dots") == 0 ||
-        strcmp(field->path, "instruction_start_half_dots") == 0 ||
+    else if (strcmp(field->path, "time_half_dots") == 0)
+        proposed = value < GBB_STATE_TIME_LIMIT ? value + 1u : value - 1u;
+    else if (strcmp(field->path, "instruction_start_half_dots") == 0 ||
         strcmp(field->path, "cart.rtc_synced_at") == 0) proposed = 0u;
     else if (strcmp(field->path, "cart.rtc_sub") == 0)
         proposed = value == 1u ? 2u : 1u;

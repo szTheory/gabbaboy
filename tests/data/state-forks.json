@@ -2236,11 +2236,9 @@
     },
     {
       "case": "generated:bus_unsupported:cgb",
-      "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "serial_active"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "serial_active",
+      "malformed_target_reason": "At the bus_unsupported CGB cut, serial_control=0x80 denotes an active external transfer; clearing serial_active while leaving that restored control bit set violates the serial relation, so canonical save rejects the omitted target."
     },
     {
       "case": "cgb-speed:speed",
@@ -2308,11 +2306,9 @@
     },
     {
       "case": "generated:native_pipeline:cgb",
-      "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "svbk"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "svbk",
+      "malformed_target_reason": "At the native_pipeline CGB cut, wram_bank is greater than one and the accepted-state invariant requires it to equal SVBK; raw SVBK zero only aliases effective bank one, so no distinct valid SVBK value exists and canonical save rejects the omitted target."
     },
     {
       "case": "generated:timer_reload:cgb",
@@ -2339,19 +2335,17 @@
     },
     {
       "case": "generated:timer_reload:cgb",
-      "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "timer_reload_pending"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "timer_reload_pending",
+      "malformed_target_reason": "At the timer_reload CGB cut, timer_reload_remaining is four; the accepted-state invariant requires a pending reload whenever remaining is nonzero, so omitting timer_reload_pending causes canonical save rejection."
     },
     {
       "case": "generated:timer_reload:cgb",
       "expected_observations": [
-        "final-canonical-state-bytes",
         "post-load-canonical-state-bytes-or-save-status"
       ],
-      "field": "timer_reload_remaining"
+      "field": "timer_reload_remaining",
+      "observation_rationale": "At the timer_reload CGB cut, the omitted remaining count changes immediate canonical bytes; the pending reload resolves before guest output diverges, so bounded run results, PCM, frame metadata and final canonical bytes match."
     },
     {
       "case": "generated:timer_reload:cgb",
