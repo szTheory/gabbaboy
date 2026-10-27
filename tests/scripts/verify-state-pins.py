@@ -230,6 +230,10 @@ def run_emitter(executable):
 def verify_snapshot(repo, source_revision, base_revision, actual):
     source_revision = immutable_revision(repo, source_revision)
     base_revision = immutable_revision(repo, base_revision)
+    ancestry = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor",
+                               base_revision, source_revision], capture_output=True)
+    if ancestry.returncode != 0:
+        reject("immutable-base", "base revision is not an ancestor of the selected source commit")
     current_golden_text = source_file(repo, source_revision, GOLDEN_PATH)
     current_golden = validate_pin_document(parse_json_text(current_golden_text, "state-goldens"), "current pins")
     current_tokens = state_tokens(repo, source_revision)
@@ -384,10 +388,19 @@ def self_test():
         rejected("altered compiled pin", "pin-mismatch",
                  lambda: verify_snapshot(repo, accepted_revision, base_revision, altered_actual))
 
-        wrong_release = json.loads(json.dumps(actual))
-        wrong_release["release"]["minor"] = 3
-        rejected("0.3.0 relabel", "pin-mismatch",
-                 lambda: verify_snapshot(repo, accepted_revision, base_revision, wrong_release))
+        relabelled_golden = json.loads(json.dumps(golden))
+        relabelled_golden["release"]["minor"] = 3
+        write_git_file(repo, GOLDEN_PATH,
+                       json.dumps(relabelled_golden, indent=2, sort_keys=True) + "\n")
+        relabelled_revision = commit_fixture(repo, "relabel 0.2.1 pins as 0.3.0")
+        wrong_release = {"schema": "state-pin-emission-v1", **relabelled_golden}
+        rejected("0.3.0 relabel", "release-token-mismatch",
+                 lambda: verify_snapshot(repo, relabelled_revision, base_revision, wrong_release))
+
+        write_git_file(repo, GOLDEN_PATH, json.dumps(golden, indent=2, sort_keys=True) + "\n")
+        write_git_file(repo, COMPATIBILITY_PATH,
+                       json.dumps(compatibility, indent=2, sort_keys=True) + "\n")
+        accepted_revision = commit_fixture(repo, "restore accepted baseline after relabel control")
 
         stale_compatibility = json.loads(json.dumps(compatibility))
         stale_compatibility["dispositions"][0]["evidence"]["revision"] = accepted_revision
@@ -434,6 +447,15 @@ def self_test():
                                  {"schema": "state-pin-emission-v1", **golden})
         if result["source_revision"] != no_change_revision:
             reject("self-test-failed", "unchanged pin control used a different immutable revision")
+        controls += 1
+
+        try:
+            verify_snapshot(repo, base_revision, no_change_revision, actual)
+        except Rejected as error:
+            if error.code != "immutable-base":
+                reject("self-test-failed", "non-ancestor base control had the wrong diagnostic")
+        else:
+            reject("self-test-failed", "non-ancestor base revision was accepted")
         controls += 1
 
         try:
