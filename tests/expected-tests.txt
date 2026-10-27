@@ -1275,6 +1275,7 @@ state_size_bound
 state_tracer
 state_observers
 state_apu_pulse_timer
+state_apu_noise_timer
 state_observer_mutant_palette_omitted
 state_observer_mutant_palette_omitted_control
 state_observer_mutant_catch_up_on_load
