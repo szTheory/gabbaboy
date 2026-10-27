@@ -9,6 +9,11 @@ const char *state_fork_mutant_field;
 #endif
 #include GBB_CORE_SOURCE_PATH
 
+#ifdef GBB_STATE_FORK_MUTANT
+int state_fork_mutant_armed;
+size_t state_fork_mutant_assignment_skips;
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -600,21 +605,51 @@ static uint64_t observer_delta(uint64_t before, uint64_t after) {
     return after >= before ? after - before : UINT64_MAX - before + after + 1u;
 }
 
-static uint64_t poison_value(const state_field_descriptor *field, uint64_t value) {
-    if (field->kind == STATE_VALUE_BOOL) return value == 0u ? 1u : 0u;
-    if (field->kind == STATE_VALUE_EVENT_KIND) return value == 0u ? 1u : 0u;
-    if (strcmp(field->path, "time_half_dots") == 0 ||
+static uint64_t poison_value(const gbb_instance *source,
+                             const state_field_descriptor *field,
+                             size_t index, uint64_t value) {
+    uint64_t proposed;
+    if (field->kind == STATE_VALUE_BOOL) proposed = value == 0u ? 1u : 0u;
+    else if (field->kind == STATE_VALUE_EVENT_KIND)
+        proposed = value == 0u ? 1u : value - 1u;
+    else if (strcmp(field->path, "time_half_dots") == 0 ||
         strcmp(field->path, "instruction_start_half_dots") == 0 ||
-        strcmp(field->path, "cart.rtc_synced_at") == 0) return 0u;
-    if (strcmp(field->path, "cart.rtc_sub") == 0) return value == 1u ? 2u : 1u;
-    if (strcmp(field->path, "compat_rgb555") == 0) return (value ^ UINT64_C(0x1111)) & 0x7FFFu;
-    switch (field->wire_width) {
-    case 1u: return (value ^ UINT64_C(0x5A)) & UINT64_C(0xFF);
-    case 2u: return (value ^ UINT64_C(0x1555)) & UINT64_C(0x7FFF);
-    case 4u: return value ^ UINT64_C(0x55555555);
-    case 8u: return value ^ UINT64_C(0x5555555555555555);
-    default: return value == 0u ? 1u : 0u;
+        strcmp(field->path, "cart.rtc_synced_at") == 0) proposed = 0u;
+    else if (strcmp(field->path, "cart.rtc_sub") == 0)
+        proposed = value == 1u ? 2u : 1u;
+    else if (strcmp(field->path, "compat_rgb555") == 0)
+        proposed = (value ^ UINT64_C(0x1111)) & 0x7FFFu;
+    else switch (field->wire_width) {
+        case 1u: proposed = (value ^ UINT64_C(0x5A)) & UINT64_C(0xFF); break;
+        case 2u: proposed = (value ^ UINT64_C(0x1555)) & UINT64_C(0x7FFF); break;
+        case 4u: proposed = value ^ UINT64_C(0x55555555); break;
+        case 8u: proposed = value ^ UINT64_C(0x5555555555555555); break;
+        default: proposed = value == 0u ? 1u : 0u; break;
     }
+    const uint8_t audio_head = (uint8_t)source->audio_event_head;
+    const uint64_t sample_phase = source->apu_sample_phase;
+    if (proposed != value && state_field_value_valid(source, field, index,
+            proposed, audio_head, sample_phase)) return proposed;
+
+    /* Prefer an alternate legal representation when a width-based poison falls
+     * outside a hardware field's accepted domain (VBK, KEY1 and mapper lines). */
+    const uint64_t candidates[] = {
+        0u, 1u, 2u, 3u, 7u, 15u, 31u, 63u, 127u, 255u,
+        0x7FFFu, 0x8000u, 0xFFFFu,
+        value == UINT64_MAX ? value : value + 1u,
+        value == 0u ? value : value - 1u
+    };
+    for (size_t i = 0u; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
+        if (candidates[i] != value && state_field_value_valid(source, field, index,
+                candidates[i], audio_head, sample_phase)) return candidates[i];
+    }
+    if (field->wire_width == 1u) {
+        for (uint64_t candidate = 0u; candidate <= UINT8_MAX; ++candidate) {
+            if (candidate != value && state_field_value_valid(source, field, index,
+                    candidate, audio_head, sample_phase)) return candidate;
+        }
+    }
+    return proposed;
 }
 
 static int poison_serialized_storage(gbb_instance *target,
@@ -632,7 +667,7 @@ static int poison_serialized_storage(gbb_instance *target,
             uint64_t actual = 0u;
             const int read_ok = state_host_value(source, &STATE_FIELDS[f], i, &actual);
             const int store_ok = read_ok && state_store_host_value(target,
-                &STATE_FIELDS[f], i, poison_value(&STATE_FIELDS[f], actual));
+                &STATE_FIELDS[f], i, poison_value(source, &STATE_FIELDS[f], i, actual));
             if (!read_ok || !store_ok) {
                 fprintf(stderr, "state-fork poison failure: id=%s index=%zu raw=%016llx\n",
                     record.qualified_id, i, (unsigned long long)actual);
@@ -844,19 +879,63 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         gbb_destroy(baseline);
         return 2;
     }
+#ifdef GBB_STATE_FORK_MUTANT
+    const state_field_descriptor *mutated_field = state_fork_mutant_field == NULL
+        ? NULL : state_field_by_path(state_fork_mutant_field);
+    const size_t mutant_field_count = mutated_field == NULL ? 0u
+        : state_field_count_for_instance(source, mutated_field);
+    uint64_t *mutant_poison_values = NULL;
+    if (state_fork_mutant_field != NULL) {
+        if (mutated_field == NULL || mutant_field_count == 0u ||
+            mutant_field_count > SIZE_MAX / sizeof(*mutant_poison_values) ||
+            (mutant_poison_values = (uint64_t *)malloc(
+                mutant_field_count * sizeof(*mutant_poison_values))) == NULL) {
+            fprintf(stderr, "state-fork setup failure: selected mutation field unavailable: %s\n",
+                state_fork_mutant_field);
+            free(target_final); free(source_final); free(saved);
+            gbb_destroy(target); gbb_destroy(source); gbb_destroy(baseline);
+            return 2;
+        }
+        for (size_t i = 0u; i < mutant_field_count; ++i) {
+            if (!state_host_value(target, mutated_field, i, &mutant_poison_values[i])) {
+                fprintf(stderr, "state-fork setup failure: poison readback failed: %s index=%zu\n",
+                    state_fork_mutant_field, i);
+                free(mutant_poison_values);
+                free(target_final); free(source_final); free(saved);
+                gbb_destroy(target); gbb_destroy(source); gbb_destroy(baseline);
+                return 2;
+            }
+        }
+    }
+#endif
     const uint8_t old_rumble_raw = target->cart.rumble_on;
     if (!copy_battery(target, &old_battery, &old_battery_size, &old_battery_status) ||
         !copy_rumble(target, &old_rumble_status, &old_rumble_level,
                      &old_rumble_changes)) {
         fprintf(stderr, "state-fork setup failure: pre-load observer projection: %s\n", case_id);
+#ifdef GBB_STATE_FORK_MUTANT
+        free(mutant_poison_values);
+#endif
         free(old_battery); free(target_final); free(source_final); free(saved);
         gbb_destroy(target); gbb_destroy(source);
         gbb_destroy(baseline);
         return 2;
     }
+#ifdef GBB_STATE_FORK_MUTANT
+    if (state_fork_mutant_field != NULL) {
+        state_fork_mutant_assignment_skips = 0u;
+        state_fork_mutant_armed = 1;
+    }
+#endif
     const gbb_error loaded = gbb_load_state(target, saved, state_size);
+#ifdef GBB_STATE_FORK_MUTANT
+    state_fork_mutant_armed = 0;
+#endif
     if (loaded != GBB_OK) {
         fprintf(stderr, "state-fork load failure: %s error=%d\n", case_id, (int)loaded);
+#ifdef GBB_STATE_FORK_MUTANT
+        free(mutant_poison_values);
+#endif
         free(old_battery); free(target_final); free(source_final); free(saved);
         gbb_destroy(target); gbb_destroy(source);
         gbb_destroy(baseline);
@@ -864,34 +943,60 @@ static int state_fork_case(const char *case_id, const char *rom_path,
     }
 #ifdef GBB_STATE_FORK_MUTANT
     if (state_fork_mutant_field != NULL) {
-        const state_field_descriptor *mutated =
-            state_field_by_path(state_fork_mutant_field);
-        int omission_observed = 0;
-        if (mutated != NULL) {
-            const size_t count = state_field_count_for_instance(source, mutated);
-            for (size_t i = 0u; i < count; ++i) {
-                uint64_t expected = 0u, actual = 0u;
-                if (!state_host_value(source, mutated, i, &expected) ||
-                    !state_host_value(target, mutated, i, &actual)) break;
-                if (expected != actual) omission_observed = 1;
+        size_t distinct_values = 0u;
+        int retained_poison = 1;
+        for (size_t i = 0u; i < mutant_field_count; ++i) {
+            uint64_t expected = 0u, actual = 0u;
+            if (!state_host_value(source, mutated_field, i, &expected) ||
+                !state_host_value(target, mutated_field, i, &actual)) {
+                retained_poison = 0;
+                break;
             }
+            if (actual != mutant_poison_values[i]) retained_poison = 0;
+            if (expected != actual) ++distinct_values;
         }
-        if (!omission_observed) {
-            fprintf(stderr, "state-fork setup failure: field omission did not preserve poison: %s\n",
-                state_fork_mutant_field);
+        if (state_fork_mutant_assignment_skips != mutant_field_count ||
+            !retained_poison || distinct_values == 0u) {
+            fprintf(stderr, "state-fork setup failure: field omission proof failed: %s skipped=%zu count=%zu retained=%d distinct=%zu\n",
+                state_fork_mutant_field, state_fork_mutant_assignment_skips,
+                mutant_field_count, retained_poison, distinct_values);
+            free(mutant_poison_values);
             free(old_battery); free(target_final); free(source_final); free(saved);
             gbb_destroy(target); gbb_destroy(source); gbb_destroy(baseline);
             return 2;
         }
-        printf("state-fork mutation-applied field=%s case=%s\n", state_fork_mutant_field, case_id);
+        printf("state-fork mutation-applied field=%s case=%s skipped_assignments=%zu field_count=%zu retained_values=%d distinct_values=%zu\n",
+            state_fork_mutant_field, case_id, state_fork_mutant_assignment_skips,
+            mutant_field_count, retained_poison, distinct_values);
+        free(mutant_poison_values);
     }
 #endif
     const gbb_error post_load_save_status =
         gbb_save_state(target, target_final, state_size);
+    if (post_load_save_status != GBB_OK) {
+#ifdef GBB_STATE_FORK_MUTANT
+        if (state_fork_mutant_field != NULL) {
+            fprintf(stderr, "state-fork discrepancy case=%s observation=post-load-canonical-save-rejected field=%s error=%d\n",
+                case_id, state_fork_mutant_field, (int)post_load_save_status);
+            printf("state-fork semantic-stop kind=post-load-canonical-save-rejected case=%s no-continuation=1\n",
+                case_id);
+            fprintf(stderr, "state-fork mismatch: named public canonical-save rejection case=%s field=%s\n",
+                case_id, state_fork_mutant_field);
+            free(old_battery); free(target_final); free(source_final); free(saved);
+            gbb_destroy(target); gbb_destroy(source); gbb_destroy(baseline);
+            return 1;
+        }
+#endif
+        fprintf(stderr, "state-fork setup failure: public canonical save rejected restored target: %s error=%d\n",
+            case_id, (int)post_load_save_status);
+        free(old_battery); free(target_final); free(source_final); free(saved);
+        gbb_destroy(target); gbb_destroy(source); gbb_destroy(baseline);
+        return 2;
+    }
     const int post_load_canonical_equal = post_load_save_status == GBB_OK &&
         memcmp(saved, target_final, state_size) == 0;
     if (!post_load_canonical_equal)
-        fprintf(stderr, "state-fork discrepancy case=%s observation=post-load-canonical-state-bytes-or-save-status\n",
+        fprintf(stderr, "state-fork discrepancy case=%s observation=post-load-canonical-state-bytes\n",
             case_id);
 
     uint8_t *new_battery = NULL;
@@ -919,16 +1024,15 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         fprintf(stderr, "state-fork discrepancy case=%s observation=battery-observer-counter\n", case_id);
     if (target->cart.rumble_changes != expected_rumble_changes)
         fprintf(stderr, "state-fork discrepancy case=%s observation=rumble-observer-counter\n", case_id);
-    if (target->battery_generation != expected_battery_generation ||
-        target->cart.rumble_changes != expected_rumble_changes) {
+    const int immediate_observers_equal =
+        target->battery_generation == expected_battery_generation &&
+        target->cart.rumble_changes == expected_rumble_changes;
+    if (!immediate_observers_equal) {
         fprintf(stderr, "state-fork mismatch: observer-delta case=%s battery=%llu expected=%llu rumble=%llu expected=%llu\n",
             case_id, (unsigned long long)target->battery_generation,
             (unsigned long long)expected_battery_generation,
             (unsigned long long)target->cart.rumble_changes,
             (unsigned long long)expected_rumble_changes);
-        free(new_battery); free(old_battery); free(target_final); free(source_final); free(saved);
-        gbb_destroy(target); gbb_destroy(source);
-        return 1;
     }
     const uint64_t source_battery_base = source->battery_generation;
     const uint64_t target_battery_base = target->battery_generation;
@@ -937,9 +1041,10 @@ static int state_fork_case(const char *case_id, const char *rom_path,
     (void)source_battery_before;
     (void)source_rumble_before;
 
-    int equal = 1;
+    printf("state-fork continuation-start case=%s\n", case_id);
+    int equal = immediate_observers_equal;
     const uint64_t future_budgets[] = {UINT64_C(70117), UINT64_C(70331)};
-    for (size_t slice = 0u; equal && slice < sizeof(future_budgets) / sizeof(future_budgets[0]); ++slice) {
+    for (size_t slice = 0u; slice < sizeof(future_budgets) / sizeof(future_budgets[0]); ++slice) {
         gbb_audio_frame source_audio[FORK_AUDIO_CAPACITY], target_audio[FORK_AUDIO_CAPACITY];
         size_t source_count = 0u, target_count = 0u;
         const gbb_run_result source_run = gbb_run_audio(source, future_budgets[slice],
@@ -950,11 +1055,12 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         const int pcm_equal = source_count == target_count &&
             memcmp(source_audio, target_audio, source_count * sizeof(source_audio[0])) == 0;
         const int frame_equal = copy_frame_equal(source, target, profile);
-        equal = run_equal && pcm_equal && frame_equal;
+        const int output_equal = run_equal && pcm_equal && frame_equal;
+        equal = equal && output_equal;
         if (!run_equal) fprintf(stderr, "state-fork discrepancy case=%s observation=run-result\n", case_id);
         if (!pcm_equal) fprintf(stderr, "state-fork discrepancy case=%s observation=pcm\n", case_id);
         if (!frame_equal) fprintf(stderr, "state-fork discrepancy case=%s observation=frame-and-metadata\n", case_id);
-        if (!equal) fprintf(stderr,
+        if (!output_equal) fprintf(stderr,
             "state-fork mismatch: immediate case=%s slice=%zu run=%d pcm=%d frame=%d counts=%zu/%zu consumed=%llu/%llu reason=%d/%d\n",
             case_id, slice, run_equal, pcm_equal, frame_equal, source_count,
             target_count, (unsigned long long)source_run.consumed_half_dots,
@@ -1030,14 +1136,24 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         const size_t fields = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
         for (size_t f = 0u; f < fields; ++f) {
             const size_t count = state_field_count_for_instance(source, &STATE_FIELDS[f]);
+            size_t differing_values = 0u, first_index = 0u;
+            uint64_t first_source = 0u, first_target = 0u;
             for (size_t i = 0u; i < count; ++i) {
                 uint64_t left = 0u, right = 0u;
                 if (state_host_value(source, &STATE_FIELDS[f], i, &left) &&
-                    state_host_value(target, &STATE_FIELDS[f], i, &right) && left != right)
-                    fprintf(stderr, "state-fork canonical-field-difference id=%s index=%zu source=%016llx target=%016llx\n",
-                        STATE_FIELDS[f].path, i, (unsigned long long)left,
-                        (unsigned long long)right);
+                    state_host_value(target, &STATE_FIELDS[f], i, &right) && left != right) {
+                    if (differing_values == 0u) {
+                        first_index = i;
+                        first_source = left;
+                        first_target = right;
+                    }
+                    ++differing_values;
+                }
             }
+            if (differing_values != 0u)
+                fprintf(stderr, "state-fork canonical-field-difference id=%s index=%zu source=%016llx target=%016llx differing_values=%zu\n",
+                    STATE_FIELDS[f].path, first_index, (unsigned long long)first_source,
+                    (unsigned long long)first_target, differing_values);
         }
     }
     const int final_saved = final_bytes_equal;

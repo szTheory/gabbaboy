@@ -10,7 +10,7 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,13 +27,35 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def git_path(path: str) -> PurePosixPath:
+    """Return a validated repository path independent of the host OS."""
+    normalized = path.replace("\\", "/")
+    result = PurePosixPath(normalized)
+    if (not normalized or result.as_posix() == "." or result.is_absolute() or
+        any(part in {"", ".", ".."} for part in result.parts)):
+        raise ForkError(f"invalid relative immutable Git path: {path}")
+    return result
+
+
+def live_path(repo: Path, path: str) -> Path:
+    return repo.joinpath(*git_path(path).parts)
+
+
+def fixture_git_path(manifest_dir: PurePosixPath, filename: str) -> str:
+    path = git_path(filename)
+    if path.parts[0] == "fixtures":
+        return path.as_posix()
+    return (manifest_dir / path).as_posix()
+
+
 def git_blob(rev: str, path: str, repo: Path) -> bytes:
+    immutable = git_path(path).as_posix()
     result = subprocess.run(
-        ["git", "show", f"{rev}:{path}"], cwd=repo,
+        ["git", "show", f"{rev}:{immutable}"], cwd=repo,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
     )
     if result.returncode:
-        raise ForkError(f"immutable revision {rev} has no readable {path}: {result.stderr.decode(errors='replace').strip()}")
+        raise ForkError(f"immutable revision {rev} has no readable {immutable}: {result.stderr.decode(errors='replace').strip()}")
     return result.stdout
 
 
@@ -75,8 +97,12 @@ def fork_mutant_source(source: str) -> str:
     guarded = (
         "#ifdef GBB_STATE_FORK_MUTANT\n"
         "            extern const char *state_fork_mutant_field;\n"
+        "            extern int state_fork_mutant_armed;\n"
+        "            extern size_t state_fork_mutant_assignment_skips;\n"
         "            const int omit_assignment = state_fork_mutant_field != NULL &&\n"
         "                strcmp(field->path, state_fork_mutant_field) == 0;\n"
+        "            if (omit_assignment && state_fork_mutant_armed)\n"
+        "                ++state_fork_mutant_assignment_skips;\n"
         "#else\n"
         "            const int omit_assignment = 0;\n"
         "#endif\n"
@@ -140,7 +166,8 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
     if dispositions != {"expected_failure": 82, "pass": 16, "prior_observation": 9}:
         raise ForkError(f"CGB corpus expected outcome classes changed: {dispositions}")
     for item in spec.get("fixture_manifests", []):
-        path = item["path"]
+        path = git_path(item["path"]).as_posix()
+        manifest_dir = PurePosixPath(path).parent
         raw = git_blob(rev, path, repo)
         if digest(raw) != item.get("sha256"):
             raise ForkError(f"fixture manifest digest changed at {path}")
@@ -156,7 +183,7 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
                 filename = filename.get("path")
             if not isinstance(filename, str) or not filename.lower().endswith(ROM_SUFFIXES):
                 continue
-            rom_path = filename if filename.startswith("fixtures/") else str(Path(path).parent / filename)
+            rom_path = fixture_git_path(manifest_dir, filename)
             case = make_case(path, row, rom_path)
             add_case(case, cases, ids)
         root_rom = manifest.get("rom")
@@ -164,16 +191,16 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
             filename = root_rom.get("path")
             rom_sha = root_rom.get("sha256")
             rom_size = root_rom.get("size_bytes")
-            row = {"id": Path(path).parent.name, "file": filename,
+            row = {"id": manifest_dir.name, "file": filename,
                    "sha256": rom_sha, "size_bytes": rom_size}
         else:
             filename = root_rom
-            row = {"id": Path(path).parent.name, "file": filename,
+            row = {"id": manifest_dir.name, "file": filename,
                    "sha256": manifest.get("sha256"),
                    "size_bytes": manifest.get("size_bytes")}
         if isinstance(filename, str) and filename.lower().endswith(ROM_SUFFIXES):
-            rom_path = filename if filename.startswith("fixtures/") else str(Path(path).parent / filename)
-            add_case(make_case(path, row or {"id": Path(path).parent.name, "file": filename}, rom_path),
+            rom_path = fixture_git_path(manifest_dir, filename)
+            add_case(make_case(path, row or {"id": manifest_dir.name, "file": filename}, rom_path),
                      cases, ids)
         count = len(cases) - before
         if count != item.get("rom_rows"):
@@ -197,6 +224,7 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
             rom_path = values.get("rom")
             if not case_id or not rom_path:
                 raise ForkError(f"unparseable acceptance row in {item['path']}: {line}")
+            rom_path = git_path(rom_path).as_posix()
             case = {
                 "id": f"accept:{case_id}", "source": item["path"], "rom": rom_path,
                 "sha256": values.get("rom_sha256"), "size_bytes": int(values.get("rom_size", "0")),
@@ -226,15 +254,15 @@ def manifest_cases(rev: str, repo: Path, spec: dict, verify_blobs: bool) -> list
             suite = disposition.get("suite")
             if suite == "samesuite":
                 source_id = str(disposition.get("source_id", ""))
-                source_stem = Path(source_id).stem
+                source_stem = PurePosixPath(source_id.replace("\\", "/")).stem
                 matching_cases = [case for case in cases
                                   if case["source"] == "fixtures/samesuite/manifest.json"
-                                  and Path(case["rom"]).stem == source_stem]
+                                  and PurePosixPath(case["rom"]).stem == source_stem]
             else:
                 matching_cases = [case for case in cases
                                   if (suite == "magentests" and case["source"] == "fixtures/magentests/manifest.json"
                                       or suite == "mooneye" and case["source"] == "fixtures/mooneye-cgb/manifest.json")
-                                  and Path(case["rom"]).stem.lower() == output_tail.lower()]
+                                  and PurePosixPath(case["rom"]).stem.lower() == output_tail.lower()]
         if not matching_cases:
             missing_cgb.append(case_id)
             continue
@@ -263,13 +291,13 @@ def make_case(manifest_path: str, row: dict, rom_path: str) -> dict:
     filename = row.get("file") or row.get("rom")
     if isinstance(filename, dict):
         filename = filename.get("path")
-    case_key = row.get("id") or row.get("alias") or Path(filename).stem
+    case_key = row.get("id") or row.get("alias") or PurePosixPath(filename.replace("\\", "/")).stem
     profile = profile_for(manifest_path, row, filename)
     disposition_keys = ("expect", "expected", "expected_role", "expected_disposition",
                         "observed_disposition", "evaluator_status", "author_expectation",
                         "note", "evidence_class", "model", "model_pass", "model_fail", "mode")
     return {
-        "id": f"{Path(manifest_path).parent.name}:{case_key}",
+        "id": f"{PurePosixPath(manifest_path).parent.name}:{case_key}",
         "source": manifest_path,
         "rom": rom_path,
         "sha256": row.get("sha256"),
@@ -288,7 +316,7 @@ def profile_for(manifest_path: str, row: dict, filename: str) -> str:
         return "dmg"
     if "cgb" in model or "cgb-cpu-e" in str(model_pass).lower():
         return "cgb"
-    name = Path(filename).name.lower()
+    name = PurePosixPath(filename.replace("\\", "/")).name.lower()
     if "banking-dmg" in name or manifest_path.startswith("fixtures/mooneye/") or manifest_path.startswith("fixtures/mooneye-mbc/"):
         return "dmg"
     if manifest_path.startswith(("fixtures/age/", "fixtures/cgb-", "fixtures/magentests/",
@@ -312,7 +340,7 @@ def verify_rom(rev: str, repo: Path, case: dict) -> None:
         raise ForkError(f"immutable ROM digest mismatch: {case['id']} ({case['rom']})")
     if case.get("size_bytes") is not None and len(raw) != int(case["size_bytes"]):
         raise ForkError(f"immutable ROM size mismatch: {case['id']} ({case['rom']})")
-    live = repo / case["rom"]
+    live = live_path(repo, case["rom"])
     if not live.is_file() or digest(live.read_bytes()) != case["sha256"]:
         raise ForkError(f"working fixture missing/stale relative to immutable input: {case['id']}")
 
@@ -355,7 +383,7 @@ def run_shard(args: argparse.Namespace) -> None:
     results = []
     for index, case in selected:
         verify_rom(rev, args.repo, case)
-        command = [str(args.test_exe), "case", case["id"], str(args.repo / case["rom"]), case["profile"]]
+        command = [str(args.test_exe), "case", case["id"], str(live_path(args.repo, case["rom"])), case["profile"]]
         proc = subprocess.run(command, cwd=args.repo, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True, check=False)
         fields, categories, constants, _, _, _ = parse_runner_output(proc.stdout)
@@ -715,6 +743,7 @@ MUTANT_OBSERVATIONS = {
     "run-result", "pcm", "frame-and-metadata", "battery-projection-or-generation-delta",
     "rumble-line-or-counter-delta", "battery-observer-counter", "rumble-observer-counter",
     "final-canonical-state-bytes", "post-load-canonical-state-bytes-or-save-status",
+    "post-load-canonical-state-bytes", "post-load-canonical-save-rejected",
 }
 
 
@@ -733,6 +762,13 @@ def validate_mutant_manifest(report: dict, spec: dict) -> list[dict]:
             not isinstance(observations, list) or not observations or
             not set(observations).issubset(MUTANT_OBSERVATIONS)):
             raise ForkError(f"field mutation manifest entry is incomplete: {path}")
+        malformed_reason = item.get("malformed_target_reason")
+        if "post-load-canonical-save-rejected" in observations:
+            if (observations != ["post-load-canonical-save-rejected"] or
+                not isinstance(malformed_reason, str) or not malformed_reason.strip()):
+                raise ForkError(f"malformed-target mutation lacks its exact named save-rejection reason: {path}")
+        elif malformed_reason is not None:
+            raise ForkError(f"unexpected malformed-target reason outside a save-rejection mutation: {path}")
         if path in by_path:
             raise ForkError(f"field mutation manifest duplicates field: {path}")
         by_path[path] = item
@@ -765,6 +801,14 @@ def mutant_controls(args: argparse.Namespace) -> None:
         raise ForkError(f"cannot read fork report {report_path}: {exc}") from exc
     validate_report(report, spec, source, rev)
     validate_mutant_manifest(report, spec)
+    cases = manifest_cases(rev, args.repo, spec, verify_blobs=False)
+    sample = next((case for case in cases if case.get("rom")), None)
+    if sample is None:
+        raise ForkError("Windows Git-path control has no immutable ROM fixture")
+    windows_path = str(PureWindowsPath(sample["rom"]))
+    normalized_blob = git_blob(rev, windows_path, args.repo)
+    if normalized_blob != git_blob(rev, sample["rom"], args.repo):
+        raise ForkError("Windows Git-path control resolved a different immutable blob")
     missing = json.loads(json.dumps(spec))
     missing["field_mutants"].pop()
     try:
@@ -783,15 +827,17 @@ def mutant_controls(args: argparse.Namespace) -> None:
             raise ForkError(f"unexercising-fixture control failed for wrong reason: {exc}") from exc
     else:
         raise ForkError("mutation checker accepted an unexercising fixture")
-    print("state-fork mutant controls pass missing-record=refused unexercising-fixture=refused")
+    print("state-fork mutant controls pass missing-record=refused unexercising-fixture=refused windows-git-path=normalized")
 
 
-def mutant_command(case: dict, test_exe: Path, field: str | None = None) -> list[str]:
+def mutant_command(case: dict, test_exe: Path, repo: Path,
+                   field: str | None = None) -> list[str]:
     if "fixture_id" in case:
         command = [str(test_exe), "generated_fields", case["fixture_id"], case["profile"],
                    "--budget", str(case["prefix_budget"])]
     else:
-        command = [str(test_exe), "case", case["id"], case["rom"], case["profile"]]
+        command = [str(test_exe), "case", case["id"],
+                   str(live_path(repo, case["rom"])), case["profile"]]
     if field is not None:
         command.extend(["--mutant", field])
     return command
@@ -817,8 +863,8 @@ def run_mutant_shard(args: argparse.Namespace) -> None:
             continue
         field, case_id = item["field"], item["case"]
         case = report_cases[case_id]
-        normal_command = mutant_command(case, args.control_exe)
-        mutant_command_line = mutant_command(case, args.test_exe, field)
+        normal_command = mutant_command(case, args.control_exe, args.repo)
+        mutant_command_line = mutant_command(case, args.test_exe, args.repo, field)
         try:
             control = subprocess.run(normal_command, cwd=args.repo, stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, check=False, timeout=20)
@@ -826,21 +872,48 @@ def run_mutant_shard(args: argparse.Namespace) -> None:
                 stderr=subprocess.STDOUT, text=True, check=False, timeout=20)
         except subprocess.TimeoutExpired as exc:
             raise ForkError(f"mutant/control timeout is not a semantic kill field={field} case={case_id}: {exc}") from exc
+        sanitizer_output = re.compile(
+            r"AddressSanitizer:|UndefinedBehaviorSanitizer|runtime error:|"
+            r"DEADLYSIGNAL|Segmentation fault|Floating point exception|"
+            r"heap-buffer-overflow|stack-buffer-overflow")
         if control.returncode != 0 or f"state-fork pass case={case_id}" not in control.stdout:
             raise ForkError(f"unmutated control did not pass field={field} case={case_id} exit={control.returncode}\n{control.stdout[-4000:]}")
+        if sanitizer_output.search(control.stdout):
+            raise ForkError(f"unmutated control reported a sanitizer/runtime failure field={field} case={case_id}\n{control.stdout[-4000:]}")
+        if sanitizer_output.search(mutant.stdout):
+            raise ForkError(f"field omission caused a sanitizer/runtime failure, not a semantic discrepancy field={field} case={case_id} exit={mutant.returncode}\n{mutant.stdout[-4000:]}")
         if mutant.returncode != 1 or "state-fork mismatch" not in mutant.stdout:
             raise ForkError(f"field omission was not a semantic discrepancy field={field} case={case_id} exit={mutant.returncode}\n{mutant.stdout[-4000:]}")
-        if f"state-fork mutation-applied field={field} case={case_id}" not in mutant.stdout:
-            raise ForkError(f"field omission did not prove the named receiver field retained poison: {field} {case_id}")
+        assignment_proof = re.search(
+            rf"state-fork mutation-applied field={re.escape(field)} case={re.escape(case_id)} skipped_assignments=(\d+) field_count=(\d+)",
+            mutant.stdout)
+        if assignment_proof is None or assignment_proof.group(1) != assignment_proof.group(2):
+            raise ForkError(f"field omission did not prove every named assignment was skipped: {field} {case_id}\n{mutant.stdout[-4000:]}")
         if ("state-fork setup failure" in mutant.stdout or "state-fork load failure" in mutant.stdout or
             "state-fork observer failure" in mutant.stdout):
             raise ForkError(f"field omission failed during setup/load, not continuation comparison: {field} {case_id}\n{mutant.stdout[-4000:]}")
         observed = sorted({match.group(1) for match in re.finditer(
             rf"state-fork discrepancy case={re.escape(case_id)} observation=([a-z0-9-]+)", mutant.stdout)})
         expected = sorted(set(item["expected_observations"]))
-        if not observed or not set(expected).issubset(observed):
-            raise ForkError(f"field omission missed its declared continuation discrepancy field={field} case={case_id}: expected={expected} observed={observed}\n{mutant.stdout[-4000:]}")
+        rejected_save = "post-load-canonical-save-rejected" in observed
+        if rejected_save:
+            if expected != ["post-load-canonical-save-rejected"] or observed != expected:
+                raise ForkError(f"canonical save rejection is not the exact declared malformed-target proof field={field} case={case_id}: expected={expected} observed={observed}\n{mutant.stdout[-4000:]}")
+            if ("state-fork semantic-stop kind=post-load-canonical-save-rejected" not in mutant.stdout or
+                "state-fork continuation-start" in mutant.stdout):
+                raise ForkError(f"rejected target save did not stop before continuation field={field} case={case_id}\n{mutant.stdout[-4000:]}")
+        else:
+            accepted_expected = set(expected)
+            if "post-load-canonical-state-bytes-or-save-status" in accepted_expected:
+                accepted_expected.remove("post-load-canonical-state-bytes-or-save-status")
+                accepted_expected.add("post-load-canonical-state-bytes")
+            if not accepted_expected.issubset(set(observed)):
+                raise ForkError(f"field omission missed its declared continuation discrepancy field={field} case={case_id}: expected={expected} observed={observed}\n{mutant.stdout[-4000:]}")
+            if "state-fork continuation-start" not in mutant.stdout:
+                raise ForkError(f"valid target did not reach future fork comparisons field={field} case={case_id}\n{mutant.stdout[-4000:]}")
         rows.append({"field": field, "case": case_id, "expected_observations": expected,
+            "proof_class": "post-load-canonical-save-rejected" if rejected_save else
+                "post-load-canonical-bytes-and-continuation",
             "observed_observations": observed, "control_exit": control.returncode,
             "mutant_exit": mutant.returncode,
             "control_output_sha256": digest(control.stdout.encode()),
@@ -889,20 +962,36 @@ def mutant_summary(args: argparse.Namespace) -> None:
         declared = by_manifest[field]
         observations = row.get("observed_observations")
         expected_observations = sorted(set(declared["expected_observations"]))
+        proof_class = row.get("proof_class")
+        proof_observations = set(observations or [])
+        if proof_class == "post-load-canonical-save-rejected":
+            valid_proof = (expected_observations == ["post-load-canonical-save-rejected"] and
+                           proof_observations == {"post-load-canonical-save-rejected"})
+        else:
+            required = set(expected_observations)
+            if "post-load-canonical-state-bytes-or-save-status" in required:
+                required.remove("post-load-canonical-state-bytes-or-save-status")
+                required.add("post-load-canonical-state-bytes")
+            valid_proof = proof_class == "post-load-canonical-bytes-and-continuation" and required.issubset(proof_observations)
         if (row.get("case") != declared.get("case") or
             row.get("expected_observations") != expected_observations or
             not isinstance(observations, list) or not set(observations).issubset(MUTANT_OBSERVATIONS) or
-            not set(expected_observations).issubset(observations) or
+            not valid_proof or
             row.get("control_exit") != 0 or row.get("mutant_exit") != 1 or
             not re.fullmatch(r"[0-9a-f]{64}", str(row.get("control_output_sha256", ""))) or
             not re.fullmatch(r"[0-9a-f]{64}", str(row.get("mutant_output_sha256", "")))):
             raise ForkError(f"mutant result differs from its fixture/observation contract: {field}")
     combined.sort(key=lambda row: row["field"])
+    proof_class_counts: dict[str, int] = {}
+    for row in combined:
+        proof_class = row["proof_class"]
+        proof_class_counts[proof_class] = proof_class_counts.get(proof_class, 0) + 1
     args.report.parent.mkdir(parents=True, exist_ok=True)
     result = {"schema": "gabbaboy-state-fork-mutants-v1", "rev": rev,
-        "spec_sha256": digest(spec_raw), "mutant_count": len(combined), "mutants": combined}
+        "spec_sha256": digest(spec_raw), "mutant_count": len(combined),
+        "proof_class_counts": proof_class_counts, "mutants": combined}
     args.report.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(f"state-fork mutant summary pass rev={rev} fields={len(combined)}")
+    print(f"state-fork mutant summary pass rev={rev} fields={len(combined)} proof_classes={proof_class_counts}")
 
 
 def parse_args() -> argparse.Namespace:

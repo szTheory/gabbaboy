@@ -822,7 +822,7 @@
     "cart.rumble_on",
     "bus_unsupported"
   ],
-  "mutant_policy": "Every serialized descriptor path with a recorded non-default witness has one exact field/case/observation entry in field_mutants. Each mutation skips only that assignment while consuming its wire bytes, proves the target retained poison immediately after successful public load, and runs an unmutated control. Compare run result, every PCM sample, frames and metadata, battery and RTC projection, rumble line, observer deltas, post-load canonical save, and final canonical bytes; require each entry declared discrepancy. A path whose guest-visible effect is refreshed before the next sample, such as div from divider_counter, uses the explicit immediate public load/save canonical-byte discrepancy and still runs the later output comparison. Timeout, crash, setup, load, and generic failures are not semantic kills.",
+  "mutant_policy": "Every serialized descriptor path with a recorded non-default witness has one exact field/case/observation entry in field_mutants. Each mutation skips only that assignment while consuming its wire bytes, proves the target retained poison immediately after successful public load, and runs an unmutated control. Compare run result, every PCM sample, frames and metadata, battery and RTC projection, rumble line, observer deltas, post-load canonical save, and final canonical bytes; require every declared discrepancy. A path whose guest-visible effect is refreshed before the next sample, such as div from divider_counter, uses the explicit immediate public load/save canonical-byte discrepancy and still runs the later output comparison. Only the three explicitly reasoned input_events component mutants may stop at a rejected post-load canonical save; all other successful target saves must reach both future slices. Timeout, crash, setup, load, and generic failures are not semantic kills.",
   "field_mutants": [
     {
       "case": "generated:accepted_dma_phase:dmg",
@@ -1078,7 +1078,6 @@
       "case": "generated:accepted_dma_phase:dmg",
       "expected_observations": [
         "final-canonical-state-bytes",
-        "pcm",
         "post-load-canonical-state-bytes-or-save-status",
         "run-result"
       ],
@@ -1251,7 +1250,6 @@
       "case": "accept:cgb-colour-hblank",
       "expected_observations": [
         "final-canonical-state-bytes",
-        "frame-and-metadata",
         "post-load-canonical-state-bytes-or-save-status"
       ],
       "field": "bg_cram"
@@ -1558,11 +1556,11 @@
       "case": "generated:key1_switch:cgb",
       "expected_observations": [
         "final-canonical-state-bytes",
-        "pcm",
         "post-load-canonical-state-bytes-or-save-status",
         "run-result"
       ],
-      "field": "double_speed"
+      "field": "double_speed",
+      "observation_rationale": "At the key1_switch CGB speed-switch stall cut, omitting double_speed changes the future run result and final canonical state; the two bounded PCM slices remain equal."
     },
     {
       "case": "accept:libbet-cgb-progress",
@@ -1827,33 +1825,33 @@
       "case": "generated:accepted_dma_phase:dmg",
       "expected_observations": [
         "final-canonical-state-bytes",
-        "frame-and-metadata",
         "post-load-canonical-state-bytes-or-save-status"
       ],
-      "field": "input_event_count"
+      "field": "input_event_count",
+      "observation_rationale": "At the accepted_dma_phase DMG cut, omitting the queued-event count leaves a valid empty queue; the guest does not sample joypad input in the measured horizon, so canonical and final bytes identify the omission."
     },
     {
       "case": "generated:accepted_dma_phase:dmg",
       "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
+        "post-load-canonical-save-rejected"
       ],
+      "malformed_target_reason": "Skipping the active event timestamp makes it precede the saved machine clock; the runner stops after canonical save rejection.",
       "field": "input_events[].at_half_dots"
     },
     {
       "case": "generated:accepted_dma_phase:dmg",
       "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
+        "post-load-canonical-save-rejected"
       ],
+      "malformed_target_reason": "Skipping the active event kind violates the public state validator's event-kind/value relation; the runner stops after canonical save rejection.",
       "field": "input_events[].kind"
     },
     {
       "case": "generated:accepted_dma_phase:dmg",
       "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
+        "post-load-canonical-save-rejected"
       ],
+      "malformed_target_reason": "Skipping the active event value leaves the kind/value pair outside the public state validator's accepted relation; the runner stops after canonical save rejection.",
       "field": "input_events[].value"
     },
     {

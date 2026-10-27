@@ -31,6 +31,11 @@ class StateForkMutantControls(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("unexercising-fixture=refused", result.stdout)
 
+    def test_windows_git_paths_are_normalized(self) -> None:
+        result = run_controls()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("windows-git-path=normalized", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(argv=[sys.argv[0], *sys.argv[5:]])
