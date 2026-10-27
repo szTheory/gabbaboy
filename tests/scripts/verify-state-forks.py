@@ -504,7 +504,9 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
         if missing_fields:
             raise ForkError(f"generated boundary predicate fields are unwitnessed in {case.get('id')}: {sorted(missing_fields)}")
         witnessed_categories = {row.get("id") for row in case.get("category_witnesses", [])}
-        missing_case_categories = set(fixture.get("required_categories", [])) - witnessed_categories
+        required_case_categories = fixture.get("required_categories_by_profile", {}).get(
+            profile, fixture.get("required_categories", []))
+        missing_case_categories = set(required_case_categories) - witnessed_categories
         if missing_case_categories:
             raise ForkError(f"generated boundary predicate categories are unwitnessed in {case.get('id')}: {sorted(missing_case_categories)}")
     fields = field_paths_from_source(source)

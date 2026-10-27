@@ -37,7 +37,8 @@
       "boundary_origin": "guest-run",
       "boundary_predicate": "APU powered; generated channel triggers and wave RAM writes completed before save",
       "required_fields": [],
-      "required_categories": ["apu_sequencer"]
+      "required_categories": [],
+      "required_categories_by_profile": {"dmg": ["apu_sequencer"], "cgb": []}
     },
     {
       "id": "bus_unsupported",
