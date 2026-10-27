@@ -4,6 +4,9 @@
 #ifndef GBB_CORE_SOURCE_PATH
 #define GBB_CORE_SOURCE_PATH "../src/core/gabbaboy.c"
 #endif
+#ifdef GBB_STATE_FORK_MUTANT
+const char *state_fork_mutant_field;
+#endif
 #include GBB_CORE_SOURCE_PATH
 
 #include <stdio.h>
@@ -11,6 +14,8 @@
 
 #define FRAME_PIXELS (GBB_FRAME_WIDTH * GBB_FRAME_HEIGHT)
 #define FORK_AUDIO_CAPACITY 2048u
+#define GENERATED_APU_ROM_SIZE 0x8000u
+#define GENERATED_APU_ROM_PATH "@generated/apu_fields"
 
 static void set_palette(gbb_compat_palette *palette, uint16_t seed) {
     memset(palette, 0, sizeof(*palette));
@@ -22,9 +27,65 @@ static void set_palette(gbb_compat_palette *palette, uint16_t seed) {
     }
 }
 
+/* Original bounded field-census program. It powers the APU, triggers a
+ * negative pulse sweep, and enables noise and wave channels before looping. */
+static void build_generated_apu_rom(uint8_t rom[GENERATED_APU_ROM_SIZE]) {
+    static const uint8_t program[] = {
+        0x3Eu, 0x80u, 0xE0u, 0x26u, /* NR52: sound on */
+        0x3Eu, 0x77u, 0xE0u, 0x24u, /* NR50: full output level */
+        0x3Eu, 0xFFu, 0xE0u, 0x25u, /* NR51: route all channels */
+        0x3Eu, 0x19u, 0xE0u, 0x10u, /* NR10: period 1, negate, shift 1 */
+        0x3Eu, 0x80u, 0xE0u, 0x11u, /* NR11: pulse duty */
+        0x3Eu, 0xF0u, 0xE0u, 0x12u, /* NR12: nonzero pulse envelope */
+        0x3Eu, 0x00u, 0xE0u, 0x13u, /* NR13: pulse frequency low */
+        0x3Eu, 0x84u, 0xE0u, 0x14u, /* NR14: trigger at frequency 1024 */
+        0x3Eu, 0x01u, 0xE0u, 0x20u, /* NR41: non-default noise length */
+        0x3Eu, 0xF0u, 0xE0u, 0x21u, /* NR42: nonzero noise envelope */
+        0x3Eu, 0xF7u, 0xE0u, 0x22u, /* NR43: divisor 112, shift 15 */
+        0x3Eu, 0xC0u, 0xE0u, 0x23u, /* NR44: length enabled and trigger */
+        0x3Eu, 0x80u, 0xE0u, 0x1Au, /* NR30: wave DAC on */
+        0x3Eu, 0x20u, 0xE0u, 0x1Cu, /* NR32: wave output level */
+        0x3Eu, 0x34u, 0xE0u, 0x1Du, /* NR33: non-default wave frequency low */
+        0x3Eu, 0x87u, 0xE0u, 0x1Eu, /* NR34: trigger wave at frequency 1844 */
+        0x18u, 0xFEu               /* JR -2 */
+    };
+    memset(rom, 0, GENERATED_APU_ROM_SIZE);
+    rom[0x100u] = 0xC3u;
+    rom[0x101u] = 0x00u;
+    rom[0x102u] = 0x02u;
+    rom[0x143u] = 0x80u; /* CGB capable and DMG compatible. */
+    rom[0x147u] = 0x00u;
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = 0x00u;
+    memcpy(rom + 0x200u, program, sizeof(program));
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+static void generated_rom_sha256(const uint8_t *rom, size_t size, char out[65]) {
+    static const char hex[] = "0123456789abcdef";
+    uint8_t digest[32];
+    state_sha256(rom, size, digest);
+    for (size_t i = 0u; i < sizeof(digest); ++i) {
+        out[i * 2u] = hex[digest[i] >> 4];
+        out[i * 2u + 1u] = hex[digest[i] & 0x0Fu];
+    }
+    out[64] = '\0';
+}
+
 static int read_file(const char *path, uint8_t **out_bytes, size_t *out_size) {
     *out_bytes = NULL;
     *out_size = 0u;
+    if (strcmp(path, GENERATED_APU_ROM_PATH) == 0) {
+        uint8_t *bytes = (uint8_t *)malloc(GENERATED_APU_ROM_SIZE);
+        if (bytes == NULL) return 0;
+        build_generated_apu_rom(bytes);
+        *out_bytes = bytes;
+        *out_size = GENERATED_APU_ROM_SIZE;
+        return 1;
+    }
     FILE *file = fopen(path, "rb");
     if (file == NULL || fseek(file, 0, SEEK_END) != 0) {
         if (file != NULL) fclose(file);
@@ -275,8 +336,31 @@ static int state_fork_case(const char *case_id, const char *rom_path,
     }
 
     size_t state_size = 0u;
-    if (gbb_state_size(source, &state_size) != GBB_OK) {
-        fprintf(stderr, "state-fork setup failure: state size: %s\n", case_id);
+    const gbb_error sized = gbb_state_size(source, &state_size);
+    if (sized != GBB_OK) {
+        fprintf(stderr, "state-fork setup failure: state size: %s error=%d time=%llu prefix_reason=%d fields_valid=%d relations_valid=%d profile=%u mode=%u double_speed=%u stall=%u stall_ticks=%u key1=%u stop_pending=%u events=%u pulse0_frequency=%u pulse0_timer=%u\n",
+                case_id, (int)sized, (unsigned long long)source->time_half_dots,
+                (int)prefix.reason, state_validate_fields(source, NULL, 0u),
+                state_validate_relations(source, NULL, 0u), (unsigned)source->profile,
+                (unsigned)source->exec_mode, (unsigned)source->double_speed,
+                (unsigned)source->cpu_stall_kind, (unsigned)source->cpu_stall_half_dots,
+                (unsigned)source->key1_armed, (unsigned)source->stop_switch_pending,
+                (unsigned)source->input_event_count,
+                (unsigned)source->apu_pulse[0].frequency,
+                (unsigned)source->apu_pulse[0].timer);
+        uint64_t phase = source->apu_sample_phase;
+        for (size_t f = 0u; f < sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]); ++f) {
+            const state_field_descriptor *field = &STATE_FIELDS[f];
+            const size_t count = state_field_count_for_instance(source, field);
+            for (size_t i = 0u; i < count; ++i) {
+                uint64_t raw = 0u;
+                if (!state_host_value(source, field, i, &raw) ||
+                    !state_field_value_valid(source, field, i, raw,
+                        source->audio_event_head, phase))
+                    fprintf(stderr, "state-fork invalid-live-field id=%s index=%zu raw=%016llx\n",
+                        field->path, i, (unsigned long long)raw);
+            }
+        }
         gbb_destroy(target);
         gbb_destroy(baseline);
         gbb_destroy(source);
@@ -437,10 +521,27 @@ static int state_fork_case(const char *case_id, const char *rom_path,
         free(target_battery); free(source_battery);
     }
 
-    const int final_saved = gbb_save_state(source, source_final, state_size) == GBB_OK &&
-        gbb_save_state(target, target_final, state_size) == GBB_OK &&
+    const gbb_error final_source_save = gbb_save_state(source, source_final, state_size);
+    const gbb_error final_target_save = gbb_save_state(target, target_final, state_size);
+    const int final_bytes_equal = final_source_save == GBB_OK && final_target_save == GBB_OK &&
         memcmp(source_final, target_final, state_size) == 0;
-    if (!final_saved) fprintf(stderr, "state-fork mismatch: final canonical bytes case=%s\n", case_id);
+    if (!final_bytes_equal && final_source_save == GBB_OK && final_target_save == GBB_OK) {
+        const size_t fields = sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0]);
+        for (size_t f = 0u; f < fields; ++f) {
+            const size_t count = state_field_count_for_instance(source, &STATE_FIELDS[f]);
+            for (size_t i = 0u; i < count; ++i) {
+                uint64_t left = 0u, right = 0u;
+                if (state_host_value(source, &STATE_FIELDS[f], i, &left) &&
+                    state_host_value(target, &STATE_FIELDS[f], i, &right) && left != right)
+                    fprintf(stderr, "state-fork canonical-field-difference id=%s index=%zu source=%016llx target=%016llx\n",
+                        STATE_FIELDS[f].path, i, (unsigned long long)left,
+                        (unsigned long long)right);
+            }
+        }
+    }
+    const int final_saved = final_bytes_equal;
+    if (!final_saved) fprintf(stderr, "state-fork mismatch: final canonical bytes case=%s source_status=%d target_status=%d\n",
+        case_id, (int)final_source_save, (int)final_target_save);
     equal = equal && final_saved;
     if (!equal) fprintf(stderr, "state-fork mismatch: canonical-state-bytes/output case=%s\n", case_id);
     else printf("state-fork pass case=%s profile=%u mode=%u state_bytes=%zu\n",
@@ -529,11 +630,40 @@ static int state_slice_invariance(void) {
 int main(int argc, char **argv) {
     if (argc == 2 && strcmp(argv[1], "state_slice_invariance") == 0)
         return state_slice_invariance();
-    if (argc == 5 && strcmp(argv[1], "case") == 0) {
+#ifdef GBB_STATE_FORK_MUTANT
+    const char *mutant_arg = NULL;
+    if ((argc == 7 && strcmp(argv[5], "--mutant") == 0) ||
+        (argc == 5 && strcmp(argv[3], "generated_apu_fields") == 0 &&
+         strcmp(argv[4], "--mutant") == 0)) {
+        mutant_arg = argv[argc - 1];
+        state_fork_mutant_field = mutant_arg;
+    }
+#define GBB_FORK_CASE_ARGS \
+    (argc == 5 || (argc == 7 && strcmp(argv[5], "--mutant") == 0))
+#define GBB_FORK_GENERATED_ARGS \
+    (argc == 3 || (argc == 5 && strcmp(argv[3], "--mutant") == 0))
+#else
+#define GBB_FORK_CASE_ARGS (argc == 5)
+#define GBB_FORK_GENERATED_ARGS (argc == 3)
+#endif
+    if (GBB_FORK_CASE_ARGS && strcmp(argv[1], "case") == 0) {
         const gbb_profile profile = strcmp(argv[4], "cgb") == 0
             ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B;
         return state_fork_case(argv[2], argv[3], profile);
     }
-    fprintf(stderr, "usage: test_state_fork state_slice_invariance | case ID ROM dmg|cgb\n");
+    if (GBB_FORK_GENERATED_ARGS && strcmp(argv[1], "generated_apu_fields") == 0) {
+        const int cgb = strcmp(argv[2], "cgb") == 0;
+        if (!cgb && strcmp(argv[2], "dmg") != 0) return 2;
+        uint8_t rom[GENERATED_APU_ROM_SIZE];
+        char sha256[65];
+        build_generated_apu_rom(rom);
+        generated_rom_sha256(rom, sizeof(rom), sha256);
+        printf("generated-rom id=apu_fields profile=%s size=%zu sha256=%s\n",
+            cgb ? "cgb" : "dmg", sizeof(rom), sha256);
+        return state_fork_case(cgb ? "generated:apu_fields:cgb" :
+            "generated:apu_fields:dmg", GENERATED_APU_ROM_PATH,
+            cgb ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B);
+    }
+    fprintf(stderr, "usage: test_state_fork state_slice_invariance | case ID ROM dmg|cgb [--mutant FIELD] | generated_apu_fields dmg|cgb [--mutant FIELD]\n");
     return 2;
 }

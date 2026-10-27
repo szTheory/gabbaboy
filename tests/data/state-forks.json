@@ -25,6 +25,16 @@
     ],
     "observer_history": "compare target-local battery and rumble counter deltas separately"
   },
+  "generated_field_fixtures": [
+    {
+      "id": "apu_fields",
+      "sha256": "5154f91097917fe20bffd5c17c85f1dddd0bf218105c591fd55dfb34461da1ef",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_apu_rom",
+      "purpose": "Original looping DMG-compatible ROM powers pulse/noise/wave, triggers a negative pulse sweep, and witnesses serialized APU fields at a real public save boundary.",
+      "profiles": ["dmg", "cgb"]
+    }
+  ],
   "fixture_manifests": [
     {"path": "fixtures/age/manifest.json", "sha256": "52a022327cc9b6eb9df2a6383b77cf8c006fca26e789c757c15dc2c58e1e4791", "rom_rows": 19},
     {"path": "fixtures/cgb-banking/manifest.json", "sha256": "99777e6c8ea35df41c25dab2c9e68d72ba3e7255bf174373492d7c2dd5d2cb2d", "rom_rows": 2},

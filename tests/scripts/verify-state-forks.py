@@ -310,14 +310,42 @@ def run_shard(args: argparse.Namespace) -> None:
         results.append({"index": index, **case, "field_witnesses": fields,
                         "category_witnesses": categories,
                         "stdout_sha256": hashlib.sha256(proc.stdout.encode()).hexdigest()})
+    generated_results = []
+    if args.shard == 0:
+        for fixture in spec.get("generated_field_fixtures", []):
+            for profile in fixture.get("profiles", []):
+                proc = subprocess.run([str(args.test_exe), "generated_apu_fields", profile],
+                                      cwd=args.repo, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, text=True, check=False)
+                if proc.returncode != 0:
+                    raise ForkError(f"generated field fork failed id={fixture.get('id')} profile={profile} exit={proc.returncode}\n{proc.stdout[-12000:]}")
+                header = next((line for line in proc.stdout.splitlines()
+                               if line.startswith("generated-rom ")), None)
+                if header is None:
+                    raise ForkError(f"generated field fork omitted ROM identity: {fixture.get('id')} {profile}")
+                identity = dict(part.split("=", 1) for part in header.split()[1:] if "=" in part)
+                if (identity.get("id") != fixture.get("id") or identity.get("profile") != profile or
+                    identity.get("sha256") != fixture.get("sha256") or
+                    int(identity.get("size", "0")) != fixture.get("size_bytes")):
+                    raise ForkError(f"generated field fixture identity differs from immutable spec: {header}")
+                fields, categories = parse_runner_output(proc.stdout)
+                generated_results.append({
+                    "id": f"generated:{fixture['id']}:{profile}",
+                    "fixture_id": fixture["id"], "source": fixture["source"],
+                    "sha256": fixture["sha256"], "size_bytes": fixture["size_bytes"],
+                    "profile": profile, "field_witnesses": fields,
+                    "category_witnesses": categories,
+                    "stdout_sha256": hashlib.sha256(proc.stdout.encode()).hexdigest(),
+                })
     report = {
         "schema": "gabbaboy-state-fork-shard-v1", "rev": rev,
         "spec_sha256": digest(spec_raw), "shard": args.shard, "shards": args.shards,
         "runner_sha256": digest(args.test_exe.read_bytes()), "cases": results,
+        "generated_field_cases": generated_results,
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-    print(f"state-fork shard pass shard={args.shard}/{args.shards} cases={len(results)} fields={sum(len(x['field_witnesses']) for x in results)}")
+    print(f"state-fork shard pass shard={args.shard}/{args.shards} cases={len(results)} generated={len(generated_results)} fields={sum(len(x['field_witnesses']) for x in results + generated_results)}")
 
 
 def matrix_summary(args: argparse.Namespace) -> None:
@@ -325,6 +353,7 @@ def matrix_summary(args: argparse.Namespace) -> None:
     spec, spec_raw = load_spec(rev, args.repo)
     expected = manifest_cases(rev, args.repo, spec, verify_blobs=False)
     by_id: dict[str, dict] = {}
+    generated_by_id: dict[str, dict] = {}
     for shard in range(args.shards):
         path = args.report_dir / f"state-fork-matrix-shard-{shard}.json"
         try:
@@ -337,18 +366,38 @@ def matrix_summary(args: argparse.Namespace) -> None:
             if case["id"] in by_id:
                 raise ForkError(f"duplicate case across shards: {case['id']}")
             by_id[case["id"]] = case
+        for case in data.get("generated_field_cases", []):
+            if case["id"] in generated_by_id:
+                raise ForkError(f"duplicate generated field case across shards: {case['id']}")
+            generated_by_id[case["id"]] = case
     expected_ids = {case["id"] for case in expected}
     if set(by_id) != expected_ids:
         missing = sorted(expected_ids - set(by_id))
         extra = sorted(set(by_id) - expected_ids)
         raise ForkError(f"matrix coverage mismatch: missing={missing[:5]} extra={extra[:5]}")
     ordered = [by_id[case["id"]] for case in expected]
+    expected_generated = {
+        f"generated:{fixture['id']}:{profile}"
+        for fixture in spec.get("generated_field_fixtures", [])
+        for profile in fixture.get("profiles", [])
+    }
+    if set(generated_by_id) != expected_generated:
+        raise ForkError(f"generated field fixture coverage mismatch: missing={sorted(expected_generated-set(generated_by_id))} extra={sorted(set(generated_by_id)-expected_generated)}")
+    generated_ordered = [generated_by_id[key] for key in sorted(expected_generated)]
+    for case in generated_ordered:
+        fixture = next(item for item in spec["generated_field_fixtures"]
+                       if item["id"] == case["fixture_id"])
+        if case.get("sha256") != fixture["sha256"] or case.get("size_bytes") != fixture["size_bytes"]:
+            raise ForkError(f"generated field fixture digest/size mismatch: {case['id']}")
+    all_cases = ordered + generated_ordered
     report = {
         "schema": "gabbaboy-state-fork-report-v1", "rev": rev,
         "spec_sha256": digest(spec_raw), "snapshot_equivalence": True,
         "oracle_replay_claim": False, "case_count": len(ordered), "cases": ordered,
-        "field_witnesses": sorted({row["id"] for case in ordered for row in case["field_witnesses"]}),
-        "category_witnesses": sorted({row["id"] for case in ordered for row in case["category_witnesses"]}),
+        "generated_field_case_count": len(generated_ordered),
+        "generated_field_cases": generated_ordered,
+        "field_witnesses": sorted({row["id"] for case in all_cases for row in case["field_witnesses"]}),
+        "category_witnesses": sorted({row["id"] for case in all_cases for row in case["category_witnesses"]}),
         "expected_failure_cases": [case["id"] for case in ordered if any(
             str(value).lower() in {"expected-failure", "xfail", "fail"}
             for key, value in case.get("oracle_disposition", {}).items()
@@ -356,7 +405,7 @@ def matrix_summary(args: argparse.Namespace) -> None:
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-    print(f"state-fork matrix pass cases={len(ordered)} field_paths={len(report['field_witnesses'])} categories={','.join(report['category_witnesses'])}")
+    print(f"state-fork matrix pass cases={len(ordered)} generated={len(generated_ordered)} field_paths={len(report['field_witnesses'])} categories={','.join(report['category_witnesses'])}")
 
 
 def field_paths_from_source(source: str) -> set[str]:
@@ -373,8 +422,55 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
         raise ForkError("fork report mislabels snapshot equivalence/oracle replay")
     if report.get("case_count") != spec.get("expected_case_count") or len(report.get("cases", [])) != spec.get("expected_case_count"):
         raise ForkError("fork report is incomplete")
+    expected_generated = {
+        f"generated:{fixture['id']}:{profile}": (fixture, profile)
+        for fixture in spec.get("generated_field_fixtures", [])
+        for profile in fixture.get("profiles", [])
+    }
+    generated_cases = report.get("generated_field_cases", [])
+    if report.get("generated_field_case_count") != len(expected_generated) or len(generated_cases) != len(expected_generated):
+        raise ForkError("generated field fixture report is incomplete")
+    generated_ids = {case.get("id") for case in generated_cases}
+    if generated_ids != set(expected_generated):
+        raise ForkError(f"generated field fixture identities differ from spec: missing={sorted(set(expected_generated)-generated_ids)} extra={sorted(generated_ids-set(expected_generated))}")
+    for case in generated_cases:
+        fixture, profile = expected_generated[case["id"]]
+        if (case.get("fixture_id") != fixture["id"] or case.get("profile") != profile or
+            case.get("sha256") != fixture["sha256"] or case.get("size_bytes") != fixture["size_bytes"] or
+            case.get("source") != fixture["source"]):
+            raise ForkError(f"generated field fixture identity/digest mismatch: {case.get('id')}")
     fields = field_paths_from_source(source)
+    all_cases = report["cases"] + generated_cases
+    actual_witnesses: set[str] = set()
+    actual_categories: set[str] = set()
+    required_categories = {item["id"] for item in spec.get("in_flight_categories", [])}
+    for case in all_cases:
+        case_id = case.get("id")
+        if not isinstance(case_id, str):
+            raise ForkError("fork case has no stable identity")
+        for row in case.get("field_witnesses", []):
+            if row.get("case") != case_id:
+                raise ForkError(f"field witness is attributed to another case: {case_id}")
+            field_id = row.get("id")
+            if field_id not in fields:
+                raise ForkError(f"unknown field witness: {field_id}")
+            try:
+                value, default = int(row["value"], 16), int(row["default"], 16)
+                offset, count = int(row["offset"]), int(row["count"])
+                width, index = int(row["width"]), int(row["index"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ForkError(f"malformed field witness for {field_id}") from exc
+            if (row.get("discriminator") != "nondefault" or row.get("treatment") != "serialize" or
+                value == default or offset < 0 or count <= 0 or width <= 0 or not 0 <= index < count):
+                raise ForkError(f"field witness is not an actual non-default serialized value: {field_id}")
+            actual_witnesses.add(field_id)
+        for row in case.get("category_witnesses", []):
+            if row.get("case") != case_id or row.get("id") not in required_categories:
+                raise ForkError(f"unknown/misattributed in-flight category witness in {case_id}")
+            actual_categories.add(row["id"])
     witnessed = set(report.get("field_witnesses", []))
+    if witnessed != actual_witnesses:
+        raise ForkError("field witness summary differs from case-level observed values")
     explicit = {item["path"] for item in spec.get("constant_dispositions", []) if isinstance(item, dict) and item.get("path")}
     unknown = (witnessed | explicit) - fields
     if unknown:
@@ -382,8 +478,9 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
     missing = fields - witnessed - explicit
     if missing:
         raise ForkError(f"serialized field lacks non-default witness or justified disposition: {sorted(missing)[:12]}")
-    required_categories = {item["id"] for item in spec.get("in_flight_categories", [])}
     observed = set(report.get("category_witnesses", []))
+    if observed != actual_categories:
+        raise ForkError("category witness summary differs from case-level save-boundary witnesses")
     missing_categories = required_categories - observed
     if missing_categories:
         raise ForkError(f"in-flight category lacks save-boundary witness: {sorted(missing_categories)}")
@@ -392,7 +489,11 @@ def validate_report(report: dict, spec: dict, source: str, rev: str) -> list[str
 
 def self_test(report: dict, spec: dict, source: str, rev: str) -> None:
     corrupted = json.loads(json.dumps(report))
-    corrupted["category_witnesses"] = [row for row in corrupted.get("category_witnesses", []) if row != "hdma_byte_phase"]
+    for case in corrupted.get("cases", []) + corrupted.get("generated_field_cases", []):
+        case["category_witnesses"] = [row for row in case.get("category_witnesses", [])
+                                       if row.get("id") != "hdma_byte_phase"]
+    corrupted["category_witnesses"] = [row for row in corrupted.get("category_witnesses", [])
+                                        if row != "hdma_byte_phase"]
     try:
         validate_report(corrupted, spec, source, rev)
     except ForkError as exc:
@@ -401,10 +502,14 @@ def self_test(report: dict, spec: dict, source: str, rev: str) -> None:
     else:
         raise ForkError("census negative control passed after removing hdma_byte_phase")
     corrupted = json.loads(json.dumps(report))
-    if corrupted.get("field_witnesses"):
-        corrupted["field_witnesses"].pop()
-    else:
+    if not corrupted.get("field_witnesses"):
         raise ForkError("cannot exercise default-only field control: no witnesses exist")
+    missing_field = corrupted["field_witnesses"][0]
+    for case in corrupted.get("cases", []) + corrupted.get("generated_field_cases", []):
+        case["field_witnesses"] = [row for row in case.get("field_witnesses", [])
+                                   if row.get("id") != missing_field]
+    corrupted["field_witnesses"] = [row for row in corrupted["field_witnesses"]
+                                    if row != missing_field]
     try:
         validate_report(corrupted, spec, source, rev)
     except ForkError as exc:
@@ -412,7 +517,18 @@ def self_test(report: dict, spec: dict, source: str, rev: str) -> None:
             raise ForkError(f"field negative control failed for wrong reason: {exc}") from exc
     else:
         raise ForkError("field negative control passed after deleting a field witness")
-    print("state-fork census self-test pass missing-category=refused missing-field-witness=refused")
+    corrupted = json.loads(json.dumps(report))
+    witness = next(row for case in corrupted["cases"] + corrupted["generated_field_cases"]
+                   for row in case.get("field_witnesses", []))
+    witness["default"] = witness["value"]
+    try:
+        validate_report(corrupted, spec, source, rev)
+    except ForkError as exc:
+        if "non-default serialized value" not in str(exc):
+            raise ForkError(f"default-only field control failed for wrong reason: {exc}") from exc
+    else:
+        raise ForkError("census negative control passed after making a field witness default-only")
+    print("state-fork census self-test pass missing-category=refused missing-field-witness=refused default-only-field=refused")
 
 
 def check_report(args: argparse.Namespace) -> None:
