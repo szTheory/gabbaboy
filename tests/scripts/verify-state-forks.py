@@ -911,57 +911,59 @@ def run_mutant_shard(args: argparse.Namespace) -> None:
         mutant_command_line = mutant_command(case, args.test_exe, args.repo, field)
         try:
             control = subprocess.run(normal_command, cwd=args.repo, stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, text=True, check=False, timeout=20)
+                stderr=subprocess.PIPE, text=True, check=False, timeout=20)
             mutant = subprocess.run(mutant_command_line, cwd=args.repo, stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT, text=True, check=False, timeout=20)
+                stderr=subprocess.PIPE, text=True, check=False, timeout=20)
         except subprocess.TimeoutExpired as exc:
             raise ForkError(f"mutant/control timeout is not a semantic kill field={field} case={case_id}: {exc}") from exc
+        control_output = control.stdout + control.stderr
+        mutant_output = mutant.stdout + mutant.stderr
         sanitizer_output = re.compile(
             r"AddressSanitizer:|UndefinedBehaviorSanitizer|runtime error:|"
             r"DEADLYSIGNAL|Segmentation fault|Floating point exception|"
             r"heap-buffer-overflow|stack-buffer-overflow")
-        if control.returncode != 0 or f"state-fork pass case={case_id}" not in control.stdout:
-            raise ForkError(f"unmutated control did not pass field={field} case={case_id} exit={control.returncode}\n{control.stdout[-4000:]}")
-        if sanitizer_output.search(control.stdout):
-            raise ForkError(f"unmutated control reported a sanitizer/runtime failure field={field} case={case_id}\n{control.stdout[-4000:]}")
-        if sanitizer_output.search(mutant.stdout):
-            raise ForkError(f"field omission caused a sanitizer/runtime failure, not a semantic discrepancy field={field} case={case_id} exit={mutant.returncode}\n{mutant.stdout[-4000:]}")
-        if mutant.returncode != 1 or "state-fork mismatch" not in mutant.stdout:
-            raise ForkError(f"field omission was not a semantic discrepancy field={field} case={case_id} exit={mutant.returncode}\n{mutant.stdout[-4000:]}")
+        if control.returncode != 0 or f"state-fork pass case={case_id}" not in control_output:
+            raise ForkError(f"unmutated control did not pass field={field} case={case_id} exit={control.returncode}\n{control_output[-4000:]}")
+        if sanitizer_output.search(control_output):
+            raise ForkError(f"unmutated control reported a sanitizer/runtime failure field={field} case={case_id}\n{control_output[-4000:]}")
+        if sanitizer_output.search(mutant_output):
+            raise ForkError(f"field omission caused a sanitizer/runtime failure, not a semantic discrepancy field={field} case={case_id} exit={mutant.returncode}\n{mutant_output[-4000:]}")
+        if mutant.returncode != 1 or "state-fork mismatch" not in mutant_output:
+            raise ForkError(f"field omission was not a semantic discrepancy field={field} case={case_id} exit={mutant.returncode}\n{mutant_output[-4000:]}")
         assignment_proof = re.search(
             rf"state-fork mutation-applied field={re.escape(field)} case={re.escape(case_id)} skipped_assignments=(\d+) field_count=(\d+)",
             mutant.stdout)
         if assignment_proof is None or assignment_proof.group(1) != assignment_proof.group(2):
-            raise ForkError(f"field omission did not prove every named assignment was skipped: {field} {case_id}\n{mutant.stdout[-4000:]}")
-        if ("state-fork setup failure" in mutant.stdout or "state-fork load failure" in mutant.stdout or
-            "state-fork observer failure" in mutant.stdout):
-            raise ForkError(f"field omission failed during setup/load, not continuation comparison: {field} {case_id}\n{mutant.stdout[-4000:]}")
+            raise ForkError(f"field omission did not prove every named assignment was skipped: {field} {case_id}\n{mutant_output[-4000:]}")
+        if ("state-fork setup failure" in mutant_output or "state-fork load failure" in mutant_output or
+            "state-fork observer failure" in mutant_output):
+            raise ForkError(f"field omission failed during setup/load, not continuation comparison: {field} {case_id}\n{mutant_output[-4000:]}")
         observed = sorted({match.group(1) for match in re.finditer(
-            rf"state-fork discrepancy case={re.escape(case_id)} observation=([a-z0-9-]+)", mutant.stdout)})
+            rf"state-fork discrepancy case={re.escape(case_id)} observation=([a-z0-9-]+)", mutant_output)})
         expected = sorted(set(item["expected_observations"]))
         rejected_save = "post-load-canonical-save-rejected" in observed
         if rejected_save:
             if expected != ["post-load-canonical-save-rejected"] or observed != expected:
-                raise ForkError(f"canonical save rejection is not the exact declared malformed-target proof field={field} case={case_id}: expected={expected} observed={observed}\n{mutant.stdout[-4000:]}")
-            if ("state-fork semantic-stop kind=post-load-canonical-save-rejected" not in mutant.stdout or
-                "state-fork continuation-start" in mutant.stdout):
-                raise ForkError(f"rejected target save did not stop before continuation field={field} case={case_id}\n{mutant.stdout[-4000:]}")
+                raise ForkError(f"canonical save rejection is not the exact declared malformed-target proof field={field} case={case_id}: expected={expected} observed={observed}\n{mutant_output[-4000:]}")
+            if ("state-fork semantic-stop kind=post-load-canonical-save-rejected" not in mutant_output or
+                "state-fork continuation-start" in mutant_output):
+                raise ForkError(f"rejected target save did not stop before continuation field={field} case={case_id}\n{mutant_output[-4000:]}")
         else:
             accepted_expected = set(expected)
             if "post-load-canonical-state-bytes-or-save-status" in accepted_expected:
                 accepted_expected.remove("post-load-canonical-state-bytes-or-save-status")
                 accepted_expected.add("post-load-canonical-state-bytes")
             if not accepted_expected.issubset(set(observed)):
-                raise ForkError(f"field omission missed its declared continuation discrepancy field={field} case={case_id}: expected={expected} observed={observed}\n{mutant.stdout[-4000:]}")
-            if "state-fork continuation-start" not in mutant.stdout:
-                raise ForkError(f"valid target did not reach future fork comparisons field={field} case={case_id}\n{mutant.stdout[-4000:]}")
+                raise ForkError(f"field omission missed its declared continuation discrepancy field={field} case={case_id}: expected={expected} observed={observed}\n{mutant_output[-4000:]}")
+            if "state-fork continuation-start" not in mutant_output:
+                raise ForkError(f"valid target did not reach future fork comparisons field={field} case={case_id}\n{mutant_output[-4000:]}")
         rows.append({"field": field, "case": case_id, "expected_observations": expected,
             "proof_class": "post-load-canonical-save-rejected" if rejected_save else
                 "post-load-canonical-bytes-and-continuation",
             "observed_observations": observed, "control_exit": control.returncode,
             "mutant_exit": mutant.returncode,
-            "control_output_sha256": digest(control.stdout.encode()),
-            "mutant_output_sha256": digest(mutant.stdout.encode())})
+            "control_output_sha256": digest(control_output.encode()),
+            "mutant_output_sha256": digest(mutant_output.encode())})
     if not args.report:
         raise ForkError("--mutants needs --report for the shard evidence")
     args.report.parent.mkdir(parents=True, exist_ok=True)
