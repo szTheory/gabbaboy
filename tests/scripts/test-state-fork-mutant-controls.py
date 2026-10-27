@@ -36,6 +36,11 @@ class StateForkMutantControls(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("windows-git-path=normalized", result.stdout)
 
+    def test_generic_malformed_target_reason_is_refused(self) -> None:
+        result = run_controls()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("malformed-invariant-reason=refused", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main(argv=[sys.argv[0], *sys.argv[5:]])

@@ -746,6 +746,27 @@ MUTANT_OBSERVATIONS = {
     "post-load-canonical-state-bytes", "post-load-canonical-save-rejected",
 }
 
+MALFORMED_TARGET_REASONS = {
+    ("input_events[].at_half_dots", "generated:accepted_dma_phase:dmg"):
+        "Skipping the active event timestamp makes it precede the saved machine clock; the runner stops after canonical save rejection.",
+    ("input_events[].kind", "generated:accepted_dma_phase:dmg"):
+        "Skipping the active event kind violates the public state validator's event-kind/value relation; the runner stops after canonical save rejection.",
+    ("input_events[].value", "generated:accepted_dma_phase:dmg"):
+        "Skipping the active event value leaves the kind/value pair outside the public state validator's accepted relation; the runner stops after canonical save rejection.",
+    ("div", "generated:div_read:dmg"):
+        "The div_read DMG seed ties div=0xAC to divider_counter=0xAC00, and the state invariant requires div to equal the counter high byte; omitting div therefore causes canonical save rejection.",
+    ("hdma.active", "generated:native_pipeline_hdma:cgb"):
+        "The native_pipeline_hdma CGB cut is mid-byte with nonzero HDMA byte phase; the accepted-state invariant requires an active transfer for that phase, so omitting hdma.active causes canonical save rejection.",
+    ("input_event_count", "generated:accepted_dma_phase:dmg"):
+        "The accepted_dma_phase DMG cut has a nonzero queued event in slot zero; the state invariant requires unused event slots to be zero, so omitting input_event_count makes the receiver invalid and canonical save rejects it.",
+    ("serial_control", "generated:bus_unsupported:cgb"):
+        "At the bus_unsupported CGB cut, an active external serial transfer has serial_control=0x80 and zero edge countdown; any distinct legal single-field control value breaks the active/control/countdown invariant, so canonical save rejects the omitted target.",
+    ("tac", "generated:timer_reload:cgb"):
+        "At the timer_reload CGB cut, divider_counter=0x005C and timer_signal=1; TAC value 5 is the only accepted selector in this fixture whose enabled tap is high, so omitting tac causes canonical save rejection.",
+    ("wram_bank", "generated:native_pipeline:cgb"):
+        "At the native_pipeline CGB cut, the effective WRAM bank is derived from the restored SVBK value; the accepted-state invariant requires wram_bank=(svbk==0 ? 1 : svbk), so omitting the cache assignment causes canonical save rejection.",
+}
+
 
 def validate_mutant_manifest(report: dict, spec: dict) -> list[dict]:
     witnessed = set(report.get("field_witnesses", []))
@@ -764,9 +785,11 @@ def validate_mutant_manifest(report: dict, spec: dict) -> list[dict]:
             raise ForkError(f"field mutation manifest entry is incomplete: {path}")
         malformed_reason = item.get("malformed_target_reason")
         if "post-load-canonical-save-rejected" in observations:
+            exact_reason = MALFORMED_TARGET_REASONS.get((path, case_id))
             if (observations != ["post-load-canonical-save-rejected"] or
-                not isinstance(malformed_reason, str) or not malformed_reason.strip()):
-                raise ForkError(f"malformed-target mutation lacks its exact named save-rejection reason: {path}")
+                not isinstance(malformed_reason, str) or
+                malformed_reason != exact_reason):
+                raise ForkError(f"malformed-target reason differs from its exact fixture invariant: {path} case={case_id}")
         elif malformed_reason is not None:
             raise ForkError(f"unexpected malformed-target reason outside a save-rejection mutation: {path}")
         if path in by_path:
@@ -827,7 +850,20 @@ def mutant_controls(args: argparse.Namespace) -> None:
             raise ForkError(f"unexercising-fixture control failed for wrong reason: {exc}") from exc
     else:
         raise ForkError("mutation checker accepted an unexercising fixture")
-    print("state-fork mutant controls pass missing-record=refused unexercising-fixture=refused windows-git-path=normalized")
+    wrong_invariant = json.loads(json.dumps(spec))
+    malformed_item = next((item for item in wrong_invariant["field_mutants"]
+                           if "malformed_target_reason" in item), None)
+    if malformed_item is None:
+        raise ForkError("malformed-target invariant negative control has no declared case")
+    malformed_item["malformed_target_reason"] = "canonical save rejected"
+    try:
+        validate_mutant_manifest(report, wrong_invariant)
+    except ForkError as exc:
+        if "exact fixture invariant" not in str(exc):
+            raise ForkError(f"malformed-target invariant control failed for wrong reason: {exc}") from exc
+    else:
+        raise ForkError("mutation checker accepted a generic malformed-target reason")
+    print("state-fork mutant controls pass missing-record=refused unexercising-fixture=refused malformed-invariant-reason=refused windows-git-path=normalized")
 
 
 def mutant_command(case: dict, test_exe: Path, repo: Path,

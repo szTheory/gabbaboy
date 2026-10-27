@@ -1469,10 +1469,9 @@
     },
     {
       "case": "generated:div_read:dmg",
-      "expected_observations": [
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "div"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "div",
+      "malformed_target_reason": "The div_read DMG seed ties div=0xAC to divider_counter=0xAC00, and the state invariant requires div to equal the counter high byte; omitting div therefore causes canonical save rejection."
     },
     {
       "case": "generated:accepted_dma_phase:dmg",
@@ -1621,11 +1620,11 @@
     {
       "case": "visible-demo:visible-demo",
       "expected_observations": [
-        "final-canonical-state-bytes",
         "frame-and-metadata",
         "post-load-canonical-state-bytes-or-save-status"
       ],
-      "field": "frame_completed"
+      "field": "frame_completed",
+      "observation_rationale": "At the visible-demo cut, omission changes frame completion metadata in the bounded continuation; the later frame completion normalizes this field, so final canonical bytes match."
     },
     {
       "case": "generated:apu_fields:cgb",
@@ -1680,10 +1679,9 @@
     },
     {
       "case": "generated:native_pipeline_hdma:cgb",
-      "expected_observations": [
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "hdma.active"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "hdma.active",
+      "malformed_target_reason": "The native_pipeline_hdma CGB cut is mid-byte with nonzero HDMA byte phase; the accepted-state invariant requires an active transfer for that phase, so omitting hdma.active causes canonical save rejection."
     },
     {
       "case": "generated:native_pipeline_hdma:cgb",
@@ -1825,11 +1823,10 @@
     {
       "case": "generated:accepted_dma_phase:dmg",
       "expected_observations": [
-        "final-canonical-state-bytes",
         "post-load-canonical-state-bytes-or-save-status"
       ],
       "field": "input_event_count",
-      "observation_rationale": "At the accepted_dma_phase DMG cut, omitting the queued-event count leaves a valid empty queue; the guest does not sample joypad input in the measured horizon, so canonical and final bytes identify the omission."
+      "malformed_target_reason": "The accepted_dma_phase DMG cut has a nonzero queued event in slot zero; the state invariant requires unused event slots to be zero, so omitting input_event_count makes the receiver invalid and canonical save rejects it."
     },
     {
       "case": "generated:accepted_dma_phase:dmg",
@@ -1864,11 +1861,9 @@
     },
     {
       "case": "generated:apu_fields:dmg",
-      "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "interrupt_flags"
+      "expected_observations": ["post-load-canonical-state-bytes-or-save-status"],
+      "field": "interrupt_flags",
+      "observation_rationale": "At the apu_fields DMG cut, omission changes immediate canonical bytes; the guest consumes or replaces the flag before the measured future outputs, so run results, PCM, frame metadata and final bytes match."
     },
     {
       "case": "generated:joypad_applied:dmg",
@@ -2131,12 +2126,9 @@
     },
     {
       "case": "generated:dmg_ppu_pipeline:dmg",
-      "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status",
-        "run-result"
-      ],
-      "field": "ppu_selected_object_count"
+      "expected_observations": ["post-load-canonical-state-bytes-or-save-status"],
+      "field": "ppu_selected_object_count",
+      "observation_rationale": "At the dmg_ppu_pipeline DMG cut, omission changes immediate canonical bytes; the selected-object count is consumed before later bounded output and final state observations, which match."
     },
     {
       "case": "generated:native_pipeline:cgb",
@@ -2215,11 +2207,11 @@
     {
       "case": "generated:apu_fields:cgb",
       "expected_observations": [
-        "final-canonical-state-bytes",
         "frame-and-metadata",
         "post-load-canonical-state-bytes-or-save-status"
       ],
-      "field": "rgb_completed"
+      "field": "rgb_completed",
+      "observation_rationale": "At the apu_fields CGB cut, omission changes frame data and metadata during the bounded continuation; later PPU output reconverges, so final canonical bytes match."
     },
     {
       "case": "generated:apu_fields:cgb",
@@ -2261,11 +2253,9 @@
     },
     {
       "case": "generated:bus_unsupported:cgb",
-      "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "serial_control"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "serial_control",
+      "malformed_target_reason": "At the bus_unsupported CGB cut, an active external serial transfer has serial_control=0x80 and zero edge countdown; any distinct legal single-field control value breaks the active/control/countdown invariant, so canonical save rejects the omitted target."
     },
     {
       "case": "cgb-speed:speed",
@@ -2328,11 +2318,9 @@
     },
     {
       "case": "generated:timer_reload:cgb",
-      "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "tac"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "tac",
+      "malformed_target_reason": "At the timer_reload CGB cut, divider_counter=0x005C and timer_signal=1; TAC value 5 is the only accepted selector in this fixture whose enabled tap is high, so omitting tac causes canonical save rejection."
     },
     {
       "case": "age:spsw-interrupts-cgbE",
@@ -2418,11 +2406,9 @@
     },
     {
       "case": "generated:native_pipeline:cgb",
-      "expected_observations": [
-        "final-canonical-state-bytes",
-        "post-load-canonical-state-bytes-or-save-status"
-      ],
-      "field": "wram_bank"
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "wram_bank",
+      "malformed_target_reason": "At the native_pipeline CGB cut, the effective WRAM bank is derived from the restored SVBK value; the accepted-state invariant requires wram_bank=(svbk==0 ? 1 : svbk), so omitting the cache assignment causes canonical save rejection."
     },
     {
       "case": "generated:dmg_ppu_pipeline:dmg",
