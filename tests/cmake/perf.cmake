@@ -5,6 +5,7 @@
 # the same evaluator real cachegrind output. No test reads .planning, so none carries the planning label.
 
 set(GBB_PERF_GATE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-perf-gate.py")
+set(GBB_PERF_RECEIPT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-performance.py")
 set(GBB_PERF_GATE_LIMITS "${PROJECT_SOURCE_DIR}/tests/baseline/perf-gate-v1.txt")
 set(GBB_PERF_GATE_DATA "${PROJECT_SOURCE_DIR}/tests/data/perf-gate")
 
@@ -55,6 +56,18 @@ function(gbb_add_perf_gate_test name code regex)
   set_tests_properties(${name} PROPERTIES TIMEOUT 60)
 endfunction()
 
+function(gbb_add_perf_receipt_test name regex argument)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_PERF_RECEIPT_CHECKER}" ${argument})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 120)
+endfunction()
+
 # The control count is a parsed minimum: adding controls is allowed, dropping one is rejected.
 set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=33)
 gbb_add_perf_gate_test(perf_gate_controls 0 "perf-gate self-test pass controls=[0-9]+" --self-test)
@@ -84,3 +97,11 @@ set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=merges -DGBB_EXPECT_MIN_VALUE=
 gbb_add_perf_gate_test(perf_attribution_merges 0 "perf-attribution pass revisions=[0-9]+ merges=[0-9]+"
   --check-attribution "${PROJECT_SOURCE_DIR}/tests/baseline/perf-attribution-v1.json" --repo "${PROJECT_SOURCE_DIR}")
 set(GBB_PERF_GATE_EXTRA_ARGS)
+
+# These exercise the actual paired-receipt producer with stubbed measurement executables, then
+# pass its receipt through the production verifier and reuse function. Extra time covers the
+# source-bound fixture setup and repeated controlled observations without a wall-clock budget.
+gbb_add_perf_receipt_test(perf_advisory_pipeline "advisory pipeline self-test pass controls=[0-9]+"
+  --self-test-advisory-pipeline)
+gbb_add_perf_receipt_test(perf_advisory_controls "advisory controls self-test pass controls=[0-9]+"
+  --self-test-advisory-controls)

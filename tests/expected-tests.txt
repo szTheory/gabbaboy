@@ -1214,6 +1214,8 @@ perf_gate_canned_realtime_under_floor
 perf_gate_limits_schema
 perf_attribution
 perf_attribution_merges
+perf_advisory_pipeline
+perf_advisory_controls
 test_budget_controls
 test_budget
 sanitizer_timeout_policy_temp_clean

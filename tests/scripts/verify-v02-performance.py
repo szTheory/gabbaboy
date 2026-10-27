@@ -216,7 +216,7 @@ def verify_reviewed_measurement_basis(receipt: dict[str, object], digest: str) -
 def verify_receipt(receipt: object, *, allow_pending: bool = False) -> dict[str, object]:
     require(isinstance(receipt, dict), "receipt-not-object")
     schema_version = receipt.get("schema_version")
-    require(schema_version in (1, 2), "schema-version-unsupported")
+    require(schema_version in (1, 2, 3), "schema-version-unsupported")
     legacy = schema_version == 1
     verify_privacy(receipt)
     if allow_pending:
@@ -385,31 +385,55 @@ def verify_receipt(receipt: object, *, allow_pending: bool = False) -> dict[str,
             require(disposition.get("decision") == "no-review-trigger" and
                     disposition.get("release_disposition") == "qualified-no-trigger",
                     "legacy-regression-disposition-invalid")
-    elif recomputed["review_trigger"] and disposition.get("decision") == "investigation-required":
-        require(allow_pending, "regression-review-pending")
-        require(receipt.get("result") == "pending-investigation" and
-                disposition.get("release_disposition") == "pending-investigation",
-                "pending-regression-disposition-invalid")
+    elif schema_version == 2:
+        # Schema 2 receipts retain the old two-stage review meaning. Do not reinterpret
+        # tagged/reviewed evidence while schema 3 makes ordinary paired timing advisory.
+        if recomputed["review_trigger"] and disposition.get("decision") == "investigation-required":
+            require(allow_pending, "regression-review-pending")
+            require(receipt.get("result") == "pending-investigation" and
+                    disposition.get("release_disposition") == "pending-investigation",
+                    "pending-regression-disposition-invalid")
+            require("reviewed_disposition" not in receipt and
+                    "reviewed_disposition_sha256" not in receipt and
+                    "measurement_receipt" not in receipt and
+                    "measurement_receipt_sha256" not in receipt,
+                    "pending-receipt-has-review-fields")
+        elif recomputed["review_trigger"]:
+            require(disposition.get("decision") == "accepted-with-disclosed-regression" and
+                    disposition.get("release_disposition") == "accepted-with-disclosed-regression" and
+                    receipt.get("result") == "passed",
+                    "regression-review-pending")
+            measurement_receipt_sha = receipt.get("measurement_receipt_sha256")
+            require(isinstance(measurement_receipt_sha, str) and
+                    HEX64.fullmatch(measurement_receipt_sha) is not None,
+                    "review-measurement-receipt-missing")
+            reviewed = verify_reviewed_disposition(
+                receipt, receipt.get("reviewed_disposition"), measurement_receipt_sha)
+            verify_reviewed_measurement_basis(receipt, measurement_receipt_sha)
+            require(receipt.get("reviewed_disposition_sha256") == canonical_sha(reviewed),
+                    "reviewed-disposition-digest-mismatch")
+            require(investigation == reviewed.get("rationale"), "review-investigation-mismatch")
+        else:
+            require(disposition.get("decision") == "no-review-trigger" and
+                    disposition.get("release_disposition") == "qualified-no-trigger" and
+                    receipt.get("result") == "passed",
+                    "regression-disposition-inconsistent")
+            require("reviewed_disposition" not in receipt and
+                    "reviewed_disposition_sha256" not in receipt and
+                    "measurement_receipt" not in receipt and
+                    "measurement_receipt_sha256" not in receipt,
+                    "unexpected-review-disposition")
+    elif recomputed["review_trigger"]:
+        require(disposition.get("decision") == "advisory-observation" and
+                disposition.get("release_disposition") == "advisory" and
+                receipt.get("result") == "passed" and
+                "advisory" in investigation.lower() and "approval" in investigation.lower(),
+                "advisory-regression-disposition-invalid")
         require("reviewed_disposition" not in receipt and
                 "reviewed_disposition_sha256" not in receipt and
                 "measurement_receipt" not in receipt and
                 "measurement_receipt_sha256" not in receipt,
-                "pending-receipt-has-review-fields")
-    elif recomputed["review_trigger"]:
-        require(disposition.get("decision") == "accepted-with-disclosed-regression" and
-                disposition.get("release_disposition") == "accepted-with-disclosed-regression" and
-                receipt.get("result") == "passed",
-                "regression-review-pending")
-        measurement_receipt_sha = receipt.get("measurement_receipt_sha256")
-        require(isinstance(measurement_receipt_sha, str) and
-                HEX64.fullmatch(measurement_receipt_sha) is not None,
-                "review-measurement-receipt-missing")
-        reviewed = verify_reviewed_disposition(
-            receipt, receipt.get("reviewed_disposition"), measurement_receipt_sha)
-        verify_reviewed_measurement_basis(receipt, measurement_receipt_sha)
-        require(receipt.get("reviewed_disposition_sha256") == canonical_sha(reviewed),
-                "reviewed-disposition-digest-mismatch")
-        require(investigation == reviewed.get("rationale"), "review-investigation-mismatch")
+                "advisory-receipt-has-review-fields")
     else:
         require(disposition.get("decision") == "no-review-trigger" and
                 disposition.get("release_disposition") == "qualified-no-trigger" and
@@ -505,6 +529,9 @@ def apply_reviewed_disposition(measurement_path: Path, decision_path: Path,
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ReceiptError("review-input-json-invalid") from error
     verified = verify_receipt(measurement, allow_pending=True)
+    require(verified.get("schema_version") == 2 and
+            verified.get("result") == "pending-investigation",
+            "review-decision-not-required")
     summary = verified["measurement"]["summary"]
     require(summary.get("review_trigger") is True, "review-decision-not-required")
     measurement_digest = canonical_sha(verified)
@@ -824,9 +851,7 @@ class PerformanceReceiptContractTests(unittest.TestCase):
             env.update(self.write_controlled_build_tools(Path(temp) / "bin"))
             return subprocess.run(
                 [self.bash_executable(), (ROOT / "tests/scripts/measure-release-baseline.sh").as_posix(),
-                 "--qualify-v02", "--output", str(output_path), "--review-regression",
-                 "The hosted DMG paired benchmark is +14.86% (±1.62%) slower than v0.1.0, "
-                 "which is disclosed in the receipt and docs/release.md."],
+                 "--qualify-v02", "--output", str(output_path)],
                 cwd=ROOT,
                 env=env,
                 text=True,
@@ -853,21 +878,58 @@ class PerformanceReceiptContractTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "the controlled producer fixture builds a shell-script cmake and a script as the measurement "
                                      "binary, which cannot be a Windows executable; the paired producer runs on the Linux evidence runner")
-    def test_triggered_producer_rejects_copied_acceptance_prose(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-pending-") as temp:
+    def test_advisory_pipeline_produces_verifies_and_reuses_triggered_receipt(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-advisory-") as temp:
             path = Path(temp) / "measurement.json"
             result = self.run_controlled_producer(path)
-            self.assertEqual(result.returncode, 1, result.stdout)
-            self.assertIn("qualify-v02-review-trigger-fired", result.stdout)
-            self.assertIn("not an independent decision", result.stdout)
-            self.assertIn("wrote pending performance measurement", result.stdout)
-            self.assertNotIn("wrote untriggered performance receipt", result.stdout)
+            self.assertEqual(result.returncode, 0, result.stdout)
+            self.assertIn("wrote advisory performance receipt", result.stdout)
             receipt = json.loads(path.read_text(encoding="utf-8"))
-            self.assertEqual(receipt["schema_version"], 2)
-            self.assertEqual(receipt["result"], "pending-investigation")
+            self.assertEqual(receipt["schema_version"], 3)
+            self.assertEqual(receipt["result"], "passed")
             self.assertTrue(receipt["measurement"]["summary"]["review_trigger"])
+            self.assertEqual(receipt["regression_disposition"]["decision"], "advisory-observation")
+            self.assertEqual(receipt["regression_disposition"]["release_disposition"], "advisory")
             self.assertNotIn("reviewed_disposition", receipt)
-            self.assertNotIn("The hosted DMG paired benchmark", path.read_text(encoding="utf-8"))
+            self.assertNotIn("measurement_receipt", receipt)
+            self.assertTrue(receipt["builds"]["candidate"]["identity_sha256"])
+            self.assertEqual(receipt["workload"]["correctness_digest_fnv1a64"], EXPECTED_DIGEST)
+            verified_cli = self.run_cli(receipt)
+            self.assertEqual(verified_cli.returncode, 0, verified_cli.stdout)
+            self.assertIn("performance receipt verified", verified_cli.stdout)
+            reused = self.run_reuse(receipt, receipt["source"]["candidate"]["tree_sha"])
+            self.assertEqual(reused.returncode, 0, reused.stdout)
+            self.assertIn("candidate tree equals the tag tree", reused.stdout)
+            wrong_tree = self.run_reuse(receipt, git_text("rev-parse", f"{BASELINE_SHA}^{{tree}}"))
+            self.assertEqual(wrong_tree.returncode, 1, wrong_tree.stdout)
+            self.assertIn("reuse-tree-mismatch", wrong_tree.stdout)
+
+    def test_advisory_controls_reject_digest_binding_and_malformed_measurement(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-advisory-controls-") as temp:
+            path = Path(temp) / "measurement.json"
+            produced = self.run_controlled_producer(path)
+            self.assertEqual(produced.returncode, 0, produced.stdout)
+            receipt = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(self.run_cli(receipt).returncode, 0)
+            self.assertEqual(self.run_cli(valid_fixture(schema_version=3)).returncode, 0)
+
+            mutations = (
+                ("workload-digest", lambda item: item["workload"].update(
+                    correctness_digest_fnv1a64="0000000000000000"), "workload-digest-mismatch"),
+                ("sample-digest", lambda item: item["resource_observations"]["dmg"]["trace"]["candidate"].update(
+                    correctness_digest_fnv1a64="0000000000000000"), "resource-digest-mismatch"),
+                ("build-binding", lambda item: item["builds"]["candidate"].update(
+                    identity_sha256="0" * 64), "candidate-build-identity-mismatch"),
+                ("malformed-measurement", lambda item: item["measurement"]["pairs"].pop(),
+                 "paired-sample-count-mismatch"),
+            )
+            for name, mutate, diagnostic in mutations:
+                with self.subTest(name=name):
+                    altered = json.loads(json.dumps(receipt))
+                    mutate(altered)
+                    rejected = self.run_cli(altered)
+                    self.assertEqual(rejected.returncode, 1, rejected.stdout)
+                    self.assertIn(diagnostic, rejected.stdout)
 
     def test_bound_review_decision_qualifies_exact_pending_measurement(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-decision-") as temp:
@@ -1189,10 +1251,13 @@ class PerformanceReceiptContractTests(unittest.TestCase):
         self.assertIn("qualify-v02-output-exists", result.stdout)
 
 
-def self_test() -> int:
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(PerformanceReceiptContractTests)
+def self_test(test_name: str | None = None, label: str | None = None) -> int:
+    if test_name is None:
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(PerformanceReceiptContractTests)
+    else:
+        suite = unittest.TestSuite([PerformanceReceiptContractTests(test_name)])
     result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2).run(suite)
-    controls = max(0, result.testsRun - 1)
+    controls = max(1 if test_name is not None else 0, result.testsRun - 1)
     summary = {
         "status": "passed" if result.wasSuccessful() else "failed",
         "tests_run": result.testsRun,
@@ -1200,12 +1265,18 @@ def self_test() -> int:
         "negative_controls": controls,
     }
     print(json.dumps(summary, sort_keys=True))
+    if label and result.wasSuccessful():
+        print(f"advisory {label} self-test pass controls={controls}")
     return 0 if result.wasSuccessful() and controls > 0 and summary["positive_successes"] > 0 else 1
 
 
 def main(argv: list[str]) -> int:
     if argv == ["--self-test"]:
         return self_test()
+    if argv == ["--self-test-advisory-pipeline"]:
+        return self_test("test_advisory_pipeline_produces_verifies_and_reuses_triggered_receipt", "pipeline")
+    if argv == ["--self-test-advisory-controls"]:
+        return self_test("test_advisory_controls_reject_digest_binding_and_malformed_measurement", "controls")
     if len(argv) == 2 and argv[0] == "--verify":
         try:
             receipt = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
@@ -1256,7 +1327,8 @@ def main(argv: list[str]) -> int:
             return 1
     print("usage: verify-v02-performance.py --verify PATH | --verify-historical PATH | "
           "--verify-reuse PATH --tag-tree TREE | "
-          "--apply-decision --measurement PATH --decision PATH --output PATH | --self-test", file=sys.stderr)
+          "--apply-decision --measurement PATH --decision PATH --output PATH | "
+          "--self-test [--self-test-advisory-pipeline | --self-test-advisory-controls]", file=sys.stderr)
     return 2
 
 
