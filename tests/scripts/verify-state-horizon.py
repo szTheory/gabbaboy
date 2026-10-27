@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Sequence
 
 
@@ -283,6 +283,17 @@ def sanitizer_mutant_environment(compiler_flags: Sequence[str]) -> dict[str, str
     return environment
 
 
+def mutant_binary_path(work: Path, msvc_style: bool,
+                       native_platform: str | None = None) -> Path:
+    platform = os.name if native_platform is None else native_platform
+    suffix = ".exe" if msvc_style or platform == "nt" else ""
+    return work / f"horizon-mutant{suffix}"
+
+
+def c_path_literal(path: Path | PureWindowsPath) -> str:
+    return str(path).replace("\\", "/").replace('"', '\\"')
+
+
 def apply_mutant(source: str, mutant: Mutant) -> str:
     changed = source
     for index, replacement in enumerate(mutant.edits, start=1):
@@ -321,6 +332,12 @@ def self_test_helpers() -> None:
         ["-fsanitize=address,undefined"])
     if sanitizer_env is None or "detect_leaks=0" not in sanitizer_env.get("ASAN_OPTIONS", ""):
         raise HorizonCheckError("self-test: expected failing mutant did not disable LSan")
+    if mutant_binary_path(Path("."), False, "nt").name != "horizon-mutant.exe" or \
+            mutant_binary_path(Path("."), False, "posix").name != "horizon-mutant":
+        raise HorizonCheckError("self-test: native compiler output suffix is not portable")
+    windows_literal = c_path_literal(PureWindowsPath(r"C:\temp\state-horizon\mutated.c"))
+    if windows_literal != "C:/temp/state-horizon/mutated.c":
+        raise HorizonCheckError("self-test: Windows source path was not normalized for C")
     try:
         check_semantic_rejection(0, "# horizon witness: stop-wait\n", MUTANTS[0])
     except HorizonCheckError:
@@ -433,13 +450,14 @@ def build_and_run(revision: str, base: Path, source_root: Path,
     major, minor, patch = version.split(".")
     msvc_style = any(flag.startswith("/") and flag.lower().startswith("/std:")
                      for flag in compiler_flags)
-    binary = work / ("horizon-mutant.exe" if msvc_style else "horizon-mutant")
+    binary = mutant_binary_path(work, msvc_style)
+    source_literal = c_path_literal(mutated_source)
     if msvc_style:
         defines = [
             f"/DGBB_STATE_RELEASE_MAJOR={major}",
             f"/DGBB_STATE_RELEASE_MINOR={minor}",
             f"/DGBB_STATE_RELEASE_PATCH={patch}",
-            f'/DGBB_CORE_SOURCE_PATH=\\"{mutated_source}\\"',
+            f'/DGBB_CORE_SOURCE_PATH=\\"{source_literal}\\"',
         ]
         command = [*compiler, *compiler_flags, *defines,
                    f"/I{source_root / 'include'}", f"/I{source_root / 'src/core'}",
@@ -450,7 +468,7 @@ def build_and_run(revision: str, base: Path, source_root: Path,
             f"-DGBB_STATE_RELEASE_MAJOR={major}",
             f"-DGBB_STATE_RELEASE_MINOR={minor}",
             f"-DGBB_STATE_RELEASE_PATCH={patch}",
-            f'-DGBB_CORE_SOURCE_PATH="{mutated_source}"',
+            f'-DGBB_CORE_SOURCE_PATH="{source_literal}"',
             "-I", str(source_root / "include"),
             "-I", str(source_root / "src/core"),
             str(source_root / "tests/test_state_horizon.c"),
@@ -459,7 +477,9 @@ def build_and_run(revision: str, base: Path, source_root: Path,
     build = run(command, cwd=source_root, timeout=compile_timeout)
     if build.returncode != 0 or not binary.is_file():
         raise HorizonCheckError(
-            f"{mutant.name}: mutant compile failed and cannot count as a kill\n"
+            f"{mutant.name}: mutant compile failed and cannot count as a kill; "
+            f"compiler_exit={build.returncode} expected_binary={binary} "
+            f"binary_exists={binary.is_file()}\ncommand={command!r}\n"
             f"{build.stdout}{build.stderr}"
         )
     semantic = run([str(binary), mutant.case], cwd=source_root, timeout=30,

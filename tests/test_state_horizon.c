@@ -600,14 +600,24 @@ static int horizon_closure(size_t shard, size_t shard_count) {
     size_t state_size = 0u;
     REQUIRE_CASE(gbb_state_size(machine, &state_size) == GBB_OK,
                  "fixture: closure state size");
-    uint8_t *baseline = NULL;
+    gbb_instance *baseline = (gbb_instance *)malloc(sizeof(*baseline));
     uint8_t *before = (uint8_t *)malloc(state_size);
     uint8_t *after = (uint8_t *)malloc(state_size);
     uint8_t *roundtrip = (uint8_t *)malloc(state_size);
     uint8_t *blocked = (uint8_t *)malloc(state_size);
-    REQUIRE_CASE(before != NULL && after != NULL && roundtrip != NULL && blocked != NULL &&
-                 save_snapshot(machine, &baseline, &state_size),
+    REQUIRE_CASE(baseline != NULL && before != NULL && after != NULL &&
+                 roundtrip != NULL && blocked != NULL &&
+                 machine->rom != NULL &&
+                 machine->cartridge_ram == NULL && machine->audio_frames == NULL &&
+                 machine->accept_input_span == NULL &&
+                 machine->test_events == NULL && machine->test_ppu_events == NULL &&
+                 machine->test_dma_events == NULL &&
+                 machine->diagnostic_output == NULL &&
+                 machine->diagnostic_operation == NULL,
                  "fixture: allocate closure state buffers");
+    memcpy(baseline, machine, sizeof(*baseline));
+    /* All variable fields are inline; the loaded ROM is the only external
+     * storage, and every other owned or borrowed pointer is empty here. */
 
     uint64_t phases[4096];
     size_t phase_count = 0u;
@@ -670,8 +680,17 @@ static int horizon_closure(size_t shard, size_t shard_count) {
             const uint64_t phase = phases[p];
             REQUIRE_CASE(phase < GBB_AUDIO_CLOCK_HALF_DOTS,
                          "fixture: generated audio phase outside accepted domain");
-            REQUIRE_CASE(gbb_load_state(machine, baseline, state_size) == GBB_OK,
-                         "closure discrepancy: baseline reload failed");
+            REQUIRE_CASE(machine->rom == baseline->rom &&
+                         machine->cartridge_ram == baseline->cartridge_ram &&
+                         machine->audio_frames == baseline->audio_frames &&
+                         machine->accept_input_span == baseline->accept_input_span &&
+                         machine->test_events == baseline->test_events &&
+                         machine->test_ppu_events == baseline->test_ppu_events &&
+                         machine->test_dma_events == baseline->test_dma_events &&
+                         machine->diagnostic_output == baseline->diagnostic_output &&
+                         machine->diagnostic_operation == baseline->diagnostic_operation,
+                         "fixture: closure reset would change external storage ownership");
+            memcpy(machine, baseline, sizeof(*machine));
             seed_time(machine, TEST_HORIZON - 8u);
             machine->pc = 0x0200u;
             machine->audio_event_head = head;
