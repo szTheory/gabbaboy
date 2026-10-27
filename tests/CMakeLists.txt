@@ -5002,10 +5002,11 @@ target_include_directories(test_state_internal PRIVATE "${PROJECT_SOURCE_DIR}/in
 target_compile_features(test_state_internal PRIVATE c_std_17)
 set_target_properties(test_state_internal PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME state_observers COMMAND test_state_internal state_observers)
+add_test(NAME state_apu_pulse_timer COMMAND test_state_internal state_apu_pulse_timer)
 add_test(NAME state_rtc_palette COMMAND test_state_internal state_rtc_palette)
 add_test(NAME state_refusal COMMAND test_state_internal state_refusal)
 add_test(NAME state_refusal_controls COMMAND test_state_internal state_refusal_controls)
-set_tests_properties(state_observers state_rtc_palette state_refusal state_refusal_controls
+set_tests_properties(state_observers state_apu_pulse_timer state_rtc_palette state_refusal state_refusal_controls
   PROPERTIES TIMEOUT 60)
 
 # Public save/load continuation forks use a private descriptor visitor only to poison the

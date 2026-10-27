@@ -628,6 +628,85 @@ static int state_refusal(void) {
     return 0;
 }
 
+static int state_apu_pulse_timer(void) {
+    const char *case_name = "state_apu_pulse_timer";
+    uint8_t rom[TEST_ROM_BYTES];
+    build_rom(rom, 0x00u, 0u);
+    gbb_instance *source = new_machine(rom, GBB_PROFILE_CGB_CPU_E);
+    gbb_instance *target = new_machine(rom, GBB_PROFILE_CGB_CPU_E);
+    REQUIRE_CASE(case_name, source != NULL && target != NULL);
+
+    source->apu_power = 1u;
+    source->apu_pulse[0].envelope = 0xF0u;
+    uint16_t maximum_reload = 0u;
+    for (uint16_t frequency = 0u; frequency <= 2047u; ++frequency) {
+        source->apu_pulse[0].frequency_low = (uint8_t)frequency;
+        source->apu_pulse[0].control = (uint8_t)((frequency >> 8) & 7u);
+        apu_pulse_trigger(source, 0u);
+        if (source->apu_pulse[0].timer > maximum_reload)
+            maximum_reload = source->apu_pulse[0].timer;
+        REQUIRE_CASE(case_name, source->apu_pulse[0].timer <= 65472u);
+    }
+    REQUIRE_CASE(case_name, maximum_reload == 65472u);
+    source->apu_pulse[0].frequency_low = 1u;
+    source->apu_pulse[0].control = 4u;
+    apu_pulse_trigger(source, 0u);
+    REQUIRE_CASE(case_name, source->apu_pulse[0].frequency == 1025u &&
+                            source->apu_pulse[0].timer == 65472u);
+    size_t size = 0u;
+    REQUIRE_CASE(case_name, gbb_state_size(source, &size) == GBB_OK);
+    const state_field_descriptor *timer_field = state_field_by_path("apu_pulse[].timer");
+    REQUIRE_CASE(case_name, timer_field != NULL &&
+                            state_field_value_valid(source, timer_field, 0u, 65472u,
+                                source->audio_event_head, source->apu_sample_phase) &&
+                            !state_field_value_valid(source, timer_field, 0u, 65473u,
+                                source->audio_event_head, source->apu_sample_phase));
+    uint8_t *saved = malloc(size);
+    uint8_t *resaved = malloc(size);
+    uint8_t *above_bound = malloc(size);
+    REQUIRE_CASE(case_name, saved != NULL && resaved != NULL && above_bound != NULL);
+    REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK);
+    REQUIRE_CASE(case_name, gbb_load_state(target, saved, size) == GBB_OK);
+    REQUIRE_CASE(case_name, target->apu_pulse[0].timer == 65472u);
+    REQUIRE_CASE(case_name, gbb_save_state(target, resaved, size) == GBB_OK &&
+                            memcmp(saved, resaved, size) == 0);
+
+    gbb_audio_frame source_audio[1024], target_audio[1024];
+    size_t source_count = 0u, target_count = 0u;
+    const gbb_run_result source_run = gbb_run_audio(source, 140448u, source_audio,
+                                                     1024u, &source_count);
+    const gbb_run_result target_run = gbb_run_audio(target, 140448u, target_audio,
+                                                     1024u, &target_count);
+    REQUIRE_CASE(case_name, source_run.reason == GBB_STOP_BUDGET &&
+                            same_run(source_run, target_run));
+    REQUIRE_CASE(case_name, source_count == target_count &&
+                            memcmp(source_audio, target_audio,
+                                   source_count * sizeof(source_audio[0])) == 0);
+    REQUIRE_CASE(case_name, gbb_save_state(source, saved, size) == GBB_OK &&
+                            gbb_save_state(target, resaved, size) == GBB_OK &&
+                            memcmp(saved, resaved, size) == 0);
+
+    memcpy(above_bound, saved, size);
+    REQUIRE_CASE(case_name, state_internal_write_field(target, above_bound,
+                                                       "apu_pulse[].timer", 65473u));
+    state_internal_rechecksum(above_bound, size);
+    state_instance_snapshot snapshot;
+    REQUIRE_CASE(case_name, state_snapshot_init(&snapshot, target));
+    target->apu_pulse[0].timer = 1234u;
+    state_snapshot_capture(&snapshot, target);
+    REQUIRE_CASE(case_name, state_expect_refusal_unchanged(&snapshot, target,
+        above_bound, size, GBB_STATE_INVALID_CONTENT));
+
+    state_snapshot_destroy(&snapshot);
+    free(above_bound);
+    free(resaved);
+    free(saved);
+    gbb_destroy(target);
+    gbb_destroy(source);
+    puts("state_apu_pulse_timer pass reload_max=65472 roundtrip=continuation-equal above_bound=crc-valid-refused unchanged=1");
+    return 0;
+}
+
 /* Unrelated smoke control for mutation builds: the state size/save path stays
  * usable when a load-only observer or RTC policy is mutated. */
 static int state_control(void) {
@@ -652,6 +731,7 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "state_observers") == 0) return state_observers();
     if (strcmp(argv[1], "state_refusal") == 0) return state_refusal();
     if (strcmp(argv[1], "state_refusal_controls") == 0) return state_refusal_controls();
+    if (strcmp(argv[1], "state_apu_pulse_timer") == 0) return state_apu_pulse_timer();
     if (strcmp(argv[1], "state_control") == 0) return state_control();
     fprintf(stderr, "unknown state internal case: %s\n", argv[1]);
     return 2;
