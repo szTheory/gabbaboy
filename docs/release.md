@@ -179,7 +179,7 @@ The attach, platform-manifest, final-gate and publication steps of
 `.github/workflows/release.yml` are the modes of
 `.github/scripts/release-evidence-lifecycle.sh` (`attach-evidence`,
 `validate-evidence`, `build-manifest`, `validate-draft`, `final-gate`,
-`publish-draft`). The workflow runs each from the trusted checkout, and the
+`nightly-gate`, `publish-draft`). The workflow runs each from the trusted checkout, and the
 workflow policy judges every call as the body that runs, so the extracted code
 cannot be unused, misplaced or run from the tagged tree.
 
@@ -204,6 +204,52 @@ replaced or deleted, and a refusal leaves the regenerated evidence untouched.
 The platform-manifest step accepts the final receipts of an earlier attempt, so a
 retry that stopped after the final upload can reach the publish job, whose
 recovery decision then compares them byte for byte.
+
+## Owner approval of a deterministic Ir exception and the nightly replay gate
+
+Two gates live in `tests/scripts/verify-release-gates.py` (stdlib only, refuses
+`python -O`, every refusal is `REJECT code: reason` with exit 1).
+
+**Ir exception approval.** Ordinary advisory paired timing never needs an
+approval and no approval can excuse a wrong correctness digest, a failed safety
+check or a realtime miss: `verify-perf-gate.py` still judges all of those. The
+only approvable event is a deliberate widening of `ir_ratio_limit`. The
+evaluator writes the exact measurement the owner approves
+(`--evaluate ... --emit-exception-measurement FILE`, which still refuses the
+unapproved widening), `verify-release-gates.py --digest --measurement FILE`
+prints its full canonical digest, and the owner comments on the recorded review
+issue with the exact wording the gate derives from the decision (the full
+digest, the approved limit, the accepted cause and its reference, and the
+per-ROM ratio bands). `--review-approval --comment-json FILE --decision FILE
+--measurement FILE --rev SHA [--output FILE --exception-receipt FILE]` requires
+`author_association` `OWNER`, the stored issue URL and number, a comment newer
+than the issue, empty owner fields, a measurement taken at `--rev`, and that
+exact wording (a wrong, prefix-only or absent digest, a changed cause, limit or
+band all refuse). Only after every check does it copy the verified comment's
+identity, link and time into new files; the input is never edited and a refusal
+writes nothing. `tests/scripts/run-perf-gate.sh --gate` is the production path:
+with the two exception environment variables named in its header set (the saved
+owner comment and the decision file) it asks the gate for the receipt and hands
+only that receipt to the ratchet.
+
+**Nightly replay gate.** Before the one publication transition the
+`nightly-gate` lifecycle mode runs `--nightly-gate --runs-json FILE --run-json
+FILE --head SHA --output FILE [--rev SHA --branch NAME]` on saved `gh run list`
+and `gh run view` JSON. The head is the rehearsed head proved to have the
+tagged tree. The newest eligible `nightly-asan` run at that head must be
+completed with success and its `asan-full-replay` job must have succeeded (a
+skipped job does not count). A newer red or in-progress run at the head, a
+newer run at another head, no run at the head, a different tree than the tagged
+source and out-of-order timestamps all refuse, and the source-bound receipt is
+written exclusively and on success alone. `verify-state-contract.py --boundary
+--rev SHA` reads a phase boundary (plans, summaries, requirements, route flags,
+receipt timestamps and the Phase 16 receipts) from that one commit and never
+from the live tree or later ancestry.
+
+The six `release_bound` rows of `.github/ci-timeouts.json` remain a named Phase
+19 entry blocker (RM-027): they must be replaced by verified tree-equality
+citations before `VERSION` exceeds 0.2.1, and the boundary check refuses a
+seventh row or a version that moved past 0.2.1 with any row left.
 
 ## Performance measurement and qualification
 

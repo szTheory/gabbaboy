@@ -10,6 +10,10 @@
 #                             build the selection (or one revision) with the DMG-only adapted harness and check
 #                             each ROM's consumed_half_dots and digest pins; needs no valgrind
 #
+# Deterministic Ir exception (D-22): a widened ir_ratio_limit passes --gate only when GBB_IR_EXCEPTION_COMMENT_JSON (the saved
+# owner comment) and GBB_IR_EXCEPTION_DECISION (the decision file) name inputs that verify-release-gates.py --review-approval
+# accepts for this run's measurement. Without them a widening is refused; ordinary runs need neither.
+#
 # The evaluator is tests/scripts/verify-perf-gate.py. This script only builds, runs and collects. It never
 # writes the real repository tree: every patched or extracted tree lives in a temporary directory.
 set -euo pipefail
