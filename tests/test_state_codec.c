@@ -212,33 +212,86 @@ typedef struct {
     uint64_t value;
 } test_state_edit;
 
-static int test_load_rejects_mutations(gbb_instance *target, const uint8_t *saved,
-                                       size_t size, const test_state_edit *edits,
-                                       size_t edit_count) {
+/* A refused load must leave the whole receiving instance unchanged. The instance
+ * struct alone is not the whole instance: cartridge RAM and the ROM image are
+ * separate heap allocations reached through pointers, and cartridge RAM is the
+ * one field the load path writes through a pointer. The snapshot therefore keeps
+ * the struct bytes (which include the pointer values and sizes) and a copy of
+ * every owned RAM and ROM byte (review WR-A03). */
+typedef struct {
+    uint8_t *instance_bytes;
+    uint8_t *ram;
+    uint8_t *rom;
+} test_target_snapshot;
+
+static void test_snapshot_free(test_target_snapshot *snapshot) {
+    free(snapshot->instance_bytes); free(snapshot->ram); free(snapshot->rom);
+    snapshot->instance_bytes = NULL; snapshot->ram = NULL; snapshot->rom = NULL;
+}
+
+static int test_snapshot_capture(const gbb_instance *target, test_target_snapshot *snapshot) {
+    snapshot->instance_bytes = malloc(sizeof(*target));
+    snapshot->ram = malloc(target->cartridge_ram_size == 0u ? 1u : target->cartridge_ram_size);
+    snapshot->rom = malloc(target->rom_size == 0u ? 1u : target->rom_size);
+    if (snapshot->instance_bytes == NULL || snapshot->ram == NULL || snapshot->rom == NULL ||
+        (target->cartridge_ram_size != 0u && target->cartridge_ram == NULL) ||
+        (target->rom_size != 0u && target->rom == NULL)) {
+        test_snapshot_free(snapshot);
+        return 0;
+    }
+    memcpy(snapshot->instance_bytes, target, sizeof(*target));
+    if (target->cartridge_ram_size != 0u)
+        memcpy(snapshot->ram, target->cartridge_ram, target->cartridge_ram_size);
+    if (target->rom_size != 0u) memcpy(snapshot->rom, target->rom, target->rom_size);
+    return 1;
+}
+
+/* Compare the struct first: equal struct bytes prove the RAM/ROM pointers and
+ * sizes are the captured ones, so the owned-byte comparisons read valid extents. */
+static int test_snapshot_unchanged(const gbb_instance *target,
+                                   const test_target_snapshot *snapshot) {
+    if (memcmp(snapshot->instance_bytes, target, sizeof(*target)) != 0) return 0;
+    if (target->cartridge_ram_size != 0u &&
+        memcmp(snapshot->ram, target->cartridge_ram, target->cartridge_ram_size) != 0) return 0;
+    return target->rom_size == 0u || memcmp(snapshot->rom, target->rom, target->rom_size) == 0;
+}
+
+typedef gbb_error (*test_state_loader)(gbb_instance *, const uint8_t *, size_t);
+
+static int test_load_rejects_mutations_with(test_state_loader loader, int report,
+                                            gbb_instance *target, const uint8_t *saved,
+                                            size_t size, const test_state_edit *edits,
+                                            size_t edit_count) {
     uint8_t *mutant = malloc(size);
-    uint8_t *backup = malloc(sizeof(*target));
-    if (mutant == NULL || backup == NULL) {
-        free(mutant); free(backup);
+    test_target_snapshot backup = {0};
+    if (mutant == NULL || !test_snapshot_capture(target, &backup)) {
+        free(mutant); test_snapshot_free(&backup);
         return 0;
     }
     memcpy(mutant, saved, size);
-    memcpy(backup, target, sizeof(*target));
     int wrote = 1;
     for (size_t i = 0u; i < edit_count; ++i)
         if (!test_write_body_field(target, mutant, edits[i].path, edits[i].index,
                                    edits[i].value)) wrote = 0;
     if (wrote) test_rechecksum(mutant, size);
-    const gbb_error got = wrote ? gbb_load_state(target, mutant, size) : GBB_INVALID_ARGUMENT;
-    const int unchanged = memcmp(backup, target, sizeof(*target)) == 0;
-    if (got != GBB_STATE_INVALID_CONTENT || !unchanged) {
+    const gbb_error got = wrote ? loader(target, mutant, size) : GBB_INVALID_ARGUMENT;
+    const int unchanged = test_snapshot_unchanged(target, &backup);
+    if (report && (got != GBB_STATE_INVALID_CONTENT || !unchanged)) {
         fprintf(stderr, "semantic mutation result=%d unchanged=%d", (int)got, unchanged);
         for (size_t i = 0u; i < edit_count; ++i)
             fprintf(stderr, " %s[%zu]=0x%llx", edits[i].path, edits[i].index,
                     (unsigned long long)edits[i].value);
         fputc('\n', stderr);
     }
-    free(backup); free(mutant);
+    test_snapshot_free(&backup); free(mutant);
     return wrote && got == GBB_STATE_INVALID_CONTENT && unchanged;
+}
+
+static int test_load_rejects_mutations(gbb_instance *target, const uint8_t *saved,
+                                       size_t size, const test_state_edit *edits,
+                                       size_t edit_count) {
+    return test_load_rejects_mutations_with(gbb_load_state, 1, target, saved, size,
+                                            edits, edit_count);
 }
 
 static int test_load_rejects_unchanged(gbb_instance *target, const uint8_t *saved,
@@ -248,23 +301,67 @@ static int test_load_rejects_unchanged(gbb_instance *target, const uint8_t *save
     return test_load_rejects_mutations(target, saved, size, &edit, 1u);
 }
 
-static int test_load_rejects_header_unchanged(gbb_instance *target, const uint8_t *saved,
-                                              size_t size, size_t offset, uint8_t value,
-                                              gbb_error expected) {
+static int test_load_rejects_header_unchanged_with(test_state_loader loader,
+                                                   gbb_instance *target, const uint8_t *saved,
+                                                   size_t size, size_t offset, uint8_t value,
+                                                   gbb_error expected) {
     uint8_t *mutant = malloc(size);
-    uint8_t *backup = malloc(sizeof(*target));
-    if (mutant == NULL || backup == NULL) {
-        free(mutant); free(backup);
+    test_target_snapshot backup = {0};
+    if (mutant == NULL || !test_snapshot_capture(target, &backup)) {
+        free(mutant); test_snapshot_free(&backup);
         return 0;
     }
     memcpy(mutant, saved, size);
-    memcpy(backup, target, sizeof(*target));
     mutant[offset] = value;
     test_rechecksum(mutant, size);
-    const gbb_error got = gbb_load_state(target, mutant, size);
-    const int unchanged = memcmp(backup, target, sizeof(*target)) == 0;
-    free(backup); free(mutant);
+    const gbb_error got = loader(target, mutant, size);
+    const int unchanged = test_snapshot_unchanged(target, &backup);
+    test_snapshot_free(&backup); free(mutant);
     return got == expected && unchanged;
+}
+
+static int test_load_rejects_header_unchanged(gbb_instance *target, const uint8_t *saved,
+                                              size_t size, size_t offset, uint8_t value,
+                                              gbb_error expected) {
+    return test_load_rejects_header_unchanged_with(gbb_load_state, target, saved, size,
+                                                   offset, value, expected);
+}
+
+/* Negative control for the refusal oracle: a loader that writes cartridge RAM
+ * before the real load refuses, as a state_apply that ran ahead of validation
+ * would. Only heap RAM changes, so a struct-only memcmp cannot see it. */
+static gbb_error test_premature_ram_write_load(gbb_instance *target, const uint8_t *bytes,
+                                               size_t size) {
+    if (target != NULL && target->cartridge_ram_size != 0u && target->cartridge_ram != NULL)
+        target->cartridge_ram[target->cartridge_ram_size - 1u] ^= 0x01u;
+    return gbb_load_state(target, bytes, size);
+}
+
+static int test_refusal_oracle_sees_ram(gbb_instance *target, const uint8_t *saved,
+                                        size_t size, const test_state_edit *invalid) {
+    if (target->cartridge_ram_size == 0u) return 0;
+    uint8_t *struct_before = malloc(sizeof(*target));
+    if (struct_before == NULL) return 0;
+    memcpy(struct_before, target, sizeof(*target));
+    const uint8_t ram_before = target->cartridge_ram[target->cartridge_ram_size - 1u];
+    /* The genuine loader refuses without mutation; the premature writer must be caught
+     * by both the body and the header refusal helpers. */
+    const int genuine = test_load_rejects_mutations(target, saved, size, invalid, 1u);
+    const int body_caught = !test_load_rejects_mutations_with(test_premature_ram_write_load, 0,
+                                                              target, saved, size, invalid, 1u);
+    const int body_ram_changed =
+        target->cartridge_ram[target->cartridge_ram_size - 1u] != ram_before;
+    /* The struct-only comparison the old helper used is blind to this mutation. */
+    const int struct_blind = memcmp(struct_before, target, sizeof(*target)) == 0;
+    target->cartridge_ram[target->cartridge_ram_size - 1u] = ram_before;
+    const int header_caught = !test_load_rejects_header_unchanged_with(
+        test_premature_ram_write_load, target, saved, size, 18u, 1u, GBB_STATE_INVALID_CONTENT);
+    target->cartridge_ram[target->cartridge_ram_size - 1u] = ram_before;
+    free(struct_before);
+    if (!(genuine && body_caught && body_ram_changed && struct_blind && header_caught))
+        fprintf(stderr, "refusal oracle control genuine=%d body=%d changed=%d blind=%d header=%d\n",
+                genuine, body_caught, body_ram_changed, struct_blind, header_caught);
+    return genuine && body_caught && body_ram_changed && struct_blind && header_caught;
 }
 
 static int test_make_state(gbb_profile profile, uint8_t cgb_flag, uint8_t cartridge_type,
@@ -597,6 +694,9 @@ static int state_semantic_bounds(void) {
     REQUIRE_CASE("state_semantic_bounds", gbb_save_state(source, saved, size) == GBB_OK);
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "cartridge_ram", 0u, 0x0Fu));
+    const test_state_edit invalid_mbc2_ram = {"cartridge_ram", 0u, 0x0Fu};
+    REQUIRE_CASE("state_semantic_bounds", test_refusal_oracle_sees_ram(target, saved, size,
+                                    &invalid_mbc2_ram));
     gbb_destroy(source); gbb_destroy(target); free(saved);
 
     source = NULL; target = NULL; saved = NULL; size = 0u;
@@ -605,6 +705,9 @@ static int state_semantic_bounds(void) {
     REQUIRE_CASE("state_semantic_bounds", gbb_save_state(source, saved, size) == GBB_OK);
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "cart.rom_bank_hi", 0u, 4u));
+    const test_state_edit invalid_mbc1_bank = {"cart.rom_bank_hi", 0u, 4u};
+    REQUIRE_CASE("state_semantic_bounds", test_refusal_oracle_sees_ram(target, saved, size,
+                                    &invalid_mbc1_bank));
     gbb_destroy(source); gbb_destroy(target); free(saved);
 
     source = NULL; target = NULL; saved = NULL; size = 0u;
@@ -618,7 +721,7 @@ static int state_semantic_bounds(void) {
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "cart.rtc_sub", 0u, RTC_SUB_MASK + 1u));
     gbb_destroy(source); gbb_destroy(target); free(saved);
-    puts("state_semantic_bounds pass checksum=valid refusal=non-mutating");
+    puts("state_semantic_bounds pass checksum=valid refusal=non-mutating oracle=struct+ram+rom");
     return 0;
 }
 
