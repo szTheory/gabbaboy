@@ -904,6 +904,8 @@ class PerformanceReceiptContractTests(unittest.TestCase):
             self.assertEqual(wrong_tree.returncode, 1, wrong_tree.stdout)
             self.assertIn("reuse-tree-mismatch", wrong_tree.stdout)
 
+    @unittest.skipIf(os.name == "nt", "the controls drive the same shell-script producer fixture as the advisory "
+                                     "pipeline test; the paired producer runs on the Linux evidence runner")
     def test_advisory_controls_reject_digest_binding_and_malformed_measurement(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-advisory-controls-") as temp:
             path = Path(temp) / "measurement.json"

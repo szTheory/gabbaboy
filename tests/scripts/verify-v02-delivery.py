@@ -1043,6 +1043,11 @@ def stage_controls(base: Path) -> tuple[int, int]:
 
 def actual_advisory_delivery_controls(base: Path) -> tuple[int, int]:
     """Carry the real controlled producer receipt through delivery aggregation and its owner verifier."""
+    if os.name == "nt":
+        # The controlled producer builds a shell-script cmake and measurement binary, which cannot run
+        # on Windows; verify-v02-performance.py skips it there too and the Linux lanes carry this control.
+        print("SKIP: advisory delivery controls need the POSIX controlled producer")
+        return 0, 0
     base.mkdir(parents=True, exist_ok=True)
     subject = base / "advisory-subject"
     cloned = subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(ROOT), str(subject)],
