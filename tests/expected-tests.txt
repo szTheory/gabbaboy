@@ -1167,6 +1167,8 @@ release_window_contract
 release_window_controls
 release_lifecycle_replay
 release_lifecycle_controls
+release_review_approval
+release_review_controls
 v02_adoption_docs
 v02_adoption_docs_controls
 v02_consumer_controls_c
@@ -1220,6 +1222,7 @@ perf_gate_canned_realtime_under_floor
 perf_gate_limits_schema
 perf_limit_ratchet
 perf_repeat_controls
+perf_exception_measurement
 perf_attribution
 perf_attribution_merges
 perf_advisory_pipeline

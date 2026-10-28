@@ -97,6 +97,9 @@ gbb_add_perf_gate_test(perf_limit_ratchet 0 "perf-gate limit-ratchet self-test p
 set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=3)
 gbb_add_perf_gate_test(perf_repeat_controls 0 "perf-gate repeat-controls self-test pass controls=[0-9]+"
   --self-test-repeat-controls)
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=2)
+gbb_add_perf_gate_test(perf_exception_measurement 0 "perf-gate exception-measurement self-test pass controls=[0-9]+"
+  --self-test-exception-measurement)
 set(GBB_PERF_GATE_EXTRA_ARGS)
 
 # D-17 attribution receipt (Task 3): the committed hosted receipt is re-derived from git history, so these two

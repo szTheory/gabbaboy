@@ -9,6 +9,7 @@ lives in the header of tests/baseline/perf-gate-v1.txt.
 Modes (stdlib only, refuses python -O):
   --check-limits FILE [--root DIR] [--base-rev SHA]  validate pins and the immutable policy ratchet
   --evaluate --limits FILE --base DIR --head DIR --base-rev SHA [--realtime FILE]
+             [--exception-receipt FILE ...identities] [--emit-exception-measurement FILE]
   --self-test                        run every control through the real CLI
 
 Every limit comparison is exact integer or fractions.Fraction arithmetic. No float decides a verdict.
@@ -396,15 +397,24 @@ def verify_deterministic_exception(path, approved_limit, base_limit, measurement
     return receipt
 
 
+def write_new_text(path, text):
+    """Exclusive create: an existing path is never overwritten (evidence is not replaced)."""
+    try:
+        with open(path, "x", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+    except OSError as error:
+        reject("exception-measurement-output", "cannot create %s: %s" % (path, error))
+
+
 def evaluate(limits_path, base_dir, head_dir, realtime_path, base_rev, exception_path=None,
              source_base_rev=None, source_head_rev=None,
-             build_base_identity=None, build_head_identity=None):
+             build_base_identity=None, build_head_identity=None, emit_measurement_path=None):
     if base_rev is None:
         reject("ratchet-base-required", "--evaluate requires --base-rev with an immutable committed limits base")
     limits = parse_limits(limits_path)
     base_limits_text, base_limits = immutable_limits(base_rev)
     needs_exception = check_policy_ratchet(limits, base_limits)
-    if needs_exception and exception_path is None:
+    if needs_exception and exception_path is None and emit_measurement_path is None:
         reject("ir-limit-widening-unapproved", "ir_ratio_limit was widened without a deterministic exception receipt")
     if not needs_exception and exception_path is not None:
         reject("exception-receipt-unexpected", "an exception receipt is only valid for an Ir-limit widening")
@@ -420,6 +430,13 @@ def evaluate(limits_path, base_dir, head_dir, realtime_path, base_rev, exception
         measurement = deterministic_exception_measurement(
             base_rev, base_limits_text, base, head, limits, source_base_rev, source_head_rev,
             build_base_identity, build_head_identity)
+        if emit_measurement_path is not None:
+            # The exact object the owner approves by digest (verify-release-gates.py --digest). It is written before
+            # any verdict, so a refused widening still leaves the evidence the review needs.
+            write_new_text(emit_measurement_path, json.dumps(measurement, sort_keys=True, indent=2) + "\n")
+        if exception_path is None:
+            reject("ir-limit-widening-unapproved",
+                   "ir_ratio_limit was widened without a deterministic exception receipt")
         verify_deterministic_exception(exception_path, limits["ir_ratio"], base_limits["ir_ratio"], measurement)
     parts = []
     for rom in ROMS:
@@ -1162,6 +1179,50 @@ class PerfGateLimitRatchetTests(unittest.TestCase):
         self.assertIn("REJECT exception-receipt-unverified", err)
 
 
+class PerfGateExceptionMeasurementTests(unittest.TestCase):
+    """--emit-exception-measurement writes the exact object an owner approves by digest, and still refuses."""
+
+    def widened(self, scratch):
+        path = os.path.join(scratch, "limits.txt")
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(re.sub(r"(?m)^ir_ratio_limit=.*$", "ir_ratio_limit=112/100",
+                                read_text(DEFAULT_LIMITS, "limits-schema")))
+        return path
+
+    def evaluate(self, limits, head, *extra):
+        return run_cli(["--evaluate", "--limits", limits, "--base", os.path.join(DATA, "base"),
+                        "--head", os.path.join(DATA, head), "--base-rev", POLICY_BASE_REV,
+                        "--source-base-rev", V020_SHA, "--source-head-rev", POLICY_BASE_REV,
+                        "--build-base-identity", "a" * 64, "--build-head-identity", "b" * 64, *extra])
+
+    def test_widening_writes_the_measurement_and_is_still_unapproved(self):
+        with tempfile.TemporaryDirectory(prefix="perf-emit-measurement-") as scratch:
+            output = os.path.join(scratch, "measurement.json")
+            rc, out, err = self.evaluate(self.widened(scratch), "head-over", "--emit-exception-measurement", output)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT ir-limit-widening-unapproved", err)
+            measurement = json.loads(read_text(output, "measurement-format"))
+            self.assertEqual(sorted(measurement["per_rom"]), sorted(ROMS))
+            self.assertEqual(measurement["source"]["head_revision"], POLICY_BASE_REV)
+
+    def test_an_existing_measurement_file_is_never_overwritten(self):
+        with tempfile.TemporaryDirectory(prefix="perf-emit-existing-") as scratch:
+            output = os.path.join(scratch, "measurement.json")
+            with open(output, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("keep")
+            rc, out, err = self.evaluate(self.widened(scratch), "head-over", "--emit-exception-measurement", output)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT exception-measurement-output", err)
+            self.assertEqual(read_text(output, "measurement-format"), "keep")
+
+    def test_an_unwidened_run_does_not_emit_a_measurement(self):
+        with tempfile.TemporaryDirectory(prefix="perf-emit-none-") as scratch:
+            output = os.path.join(scratch, "measurement.json")
+            rc, out, err = self.evaluate(DEFAULT_LIMITS, "head-pass", "--emit-exception-measurement", output)
+            self.assertEqual(rc, 0, out + err)
+            self.assertFalse(os.path.exists(output))
+
+
 class PerfGateRepeatControlsTests(unittest.TestCase):
     def evaluate_head(self, head):
         return run_cli(["--evaluate", "--limits", DEFAULT_LIMITS, "--base", os.path.join(DATA, "base"),
@@ -1238,6 +1299,8 @@ def main(argv):
     try:
         if argv == ["--self-test-limit-ratchet"]:
             return contract_self_test(PerfGateLimitRatchetTests, "limit-ratchet")
+        elif argv == ["--self-test-exception-measurement"]:
+            return contract_self_test(PerfGateExceptionMeasurementTests, "exception-measurement")
         elif argv == ["--self-test-repeat-controls"]:
             return contract_self_test(PerfGateRepeatControlsTests, "repeat-controls")
         elif "--self-test" in argv:
@@ -1276,7 +1339,8 @@ def main(argv):
             evaluate(option("--limits"), option("--base"), option("--head"), option("--realtime"),
                      option("--base-rev"), option("--exception-receipt"),
                      option("--source-base-rev"), option("--source-head-rev"),
-                     option("--build-base-identity"), option("--build-head-identity"))
+                     option("--build-base-identity"), option("--build-head-identity"),
+                     option("--emit-exception-measurement"))
         else:
             reject("usage", "use --self-test, --check-limits, --evaluate, --check-attribution, --emit-attribution, --print-selection or --adapt-harness")
     except Rejected as error:

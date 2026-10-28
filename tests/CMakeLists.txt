@@ -5514,6 +5514,29 @@ if(NOT WIN32)
   endforeach()
 endif()
 
+# Phase 17 RM-030 / D-22 (17-11): release gates. The owner-approval gate (a deterministic Ir exception bound to the
+# exact measurement digest, cause, band and approved limit) and the exact-head nightly gate run on captured GitHub
+# API shapes and the canned perf-gate fixtures, so they need no network and run on every platform. The revision is
+# the configure-time HEAD, read with git; nothing falls back to the live tree. Each case: name | suite | key whose value
+# must reach a minimum | minimum. Controls are parsed minimums: adding one is allowed, dropping one is rejected.
+foreach(gbb_gate_case IN ITEMS
+    "release_review_approval|review-approval|controls|5"
+    "release_review_controls|review-controls|controls|36")
+  string(REPLACE "|" ";" gbb_gate_fields "${gbb_gate_case}")
+  list(GET gbb_gate_fields 0 gbb_gate_name)
+  list(GET gbb_gate_fields 1 gbb_gate_suite)
+  list(GET gbb_gate_fields 2 gbb_gate_key)
+  list(GET gbb_gate_fields 3 gbb_gate_min)
+  add_test(NAME ${gbb_gate_name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-gates.py;--self-test;${gbb_gate_suite};--rev;${GBB_STATE_SOURCE_REV}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=release-gates self-test pass suite=${gbb_gate_suite} controls=[0-9]+ positives=[0-9]+"
+      -DGBB_EXPECT_MIN_KEY=${gbb_gate_key} -DGBB_EXPECT_MIN_VALUE=${gbb_gate_min}
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${gbb_gate_name} PROPERTIES TIMEOUT 60 LABELS "v02")
+endforeach()
+
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times
