@@ -1,9 +1,9 @@
 ---
 phase: "17"
 slug: "native-save-state-core"
-status: verified
+status: open
 # threats_open = count of OPEN threats at or above workflow.security_block_on severity (the blocking gate)
-threats_open: 0
+threats_open: 1
 asvs_level: 1
 created: "2026-10-28"
 ---
@@ -60,7 +60,7 @@ created: "2026-10-28"
 | T-17-24 | Spoofing | performance reuse/check apps | high | mitigate | Reuse bound to the workflow path, event, run attempt and head SHA or tree (`verify-release-source-proof.py:88-131`) | closed |
 | T-17-25 | Tampering | manifests/historical/budget | high | mitigate | Duplicate asset names rejected; Phase 8 tag peels to `96d5eec`; `new-row-ref-reused`; plan cap with suffixed names; `test_budget(_controls)`, `plan_cap`, `phase8_*_selftest`, `planning_hygiene_controls` | closed |
 | T-17-26 | Elevation of privilege | report-red | high | mitigate | `timeout-minutes: 5` on both the job and the step, `issues: write` only, no checkout, exact title and label dedupe; 14 policy mutants plus a body replay; hosted dry run 40749683012 (success in 4 s, both writes printed as `DRY-RUN not sent`) cited in `.github/ci-timeouts.json` | closed |
-| T-17-27 | Spoofing | Ir OWNER approval | high | mitigate | OWNER, issue, empty owner fields and comment-after-issue checks (`verify-release-gates.py:255-284`, 8 mutants); ratchet consumes only the gate-written receipt, and the self-attested `GBB_PERF_EXCEPTION_RECEIPT` path is removed and refused by policy; `release_review_approval(_controls)` | closed |
+| T-17-27 | Spoofing | Ir OWNER approval | high | mitigate | OWNER, issue, empty owner fields and comment-after-issue checks (`verify-release-gates.py:255-284`, 8 mutants); ratchet consumes only the gate-written receipt, and the self-attested `GBB_PERF_EXCEPTION_RECEIPT` path is removed and refused by policy; `release_review_approval(_controls)` **Reopened by code review CR-C01:** the issue URL's owner/repo is never bound to this repository, and no policy rule stops a workflow from setting `GBB_IR_EXCEPTION_*`, so a PR could commit a forged comment and decision | open |
 | T-17-28 | Elevation of privilege | nightly/release decision | high | mitigate | Trusted `nightly-gate` runs immediately before `publish-draft` (`release.yml:1356-1359`); publish job holds exactly `actions: read` (policy mutants G17-09/G17-10); `release_nightly_gate(_controls)` | closed |
 | T-17-29 | Repudiation | phase boundary | medium | mitigate | `verify-state-contract.py --boundary` reads facts from the literal `boundary_sha` `d53ec9c`; `state_boundary_controls`; both auto-advance flags false | closed |
 
@@ -75,7 +75,7 @@ No risks were accepted in Phase 17. The Phase 16 accepted and deferred risks cov
 
 Non-blocking residuals. None of these is a mitigation gap:
 
-1. **T-17-27, comment source.** The approval gate judges a saved comment JSON file. No trusted workflow fetches that comment from the GitHub API yet, so the OWNER check is only as authentic as the file. On hosted runs this fails closed, because no workflow sets `GBB_IR_EXCEPTION_*` and a widened Ir limit is refused. There is also no hosted path yet for a genuine approval to pass.
+1. **T-17-27, comment source (superseded by CR-C01, now open).** The approval gate judges a saved comment JSON file. No trusted workflow fetches that comment from the GitHub API yet, so the OWNER check is only as authentic as the file. On hosted runs this fails closed, because no workflow sets `GBB_IR_EXCEPTION_*` and a widened Ir limit is refused. There is also no hosted path yet for a genuine approval to pass.
 2. **`state_fuzz_controls` reads the live HEAD.** It refuses, never accepts, when the build is configured at a different revision than HEAD. Reconfigure before running it.
 3. **`release.yml:candidate-performance`.** This timeout row was added in Phase 16 (`26a2b97`). Its cited run predates the job's rename, so `verify-workflow-policy.py --check --verify-cited` fails it. Re-citing needs the next release run.
 4. **RM-027.** The six `release_bound` rows remain Phase 19 entry blockers by design.
@@ -89,6 +89,7 @@ Non-blocking residuals. None of these is a mitigation gap:
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-10-28 | 29 | 29 | 0 | gsd-security-auditor (verdict SECURED; no unregistered SUMMARY threat flags) |
+| 2026-10-28 | 29 | 28 | 1 (high) | orchestrator: T-17-27 reopened by 17-REVIEW.md CR-C01 (repository binding absent, env-var path unguarded by policy); closes only with a fix and a negative control |
 
 ---
 
@@ -96,7 +97,7 @@ Non-blocking residuals. None of these is a mitigation gap:
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
-- [x] `threats_open: 0` confirmed
-- [x] `status: verified` set in frontmatter
+- [ ] `threats_open: 0` confirmed (T-17-27 open)
+- [ ] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-10-28
+**Approval:** pending the review-fix round
