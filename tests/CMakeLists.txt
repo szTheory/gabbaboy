@@ -5446,7 +5446,14 @@ add_test(NAME state_purity
 add_test(NAME state_purity_controls COMMAND test_state_alloc state_purity_controls)
 set_tests_properties(state_purity state_purity_controls PROPERTIES TIMEOUT 30)
 
-function(gbb_state_alloc_mutant name anchor replacement)
+# Each mutant names the probe diagnostic that only its own defect produces, so a mutant that dies for an unrelated
+# reason (a lost CRC write, a crash) cannot satisfy the control. The anchor and replacement contain `;`, so callers
+# must quote them; an unquoted expansion splits into extra arguments and the ARGC check refuses it at configure time
+# (17-REVIEW CR-B01: the split once made all three mutants the same CRC-omission edit).
+function(gbb_state_alloc_mutant name anchor replacement failing_regex)
+  if(NOT ARGC EQUAL 4)
+    message(FATAL_ERROR "State allocation mutant ${name}: expected 4 arguments, got ${ARGC}; quote the anchor and replacement")
+  endif()
   set(text "${gbb_state_internal_core_text}")
   string(FIND "${text}" "${anchor}" first)
   string(FIND "${text}" "${anchor}" last REVERSE)
@@ -5466,7 +5473,7 @@ function(gbb_state_alloc_mutant name anchor replacement)
   set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
   add_test(NAME state_purity_mutant_${name}
     COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_purity"
-      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=state_purity failure"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${failing_regex}"
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
   add_test(NAME state_purity_mutant_${name}_control
     COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_purity_controls"
@@ -5479,20 +5486,23 @@ endfunction()
 set(GBB_STATE_SAVE_SUCCESS_ANCHOR
   [=[state_put_u32(header + 60u, crc);
     return GBB_OK;]=])
-gbb_state_alloc_mutant(allocation_in_save ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
+gbb_state_alloc_mutant(allocation_in_save "${GBB_STATE_SAVE_SUCCESS_ANCHOR}"
   [=[void *state_probe_allocation = malloc(1u);
     free(state_probe_allocation);
     state_put_u32(header + 60u, crc);
-    return GBB_OK;]=])
-gbb_state_alloc_mutant(hash_in_save ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
+    return GBB_OK;]=]
+  "state_purity failure: operation=save_success heap_calls=[1-9][0-9]* request_bytes=[1-9]")
+gbb_state_alloc_mutant(hash_in_save "${GBB_STATE_SAVE_SUCCESS_ANCHOR}"
   [=[uint8_t state_probe_hash[32];
     state_sha256(out_bytes, total_size, state_probe_hash);
     state_put_u32(header + 60u, crc);
-    return GBB_OK;]=])
-gbb_state_alloc_mutant(save_overwrites_tail ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
+    return GBB_OK;]=]
+  "state_purity failure: operation=save_success heap_calls=0 request_bytes=0 largest=0 hashes=[1-9]")
+gbb_state_alloc_mutant(save_overwrites_tail "${GBB_STATE_SAVE_SUCCESS_ANCHOR}"
   [=[state_put_u32(header + 60u, crc);
     out_bytes[total_size] = 0u;
-    return GBB_OK;]=])
+    return GBB_OK;]=]
+  "state_purity failure: save tail modified")
 
 # Phase 17 RM-028 / D-20 (17-09): the release evidence lifecycle (attach, manifest, final gates, publish decision and
 # retry) is rehearsed by running the production lifecycle script and gates against a bounded `gh` transport that serves
