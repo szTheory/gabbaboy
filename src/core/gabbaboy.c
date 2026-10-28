@@ -4280,8 +4280,8 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (STATE_PATH("rgb_working") ||
         STATE_PATH("rgb_completed") ||
         STATE_PATH("compat_rgb555")) return raw <= 0x7FFFu;
-    if ((STATE_PATH("bg_cram") || STATE_PATH("obj_cram")) &&
-        (index & 1u) != 0u) return (raw & 0x80u) == 0u;
+    /* bg_cram/obj_cram have no rule: cram_data_write stores the whole byte, as palette
+     * RAM does, and cram_colour masks bit 15 only when a colour is rendered. */
     if (STATE_PATH("cartridge_ram") && instance->cart.kind == CART_MBC2)
         return (raw & 0xF0u) == 0xF0u;
     if (STATE_PATH("cart.ram_enabled") ||

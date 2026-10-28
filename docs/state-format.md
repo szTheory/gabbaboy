@@ -77,7 +77,7 @@ counters, test-only fields, pointers and host output buffers are not body data.
 Booleans encode only `0` or `1`. The input count is at most 64; active events
 are time ordered, cannot precede saved emulated time, and must have a valid kind
 and value. Unused queue slots are encoded as zero and a decoder rejects
-nonzero unused slots. CGB frame pixels and palette entries are at most `0x7FFF`;
+nonzero unused slots. CGB frame pixels and the compatibility palette are at most `0x7FFF`, while CGB palette RAM bytes are stored whole;
 DMG frame indices are `0..3`; MBC2's 512 RAM bytes use canonical `$F0 | nibble`
 values. RAM is at most 131072 bytes. RTC fields must satisfy the timer cartridge
 invariants; RTC state is zero for cartridges without a timer. Ordinary emulated
@@ -352,7 +352,8 @@ Each decoded value must fit its descriptor's 1-, 2-, 4-, or 8-byte little-endian
 | `cart.rtc_dh`, `cart.rtc_l[4]` | Only bits 0, 6, and 7; `rtc_latch_prev` remains a full byte because every latch write is retained. |
 | `cart.rtc_sub` | 0..`RTC_SUB_MASK`. RTC live and latched fields are zero on cartridges without a timer. Rumble is zero when the loaded cartridge has no rumble line. |
 | `frame_working`, `frame_completed` | Each DMG shade is 0..3. |
-| `rgb_working`, `rgb_completed`, `compat_rgb555`, CRAM words | RGB555 bit 15 is clear; for byte-addressed CRAM, the high byte has bit 7 clear. |
+| `rgb_working`, `rgb_completed`, `compat_rgb555` | RGB555 bit 15 is clear. |
+| `bg_cram`, `obj_cram` | Any byte. Palette RAM keeps all eight bits written through BCPD/OCPD, including bit 7 of a colour's high byte; colour lookup ignores bit 15 when rendering. |
 | `vram_bank`, `hdma.block_vram_bank` | 0 or 1. `wram_bank` is 1..7; raw `svbk` is 0..7 and the selected bank is `svbk == 0 ? 1 : svbk`. DMG pins VRAM bank to 0, WRAM bank to 1, and SVBK to 0. |
 | `key1_armed`, `double_speed`, `stop_switch_pending`, `ppu_stat_line`, `ppu_window_started`, `ppu_transfer_complete`, DMA/HDMA activity flags | 0 or 1. CGB speed-switch state is unavailable on the DMG profile. |
 | `bcps`, `ocps` | Full byte is preserved. The $40 read-as-one bit is present in post-boot compatibility state; palette consumers mask the index to 6 bits. |

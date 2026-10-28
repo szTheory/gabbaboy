@@ -754,12 +754,15 @@ static int state_semantic_bounds(void) {
                                     "frame_completed", GBB_FRAME_PIXELS - 1u, 4u));
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "frame_working", GBB_FRAME_PIXELS - 1u, 4u));
-    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
-                                    "obj_cram", 63u, 0x80u));
-    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
-                                    "bg_cram", 1u, 0x80u));
-    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
-                                    "obj_cram", 1u, 0x80u));
+    /* CR-A02: palette RAM stores all eight bits of every byte the guest writes through
+     * BCPD/OCPD; colour lookup masks bit 15 only when rendering. Bit 7 of a high byte is
+     * therefore reachable state and must load and resave unchanged. */
+    const test_state_edit cram_high_bits[] = {
+        {"bg_cram", 1u, 0x80u}, {"bg_cram", 63u, 0xFFu},
+        {"obj_cram", 1u, 0x80u}, {"obj_cram", 63u, 0xFFu}
+    };
+    REQUIRE_CASE("state_semantic_bounds", test_load_accepts_mutations(target, saved, size,
+                                    cram_high_bits, sizeof(cram_high_bits) / sizeof(cram_high_bits[0])));
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "ime", 0u, 2u));
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
