@@ -12,6 +12,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import Sequence
@@ -46,6 +47,10 @@ class Mutant:
     witnesses: tuple[str, ...]
     expected_failure: str
     edits: tuple[Edit, ...]
+
+
+# Keep equal to the PROCESSORS property of state_horizon_mutants in tests/CMakeLists.txt.
+MUTANT_WORKERS = 4
 
 
 def edit(old: str, new: str) -> Edit:
@@ -518,10 +523,18 @@ def execute(revision: str, build_dir: Path, *, self_test: bool) -> dict[str, obj
         temporary = Path(temp_name)
         source_root = temporary / "source"
         contents, version = materialize_sources(revision, source_root)
-        for mutant in selected:
-            result = build_and_run(revision, temporary, source_root, contents, version, mutant,
-                                   compiler, compiler_flags)
-            results.append(result)
+        # Each mutant builds and runs in its own directory, so they are independent. Serial -O2
+        # builds of the whole core left too little of the CTest budget on loaded hosted macOS
+        # runners; a small pool (matched by the test's PROCESSORS property) keeps the same
+        # mutants, flags and judgements. Results stay in inventory order and the first failing
+        # mutant in that order is the one reported.
+        workers = max(1, min(MUTANT_WORKERS, os.cpu_count() or 1, len(selected)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(build_and_run, revision, temporary, source_root, contents,
+                                   version, mutant, compiler, compiler_flags)
+                       for mutant in selected]
+            for future in futures:
+                results.append(future.result())
     report: dict[str, object] = {
         "revision": revision,
         "compiler": compiler_identity,
