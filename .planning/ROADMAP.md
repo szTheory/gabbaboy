@@ -63,7 +63,7 @@ Milestone-wide rules:
 - **Scope limits.** Save states are same-version-only before 1.0 (D-106). INT-01b (RM-020), RTC footer interop (RM-021), BESS (RM-022) and libretro (RM-009) are out of scope.
 
 - [x] **Phase 16: Tune-up and v0.2 Debt Closure** - Archive v0.2 phase records behind a lint, wire the Phase 8 verifiers, add the perf gate and CI/planning hygiene checks, and ship v0.2.1 (completed 2026-10-26)
-- [ ] **Phase 17: Native Save State Core** - Public `gbb_state_size`/`gbb_save_state`/`gbb_load_state` with exact continuation, transactional bounded loads, machine-checked completeness and portable canonical bytes
+- [x] **Phase 17: Native Save State Core** - Public `gbb_state_size`/`gbb_save_state`/`gbb_load_state` with exact continuation, transactional bounded loads, machine-checked completeness and portable canonical bytes (completed 2026-10-28)
 - [ ] **Phase 18: Player Save Slots and Host Contract** - Numbered state slots in the SDL player and a `--rom`/`--save-dir` runner with atomic raw `.sav`, SIGTERM save-and-exit, an exit-code table and declared save-format ids
 - [ ] **Phase 19: Qualified v0.3.0 Release** - Publish `v0.3.0` from its exact tag after a green exact-tag rehearsal, with a scoped support ledger and tag-bound receipts
 
@@ -163,7 +163,7 @@ Plans:
 - [x] 17-10-PLAN.md — Close every remaining Phase 16 WR/IN finding with intended controls on production gates.
 
 **Wave 11** *(blocked on Wave 10 completion)*
-- [ ] 17-11-PLAN.md — Enforce deterministic exception approval and nightly evidence in CTest and real release gates, then produce final-head evidence.
+- [x] 17-11-PLAN.md — Enforce deterministic exception approval and nightly evidence in CTest and real release gates, then produce final-head evidence.
 
 ### Phase 18: Player Save Slots and Host Contract
 
@@ -206,6 +206,6 @@ Plans:
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
 | 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
-| 17. Native Save State Core | 10/11 | 12 | Planned | - |
+| 17. Native Save State Core | 11/11 | 12 | Planned | 2026-10-28 |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |

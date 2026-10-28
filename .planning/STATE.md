@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v0.3
 milestone_name: Save States & Host Contract
-current_phase: 17
-current_phase_name: Native Save State Core
-status: executing
-Phase 17 plans 1-11 implemented; review-fix round 1 closed 5 critical review findings; full suite 1496/1496 at e9e2d57; verifying
+current_phase: 18
+current_phase_name: Player Save Slots and Host Contract
+status: ready_to_plan
+Phase 17 complete and verified (8/8); hosted exact-head CI green at 2eb492f; next /gsd-discuss-phase 18
 last_updated: "2026-10-28T00:00:00.000Z"
 last_activity: 2026-10-28
-last_activity_desc: Phase 17 plan 17-10 implemented, macOS horizon-mutants timeout fixed, full suite 1488/1488 at 716aab2; 17-11 is next
+last_activity_desc: Phase 17 verified and marked complete; review-fix round 1 closed 5 critical findings; hosted CI green at 2eb492f
 state_head: 570113052a356227545dded8b1ec05135bfae754
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 18
-  completed_plans: 17
-  percent: 25
+  completed_plans: 18
+  percent: 50
 current_plan: 11
 ---
 
@@ -30,10 +30,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 ## Current Position
 
-Phase: 17 (Native Save State Core) — EXECUTING
-Plan: 11 of 11
-Status: Executing Phase 17
-Last activity: 2026-10-28 — Plan 17-10 (Phase 16 WR-01..05, IN-01/02/04 closed in production gates; IN-03 closed except the `report-red` job timeout and its `ci-timeouts.json` row, which need a cited hosted dry run) implemented through `de7761b`. Hosted macOS at `b9cc82e` timed out `state_horizon_mutants` (35.4/22.6 s of 60 s on earlier green runs); `716aab2` builds mutants on a 4-worker pool with CTest PROCESSORS 4 (15.1 s → 5.1 s locally). Windows `v02_support_ledger_controls` fell to 59.6 s hosted after `e5064c3`. Full suite 1488/1488 at `716aab2`. Plan 17-09 (release evidence lifecycle replay on captured GitHub shapes, retry-order IN-01) implemented through `c2c10df`. Hosted Windows at `246b7d4` timed out `v02_support_ledger_controls` (115.71 s of 120 s already at `0c8fd56`; 7 cascade failures); `e5064c3` batches tagged reads (30.1 s → 12.4 s locally, LESSONS GB-CI-012). Full suite 1488/1488 at `e5064c3`; hosted pending. Plan 17-08 (generated disclosure + version-window protection) implemented at `ada8050`/`9de6089`; full suite 1486/1486 at `9de6089` after reconfigure; hosted checks not yet run at that head. Earlier: Plans 17-01..07 implemented. Settled full suite at `7cb5739`: 1481/1482; the one failure (`test_budget` rejecting the two 120 s advisory perf TIMEOUTs with no allowlist row) is fixed in `5701130` (TIMEOUT 60, measured ~7 s) and the affected tests pass. Hosted ASan fuzzing at `b3e57bc` then hit the 2 s per-input timeout because state validation repeated ~100 path `strcmp`s per body byte; `f0591f4` resolves path rules once per field (Debug save/load 15/29 ms → ~6/6 ms) with late-element refusal rows as negative controls. Full suite at `f0591f4`: 1482/1482. Windows portability fixes (`be8ec08`, `0c8fd56`: closed temp limits file, byte-mode mutant core, eol-aware stale-source check, POSIX-only advisory producer controls skipped on Windows) make PR130 hosted checks all green at `0c8fd56` (41 pass, 3 path-skipped, 0 fail; first green Windows lane since `2eea1e8`). Next 17-08.
+Phase: 18 — Player Save Slots and Host Contract
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-10-28 — Phase 17 complete. 11/11 plans; goal verification passed 8/8 ([17-VERIFICATION.md](phases/GB-17-native-save-state-core/17-VERIFICATION.md)); Nyquist 0 gaps; security 29/29 closed; code review found 5 critical findings, all closed in review-fix round 1 of 2 with negative controls ([17-REVIEW-DISPOSITION.md](phases/GB-17-native-save-state-core/17-REVIEW-DISPOSITION.md)); full suite 1496/1496 at `e9e2d57`; PR130 hosted exact-head CI green at `2eb492f` (41 pass, 3 path-skipped). Release preconditions before v0.3.0: re-cite the provisional `nightly-asan.yml:report-red` row from a main dry run (WR-C03) and `release.yml:candidate-performance` from the next release run; RM-027 remains the Phase 19 entry blocker.
 
 Prior phase evidence: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
 
@@ -86,10 +86,10 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 ## Session Continuity
 
 **Last session:** 2026-10-28
-**Stopped at:** Phase 17 plans 1-11 implemented; review-fix round 1 closed 5 critical review findings; full suite 1496/1496 at e9e2d57; verifying
+**Stopped at:** Phase 17 complete, ready to plan Phase 18
 **Resume file:** .planning/phases/GB-17-native-save-state-core/continue.md
 
-Completed stage: **Phase 17 execution, plans 1–10 implemented with targeted evidence**. Next stage: **Phase 17 — Native Save State Core, wave 11 / plan 17-11**, `/gsd-execute-phase 17`. The next feature phase remains **18 — Player Save Slots and Host Contract**, after Phase 17 execution and verification and an owner-selected handoff. Both automatic advance flags stay false.
+Completed stage: **Phase 17 — Native Save State Core: execution and verification complete** (`passed` 8/8, hosted exact-head CI green at `2eb492f`). Next phase: **18 — Player Save Slots and Host Contract**. Next command: `/gsd-discuss-phase 18`, only when the owner chooses. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 

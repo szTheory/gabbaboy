@@ -104,7 +104,7 @@ All in-scope deterministic contracts are automated; no human UAT checkpoint is p
 - [x] Test ordering, CTest inventory/timeouts and phase-unique threat links are complete.
 - [x] SUMMARY coverage uses block schema: id, description, human_judgment:false; verification block items kind/ref/status:pass, no flow maps/ctest kind/inline comments.
 - [ ] At verify-work use tests/scripts/verify-uat-closure.py with --write evidence and --self-test; no handwritten UAT/local copy.
-- [ ] Final source-head suite and required exact-revision hosted checks pass.
+- [x] Final source-head suite and required exact-revision hosted checks pass (1496/1496 at `e9e2d57`; PR130 hosted green at `2eb492f`).
 - [x] Validated/Nyquist flags change only after real execution evidence.
 
 Nyquist audit 2026-10-28: 0 gaps, 0 escalated. Open: the exact-revision hosted checks and the verify-work closure, which this audit does not claim.

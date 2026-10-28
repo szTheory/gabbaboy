@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.3 \u2014 Save States & Host Contract",
+  "milestone": "v0.3 — Save States & Host Contract",
   "phases": [
     {
       "number": "16",
@@ -11,7 +11,7 @@
     {
       "number": "17",
       "name": "Native Save State Core",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "18",
@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 17",
-    "label": "Execute Phase 17 (Native Save State Core)",
-    "reason": "Phase 17 planning verified: 11 plans, 32 tasks, 11 waves; implementation unstarted; one gap slot retained"
+    "command": "/gsd-discuss-phase 18",
+    "label": "Discuss Phase 18 (Player Save Slots and Host Contract)",
+    "reason": "Phase 17 complete and verified (8/8; hosted exact-head CI green at 2eb492f); Phase 18 has no context or plans yet"
   },
-  "updated_at": "2026-10-26T18:57:37.890Z"
+  "updated_at": "2026-10-28T23:15:20.000Z"
 }

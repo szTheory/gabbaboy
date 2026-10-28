@@ -23,3 +23,9 @@ Runtime is now Claude Code (`runtime: claude`). Use current OpenGSD @opengsd/gsd
 ## Verification in progress (2026-10-28)
 
 All 11 plans executed (no gap plan used); final plan source head `6199487`. Verification so far: wave gates clear; Nyquist audit 0 gaps (`e8ea47a`); security 29/29 (`2fac1be`). Code review (`b89cd74`, 3 slices) found 5 critical defects, so T-17-27 was reopened (`be21b41`). **Review-fix round 1 of 2** (`b2acaa7`..`e9e2d57`) fixed all 5 criticals and 10 of 13 warnings, each with a negative control. Dispositions are in `17-REVIEW-DISPOSITION.md`, T-17-27 is closed again, and the full suite passed 1496/1496 at `e9e2d57`. One review-fix round remains. Remaining steps: the hosted exact-head checks at the pushed head, the regression gate and the goal verifier (`gsd-verifier`), then `phase.complete`. Release precondition (WR-C03): after merge, dispatch the `report-red` dry run on main and re-cite the provisional `nightly-asan.yml:report-red` row before any release.
+
+## Phase 17 complete (2026-10-28)
+
+Goal verification `passed` 8/8 (`17-VERIFICATION.md`). `phase.complete` ran. Hosted exact-head CI for PR130 is green at `2eb492f` (41 pass, 3 path-skipped). Two Windows-only fixes came after the review round: `2eb492f` (inventory exemption for the POSIX-only `perf_advisory_*` pair) and the round-1 timing fixes. One review-fix round and the gap slot were left unused.
+
+Next phase: **18 — Player Save Slots and Host Contract**. Command: `/gsd-discuss-phase 18`, only when the owner chooses. Release preconditions before v0.3.0: re-cite the provisional `nightly-asan.yml:report-red` row from a dry run on main after merge (WR-C03); re-cite `release.yml:candidate-performance` from the next release run; RM-027 is the Phase 19 entry blocker. Deferred review items are listed in `17-REVIEW-DISPOSITION.md`.

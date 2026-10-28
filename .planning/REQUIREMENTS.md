@@ -37,30 +37,30 @@ Each requirement names the automated check that proves it (D-105). Every check c
 
 ### Save states (STATE-01)
 
-- [ ] **STATE-01**: The public API offers `gbb_state_size`, `gbb_save_state` and `gbb_load_state`.
+- [x] **STATE-01**: The public API offers `gbb_state_size`, `gbb_save_state` and `gbb_load_state`.
   - The size is fixed per loaded ROM and mode.
   - Saving does not mutate state and does not allocate.
   - Errors are typed and appended to the existing codes.
   - API docs are updated, and the installed C and C++ consumers exercise the calls.
-- [ ] **STATE-02**: A save state continues exactly. A fork matrix over the admitted corpus saves at seeded random points and at targeted ones:
+- [x] **STATE-02**: A save state continues exactly. A fork matrix over the admitted corpus saves at seeded random points and at targeted ones:
   - targeted points: mid OAM DMA, mid HDMA, the speed-switch stall, HALT/EI delay, the APU sequencer, RTC sub-seconds and a partly drawn frame;
   - each state loads into a fresh, deliberately corrupted instance;
   - every later frame, PCM sample, run result, battery image and final state byte must match the uninterrupted run;
   - a coverage gate fails when any in-flight category was never present at a save point;
   - field-drop mutant builds must all be caught.
-- [ ] **STATE-03**: Loading is transactional and bounded.
+- [x] **STATE-03**: Loading is transactional and bounded.
   - Every refused load leaves the instance byte-identical. Refusal cases: truncation, byte flips, wrong magic/version/profile/mode/ROM, out-of-range fields, and 64-bit time fields above 2^62.
   - A closure property test: any accepted state, run N steps, still saves to an accepted state.
   - A fuzz target for state loads is part of the hosted fuzz campaign.
-- [ ] **STATE-04**: Completeness is machine-checked.
+- [x] **STATE-04**: Completeness is machine-checked.
   - An inventory checker fails when an instance-struct member has no recorded serialize/reset treatment.
   - An `nm`-based CTest fails on any writable global in the core library.
   - Each check rejects a seeded fixture.
-- [ ] **STATE-05**: State bytes are portable and canonical.
+- [x] **STATE-05**: State bytes are portable and canonical.
   - Encoding is explicitly little-endian.
   - Saving a just-loaded state reproduces identical bytes.
   - Pinned state digests match on Linux, macOS and Windows CI.
-- [ ] **STATE-06**: Battery and RTC interplay is defined.
+- [x] **STATE-06**: Battery and RTC interplay is defined.
   - A state carries cartridge RAM and the full RTC.
   - Loading never reads the wall clock or applies catch-up.
   - The battery generation bumps once, and only when battery bytes change.
@@ -138,12 +138,12 @@ These are deferred and tracked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTON
 | TUNE-04 | Phase 16 | Complete |
 | TUNE-05 | Phase 16 | Complete |
 | TUNE-06 | Phase 16 | Complete |
-| STATE-01 | Phase 17 | Pending |
-| STATE-02 | Phase 17 | Pending |
-| STATE-03 | Phase 17 | Pending |
-| STATE-04 | Phase 17 | Pending |
-| STATE-05 | Phase 17 | Pending |
-| STATE-06 | Phase 17 | Pending |
+| STATE-01 | Phase 17 | Complete |
+| STATE-02 | Phase 17 | Complete |
+| STATE-03 | Phase 17 | Complete |
+| STATE-04 | Phase 17 | Complete |
+| STATE-05 | Phase 17 | Complete |
+| STATE-06 | Phase 17 | Complete |
 | PLAY-01 | Phase 18 | Pending |
 | HOST-01 | Phase 18 | Pending |
 | HOST-02 | Phase 18 | Pending |
