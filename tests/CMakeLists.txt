@@ -5491,7 +5491,7 @@ gbb_state_alloc_mutant(save_overwrites_tail ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
 # configure-time HEAD, read with git show; nothing falls back to the live tree.
 if(NOT WIN32)
   foreach(gbb_lifecycle_case IN ITEMS
-      "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=1 live_mutations=0"
+      "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0"
       "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*")
     string(REPLACE "|" ";" gbb_lifecycle_fields "${gbb_lifecycle_case}")
     list(GET gbb_lifecycle_fields 0 gbb_lifecycle_name)

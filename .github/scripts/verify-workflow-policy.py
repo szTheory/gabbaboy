@@ -1868,6 +1868,68 @@ def _check_release_entrypoint(root: Path) -> None:
         raise Reject("release-entrypoint", f"{RELEASE_ENTRYPOINT_WORKFLOW} must call {RELEASE_LOCAL_PATH} from a job")
 
 
+# --------------------------------------------------------------------------- release lifecycle script (RM-028, D-20)
+# The attach, manifest, final-gate and publication steps of release.yml are bodies of .github/scripts/release-evidence-lifecycle.sh,
+# so the production workflow and the local replay run the same commands. The judge therefore reads each step that calls the
+# script as if its body were inline: every rule below (command reachability, order, trusted-judge paths, token scope) keeps
+# judging the exact text that runs. A mode that is not called, called from the wrong job, called with a path outside the trusted
+# checkout, or defined twice is rejected, so extracted code can never be unused or substituted.
+LIFECYCLE_SCRIPT = ".github/scripts/release-evidence-lifecycle.sh"
+LIFECYCLE_MODES = {
+    "attach-evidence": "attach-v02-evidence",
+    "validate-evidence": "candidate-platform-manifest",
+    "build-manifest": "candidate-platform-manifest",
+    "validate-draft": "publish-qualified-release",
+    "final-gate": "publish-qualified-release",
+    "publish-draft": "publish-qualified-release",
+}
+_LIFECYCLE_CALL = re.compile(r"^bash trusted/\.github/scripts/release-evidence-lifecycle\.sh ([a-z-]+)$")
+
+
+def lifecycle_regions(text: str) -> dict[str, str]:
+    """The verbatim body of every mode: the lines between its BEGIN and END markers, each defined exactly once."""
+    regions: dict[str, str] = {}
+    for mode in LIFECYCLE_MODES:
+        begin, end = f"\n# BEGIN {mode}\n", f"\n# END {mode}\n"
+        if text.count(begin) != 1 or text.count(end) != 1 or text.find(begin) > text.find(end):
+            raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} must define the mode {mode} exactly once between its BEGIN and END markers")
+        function = f"\nlifecycle_{mode.replace('-', '_')}() {{{begin}"
+        if text.count(function) != 1:
+            raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} mode {mode} must be the body of its own function")
+        if f"\n  {mode}) lifecycle_{mode.replace('-', '_')} ;;\n" not in text:
+            raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} does not dispatch the mode {mode} to its function")
+        regions[mode] = text[text.find(begin) + len(begin):text.find(end)]
+    return regions
+
+
+def expand_lifecycle(workflow: str, tree: dict, root: Path) -> None:
+    path = root / LIFECYCLE_SCRIPT
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise Reject("lifecycle-wiring", f"{workflow} calls {LIFECYCLE_SCRIPT}, which cannot be read: {exc.strerror}") from exc
+    regions = lifecycle_regions(text)
+    called: dict[str, str] = {}
+    for job_id, job in tree["jobs"].items():
+        for step in job.get("steps", []):
+            run = str(step.get("run", "")).strip()
+            if "release-evidence-lifecycle.sh" not in run:
+                continue
+            match = _LIFECYCLE_CALL.fullmatch(run)
+            if not match or match.group(1) not in LIFECYCLE_MODES:
+                raise Reject("lifecycle-wiring", f"{_where(workflow, job_id)} must call the lifecycle script exactly as "
+                             "'bash trusted/.github/scripts/release-evidence-lifecycle.sh MODE' with a known mode")
+            mode = match.group(1)
+            if LIFECYCLE_MODES[mode] != job_id or mode in called:
+                raise Reject("lifecycle-wiring", f"{_where(workflow, job_id)} must not call the lifecycle mode {mode}: "
+                             f"it belongs to {LIFECYCLE_MODES[mode]} and runs once")
+            called[mode] = job_id
+            step["run"] = regions[mode]
+    missing = sorted(set(LIFECYCLE_MODES) - set(called))
+    if missing:
+        raise Reject("lifecycle-wiring", f"{workflow} never calls the extracted lifecycle mode(s) {', '.join(missing)}: extracted code must be executed by the workflow")
+
+
 ATTACH_REUSE_GUARD = 'if [[ "${RETRY:-}" == true ]]; then'
 ATTACH_REUSE_DOWNLOAD = 'gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir "$RUNNER_TEMP/attached-$name"'
 
@@ -1893,6 +1955,7 @@ def check_release(root: Path) -> None:
     name = "release"
     _check_residual_classification()
     tree = read_workflow(root / ".github/workflows/release.yml")
+    expand_lifecycle(name, tree, root)
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "release must declare only top-level contents: read")
     _check_release_triggers(name, tree)
@@ -2179,6 +2242,10 @@ def check_rehearsal_flag_scope(root: Path) -> None:
         if path.name != "release-rehearsal.yml":
             if REHEARSAL_FLAG.search(path.read_text(encoding="utf-8")):
                 raise Reject("rehearsal-flag-scope", f"{path.name} must not pass --rehearsal; only the rehearsal aggregate may")
+    # The release steps now live in the lifecycle script, so the same rule covers it.
+    lifecycle = root / LIFECYCLE_SCRIPT
+    if lifecycle.is_file() and REHEARSAL_FLAG.search(lifecycle.read_text(encoding="utf-8")):
+        raise Reject("rehearsal-flag-scope", f"{LIFECYCLE_SCRIPT} must not pass --rehearsal; only the rehearsal aggregate may")
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
     for job_id, job in tree["jobs"].items():
         for step in job.get("steps", []):
@@ -2294,7 +2361,7 @@ def _copy_fixture(root: Path, target: Path) -> None:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
-    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD):
+    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD, LIFECYCLE_SCRIPT):
         if (root / extra).is_file():
             (target / extra).parent.mkdir(parents=True, exist_ok=True)
             (target / extra).write_bytes((root / extra).read_bytes())
@@ -2365,9 +2432,9 @@ def _mutations():
            '"$RUNNER_TEMP/source-archive.tar.gz" --rehearsal', '"$RUNNER_TEMP/source-archive.tar.gz"', "required-command-not-executed"),
         _m("rehearsal judge verifies the fuzz receipt without its source", reh, "  judge:\n",
            ' --source-sha "$GITHUB_SHA"', "", "required-command-not-executed"),
-        _m("release passes --rehearsal to the evidence gate", rel, "  candidate-platform-manifest:\n",
-           '"$RUNNER_TEMP/source-archive.tar.gz"\n      - name: Validate the exact candidate asset set',
-           '"$RUNNER_TEMP/source-archive.tar.gz" --rehearsal\n      - name: Validate the exact candidate asset set', "rehearsal-flag-scope"),
+        _m("release passes --rehearsal to the evidence gate", "lifecycle", "# BEGIN validate-evidence\n",
+           '"$RUNNER_TEMP/source-archive.tar.gz"\n# END validate-evidence',
+           '"$RUNNER_TEMP/source-archive.tar.gz" --rehearsal\n# END validate-evidence', "rehearsal-flag-scope"),
         _m("a rehearsal producer job passes --rehearsal", reh, "  fuzz:\n",
            "run-bounded-fuzz.sh --self-test", "run-bounded-fuzz.sh --self-test --rehearsal", "rehearsal-flag-scope"),
         _m("rehearsal fuzz producer gains contents: write", reh, "  fuzz:\n", "    runs-on: ubuntu-24.04\n",
@@ -2588,12 +2655,12 @@ def _mutations():
            'bash .github/scripts/verify-release-gates.sh --check-v02-evidence', "subject-judge-execution"),
         _m("release manifest trusted checkout points at the tag", "release.yml", "  candidate-platform-manifest:\n", "          ref: ${{ github.sha }}\n          path: trusted",
            "          ref: ${{ env.SOURCE_SHA }}\n          path: trusted", "judge-trust"),
-        _m("release publisher final gate taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final',
-           'run: bash .github/scripts/verify-release-gates.sh --check-draft-final', "subject-judge-execution"),
+        _m("release publisher final gate taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final',
+           'bash .github/scripts/verify-release-gates.sh --check-draft-final', "subject-judge-execution"),
         _m("release publisher published-asset verifier taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", "python3 -I trusted/.github/scripts/verify-published-release-assets.py",
            "python3 .github/scripts/verify-published-release-assets.py", "subject-judge-execution"),
         ("release publication runs before the final downloaded-byte gate", "release.yml", [
-            ("  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "run: true"),
+            ("  publish-qualified-release:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "true"),
             ("  publish-qualified-release:\n", 'echo "Published the exact qualified release', 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"\n{I}echo "Published the exact qualified release')],
          "publication-order"),
         _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-platform-manifest]",
@@ -2826,7 +2893,7 @@ def _mutations():
         _m("W6-12 windows no longer needs macOS", rel, "  candidate-windows:\n", "needs: [release, candidate-macos]", "needs: [release]", "workflow-dependency"),
         _m("W6-14 release gains pull_request_target", rel, "", "  workflow_call:\n", "  pull_request_target:\n    branches: [main]\n  workflow_call:\n", "workflow-trigger"),
         ("W6-15 final gate moved after publish", rel, [
-            ("  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "run: true"),
+            ("  publish-qualified-release:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "true"),
             ("  publish-qualified-release:\n", 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag',
              'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag\n{I}bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"')],
          "publication-order"),
@@ -2836,6 +2903,20 @@ def _mutations():
            "required-command-not-executed"),
         _m("W6-19 entrypoint stops calling release.yml", "release-please.yml", "", "uses: ./.github/workflows/release.yml",
            "uses: ./.github/workflows/release-renamed.yml", "release-entrypoint"),
+        # RM-028 lifecycle extraction (17-09): extracted code must be executed by the workflow, from the trusted checkout, once.
+        _m("L17-01 workflow stops calling an extracted mode", rel, "  publish-qualified-release:\n",
+           "run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft", "run: true", "lifecycle-wiring"),
+        _m("L17-02 workflow calls one mode twice", rel, "  candidate-platform-manifest:\n",
+           "release-evidence-lifecycle.sh validate-evidence", "release-evidence-lifecycle.sh build-manifest", "lifecycle-wiring"),
+        _m("L17-03 workflow runs the lifecycle script from the tagged checkout", rel, "  attach-v02-evidence:\n",
+           "bash trusted/.github/scripts/release-evidence-lifecycle.sh attach-evidence",
+           "bash .github/scripts/release-evidence-lifecycle.sh attach-evidence", "lifecycle-wiring"),
+        _m("L17-04 workflow calls a mode from another job", rel, "  attach-v02-evidence:\n",
+           "release-evidence-lifecycle.sh attach-evidence", "release-evidence-lifecycle.sh publish-draft", "lifecycle-wiring"),
+        _m("L17-05 lifecycle mode loses its end marker", "lifecycle", "", "# END final-gate\n", "", "lifecycle-wiring"),
+        _m("L17-06 lifecycle dispatch drops a mode", "lifecycle", "", "  publish-draft) lifecycle_publish_draft ;;\n", "", "lifecycle-wiring"),
+        _m("L17-07 lifecycle mode is not the body of its own function", "lifecycle", "", "lifecycle_final_gate() {\n# BEGIN final-gate",
+           "lifecycle_other() {\n# BEGIN final-gate", "lifecycle-wiring"),
     ]
 
 
@@ -2972,6 +3053,41 @@ def _ledger_boundary_controls() -> int:
     return done
 
 
+_LIFECYCLE_JOB_ANCHORS = {f"  {job}:\n": next(mode for mode, owner in LIFECYCLE_MODES.items() if owner == job) for job in set(LIFECYCLE_MODES.values())}
+_JOB_HEADER = re.compile(r"\n  [a-z0-9-]+:\n")
+
+
+def _outdent(text: str) -> str:
+    """A step body sits ten columns deep in release.yml (a run block under a step) and at column zero in the script."""
+    return "\n".join(line[10:] if line.startswith(" " * 10) else line for line in text.split("\n"))
+
+
+def _route_lifecycle(workflow: str, edits, workflow_text: str, script_text: str):
+    """A mutation written against release.yml whose anchor text now lives in the lifecycle script is applied to the script.
+
+    The edit keeps its meaning (the same text in the same job, in the same order); only the file that holds the text moved
+    with the extraction. An edit whose text is in neither file is a stale mutant and fails the self-test loudly."""
+    if workflow != "release.yml":
+        return workflow, edits
+    routed, kept = [], []
+    for after, old, replacement in edits:
+        start = workflow_text.find(after) if after else 0
+        end = len(workflow_text)
+        if after in _LIFECYCLE_JOB_ANCHORS and start >= 0:
+            following = _JOB_HEADER.search(workflow_text, start + len(after))
+            end = following.start() if following else end
+        if start >= 0 and 0 <= workflow_text.find(old, start) < end:
+            kept.append((after, old, replacement))
+        elif _outdent(old) in script_text:
+            routed.append((f"# BEGIN {_LIFECYCLE_JOB_ANCHORS[after]}\n" if after in _LIFECYCLE_JOB_ANCHORS else "",
+                           _outdent(old), _outdent(replacement)))
+        else:
+            kept.append((after, old, replacement))
+    if routed and kept:
+        raise SystemExit(f"self-test mutation mixes release.yml and lifecycle-script edits: {routed[0][1][:60]!r}")
+    return ("lifecycle", routed) if routed else (workflow, edits)
+
+
 def self_test(root: Path) -> None:
     rejected = 0
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
@@ -2985,13 +3101,17 @@ def self_test(root: Path) -> None:
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
         baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
         baselines["config"] = (fixture / WINDOW_CONFIG).read_text(encoding="utf-8")
+        baselines["lifecycle"] = (fixture / LIFECYCLE_SCRIPT).read_text(encoding="utf-8")
 
         def target(workflow: str) -> Path:
             if workflow == "config":
                 return fixture / WINDOW_CONFIG
+            if workflow == "lifecycle":
+                return fixture / LIFECYCLE_SCRIPT
             return fixture / (PRODUCER_SCRIPT if workflow == "script" else f".github/workflows/{workflow}")
 
         for label, workflow, edits, expected in (*_mutations(), *_window_mutations()):
+            workflow, edits = _route_lifecycle(workflow, edits, baselines["release.yml"], baselines["lifecycle"])
             text = baselines[workflow]
             for after, old, replacement in edits:
                 split = text.find(after) if after else 0

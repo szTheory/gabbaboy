@@ -139,3 +139,5 @@ fixtures/magentests/*.gbc binary
 # they must hash identically in an autocrlf Windows checkout.
 tests/data/release-disclosure.json text eol=lf
 tests/data/version-window.json text eol=lf
+tests/data/release-api/captured.json text eol=lf
+tests/data/release-api/SOURCES.md text eol=lf

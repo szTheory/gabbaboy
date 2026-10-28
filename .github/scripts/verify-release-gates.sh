@@ -39,7 +39,9 @@ if not excluded_path(".github/workflows/release.yml") or not excluded_path(".git
     raise SystemExit("release-control-plane paths are not excluded from release parsing")
 if excluded_path("src/gabbaboy.c") or excluded_path("CMakeLists.txt"):
     raise SystemExit("release-please exclusion incorrectly hides product source/version paths")
-workflow = (root / ".github/workflows/release.yml").read_text()
+# The attach, manifest, final-gate and publication steps are bodies of the lifecycle script; the declarations and commands
+# judged below are the text of both files, exactly as the hosted workflow runs them.
+workflow = (root / ".github/workflows/release.yml").read_text() + "\n" + (root / ".github/scripts/release-evidence-lifecycle.sh").read_text()
 entrypoint = (root / ".github/workflows/release-please.yml").read_text()
 gate_source = (root / ".github/scripts/verify-release-gates.sh").read_text()
 # Which gate runs which validator is proved by running the gates on defective fixtures in --self-test below,
@@ -74,7 +76,8 @@ def validate_downloaded_sidecars(text):
     required = (
         'bash "$RUNNER_TEMP/verify-release-gates.sh" --check-digest-sidecar \\\n            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz',
         'bash build/verify-release-gates.sh --check-digest-sidecar \\\n            build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 \\\n            build/downloaded/gabbaboy-core-windows-x64.tar.gz',
-        'bash build/verify-release-gates.sh --check-digest-sidecar \\\n            build/downloaded/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n            build/downloaded/gabbaboy-core-macos-arm64.tar.gz',
+        # the manifest step is the build-manifest body of the lifecycle script, two columns deep after the extraction
+        'bash build/verify-release-gates.sh --check-digest-sidecar \\\n  build/downloaded/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n  build/downloaded/gabbaboy-core-macos-arm64.tar.gz',
     )
     if "sha256sum --check" in text or any(call not in text for call in required):
         raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
