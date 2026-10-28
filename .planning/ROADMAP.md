@@ -160,7 +160,7 @@ Plans:
 - [x] 17-09-PLAN.md — Rehearse the actual attach/manifest/final-decision/retry lifecycle using bounded sanitized captured GitHub responses.
 
 **Wave 10** *(blocked on Wave 9 completion)*
-- [ ] 17-10-PLAN.md — Close every remaining Phase 16 WR/IN finding with intended controls on production gates.
+- [x] 17-10-PLAN.md — Close every remaining Phase 16 WR/IN finding with intended controls on production gates.
 
 **Wave 11** *(blocked on Wave 10 completion)*
 - [ ] 17-11-PLAN.md — Enforce deterministic exception approval and nightly evidence in CTest and real release gates, then produce final-head evidence.
@@ -206,6 +206,6 @@ Plans:
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
 | 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
-| 17. Native Save State Core | 9/11 | 12 | Planned | - |
+| 17. Native Save State Core | 10/11 | 12 | Planned | - |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |

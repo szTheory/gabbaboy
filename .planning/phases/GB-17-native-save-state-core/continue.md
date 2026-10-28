@@ -6,11 +6,13 @@ Plan 17-08 implemented at `9de6089`; full suite 1486/1486 there after `cmake --p
 
 Plan 17-09 implemented through `c2c10df`; `e5064c3` fixes the Windows `v02_support_ledger_controls` timeout (GB-CI-012); full suite 1488/1488 at `e5064c3`, hosted pending.
 
-Next stage: **Phase 17 — Native Save State Core, wave 10 / plan 17-10**. Resume command: `/gsd-execute-phase 17`.
+Plan 17-10 implemented through `de7761b`; IN-03 still needs the `report-red` job `timeout-minutes` and a `ci-timeouts.json` row citing a hosted `nightly-asan.yml` dry run (`-f report_red_dry_run=true`, see 17-10-SUMMARY Deviation 3). `716aab2` fixes the macOS `state_horizon_mutants` timeout; full suite 1488/1488 there.
+
+Next stage: **Phase 17 — Native Save State Core, wave 11 / plan 17-11**. Resume command: `/gsd-execute-phase 17`.
 
 Next feature phase: **18 — Player Save Slots and Host Contract**, after Phase 17 execution/verification and owner choice. Both auto flags remain false. Never start Phase 18 automatically.
 
-Read nine completed summaries and `17-10-PLAN.md` with the existing context, research, patterns, source audit and validation. Reuse decisions and evidence. Two primary plans remain, plus the reserved gap slot. No formal phase review has begun; retain the two review-fix/one gap-round limits. RM-027 remains a Phase 19 entry blocker.
+Read ten completed summaries and `17-11-PLAN.md` with the existing context, research, patterns, source audit and validation. Reuse decisions and evidence. One primary plan remains, plus the reserved gap slot. No formal phase review has begun; retain the two review-fix/one gap-round limits. RM-027 remains a Phase 19 entry blocker.
 
 Implemented: explicit 198-field codec; exact release/format/model/ROM identity; validation, refusal, observers, purity; full 2^62 horizon; 153 corpus snapshot forks and 14 model-applicable categories; 198 omission controls; three compiled platform pins with exact base dispositions; deep semantic fuzzing and whole-instance/RAM refusal oracle. Source, API, consumer and limitation notes remain coordinated.
 
