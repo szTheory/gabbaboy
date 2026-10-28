@@ -221,8 +221,12 @@ prints its full canonical digest, and the owner comments on the recorded review
 issue with the exact wording the gate derives from the decision (the full
 digest, the approved limit, the accepted cause and its reference, and the
 per-ROM ratio bands). `--review-approval --comment-json FILE --decision FILE
---measurement FILE --rev SHA [--output FILE --exception-receipt FILE]` requires
-`author_association` `OWNER`, the stored issue URL and number, a comment newer
+--measurement FILE --rev SHA [--repository OWNER/REPO] [--output FILE
+--exception-receipt FILE]` requires `author_association` `OWNER`, a review
+issue, comment link and approving login in the expected repository (the
+`--repository` argument, `$GITHUB_REPOSITORY` on hosted runs and
+`szTheory/gabbaboy` otherwise; never a repository the decision file names, since
+any repository's owner is `OWNER` there), the stored issue URL and number, a comment newer
 than the issue, empty owner fields, a measurement taken at `--rev`, and that
 exact wording (a wrong, prefix-only or absent digest, a changed cause, limit or
 band all refuse). Only after every check does it copy the verified comment's
@@ -230,7 +234,10 @@ identity, link and time into new files; the input is never edited and a refusal
 writes nothing. `tests/scripts/run-perf-gate.sh --gate` is the production path:
 with the two exception environment variables named in its header set (the saved
 owner comment and the decision file) it asks the gate for the receipt and hands
-only that receipt to the ratchet.
+only that receipt to the ratchet. No workflow sets those variables, and
+`verify-workflow-policy.py` refuses any workflow file that names them (or assigns
+`GITHUB_REPOSITORY`), so a hosted run fails closed for a widened limit; there is
+no trusted step that fetches the owner comment from the API.
 
 **Nightly replay gate.** Before the one publication transition the
 `nightly-gate` lifecycle mode runs `--nightly-gate --runs-json FILE --run-json

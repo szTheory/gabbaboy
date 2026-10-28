@@ -2442,8 +2442,9 @@ PERF_GATE_APPROVAL_PARTS = (
     # (fragment, how many times it must appear, the reason)
     ('--emit-exception-measurement "$WORK/exception-measurement.json"', 1, "the evaluator must write the measurement the owner approves"),
     ('python3 -I "$GATES" --review-approval --comment-json "$GBB_IR_EXCEPTION_COMMENT_JSON"', 1, "the release gate must verify the owner comment"),
-    ('--measurement "$WORK/exception-measurement.json" \\\n      --rev "$head_revision" --output "$WORK/exception-decision.json" --exception-receipt "$WORK/exception-receipt.json" ||\n      fail exception-approval-refused', 1,
-     "the approval must be bound to the measurement and the head and its refusal must be fatal"),
+    ('--measurement "$WORK/exception-measurement.json" \\\n      --rev "$head_revision" --output "$WORK/exception-decision.json" --exception-receipt "$WORK/exception-receipt.json" \\\n'
+     '      --repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" ||\n      fail exception-approval-refused', 1,
+     "the approval must be bound to the measurement, the head and this repository, and its refusal must be fatal"),
     ('args+=(--exception-receipt "$WORK/exception-receipt.json")', 1, "only the receipt the gate wrote may reach the evaluator"),
 )
 
@@ -2467,8 +2468,33 @@ def check_release_gate_wiring(root: Path) -> None:
         raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT} must emit the measurement, verify the approval and only then hand over the receipt")
 
 
+# CR-C01: the owner-approval inputs of a widened Ir limit reach run-perf-gate.sh only through these two environment
+# names, and no workflow has a legitimate reason to supply them: an approval is verified locally by the owner, and no
+# trusted step fetches the comment from the API. A workflow, job or step `env:`, a `$GITHUB_ENV` write, or any other
+# text naming them (a split name included, so the suffixes are matched on their own, and case-insensitively because
+# Windows environment names are) is refused in every workflow file, listed or not. The expected review repository
+# comes from $GITHUB_REPOSITORY, so a workflow that assigns that name is refused too. With both rules, a hosted run
+# fails closed for a widened limit.
+IR_EXCEPTION_ENV = re.compile(r"GBB_IR_EXCEPTION|EXCEPTION_COMMENT_JSON|EXCEPTION_DECISION|GITHUB_REPOSITORY\s*[:=]", re.I)
+
+
+def check_ir_exception_env(root: Path) -> None:
+    directory = root / ".github/workflows"
+    for path in sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")]):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise Reject("ir-exception-env", f"{path.name} cannot be read: {exc.strerror}") from exc
+        found = IR_EXCEPTION_ENV.search(text)
+        if found:
+            line = text.count("\n", 0, found.start()) + 1
+            raise Reject("ir-exception-env", f"{path.name}:{line}: a workflow must not supply the Ir exception approval inputs "
+                         f"or the expected review repository ({found.group(0)!r}); hosted runs fail closed for a widened limit")
+
+
 def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_producer_script(root)
+    check_ir_exception_env(root)
     check_rehearsal_flag_scope(root)
     check_rehearsal(root)
     check_ci(root)
@@ -3262,8 +3288,29 @@ def _mutations():
            "  if [[ -n \"${GBB_IR_EXCEPTION_COMMENT_JSON:-}\" || -n \"${GBB_IR_EXCEPTION_DECISION:-}\" ]]; then\n",
            "  if [[ -n \"${GBB_PERF_EXCEPTION_RECEIPT:-}\" ]]; then args+=(--exception-receipt \"$GBB_PERF_EXCEPTION_RECEIPT\"); fi\n"
            "  if [[ -n \"${GBB_IR_EXCEPTION_COMMENT_JSON:-}\" || -n \"${GBB_IR_EXCEPTION_DECISION:-}\" ]]; then\n", "release-gate-wiring"),
-        _m("G17-13 approval refusal swallowed", "perfgate", "", "--exception-receipt \"$WORK/exception-receipt.json\" ||", "--exception-receipt \"$WORK/exception-receipt.json\" || true ||",
+        _m("G17-13 approval refusal swallowed", "perfgate", "", '--repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" ||',
+           '--repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" || true ||', "release-gate-wiring"),
+        # CR-C01: the approval is bound to this repository, and no workflow may supply the approval inputs.
+        _m("CR-C01-1 approval not bound to this repository", "perfgate", "", ' \\\n      --repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" ||', " ||",
            "release-gate-wiring"),
+        _m("CR-C01-2 approval bound to a repository the caller chose", "perfgate", "", '--repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}"',
+           '--repository "${GBB_REVIEW_REPOSITORY:-szTheory/gabbaboy}"', "release-gate-wiring"),
+        _m("CR-C01-3 ci perf-gate step sets the approval comment", "ci.yml", "  perf-gate:\n", "        run: bash tests/scripts/run-perf-gate.sh --gate\n",
+           "        env:\n          GBB_IR_EXCEPTION_COMMENT_JSON: tests/data/approval-comment.json\n"
+           "          GBB_IR_EXCEPTION_DECISION: tests/data/approval-decision.json\n        run: bash tests/scripts/run-perf-gate.sh --gate\n", "ir-exception-env"),
+        _m("CR-C01-4 rehearsal perf-gate job sets the approval decision", "release-rehearsal.yml", "  perf-gate:\n", "    timeout-minutes: 40\n",
+           "    timeout-minutes: 40\n    env:\n      GBB_IR_EXCEPTION_DECISION: tests/data/approval-decision.json\n", "ir-exception-env"),
+        _m("CR-C01-5 ci workflow-level env sets the approval inputs", "ci.yml", "", "permissions:\n  contents: read\n",
+           "env:\n  GBB_IR_EXCEPTION_COMMENT_JSON: c.json\n  GBB_IR_EXCEPTION_DECISION: d.json\npermissions:\n  contents: read\n", "ir-exception-env"),
+        _m("CR-C01-6 ci writes the approval inputs to GITHUB_ENV", "ci.yml", "  perf-gate:\n", "          sudo apt-get update -qq\n",
+           "          echo \"GBB_IR_EXCEPTION_DECISION=tests/data/d.json\" >> \"$GITHUB_ENV\"\n          sudo apt-get update -qq\n", "ir-exception-env"),
+        _m("CR-C01-7 ci writes a split approval name to GITHUB_ENV", "ci.yml", "  perf-gate:\n", "          sudo apt-get update -qq\n",
+           "          p=GBB_IR; echo \"${p}_EXCEPTION_COMMENT_JSON=c.json\" >> \"$GITHUB_ENV\"\n          sudo apt-get update -qq\n", "ir-exception-env"),
+        _m("CR-C01-8 perf-attribution sets a lower-case approval name", "perf-attribution.yml", "", "permissions:\n",
+           "env:\n  gbb_ir_exception_decision: d.json\npermissions:\n", "ir-exception-env"),
+        _m("CR-C01-9 ci perf-gate step redefines the expected review repository", "ci.yml", "  perf-gate:\n",
+           "        run: bash tests/scripts/run-perf-gate.sh --gate\n",
+           "        env:\n          GITHUB_REPOSITORY: example-owner/example-repo\n        run: bash tests/scripts/run-perf-gate.sh --gate\n", "ir-exception-env"),
         _m("G17-14 evaluator never receives the derived receipt", "perfgate", "", 'args+=(--exception-receipt "$WORK/exception-receipt.json")', "true", "release-gate-wiring"),
         _m("G17-15 evaluator stops writing the measurement", "perfgate", "", '--emit-exception-measurement "$WORK/exception-measurement.json"', "", "release-gate-wiring"),
         _m("G17-16 approval bound to another head", "perfgate", "", '--rev "$head_revision" --output', '--rev "$V020_EXPECTED" --output', "release-gate-wiring"),

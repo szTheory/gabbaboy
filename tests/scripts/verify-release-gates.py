@@ -9,8 +9,11 @@ Modes
       Print the full canonical SHA-256 of a deterministic Ir measurement (the object verify-perf-gate.py writes
       with --emit-exception-measurement). The owner approves exactly this digest.
   --review-approval --comment-json FILE --decision FILE --measurement FILE --rev SHA
-        [--output FILE] [--exception-receipt FILE]
-      Verify one OWNER comment on the recorded review issue. The only approvable event is a deterministic Ir
+        [--repository OWNER/REPO] [--output FILE] [--exception-receipt FILE]
+      Verify one OWNER comment on the recorded review issue. The issue, the comment link and the approving login
+      must belong to --repository (default szTheory/gabbaboy, the project repository; hosted callers pass
+      $GITHUB_REPOSITORY). The expected repository never comes from the decision file, which the change author
+      controls: the owner of any repository is OWNER there, so an issue elsewhere proves nothing. The only approvable event is a deterministic Ir
       exception: a widened ir_ratio_limit, bound to the measurement digest, the accepted cause, the per-ROM band
       and the approved limit. Ordinary advisory paired timing never needs approval and approval never makes wrong
       correctness, safety or realtime evidence pass: verify-perf-gate.py still judges all of those. The owner
@@ -65,6 +68,9 @@ SHA40 = re.compile(r"[0-9a-f]{40}")
 SHA64 = re.compile(r"[0-9a-f]{64}")
 FRACTION = re.compile(r"[1-9][0-9]*/[1-9][0-9]*")
 ISSUE_URL = re.compile(r"https://api\.github\.com/repos/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/([1-9][0-9]*)")
+# The project repository. A review issue, comment link or approving login anywhere else is refused (17-REVIEW CR-C01).
+PROJECT_REPOSITORY = "szTheory/gabbaboy"
+REPOSITORY = re.compile(r"([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9_.-]{1,100})")
 
 
 class GateError(Exception):
@@ -238,9 +244,11 @@ def approval_text(decision: dict, digest: str, measurement: dict) -> str:
              decision["accepted_cause_reference"], bands))
 
 
-def review_approval(comment, decision, measurement, rev):
+def review_approval(comment, decision, measurement, rev, repository=PROJECT_REPOSITORY):
     """Verify one owner comment. Returns (completed_decision, exception_receipt); writes nothing."""
     perf = perf_gate()
+    expected = REPOSITORY.fullmatch(repository) if isinstance(repository, str) else None
+    need(expected is not None, "usage", "--repository must be OWNER/REPO, got %r" % (repository,))
     rev = resolve_commit(rev, "review-source-mismatch", "--rev")
     digest = measurement_digest(measurement)
     need(measurement["source"]["head_revision"] == rev, "review-source-mismatch",
@@ -255,6 +263,10 @@ def review_approval(comment, decision, measurement, rev):
          isinstance(decision["review_issue_created_at"], str) and
          TIMESTAMP.fullmatch(decision["review_issue_created_at"]) is not None,
          "review-issue-unrecorded", "the decision does not record the review issue number, API url and creation time")
+    # GitHub owner and repository names compare case-insensitively.
+    need((located.group(1).casefold(), located.group(2).casefold()) ==
+         (expected.group(1).casefold(), expected.group(2).casefold()), "review-wrong-repository",
+         "the review issue %r is not in the project repository %s" % (url, repository))
     need(all(decision[field] == "" for field in OWNER_FIELDS), "review-fields-prefilled",
          "the owner-derived fields must be empty before verification")
     cause, reference = decision["accepted_cause"], decision["accepted_cause_reference"]
@@ -277,6 +289,8 @@ def review_approval(comment, decision, measurement, rev):
          isinstance(comment["body"], str), "review-comment-schema", "the comment is not a GitHub issue comment")
     need(comment["author_association"] == "OWNER", "review-not-owner",
          "the approving comment author_association is %r, not OWNER" % comment["author_association"])
+    need(comment["user"]["login"].casefold() == expected.group(1).casefold(), "review-not-owner",
+         "the approving login %r is not the owner of %s" % (comment["user"]["login"], repository))
     need(comment["issue_url"] == url, "review-wrong-issue",
          "the comment belongs to %r, not to the recorded review issue %r" % (comment["issue_url"], url))
     comment_time = parse_ts(comment["created_at"], "review-comment-schema", "the comment created_at")
@@ -323,7 +337,8 @@ def run_review_approval(options: dict) -> str:
     outputs = [(options[name], None) for name in ("output", "exception-receipt") if name in options]
     for path, _ in outputs:
         need(not os.path.lexists(path), "output-exists", "%s already exists and is never overwritten" % path)
-    completed, receipt = review_approval(comment, decision, measurement, options["rev"])
+    completed, receipt = review_approval(comment, decision, measurement, options["rev"],
+                                         options.get("repository", PROJECT_REPOSITORY))
     texts = {"output": json.dumps(completed, sort_keys=True, indent=2) + "\n",
              "exception-receipt": json.dumps(receipt, sort_keys=True, indent=2) + "\n"}
     write_new_files([(options[name], texts[name]) for name in ("output", "exception-receipt") if name in options])
@@ -437,11 +452,11 @@ def run_nightly_gate(options: dict) -> str:
 # command line
 
 VALUE_OPTIONS = {"comment-json", "decision", "measurement", "rev", "output", "exception-receipt", "runs-json",
-                 "run-json", "head", "branch", "checked-at"}
+                 "run-json", "head", "branch", "checked-at", "repository"}
 MODES = {"digest": {"measurement"},
          "review-approval": {"comment-json", "decision", "measurement", "rev"},
          "nightly-gate": {"runs-json", "run-json", "head", "output"}}
-OPTIONAL = {"review-approval": {"output", "exception-receipt"}, "nightly-gate": {"rev", "branch", "checked-at"}}
+OPTIONAL = {"review-approval": {"output", "exception-receipt", "repository"}, "nightly-gate": {"rev", "branch", "checked-at"}}
 
 
 def parse_arguments(argv: list) -> tuple:
@@ -497,8 +512,11 @@ def main(argv: list) -> int:
 # self-test: every control runs the production functions above; the CLI is driven for exit codes and for the
 # promise that a refusal writes nothing and an approval never edits its input.
 
-REVIEW_ISSUE_API = "https://api.github.com/repos/example-owner/example-repo/issues/122"
-REVIEW_COMMENT_URL = "https://github.com/example-owner/example-repo/issues/122#issuecomment-6406576530"
+# The positives use the project repository; an identical approval in any other repository is a negative control.
+PROJECT_OWNER = PROJECT_REPOSITORY.split("/")[0]
+REVIEW_ISSUE_API = "https://api.github.com/repos/%s/issues/122" % PROJECT_REPOSITORY
+REVIEW_COMMENT_URL = "https://github.com/%s/issues/122#issuecomment-6406576530" % PROJECT_REPOSITORY
+FOREIGN_REPOSITORY = "example-owner/example-repo"
 BASE_TIME = "2026-10-28T03:00:00Z"
 
 
@@ -588,19 +606,26 @@ class ReviewFixture:
                 "reviewer_identity": "", "review_reference": "", "reviewed_at": ""}
 
     def comment(self, decision: dict, **changes) -> dict:
-        comment = {"id": 6406576530, "user": {"login": "example-owner", "id": 1}, "author_association": "OWNER",
+        comment = {"id": 6406576530, "user": {"login": PROJECT_OWNER, "id": 1}, "author_association": "OWNER",
                    "issue_url": decision["review_issue_url"], "created_at": "2026-10-26T02:02:17Z",
                    "html_url": REVIEW_COMMENT_URL,
                    "body": approval_text(decision, self.digest, self.measurement)}
         comment.update(changes)
         return comment
 
-    def approve(self, decision=None, comment=None, measurement=None, rev=None):
+    def approve(self, decision=None, comment=None, measurement=None, rev=None, repository=PROJECT_REPOSITORY):
         decision = self.decision() if decision is None else decision
         comment = self.comment(decision) if comment is None else comment
         return review_approval(copy.deepcopy(comment), copy.deepcopy(decision),
                                copy.deepcopy(self.measurement if measurement is None else measurement),
-                               rev or self.rev)
+                               rev or self.rev, repository)
+
+    def foreign(self) -> tuple:
+        """A self-consistent approval in another repository: its owner is OWNER there, and every other field is right."""
+        decision = dict(self.decision(), review_issue_url=REVIEW_ISSUE_API.replace(PROJECT_REPOSITORY, FOREIGN_REPOSITORY))
+        comment = self.comment(decision, user={"login": FOREIGN_REPOSITORY.split("/")[0], "id": 2},
+                               html_url=REVIEW_COMMENT_URL.replace(PROJECT_REPOSITORY, FOREIGN_REPOSITORY))
+        return decision, comment
 
 
 def self_test_review_approval(ledger: Ledger, fixture: ReviewFixture) -> None:
@@ -608,7 +633,7 @@ def self_test_review_approval(ledger: Ledger, fixture: ReviewFixture) -> None:
     completed, receipt = ledger.passes("valid owner approval", fixture.approve) or ({}, {})
     ledger.check("owner fields come from the verified comment",
                  (completed.get("reviewer_identity"), completed.get("review_reference"), completed.get("reviewed_at"))
-                 == ("example-owner", REVIEW_COMMENT_URL, "2026-10-26T02:02:17Z"), "owner fields were not copied")
+                 == (PROJECT_OWNER, REVIEW_COMMENT_URL, "2026-10-26T02:02:17Z"), "owner fields were not copied")
     ledger.check("receipt is the closed perf-gate schema", receipt.get("schema") == perf.EXCEPTION_SCHEMA and
                  receipt.get("external_verification", {}).get("status") == "verified")
 
@@ -625,7 +650,7 @@ def self_test_review_approval(ledger: Ledger, fixture: ReviewFixture) -> None:
     ledger.check("CLI approval passes", code == 0 and "review-approval pass issue=122" in out and not err.strip(), out + err)
     ledger.check("the input decision is never altered", Path(decision_path).read_bytes() == before)
     ledger.check("the completed decision carries the verified owner fields",
-                 read_json(out_path, "x").get("reviewer_identity") == "example-owner")
+                 read_json(out_path, "x").get("reviewer_identity") == PROJECT_OWNER)
 
     # The approved receipt reaches the real deterministic ratchet and is the only way a widened limit passes.
     perf_script = HERE / "verify-perf-gate.py"
@@ -732,6 +757,21 @@ def self_test_review_controls(ledger: Ledger, fixture: ReviewFixture) -> None:
     narrow = "1100000001/1000000000"
     ledger.rejects("a limit below the measured band", "review-exception-limit-below-measurement", lambda: approve(
         decision=fixture.decision(limit=narrow), comment=fixture.comment(fixture.decision(limit=narrow))))
+    # The approval is bound to the project repository, which comes from the caller and never from the decision (CR-C01).
+    # The foreign approval below is otherwise valid: naming its repository as the expected one makes it pass.
+    foreign_decision, foreign_comment = fixture.foreign()
+    ledger.rejects("an owner approval in another repository", "review-wrong-repository",
+                   lambda: approve(decision=foreign_decision, comment=foreign_comment))
+    ledger.passes("the same approval passes only where the caller expects that repository",
+                  lambda: approve(decision=foreign_decision, comment=foreign_comment, repository=FOREIGN_REPOSITORY))
+    ledger.rejects("the project approval under another expected repository", "review-wrong-repository",
+                   lambda: approve(repository=FOREIGN_REPOSITORY))
+    ledger.rejects("an OWNER comment by another login", "review-not-owner",
+                   lambda: comment_with(user={"login": "someone-else", "id": 3}))
+    ledger.rejects("a comment link in another repository", "review-reference-invalid", lambda: comment_with(
+        html_url=REVIEW_COMMENT_URL.replace(PROJECT_REPOSITORY, FOREIGN_REPOSITORY)))
+    ledger.rejects("a malformed expected repository", "usage", lambda: approve(repository="szTheory"))
+    ledger.passes("owner and repository compare case-insensitively", lambda: approve(repository=PROJECT_REPOSITORY.upper()))
     # An unrelated edit of the comment is not a defect.
     ledger.passes("unrelated comment fields", lambda: comment_with(reactions={"+1": 3}, id=1))
     ledger.passes("approval after the mutants", approve)
@@ -746,6 +786,12 @@ def self_test_review_controls(ledger: Ledger, fixture: ReviewFixture) -> None:
                            "--decision", decision_path, "--measurement", str(fixture.measurement_path),
                            "--rev", fixture.rev, "--output", str(out_path), "--exception-receipt", str(receipt_path))
     ledger.check("a refusal exits 1 with its reason", code == 1 and error.startswith("REJECT review-not-owner:"), error, control=True)
+    good_comment_path = write_text(scratch / "foreign-check-comment.json", json.dumps(fixture.comment(fixture.decision())))
+    code, _, error = spawn(Path(__file__).resolve(), "--review-approval", "--comment-json", good_comment_path,
+                           "--decision", decision_path, "--measurement", str(fixture.measurement_path),
+                           "--rev", fixture.rev, "--repository", FOREIGN_REPOSITORY, "--output", str(out_path))
+    ledger.check("the CLI --repository is the expected repository", code == 1 and
+                 error.startswith("REJECT review-wrong-repository:") and not out_path.exists(), error, control=True)
     ledger.check("a refusal writes no output and edits no input",
                  not out_path.exists() and not receipt_path.exists() and Path(decision_path).read_bytes() == before, control=True)
     existing = scratch / "existing.json"

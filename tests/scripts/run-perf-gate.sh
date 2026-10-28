@@ -12,7 +12,9 @@
 #
 # Deterministic Ir exception (D-22): a widened ir_ratio_limit passes --gate only when GBB_IR_EXCEPTION_COMMENT_JSON (the saved
 # owner comment) and GBB_IR_EXCEPTION_DECISION (the decision file) name inputs that verify-release-gates.py --review-approval
-# accepts for this run's measurement. Without them a widening is refused; ordinary runs need neither.
+# accepts for this run's measurement. Without them a widening is refused; ordinary runs need neither. The review issue must
+# be in this repository ($GITHUB_REPOSITORY on hosted runs, szTheory/gabbaboy otherwise), never one the decision names.
+# No workflow sets either variable (verify-workflow-policy.py refuses one that does), so hosted runs fail closed.
 #
 # The evaluator is tests/scripts/verify-perf-gate.py. This script only builds, runs and collects. It never
 # writes the real repository tree: every patched or extracted tree lives in a temporary directory.
@@ -173,7 +175,8 @@ evaluate_tree() {
       fail exception-not-needed "no deterministic Ir exception is requested by this run: $(cat "$WORK/exception-measure.err")"
     python3 -I "$GATES" --review-approval --comment-json "$GBB_IR_EXCEPTION_COMMENT_JSON" \
       --decision "$GBB_IR_EXCEPTION_DECISION" --measurement "$WORK/exception-measurement.json" \
-      --rev "$head_revision" --output "$WORK/exception-decision.json" --exception-receipt "$WORK/exception-receipt.json" ||
+      --rev "$head_revision" --output "$WORK/exception-decision.json" --exception-receipt "$WORK/exception-receipt.json" \
+      --repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" ||
       fail exception-approval-refused "the OWNER approval was refused; the limit stays unapproved"
     args+=(--exception-receipt "$WORK/exception-receipt.json")
   fi

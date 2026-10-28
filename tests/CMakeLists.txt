@@ -5542,7 +5542,7 @@ endif()
 # must reach a minimum | minimum. Controls are parsed minimums: adding one is allowed, dropping one is rejected.
 foreach(gbb_gate_case IN ITEMS
     "release_review_approval|review-approval|controls|5"
-    "release_review_controls|review-controls|controls|36"
+    "release_review_controls|review-controls|controls|44"
     "release_nightly_gate|nightly-gate|positives|7"
     "release_nightly_controls|nightly-controls|controls|37")
   string(REPLACE "|" ";" gbb_gate_fields "${gbb_gate_case}")
