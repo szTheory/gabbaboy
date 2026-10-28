@@ -55,6 +55,39 @@ patch release (for example v0.1.1 or v0.1.2) binds the unchanged
 The source ledger intentionally does not contain its future commit SHA, so its
 own source can be reviewed before tagging without a self-reference.
 
+## Support-ledger generator and managed inputs
+
+`python3 -I tests/scripts/verify-support-ledger.py --write-current --receipt
+build/cgb-corpus-receipt.json` renders the versioned support ledger for the
+tree's own version. The historical performance disclosure below is part of that
+generator output, not prose added afterwards: its facts live in
+[`tests/data/release-disclosure.json`](../tests/data/release-disclosure.json)
+and are rendered into every generated ledger. The input is validated before it
+is used. Every field is classified, and the candidate and baseline source
+identities must be the commits of the `v0.2.0` and `v0.1.0` tags, and the
+fixture digest must be the candidate-source blob's digest, all read from Git
+objects. A current advisory interpretation is rendered only for ledgers after
+the last tagged one (v0.2.1); it states that paired wall-clock timing is
+advisory and that the instruction-count ratio and realtime floor remain
+blocking. It never rewrites the historical metric.
+
+To preview without touching a tracked file, add `--output PATH`; the default
+target is refused when that version already has its tag, because a tagged
+ledger's bytes are historical. A generated ledger is accepted only if
+rendering its own structured data reproduces its exact bytes, so a hand edit
+(including a hand-inserted disclosure) is rejected.
+
+```sh
+python3 -I tests/scripts/verify-support-ledger.py --check-disclosure
+python3 -I tests/scripts/verify-support-ledger.py --self-test-disclosure
+```
+
+The first command requires the tracked v0.2.0 and v0.2.1 ledgers to be exact
+generator output, the v0.2.1 ledger to equal its tag blob, and the adoption
+verifier to accept the result. The second runs omission, altered-value,
+unbound-source, handwritten-bypass and tagged-rewrite controls. Both run as the
+`release_disclosure_generator` and `release_disclosure_controls` tests.
+
 ## Performance measurement and qualification
 
 The v0.2.0 DMG paired performance comparison is historical evidence: it reported

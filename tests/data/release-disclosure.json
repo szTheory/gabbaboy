@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "kind": "historical-performance-disclosure",
+  "historical": {
+    "comparison_release": "v0.2.0",
+    "baseline_release": "v0.1.0",
+    "candidate_source": "ab301aa69b1f085050fd66bf7b1378863a0821f2",
+    "baseline_source": "e30d168f7fc61de8db0a3801e7b1736362912cb7",
+    "workload": "original-wram-tracer-1m-half-dots-v1",
+    "model": "DMG-CPU-B",
+    "fixture": {
+      "path": "fixtures/tracer/tracer.gb",
+      "sha256": "ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d"
+    },
+    "half_dot_budget": 1000000,
+    "correctness_digest": "4c7a57ff3d50d228",
+    "platform": "Linux x86_64",
+    "paired_samples": 30,
+    "warmups": 3,
+    "delta_percent": "14.86",
+    "margin_percent": "1.62",
+    "disposition": "accepted-with-disclosed-regression"
+  },
+  "current_interpretation": {
+    "applies_after_version": "0.2.1",
+    "text": "**Current interpretation:** paired wall-clock timing is advisory evidence for this release and does not approve or reinterpret the historical comparison above. The deterministic instruction-count ratio and the native realtime floor remain independent blocking gates."
+  }
+}

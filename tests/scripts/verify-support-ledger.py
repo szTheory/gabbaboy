@@ -1072,7 +1072,11 @@ def stable_v2_evidence(data: dict) -> dict:
     return stable
 
 
-def render_v2_ledger(data: dict) -> str:
+def render_v2_ledger(data: dict, disclosure: dict | None = None) -> str:
+    # The historical performance disclosure is rendered from validated, source-bound managed input
+    # (tests/data/release-disclosure.json, D-19), never inserted by hand after generation.
+    if disclosure is None:
+        disclosure = load_disclosure(ROOT)
     counts = data["receipt"]["counts"]
     suite_rows = data["receipt"]["suite_model_mode_counts"]
     lines = [
@@ -1128,6 +1132,7 @@ def render_v2_ledger(data: dict) -> str:
         "",
         "Known limitations include skipped boot ROMs; no physical DMG-CPU-B or CGB-CPU-E qualification; no general game compatibility percentage; no CGB mode-3 timing qualification; no analog audio, perceptual color/audio, or physical rumble claim; no MBC1M or MBC30 support; and no Linux/Windows packaged-player game smoke. CGB-CPU-E's current APU, PPU and speed limitations remain profile/model-specific as described in the CGB corpus and profile documentation.",
         "",
+        *disclosure_paragraphs(disclosure, data["version"]),
         "Evidence classes are kept distinct: source-backed expectations, admitted fixture bytes, independent inventory and assertion contracts, local software execution receipts, differential observations, project-authored regression tests, and game-level acceptance. Physical-hardware evidence is absent for this ledger.",
         "",
         "The receipt below is a historical producer snapshot: its exact bytes, producer revision, run identity and build artifacts identify that earlier run. A fresh receipt must independently validate its source and build bytes and reproduce the same stable corpus evidence before a release sidecar is created. The sidecar binds that supplied receipt's digest, producer revision, run identity and build artifacts alongside the tagged source and exact ledger blob; tag verification never regenerates this ledger. This tracked ledger intentionally contains no release source SHA.",
@@ -1144,7 +1149,7 @@ def render_v2_ledger(data: dict) -> str:
     return "\n".join(lines)
 
 
-def create_current_ledger(receipt_path: pathlib.Path) -> dict:
+def create_current_ledger(receipt_path: pathlib.Path, output: pathlib.Path | None = None) -> dict:
     receipt_path = receipt_path.resolve(strict=True)
     try:
         receipt_rel = receipt_path.relative_to(ROOT.resolve()).as_posix()
@@ -1168,9 +1173,18 @@ def create_current_ledger(receipt_path: pathlib.Path) -> dict:
         check_source_ancestry(identity.get("core_revision", ""), current)
     validate_data_v2(data, version)
     validate_source_bindings(data, ROOT)
-    target = ROOT / f"{LEDGER_DIR}/v{version}.md"
-    target.write_text(render_v2_ledger(data), encoding="utf-8")
+    write_generated_ledger(data, ROOT, output)
     return data
+
+
+def write_generated_ledger(data: dict, root: pathlib.Path, output: pathlib.Path | None = None) -> pathlib.Path:
+    """The writer tail of --write-current: refuse a tagged tracked target, then write the generator bytes."""
+    default_target = root / f"{LEDGER_DIR}/v{data['version']}.md"
+    target = output if output is not None else default_target
+    refuse_tagged_target(root, data["version"], target, default_target)
+    # Bytes, not text mode: the ledger is digest-bound and must not gain CRLF on Windows (GB-CI-011).
+    target.write_bytes(render_v2_ledger(data).encode("utf-8"))
+    return target
 
 
 def validate_source_bindings(data: dict, repo_root: pathlib.Path,
@@ -2267,6 +2281,17 @@ def self_test_v2_sidecar() -> None:
         if stable_v2_evidence(fixture_data) != stable_v2_evidence({**data, "version": "0.2.0"}):
             fail("synthetic full-membership receipt differs from stable historical evidence")
         ledger_text = render_v2_ledger(fixture_data)
+        # The writer output for an independent synthetic receipt carries the generated disclosure and is a
+        # generator fixed point, so --write-current needs no hand-inserted prose (RM-028, D-19).
+        if disclosure_paragraphs(load_disclosure(ROOT), "0.2.0")[0] not in ledger_text:
+            fail("synthetic-receipt ledger lacks the generated historical performance disclosure")
+        require_generated(ledger_text.encode("utf-8"), "synthetic-receipt ledger", "0.2.0", load_disclosure(ROOT))
+        # Drive the writer tail of --write-current into a disposable output: the bytes are the generator
+        # output (no text-mode newline translation), and a tagged tracked target is refused untouched.
+        preview = repository / receipt_path.parent / "disclosure-preview.md"
+        written = write_generated_ledger(fixture_data, ROOT, preview)
+        if written != preview or preview.read_bytes() != ledger_text.encode("utf-8"):
+            fail("write-current writer did not emit the exact generator bytes")
         fixture_ledger = repository / "docs/support/v0.2.0.md"
         fixture_ledger.parent.mkdir(parents=True, exist_ok=True)
         fixture_ledger.write_text(ledger_text, encoding="utf-8")
@@ -2275,6 +2300,17 @@ def self_test_v2_sidecar() -> None:
         source_sha = git_fixture(repository, "rev-parse", "HEAD")
         for tag in ("v0.2.0", "v0.2.1"):
             git_fixture(repository, "tag", tag, source_sha)
+        # A tagged release's tracked ledger is historical: the writer refuses it and leaves the bytes untouched.
+        tracked_before = fixture_ledger.read_bytes()
+        try:
+            write_generated_ledger(fixture_data, repository)
+        except ValueError as error:
+            if "ledger-target-tagged" not in str(error):
+                fail(f"write-current mis-rejected a tagged target: {error}")
+        else:
+            fail("write-current accepted a tagged tracked target")
+        if fixture_ledger.read_bytes() != tracked_before:
+            fail("write-current modified tagged ledger bytes")
         # Keep HEAD at the receipt producer's base revision so this synthetic
         # contract fixture cannot be mistaken for a CTest execution receipt.
         git_fixture(repository, "checkout", "--detach", base_revision)
@@ -2607,6 +2643,139 @@ def self_test_v2_sidecar() -> None:
           " controls=" + ",".join(controls))
 
 
+# RM-028 / D-19: the historical performance disclosure is generator output. Its facts live in one validated,
+# source-bound managed input and are rendered into every ledger by render_v2_ledger, so --write-current never
+# needs hand-inserted prose and a hand edit or a rewritten historical metric is caught by byte comparison.
+DISCLOSURE_PATH = "tests/data/release-disclosure.json"
+MAX_DISCLOSURE_BYTES = 64 * 1024
+DISCLOSURE_MODELS = ("DMG-CPU-B",)
+DISCLOSURE_TOP_KEYS = {"schema_version", "kind", "historical", "current_interpretation"}
+DISCLOSURE_HISTORICAL_KEYS = {
+    "comparison_release", "baseline_release", "candidate_source", "baseline_source", "workload", "model",
+    "fixture", "half_dot_budget", "correctness_digest", "platform", "paired_samples", "warmups",
+    "delta_percent", "margin_percent", "disposition",
+}
+DISCLOSURE_INTERPRETATION_KEYS = {"applies_after_version", "text"}
+DISCLOSURE_TEXT = re.compile(r"[\x20-\x7e]{1,800}")
+
+
+def _disclosure_invalid(reason: str) -> None:
+    fail("REJECT disclosure-input-invalid: " + reason)
+
+
+def _disclosure_int(value: object, name: str, low: int, high: int) -> int:
+    if type(value) is not int or not low <= value <= high:
+        _disclosure_invalid(f"{name} must be an integer in [{low}, {high}]")
+    return value
+
+
+def _disclosure_pattern(value: object, name: str, pattern: str) -> str:
+    if type(value) is not str or re.fullmatch(pattern, value) is None:
+        _disclosure_invalid(f"{name} is malformed")
+    return value
+
+
+def _disclosure_keys(value: object, name: str, expected: set) -> dict:
+    if type(value) is not dict:
+        _disclosure_invalid(f"{name} must be an object")
+    missing = sorted(expected - set(value))
+    unknown = sorted(set(value) - expected)
+    if missing:
+        _disclosure_invalid(f"{name} omits {','.join(missing)}")
+    if unknown:
+        _disclosure_invalid(f"{name} has unclassified field {','.join(unknown)}")
+    return value
+
+
+def validate_disclosure(data: object, root: pathlib.Path = ROOT, bind: bool = True) -> dict:
+    """Validate shape, value domains and (with bind) the source identities against immutable Git objects."""
+    data = _disclosure_keys(data, "disclosure", DISCLOSURE_TOP_KEYS)
+    if data["schema_version"] != 1 or type(data["schema_version"]) is not int:
+        _disclosure_invalid("schema_version must be 1")
+    if data["kind"] != "historical-performance-disclosure":
+        _disclosure_invalid("kind must be historical-performance-disclosure")
+    historical = _disclosure_keys(data["historical"], "historical", DISCLOSURE_HISTORICAL_KEYS)
+    for name in ("comparison_release", "baseline_release"):
+        _disclosure_pattern(historical[name], name, r"v\d+\.\d+\.\d+")
+    for name in ("candidate_source", "baseline_source"):
+        _disclosure_pattern(historical[name], name, r"[0-9a-f]{40}")
+    _disclosure_pattern(historical["workload"], "workload", r"[a-z0-9][a-z0-9-]{2,63}")
+    if historical["model"] not in DISCLOSURE_MODELS:
+        _disclosure_invalid("model is not a disclosed software model")
+    fixture = _disclosure_keys(historical["fixture"], "fixture", {"path", "sha256"})
+    try:
+        relative_path(fixture["path"], "fixture-path-invalid")
+    except ValueError:
+        _disclosure_invalid("fixture path is malformed")
+    _disclosure_pattern(fixture["sha256"], "fixture sha256", r"[0-9a-f]{64}")
+    _disclosure_int(historical["half_dot_budget"], "half_dot_budget", 1, 10**12)
+    _disclosure_pattern(historical["correctness_digest"], "correctness_digest", r"[0-9a-f]{16}")
+    _disclosure_pattern(historical["platform"], "platform", r"[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}")
+    _disclosure_int(historical["paired_samples"], "paired_samples", 1, 100000)
+    _disclosure_int(historical["warmups"], "warmups", 0, 10000)
+    _disclosure_pattern(historical["delta_percent"], "delta_percent", r"[0-9]{1,3}\.[0-9]{2}")
+    _disclosure_pattern(historical["margin_percent"], "margin_percent", r"[0-9]{1,3}\.[0-9]{2}")
+    _disclosure_pattern(historical["disposition"], "disposition", r"[a-z][a-z-]{2,63}")
+    interpretation = _disclosure_keys(data["current_interpretation"], "current_interpretation",
+                                      DISCLOSURE_INTERPRETATION_KEYS)
+    _disclosure_pattern(interpretation["applies_after_version"], "applies_after_version", r"\d+\.\d+\.\d+")
+    text = _disclosure_pattern(interpretation["text"], "interpretation text", DISCLOSURE_TEXT.pattern)
+    for word in ("advisory", "blocking"):
+        if word not in text:
+            _disclosure_invalid(f"interpretation text must state the {word} status")
+    if bind:
+        if tag_commit(root, historical["comparison_release"]) != historical["candidate_source"]:
+            fail("REJECT disclosure-source-unbound: candidate_source is not the "
+                 f"{historical['comparison_release']} tag commit")
+        if tag_commit(root, historical["baseline_release"]) != historical["baseline_source"]:
+            fail("REJECT disclosure-source-unbound: baseline_source is not the "
+                 f"{historical['baseline_release']} tag commit")
+        blob = immutable_git_file(root, historical["candidate_source"], fixture["path"], MAX_INPUT_BYTES)
+        if sha256(blob) != fixture["sha256"]:
+            fail("REJECT disclosure-fixture-unbound: the fixture digest is not the candidate-source blob digest")
+    return data
+
+
+def load_disclosure(root: pathlib.Path = ROOT, bind: bool = True) -> dict:
+    raw = bounded_file(root / DISCLOSURE_PATH, MAX_DISCLOSURE_BYTES, "disclosure-input")
+    return validate_disclosure(strict_json(raw, "disclosure-input"), root, bind)
+
+
+def disclosure_paragraphs(disclosure: dict, version: str) -> list[str]:
+    """The ledger paragraphs, each followed by the blank separator line."""
+    h = disclosure["historical"]
+    block = (
+        f"**The historical evidence for the DMG performance limitation:** the archived {h['comparison_release']} performance receipt\n"
+        f"compares candidate source `{h['candidate_source']}` with\n"
+        f"baseline source `{h['baseline_source']}`. Its\n"
+        f"`{h['workload']}` workload uses {h['model']},\n"
+        f"`{h['fixture']['path']}` (SHA-256\n"
+        f"`{h['fixture']['sha256']}`), a\n"
+        f"{h['half_dot_budget']:,} half-dot budget, and correctness digest `{h['correctness_digest']}`. The\n"
+        f"{h['platform']} comparison used {h['paired_samples']} paired samples after {h['warmups']} warmups and recorded\n"
+        f"**+{h['delta_percent']}% slower** with an approximate 95% mean margin of ±{h['margin_percent']}%; the historical\n"
+        f"disposition was `{h['disposition']}`. This source-bound result\n"
+        "is not a current approval, fresh result, or equivalent-speed claim.")
+    paragraphs = [block, ""]
+    interpretation = disclosure["current_interpretation"]
+    after = tuple(int(part) for part in interpretation["applies_after_version"].split("."))
+    if tuple(int(part) for part in version.split(".")) > after:
+        paragraphs.extend([interpretation["text"], ""])
+    return paragraphs
+
+
+def refuse_tagged_target(root: pathlib.Path, version: str, target: pathlib.Path, default_target: pathlib.Path) -> None:
+    """--write-current must never rewrite the tracked ledger of a release that already has its tag."""
+    if target.resolve() != default_target.resolve():
+        return
+    result = subprocess.run(["git", "rev-parse", "--verify", "-q", f"refs/tags/v{version}^{{commit}}"], cwd=root,
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            check=False, timeout=10, env=git_environment())
+    if result.returncode == 0:
+        fail(f"REJECT ledger-target-tagged: v{version} is already tagged; its tracked ledger bytes are historical "
+             "(write a disposable preview with --output)")
+
+
 # RM-028 / D-19: the tagged ledgers must be fixed points of the actual generator. A ledger is accepted as
 # generated only when rendering its own structured data reproduces its exact bytes, so any hand edit outside
 # the generator (including a hand-inserted performance disclosure) is rejected.
@@ -2652,9 +2821,9 @@ def first_difference(expected: bytes, observed: bytes) -> str:
     return "none"
 
 
-def require_generated(raw: bytes, label: str, version: str) -> bytes:
+def require_generated(raw: bytes, label: str, version: str, disclosure: dict) -> bytes:
     """The bytes the actual generator renders from this ledger's own structured data; they must equal the ledger."""
-    generated = render_v2_ledger(parse_ledger(raw, version)).encode("utf-8")
+    generated = render_v2_ledger(parse_ledger(raw, version), disclosure).encode("utf-8")
     if generated != raw:
         fail(f"REJECT ledger-not-generated: {label} is not the exact generator output "
              f"(first difference at {first_difference(generated, raw)})")
@@ -2684,10 +2853,17 @@ def run_adoption_over_ledger(ledger_rel: str, ledger_raw: bytes, root: pathlib.P
         fail(f"REJECT adoption-rejected: {ledger_rel}: " + (result.stderr.strip() or result.stdout.strip()))
 
 
+def require_tagged(root: pathlib.Path, ledger_rel: str, tag: str, raw: bytes) -> None:
+    blob = immutable_git_file(root, tag_commit(root, tag), ledger_rel, MAX_LEDGER_BYTES)
+    if blob != raw:
+        fail(f"REJECT tagged-ledger-changed: {ledger_rel} differs from the {tag} tag blob")
+
+
 def check_disclosure_generator(root: pathlib.Path = ROOT) -> tuple[int, int]:
     """Tagged ledgers are unchanged tag bytes, are generator fixed points and pass the adoption verifier."""
     checked = 0
     tagged = 0
+    disclosure = load_disclosure(root)
     tree_ledger_rel = tree_ledger(root)
     paths = list(DISCLOSED_LEDGERS)
     if tree_ledger_rel not in {entry[0] for entry in paths}:
@@ -2696,15 +2872,149 @@ def check_disclosure_generator(root: pathlib.Path = ROOT) -> tuple[int, int]:
         version = ledger_version(ledger_rel)
         raw = bounded_file(root / ledger_rel, MAX_LEDGER_BYTES, "ledger")
         if tag is not None:
-            blob = immutable_git_file(root, tag_commit(root, tag), ledger_rel, MAX_LEDGER_BYTES)
-            if blob != raw:
-                fail(f"REJECT tagged-ledger-changed: {ledger_rel} differs from the {tag} tag blob")
+            require_tagged(root, ledger_rel, tag, raw)
             tagged += 1
-        require_generated(raw, ledger_rel, version)
+        require_generated(raw, ledger_rel, version, disclosure)
         checked += 1
     tree_raw = bounded_file(root / tree_ledger_rel, MAX_LEDGER_BYTES, "ledger")
     run_adoption_over_ledger(tree_ledger_rel, tree_raw, root)
     return checked, tagged
+
+
+def self_test_disclosure(root: pathlib.Path = ROOT) -> tuple[int, int]:
+    """Positive generator checks plus discriminating omission, value, source and handwritten-bypass controls.
+
+    Every negative control must be rejected with its own diagnostic; an unrelated positive control runs
+    alongside so a crash or setup failure cannot be mistaken for a semantic rejection.
+    """
+    positives = 0
+    controls = 0
+    disclosure = load_disclosure(root)
+    positives += 1
+    checked, tagged = check_disclosure_generator(root)
+    if checked < 2 or tagged < 1:
+        fail("disclosure self-test selected too few historical ledgers")
+    positives += 1
+
+    ledger_rel = "docs/support/v0.2.1.md"
+    raw = bounded_file(root / ledger_rel, MAX_LEDGER_BYTES, "ledger")
+    data = parse_ledger(raw, "0.2.1")
+    text = raw.decode("utf-8")
+    historical_block = disclosure_paragraphs(disclosure, "0.2.1")[0]
+    if historical_block not in text:
+        fail("the generated historical block is absent from the tagged ledger")
+
+    # The current advisory interpretation is rendered only for ledgers after the last tagged version, and the
+    # rendered ledger still passes the downstream adoption verifier (the unrelated passing control).
+    current = render_v2_ledger({**data, "version": "0.2.2"}, disclosure)
+    interpretation = disclosure["current_interpretation"]["text"]
+    if interpretation not in current or interpretation in text:
+        fail("the current interpretation is not scoped to ledgers after the tagged version")
+    if current.count(historical_block) != 1:
+        fail("a later ledger lost or duplicated the historical block")
+    run_adoption_over_ledger(ledger_rel, current.encode("utf-8"), root)
+    positives += 1
+
+    def expect_rejected(name: str, action, reason: str) -> None:
+        nonlocal controls
+        try:
+            action()
+        except ValueError as error:
+            if reason not in str(error):
+                fail(f"disclosure control {name} was rejected for the wrong reason: {error}")
+        else:
+            fail(f"disclosure control {name} was accepted")
+        controls += 1
+
+    def mutated(change) -> dict:
+        value = copy.deepcopy(disclosure)
+        change(value)
+        return value
+
+    def validate(value: object, bind: bool = True):
+        return lambda: validate_disclosure(value, root, bind)
+
+    # Input omission, unclassified fields and malformed values.
+    expect_rejected("omit-historical-block", validate(mutated(lambda v: v.pop("historical"))),
+                    "disclosure-input-invalid")
+    expect_rejected("omit-paired-samples", validate(mutated(lambda v: v["historical"].pop("paired_samples"))),
+                    "disclosure-input-invalid")
+    expect_rejected("omit-interpretation", validate(mutated(lambda v: v.pop("current_interpretation"))),
+                    "disclosure-input-invalid")
+    expect_rejected("unclassified-readiness-field",
+                    validate(mutated(lambda v: v["historical"].update(approved=True))), "unclassified field")
+    expect_rejected("boolean-for-count",
+                    validate(mutated(lambda v: v["historical"].update(warmups=True))), "warmups")
+    expect_rejected("interpretation-drops-advisory-status",
+                    validate(mutated(lambda v: v["current_interpretation"].update(text="Timing is fine."))),
+                    "interpretation text must state")
+    expect_rejected("duplicate-json-key",
+                    lambda: strict_json(b'{"schema_version": 1, "schema_version": 1}', "disclosure-input"),
+                    "duplicate JSON key")
+
+    # Source binding: identities must be the tagged commits and the fixture digest the candidate-source blob.
+    expect_rejected("unbound-candidate-source",
+                    validate(mutated(lambda v: v["historical"].update(
+                        candidate_source=v["historical"]["baseline_source"]))), "disclosure-source-unbound")
+    expect_rejected("unbound-baseline-source",
+                    validate(mutated(lambda v: v["historical"].update(
+                        baseline_source=v["historical"]["candidate_source"]))), "disclosure-source-unbound")
+    expect_rejected("unbound-fixture-digest",
+                    validate(mutated(lambda v: v["historical"]["fixture"].update(sha256="0" * 64))),
+                    "disclosure-fixture-unbound")
+    expect_rejected("missing-release-tag",
+                    validate(mutated(lambda v: v["historical"].update(comparison_release="v9.9.9"))),
+                    "tag-missing")
+
+    # A rewritten historical metric is well-formed input, so only the exact-bytes comparison and the
+    # downstream adoption verifier can reject it.
+    altered = mutated(lambda v: v["historical"].update(delta_percent="14.87"))
+    validate_disclosure(altered, root)
+    altered_ledger = render_v2_ledger(data, altered).encode("utf-8")
+    expect_rejected("altered-historical-value",
+                    lambda: require_tagged(root, ledger_rel, "v0.2.1", altered_ledger), "tagged-ledger-changed")
+    expect_rejected("altered-historical-value-adoption",
+                    lambda: run_adoption_over_ledger(ledger_rel, altered_ledger, root),
+                    "historical-performance-disclosure-missing")
+
+    # Omission: a ledger regenerated without the block fails adoption; the fixed point also fails.
+    omitted = text.replace(historical_block + "\n\n", "", 1).encode("utf-8")
+    if omitted == raw:
+        fail("the omission control did not remove the block")
+    expect_rejected("omitted-disclosure-adoption",
+                    lambda: run_adoption_over_ledger(ledger_rel, omitted, root),
+                    "historical-performance-disclosure-missing")
+    expect_rejected("omitted-disclosure-not-generated",
+                    lambda: require_generated(omitted, ledger_rel, "0.2.1", disclosure), "ledger-not-generated")
+
+    # Handwritten-success bypass: every required phrase is present, so adoption passes, but the bytes are not
+    # generator output and the fixed point rejects them.
+    reworded = text.replace("## Reconciled prior scope entries", "## Reconciled earlier scope entries", 1).encode("utf-8")
+    run_adoption_over_ledger(ledger_rel, reworded, root)
+    expect_rejected("handwritten-prose-edit",
+                    lambda: require_generated(reworded, ledger_rel, "0.2.1", disclosure), "ledger-not-generated")
+    relocated = text.replace(historical_block + "\n\n", "", 1) + "\n" + historical_block + "\n"
+    run_adoption_over_ledger(ledger_rel, relocated.encode("utf-8"), root)
+    expect_rejected("handwritten-disclosure-relocated",
+                    lambda: require_generated(relocated.encode("utf-8"), ledger_rel, "0.2.1", disclosure),
+                    "ledger-not-generated")
+
+    # Tagged bytes: a tracked tagged ledger that differs from its tag blob in a single byte is rejected.
+    flipped = bytearray(raw)
+    flipped[100] ^= 1
+    expect_rejected("tagged-ledger-byte-flip",
+                    lambda: require_tagged(root, ledger_rel, "v0.2.1", bytes(flipped)), "tagged-ledger-changed")
+
+    # --write-current may not rewrite the tracked ledger of a tagged release, but a disposable output and an
+    # untagged version are accepted.
+    default_target = root / ledger_rel
+    expect_rejected("write-current-tagged-target",
+                    lambda: refuse_tagged_target(root, "0.2.1", default_target, default_target),
+                    "ledger-target-tagged")
+    refuse_tagged_target(root, "0.2.1", root / "build/disclosure-preview.md", default_target)
+    refuse_tagged_target(root, "9.9.9", root / "docs/support/v9.9.9.md", root / "docs/support/v9.9.9.md")
+    positives += 1
+    return positives, controls
 
 
 def main() -> int:
@@ -2732,6 +3042,7 @@ def main() -> int:
                         help="receipt-free check of the tracked ledger for this tree's version against its covered source inputs")
     parser.add_argument("--check-disclosure", action="store_true",
                         help="the tagged ledgers are unchanged tag bytes and exact generator output (RM-028, D-19)")
+    parser.add_argument("--self-test-disclosure", action="store_true")
     parser.add_argument("--write-current", action="store_true")
     parser.add_argument("--receipt", type=pathlib.Path)
     parser.add_argument("--attached-evidence", action="store_true",
@@ -2756,6 +3067,8 @@ def main() -> int:
             self_test_v2()
             self_test_v2_sidecar()
             self_test_static_ledger()
+            positives, controls = self_test_disclosure()
+            print(f"release-disclosure controls pass positives={positives} controls={controls}")
             return 0
         if args.print_version:
             print(tree_version())
@@ -2793,6 +3106,10 @@ def main() -> int:
                   " matched-xfails=" + str(counts["matched_xfail_cases"]) +
                   " assertions=" + str(counts["assertions"]))
             return 0
+        if args.self_test_disclosure:
+            positives, controls = self_test_disclosure()
+            print(f"release-disclosure controls pass positives={positives} controls={controls}")
+            return 0
         if args.check_disclosure:
             checked, tagged = check_disclosure_generator()
             print(f"release-disclosure generator pass ledgers={checked} tagged={tagged}")
@@ -2800,7 +3117,7 @@ def main() -> int:
         if args.write_current:
             if not args.receipt:
                 parser.error("--write-current requires --receipt PATH")
-            data = create_current_ledger(args.receipt)
+            data = create_current_ledger(args.receipt, args.output)
             counts = data["receipt"]["counts"]
             print("support-ledger wrote version=" + data["version"] + " cases=" +
                   str(counts["completed_cases"]) +

@@ -135,3 +135,7 @@ fixtures/magentests/*.gbc binary
 # v03_dispositions; they must hash identically on Windows checkouts (basename patterns avoid spelling the phases path).
 16-release-readback.json text eol=lf
 16-pr-closures.json text eol=lf
+# The release disclosure generator input and the version-window record are digest-bound by the window checker (17-08);
+# they must hash identically in an autocrlf Windows checkout.
+tests/data/release-disclosure.json text eol=lf
+tests/data/version-window.json text eol=lf

@@ -1466,6 +1466,19 @@ gbb_add_ledger_contract(support_ledger_binding_controls
   [=[support-ledger binding self-test pass controls=[0-9]+]=]
   --self-test-binding)
 unset(GBB_LEDGER_MIN)
+# Phase 17 RM-028 / D-19 (17-08): the historical performance disclosure is generator output rendered from the validated,
+# source-bound tests/data/release-disclosure.json. The generator test requires the tagged ledgers to be unchanged tag
+# bytes, exact generator fixed points and accepted by the adoption verifier; the controls reject input omission, a
+# rewritten historical value, unbound sources, a handwritten-success bypass and rewriting a tagged ledger (both read
+# the v0.2.0/v0.2.1 tags the full-suite jobs fetch).
+gbb_add_ledger_contract(release_disclosure_generator
+  [=[release-disclosure generator pass ledgers=[2-9] tagged=[1-9]]=]
+  --check-disclosure)
+set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=15)
+gbb_add_ledger_contract(release_disclosure_controls
+  [=[release-disclosure controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  --self-test-disclosure)
+unset(GBB_LEDGER_MIN)
 # Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
 # so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
 gbb_add_v02_contract(v02_consumer_controls_c 600
