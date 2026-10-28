@@ -1103,8 +1103,7 @@ def c_missing_gate(ctx: Context) -> str:
     mutated = mutate_script(ctx.script, f"# BEGIN final-gate\n{FINAL_GATE_LINE}\n", "# BEGIN final-gate\ntrue\n")
     for variant, text in (("real", ctx.script), ("mutant", mutated)):
         s = ctx.scenario(f"missing-gate-{variant}", "finalized")
-        publish = publish_from(ctx, s, script=text)
-        require_ok({"validate-draft": s.run_mode(publish, "validate-draft", **PUBLISH_ENV)}, "missing-gate setup (identical final metadata is reused)")
+        publish = s.subject_workspace("publish", text)
         # a hostile writer replaces the final receipt after the upload (the row digest follows the replacement)
         receipt = json.loads(s.asset_bytes("release-receipt.json"))
         receipt["source_sha"] = "0" * 40
@@ -1166,9 +1165,7 @@ def c_live_publication(ctx: Context) -> str:
     publish_line = 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag'
     mutated = mutate_script(ctx.script, publish_line, publish_line + " --latest")
     s = ctx.scenario("live-publication", "finalized")
-    publish = publish_from(ctx, s, script=mutated)
-    require_ok({"validate-draft": s.run_mode(publish, "validate-draft", **PUBLISH_ENV),
-                "final-gate": s.run_mode(publish, "final-gate", **PUBLISH_ENV)}, "live-publication setup")
+    publish = s.subject_workspace("publish", mutated)
     outcome = s.run_mode(publish, "publish-draft", **PUBLISH_ENV)
     if outcome.rc == 0 or "only as the one publish command" not in outcome.err or s.state()["decisions"] or not s.state()["release"]["draft"]:
         raise Reject("control-wrong-reason", "a publish command other than the intercepted one was not refused")
@@ -1504,8 +1501,7 @@ def rewrite_sums(s: Scenario, change) -> None:
 
 def sums_control(ctx: Context, label: str, needle: str, change) -> str:
     s = ctx.scenario("sums-" + label, "finalized")
-    ws = publish_from(ctx, s)
-    require_ok({"validate-draft": s.run_mode(ws, "validate-draft", **PUBLISH_ENV)}, "sums setup (identical final metadata is reused)")
+    ws = s.subject_workspace("publish")  # the final gate reads the live draft itself; it needs only the tag checkout and trusted/
     rewrite_sums(s, change)
     outcome = s.run_mode(ws, "final-gate", **PUBLISH_ENV)
     expect_fail(outcome, label, needle)
@@ -1656,12 +1652,13 @@ def c_downstream_refusals(ctx: Context) -> list[str]:
     """Evidence that passes the independent check is still judged downstream; every refusal precedes the publish decision."""
     results: list[str] = []
 
-    def stage(label: str, tamper, mode: str, needle: str, from_stage: str = "attached") -> None:
+    def stage(label: str, tamper, mode: str, needle: str, from_stage: str = "attached", attach_first: bool = True) -> None:
         s = retry_scenario(ctx, "downstream-" + label, from_stage)
         tamper(s)
         if mode == "validate-evidence":
-            ws, outcome, _ = retry_attach(ctx, s, label)
-            require_ok({"retry attach": outcome}, label)
+            if attach_first:
+                ws, outcome, _ = retry_attach(ctx, s, label)
+                require_ok({"retry attach": outcome}, label)  # identity-valid evidence passes the independent check
             ws = s.subject_workspace("m")
             outcome = s.run_mode(ws, "validate-evidence", **RETRY_ENV)
         elif mode == "build-manifest":
@@ -1680,7 +1677,7 @@ def c_downstream_refusals(ctx: Context) -> list[str]:
           lambda s: edit_json_asset(s, "v02-fuzz-receipt.json", lambda v: v.update(status="incomplete")),
           "validate-evidence", "campaign is not a complete exploration")
     stage("a consumer receipt of another source", lambda s: edit_json_asset(s, "v02-consumer-receipt.json", lambda v: v.update(source_sha="0" * 40)),
-          "validate-evidence", "downloaded C and C++ consumer receipt is malformed or not bound")
+          "validate-evidence", "downloaded C and C++ consumer receipt is malformed or not bound", attach_first=False)
     stage("a required platform asset removed", lambda s: s.remove_asset("gabbaboy-notices.txt"), "build-manifest", "candidate asset set mismatch")
     stage("an unknown extra asset at the manifest step", _extra_asset, "build-manifest", "candidate asset set mismatch")
     stage("final receipts without a platform manifest", lambda s: (s.add_asset("SHA256SUMS", b"x\n"), s.add_asset("release-receipt.json", b"{}\n")),
