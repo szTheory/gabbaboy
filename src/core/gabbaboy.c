@@ -2856,6 +2856,7 @@ static void write8(gbb_instance *m, uint16_t address, uint8_t value) {
             m->ly = 0;
             ppu_set_mode(m, 0);
             m->ppu_selected_object_count = 0;
+            m->ppu_objects_stalled = 0; /* cleared with the selection; see ppu_begin_object_scan */
             m->ppu_window_line = 0;
             m->ppu_window_line_drawn = 0;
             m->ppu_transfer_complete = 0;
@@ -3244,8 +3245,16 @@ static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
 }
 
 /* MODEL: BOTH GATE-00 basis=model-neutral */
+/* ppu_objects_stalled marks which selected objects have already stalled this line's
+ * mode 3, indexed by selection slot, so it is only meaningful together with the
+ * selection made by this scan. Clear it whenever the selection is cleared. Nothing
+ * reads it before ppu_begin_transfer, which also clears it at dot 80, so clearing it
+ * here changes no rendering or timing. It only stops slot bits from the previous
+ * line outliving their selection through mode 2 (or through LCD off), which made a
+ * live machine fail the stalled-bits-within-selected-count state invariant. */
 static void ppu_begin_object_scan(gbb_instance *m) {
     m->ppu_selected_object_count = 0;
+    m->ppu_objects_stalled = 0;
     m->ppu_scan_index = 0;
 }
 
