@@ -59,6 +59,7 @@ jobs:
     needs: asan-full-replay
     if: ${{ failure() || (always() && inputs.report_red_dry_run) }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     permissions:
       issues: write
     steps:
