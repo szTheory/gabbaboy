@@ -123,6 +123,10 @@ python3 -I tests/scripts/verify-version-window.py --rev REV_SHA --base MAIN_SHA 
   --check tests/data/version-window.json --body pr-body.md
 ```
 
+The PR body is compared after normalizing line endings and trailing newlines
+(`gh`, the API and the web editor differ in both); every other byte of it is
+reviewed content.
+
 `--rev` and `--base` are full 40-hex commits. The record, the generator inputs and
 the regenerated files are read from Git objects at `--rev`, so the working tree
 is never a fallback. The checker proves content bindings only; the recorded run
@@ -131,6 +135,43 @@ this script, authenticate. The `release_window_contract` and
 `release_window_controls` tests cover the tracked record and the body-overwrite,
 stale-head, stale-input, changed-path, regeneration-mismatch and revalidation
 cases.
+
+### Production regeneration route and operator sequence
+
+The `version-window` job in `.github/workflows/release-please.yml` runs after the
+`release` job, on every push to main, so it judges the version PR that
+release-please has just regenerated. With no open version PR, or with the
+inactive record (the normal state), it passes and the existing release policy is
+unchanged. With an active record it runs the checker from the trusted main
+commit against the version-PR head, which is checked out as data and never
+executed, and the job fails while the freeze is broken. It cannot be skipped by
+a failed release job, a paths filter on the trigger, a masked failure
+(`|| true`, `continue-on-error`) or a path exclusion in
+`release-please-config.json`; `.github/scripts/verify-workflow-policy.py`
+enforces each of these. A regenerated body, a moved main or any changed source,
+release note or generator input therefore invalidates the old reviewed digests
+rather than preserving stale hand edits. Phase 17 does not open, regenerate or
+merge a live version PR and ships only the inactive record.
+
+For a future version PR, in order:
+
+1. Let release-please regenerate the PR, then render the ledger with
+   `--write-current` from the managed inputs; commit no hand-edited generated
+   file.
+2. Run the required checks on that exact head and push the matching
+   `rehearsal/vX.Y.Z` branch for the rehearsal.
+3. When both are green on the same head, run `--digest` for that head, main and
+   the PR body, fill in the run identities, and commit only the resulting
+   `tests/data/version-window.json` as the next commit. Run `--check` on that
+   commit before asking for merge.
+4. Any later change reopens the work: regenerate, repeat steps 1 to 3 on the new
+   exact head, and merge only a commit whose `--check` passes with the current
+   main.
+
+The six release-bound timeout citations tracked as RM-027 are separate and
+remain an entry blocker for Phase 19; nothing here closes them, and the window
+gate has per-step timeouts because a new job has no completed run to cite in
+`.github/ci-timeouts.json`.
 
 ## Performance measurement and qualification
 

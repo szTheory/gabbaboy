@@ -41,3 +41,69 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+
+  # RM-028 / D-19: the version PR is generated content, so its reviewed window is judged AFTER release-please has
+  # regenerated it. With no open version PR, or an inactive tests/data/version-window.json record (the normal state),
+  # nothing is frozen and this job passes. An active record is judged by the trusted checker from the main commit
+  # against the version-PR head read as Git objects, never run: a regenerated body, a moved main or any changed
+  # source, release note or generator input ends the freeze and fails this job until the record is regenerated and the
+  # exact-head checks and rehearsal are rerun. It must stay fatal; it never opens, regenerates or merges a version PR.
+  # The job has no job-level timeout-minutes because .github/ci-timeouts.json rows cite a completed run of the job itself,
+  # which a new job cannot yet do; every step carries its own bound instead (the workflow policy requires it).
+  version-window:
+    name: version-window-gate
+    needs: [release]
+    if: ${{ !cancelled() && inputs.retry != true }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check out the trusted main commit
+        timeout-minutes: 5
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+      - name: Find the open version PR and its regenerated body
+        timeout-minutes: 5
+        id: discover
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          pr=$(gh pr list --repo "$GH_REPO" --head release-please--branches--main --state open --json number --jq '.[0].number // empty')
+          if [[ -z "$pr" ]]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No open version PR, so no window is frozen."
+            exit 0
+          fi
+          head=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha)
+          gh api "repos/$GH_REPO/pulls/$pr" --jq '.body // ""' > "$RUNNER_TEMP/version-pr-body.md"
+          echo "present=true" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+      - name: Check out the regenerated version PR head as data
+        timeout-minutes: 5
+        if: ${{ steps.discover.outputs.present == 'true' }}
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.discover.outputs.head }}
+          path: version-pr
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Judge the regenerated version PR against its frozen window
+        timeout-minutes: 5
+        env:
+          PRESENT: ${{ steps.discover.outputs.present }}
+          PR_HEAD: ${{ steps.discover.outputs.head }}
+          MAIN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$PRESENT" != true ]]; then
+            echo "No open version PR; normal development keeps the existing release policy."
+            exit 0
+          fi
+          python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" --base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"

@@ -2186,6 +2186,89 @@ def check_rehearsal_flag_scope(root: Path) -> None:
                 raise Reject("rehearsal-flag-scope", f"release-rehearsal.{job_id} must not pass --rehearsal; only the aggregate may")
 
 
+# --------------------------------------------------------------------------- version-PR content window (RM-028, D-19)
+# release-please regenerates the version PR (body, changelog, version files) and the ledger is rendered from managed
+# inputs, so a reviewed window is judged AFTER regeneration by the trusted checker, with the version-PR head read as
+# Git objects and never executed. The gate is fatal, runs even when the release job fails, keeps the push trigger
+# unfiltered and the release-note paths in release-please's own change set. It does not open or merge a version PR.
+WINDOW_WORKFLOW = "release-please.yml"
+WINDOW_JOB = "version-window"
+WINDOW_IF = "${{ !cancelled() && inputs.retry != true }}"
+WINDOW_CHECKER = "tests/scripts/verify-version-window.py"
+WINDOW_RECORD = "tests/data/version-window.json"
+WINDOW_CONFIG = "release-please-config.json"
+WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
+               '--base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
+WINDOW_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
+WINDOW_STEP_TIMEOUT_MAX = 10
+# release-please already ignores its own workflow and script paths when attributing commits; anything wider would hide
+# a source, release-note or generator-input change from the version PR the window freezes.
+WINDOW_EXCLUDED_PATHS_ALLOWED = (".github/workflows", ".github/scripts")
+
+
+def _check_window_config(root: Path) -> None:
+    try:
+        config = json.loads((root / WINDOW_CONFIG).read_text(encoding="utf-8"), object_pairs_hook=_ledger_pairs)
+    except OSError as exc:
+        raise Reject("window-config", f"cannot read {WINDOW_CONFIG}: {exc.strerror}") from exc
+    except (ValueError, Reject) as exc:
+        raise Reject("window-config", f"{WINDOW_CONFIG} is not strict JSON: {exc}") from exc
+    package = config.get("packages", {}).get(".") if isinstance(config, dict) else None
+    if not isinstance(package, dict):
+        raise Reject("window-config", f"{WINDOW_CONFIG} must configure the root package")
+    for scope, holder in (("top level", config), ("root package", package)):
+        excluded = holder.get("exclude-paths", [])
+        if not isinstance(excluded, list) or any(path not in WINDOW_EXCLUDED_PATHS_ALLOWED for path in excluded):
+            raise Reject("window-path-excluded",
+                         f"{WINDOW_CONFIG} {scope} exclude-paths may only be {list(WINDOW_EXCLUDED_PATHS_ALLOWED)}, not {excluded!r}: "
+                         "excluding source, release-note or generator-input paths hides changes from the version PR")
+        if holder.get("skip-changelog") not in (None, False) or holder.get("skip-github-release") not in (None, False):
+            raise Reject("window-config", f"{WINDOW_CONFIG} {scope} may not skip the changelog or the GitHub release")
+    if package.get("changelog-path") != "CHANGELOG.md" or "CMakeLists.txt" not in package.get("extra-files", []):
+        raise Reject("window-config", f"{WINDOW_CONFIG} must keep CHANGELOG.md and the CMakeLists.txt version file under release-please")
+
+
+def check_version_window(root: Path) -> None:
+    name = WINDOW_WORKFLOW
+    tree = read_workflow(root / ".github/workflows" / WINDOW_WORKFLOW)
+    for path in (WINDOW_CHECKER, WINDOW_RECORD):
+        if not (root / path).is_file():
+            raise Reject("window-gate-missing", f"{path} is required by the {WINDOW_JOB} gate and is not in the tree")
+    push = tree.get("on", {}).get("push") if isinstance(tree.get("on"), dict) else None
+    if not isinstance(push, dict) or push.get("branches") != ["main"] or {"paths", "paths-ignore"} & set(push):
+        raise Reject("window-trigger-filtered", f"{name} must start on every push to main; a paths filter would let a relevant change skip regeneration")
+    job = tree["jobs"].get(WINDOW_JOB)
+    if job is None:
+        raise Reject("window-gate-missing", f"{name} has no {WINDOW_JOB} job, so a regenerated version PR is never judged against its window")
+    if _needs(job) != {"release"}:
+        raise Reject("window-gate-order", f"{_where(name, WINDOW_JOB)} must depend on exactly the release job so it judges the PR after regeneration")
+    if str(job.get("if", "")).strip() != WINDOW_IF:
+        raise Reject("window-gate-skipped", f"{_where(name, WINDOW_JOB)} must run with {WINDOW_IF}, so a failed release job cannot skip it")
+    if _permissions(job, tree.get("permissions", {})) != WINDOW_PERMISSIONS:
+        raise Reject("window-gate-permissions", f"{_where(name, WINDOW_JOB)} needs exactly {WINDOW_PERMISSIONS}")
+    _check_checkout_credentials(name, tree, (WINDOW_JOB,))
+    checkouts = _checkouts(job)
+    by_path = {step.get("with", {}).get("path"): step.get("with", {}) for step in checkouts}
+    if len(checkouts) != 2 or set(by_path) != {"trusted", "version-pr"}:
+        raise Reject("window-gate-trust", f"{_where(name, WINDOW_JOB)} needs exactly a trusted checkout and a version-pr data checkout")
+    if by_path["trusted"].get("ref") != TRUSTED_SHA_REF:
+        raise Reject("window-gate-trust", f"{_where(name, WINDOW_JOB)} must take the checker from the trusted main commit {TRUSTED_SHA_REF}")
+    if str(by_path["version-pr"].get("fetch-depth", "")) != "0":
+        raise Reject("window-gate-history", f"{_where(name, WINDOW_JOB)} needs the full history of the version PR to prove ancestry")
+    for step in job.get("steps", []):
+        minutes = str(step.get("timeout-minutes", ""))
+        if not minutes.isdigit() or not 1 <= int(minutes) <= WINDOW_STEP_TIMEOUT_MAX:
+            raise Reject("window-gate-timeout", f"{_where(name, WINDOW_JOB)} step {step.get('name', '?')!r} needs a timeout-minutes of at most {WINDOW_STEP_TIMEOUT_MAX}")
+    _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
+    _check_bounded_downloads(name, tree)
+    require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
+    _check_window_config(root)
+
+
+
 def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_producer_script(root)
     check_rehearsal_flag_scope(root)
@@ -2196,6 +2279,7 @@ def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_readonly_workflows(root)
     check_preview_player_lane(root)
     check_release(root)
+    check_version_window(root)
     check_timeout_ledger(root, release_head)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
@@ -2210,7 +2294,7 @@ def _copy_fixture(root: Path, target: Path) -> None:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
-    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt"):
+    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD):
         if (root / extra).is_file():
             (target / extra).parent.mkdir(parents=True, exist_ok=True)
             (target / extra).write_bytes((root / extra).read_bytes())
@@ -2756,6 +2840,51 @@ def _mutations():
 
 
 
+def _window_mutations():
+    """Version-window gate wiring (RM-028): each defect must be rejected with its own code while the baseline passes."""
+    rp = WINDOW_WORKFLOW
+    window = f"  {WINDOW_JOB}:\n"
+    return [
+        _m("W17-01 window gate job removed", rp, "", window, "  version-window-renamed:\n", "window-gate-missing"),
+        _m("W17-02 gate no longer waits for regeneration", rp, window, "needs: [release]", "needs: []", "window-gate-order"),
+        _m("W17-03 gate skipped when the release job fails", rp, window, "if: ${{ !cancelled() && inputs.retry != true }}",
+           "if: ${{ success() && inputs.retry != true }}", "window-gate-skipped"),
+        _m("W17-04 gate disabled by a constant condition", rp, window, "if: ${{ !cancelled() && inputs.retry != true }}",
+           "if: ${{ false }}", "window-gate-skipped"),
+        _m("W17-05 gate gains write authority", rp, window, "pull-requests: read", "pull-requests: write", "window-gate-permissions"),
+        _m("W17-06 version PR checkout persists credentials", rp, "path: version-pr\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("W17-07 checker taken from the version PR head", rp, "name: Check out the trusted main commit\n", "ref: ${{ github.sha }}",
+           "ref: ${{ steps.discover.outputs.head }}", "window-gate-trust"),
+        _m("W17-08 version PR history shallow", rp, "path: version-pr\n", "fetch-depth: 0", "fetch-depth: 1", "window-gate-history"),
+        _m("W17-09 step without a timeout", rp, "name: Judge the regenerated version PR against its frozen window\n",
+           "        timeout-minutes: 5\n", "", "window-gate-timeout"),
+        _m("W17-10 window validation call removed", rp, "Judge the regenerated version PR against its frozen window", WINDOW_CALL,
+           'echo "window judged"', "required-command-not-executed"),
+        _m("W17-11 fake green stale window (|| true)", rp, "Judge the regenerated version PR against its frozen window", WINDOW_CALL,
+           WINDOW_CALL + " || true", "required-command-not-executed"),
+        _m("W17-12 fake green stale window (continue-on-error)", rp, "name: Judge the regenerated version PR against its frozen window\n",
+           "        timeout-minutes: 5\n", "        timeout-minutes: 5\n        continue-on-error: true\n", "ignored-gate"),
+        _m("W17-13 judge compares against the PR head as base", rp, "Judge the regenerated version PR against its frozen window",
+           '--base "$MAIN_SHA"', '--base "$PR_HEAD"', "required-command-not-executed"),
+        _m("W17-14 judge stops reading the regenerated body", rp, "Judge the regenerated version PR against its frozen window",
+           ' --body "$RUNNER_TEMP/version-pr-body.md"', "", "required-command-not-executed"),
+        _m("W17-15 judge runs the version PR's own checker", rp, "Judge the regenerated version PR against its frozen window",
+           "python3 -I trusted/tests/scripts/verify-version-window.py", "python3 -I version-pr/tests/scripts/verify-version-window.py",
+           "required-command-not-executed"),
+        _m("W17-16 release-please push trigger path-filtered", rp, "", "    branches: [main]\n",
+           "    branches: [main]\n    paths-ignore: [CHANGELOG.md]\n", "window-trigger-filtered"),
+        _m("W17-17 blanket path exclusion", "config", "", '"exclude-paths": [".github/workflows", ".github/scripts"]',
+           '"exclude-paths": [".github/workflows", ".github/scripts", "."]', "window-path-excluded"),
+        _m("W17-18 release-note path excluded", "config", "", '"exclude-paths": [".github/workflows", ".github/scripts"]',
+           '"exclude-paths": [".github/workflows", ".github/scripts", "docs/support"]', "window-path-excluded"),
+        _m("W17-19 changelog skipped", "config", "", '"include-v-in-tag": true,', '"include-v-in-tag": true,\n      "skip-changelog": true,',
+           "window-config"),
+        _m("W17-20 changelog path moved", "config", "", '"changelog-path": "CHANGELOG.md"', '"changelog-path": "docs/CHANGELOG.md"',
+           "window-config"),
+    ]
+
+
 def _ledger_edit(fixture: Path, edit) -> None:
     path = fixture / LEDGER_PATH
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -2855,11 +2984,14 @@ def self_test(root: Path) -> None:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
         baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
+        baselines["config"] = (fixture / WINDOW_CONFIG).read_text(encoding="utf-8")
 
         def target(workflow: str) -> Path:
+            if workflow == "config":
+                return fixture / WINDOW_CONFIG
             return fixture / (PRODUCER_SCRIPT if workflow == "script" else f".github/workflows/{workflow}")
 
-        for label, workflow, edits, expected in _mutations():
+        for label, workflow, edits, expected in (*_mutations(), *_window_mutations()):
             text = baselines[workflow]
             for after, old, replacement in edits:
                 split = text.find(after) if after else 0

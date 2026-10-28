@@ -69,6 +69,12 @@ def digest(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def canonical_body(raw: bytes) -> bytes:
+    """The PR body as GitHub stores it varies in line endings and trailing newlines between the API, the web editor and
+    `gh`; those carry no meaning. Every other byte is part of the reviewed content."""
+    return raw.replace(b"\r\n", b"\n").rstrip(b"\n")
+
+
 def git_environment() -> dict:
     environment = os.environ.copy()
     environment.update({
@@ -317,7 +323,7 @@ def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes 
             reject("window-generated-changed", f"{path} is not the reviewed generated content")
     if body is None:
         reject("window-body-unsupplied", "an active window needs the current version-PR body (--body)")
-    if digest(body) != record["generated"]["pr_body_sha256"]:
+    if digest(canonical_body(body)) != record["generated"]["pr_body_sha256"]:
         reject("window-body-overwritten", "the version-PR body differs from the reviewed body (regenerated or edited)")
     return (f"version-window active pass version={version} head={head[:12]} rev={rev[:12]} "
             f"inputs={len(record['managed_inputs'])} generated={len(record['generated']['files'])}")
@@ -349,7 +355,7 @@ def draft_record(repo: Path, rev: str, base: str, body: bytes | None, pull_reque
         "intended": {"head": rev, "base": base},
         "managed_inputs": dict(sorted(inputs.items())),
         "generated": {"files": dict(sorted(files.items())),
-                      "pr_body_sha256": digest(body) if body is not None else None},
+                      "pr_body_sha256": digest(canonical_body(body)) if body is not None else None},
         "review": {"head": rev, "pull_request": pull_request, "ci_run_id": ci_run_id},
         "rehearsal": {"head": rev, "ref": f"rehearsal/v{version}", "run_id": rehearsal_run_id},
     }
@@ -525,6 +531,12 @@ def self_test() -> tuple[int, int]:
                  "window-record-missing")
         rejected("absolute-record-path", lambda: check_window(repo, frozen, base, "/etc/passwd", body),
                  "window-path-invalid")
+
+        # Line endings and trailing newlines of the PR body carry no meaning; every other byte does.
+        accepted("body-crlf-and-trailing-newline-equivalent",
+                 lambda: check(frozen, base, body.replace(b"\n", b"\r\n") + b"\r\n\r\n"))
+        rejected("body-one-word-changed", lambda: check(frozen, base, body.replace(b"generated", b"edited")),
+                 "window-body-overwritten")
 
         # Body overwrite: release-please regenerated or a human edited the PR body.
         rejected("body-overwritten", lambda: check(frozen, base, b"## 0.2.2\n\n- regenerated entry\n"),
