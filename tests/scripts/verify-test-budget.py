@@ -23,7 +23,13 @@ Contract:
 * ``--base REV`` also reads the allowlist at REV (absent there means first seeding), rejects a raised
   ceiling, and resolves every row's ref at REV only: a LESSONS heading token, a DECISIONS D-NNN id or a
   plan id whose PLAN.md path exists at REV. A ref added only in the head commit does not resolve, so a PR
-  cannot certify its own row. An unreadable REV fails closed. Without --base refs are checked for syntax.
+  cannot certify its own row. An unreadable REV fails closed, and REV must be a full 40-hex commit id, so
+  what is judged cannot move between reads. Without --base refs are checked for syntax.
+* With ``--base`` every row that is new relative to the base allowlist (WR-04) is bounded too. Its ceiling may
+  not exceed ``NEW_ROW_CEILING_MAX``, the sanitizer-scaled base budget (3 x 60 s) this contract already names
+  as the budget that fits the hosted sanitizer limit, and its ref may not be a citation that already backs a
+  base row, so copying an existing reference cannot grant a new test an unbounded timeout. A new row cites its
+  own LESSONS id, DECISIONS id or plan id, which must already resolve at the base.
 * The success line prints tests=N once; the CTest pins a floor on N. A non-gating ``slowest:`` block lists
   the ten largest budgets. The CGB GB-CI-007 output parser is not extended.
 
@@ -49,6 +55,9 @@ ALLOWLIST_REL = "tests/ci/test-budget-allowlist"
 BASE_LIMIT_SECONDS = 60
 SANITIZER_SCALE = 3
 SLOWEST_COUNT = 10
+# A new row's ceiling: the scaled budget the module docstring names, derived from the two constants above, not a new quota.
+NEW_ROW_CEILING_MAX = SANITIZER_SCALE * BASE_LIMIT_SECONDS
+FULL_COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 LESSON_REF = re.compile(r"^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-[0-9]{3}$")
 DECISION_REF = re.compile(r"^D-[0-9]{3}$")
@@ -110,8 +119,9 @@ class BaseView:
         self.repo = repo
         self.rev = rev
         verify = git(repo, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}")
-        if verify.returncode != 0:
+        if verify.returncode != 0 or not FULL_COMMIT.match(verify.stdout.strip()):
             raise BudgetError(f"REJECT base-unreadable: {rev} is not a commit in {repo}")
+        self.rev = verify.stdout.strip()
         self._lessons: str | None = None
         self._decisions: str | None = None
         self._plan_paths: set[str] | None = None
@@ -181,6 +191,13 @@ def evaluate(tests: dict[str, float | None], rows: dict[str, Row], *, player_on:
         if base_rows is not None and name in base_rows and row.ceiling > base_rows[name].ceiling:
             findings.append(f"REJECT ceiling-raised: {name} ceiling {row.ceiling} s above base "
                             f"{base_rows[name].ceiling} s")
+        if base_rows is not None and name not in base_rows:
+            if row.ceiling > NEW_ROW_CEILING_MAX:
+                findings.append(f"REJECT new-row-ceiling: {name} is new relative to the base and its ceiling "
+                                f"{row.ceiling} s is above {NEW_ROW_CEILING_MAX} s")
+            if any(row.ref == other.ref for other in base_rows.values()):
+                findings.append(f"REJECT new-row-ref-reused: {name} is new relative to the base and cites {row.ref}, "
+                                "which already backs a base row; a new row cites its own reference")
     return findings, skipped, partial_skipped
 
 
@@ -317,6 +334,29 @@ def self_test() -> int:
     # Ratchet against the base allowlist.
     expect("raised", judge({"a": 120.0}, [row("a", 180)], base_rows={"a": row("a", 120)})[0], "ceiling-raised")
     expect("lowered", judge({"a": 120.0}, [row("a", 120)], base_rows={"a": row("a", 180)})[0], None)
+    # New rows against the base allowlist (WR-04): every new row is bounded, including one that copies an existing ref.
+    base_a = {"a": row("a", 600)}
+    expect("existing row at a large ceiling stays valid", judge({"a": 600.0}, [row("a", 600)], base_rows=base_a)[0], None)
+    expect("new row within the bound with its own ref", judge({"a": 600.0, "n": 120.0},
+           [row("a", 600), row("n", NEW_ROW_CEILING_MAX, ref="D-107")], base_rows=base_a)[0], None)
+    expect("new row above the bound", judge({"n": 120.0}, [row("n", NEW_ROW_CEILING_MAX + 1, ref="D-107")],
+           base_rows=base_a)[0], "new-row-ceiling")
+    expect("new row at an unbounded timeout citing a reused ref", judge({"n": 3000.0}, [row("n", 3000)],
+           base_rows=base_a)[0], "new-row-ref-reused")
+    expect("new row at an unbounded timeout is also over the bound", judge({"n": 3000.0}, [row("n", 3000)],
+           base_rows=base_a)[0], "new-row-ceiling")
+    expect("new row at a small ceiling still may not reuse a base ref", judge({"n": 120.0}, [row("n", 120)],
+           base_rows=base_a)[0], "new-row-ref-reused")
+    expect("a renamed test is a new row", judge({"b": 120.0}, [row("b", 600)], base_rows=base_a)[0], "new-row-ceiling")
+    expect("two new rows may share one fresh ref", judge({"n": 120.0, "m": 120.0},
+           [row("n", 120, ref="D-107"), row("m", 120, ref="D-107")], base_rows=base_a)[0], None)
+    expect("without a base allowlist (first seeding) rows are not new", judge({"n": 120.0}, [row("n", 600)],
+           base_rows=None)[0], None)
+    # The shipped allowlist judged against itself as the base introduces no new row.
+    live_rows = parse_allowlist((ROOT / ALLOWLIST_REL).read_text(encoding="utf-8"), found := [])
+    expect("the shipped allowlist parses", found, None)
+    expect("the shipped allowlist is not new against itself", judge({name: 30.0 for name in live_rows},
+           list(live_rows.values()), base_rows=live_rows, minor=(0, 0))[0], None)
     # Allowlist parser: malformed, duplicate and ref syntax.
     found: list[str] = []
     parse_allowlist("a\t120\t0.4\tGB-CI-004\n", found)
@@ -385,6 +425,10 @@ def self_test() -> int:
         # A head-only ref resolves once its base is the head: the same row passes at the later base.
         expect("same ref at head base", judge(tests, [row("a", ref="GB-CI-099")],
                                               base=BaseView(repo, head_rev))[0], None)
+        # A symbolic base is resolved to its commit id once, so later reads cannot follow a moved name.
+        pinned = BaseView(repo, "HEAD")
+        assert FULL_COMMIT.match(pinned.rev) and pinned.rev == head_rev
+        controls += 1
         # Fail closed on an unreadable base.
         try:
             BaseView(repo, "0" * 40)
@@ -399,6 +443,19 @@ def self_test() -> int:
         assert BaseView(repo, seeded).allowlist() == "a\t120\t0.4\tGB-CI-004\ttrigger\n"
         controls += 1
 
+    # A symbolic base is refused at the command line before anything is read.
+    import contextlib
+    import io
+    for symbolic in ("HEAD", "main", "refs/heads/main", "abc1234"):
+        with contextlib.redirect_stderr(io.StringIO()) as captured:
+            try:
+                main(["--build-dir", ".", "--base", symbolic])
+            except SystemExit as exc:
+                assert exc.code == 2 and "full 40-hex commit id" in captured.getvalue(), (symbolic, exc.code)
+            else:
+                raise AssertionError(f"a symbolic --base {symbolic!r} was accepted")
+        controls += 1
+
     assert controls >= 10
     print(f"test-budget self-test pass controls={controls}")
     return 0
@@ -407,7 +464,7 @@ def self_test() -> int:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--build-dir", type=Path)
-    parser.add_argument("--base", help="commit holding the allowlist and refs this change is judged against")
+    parser.add_argument("--base", help="full commit id holding the allowlist and refs this change is judged against")
     parser.add_argument("--repo", type=Path, default=ROOT, help="repository root (default: this checkout)")
     parser.add_argument("--allowlist", type=Path)
     parser.add_argument("--ctest", default="ctest", help="ctest executable (CTest passes CMAKE_CTEST_COMMAND)")
@@ -420,6 +477,8 @@ def main(argv: list[str]) -> int:
             return self_test()
         if args.build_dir is None:
             parser.error("--build-dir or --self-test is required")
+        if args.base is not None and not FULL_COMMIT.match(args.base):
+            parser.error("--base must be a full 40-hex commit id, not a name")
         allowlist = args.allowlist or args.repo / ALLOWLIST_REL
         return run_check(args.build_dir, args.base, args.repo, allowlist, args.ctest, args.partial_inventory)
     except BudgetError as exc:

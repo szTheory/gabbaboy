@@ -2892,7 +2892,7 @@ add_test(NAME test_budget_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=test-budget self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=50
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(test_budget_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 # Many allowlisted tests register only under if(NOT WIN32), so a Windows inventory is partial by design and

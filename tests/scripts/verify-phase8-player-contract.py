@@ -8,14 +8,19 @@ Phase 8 evidence boundary rather than the current checkout's player behavior.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
+import tempfile
 
 
 # The boundary is a durable annotated tag on the Phase 8 verification commit (D-12). It is resolved once to a
-# commit id and never falls back to a literal SHA, so an unreadable tag fails closed.
+# commit id and never falls back to a literal SHA, so an unreadable tag fails closed. A tag is mutable, so the commit
+# it must peel to is also pinned here (WR-02): a retargeted tag fails with its own message before any clause is read,
+# and the clauses themselves are read from the resolved commit, never from the working tree or later history.
 DEFAULT_BOUNDARY = "historical/phase-08-boundary"
+EXPECTED_BOUNDARY = "96d5eec977bee99a0629499b89c737415e24184c"
 STATUS = (
     "Battery saving is not supported for this cartridge type yet; "
     "progress is not kept"
@@ -27,20 +32,74 @@ LIMITATION_CLAUSE = (
 )
 
 
-def resolve_boundary(rev: str) -> str | None:
+def resolve_boundary(rev: str, repo: str | None = None) -> str | None:
     """Return the commit id for rev, or None when rev is empty, option-shaped or not a readable commit."""
     if not rev or rev.startswith("-"):
         return None
-    result = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    command = ["git"] + (["-C", repo] if repo else []) + ["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"]
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
     sha = result.stdout.strip()
     if result.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", sha):
         return None
     return sha
+
+
+def boundary_identity_error(rev: str, sha: str, expected: str = EXPECTED_BOUNDARY) -> str | None:
+    """The named tag must peel to the pinned commit. Any other revision is an explicit override (the wrong-boundary
+    controls use one), judged by its clauses alone."""
+    if rev == DEFAULT_BOUNDARY and sha != expected:
+        return f"boundary tag {rev} was retargeted: it resolves to {sha}, not {expected}"
+    return None
+
+
+def boundary_identity_self_test(boundary: str) -> int:
+    """Retarget a disposable annotated and a disposable lightweight tag and require the pinned-commit rejection; the
+    repository's own tag is never touched. Returns the number of controls that held."""
+    controls = 0
+    if boundary == EXPECTED_BOUNDARY and boundary_identity_error(DEFAULT_BOUNDARY, boundary) is not None:
+        raise SystemExit("phase8-player-contract self-test: boundary identity rejected the pinned commit")
+    if boundary_identity_error(DEFAULT_BOUNDARY, "0" * 40) is None:
+        raise SystemExit("phase8-player-contract self-test: boundary identity accepted another commit for the tag")
+    if boundary_identity_error("v0.2.0", "0" * 40) is not None:
+        raise SystemExit("phase8-player-contract self-test: boundary identity rejected an explicit override")
+    controls += 3
+    with tempfile.TemporaryDirectory(prefix="gbb-phase8-tag-") as tmp:
+        env = {k: v for k, v in os.environ.items() if k in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
+        env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, GIT_AUTHOR_NAME="fixture",
+                   GIT_AUTHOR_EMAIL="fixture@example.invalid", GIT_COMMITTER_NAME="fixture",
+                   GIT_COMMITTER_EMAIL="fixture@example.invalid")
+
+        def git(*args: str) -> str:
+            return subprocess.run(["git", "-C", tmp, *args], capture_output=True, text=True, check=True, env=env).stdout.strip()
+
+        git("init", "-q")
+        git("commit", "-q", "--allow-empty", "-m", "boundary")
+        pinned = git("rev-parse", "HEAD")
+        git("commit", "-q", "--allow-empty", "-m", "other")
+        other = git("rev-parse", "HEAD")
+        git("tag", "-a", "-m", "boundary", DEFAULT_BOUNDARY, pinned)
+        resolved = resolve_boundary(DEFAULT_BOUNDARY, tmp)
+        if resolved != pinned or boundary_identity_error(DEFAULT_BOUNDARY, resolved, pinned) is not None:
+            raise SystemExit("phase8-player-contract self-test: a disposable annotated tag at the pinned commit was rejected")
+        git("tag", "-f", "-a", "-m", "retargeted", DEFAULT_BOUNDARY, other)
+        # The command line the CTest runs, from inside the disposable repository: the retargeted tag stops it with its own
+        # message, before any clause is judged.
+        run = subprocess.run([sys.executable, "-I", os.path.abspath(__file__)], cwd=tmp, capture_output=True, text=True, env=env)
+        if run.returncode != 1 or "retargeted" not in run.stderr or "does not set the pinned" in run.stderr:
+            raise SystemExit(f"phase8-player-contract self-test: the command did not stop on a retargeted tag: {run.returncode} {run.stderr[:200]}")
+        controls += 1
+        for label in ("annotated", "lightweight"):
+            resolved = resolve_boundary(DEFAULT_BOUNDARY, tmp)
+            error = boundary_identity_error(DEFAULT_BOUNDARY, resolved or "", pinned)
+            if resolved != other or not error or "retargeted" not in error:
+                raise SystemExit(f"phase8-player-contract self-test: a retargeted {label} tag was not rejected")
+            git("tag", "-f", DEFAULT_BOUNDARY, other)
+            controls += 1
+        git("tag", "-d", DEFAULT_BOUNDARY)
+        if resolve_boundary(DEFAULT_BOUNDARY, tmp) is not None:
+            raise SystemExit("phase8-player-contract self-test: a deleted tag still resolved")
+        controls += 2
+    return controls
 
 
 def read_boundary(boundary: str, path: str) -> str:
@@ -166,6 +225,10 @@ def main() -> int:
     if boundary is None:
         print(f"phase8-player-contract: FAIL: boundary unreadable: {args.boundary}", file=sys.stderr)
         return 1
+    retargeted = boundary_identity_error(args.boundary, boundary)
+    if retargeted:
+        print(f"phase8-player-contract: FAIL: {retargeted}", file=sys.stderr)
+        return 1
 
     paths = (
         "src/player/main.c",
@@ -190,6 +253,8 @@ def main() -> int:
 
     if not args.self_test:
         return 0
+
+    identity_controls = boundary_identity_self_test(boundary)
 
     # An unreadable boundary is its own failure class: empty, option-shaped and missing revisions fail closed.
     for bad in ("", "--help", "refs/tags/does-not-exist-phase8"):
@@ -241,7 +306,7 @@ def main() -> int:
             print(f"phase8-player-contract self-test: {label} was not rejected", file=sys.stderr)
             return 1
 
-    print("phase8-player-contract self-test: PASS controls=unreadable-boundary,warning-removed,pinned-copy-changed,branch-removed,status-call-removed,stderr-call-removed")
+    print(f"phase8-player-contract self-test: PASS controls=unreadable-boundary,retargeted-tag-x{identity_controls},warning-removed,pinned-copy-changed,branch-removed,status-call-removed,stderr-call-removed")
     return 0
 
 
