@@ -3244,7 +3244,6 @@ static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
     return ppu_tile_color(m, tile, source_y & 7u, source_x & 7u, 0);
 }
 
-/* MODEL: BOTH GATE-00 basis=model-neutral */
 /* ppu_objects_stalled marks which selected objects have already stalled this line's
  * mode 3, indexed by selection slot, so it is only meaningful together with the
  * selection made by this scan. Clear it whenever the selection is cleared. Nothing
@@ -3252,6 +3251,7 @@ static uint8_t ppu_background_color(const gbb_instance *m, unsigned x) {
  * here changes no rendering or timing. It only stops slot bits from the previous
  * line outliving their selection through mode 2 (or through LCD off), which made a
  * live machine fail the stalled-bits-within-selected-count state invariant. */
+/* MODEL: BOTH GATE-00 basis=model-neutral */
 static void ppu_begin_object_scan(gbb_instance *m) {
     m->ppu_selected_object_count = 0;
     m->ppu_objects_stalled = 0;
