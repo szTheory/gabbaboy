@@ -1479,6 +1479,17 @@ gbb_add_ledger_contract(release_disclosure_controls
   [=[release-disclosure controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-disclosure)
 unset(GBB_LEDGER_MIN)
+# Phase 17 RM-028 / D-19 (17-08): the version-PR content window. The contract test checks the tracked record is a
+# well-formed inactive (or statically valid active) record and that every generator input the window digests exists in
+# the tree; the controls run the checker over disposable repositories (body overwrite, stale head/input, a changed
+# relevant path, mismatch after regeneration, a valid revalidation) and read only Git objects, never the live tree.
+# A window is a content/event rule: no clock appears in the record or in any proof.
+gbb_add_v02_contract(release_window_contract 60
+  [=[version-window contract pass state=(inactive|active) rev=[0-9a-f]+ inputs=[1-9][0-9]*]=]
+  verify-version-window.py --check-tracked)
+gbb_add_v02_contract(release_window_controls 60
+  [=[version-window controls pass positives=[1-9][0-9]* controls=([2-9][0-9]|[1-9][0-9][0-9]+)]=]
+  verify-version-window.py --self-test)
 # Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
 # so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
 gbb_add_v02_contract(v02_consumer_controls_c 600

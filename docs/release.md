@@ -88,6 +88,50 @@ verifier to accept the result. The second runs omission, altered-value,
 unbound-source, handwritten-bypass and tagged-rewrite controls. Both run as the
 `release_disclosure_generator` and `release_disclosure_controls` tests.
 
+## Version-PR content window
+
+A version PR is generated content. release-please rewrites `CHANGELOG.md`, the
+version files and the PR body, and the support ledger is rendered from the
+managed generator inputs above. A short review freeze therefore protects exact
+content, never elapsed time: no clock, expiry or run counter appears in the
+record or in any proof of it.
+
+The freeze begins only after the managed outputs are generated and the checks
+and rehearsal are green on one exact head. It ends immediately when main, the
+source tree, the release notes, a generator input or the regenerated PR body
+changes. Only the window record itself may differ between the reviewed head and
+the revision being merged. The window is reopened only by regenerating the
+managed outputs, recomputing the digests and rerunning the exact-head required
+checks and rehearsal. Required checks are never disabled, and release-note paths
+are never excluded wholesale, to make a window easier to hold.
+
+The record is [`tests/data/version-window.json`](../tests/data/version-window.json).
+In normal development it is the inactive example: every window field is null and
+the record cannot assert a frozen identity or release readiness. An active record
+carries the release version, the frozen head and main base, the SHA-256 of each
+managed generator input (the disclosure input, the ledger generator and the
+release-please configuration), the SHA-256 of each regenerated file (the ledger,
+`CHANGELOG.md` and the manifest) and of the PR body, and the exact-head review and
+rehearsal run identities.
+
+```sh
+# draft the digests of a freshly regenerated head, then fill in the run identities
+python3 -I tests/scripts/verify-version-window.py --rev HEAD_SHA --base MAIN_SHA \
+  --body pr-body.md --pull-request N --ci-run-id ID --rehearsal-run-id ID --digest
+# judge the committed record at the revision about to merge
+python3 -I tests/scripts/verify-version-window.py --rev REV_SHA --base MAIN_SHA \
+  --check tests/data/version-window.json --body pr-body.md
+```
+
+`--rev` and `--base` are full 40-hex commits. The record, the generator inputs and
+the regenerated files are read from Git objects at `--rev`, so the working tree
+is never a fallback. The checker proves content bindings only; the recorded run
+identities name hosted evidence that the required checks on the exact head, not
+this script, authenticate. The `release_window_contract` and
+`release_window_controls` tests cover the tracked record and the body-overwrite,
+stale-head, stale-input, changed-path, regeneration-mismatch and revalidation
+cases.
+
 ## Performance measurement and qualification
 
 The v0.2.0 DMG paired performance comparison is historical evidence: it reported

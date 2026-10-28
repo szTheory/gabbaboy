@@ -1163,6 +1163,8 @@ support_ledger_binding
 support_ledger_binding_controls
 release_disclosure_generator
 release_disclosure_controls
+release_window_contract
+release_window_controls
 v02_adoption_docs
 v02_adoption_docs_controls
 v02_consumer_controls_c
