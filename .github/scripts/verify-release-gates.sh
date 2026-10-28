@@ -561,8 +561,21 @@ for platform in ("macos-arm64", "windows-x64"):
     content[f"gabbaboy-core-{platform}.tar.gz.sha256"] = (digest(content[f"gabbaboy-core-{platform}.tar.gz"]) + "\n").encode()
 if defect == "sidecar":
     content["gabbaboy-core-macos-arm64.tar.gz.sha256"] = ("0" * 64 + "\n").encode()
-content["candidate-platform-manifest.json"] = json.dumps({"source_sha": sha, "assets": [
-    {"name": n, "sha256": digest(content[n])} for n in names if n != "candidate-platform-manifest.json"]}).encode()
+manifest_rows = [{"name": n, "sha256": digest(content[n])} for n in names if n != "candidate-platform-manifest.json"]
+if defect == "manifest-duplicate":
+    # A wrong digest first and the right one last: a name-keyed map keeps only the last entry and would pass.
+    manifest_rows.insert(0, dict(manifest_rows[0], sha256="0" * 64))
+elif defect == "manifest-malformed-name":
+    manifest_rows[0] = dict(manifest_rows[0], name="../" + manifest_rows[0]["name"])
+elif defect == "manifest-short-digest":
+    manifest_rows[0] = dict(manifest_rows[0], sha256=manifest_rows[0]["sha256"][:63])
+elif defect == "manifest-upper-digest":
+    manifest_rows[0] = dict(manifest_rows[0], sha256=manifest_rows[0]["sha256"].upper())
+elif defect == "manifest-no-digest":
+    manifest_rows[0] = {"name": manifest_rows[0]["name"]}
+elif defect == "manifest-not-a-list":
+    manifest_rows = {"name": "x"}
+content["candidate-platform-manifest.json"] = json.dumps({"source_sha": sha, "assets": manifest_rows}).encode()
 if defect == "stale":
     content["v02-fuzz-receipt.json"] = b"altered after the platform manifest\n"
 if final:
@@ -575,6 +588,16 @@ if final:
         lines[0] = lines[0].replace("  ", "  ../", 1)
     elif defect == "sums-no-newline":
         lines[-1] = lines[-1].rstrip("\n")
+    elif defect == "sums-short-digest":
+        lines[0] = lines[0][1:]
+    elif defect == "sums-upper-digest":
+        lines[0] = lines[0][:64].upper() + lines[0][64:]
+    elif defect == "sums-blank-line":
+        lines.insert(1, "\n")
+    elif defect == "sums-crlf":
+        lines = [line[:-1] + "\r\n" for line in lines]
+    elif defect == "sums-extra-space":
+        lines[0] = lines[0].replace("  ", "   ", 1)
     content["SHA256SUMS"] = "".join(lines).encode()
     content["release-receipt.json"] = json.dumps({"tag": tag, "source_sha": sha, "release_id": release_id,
                                                   "sha256sums_sha256": digest(content["SHA256SUMS"])}).encode()
@@ -772,7 +795,7 @@ rules = {"required_status_checks": {"checks": [
     {"context": "fixture-repro", "app_id": 15368},
     {"context": "preview-package-smoke", "app_id": None}]}}
 runs = {"check_runs": [{"name": name, "head_sha": head, "status": "completed", "conclusion": "success",
-                         "app": {"id": app_id}}
+                         "app": {"id": app_id, "slug": "github-actions"}}
                         for name, app_id in (("required-native", 15368), ("fixture-repro", 15368),
                                              ("preview-package-smoke", 15368))]}
 (root / "rules.json").write_text(json.dumps(rules))
@@ -817,6 +840,42 @@ PY
       fi
       printf 'rejected: %s required-check evidence\n' "$mutation"
     done
+    # IN-02: the same trusted GitHub App identity (id 15368, slug github-actions) is required of every recorded context at
+    # PR time as at release time, whatever the branch rule says. A wildcard rule (app_id null) still gets the identity check on
+    # the run itself, and a rule that names another App is refused outright.
+    python3 - "$temp" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+rules = json.loads((root / "rules.json").read_text())
+runs = json.loads((root / "runs.json").read_text())
+def variant(name, mutate_rules=None, mutate_runs=None):
+    r, c = json.loads(json.dumps(rules)), json.loads(json.dumps(runs))
+    if mutate_rules: mutate_rules(r)
+    if mutate_runs: mutate_runs(c)
+    (root / f"in02-{name}-rules.json").write_text(json.dumps(r))
+    (root / f"in02-{name}-runs.json").write_text(json.dumps(c))
+# The wildcard context (preview-package-smoke) is the last run; its App is replaced.
+variant("wildcard-other-app", mutate_runs=lambda c: c["check_runs"][2]["app"].update(id=1))
+variant("wildcard-other-slug", mutate_runs=lambda c: c["check_runs"][2]["app"].update(slug="other-app"))
+variant("wildcard-no-slug", mutate_runs=lambda c: c["check_runs"][2]["app"].pop("slug"))
+variant("wildcard-no-app", mutate_runs=lambda c: c["check_runs"][2].pop("app"))
+variant("rule-other-app", mutate_rules=lambda r: r["required_status_checks"]["checks"][0].update(app_id=1),
+        mutate_runs=lambda c: c["check_runs"][0]["app"].update(id=1))
+variant("rule-string-app", mutate_rules=lambda r: r["required_status_checks"]["checks"][1].update(app_id="15368"))
+PY
+    expect_reject 'a wildcard rule whose run came from another App' 'wrong GitHub App' \
+      check_required_checks "$temp/in02-wildcard-other-app-rules.json" "$temp/in02-wildcard-other-app-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a wildcard rule whose run has another App slug' 'wrong GitHub App' \
+      check_required_checks "$temp/in02-wildcard-other-slug-rules.json" "$temp/in02-wildcard-other-slug-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a wildcard rule whose run has no App slug' 'wrong GitHub App' \
+      check_required_checks "$temp/in02-wildcard-no-slug-rules.json" "$temp/in02-wildcard-no-slug-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a wildcard rule whose run has no App at all' 'wrong GitHub App' \
+      check_required_checks "$temp/in02-wildcard-no-app-rules.json" "$temp/in02-wildcard-no-app-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a branch rule that trusts another App' 'does not trust the recorded GitHub App' \
+      check_required_checks "$temp/in02-rule-other-app-rules.json" "$temp/in02-rule-other-app-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a branch rule whose App id is not the integer id' 'does not trust the recorded GitHub App' \
+      check_required_checks "$temp/in02-rule-string-app-rules.json" "$temp/in02-rule-string-app-runs.json" "$(printf 'a%.0s' {1..40})"
+    printf 'rejected: required-check evidence from an untrusted App, whether the branch rule is a wildcard or names another App\n'
     mkdir -p "$temp/runner"
     python3 - "$temp/runner" <<'PY'
 import hashlib, json, pathlib, sys
@@ -925,6 +984,17 @@ PY
     expect_reject 'a schema-1 support sidecar' 'schema-2 support sidecar' \
       check_asset_inventory "$temp/schema1/api.json" "$temp/schema1/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
     printf 'rejected: schema-1 support sidecar\n'
+    # WR-03: the platform manifest is parsed strictly before a name-keyed map exists, so a repeated name cannot hide a wrong
+    # digest behind a right one and a malformed row is a named refusal, never a traceback.
+    inventory_fixture "$temp/manifest-duplicate" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" manifest-duplicate
+    expect_reject 'a platform manifest that lists one name twice' 'platform manifest names' \
+      check_asset_inventory "$temp/manifest-duplicate/api.json" "$temp/manifest-duplicate/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    for defect in manifest-malformed-name manifest-short-digest manifest-upper-digest manifest-no-digest manifest-not-a-list; do
+      inventory_fixture "$temp/$defect" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "$defect"
+      expect_reject "a platform manifest with $defect" 'platform manifest has a malformed' \
+        check_asset_inventory "$temp/$defect/api.json" "$temp/$defect/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    done
+    printf 'rejected: duplicate and malformed platform manifest entries before any map is built\n'
     # The draft and final gates reach the sidecar helper through the inventory check: a defective platform sidecar
     # must stop the real inventory gate, and the same fixture without the defect must pass it.
     inventory_fixture "$temp/bad-sidecar" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" sidecar
@@ -956,7 +1026,7 @@ PY
     inventory_fixture "$temp/final-short" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "" final-short
     expect_reject 'an incomplete final inventory' 'must contain exactly' \
       check_final_receipt "$temp/final-short/api.json" "$temp/final-short/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
-    for defect in sums-duplicate sums-malformed sums-pathlike sums-no-newline; do
+    for defect in sums-duplicate sums-malformed sums-pathlike sums-no-newline sums-short-digest sums-upper-digest sums-blank-line sums-crlf sums-extra-space; do
       inventory_fixture "$temp/final-$defect" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "$defect" final
     done
     expect_reject 'a SHA256SUMS name listed twice' 'more than once' \
@@ -967,7 +1037,11 @@ PY
       check_final_receipt "$temp/final-sums-pathlike/api.json" "$temp/final-sums-pathlike/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
     expect_reject 'a SHA256SUMS without its final newline' 'must end with a newline' \
       check_final_receipt "$temp/final-sums-no-newline/api.json" "$temp/final-sums-no-newline/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
-    printf 'PASS: final inventory binds every asset; rejected: incomplete final inventory, duplicate, malformed, path-like and unterminated SHA256SUMS\n'
+    for defect in sums-short-digest sums-upper-digest sums-blank-line sums-crlf sums-extra-space; do
+      expect_reject "a SHA256SUMS line that is $defect" 'malformed or path-like line' \
+        check_final_receipt "$temp/final-$defect/api.json" "$temp/final-$defect/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    done
+    printf 'PASS: final inventory binds every asset; rejected: incomplete final inventory, duplicate, malformed, path-like, wrongly sized, upper-case, blank, CRLF and unterminated SHA256SUMS\n'
     python3 -I "$ROOT/tests/scripts/verify-v02-delivery.py" --self-test
     python3 -I "$ROOT/.github/scripts/verify-published-release-assets.py" --self-test
     recovery_self_test "$temp/recovery"
