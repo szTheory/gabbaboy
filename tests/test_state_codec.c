@@ -1558,22 +1558,26 @@ static int state_reachable_saveable(const char *profile_name, const char *fixtur
         setup &= reachable_sprite_case(profile, 0x80u, "sprite-cgb", &tally);
         setup &= reachable_cram_case(&tally);
     }
+    /* Sample counts keep each case near 3 s at -O0 locally and about 15 s under a
+     * macOS ASan/UBSan build, well inside the 60 s base budget (180 s under the
+     * sanitizer scale). Each sample runs the full validator. The libbet warm-up
+     * skips its title until objects appear (frame ~49 on DMG, ~8 on CGB). */
     static const reachable_fixture dmg_fixtures[] = {
-        {"libbet/libbet.gb", 9200000u, 200u},
-        {"age/stat-mode-sprites-dmgC-cgbBCE.gb", 0u, 160u},
-        {"cgb-colour/colour-attr.gb", 0u, 120u},
-        {"visible-demo/demo.gb", 0u, 80u},
-        {"tracer/tracer.gb", 0u, 80u}
+        {"libbet/libbet.gb", 9200000u, 128u},
+        {"age/stat-mode-sprites-dmgC-cgbBCE.gb", 0u, 112u},
+        {"cgb-colour/colour-attr.gb", 0u, 80u},
+        {"visible-demo/demo.gb", 0u, 48u},
+        {"tracer/tracer.gb", 0u, 48u}
     };
     static const reachable_fixture cgb_fixtures[] = {
-        {"libbet/libbet.gb", 3400000u, 200u},
-        {"age/stat-mode-sprites-dmgC-cgbBCE.gb", 0u, 120u},
-        {"cgb-colour/colour-attr.gb", 0u, 120u},
-        {"cgb-colour/colour-cram.gb", 0u, 60u},
-        {"cgb-hdma/hblank.gb", 0u, 60u},
-        {"rtc3test/rtc3test.gb", 0u, 60u},
-        {"visible-demo/demo.gb", 0u, 40u},
-        {"tracer/tracer.gb", 0u, 40u}
+        {"libbet/libbet.gb", 3400000u, 128u},
+        {"age/stat-mode-sprites-dmgC-cgbBCE.gb", 0u, 80u},
+        {"cgb-colour/colour-attr.gb", 0u, 80u},
+        {"cgb-colour/colour-cram.gb", 0u, 40u},
+        {"cgb-hdma/hblank.gb", 0u, 40u},
+        {"rtc3test/rtc3test.gb", 0u, 40u},
+        {"visible-demo/demo.gb", 0u, 32u},
+        {"tracer/tracer.gb", 0u, 32u}
     };
     const reachable_fixture *list = cgb ? cgb_fixtures : dmg_fixtures;
     const size_t count = cgb ? sizeof(cgb_fixtures) / sizeof(cgb_fixtures[0])
