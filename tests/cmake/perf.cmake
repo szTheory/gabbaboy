@@ -56,7 +56,7 @@ function(gbb_add_perf_gate_test name code regex)
   set_tests_properties(${name} PROPERTIES TIMEOUT 60)
 endfunction()
 
-function(gbb_add_perf_receipt_test name regex argument)
+function(gbb_add_perf_receipt_test name regex argument min_controls)
   set(command "${Python3_EXECUTABLE}" -I "${GBB_PERF_RECEIPT_CHECKER}" ${argument})
   list(JOIN command "$<SEMICOLON>" joined)
   add_test(NAME ${name}
@@ -64,6 +64,7 @@ function(gbb_add_perf_receipt_test name regex argument)
       "-DGBB_CMD=${joined}"
       -DGBB_EXPECT_CODE=0
       "-DGBB_EXPECT_REGEX=${regex}"
+      -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=${min_controls}
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   # Both controls measure about 7 s locally, inside the base 60 s budget (verify-test-budget.py).
   set_tests_properties(${name} PROPERTIES TIMEOUT 60)
@@ -115,7 +116,12 @@ set(GBB_PERF_GATE_EXTRA_ARGS)
 
 # These exercise the actual paired-receipt producer with stubbed measurement executables, then
 # pass its receipt through the production verifier and reuse function. No wall-clock threshold is asserted.
-gbb_add_perf_receipt_test(perf_advisory_pipeline "advisory pipeline self-test pass controls=[0-9]+"
-  --self-test-advisory-pipeline)
-gbb_add_perf_receipt_test(perf_advisory_controls "advisory controls self-test pass controls=[0-9]+"
-  --self-test-advisory-controls)
+# The producer fixture is a shell-script cmake and measurement binary, so both cases skip on Windows (GB-CI-011);
+# they are not registered there, as the lifecycle pair is not, because a skipped case is not a pass (WR-B03). The
+# control count is the number of refusals the case asserted, a parsed minimum.
+if(NOT WIN32)
+  gbb_add_perf_receipt_test(perf_advisory_pipeline "advisory pipeline self-test pass controls=[0-9]+"
+    --self-test-advisory-pipeline 1)
+  gbb_add_perf_receipt_test(perf_advisory_controls "advisory controls self-test pass controls=[0-9]+"
+    --self-test-advisory-controls 4)
+endif()

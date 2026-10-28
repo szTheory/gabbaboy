@@ -745,6 +745,10 @@ def decision_fixture(receipt: dict[str, object]) -> dict[str, object]:
 
 
 class PerformanceReceiptContractTests(unittest.TestCase):
+    # Negative controls a named advisory self-test actually executed (each refusal it asserted), so the reported
+    # count moves with the test body and is zero for a skipped test.
+    executed_controls = 0
+
     def run_cli(self, receipt: dict[str, object]) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-test-") as temp:
             path = Path(temp) / "receipt.json"
@@ -903,6 +907,7 @@ class PerformanceReceiptContractTests(unittest.TestCase):
             wrong_tree = self.run_reuse(receipt, git_text("rev-parse", f"{BASELINE_SHA}^{{tree}}"))
             self.assertEqual(wrong_tree.returncode, 1, wrong_tree.stdout)
             self.assertIn("reuse-tree-mismatch", wrong_tree.stdout)
+            PerformanceReceiptContractTests.executed_controls += 1
 
     @unittest.skipIf(os.name == "nt", "the controls drive the same shell-script producer fixture as the advisory "
                                      "pipeline test; the paired producer runs on the Linux evidence runner")
@@ -932,6 +937,7 @@ class PerformanceReceiptContractTests(unittest.TestCase):
                     rejected = self.run_cli(altered)
                     self.assertEqual(rejected.returncode, 1, rejected.stdout)
                     self.assertIn(diagnostic, rejected.stdout)
+                    PerformanceReceiptContractTests.executed_controls += 1
 
     def test_bound_review_decision_qualifies_exact_pending_measurement(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gabbaboy-performance-decision-") as temp:
@@ -1253,13 +1259,27 @@ class PerformanceReceiptContractTests(unittest.TestCase):
         self.assertIn("qualify-v02-output-exists", result.stdout)
 
 
+# A named advisory self-test whose only case was skipped (the POSIX-only producer fixture on Windows, GB-CI-011) exits
+# with this code and says "skipped", never "pass": a skip is not evidence (17-REVIEW WR-B03).
+SELF_TEST_SKIPPED = 77
+
+
 def self_test(test_name: str | None = None, label: str | None = None) -> int:
     if test_name is None:
         suite = unittest.defaultTestLoader.loadTestsFromTestCase(PerformanceReceiptContractTests)
     else:
         suite = unittest.TestSuite([PerformanceReceiptContractTests(test_name)])
+    PerformanceReceiptContractTests.executed_controls = 0
     result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2).run(suite)
-    controls = max(1 if test_name is not None else 0, result.testsRun - 1)
+    executed = result.testsRun - len(result.skipped)
+    if test_name is not None:
+        if result.wasSuccessful() and executed == 0:
+            reason = result.skipped[0][1] if result.skipped else "no case ran"
+            print(f"advisory {label} self-test skipped reason={reason}")
+            return SELF_TEST_SKIPPED
+        controls = PerformanceReceiptContractTests.executed_controls
+    else:
+        controls = executed - 1
     summary = {
         "status": "passed" if result.wasSuccessful() else "failed",
         "tests_run": result.testsRun,

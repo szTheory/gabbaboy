@@ -21,7 +21,8 @@ function(gabbaboy_verify_registered_tests)
       cgb_speed_repro_tool_failure cgb_speed_repro_missing_pin
       age_repro_selfcheck age_repro_selfcheck_tampered age_repro_compare_tampered
       core_linkage_links core_linkage_controls
-      release_lifecycle_replay release_lifecycle_controls)
+      release_lifecycle_replay release_lifecycle_controls
+      perf_advisory_pipeline perf_advisory_controls)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

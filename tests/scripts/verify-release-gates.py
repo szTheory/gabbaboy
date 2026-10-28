@@ -681,9 +681,11 @@ def self_test_review_approval(ledger: Ledger, fixture: ReviewFixture) -> None:
     code, out, err = spawn(perf_script, *unchanged, "--exception-receipt", receipt_path)
     ledger.check("an approval is not accepted for an ordinary run",
                  code == 1 and "REJECT exception-receipt-unexpected" in err, out + err, control=True)
-    code, out, err = spawn(HERE / "verify-v02-performance.py", "--self-test-advisory-pipeline")
-    ledger.check("a triggered paired-timing receipt succeeds as advisory evidence without a decision",
-                 code == 0 and "self-test pass" in out, out + err)
+    # The advisory producer fixture is POSIX-only (GB-CI-011); on Windows it reports a skip, which is not a positive.
+    if os.name != "nt":
+        code, out, err = spawn(HERE / "verify-v02-performance.py", "--self-test-advisory-pipeline")
+        ledger.check("a triggered paired-timing receipt succeeds as advisory evidence without a decision",
+                     code == 0 and "self-test pass" in out, out + err)
 
 
 def self_test_review_controls(ledger: Ledger, fixture: ReviewFixture) -> None:
