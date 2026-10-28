@@ -4304,6 +4304,9 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (STATE_PATH("ppu_fifo"))
         return raw == UINT8_MAX || raw < GBB_FRAME_WIDTH;
     if (STATE_PATH("ppu_dot")) return raw < GBB_DOTS_PER_LINE;
+    /* ppu_advance_dot wraps LY from 153 to 0 and every LCD on/off write sets it to 0;
+     * the post-boot tables set it to 0. 154..255 is unreachable. */
+    if (STATE_PATH("ly")) return raw < GBB_LINES_PER_FRAME;
     if (STATE_PATH("ppu_half_phase") || STATE_PATH("ppu_stat_line") ||
         STATE_PATH("ppu_window_started") ||
         STATE_PATH("ppu_transfer_complete")) return raw <= 1u;

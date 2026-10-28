@@ -359,7 +359,7 @@ Each decoded value must fit its descriptor's 1-, 2-, 4-, or 8-byte little-endian
 | `f` | Low four bits are zero. |
 | `joypad_select` | Only bits 4 and 5. `joypad_buttons` is a full byte. |
 | `interrupt_flags` | Only bits 0..4. `ie` is 0..31 on DMG and a full byte on CGB. `stat` stores only bits 3..6. |
-| `ppu_dot`, `ppu_half_phase`, `ppu_mode` | Dot 0..455, half-phase 0..1, mode 0..3. `ly` is 0..153. |
+| `ppu_dot`, `ppu_half_phase`, `ppu_mode` | Dot 0..455, half-phase 0..1, mode 0..3. `ly` is 0..153 (it wraps at 154, and LCD on/off writes set it to 0); 154..255 is refused. |
 | `ppu_fifo` | Each slot is `0xFF` (fine-scroll discard) or 0..159. Head is 0..15 and count 0..16. |
 | `ppu_fetch_stage`, `ppu_fetch_phase`, `ppu_fetch_enqueued` | Stage 0..3, phase 0..1, enqueued pixels at most 160 plus the fine-scroll offset (0..7). |
 | `ppu_transfer_age`, `ppu_output_x`, `ppu_scroll_discard`, `ppu_fine_scroll`, `ppu_mode3_stall` | Age at most 12, output x at most 160, fine/discard at most 7, mode-3 stall at most 11. |
