@@ -6,7 +6,7 @@ Plan 17-08 implemented at `9de6089`; full suite 1486/1486 there after `cmake --p
 
 Plan 17-09 implemented through `c2c10df`; `e5064c3` fixes the Windows `v02_support_ledger_controls` timeout (GB-CI-012); full suite 1488/1488 at `e5064c3`, hosted pending.
 
-Plan 17-10 implemented through `de7761b`; IN-03 still needs the `report-red` job `timeout-minutes` and a `ci-timeouts.json` row citing a hosted `nightly-asan.yml` dry run (`-f report_red_dry_run=true`, see 17-10-SUMMARY Deviation 3). `716aab2` fixes the macOS `state_horizon_mutants` timeout; full suite 1488/1488 there.
+Plan 17-10 implemented through `de7761b`; IN-03 closed in `fdce605`/`50fda9e`: `report-red` job timeout 5 and a provisional `ci-timeouts.json` row cite hosted dry run 40749683012 at `fe4c932`. Open for 17-11/verification: `verify-workflow-policy.py --check --verify-cited` fails `release.yml:candidate-performance` (job renamed to `exact-tag-advisory-paired-performance-observation` before this session; cited run 39406047351 has the old name). `716aab2` fixes the macOS `state_horizon_mutants` timeout; full suite 1488/1488 there.
 
 Next stage: **Phase 17 — Native Save State Core, wave 11 / plan 17-11**. Resume command: `/gsd-execute-phase 17`.
 
