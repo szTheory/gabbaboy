@@ -4337,8 +4337,11 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (STATE_PATH("hdma.destination_high")) return raw <= 0x1Fu;
     if (STATE_PATH("hdma.byte_index")) return raw < 16u;
     if (STATE_PATH("hdma.byte_phase")) return raw <= 3u;
+    /* FF53 always ORs 0x8000 into the cursor. Before the first FF53 write, FF54 sets
+     * only the low byte of the reset cursor 0, so 0x0000..0x00F0 (FF54 clears the low
+     * nibble) is reachable while idle or pending. 0xA000 follows the final block. */
     if (STATE_PATH("hdma.destination_cursor"))
-        return raw == 0u || (raw >= 0x8000u && raw <= 0xA000u);
+        return (raw <= 0x00F0u && (raw & 0x0Fu) == 0u) || (raw >= 0x8000u && raw <= 0xA000u);
     if (STATE_PATH("hdma.blocks_remaining")) return raw <= 128u;
     if (STATE_PATH("ime_delay")) return raw <= 2u;
     if (STATE_PATH("tac")) return raw <= 7u;
@@ -4628,8 +4631,9 @@ static int state_validate_relations(const gbb_instance *instance,
         (hdma_active == 0u && (hdma_byte != 0u || hdma_phase != 0u)) ||
         ((hdma_active != 0u || hdma_pending != 0u) &&
          (instance->profile != GBB_PROFILE_CGB_CPU_E || instance->exec_mode != GBB_MODE_CGB)) ||
-        (hdma_active != 0u && (hdma_destination > 0x9FF0u || hdma_source > UINT16_MAX - 15u)))
-        return 0;
+        (hdma_active != 0u && (hdma_destination < 0x8000u || hdma_destination > 0x9FF0u ||
+                               hdma_source > UINT16_MAX - 15u)))
+        return 0; /* the active-block bounds are exactly what hdma_admit_block admitted */
     if ((hdma_active != 0u || hdma_pending != 0u) &&
         (((hdma_source & 0x0Fu) != 0u) || ((hdma_destination & 0x0Fu) != 0u))) return 0;
     if (hdma_active != 0u) {
