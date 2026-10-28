@@ -17,6 +17,7 @@
 # build-manifest  candidate-platform-manifest     validate the candidate asset set and attach the platform manifest
 # validate-draft  publish-qualified-release       validate every downloaded byte, write SHA256SUMS and the release receipt
 # final-gate      publish-qualified-release       recheck the final inventory and receipts
+# nightly-gate    publish-qualified-release       the exact-tree nightly ASan replay gate, immediately before publication
 # publish-draft   publish-qualified-release       the one draft-to-published transition, then published-asset readback
 #
 # policy: .github/scripts/verify-workflow-policy.py reads each region between its BEGIN and END marker as the body of the
@@ -303,6 +304,29 @@ bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEA
 # END final-gate
 }
 
+lifecycle_nightly_gate() {
+# BEGIN nightly-gate
+set -euo pipefail
+[[ "$GH_REPO" == szTheory/gabbaboy && "$GITHUB_REF" == refs/heads/main ]] || exit 1
+[[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "Malformed release tag or source SHA." >&2; exit 1; }
+# The full ASan stall replay is dispatched on the rehearsal branch at the rehearsed head, whose tree is the tagged tree (the
+# squash commit differs from that head, the tree does not). The head is the one the trusted selection proves for the newest
+# successful rehearsal run of this tag, from git objects. verify-release-gates.py --nightly-gate then requires the newest
+# nightly-asan run at that head to be completed with success and its asan-full-replay job to have succeeded; a newer run at
+# another head supersedes it, and a source with another tree refuses. The judge is the trusted workflow revision. A
+# refusal stops the job before the one publication transition.
+gh api "repos/$GH_REPO/actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success&per_page=100" > "$RUNNER_TEMP/nightly-rehearsal-runs.json"
+python3 -I trusted/.github/scripts/verify-release-source-proof.py --select-performance-run "$RUNNER_TEMP/nightly-rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo "$GH_REPO" --selected-run "$RUNNER_TEMP/nightly-rehearsal-run.json" > /dev/null
+head=$(jq -r .head_sha "$RUNNER_TEMP/nightly-rehearsal-run.json")
+gh run list --repo "$GH_REPO" --workflow nightly-asan.yml --branch "rehearsal/$RELEASE_TAG" --limit 50 --json databaseId,attempt,headSha,headBranch,event,status,conclusion,createdAt,workflowName > "$RUNNER_TEMP/nightly-runs.json"
+run_id=$(jq -r --arg head "$head" '(([.[] | select(.headSha == $head)] | sort_by([.createdAt, .databaseId]) | last) // (sort_by([.createdAt, .databaseId]) | last) // {}) | .databaseId // empty' "$RUNNER_TEMP/nightly-runs.json")
+[[ -n "$run_id" ]] || { echo "No nightly-asan run exists for the rehearsal branch." >&2; exit 1; }
+gh run view "$run_id" --repo "$GH_REPO" --json databaseId,attempt,headSha,headBranch,event,status,conclusion,createdAt,updatedAt,workflowName,jobs > "$RUNNER_TEMP/nightly-run.json"
+python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate --runs-json "$RUNNER_TEMP/nightly-runs.json" --run-json "$RUNNER_TEMP/nightly-run.json" --head "$head" --rev "$SOURCE_SHA" --branch "rehearsal/$RELEASE_TAG" --output "$RUNNER_TEMP/nightly-gate-receipt.json"
+cat "$RUNNER_TEMP/nightly-gate-receipt.json"
+# END nightly-gate
+}
+
 lifecycle_publish_draft() {
 # BEGIN publish-draft
 set -euo pipefail
@@ -328,6 +352,7 @@ case "${1:-}" in
   build-manifest) lifecycle_build_manifest ;;
   validate-draft) lifecycle_validate_draft ;;
   final-gate) lifecycle_final_gate ;;
+  nightly-gate) lifecycle_nightly_gate ;;
   publish-draft) lifecycle_publish_draft ;;
-  *) printf 'usage: release-evidence-lifecycle.sh attach-evidence|validate-evidence|build-manifest|validate-draft|final-gate|publish-draft\n' >&2; exit 2 ;;
+  *) printf 'usage: release-evidence-lifecycle.sh attach-evidence|validate-evidence|build-manifest|validate-draft|final-gate|nightly-gate|publish-draft\n' >&2; exit 2 ;;
 esac

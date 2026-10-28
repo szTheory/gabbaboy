@@ -58,6 +58,8 @@ JUDGE_FILES = (
     ".github/scripts/verify-published-release-assets.py",
     ".github/scripts/verify-release-source-proof.py",
     ".github/scripts/download-release-artifact.py",
+    "tests/scripts/verify-release-gates.py",
+    "tests/scripts/verify-perf-gate.py",
 )
 # mode -> the release.yml job whose step must call it
 MODES = {
@@ -66,8 +68,10 @@ MODES = {
     "build-manifest": "candidate-platform-manifest",
     "validate-draft": "publish-qualified-release",
     "final-gate": "publish-qualified-release",
+    "nightly-gate": "publish-qualified-release",
     "publish-draft": "publish-qualified-release",
 }
+NIGHTLY_RUN_ID = 40245698754
 LOAD_VERIFIERS_STEP = "Load trusted release evidence verifiers"
 EVIDENCE_ATTACHED = ("support-ledger.json", "cgb-corpus-receipt.json", "v02-fuzz-receipt.json", "v02-performance-receipt.json")
 FINAL_NAMES = ("SHA256SUMS", "release-receipt.json")
@@ -427,6 +431,9 @@ def api(args):
         kind, body = "release_assets", st["assets"]
     elif tail == "actions/workflows/release-please.yml/runs" and query == "per_page=100":
         kind, body = "workflow_runs", {"total_count": len(st["runs"]), "workflow_runs": st["runs"]}
+    elif tail == "actions/workflows/release-rehearsal.yml/runs" and \
+            query == "branch=rehearsal/%s&status=success&per_page=100" % st["release"]["tag_name"]:
+        kind, body = "workflow_runs", {"total_count": len(st["rehearsal_runs"]), "workflow_runs": st["rehearsal_runs"]}
     elif re.fullmatch(r"pulls/\d+", tail) and not query:
         if int(tail.split("/")[1]) != st["pull_request"]["number"]:
             fail("HTTP 404: Not Found (" + route + ")")
@@ -521,12 +528,35 @@ def release_edit(args):
     log({"outcome": "ok", "kind": "publish-decision", "mutation": "publish-decision"})
 
 
+NIGHTLY_LIST_FIELDS = "databaseId,attempt,headSha,headBranch,event,status,conclusion,createdAt,workflowName"
+NIGHTLY_VIEW_FIELDS = "databaseId,attempt,headSha,headBranch,event,status,conclusion,createdAt,updatedAt,workflowName,jobs"
+
+
+def run_cmd(args):
+    """gh run list / gh run view with exactly the closed field lists the nightly gate reads; recorded JSON, no other call."""
+    st = state()
+    tag = st["release"]["tag_name"]
+    if args == ["list", "--repo", REPO, "--workflow", "nightly-asan.yml", "--branch", "rehearsal/" + tag, "--limit", "50",
+                "--json", NIGHTLY_LIST_FIELDS]:
+        body = st["nightly_runs"]
+    elif len(args) == 6 and args[0] == "view" and args[2:] == ["--repo", REPO, "--json", NIGHTLY_VIEW_FIELDS]:
+        body = st["nightly_view"].get(args[1])
+        if body is None:
+            fail("HTTP 404: Not Found (run " + args[1] + ")")
+    else:
+        refuse("run command is allowed only as the two nightly gate reads")
+    log({"outcome": "ok", "kind": "nightly-run"})
+    sys.stdout.write(json.dumps(body) + "\n")
+
+
 ARGV = sys.argv[1:]
 st_shapes = state()["shapes"] if (DIR / "state.json").is_file() else {}
 if not ARGV:
     refuse("no command")
 if ARGV[0] == "api":
     api(ARGV[1:])
+elif ARGV[0] == "run":
+    run_cmd(ARGV[1:])
 elif ARGV[0:2] == ["release", "download"]:
     release_download(ARGV[2:])
 elif ARGV[0:2] == ["release", "upload"]:
@@ -620,6 +650,12 @@ class Template:
         run_git(repo, "add", "-A")
         run_git(repo, "commit", "-q", "-m", "judge: production scripts at the replay revision")
         self.judge_sha = run_git(repo, "rev-parse", "HEAD")
+        # The rehearsed head: another commit with exactly the tagged tree (a squash commit differs, its tree does not), kept
+        # on a branch so every clone of the judge repository holds it.
+        self.rehearsal_head = run_git(repo, "commit-tree", f"{source}^{{tree}}", "-p", source, "-m", "rehearsal head")
+        run_git(repo, "branch", "rehearsal-fixture", self.rehearsal_head)
+        self.other_head = run_git(repo, "commit-tree", f"{self.judge_sha}^{{tree}}", "-p", source, "-m", "head with another tree")
+        run_git(repo, "branch", "other-tree-fixture", self.other_head)
         self.evidence = base / "evidence"
         self.archive = self.delivery.make_evidence(self.evidence, source, repo)
         # the production sidecar also names the tagged ledger blob under `ledger.git_blob_oid`, which the draft gate reads
@@ -703,11 +739,24 @@ class Template:
             run["status"], run["conclusion"] = "completed", "success"
         commit = responses["commit"]
         commit["sha"] = self.source
+        rehearsal = copy.deepcopy(run_template)
+        rehearsal.update(id=RUN_ID - 500, run_attempt=1, status="completed", conclusion="success", head_sha=self.rehearsal_head,
+                         head_branch="rehearsal/" + self.tag, event="workflow_dispatch",
+                         path=".github/workflows/release-rehearsal.yml")
+        rehearsal["repository"]["full_name"] = REPO
+        rehearsal["head_repository"]["full_name"] = REPO
+        nightly = {"databaseId": NIGHTLY_RUN_ID, "attempt": 1, "headSha": self.rehearsal_head,
+                   "headBranch": "rehearsal/" + self.tag, "event": "workflow_dispatch", "status": "completed",
+                   "conclusion": "success", "createdAt": "2026-10-26T12:00:00Z", "workflowName": "nightly-asan"}
+        nightly_view = dict(nightly, updatedAt="2026-10-26T12:40:05Z", jobs=[
+            {"name": "asan-full-replay", "status": "completed", "conclusion": "success",
+             "startedAt": "2026-10-26T12:00:10Z", "completedAt": "2026-10-26T12:40:00Z"}])
         state = {
             "release": release, "assets": [], "asset_template": template, "next_asset_id": FIRST_ASSET_ID,
             "runs": [old], "run_template": run_template, "pull_request": pull, "check_runs": checks,
             "check_runs_head": self.pr_head, "commits": {self.tag: commit, self.source: commit},
-            "decisions": [], "shapes": shapes,
+            "decisions": [], "shapes": shapes, "rehearsal_runs": [rehearsal],
+            "nightly_runs": [nightly], "nightly_view": {str(NIGHTLY_RUN_ID): nightly_view},
         }
         directory.mkdir(parents=True)
         (directory / "store").mkdir()
@@ -928,7 +977,7 @@ def first_attempt(s: Scenario, wf: str) -> dict[str, Outcome]:
     publish = s.subject_workspace("publish")
     env = {"RELEASE_ID": str(RELEASE_ID)}
     out["load-verifiers"] = s.run_workflow_step(publish, wf, LOAD_VERIFIERS_STEP, **env)
-    for mode in ("validate-draft", "final-gate", "publish-draft"):
+    for mode in ("validate-draft", "final-gate", "nightly-gate", "publish-draft"):
         out[mode] = s.run_mode(publish, mode, **env)
         if mode == "validate-draft" and out[mode].rc == 0 and "finalized-first" not in s.t.stages:
             s.snapshot("finalized-first")  # an attempt that stopped here has attached the final metadata
@@ -1001,7 +1050,7 @@ def replay(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> dict
     outs["build-manifest"] = r.run_mode(manifest2, "build-manifest", **rt)
     publish2 = r.subject_workspace("publish-2")
     outs["load-verifiers"] = r.run_workflow_step(publish2, wf, LOAD_VERIFIERS_STEP, **rt)
-    for mode in ("validate-draft", "final-gate", "publish-draft"):
+    for mode in ("validate-draft", "final-gate", "nightly-gate", "publish-draft"):
         outs[mode] = r.run_mode(publish2, mode, **rt)
     require_ok(outs, "retry")
     after = {n: r.asset_bytes(n) for n in before}
@@ -1731,8 +1780,66 @@ def task3_controls(ctx: Context) -> list:
     return items
 
 
+def nightly_control(ctx: Context, label: str, needle: str, change) -> str:
+    """The production nightly-gate mode against a hostile run history: refused in the gate's own words, before publication."""
+    s = Scenario(ctx.t, "nightly-" + label)
+    state = s.state()
+    change(state, ctx.t)
+    s.write_state(state)
+    out = s.run_mode(s.subject_workspace("publish"), "nightly-gate", RELEASE_ID=str(RELEASE_ID))
+    expect_fail(out, f"nightly gate: {label}", needle)
+    if s.mutations_logged():
+        raise Reject("control-effect", f"nightly gate {label}: a refused gate still wrote to the release")
+    return f"the nightly gate refuses {label}"
+
+
+def _nightly(state: dict, **changes) -> None:
+    for run in (state["nightly_runs"][0], state["nightly_view"][str(NIGHTLY_RUN_ID)]):
+        run.update(changes)
+
+
+def _nightly_replay(state: dict, **changes) -> None:
+    state["nightly_view"][str(NIGHTLY_RUN_ID)]["jobs"][0].update(changes)
+
+
+def _nightly_other_run(state: dict, head: str, **changes) -> None:
+    run = dict(state["nightly_runs"][0], databaseId=NIGHTLY_RUN_ID + 1, createdAt="2026-10-26T18:00:00Z", headSha=head, **changes)
+    state["nightly_runs"].append(run)
+    state["nightly_view"][str(run["databaseId"])] = dict(state["nightly_view"][str(NIGHTLY_RUN_ID)], **run)
+
+
+def c_nightly_gate(ctx: Context) -> list:
+    positive = Scenario(ctx.t, "nightly-positive")
+    ws = positive.subject_workspace("publish")
+    ok = positive.run_mode(ws, "nightly-gate", RELEASE_ID=str(RELEASE_ID))
+    if ok.rc != 0 or f"nightly-gate pass run_id={NIGHTLY_RUN_ID}" not in ok.out or positive.mutations_logged():
+        raise Reject("replay-failed", f"nightly gate positive control: exit {ok.rc}: {ok.text.strip()[-300:]}")
+    receipt = json.loads(ok.out[ok.out.index("{"):])
+    if receipt["head_sha"] != ctx.t.rehearsal_head or receipt["source_sha"] != ctx.t.source or receipt["run_id"] != NIGHTLY_RUN_ID:
+        raise Reject("replay-failed", "the nightly receipt is not bound to the rehearsed head, the tagged source and the run")
+    if any(c.get("outcome") == "refused" for c in positive.calls()):
+        raise Reject("replay-refused", "the transport refused a production nightly call")
+    cases = (
+        ("a failed run", "nightly-not-success", lambda st, t: _nightly(st, conclusion="failure")),
+        ("a cancelled run", "nightly-not-success", lambda st, t: _nightly(st, conclusion="cancelled")),
+        ("a newer run at another head", "nightly-head-mismatch", lambda st, t: _nightly_other_run(st, "1" * 40)),
+        ("a skipped replay job", "nightly-replay-not-success", lambda st, t: _nightly_replay(st, conclusion="skipped")),
+        ("a failed replay job", "nightly-replay-not-success", lambda st, t: _nightly_replay(st, conclusion="failure")),
+        ("a run still in progress", "nightly-in-progress", lambda st, t: _nightly(st, status="in_progress", conclusion="")),
+        ("no run at the rehearsed head", "nightly-no-run-at-head", lambda st, t: _nightly(st, headSha="2" * 40)),
+        ("a newer red run behind which an older green one sits", "nightly-not-success",
+         lambda st, t: _nightly_other_run(st, t.rehearsal_head, conclusion="failure")),
+        ("a nightly run of another workflow", "nightly-no-run-at-head", lambda st, t: _nightly(st, workflowName="ci")),
+        ("a rehearsed head with another tree", "differs from the tagged tree",
+         lambda st, t: st["rehearsal_runs"][0].update(head_sha=t.other_head)),
+        ("no successful rehearsal run", "no successful rehearsal run", lambda st, t: st.update(rehearsal_runs=[])),
+        ("no nightly run at all", "No nightly-asan run exists", lambda st, t: st.update(nightly_runs=[])),
+    )
+    return [nightly_control(ctx, label, needle, change) for label, needle, change in cases]
+
+
 TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_advisory_consumers, c_non_advisory,
-                  c_unexpected_endpoint_in_script, c_live_publication)
+                  c_unexpected_endpoint_in_script, c_live_publication, c_nightly_gate)
 
 
 def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tuple[int, int]:

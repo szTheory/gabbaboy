@@ -17,6 +17,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 LIMITS="$ROOT/tests/baseline/perf-gate-v1.txt"
 CHECKER="$ROOT/tests/scripts/verify-perf-gate.py"
+GATES="$ROOT/tests/scripts/verify-release-gates.py"
 V020_EXPECTED=ab301aa69b1f085050fd66bf7b1378863a0821f2
 LIMITS_BASE_REV=947d6a9d177af6c04a5f9ea6abcc2c470ab9be57
 ROMS=(tracer libbet visible-demo)
@@ -153,8 +154,24 @@ evaluate_tree() {
   local args=(--evaluate --limits "$LIMITS" --base "$WORK/base" --head "$WORK/head"
     --base-rev "$LIMITS_BASE_REV" --source-base-rev "$V020_EXPECTED" --source-head-rev "$head_revision"
     --build-base-identity "$base_identity" --build-head-identity "$head_identity")
-  if [[ -n "${GBB_PERF_EXCEPTION_RECEIPT:-}" ]]; then
-    args+=(--exception-receipt "$GBB_PERF_EXCEPTION_RECEIPT")
+  # A widened Ir limit passes only with a deterministic exception receipt that verify-release-gates.py --review-approval
+  # derived from a verified OWNER comment (D-22, RM-030): the evaluator writes the exact measurement the owner approves by
+  # digest, the release gate checks the comment against it, and only the receipt that gate wrote reaches the ratchet. No
+  # receipt can be handed to the evaluator directly, ordinary runs need no approval, and an approval never excuses a
+  # correctness, safety or realtime failure: the evaluator below still judges all of those.
+  if [[ -n "${GBB_IR_EXCEPTION_COMMENT_JSON:-}" || -n "${GBB_IR_EXCEPTION_DECISION:-}" ]]; then
+    [[ -n "${GBB_IR_EXCEPTION_COMMENT_JSON:-}" && -n "${GBB_IR_EXCEPTION_DECISION:-}" ]] ||
+      fail exception-approval-incomplete "GBB_IR_EXCEPTION_COMMENT_JSON and GBB_IR_EXCEPTION_DECISION are both required"
+    rm -f "$WORK/exception-measurement.json" "$WORK/exception-decision.json" "$WORK/exception-receipt.json"
+    python3 -I "$CHECKER" "${args[@]}" --emit-exception-measurement "$WORK/exception-measurement.json" \
+      >"$WORK/exception-measure.out" 2>"$WORK/exception-measure.err" || true
+    [[ -s "$WORK/exception-measurement.json" ]] ||
+      fail exception-not-needed "no deterministic Ir exception is requested by this run: $(cat "$WORK/exception-measure.err")"
+    python3 -I "$GATES" --review-approval --comment-json "$GBB_IR_EXCEPTION_COMMENT_JSON" \
+      --decision "$GBB_IR_EXCEPTION_DECISION" --measurement "$WORK/exception-measurement.json" \
+      --rev "$head_revision" --output "$WORK/exception-decision.json" --exception-receipt "$WORK/exception-receipt.json" ||
+      fail exception-approval-refused "the OWNER approval was refused; the limit stays unapproved"
+    args+=(--exception-receipt "$WORK/exception-receipt.json")
   fi
   if [[ "$with_realtime" == yes ]]; then
     for attempt in 1 2; do

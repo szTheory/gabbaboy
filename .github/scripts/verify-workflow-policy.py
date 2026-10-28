@@ -1097,6 +1097,8 @@ PERF_GATE_COMMANDS = (
     "bash tests/scripts/run-perf-gate.sh --gate",
     "bash tests/scripts/run-perf-gate.sh --seeded-regression",
     "bash tests/scripts/run-perf-gate.sh --noop-twin",
+    # RM-030: the release gate controls (eight owner-approval and six nightly mutants plus the extras) run beside the gate.
+    'python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"',
 )
 PERFORMANCE_MEASURE = "bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json"
 PERFORMANCE_UPLOAD = "rehearsal-performance-${{ github.run_id }}-${{ github.run_attempt }}"
@@ -1149,6 +1151,11 @@ REHEARSAL_REQUIRED = {
         'python3 -I trusted-judge/tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject',
     ),
 }
+# RM-030 (D-22): the exact-tree nightly ASan replay gate runs from the trusted revision, bound to the tagged source, after the
+# final downloaded-byte gate and before the one publication transition.
+NIGHTLY_GATE_CALL = ('python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate --runs-json "$RUNNER_TEMP/nightly-runs.json" '
+                     '--run-json "$RUNNER_TEMP/nightly-run.json" --head "$head" --rev "$SOURCE_SHA" --branch "rehearsal/$RELEASE_TAG" '
+                     '--output "$RUNNER_TEMP/nightly-gate-receipt.json"')
 _PUBLISH_INVENTORY = 'python3 -I trusted/.github/scripts/verify-published-release-assets.py --inventory "$RUNNER_TEMP/expected-inventory.json" build/release-final'
 _PUBLISH_RECOVERY = ('bash trusted/.github/scripts/verify-release-gates.sh --check-recovery "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA" '
                      '"$RUNNER_TEMP/expected-inventory.json" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" full')
@@ -1950,6 +1957,7 @@ LIFECYCLE_MODES = {
     "build-manifest": "candidate-platform-manifest",
     "validate-draft": "publish-qualified-release",
     "final-gate": "publish-qualified-release",
+    "nightly-gate": "publish-qualified-release",
     "publish-draft": "publish-qualified-release",
 }
 _LIFECYCLE_CALL = re.compile(r"^bash trusted/\.github/scripts/release-evidence-lifecycle\.sh ([a-z-]+)$")
@@ -2124,6 +2132,12 @@ def check_release(root: Path) -> None:
     upload_at = require_call(name, "publish-qualified-release", publisher, upload, conditional=True)
     if not inventory_at < recovery_at < upload_at:
         raise Reject("recovery-order", f"{_where(name, 'publish-qualified-release')} must decide recovery from live state before any final-metadata upload")
+    nightly_at = require_call(name, "publish-qualified-release", publisher, NIGHTLY_GATE_CALL)
+    if not gate_at < nightly_at < publish_at:
+        raise Reject("nightly-gate-order", f"{_where(name, 'publish-qualified-release')} must run the nightly ASan replay gate after the final "
+                     "downloaded-byte gate and before the one publication transition")
+    if _permissions(publisher, tree["permissions"]).get("actions") != "read":
+        raise Reject("nightly-gate-permissions", f"{_where(name, 'publish-qualified-release')} needs exactly actions: read to list the nightly runs")
     readback_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][3] + ' "$assets" build/release-final/api-assets.json')
     if readback_at <= publish_at:
         raise Reject("publication-order", f"{_where(name, 'publish-qualified-release')} must read published assets back after the publication transition")
@@ -2422,6 +2436,37 @@ def check_version_window(root: Path) -> None:
 
 
 
+PERF_GATE_SCRIPT = "tests/scripts/run-perf-gate.sh"
+RELEASE_GATES_CLI = "tests/scripts/verify-release-gates.py"
+PERF_GATE_APPROVAL_PARTS = (
+    # (fragment, how many times it must appear, the reason)
+    ('--emit-exception-measurement "$WORK/exception-measurement.json"', 1, "the evaluator must write the measurement the owner approves"),
+    ('python3 -I "$GATES" --review-approval --comment-json "$GBB_IR_EXCEPTION_COMMENT_JSON"', 1, "the release gate must verify the owner comment"),
+    ('--measurement "$WORK/exception-measurement.json" \\\n      --rev "$head_revision" --output "$WORK/exception-decision.json" --exception-receipt "$WORK/exception-receipt.json" ||\n      fail exception-approval-refused', 1,
+     "the approval must be bound to the measurement and the head and its refusal must be fatal"),
+    ('args+=(--exception-receipt "$WORK/exception-receipt.json")', 1, "only the receipt the gate wrote may reach the evaluator"),
+)
+
+
+def check_release_gate_wiring(root: Path) -> None:
+    """RM-030: the actual conditional Ir exception path verifies an OWNER approval before the ratchet sees a receipt."""
+    try:
+        text = (root / PERF_GATE_SCRIPT).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT} cannot be read: {exc.strerror}") from exc
+    if not (root / RELEASE_GATES_CLI).is_file():
+        raise Reject("release-gate-wiring", f"{RELEASE_GATES_CLI} is absent, so the approval path is defined but cannot run")
+    for fragment, count, reason in PERF_GATE_APPROVAL_PARTS:
+        if text.count(fragment) != count:
+            raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT}: {reason} (expected {count} of: {fragment[:70]})")
+    if "GBB_PERF_EXCEPTION_RECEIPT" in text or text.count("--exception-receipt") != 2:
+        raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT} must not accept an exception receipt that the approval gate did not write")
+    emit, review, handed = (text.find(part) for part in ('--emit-exception-measurement "$WORK', 'python3 -I "$GATES" --review-approval',
+                                                          'args+=(--exception-receipt'))
+    if not 0 < emit < review < handed:
+        raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT} must emit the measurement, verify the approval and only then hand over the receipt")
+
+
 def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_producer_script(root)
     check_rehearsal_flag_scope(root)
@@ -2432,6 +2477,7 @@ def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_readonly_workflows(root)
     check_preview_player_lane(root)
     check_release(root)
+    check_release_gate_wiring(root)
     check_version_window(root)
     check_timeout_ledger(root, release_head)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
@@ -2583,7 +2629,8 @@ def _copy_fixture(root: Path, target: Path) -> None:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
-    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD, LIFECYCLE_SCRIPT):
+    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD, LIFECYCLE_SCRIPT,
+                  PERF_GATE_SCRIPT, RELEASE_GATES_CLI):
         if (root / extra).is_file():
             (target / extra).parent.mkdir(parents=True, exist_ok=True)
             (target / extra).write_bytes((root / extra).read_bytes())
@@ -3186,6 +3233,47 @@ def _mutations():
            "required-command-not-executed"),
         _m("W6-19 entrypoint stops calling release.yml", "release-please.yml", "", "uses: ./.github/workflows/release.yml",
            "uses: ./.github/workflows/release-renamed.yml", "release-entrypoint"),
+        # RM-030 (17-11): the nightly gate and the owner-approval gate are called by the real paths, in order, from the trusted revision.
+        _m("G17-01 workflow stops calling the nightly gate", rel, "  publish-qualified-release:\n",
+           "run: bash trusted/.github/scripts/release-evidence-lifecycle.sh nightly-gate", "run: true", "lifecycle-wiring"),
+        _m("G17-02 nightly gate replaced by echo", "lifecycle", "# BEGIN nightly-gate\n",
+           "python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate", "echo python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate",
+           "required-command-not-executed"),
+        _m("G17-03 nightly gate taken from the tagged checkout", "lifecycle", "# BEGIN nightly-gate\n",
+           "python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate", "python3 -I tests/scripts/verify-release-gates.py --nightly-gate",
+           "token-subject-execution"),
+        _m("G17-04 nightly gate failure swallowed", "lifecycle", "# BEGIN nightly-gate\n",
+           '--output "$RUNNER_TEMP/nightly-gate-receipt.json"\n', '--output "$RUNNER_TEMP/nightly-gate-receipt.json" || true\n',
+           "required-command-not-executed"),
+        _m("G17-05 nightly gate loses the tagged-source binding", "lifecycle", "# BEGIN nightly-gate\n",
+           ' --rev "$SOURCE_SHA" --branch', ' --branch', "required-command-not-executed"),
+        _m("G17-06 nightly gate loses the rehearsal branch filter", "lifecycle", "# BEGIN nightly-gate\n",
+           ' --branch "rehearsal/$RELEASE_TAG" --output', ' --output', "required-command-not-executed"),
+        _m("G17-07 nightly gate judges a different head than the rehearsed one", "lifecycle", "# BEGIN nightly-gate\n",
+           '--head "$head" --rev', '--head "$SOURCE_SHA" --rev', "required-command-not-executed"),
+        ("G17-08 nightly gate moved after the publication transition", "lifecycle", [
+            ("# BEGIN nightly-gate\n", "python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate", "echo skipped")],
+         "required-command-not-executed"),
+        _m("G17-09 publisher gains actions: write", rel, "  publish-qualified-release:\n", "      actions: read\n", "      actions: write\n",
+           "nightly-gate-permissions"),
+        _m("G17-10 publisher loses actions: read", rel, "  publish-qualified-release:\n", "      actions: read\n", "", "nightly-gate-permissions"),
+        _m("G17-11 owner approval gate no longer called", "perfgate", "", "python3 -I \"$GATES\" --review-approval", "python3 -I \"$GATES\" --digest", "release-gate-wiring"),
+        _m("G17-12 a receipt is handed to the evaluator without the approval", "perfgate", "",
+           "  if [[ -n \"${GBB_IR_EXCEPTION_COMMENT_JSON:-}\" || -n \"${GBB_IR_EXCEPTION_DECISION:-}\" ]]; then\n",
+           "  if [[ -n \"${GBB_PERF_EXCEPTION_RECEIPT:-}\" ]]; then args+=(--exception-receipt \"$GBB_PERF_EXCEPTION_RECEIPT\"); fi\n"
+           "  if [[ -n \"${GBB_IR_EXCEPTION_COMMENT_JSON:-}\" || -n \"${GBB_IR_EXCEPTION_DECISION:-}\" ]]; then\n", "release-gate-wiring"),
+        _m("G17-13 approval refusal swallowed", "perfgate", "", "--exception-receipt \"$WORK/exception-receipt.json\" ||", "--exception-receipt \"$WORK/exception-receipt.json\" || true ||",
+           "release-gate-wiring"),
+        _m("G17-14 evaluator never receives the derived receipt", "perfgate", "", 'args+=(--exception-receipt "$WORK/exception-receipt.json")', "true", "release-gate-wiring"),
+        _m("G17-15 evaluator stops writing the measurement", "perfgate", "", '--emit-exception-measurement "$WORK/exception-measurement.json"', "", "release-gate-wiring"),
+        _m("G17-16 approval bound to another head", "perfgate", "", '--rev "$head_revision" --output', '--rev "$V020_EXPECTED" --output', "release-gate-wiring"),
+        _m("G17-17 ci perf-gate loses the release gate controls", "ci.yml", "  perf-gate:\n",
+           'run: python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"', "run: true", "required-command-not-executed"),
+        _m("G17-18 rehearsal perf-gate loses the release gate controls", reh, "  perf-gate:\n",
+           'run: python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"', "run: true", "required-command-not-executed"),
+        _m("G17-19 rehearsal release gate controls replaced by echo", reh, "  perf-gate:\n",
+           'run: python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"',
+           'run: echo python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"', "required-command-not-executed"),
         # RM-028 lifecycle extraction (17-09): extracted code must be executed by the workflow, from the trusted checkout, once.
         _m("L17-01 workflow stops calling an extracted mode", rel, "  publish-qualified-release:\n",
            "run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft", "run: true", "lifecycle-wiring"),
@@ -3408,8 +3496,11 @@ def self_test(root: Path) -> None:
         baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
         baselines["config"] = (fixture / WINDOW_CONFIG).read_text(encoding="utf-8")
         baselines["lifecycle"] = (fixture / LIFECYCLE_SCRIPT).read_text(encoding="utf-8")
+        baselines["perfgate"] = (fixture / PERF_GATE_SCRIPT).read_text(encoding="utf-8")
 
         def target(workflow: str) -> Path:
+            if workflow == "perfgate":
+                return fixture / PERF_GATE_SCRIPT
             if workflow == "config":
                 return fixture / WINDOW_CONFIG
             if workflow == "lifecycle":

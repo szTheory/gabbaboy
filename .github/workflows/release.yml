@@ -1293,6 +1293,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     permissions:
+      actions: read
       checks: read
       contents: write
       pull-requests: read
@@ -1351,6 +1352,11 @@ jobs:
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh validate-draft
       - name: Recheck final API inventory and downloaded receipts
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh final-gate
+      # RM-030 (D-22): the full ASan stall replay of the exact tagged tree must have succeeded, judged by the trusted
+      # revision's gate immediately before the one publication transition.
+      - name: Require the successful exact-tree nightly ASan replay
+        shell: bash
+        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh nightly-gate
       - name: Publish the one qualified draft
         shell: bash
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft
