@@ -11,6 +11,7 @@ the verdict of an earlier boundary.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
@@ -18,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,13 +35,92 @@ def run(command: list[str], *, cwd: Path | None = None) -> subprocess.CompletedP
     return subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
 
 
-def git_show(root: Path, rev: str, path: str) -> str:
-    if not re.fullmatch(r"[0-9a-f]{40}", rev):
-        raise ContractError("--rev must be a resolved immutable 40-hex commit")
-    result = run(["git", "show", f"{rev}:{path}"], cwd=root)
-    if result.returncode != 0:
-        raise ContractError(f"git show {rev}:{path} failed: {result.stderr.strip()}")
-    return result.stdout
+# One revision's facts are read through one `git cat-file --batch` process, one `git ls-tree` listing and (only when a
+# summary names a plan head) one `git rev-list`, instead of a `git show`, `rev-parse` or `merge-base` per fact. The
+# self-test runs the boundary about thirty times, and a process per fact (about 1,050 spawns) cost 31 s of the 60 s
+# budget on hosted Windows (17-REVIEW WR-B01, LESSONS GB-CI-012). The binding is unchanged: every request names the
+# resolved 40-hex --rev, a missing object is refused, and no object above BOUNDARY_OBJECT_LIMIT is read.
+BOUNDARY_OBJECT_LIMIT = 8 * 1024 * 1024
+_BATCH_HEADER = re.compile(rb"([0-9a-f]{40}) (blob|tree|commit|tag) ([0-9]+)\n")
+
+
+def _universal_newlines(data: bytes, what: str) -> str:
+    """The text `git show` gave through text-mode subprocess: UTF-8 with CRLF and CR read as LF."""
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ContractError(f"{what} is not UTF-8 text: {error}") from None
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+class RevisionObjects:
+    """A `git cat-file --batch` session for one boundary run. Each request is answered in order and framed by its
+    header, so a short read, a missing object or a wrong type is refused instead of misread."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.process = subprocess.Popen(["git", "cat-file", "--batch"], cwd=root, stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self.ancestry: set[str] | None = None
+
+    def __enter__(self) -> "RevisionObjects":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        try:
+            if self.process.stdin is not None:
+                self.process.stdin.close()
+            self.process.wait(timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            self.process.kill()
+            self.process.wait()
+        finally:
+            if self.process.stdout is not None:
+                self.process.stdout.close()
+
+    def read(self, spec: str) -> tuple[str, str, bytes] | None:
+        """(object id, type, bytes) of `spec`, or None when git reports it missing or ambiguous."""
+        boundary_need("\n" not in spec and "\r" not in spec, f"a batch request cannot carry a line break: {spec!r}")
+        stdin, stdout = self.process.stdin, self.process.stdout
+        boundary_need(stdin is not None and stdout is not None, "git cat-file --batch has no pipes")
+        try:
+            stdin.write(spec.encode("utf-8") + b"\n")
+            stdin.flush()
+        except OSError as error:
+            raise ContractError(f"git cat-file --batch stopped accepting requests: {error}") from None
+        header = stdout.readline()
+        found = _BATCH_HEADER.fullmatch(header)
+        if found is None:
+            boundary_need(header.endswith((b" missing\n", b" ambiguous\n")),
+                          f"git cat-file --batch answered {spec!r} with {header[:120]!r}")
+            return None
+        size = int(found.group(3))
+        boundary_need(size <= BOUNDARY_OBJECT_LIMIT, f"{spec} is {size} bytes, above the {BOUNDARY_OBJECT_LIMIT}-byte limit")
+        data = stdout.read(size + 1)
+        boundary_need(len(data) == size + 1 and data.endswith(b"\n"), f"git cat-file --batch output for {spec} is truncated")
+        return found.group(1).decode("ascii"), found.group(2).decode("ascii"), data[:-1]
+
+    def blob(self, rev: str, path: str) -> bytes:
+        if "\n" in path or "\r" in path:
+            # A name that cannot travel on a batch line keeps the single-file read.
+            shown = subprocess.run(["git", "show", f"{rev}:{path}"], cwd=self.root, capture_output=True, check=False)
+            boundary_need(shown.returncode == 0, f"git show {rev}:{path} failed")
+            boundary_need(len(shown.stdout) <= BOUNDARY_OBJECT_LIMIT, f"{path} is above the object limit")
+            return shown.stdout
+        answer = self.read(f"{rev}:{path}")
+        boundary_need(answer is not None and answer[1] == "blob", f"git show {rev}:{path} failed: no such file at the revision")
+        return answer[2]
+
+    def text(self, rev: str, path: str) -> str:
+        return _universal_newlines(self.blob(rev, path), f"{path} at {rev}")
+
+    def is_ancestor(self, commit: str, rev: str) -> bool:
+        """`git merge-base --is-ancestor commit rev`, from one `git rev-list rev` for the whole run."""
+        if self.ancestry is None:
+            listed = run(["git", "rev-list", rev], cwd=self.root)
+            boundary_need(listed.returncode == 0, f"cannot list the history of {rev}: {listed.stderr.strip()}")
+            self.ancestry = set(listed.stdout.split())
+        return commit in self.ancestry
 
 
 PHASES_AT_REV = ".planning/phases"
@@ -68,19 +149,31 @@ def boundary_need(condition: bool, message: str) -> None:
         raise ContractError(message)
 
 
-def boundary_resolve(root: Path, rev: str | None) -> str:
+def boundary_resolve(objects: RevisionObjects, rev: str | None) -> tuple[str, datetime]:
+    """The exact commit `rev` names and its committer time (what `git show -s --format=%ct` printed)."""
     boundary_need(isinstance(rev, str) and re.fullmatch(r"[0-9a-f]{40}", rev) is not None,
                   "--rev must be a resolved immutable 40-hex commit")
-    resolved = run(["git", "rev-parse", "--verify", f"{rev}^{{commit}}"], cwd=root)
-    boundary_need(resolved.returncode == 0 and resolved.stdout.strip() == rev,
+    answer = objects.read(f"{rev}^{{commit}}")
+    boundary_need(answer is not None and answer[0] == rev and answer[1] == "commit",
                   f"--rev {rev} does not resolve to that exact commit")
-    return rev
+    head = answer[2].split(b"\n\n", 1)[0]
+    committer = re.search(rb"(?m)^committer .* ([0-9]+) [+-][0-9]{4}$", head)
+    boundary_need(committer is not None, "cannot read the commit time")
+    return rev, datetime.fromtimestamp(int(committer.group(1)), tz=timezone.utc)
 
 
-def boundary_files(root: Path, rev: str, prefix: str) -> list[str]:
-    listing = run(["git", "ls-tree", "-r", "--name-only", "-z", rev, "--", prefix], cwd=root)
-    boundary_need(listing.returncode == 0, f"cannot list {prefix} at {rev}: {listing.stderr.strip()}")
-    return [name for name in listing.stdout.split("\0") if name]
+def boundary_listing(root: Path, rev: str, prefix: str) -> dict[str, str]:
+    """Every file under `prefix` at `rev`, with its object id, from one `git ls-tree`."""
+    listing = subprocess.run(["git", "ls-tree", "-r", "-z", rev, "--", prefix], cwd=root, capture_output=True, check=False)
+    boundary_need(listing.returncode == 0, f"cannot list {prefix} at {rev}: {listing.stderr.decode(errors='replace').strip()}")
+    files: dict[str, str] = {}
+    for entry in listing.stdout.split(b"\0"):
+        if not entry:
+            continue
+        found = re.fullmatch(rb"[0-7]{6} (blob|tree|commit) ([0-9a-f]{40})\t(.+)", entry, re.S)
+        boundary_need(found is not None, f"unexpected git ls-tree entry {entry[:120]!r}")
+        files[found.group(3).decode("utf-8", errors="surrogateescape")] = found.group(2).decode("ascii")
+    return files
 
 
 def boundary_frontmatter(text: str, where: str) -> dict[str, str]:
@@ -120,20 +213,25 @@ def boundary_nightly_receipt(text: str, where: str, committed_at: datetime) -> N
 
 
 def run_boundary(root: Path, rev: str | None) -> dict[str, object]:
-    rev = boundary_resolve(root, rev)
-    names = boundary_files(root, rev, BOUNDARY_PHASE_DIR)
+    boundary_need(isinstance(rev, str) and re.fullmatch(r"[0-9a-f]{40}", rev) is not None,
+                  "--rev must be a resolved immutable 40-hex commit")
+    with RevisionObjects(root) as objects:
+        return _run_boundary(root, objects, rev)
+
+
+def _run_boundary(root: Path, objects: RevisionObjects, rev: str) -> dict[str, object]:
+    rev, committed_at = boundary_resolve(objects, rev)
+    listing = boundary_listing(root, rev, PHASES_AT_REV)
+    names = [name for name in listing if name.startswith(BOUNDARY_PHASE_DIR + "/")]
     plans = sorted(name for name in names if re.fullmatch(re.escape(BOUNDARY_PHASE_DIR) + r"/17-\d\d-PLAN\.md", name))
     for number in range(1, 12):
         boundary_need(f"{BOUNDARY_PHASE_DIR}/17-{number:02d}-PLAN.md" in plans, f"plan 17-{number:02d} is missing")
     boundary_need(len(plans) <= 12, f"Phase 17 has {len(plans)} plans; the cap is 11 primary plans plus one gap slot")
-    committed = run(["git", "show", "-s", "--format=%ct", rev], cwd=root)
-    boundary_need(committed.returncode == 0 and committed.stdout.strip().isdigit(), "cannot read the commit time")
-    committed_at = datetime.fromtimestamp(int(committed.stdout.strip()), tz=timezone.utc)
 
-    requirements_text = git_show(root, rev, ".planning/REQUIREMENTS.md")
+    requirements_text = objects.text(rev, ".planning/REQUIREMENTS.md")
     claimed: set[str] = set()
     for plan in plans:
-        fields = boundary_frontmatter(git_show(root, rev, plan), plan)
+        fields = boundary_frontmatter(objects.text(rev, plan), plan)
         try:
             claimed.update(json.loads(fields.get("requirements", "")))
         except ValueError:
@@ -151,49 +249,47 @@ def run_boundary(root: Path, rev: str | None) -> dict[str, object]:
             # The summary of the last plan is written after its implementation commit; it cannot be in that commit.
             boundary_need(number == 11, f"summary 17-{number:02d} is missing")
             continue
-        fields = boundary_frontmatter(git_show(root, rev, path), path)
+        fields = boundary_frontmatter(objects.text(rev, path), path)
         boundary_need(fields.get("status") == "complete", f"{path} is not status: complete")
         boundary_need(fields.get("plan", "").strip("\"'") == f"{number:02d}", f"{path} names another plan")
         after = fields.get("plan_head_after", "")
         boundary_need(re.fullmatch(r"[0-9a-f]{40}", after) is not None, f"{path} has no plan_head_after commit")
-        reached = run(["git", "merge-base", "--is-ancestor", after, rev], cwd=root)
-        boundary_need(reached.returncode == 0, f"{path} plan_head_after {after} is not part of the boundary history")
+        boundary_need(objects.is_ancestor(after, rev), f"{path} plan_head_after {after} is not part of the boundary history")
         summaries += 1
 
     phase_pattern = re.compile(r"/(\d+(?:\.\d+)?)-\d\d-(?:PLAN|SUMMARY)\.md$")
-    later = [name for name in boundary_files(root, rev, PHASES_AT_REV)
+    later = [name for name in listing
              if phase_pattern.search(name) and float(phase_pattern.search(name).group(1)) > 17]
     boundary_need(not later, f"work for a later phase exists at the Phase 17 boundary: {later[0] if later else ''}")
     try:
-        workflow = json.loads(git_show(root, rev, ".planning/config.json")).get("workflow", {})
+        workflow = json.loads(objects.text(rev, ".planning/config.json")).get("workflow", {})
     except ValueError:
         raise ContractError("config.json is not JSON at the boundary") from None
     boundary_need(workflow.get("auto_advance", False) is False and workflow.get("_auto_chain_active", False) is False,
                   "an auto-advance flag is on at the boundary")
 
     for name, blob in BOUNDARY_HISTORIC_RECEIPTS.items():
-        found = run(["git", "rev-parse", f"{rev}:{BOUNDARY_HISTORIC_DIR}/{name}"], cwd=root)
-        boundary_need(found.returncode == 0 and found.stdout.strip() == blob,
+        boundary_need(listing.get(f"{BOUNDARY_HISTORIC_DIR}/{name}") == blob,
                       f"historic Phase 16 receipt {name} is missing or changed")
     receipts = 0
-    for name in boundary_files(root, rev, PHASES_AT_REV):
+    for name in listing:
         base = name.rsplit("/", 1)[-1]
         if not (base.endswith(".json") and "nightly" in base):
             continue
         if base in BOUNDARY_HISTORIC_RECEIPTS and name.startswith(BOUNDARY_HISTORIC_DIR + "/"):
             continue
-        boundary_nightly_receipt(git_show(root, rev, name), name, committed_at)
+        boundary_nightly_receipt(objects.text(rev, name), name, committed_at)
         receipts += 1
 
-    version = re.search(r"(?m)^project\(GabbaBoy VERSION (\d+)\.(\d+)\.(\d+)", git_show(root, rev, "CMakeLists.txt"))
+    version = re.search(r"(?m)^project\(GabbaBoy VERSION (\d+)\.(\d+)\.(\d+)", objects.text(rev, "CMakeLists.txt"))
     boundary_need(version is not None, "CMakeLists.txt has no project version at the boundary")
     version_tuple = tuple(int(part) for part in version.groups())
     try:
-        ledger = json.loads(git_show(root, rev, ".github/ci-timeouts.json"))
+        ledger = json.loads(objects.text(rev, ".github/ci-timeouts.json"))
     except ValueError:
         raise ContractError("ci-timeouts.json is not JSON at the boundary") from None
     bound = sorted(key for key, row in ledger.items() if isinstance(row, dict) and row.get("release_bound") is True)
-    row = next((line for line in git_show(root, rev, ".planning/context/FUTURE-MILESTONES.md").splitlines()
+    row = next((line for line in objects.text(rev, ".planning/context/FUTURE-MILESTONES.md").splitlines()
                 if line.startswith("| RM-027 |")), "")
     if version_tuple <= (0, 2, 1):
         boundary_need(bound == sorted(BOUNDARY_RELEASE_BOUND_ROWS),
@@ -208,22 +304,18 @@ def run_boundary(root: Path, rev: str | None) -> dict[str, object]:
 
 def boundary_files_from_rev(root: Path, rev: str) -> dict[str, bytes]:
     """Every file the boundary reads, as bytes from the boundary commit (the self-test fixture seed)."""
-    wanted = [name for name in boundary_files(root, rev, BOUNDARY_PHASE_DIR)
+    wanted = [name for name in boundary_listing(root, rev, BOUNDARY_PHASE_DIR)
               if re.search(r"/17-\d\d-(PLAN|SUMMARY)\.md$", name)]
     wanted += [f"{BOUNDARY_HISTORIC_DIR}/{name}" for name in BOUNDARY_HISTORIC_RECEIPTS]
     wanted += [".planning/REQUIREMENTS.md", ".planning/config.json", ".planning/context/FUTURE-MILESTONES.md",
                ".github/ci-timeouts.json", "CMakeLists.txt"]
-    files: dict[str, bytes] = {}
-    for name in wanted:
-        shown = subprocess.run(["git", "show", f"{rev}:{name}"], cwd=root, capture_output=True, check=False)
-        boundary_need(shown.returncode == 0, f"git show {rev}:{name} failed")
-        files[name] = shown.stdout
-    return files
+    with RevisionObjects(root) as objects:
+        return {name: objects.blob(rev, name) for name in wanted}
 
 
 def boundary_self_test(root: Path, rev: str | None) -> int:
-    rev = boundary_resolve(root, rev)
     real = run_boundary(root, rev)
+    rev = str(real["rev"])
     seed = boundary_files_from_rev(root, rev)
     controls = 0
     failures: list[str] = []
@@ -365,6 +457,35 @@ def boundary_self_test(root: Path, rev: str | None) -> int:
         later_commit = commit(without(plan_11), "2026-10-29T00:00:00+0000")
         expect("a later commit does not change an earlier boundary", None, None, revision=kept)
         expect("the later commit is its own boundary", None, "plan 17-11 is missing", revision=later_commit)
+
+    # The batch framing (WR-B01): a canned answer stream replaces git, so a reader that skipped a check would accept it.
+    def framed(name: str, stream: bytes, call, needle: str | None) -> None:
+        nonlocal controls
+        controls += 1
+        objects = RevisionObjects.__new__(RevisionObjects)
+        objects.root, objects.ancestry = root, None
+        objects.process = types.SimpleNamespace(stdin=io.BytesIO(), stdout=io.BytesIO(stream))
+        try:
+            call(objects)
+        except ContractError as error:
+            if needle is None or needle not in str(error):
+                failures.append(f"{name}: refused ({error}), expected {needle!r}")
+            return
+        if needle is not None:
+            failures.append(f"{name}: accepted, expected {needle!r}")
+
+    oid = b"c" * 40
+    framed("a well-framed blob is read", oid + b" blob 3\nabc\n",
+           lambda objects: boundary_need(objects.blob(rev, "x") == b"abc", "wrong bytes"), None)
+    framed("a truncated batch object", oid + b" blob 10\nabc\n", lambda objects: objects.blob(rev, "x"), "truncated")
+    framed("a batch object without its terminator", oid + b" blob 3\nabcd", lambda objects: objects.blob(rev, "x"), "truncated")
+    framed("a batch object above the limit", oid + b" blob %d\n" % (BOUNDARY_OBJECT_LIMIT + 1),
+           lambda objects: objects.blob(rev, "x"), "above the")
+    framed("a misframed batch header", b"fatal: bad revision\n", lambda objects: objects.blob(rev, "x"), "answered")
+    framed("a missing object", rev.encode() + b":x missing\n", lambda objects: objects.blob(rev, "x"), "no such file")
+    framed("a directory where a file is read", oid + b" tree 0\n\n", lambda objects: objects.blob(rev, "x"), "no such file")
+    framed("a peeled commit that is not --rev", oid + b" commit 0\n\n", lambda objects: boundary_resolve(objects, rev),
+           "does not resolve")
     if failures:
         for failure in failures:
             print(f"boundary control failed: {failure}", file=sys.stderr)

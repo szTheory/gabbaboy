@@ -5571,7 +5571,7 @@ add_test(NAME state_boundary_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_STATE_CONTRACT_CHECKER};--boundary;--self-test;--rev;${GBB_PHASE17_BOUNDARY_SHA};--repo;${PROJECT_SOURCE_DIR}"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=state boundary controls pass rev=${GBB_PHASE17_BOUNDARY_SHA} controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=31
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=39
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(state_boundary_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 
