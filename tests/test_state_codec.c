@@ -301,6 +301,40 @@ static int test_load_rejects_unchanged(gbb_instance *target, const uint8_t *save
     return test_load_rejects_mutations(target, saved, size, &edit, 1u);
 }
 
+/* Positive control for a relation: a reachable combination of edited fields must
+ * load, and the loaded machine must resave the exact mutated bytes. The target is
+ * restored from the unedited state afterwards. */
+static int test_load_accepts_mutations(gbb_instance *target, const uint8_t *saved,
+                                       size_t size, const test_state_edit *edits,
+                                       size_t edit_count) {
+    uint8_t *mutant = malloc(size);
+    uint8_t *resaved = malloc(size);
+    if (mutant == NULL || resaved == NULL) {
+        free(mutant); free(resaved);
+        return 0;
+    }
+    memcpy(mutant, saved, size);
+    int ok = 1;
+    for (size_t i = 0u; i < edit_count; ++i)
+        if (!test_write_body_field(target, mutant, edits[i].path, edits[i].index,
+                                   edits[i].value)) ok = 0;
+    if (ok) test_rechecksum(mutant, size);
+    const gbb_error loaded = ok ? gbb_load_state(target, mutant, size) : GBB_INVALID_ARGUMENT;
+    const gbb_error resave = loaded == GBB_OK ? gbb_save_state(target, resaved, size)
+                                              : GBB_INVALID_ARGUMENT;
+    ok = ok && loaded == GBB_OK && resave == GBB_OK && memcmp(mutant, resaved, size) == 0;
+    if (!ok) {
+        fprintf(stderr, "reachable mutation load=%d resave=%d", (int)loaded, (int)resave);
+        for (size_t i = 0u; i < edit_count; ++i)
+            fprintf(stderr, " %s[%zu]=0x%llx", edits[i].path, edits[i].index,
+                    (unsigned long long)edits[i].value);
+        fputc('\n', stderr);
+    }
+    if (gbb_load_state(target, saved, size) != GBB_OK) ok = 0;
+    free(resaved); free(mutant);
+    return ok;
+}
+
 static int test_load_rejects_header_unchanged_with(test_state_loader loader,
                                                    gbb_instance *target, const uint8_t *saved,
                                                    size_t size, size_t offset, uint8_t value,
@@ -559,6 +593,45 @@ static int state_override_isolation(void) {
     return 0;
 }
 
+static int test_dma_state_relation(gbb_instance *target, const uint8_t *saved, size_t size) {
+    static const uint64_t active_indices[] = {GBB_OAM_BYTES, 0xFFu};
+    for (size_t i = 0u; i < sizeof(active_indices) / sizeof(active_indices[0]); ++i) {
+        const test_state_edit active_past_end[] = {
+            {"dma_active", 0u, 1u}, {"dma_index", 0u, active_indices[i]}
+        };
+        if (!test_load_rejects_mutations(target, saved, size, active_past_end,
+                                         sizeof(active_past_end) / sizeof(active_past_end[0])))
+            return 0;
+    }
+    const test_state_edit finished[] = {{"dma_active", 0u, 0u}, {"dma_index", 0u, GBB_OAM_BYTES}};
+    const test_state_edit last_byte[] = {{"dma_active", 0u, 1u}, {"dma_index", 0u, GBB_OAM_BYTES - 1u}};
+    if (!test_load_accepts_mutations(target, saved, size, finished, 2u) ||
+        !test_load_accepts_mutations(target, saved, size, last_byte, 2u)) return 0;
+
+    /* The tick also refuses to index past OAM if an unvalidated caller (a white-box
+     * test or a future decoder bug) ever presents {active, index >= 160}: it ends the
+     * transfer without writing. Without the guard this writes oam[160..255], which is
+     * the start of frame_working, and UBSan reports the out-of-bounds index. */
+    gbb_instance *probe = malloc(sizeof(*probe));
+    if (probe == NULL) return 0;
+    memcpy(probe, target, sizeof(*probe));
+    memset(probe->frame_working, 0, 96u);
+    probe->dma_active = 1u;
+    probe->dma_index = (uint8_t)GBB_OAM_BYTES;
+    probe->dma_phase = 0u;
+    probe->dma_page = 0xC0u;
+    for (unsigned i = GBB_OAM_BYTES; i < 256u; ++i)
+        *wram_byte_mut(probe, (uint16_t)(0xC000u + i)) = 0x5Au; /* a write would be visible */
+    for (unsigned tick = 0u; tick < 4u * 96u && probe->dma_active; ++tick)
+        dma_advance_half_dot(probe);
+    int guarded = probe->dma_active == 0u && probe->dma_index == GBB_OAM_BYTES;
+    for (unsigned i = 0u; i < 96u; ++i) if (probe->frame_working[i] != 0u) guarded = 0;
+    if (!guarded)
+        fprintf(stderr, "dma tick guard active=%u index=%u\n", probe->dma_active, probe->dma_index);
+    free(probe);
+    return guarded;
+}
+
 static int state_semantic_bounds(void) {
     gbb_instance *source = NULL, *target = NULL;
     uint8_t *saved = NULL;
@@ -676,6 +749,11 @@ static int state_semantic_bounds(void) {
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_mutations(target, saved, size,
                                     invalid_hdma_destination,
                                     sizeof(invalid_hdma_destination) / sizeof(invalid_hdma_destination[0])));
+    /* CR-A03: OAM DMA stops when dma_index reaches 160, and dma_start resets it to 0,
+     * so an active transfer always has dma_index < 160. Index 160 is reachable only
+     * with the transfer finished. Accepting {active, 160} would let the next DMA tick
+     * write oam[160], past the 160-byte array. */
+    REQUIRE_CASE("state_semantic_bounds", test_dma_state_relation(target, saved, size));
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_header_unchanged(target, saved,
                                     size, 18u, 1u, GBB_STATE_INVALID_CONTENT));
     gbb_destroy(source); gbb_destroy(target); free(saved);
