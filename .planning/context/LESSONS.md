@@ -943,3 +943,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** At resume, `ps -p <lock pid>` returned nothing, `git diff .planning/state.json` showed the regressed route, and the fresh suite at `7cb5739` surfaced a real `test_budget` failure (fixed in `5701130`) that the stopped run had not reached.
 - **Source:** Phase 17 resume under Claude Code, 2026-10-28.
 - **Status:** Adopted.
+
+### GB-CI-012 / 2026-10-28 / A CTest budget passed at 96% is a pending failure
+
+- **Cause and evidence:** `v02_support_ledger_controls` passed in 115.71 s against its 120 s TIMEOUT on hosted `native-windows-x64` at `0c8fd56` (run 40707388400), the first green Windows lane of Phase 17. Plan 17-08 then added disclosure controls (about +2 s on macOS) and the same test timed out at `246b7d4` (run 40729489427). Seven more checks failed in cascade, because package smoke and `required-native` wait for a green exact-head CI run. The self-test spawned one `git show tag:path` per covered source input per sidecar build: 1,398 git processes, 436 distinct. Process spawn costs several times more on Windows runners.
+- **Remedy:** `e5064c3` reads each sidecar build's tagged inputs through one `git cat-file --batch` process. Tag binding, path guard, per-file size limit and digest checks are unchanged. Names with CR/LF keep the single-file path. Locally the self-test dropped from 30.1 s to 12.4 s and git calls from 1,398 to 209. The budget was not raised.
+- **Applies when:** A green hosted run shows any test above about 75% of its TIMEOUT, especially Windows tests that spawn many processes. Treat it as a defect at once rather than waiting for the next control to tip it over. Check the per-test time in the previous green Windows log before blaming the newest change.
+- **Verification:** Mutants that misframe the batch output, truncate a blob, or read `HEAD` instead of the tag each make `verify-support-ledger.py --self-test` fail. The full suite passed 1488/1488 at `e5064c3`. The next hosted Windows run at the pushed head should show the test well under 60 s.
+- **Source:** Phase 17 PR130, plans 17-08/17-09; `tests/scripts/verify-support-ledger.py`.
+- **Status:** Adopted.
