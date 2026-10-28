@@ -335,6 +335,37 @@ static int test_load_accepts_mutations(gbb_instance *target, const uint8_t *save
     return ok;
 }
 
+/* A live machine is saveable, and its state reloads into a fresh instance of the
+ * same ROM and profile and resaves byte-identically. Returns 1 on success; on
+ * failure it prints the first failing step with the caller's label. */
+static int test_live_roundtrip(const gbb_instance *source, const char *label) {
+    size_t size = 0u;
+    const gbb_error sized = gbb_state_size(source, &size);
+    if (sized != GBB_OK) {
+        fprintf(stderr, "%s: gbb_state_size=%d ly=%u dot=%u mode=%u lcdc=0x%02x\n", label,
+                (int)sized, source->ly, source->ppu_dot, source->ppu_mode, source->lcdc);
+        return 0;
+    }
+    uint8_t *saved = malloc(size), *resaved = malloc(size);
+    gbb_instance *target = NULL;
+    int ok = saved != NULL && resaved != NULL &&
+             gbb_create(source->profile, &target) == GBB_OK &&
+             gbb_load_rom(target, source->rom, source->rom_size) == GBB_OK;
+    const gbb_error save = ok ? gbb_save_state(source, saved, size) : GBB_INVALID_ARGUMENT;
+    const gbb_error load = save == GBB_OK ? gbb_load_state(target, saved, size)
+                                          : GBB_INVALID_ARGUMENT;
+    const gbb_error resave = load == GBB_OK ? gbb_save_state(target, resaved, size)
+                                            : GBB_INVALID_ARGUMENT;
+    ok = ok && resave == GBB_OK && memcmp(saved, resaved, size) == 0;
+    if (!ok)
+        fprintf(stderr, "%s: save=%d load=%d resave=%d identical=%d\n", label, (int)save,
+                (int)load, (int)resave,
+                resave == GBB_OK ? memcmp(saved, resaved, size) == 0 : 0);
+    if (target != NULL) gbb_destroy(target);
+    free(resaved); free(saved);
+    return ok;
+}
+
 static int test_load_rejects_header_unchanged_with(test_state_loader loader,
                                                    gbb_instance *target, const uint8_t *saved,
                                                    size_t size, size_t offset, uint8_t value,
@@ -632,6 +663,46 @@ static int test_dma_state_relation(gbb_instance *target, const uint8_t *saved, s
     return guarded;
 }
 
+/* WR-A02. FF53 is the only write that sets the destination cursor's high byte, and it
+ * always ORs in 0x8000. Until the guest writes FF53, FF54 changes only the low byte of
+ * the reset cursor 0, so 0x0000..0x00F0 (low nibble clear) is reachable while idle or
+ * pending. hdma_admit_block refuses any block whose cursor is outside 0x8000..0x9FF0,
+ * so an active block never has a low cursor, and such a state is refused. */
+static int test_hdma_destination_relation(gbb_instance *source, gbb_instance *target,
+                                          const uint8_t *saved, size_t size) {
+    static const uint64_t active_low[] = {0x0000u, 0x0010u, 0x00F0u};
+    for (size_t i = 0u; i < sizeof(active_low) / sizeof(active_low[0]); ++i) {
+        const test_state_edit active_block[] = {
+            {"hdma.mode", 0u, 2u}, {"hdma.active", 0u, 1u},
+            {"hdma.pending_hblank", 0u, 0u}, {"hdma.blocks_remaining", 0u, 1u},
+            {"hdma.source_cursor", 0u, 0xC000u}, {"hdma.destination_cursor", 0u, active_low[i]}
+        };
+        if (!test_load_rejects_mutations(target, saved, size, active_block,
+                                         sizeof(active_block) / sizeof(active_block[0])))
+            return 0;
+    }
+    const test_state_edit unaligned_low[] = {{"hdma.destination_cursor", 0u, 0x0018u}};
+    if (!test_load_rejects_mutations(target, saved, size, unaligned_low, 1u)) return 0;
+    const test_state_edit valid_block[] = {
+        {"hdma.mode", 0u, 2u}, {"hdma.active", 0u, 1u},
+        {"hdma.pending_hblank", 0u, 0u}, {"hdma.blocks_remaining", 0u, 1u},
+        {"hdma.source_cursor", 0u, 0xC000u}, {"hdma.destination_cursor", 0u, 0x8000u}
+    };
+    if (!test_load_accepts_mutations(target, saved, size, valid_block,
+                                     sizeof(valid_block) / sizeof(valid_block[0]))) return 0;
+
+    /* Guest-driven reachability: FF54 before any FF53 write, idle and then pending. */
+    if (source->exec_mode != GBB_MODE_CGB || source->hdma.destination_cursor != 0u) return 0;
+    write8(source, 0xFF51u, 0xC0u);
+    write8(source, 0xFF52u, 0x00u);
+    write8(source, 0xFF54u, 0xF0u);
+    if (source->hdma.destination_cursor != 0x00F0u ||
+        !test_live_roundtrip(source, "hdma idle low cursor")) return 0;
+    write8(source, 0xFF55u, 0x00u); /* general-purpose request, one block */
+    return source->hdma.pending_hblank == 1u &&
+           test_live_roundtrip(source, "hdma pending low cursor");
+}
+
 static int state_semantic_bounds(void) {
     gbb_instance *source = NULL, *target = NULL;
     uint8_t *saved = NULL;
@@ -754,6 +825,8 @@ static int state_semantic_bounds(void) {
      * with the transfer finished. Accepting {active, 160} would let the next DMA tick
      * write oam[160], past the 160-byte array. */
     REQUIRE_CASE("state_semantic_bounds", test_dma_state_relation(target, saved, size));
+    REQUIRE_CASE("state_semantic_bounds", test_hdma_destination_relation(source, target,
+                                    saved, size));
     /* WR-A01: LY counts lines 0..153 and wraps at 154; LCD off holds it at 0. */
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "ly", 0u, GBB_LINES_PER_FRAME));
