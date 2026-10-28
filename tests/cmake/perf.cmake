@@ -65,7 +65,8 @@ function(gbb_add_perf_receipt_test name regex argument)
       -DGBB_EXPECT_CODE=0
       "-DGBB_EXPECT_REGEX=${regex}"
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-  set_tests_properties(${name} PROPERTIES TIMEOUT 120)
+  # Both controls measure about 7 s locally, inside the base 60 s budget (verify-test-budget.py).
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
 endfunction()
 
 # The control count is a parsed minimum: adding controls is allowed, dropping one is rejected.
@@ -110,8 +111,7 @@ gbb_add_perf_gate_test(perf_attribution_merges 0 "perf-attribution pass revision
 set(GBB_PERF_GATE_EXTRA_ARGS)
 
 # These exercise the actual paired-receipt producer with stubbed measurement executables, then
-# pass its receipt through the production verifier and reuse function. Extra time covers the
-# source-bound fixture setup and repeated controlled observations without a wall-clock budget.
+# pass its receipt through the production verifier and reuse function. No wall-clock threshold is asserted.
 gbb_add_perf_receipt_test(perf_advisory_pipeline "advisory pipeline self-test pass controls=[0-9]+"
   --self-test-advisory-pipeline)
 gbb_add_perf_receipt_test(perf_advisory_controls "advisory controls self-test pass controls=[0-9]+"
