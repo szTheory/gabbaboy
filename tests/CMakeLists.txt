@@ -5010,6 +5010,13 @@ add_test(NAME state_codec_matrix COMMAND test_state_codec state_codec_matrix)
 add_test(NAME state_canonical COMMAND test_state_codec state_canonical)
 add_test(NAME state_semantic_bounds COMMAND test_state_codec state_semantic_bounds)
 add_test(NAME state_override_isolation COMMAND test_state_codec_override state_override_isolation)
+# Reachable-state saveability property (review WR-A04): synthetic sprite, palette and
+# HDMA-cursor guests plus in-repository fixtures must be saveable at sampled instants and
+# reload to identical resave bytes. One case per profile keeps each well under its budget.
+add_test(NAME state_reachable_saveable_dmg
+  COMMAND test_state_codec state_reachable_saveable dmg "${PROJECT_SOURCE_DIR}/fixtures")
+add_test(NAME state_reachable_saveable_cgb
+  COMMAND test_state_codec state_reachable_saveable cgb "${PROJECT_SOURCE_DIR}/fixtures")
 add_test(NAME state_field_census
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
     --field-census --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
@@ -5021,7 +5028,7 @@ add_test(NAME state_codec_mutant_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-mutants.py"
     --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}" --cc "${CMAKE_C_COMPILER}")
 set_tests_properties(state_identity state_codec_matrix state_canonical state_semantic_bounds
-  state_override_isolation
+  state_override_isolation state_reachable_saveable_dmg state_reachable_saveable_cgb
   PROPERTIES TIMEOUT 60)
 set_tests_properties(state_field_census state_field_census_controls PROPERTIES TIMEOUT 30)
 set_tests_properties(state_codec_mutant_controls PROPERTIES TIMEOUT 60)

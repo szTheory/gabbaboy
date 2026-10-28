@@ -1322,6 +1322,266 @@ static int test_full_field_census(void) {
     return ok;
 }
 
+/* Reachable-state saveability property (review WR-A04). Every state the emulator
+ * produces by running a ROM must be saveable, and its saved bytes must reload into a
+ * fresh instance and resave identically. Earlier suites saved only at hand-picked
+ * instants, so validator rules stricter than the core (CR-A01 stale stalled-object
+ * bits, CR-A02 CRAM bit 7) went unnoticed. Two deterministic guest programs pin
+ * those cases; a set of in-repository fixtures adds breadth at sampled instants. */
+typedef struct {
+    unsigned samples;
+    unsigned roundtrips;
+    unsigned failures;
+} reachable_tally;
+
+static int reachable_check(const gbb_instance *m, int full, const char *label,
+                           reachable_tally *tally) {
+    ++tally->samples;
+    int ok;
+    if (full) {
+        ++tally->roundtrips;
+        ok = test_live_roundtrip(m, label);
+    } else {
+        size_t size = 0u;
+        const gbb_error sized = gbb_state_size(m, &size);
+        ok = sized == GBB_OK;
+        if (!ok && tally->failures < 8u)
+            fprintf(stderr, "%s: gbb_state_size=%d ly=%u dot=%u mode=%u lcdc=0x%02x "
+                    "stalled=0x%x selected=%u\n", label, (int)sized, m->ly, m->ppu_dot,
+                    m->ppu_mode, m->lcdc, m->ppu_objects_stalled, m->ppu_selected_object_count);
+    }
+    if (!ok) ++tally->failures;
+    return ok;
+}
+
+static gbb_instance *reachable_boot(gbb_profile profile, const uint8_t *rom, size_t rom_size) {
+    gbb_instance *m = NULL;
+    if (gbb_create(profile, &m) != GBB_OK) return NULL;
+    if (gbb_load_rom(m, rom, rom_size) != GBB_OK) {
+        gbb_destroy(m);
+        return NULL;
+    }
+    return m;
+}
+
+static int reachable_step(gbb_instance *m, uint64_t budget) {
+    const gbb_run_result r = gbb_run(m, budget, NULL, 0u);
+    return r.reason == GBB_STOP_BUDGET || r.reason == GBB_STOP_HALTED_IDLE;
+}
+
+/* Advance the master clock by at least `half_dots`. A halted guest returns
+ * GBB_STOP_HALTED_IDLE before the budget is spent, so one gbb_run call is not
+ * enough. A budget below one instruction makes no progress, so each call asks for
+ * at least 64 half-dots (longer than any instruction) and may overshoot. The
+ * iteration cap bounds a guest that makes no progress at all. */
+static int reachable_advance(gbb_instance *m, uint64_t half_dots) {
+    const uint64_t target = m->time_half_dots + half_dots;
+    for (unsigned i = 0u; i < 1000000u && m->time_half_dots < target; ++i) {
+        const uint64_t remaining = target - m->time_half_dots;
+        if (!reachable_step(m, remaining < 64u ? 64u : remaining)) return 0;
+    }
+    return m->time_half_dots >= target;
+}
+
+/* One 8x8 object at OAM Y=16, X=8 covers lines 0..7 and stalls mode 3 at x=0. Line 8
+ * has no object, so its OAM scan resets the selected count while the stalled bit
+ * from line 7 is still set until mode 3 begins (CR-A01). The guest then idles in
+ * a 24-half-dot JR loop. Steps use a 48-half-dot budget, enough for any instruction
+ * in these programs (JP is 32). */
+static void reachable_sprite_rom(uint8_t *rom, uint8_t cgb_flag) {
+    test_build_rom(rom, 0x00u, cgb_flag);
+    static const uint8_t program[] = {
+        0xAFu, 0xE0u, 0x40u,             /* xor a; ldh (LCDC),a: LCD off for OAM writes */
+        0x21u, 0x00u, 0xFEu,             /* ld hl,$FE00 */
+        0x3Eu, 0x10u, 0x22u,             /* Y=16 */
+        0x3Eu, 0x08u, 0x22u,             /* X=8 */
+        0xAFu, 0x22u, 0x22u,             /* tile 0, attributes 0 */
+        0x3Eu, 0x93u, 0xE0u, 0x40u,      /* LCD, BG and OBJ on, $8000 tile data */
+        0x18u, 0xFEu                     /* jr -2 */
+    };
+    memset(rom + 0x200u, 0, 0x100u);
+    memcpy(rom + 0x200u, program, sizeof(program));
+}
+
+/* Fill BG and OBJ palette RAM with $FF through auto-incrementing BCPS/OCPS, the
+ * common "all white" init: every odd byte has bit 7 set (CR-A02). It also writes
+ * FF54 before any FF53, leaving the HDMA destination cursor at $00F0 (WR-A02). */
+static void reachable_cram_rom(uint8_t *rom) {
+    test_build_rom(rom, 0x00u, 0x80u);
+    static const uint8_t program[] = {
+        0xAFu, 0xE0u, 0x40u,                    /* LCD off: palette RAM always writable */
+        0x3Eu, 0x80u, 0xE0u, 0x68u,             /* BCPS = auto-increment from 0 */
+        0x3Eu, 0xFFu, 0x06u, 0x40u,             /* a=$FF, b=64 */
+        0xE0u, 0x69u, 0x05u, 0x20u, 0xFBu,      /* ldh (BCPD),a; dec b; jr nz */
+        0x3Eu, 0x80u, 0xE0u, 0x6Au,             /* OCPS = auto-increment from 0 */
+        0x3Eu, 0xFFu, 0x06u, 0x40u,
+        0xE0u, 0x6Bu, 0x05u, 0x20u, 0xFBu,      /* ldh (OCPD),a; dec b; jr nz */
+        0x3Eu, 0xF0u, 0xE0u, 0x54u,             /* HDMA4 before HDMA3 */
+        0x3Eu, 0x91u, 0xE0u, 0x40u,             /* LCD on */
+        0x18u, 0xFEu
+    };
+    memset(rom + 0x200u, 0, 0x100u);
+    memcpy(rom + 0x200u, program, sizeof(program));
+}
+
+static int reachable_seek(gbb_instance *m, uint8_t ly, uint16_t dot, uint64_t min_frame) {
+    for (unsigned i = 0u; i < 200000u; ++i) {
+        if (m->frame_generation >= min_frame && m->ly == ly && m->ppu_dot >= dot) return 1;
+        if (!reachable_step(m, 48u)) return 0;
+    }
+    return 0;
+}
+
+static int reachable_sprite_case(gbb_profile profile, uint8_t cgb_flag, const char *label,
+                                 reachable_tally *tally) {
+    uint8_t *rom = calloc(TEST_ROM_BYTES, 1u);
+    if (rom == NULL) return 0;
+    reachable_sprite_rom(rom, cgb_flag);
+    gbb_instance *m = reachable_boot(profile, rom, TEST_ROM_BYTES);
+    free(rom);
+    if (m == NULL) return 0;
+    int ok = reachable_seek(m, 7u, 300u, 1u);
+    /* Precondition: line 7 stalled on the object, so the next OAM scan starts stale. */
+    const int stalled = ok && m->ppu_objects_stalled == 1u && m->ppu_selected_object_count == 1u;
+    unsigned stale_window = 0u, seen = 0u;
+    for (unsigned i = 0u; ok && i < 64u && !(m->ly == 8u && m->ppu_dot >= 100u); ++i) {
+        if (m->ly == 8u && m->ppu_dot < 80u) ++stale_window;
+        reachable_check(m, (i % 8u) == 0u, label, tally);
+        ++seen;
+        ok = reachable_step(m, 48u);
+    }
+    /* LCD off right after the stall line holds the PPU there indefinitely. */
+    ok = ok && reachable_seek(m, 7u, 300u, m->frame_generation + 1u);
+    if (ok) {
+        write8(m, 0xFF40u, 0x13u);
+        reachable_check(m, 1, label, tally);
+        ok = reachable_advance(m, 6400u);
+        reachable_check(m, 1, label, tally);
+    }
+    gbb_destroy(m);
+    if (!ok || !stalled || stale_window == 0u || seen < 8u)
+        fprintf(stderr, "%s: setup ok=%d stalled=%d stale_window=%u samples=%u\n", label, ok,
+                stalled, stale_window, seen);
+    return ok && stalled && stale_window != 0u && seen >= 8u;
+}
+
+static int reachable_cram_case(reachable_tally *tally) {
+    uint8_t *rom = calloc(TEST_ROM_BYTES, 1u);
+    if (rom == NULL) return 0;
+    reachable_cram_rom(rom);
+    gbb_instance *m = reachable_boot(GBB_PROFILE_CGB_CPU_E, rom, TEST_ROM_BYTES);
+    free(rom);
+    if (m == NULL) return 0;
+    int ok = m->exec_mode == GBB_MODE_CGB;
+    for (unsigned i = 0u; ok && i < 40u; ++i) {
+        ok = reachable_advance(m, 997u);
+        reachable_check(m, (i % 8u) == 7u, "cram-ff", tally);
+    }
+    /* Precondition: the guest really stored bit 7 in odd palette bytes. */
+    int bit7 = 1;
+    for (unsigned i = 1u; i < 64u; i += 2u)
+        if (m->bg_cram[i] != 0xFFu || m->obj_cram[i] != 0xFFu) bit7 = 0;
+    const int low_cursor = m->hdma.destination_cursor == 0x00F0u;
+    gbb_destroy(m);
+    if (!ok || !bit7 || !low_cursor)
+        fprintf(stderr, "cram-ff: setup ok=%d bit7=%d low_cursor=%d\n", ok, bit7, low_cursor);
+    return ok && bit7 && low_cursor;
+}
+
+static uint8_t *reachable_read_file(const char *path, size_t *size) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) return NULL;
+    uint8_t *bytes = NULL;
+    long length = -1;
+    if (fseek(file, 0L, SEEK_END) == 0) length = ftell(file);
+    if (length > 0 && length <= (long)(8u * 1024u * 1024u) && fseek(file, 0L, SEEK_SET) == 0) {
+        bytes = malloc((size_t)length);
+        if (bytes != NULL && fread(bytes, 1u, (size_t)length, file) != (size_t)length) {
+            free(bytes);
+            bytes = NULL;
+        }
+    }
+    fclose(file);
+    if (bytes != NULL) *size = (size_t)length;
+    return bytes;
+}
+
+typedef struct {
+    const char *path;
+    uint64_t warmup;
+    unsigned samples;
+} reachable_fixture;
+
+/* The stride is prime and not a multiple of the 912-half-dot line, so sampled
+ * instants walk through every line phase; each eighth sample is a full roundtrip. */
+static int reachable_fixture_case(gbb_profile profile, const char *root,
+                                  const reachable_fixture *fixture, reachable_tally *tally) {
+    char path[1024];
+    const int written = snprintf(path, sizeof(path), "%s/%s", root, fixture->path);
+    if (written < 0 || (size_t)written >= sizeof(path)) return 0;
+    size_t size = 0u;
+    uint8_t *rom = reachable_read_file(path, &size);
+    gbb_instance *m = rom == NULL ? NULL : reachable_boot(profile, rom, size);
+    free(rom);
+    if (m == NULL) {
+        fprintf(stderr, "%s: fixture did not load\n", fixture->path);
+        return 0;
+    }
+    int ok = fixture->warmup == 0u || reachable_advance(m, fixture->warmup);
+    unsigned objects = 0u;
+    for (unsigned i = 0u; ok && i < fixture->samples; ++i) {
+        ok = reachable_advance(m, 9973u);
+        if (m->ppu_selected_object_count != 0u) ++objects;
+        reachable_check(m, (i % 8u) == 7u, fixture->path, tally);
+    }
+    if (!ok) {
+        fprintf(stderr, "%s: run stopped before sampling finished\n", fixture->path);
+        reachable_check(m, 1, fixture->path, tally);
+    }
+    printf("  %s profile=%d mode=%d samples=%u object_samples=%u\n", fixture->path,
+           (int)profile, (int)m->exec_mode, fixture->samples, objects);
+    gbb_destroy(m);
+    return ok;
+}
+
+static int state_reachable_saveable(const char *profile_name, const char *fixtures) {
+    const int cgb = strcmp(profile_name, "cgb") == 0;
+    if (!cgb && strcmp(profile_name, "dmg") != 0) return 2;
+    const gbb_profile profile = cgb ? GBB_PROFILE_CGB_CPU_E : GBB_PROFILE_DMG_CPU_B;
+    reachable_tally tally = {0u, 0u, 0u};
+    int setup = 1;
+    setup &= reachable_sprite_case(profile, 0x00u, cgb ? "sprite-compat" : "sprite-dmg", &tally);
+    if (cgb) {
+        setup &= reachable_sprite_case(profile, 0x80u, "sprite-cgb", &tally);
+        setup &= reachable_cram_case(&tally);
+    }
+    static const reachable_fixture dmg_fixtures[] = {
+        {"libbet/libbet.gb", 9200000u, 200u},
+        {"age/stat-mode-sprites-dmgC-cgbBCE.gb", 0u, 160u},
+        {"cgb-colour/colour-attr.gb", 0u, 120u},
+        {"visible-demo/demo.gb", 0u, 80u},
+        {"tracer/tracer.gb", 0u, 80u}
+    };
+    static const reachable_fixture cgb_fixtures[] = {
+        {"libbet/libbet.gb", 3400000u, 200u},
+        {"age/stat-mode-sprites-dmgC-cgbBCE.gb", 0u, 120u},
+        {"cgb-colour/colour-attr.gb", 0u, 120u},
+        {"cgb-colour/colour-cram.gb", 0u, 60u},
+        {"cgb-hdma/hblank.gb", 0u, 60u},
+        {"rtc3test/rtc3test.gb", 0u, 60u},
+        {"visible-demo/demo.gb", 0u, 40u},
+        {"tracer/tracer.gb", 0u, 40u}
+    };
+    const reachable_fixture *list = cgb ? cgb_fixtures : dmg_fixtures;
+    const size_t count = cgb ? sizeof(cgb_fixtures) / sizeof(cgb_fixtures[0])
+                             : sizeof(dmg_fixtures) / sizeof(dmg_fixtures[0]);
+    for (size_t i = 0u; i < count; ++i)
+        setup &= reachable_fixture_case(profile, fixtures, &list[i], &tally);
+    printf("state_reachable_saveable profile=%s samples=%u roundtrips=%u failures=%u setup=%s\n",
+           profile_name, tally.samples, tally.roundtrips, tally.failures, setup ? "ok" : "FAILED");
+    return setup && tally.failures == 0u && tally.roundtrips != 0u ? 0 : 1;
+}
+
 static int emit_state_field_census(void) {
     gbb_instance *instance = NULL;
     if (!state_field_census_instance(&instance)) return 1;
@@ -1495,8 +1755,10 @@ int main(int argc, char **argv) {
         return emit_state_field_census();
     if (argc == 2 && strcmp(argv[1], "state_portable_pins") == 0)
         return emit_state_portable_pins();
+    if (argc == 4 && strcmp(argv[1], "state_reachable_saveable") == 0)
+        return state_reachable_saveable(argv[2], argv[3]);
     if (argc != 2) {
-        fprintf(stderr, "usage: test_state_codec state_identity|state_codec_matrix|state_canonical|state_semantic_bounds|state_override_isolation|state_field_census\n");
+        fprintf(stderr, "usage: test_state_codec state_identity|state_codec_matrix|state_canonical|state_semantic_bounds|state_override_isolation|state_field_census|state_reachable_saveable dmg|cgb FIXTURES\n");
         return 2;
     }
     if (strcmp(argv[1], "state_identity") == 0) return state_identity();

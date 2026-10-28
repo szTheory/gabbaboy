@@ -1306,6 +1306,8 @@ state_identity
 state_codec_matrix
 state_semantic_bounds
 state_override_isolation
+state_reachable_saveable_dmg
+state_reachable_saveable_cgb
 state_slice_invariance
 state_codec_mutant_controls
 state_precodec_gate
