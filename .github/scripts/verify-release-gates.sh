@@ -264,7 +264,7 @@ PY
 check_final_receipt() {
   local assets_json=$1 directory=$2 tag=$3 source_sha=$4 release_id=$5
   python3 - "$assets_json" "$directory" "$tag" "$source_sha" "$release_id" <<'PY' || return $?
-import hashlib, json, os, pathlib, sys
+import hashlib, json, os, pathlib, re, sys
 assets = json.loads(pathlib.Path(sys.argv[1]).read_text())
 root = pathlib.Path(sys.argv[2])
 tag, source, release_id = sys.argv[3:]
@@ -277,10 +277,25 @@ if receipt.get("tag") != tag or receipt.get("source_sha") != source or str(recei
 manifest_sha = hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest()
 if receipt.get("sha256sums_sha256") != manifest_sha:
     raise SystemExit("release receipt does not bind the final SHA256SUMS manifest")
+# The manifest is parsed strictly before any map is built, so a repeated name cannot collapse into one entry and a
+# malformed, path-like or differently spaced line cannot be read as something else. The producer writes exactly
+# "<64 hex>  <asset name>\n" per asset.
+try:
+    sums_text = (root / "SHA256SUMS").read_bytes().decode("utf-8")
+except UnicodeDecodeError:
+    raise SystemExit("SHA256SUMS is not UTF-8")
+sums_lines = sums_text.split("\n")
+if sums_lines.pop() != "":
+    raise SystemExit("SHA256SUMS must end with a newline")
 listed = {}
-for line in (root / "SHA256SUMS").read_text().splitlines():
-    digest, name = line.split(None, 1)
-    listed[name.lstrip("* ")] = digest
+for line in sums_lines:
+    entry = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9][A-Za-z0-9._-]*)", line)
+    if not entry:
+        raise SystemExit(f"SHA256SUMS has a malformed or path-like line: {line[:80]!r}")
+    digest, name = entry.groups()
+    if name in listed:
+        raise SystemExit(f"SHA256SUMS names {name} more than once")
+    listed[name] = digest
 for name, digest in listed.items():
     if name not in {asset["name"] for asset in assets}:
         raise SystemExit(f"SHA256SUMS names an absent API asset: {name}")
@@ -426,8 +441,16 @@ content["candidate-platform-manifest.json"] = json.dumps({"source_sha": sha, "as
 if defect == "stale":
     content["v02-fuzz-receipt.json"] = b"altered after the platform manifest\n"
 if final:
-    sums = "".join(f"{digest(content[n])}  {n}\n" for n in sorted(names))
-    content["SHA256SUMS"] = sums.encode()
+    lines = [f"{digest(content[n])}  {n}\n" for n in sorted(names)]
+    if defect == "sums-duplicate":
+        lines.append(lines[0])
+    elif defect == "sums-malformed":
+        lines[0] = lines[0].replace("  ", " ", 1)
+    elif defect == "sums-pathlike":
+        lines[0] = lines[0].replace("  ", "  ../", 1)
+    elif defect == "sums-no-newline":
+        lines[-1] = lines[-1].rstrip("\n")
+    content["SHA256SUMS"] = "".join(lines).encode()
     content["release-receipt.json"] = json.dumps({"tag": tag, "source_sha": sha, "release_id": release_id,
                                                   "sha256sums_sha256": digest(content["SHA256SUMS"])}).encode()
     if final == "final-short":
@@ -808,7 +831,18 @@ PY
     inventory_fixture "$temp/final-short" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "" final-short
     expect_reject 'an incomplete final inventory' 'must contain exactly' \
       check_final_receipt "$temp/final-short/api.json" "$temp/final-short/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
-    printf 'PASS: final inventory binds every asset; rejected: incomplete final inventory\n'
+    for defect in sums-duplicate sums-malformed sums-pathlike sums-no-newline; do
+      inventory_fixture "$temp/final-$defect" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "$defect" final
+    done
+    expect_reject 'a SHA256SUMS name listed twice' 'more than once' \
+      check_final_receipt "$temp/final-sums-duplicate/api.json" "$temp/final-sums-duplicate/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    expect_reject 'a malformed SHA256SUMS line' 'malformed or path-like line' \
+      check_final_receipt "$temp/final-sums-malformed/api.json" "$temp/final-sums-malformed/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    expect_reject 'a path-like SHA256SUMS name' 'malformed or path-like line' \
+      check_final_receipt "$temp/final-sums-pathlike/api.json" "$temp/final-sums-pathlike/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    expect_reject 'a SHA256SUMS without its final newline' 'must end with a newline' \
+      check_final_receipt "$temp/final-sums-no-newline/api.json" "$temp/final-sums-no-newline/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    printf 'PASS: final inventory binds every asset; rejected: incomplete final inventory, duplicate, malformed, path-like and unterminated SHA256SUMS\n'
     python3 -I "$ROOT/tests/scripts/verify-v02-delivery.py" --self-test
     python3 -I "$ROOT/.github/scripts/verify-published-release-assets.py" --self-test
     recovery_self_test "$temp/recovery"

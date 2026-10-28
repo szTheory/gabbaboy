@@ -5490,18 +5490,22 @@ gbb_state_alloc_mutant(save_overwrites_tail ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
 # (bash, jq and a POSIX `gh` shim), so the replay is POSIX-only like the other bash-bound checks. The revision is the
 # configure-time HEAD, read with git show; nothing falls back to the live tree.
 if(NOT WIN32)
+  # Each case: name | checker mode | output regex | key whose value must reach a minimum | minimum.
   foreach(gbb_lifecycle_case IN ITEMS
-      "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0"
-      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*")
+      "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0|uploads|7"
+      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|60")
     string(REPLACE "|" ";" gbb_lifecycle_fields "${gbb_lifecycle_case}")
     list(GET gbb_lifecycle_fields 0 gbb_lifecycle_name)
     list(GET gbb_lifecycle_fields 1 gbb_lifecycle_mode)
     list(GET gbb_lifecycle_fields 2 gbb_lifecycle_regex)
+    list(GET gbb_lifecycle_fields 3 gbb_lifecycle_key)
+    list(GET gbb_lifecycle_fields 4 gbb_lifecycle_min)
     add_test(NAME ${gbb_lifecycle_name}
       COMMAND ${CMAKE_COMMAND}
         "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};${gbb_lifecycle_mode}"
         -DGBB_EXPECT_CODE=0
         "-DGBB_EXPECT_REGEX=${gbb_lifecycle_regex}"
+        -DGBB_EXPECT_MIN_KEY=${gbb_lifecycle_key} -DGBB_EXPECT_MIN_VALUE=${gbb_lifecycle_min}
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
   endforeach()

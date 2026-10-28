@@ -149,6 +149,58 @@ def run_self_test() -> None:
     print("PASS: source-proof self-tests reject stale, missing, failed and wrong-App evidence")
 
 
+CAPTURED = Path(__file__).resolve().parents[2] / "tests/data/release-api/captured.json"
+
+
+def captured_shape_self_test() -> int:
+    """Judge real, sanitized GitHub objects (tests/data/release-api) with the same validator.
+
+    The hand-built fixture above shows what the validator accepts; the captured pull request and check runs show it
+    accepts what GitHub actually returns, which carries url, html_url and check_suite and no repository member. The
+    receipt is built from the capture's own identity, never from the validator's constants."""
+    if not CAPTURED.is_file():
+        print("SKIP: no captured GitHub API shapes beside this validator (a bare copy has none)")
+        return 0
+    capture = json.loads(CAPTURED.read_text(encoding="utf-8"))
+    identity, responses = capture["identity"], capture["responses"]
+    head, source = identity["pr_head_sha"], identity["source_sha"]
+    pr = json.loads(json.dumps(responses["pull_request"]))
+    checks = json.loads(json.dumps(responses["check_runs"]))
+    checks["check_runs"] = [run for run in checks["check_runs"] if run["name"] in REQUIRED_CONTEXTS]
+    receipt = {"tag_name": identity["tag"], "version": identity["tag"][1:], "source_sha": source,
+               "release_id": str(identity["release_id"]), "draft": True, "source_clean": True,
+               "prior_pr_proof": {"pr_number": identity["pr_number"], "head_sha": head,
+                                  "merge_commit_sha": source, "required_checks": "passed"}}
+    args = (identity["tag"], source, str(identity["release_id"]))
+    validate(receipt, pr, checks, *args)
+    first = checks["check_runs"][0]
+    if "repository" in first or not first["url"].startswith(API_CHECK_RUN_PREFIX) or not isinstance(first.get("check_suite"), dict):
+        raise SystemExit("captured check runs are not the real GitHub shape")
+    mutations = {
+        "captured check run without its check_suite": lambda c: c["check_runs"][0].pop("check_suite"),
+        "captured check run of another repository": lambda c: c["check_runs"][0].update(
+            url=c["check_runs"][0]["url"].replace(EXPECTED_REPOSITORY, "other/repository")),
+        "captured html_url of another repository": lambda c: c["check_runs"][0].update(
+            html_url=c["check_runs"][0]["html_url"].replace(EXPECTED_REPOSITORY, "other/repository")),
+        "captured check run of a stale head": lambda c: c["check_runs"][0].update(head_sha="0" * 40),
+        "captured check run of another App": lambda c: c["check_runs"][0]["app"].update(id=1),
+        "captured check run with only the old repository member": lambda c: (
+            c["check_runs"][0].pop("url"), c["check_runs"][0].pop("html_url"),
+            c["check_runs"][0].update(repository={"full_name": EXPECTED_REPOSITORY})),
+        "captured required context missing": lambda c: c["check_runs"].pop(),
+    }
+    for label, mutate in mutations.items():
+        altered = json.loads(json.dumps(checks))
+        mutate(altered)
+        try:
+            validate(receipt, pr, altered, *args)
+        except ValueError:
+            continue
+        raise SystemExit(f"captured-shape self-test accepted {label}")
+    print(f"PASS: real captured GitHub shapes validate and {len(mutations)} captured-shape defects are rejected")
+    return len(mutations)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--receipt")
@@ -161,6 +213,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.self_test:
         run_self_test()
+        captured_shape_self_test()
         return 0
     required = (args.receipt, args.pull_request, args.check_runs, args.tag, args.source_sha, args.release_id)
     if any(value is None for value in required):

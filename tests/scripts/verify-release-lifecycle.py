@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Replay the release evidence lifecycle against bounded, captured GitHub API shapes (RM-028, D-20).
 
-    verify-release-lifecycle.py --rev SHA --replay
-    verify-release-lifecycle.py --rev SHA --self-test
-    verify-release-lifecycle.py --rev SHA --check-capture
+    verify-release-lifecycle.py [--rev SHA] --replay
+    verify-release-lifecycle.py [--rev SHA] --self-test
+    verify-release-lifecycle.py [--rev SHA] --check-capture
     verify-release-lifecycle.py --sanitize-capture RAW_DIR OUTPUT
 
---rev is a resolved immutable 40-hex commit. Every production file the replay uses is materialized from that commit
-with git show; the live working tree is never read and never a fallback.
+--rev is a resolved immutable 40-hex commit (CTest passes the configure-time HEAD; without it HEAD is resolved to a
+commit id once). Every production file the replay uses is materialized from that commit with git show; the live working
+tree is never read and never a fallback, so uncommitted edits are not what is judged.
 
 The replay runs the production lifecycle script (.github/scripts/release-evidence-lifecycle.sh) and, through it, the
 production gates, unchanged, from a non-git workspace for the attacher and from a tag checkout for the judge jobs, with
@@ -191,8 +192,11 @@ def sanitize(value, key: str = "", log: dict | None = None):
             for k, v in list(blank.items()):
                 if isinstance(v, str) and login and login in v:
                     blank[k] = v.replace(login, "sanitized-user")
-            blank.update(login="sanitized-user", id=1, node_id="U_sanitized", gravatar_id="",
-                         avatar_url="https://avatars.githubusercontent.com/u/1?v=4", site_admin=False)
+            # same members as the original, never more or fewer: only values that exist are replaced
+            for member, replacement in (("login", "sanitized-user"), ("id", 1), ("node_id", "U_sanitized"), ("gravatar_id", ""),
+                                        ("avatar_url", "https://avatars.githubusercontent.com/u/1?v=4"), ("site_admin", False)):
+                if member in blank:
+                    blank[member] = replacement
             log["users"] = log.get("users", 0) + 1
             return blank
         out = {}
@@ -862,6 +866,13 @@ class Scenario:
         outcome.seconds = time.monotonic() - started
         return outcome
 
+    def run_gate(self, ws: Path, *args: str, **env_extra: str) -> Outcome:
+        """Run one mode of the production gate script directly, from the trusted checkout, with the workflow's environment."""
+        before = len(self.calls())
+        done = subprocess.run(["bash", "trusted/.github/scripts/verify-release-gates.sh", *args], cwd=ws,
+                              env=self.env(ws, **env_extra), capture_output=True, text=True, timeout=180)
+        return Outcome(done.returncode, done.stdout, done.stderr, self.calls()[before:])
+
     def run_workflow_step(self, ws: Path, workflow: str, step: str, **env_extra: str) -> Outcome:
         before = len(self.calls())
         body = workflow_step_run(workflow, step)
@@ -919,6 +930,8 @@ def first_attempt(s: Scenario, wf: str) -> dict[str, Outcome]:
     out["load-verifiers"] = s.run_workflow_step(publish, wf, LOAD_VERIFIERS_STEP, **env)
     for mode in ("validate-draft", "final-gate", "publish-draft"):
         out[mode] = s.run_mode(publish, mode, **env)
+        if mode == "validate-draft" and out[mode].rc == 0 and "finalized-first" not in s.t.stages:
+            s.snapshot("finalized-first")  # an attempt that stopped here has attached the final metadata
     return out
 
 
@@ -970,17 +983,8 @@ def replay(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> dict
     if sorted(line.split("  ", 1)[1] for line in sums) != sorted(n for n in names if n not in FINAL_NAMES):
         raise Reject("replay-sha256sums", "SHA256SUMS does not cover exactly the qualified inventory")
     # retry: the first attempt stopped after the final metadata was attached; fresh producers regenerate different bytes
-    r = Scenario(template, "retry")
-    r.set_runs()
-    attach = r.attach_workspace("attach-1")
-    require_ok({"attach-evidence": r.run_mode(attach, "attach-evidence")}, "retry setup")
-    manifest = r.subject_workspace("manifest-1")
-    require_ok({m: r.run_mode(manifest, m) for m in ("validate-evidence", "build-manifest")}, "retry setup")
-    publish = r.subject_workspace("publish-1")
-    require_ok({"load-verifiers": r.run_workflow_step(publish, wf, LOAD_VERIFIERS_STEP, RELEASE_ID=str(RELEASE_ID)),
-                "validate-draft": r.run_mode(publish, "validate-draft", RELEASE_ID=str(RELEASE_ID))}, "retry setup")
+    r = Scenario(template, "retry", "finalized-first")
     before = {n: r.asset_bytes(n) for n in r.asset_names()}
-    (r.stub / "calls.jsonl").unlink()
     r.run_id, r.attempt = RUN_ID + 1, 1
     r.set_runs(own_event="workflow_dispatch")
     regenerated = {
@@ -1254,6 +1258,301 @@ def c_wiring(ctx: Context) -> str:
     return "the wiring check rejects an uncalled mode, a tagged-checkout call, a cross-job call and an absent script"
 
 
+# ----------------------------------------------------------------------------------------- Task 2: captured shapes
+
+def sources_with_digest(sources: str, text: bytes) -> str:
+    return SOURCES_DIGEST.sub(f"- captured.json sha256: {sha256_bytes(text)}", sources)
+
+
+def expect_capture_reject(label: str, text: bytes, sources: str, code: str) -> None:
+    try:
+        check_capture(text, sources)
+    except Reject as error:
+        if error.code != code:
+            raise Reject("control-wrong-reason", f"{label}: wanted {code}, got {error}") from error
+        return
+    raise Reject("control-accepted", f"{label}: the capture check accepted it")
+
+
+def c_capture_contract(ctx: Context) -> str:
+    text, sources = ctx.files[CAPTURE], ctx.files[SOURCES].decode("utf-8")
+    check_capture(text, sources)  # positive first: the committed capture is accepted before any defect is credited
+    base = json.loads(text.decode("utf-8"))
+    count = 0
+
+    def mutated(label: str, code: str, change, resign: bool = True) -> None:
+        nonlocal count
+        value = copy.deepcopy(base)
+        change(value)
+        new = capture_text(value).encode("utf-8")
+        expect_capture_reject(label, new, sources_with_digest(sources, new) if resign else sources, code)
+        count += 1
+
+    first_run = lambda v: v["responses"]["check_runs"]["check_runs"][0]
+    mutated("a stale SOURCES digest", "capture-digest", lambda v: v["responses"]["commit"].update(sha="0" * 40), resign=False)
+    mutated("an email address left in the capture", "capture-sanitization", lambda v: v["responses"]["commit"].update(note="someone@example.com"))
+    mutated("a local path left in the capture", "capture-sanitization", lambda v: v["responses"]["commit"].update(note="/Users/example/work"))
+    mutated("a credential left in the capture", "capture-sanitization", lambda v: v["responses"]["commit"].update(note="ghp_" + "a" * 36))
+    mutated("an invented repository member on a check run", "capture-schema", lambda v: first_run(v).update(repository={"full_name": REPO}))
+    mutated("a check run without its check_suite", "capture-schema", lambda v: first_run(v).pop("check_suite"))
+    mutated("a check run without its html_url", "capture-schema", lambda v: first_run(v).pop("html_url"))
+    mutated("a pull request without its merge commit", "capture-schema", lambda v: v["responses"]["pull_request"].pop("merge_commit_sha"))
+    mutated("a release asset without its digest", "capture-schema", lambda v: v["responses"]["release_assets"][0].pop("digest"))
+    mutated("an undeclared response", "capture-schema", lambda v: v["responses"].update(extra={}))
+    mutated("a missing response", "capture-schema", lambda v: v["responses"].pop("artifacts"))
+    mutated("another API version", "capture-schema", lambda v: v.update(api_version="2024-01-01"))
+    mutated("another repository", "capture-schema", lambda v: v.update(repository="other/repository"))
+    mutated("a capture without its source identity", "capture-schema", lambda v: v["identity"].update(source_sha="x"))
+    crlf = text.replace(b"\n", b"\r\n")
+    expect_capture_reject("CRLF line endings", crlf, sources_with_digest(sources, crlf), "capture-eol")
+    oversize = text + b" " * MAX_CAPTURE_BYTES
+    expect_capture_reject("an oversized capture", oversize, sources_with_digest(sources, oversize), "capture-oversize")
+    broken = b"{" + text
+    expect_capture_reject("invalid JSON", broken, sources_with_digest(sources, broken), "capture-json")
+    for section in ("Provenance", "Sanitization", "Endpoints", "API version"):
+        expect_capture_reject(f"SOURCES.md without its {section} section", text, sources.replace(f"## {section}\n", f"## {section} removed\n"),
+                              "capture-provenance")
+    expect_capture_reject("SOURCES.md without a digest line", text, SOURCES_DIGEST.sub("", sources), "capture-digest")
+    return f"the capture contract rejects {count + 3 + 4 + 1} provenance, sanitization, bound and schema defects"
+
+
+def c_sanitizer(ctx: Context) -> str:
+    raw = {
+        "body": "private release notes", "patch": "@@ -1 +1 @@ secret", "signature": "sig", "payload": "payload with a@b.example",
+        "author": {"name": "Jane Doe", "email": "jane@example.com", "date": "2026-01-01T00:00:00Z"},
+        "user": {"login": "jane-doe", "id": 77, "node_id": "U_77", "avatar_url": "https://avatars.githubusercontent.com/u/77?v=4",
+                 "url": "https://api.github.com/users/jane-doe", "type": "User"},
+        "owner": {"login": "szTheory", "id": 5, "node_id": "U_5", "avatar_url": "https://avatars.githubusercontent.com/u/5?v=4"},
+        "bot": {"login": "github-actions[bot]", "id": 41898282, "node_id": "BOT", "avatar_url": "https://avatars.githubusercontent.com/in/15368"},
+        "runner_name": "GitHub Actions 1000199669", "runner_id": 1000199669,
+        "message": "m" * 500 + " contact jane@example.com", "assets": [{"n": i} for i in range(9)],
+    }
+    out = sanitize(raw, "", {})
+    text = json.dumps(out)
+    checks = (
+        ("release/PR body text", "private release notes" not in text and out["body"] == OMITTED),
+        ("commit patch, signature and payload", "secret" not in text and out["patch"] == OMITTED and out["signature"] == OMITTED and "a@b.example" not in text),
+        ("git author name and email", out["author"]["name"] == "Sanitized Author" and "jane@example.com" not in text and "Jane" not in text),
+        ("a human user object", out["user"]["login"] == "sanitized-user" and "jane-doe" not in text and set(out["user"]) == set(raw["user"])),
+        ("the repository owner and bot accounts are kept", out["owner"]["login"] == "szTheory" and out["bot"]["login"] == "github-actions[bot]"),
+        ("runner identifiers", out["runner_name"] == "GitHub Actions" and out["runner_id"] == 0),
+        ("long messages", len(out["message"]) < 240 and "jane@example.com" not in out["message"]),
+        ("array bounds", len(out["assets"]) == TRUNCATE_ARRAYS["assets"]),
+        ("every email-shaped string", all(m == REDACTED_EMAIL for m in EMAIL.findall(text))),
+    )
+    for label, ok in checks:
+        if not ok:
+            raise Reject("sanitizer", f"the sanitizer did not apply its documented rule for {label}")
+    return f"the sanitizer applies each of its {len(checks)} documented rules"
+
+
+def merged_source(ctx: Context, s: Scenario, ws: Path) -> Outcome:
+    receipt = ws / "build/release-final"
+    receipt.mkdir(parents=True, exist_ok=True)
+    (receipt / "source-receipt.json").write_bytes(s.asset_bytes("source-receipt.json"))
+    return s.run_gate(ws, "--check-merged-source", ctx.t.source, ctx.t.tag, str(RELEASE_ID), "build/release-final/source-receipt.json",
+                      str(Path(s.env(ws)["RUNNER_TEMP"]) / "verify-release-source-proof.py"), **PUBLISH_ENV)
+
+
+def source_proof_control(ctx: Context, label: str, needle: str, change, shapes_off: bool = False) -> str:
+    s = ctx.scenario("proof-" + label, "manifested")
+    state = s.state()
+    change(state)
+    if shapes_off:
+        # The transport's shape pin would refuse these reshaped payloads before the production consumer saw them. Pinning
+        # is switched off for this scenario only, so the production consumer is the one that judges the old shape.
+        state["shapes"].pop("check_runs", None)
+        state["shapes"].pop("pull_request", None)
+    s.write_state(state)
+    ws = publish_from(ctx, s)
+    outcome = merged_source(ctx, s, ws)
+    expect_fail(outcome, label, needle)
+    if not any(c.get("kind") == "check_runs" for c in outcome.calls):
+        raise Reject("control-unexercised", f"{label}: the production gate never read the check runs")
+    return f"source proof: {label}"
+
+
+def required_run(state: dict, index: int = 0) -> dict:
+    names = {"required-native", "fixture-repro", "preview-package-smoke"}
+    return [r for r in state["check_runs"]["check_runs"] if r["name"] in names][index]
+
+
+SOURCE_PROOF_CASES = (
+    ("a stale check head", "stale check evidence", lambda st: required_run(st).update(head_sha="0" * 40), False),
+    ("a check run of another App id", "wrong GitHub App", lambda st: required_run(st)["app"].update(id=1), False),
+    ("a check run of another App slug", "wrong GitHub App", lambda st: required_run(st)["app"].update(slug="other-app"), False),
+    ("a check run url of another repository", "wrong repository",
+     lambda st: required_run(st).update(url=required_run(st)["url"].replace(REPO, "other/repository")), False),
+    ("a check run url with a lookalike repository prefix", "wrong repository",
+     lambda st: required_run(st).update(url=required_run(st)["url"].replace(REPO + "/", REPO + "-evil/")), False),
+    ("a check run html_url of another repository", "wrong repository",
+     lambda st: required_run(st).update(html_url=required_run(st)["html_url"].replace(REPO, "other/repository")), False),
+    ("a check run without its check_suite", "wrong repository", lambda st: required_run(st).pop("check_suite"), True),
+    ("the old repository-only check run shape", "wrong repository",
+     lambda st: (required_run(st).pop("url"), required_run(st).pop("html_url"), required_run(st).update(repository={"full_name": REPO})), True),
+    ("a required context without evidence", "has no exact-head check-run evidence",
+     lambda st: st["check_runs"].update(check_runs=[r for r in st["check_runs"]["check_runs"] if r["name"] != "fixture-repro"]), False),
+    ("a failed required context", "incomplete or unsuccessful", lambda st: required_run(st).update(conclusion="failure"), False),
+    ("a mixed duplicate of a required context", "incomplete or unsuccessful",
+     lambda st: st["check_runs"]["check_runs"].append({**required_run(st), "conclusion": "failure"}), False),
+    ("a pull request merged to another source", "live pull request does not match", lambda st: st["pull_request"].update(merge_commit_sha="0" * 40), False),
+    ("a pull request of another base repository", "live pull request does not match",
+     lambda st: st["pull_request"]["base"]["repo"].update(full_name="other/repository"), False),
+)
+
+
+def draft_gate(ctx: Context, s: Scenario) -> Outcome:
+    ws = s.subject_workspace("draft")
+    return s.run_gate(ws, "--check-draft", str(RELEASE_ID), ctx.t.tag, ctx.t.source, **PUBLISH_ENV)
+
+
+def draft_control(ctx: Context, label: str, needle: str, change) -> str:
+    s = ctx.scenario("draft-" + label, "manifested")
+    change(s)
+    outcome = draft_gate(ctx, s)
+    expect_fail(outcome, label, needle)
+    return f"draft asset set: {label}"
+
+
+def _bytes_flip(s: Scenario, name: str, keep_digest: bool) -> None:
+    s.replace_asset(name, s.asset_bytes(name) + b"altered\n", keep_digest=keep_digest)
+
+
+def _receipt_edit(s: Scenario, name: str, **changes) -> None:
+    value = json.loads(s.asset_bytes(name))
+    value.update(changes)
+    s.replace_asset(name, (json.dumps(value, indent=2, sort_keys=True) + "\n").encode())
+
+
+def _duplicate_row(s: Scenario, name: str) -> None:
+    state = s.state()
+    row = next(r for r in state["assets"] if r["name"] == name)
+    state["assets"].append({**row, "id": row["id"] + 1000})
+    s.write_state(state)
+
+
+def _extra_asset(s: Scenario) -> None:
+    s.add_asset("unknown-extra-asset.bin", b"not part of the qualified set\n")
+
+
+def _tag_moves(s: Scenario) -> None:
+    state = s.state()
+    state["commits"][s.t.tag] = {**state["commits"][s.t.tag], "sha": "0" * 40}
+    s.write_state(state)
+
+
+def _published(s: Scenario) -> None:
+    state = s.state()
+    state["release"]["draft"] = False
+    s.write_state(state)
+
+
+DRAFT_CASES = (
+    ("attached bytes that differ from the API digest", "GitHub API digest differs from downloaded bytes", lambda s: _bytes_flip(s, "gabbaboy-notices.txt", True)),
+    ("replaced bytes with a recomputed digest", "platform manifest does not bind downloaded bytes", lambda s: _bytes_flip(s, "gabbaboy-core-linux-x64.tar.gz", False)),
+    ("a candidate receipt of another source", "has mismatched source_sha", lambda s: _receipt_edit(s, "candidate-receipt.json", source_sha="0" * 40)),
+    ("a source receipt of another release id", "has mismatched release_id", lambda s: _receipt_edit(s, "source-receipt.json", release_id="1")),
+    ("a source receipt of another tag", "has mismatched tag_name", lambda s: _receipt_edit(s, "source-receipt.json", tag_name="v9.9.9")),
+    ("a support sidecar of another tag", "support sidecar is not bound to the exact tag/source",
+     lambda s: _receipt_edit(s, "support-ledger.json", tag="v9.9.9")),
+    ("a platform manifest of another source", "platform manifest source SHA differs from candidate",
+     lambda s: _receipt_edit(s, "candidate-platform-manifest.json", source_sha="0" * 40)),
+    ("a platform manifest entry that no longer matches its asset", "platform manifest does not bind downloaded bytes",
+     lambda s: _receipt_edit(s, "candidate-platform-manifest.json", assets=[{"name": "gabbaboy-notices.txt", "sha256": "0" * 64}])),
+    ("a partial asset set", "draft asset inventory differs", lambda s: s.remove_asset("gabbaboy-notices.txt")),
+    ("a duplicated asset name", "draft asset inventory differs", lambda s: _duplicate_row(s, "gabbaboy-notices.txt")),
+    ("an unknown extra asset", "draft asset inventory differs", _extra_asset),
+    ("a tag that moved off the frozen source", "release tag target differs from the frozen source SHA", _tag_moves),
+    ("a release that is already published", "release is already published", _published),
+)
+
+
+def recovery_control(ctx: Context, label: str, needle: str, change) -> str:
+    s = ctx.scenario("recovery-" + label, "manifested")
+    change(s)
+    ws = publish_from(ctx, s)
+    outcome = s.run_mode(ws, "validate-draft", **PUBLISH_ENV)
+    expect_fail(outcome, label, needle)
+    return f"recovery decision: {label}"
+
+
+def _runs(s: Scenario, rows) -> None:
+    state = s.state()
+    own = next(r for r in state["runs"] if r["id"] == s.run_id)
+    state["runs"] = rows(state, own)
+    s.write_state(state)
+
+
+RECOVERY_CASES = (
+    ("this run absent from the live run list", "not in the live release workflow run list", lambda s: _runs(s, lambda st, own: [r for r in st["runs"] if r["id"] != own["id"]])),
+    ("a later attempt of this run", "stale", lambda s: _runs(s, lambda st, own: [{**own, "run_attempt": own["run_attempt"] + 1}] + [r for r in st["runs"] if r["id"] != own["id"]])),
+    ("a concurrent unfinished run of the same source", "concurrent publication attempt",
+     lambda s: _runs(s, lambda st, own: [own, {**own, "id": own["id"] + 7, "status": "in_progress", "head_sha": s.t.source, "event": "push"}] + [r for r in st["runs"] if r["id"] != own["id"]])),
+    ("a concurrent manual retry dispatch", "concurrent publication attempt",
+     lambda s: _runs(s, lambda st, own: [own, {**own, "id": own["id"] + 7, "status": "queued", "head_sha": "e" * 40, "event": "workflow_dispatch"}] + [r for r in st["runs"] if r["id"] != own["id"]])),
+)
+
+
+def rewrite_sums(s: Scenario, change) -> None:
+    """A hostile writer that rewrites SHA256SUMS and the receipt that binds it, so only the strict parse can object."""
+    sums = change(s.asset_bytes("SHA256SUMS").decode("utf-8")).encode("utf-8")
+    s.replace_asset("SHA256SUMS", sums)
+    receipt = json.loads(s.asset_bytes("release-receipt.json"))
+    receipt["sha256sums_sha256"] = sha256_bytes(sums)
+    s.replace_asset("release-receipt.json", (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode())
+
+
+def sums_control(ctx: Context, label: str, needle: str, change) -> str:
+    s = ctx.scenario("sums-" + label, "finalized")
+    ws = publish_from(ctx, s)
+    require_ok({"validate-draft": s.run_mode(ws, "validate-draft", **PUBLISH_ENV)}, "sums setup (identical final metadata is reused)")
+    rewrite_sums(s, change)
+    outcome = s.run_mode(ws, "final-gate", **PUBLISH_ENV)
+    expect_fail(outcome, label, needle)
+    if s.state()["decisions"]:
+        raise Reject("control-effect", f"{label}: a decision was recorded")
+    return f"final receipt: {label}"
+
+
+SUMS_CASES = (
+    ("a name listed twice", "more than once", lambda text: text + text.splitlines(keepends=True)[0]),
+    ("a line with one space", "malformed or path-like line", lambda text: text.replace("  ", " ", 1)),
+    ("a path-like name", "malformed or path-like line", lambda text: text.replace("  ", "  ../", 1)),
+    ("a manifest without its final newline", "must end with a newline", lambda text: text.rstrip("\n")),
+    ("a manifest that omits an asset", "SHA256SUMS must cover every candidate asset", lambda text: "".join(text.splitlines(keepends=True)[1:])),
+    ("a digest that is not the asset's", "SHA256SUMS differs from downloaded bytes", lambda text: "0" * 64 + text[64:]),
+)
+
+
+def positive_baselines(ctx: Context) -> int:
+    """The positive production result for each gate group, shown before any rejection of that group is credited."""
+    s = ctx.scenario("baseline-proof", "manifested")
+    ws = publish_from(ctx, s)
+    done = merged_source(ctx, s, ws)
+    if done.rc != 0 or "agree" not in done.out:
+        raise Reject("baseline", f"the real captured shapes did not pass the production source proof: {done.text.strip()[-300:]}")
+    s2 = ctx.scenario("baseline-draft", "manifested")
+    done = draft_gate(ctx, s2)
+    if done.rc != 0:
+        raise Reject("baseline", f"the qualified draft did not pass the production draft gate: {done.text.strip()[-300:]}")
+    s3 = ctx.scenario("baseline-final", "finalized")
+    ws3 = publish_from(ctx, s3)
+    done = s3.run_mode(ws3, "validate-draft", **PUBLISH_ENV)
+    done_gate = s3.run_mode(ws3, "final-gate", **PUBLISH_ENV)
+    if done.rc != 0 or done_gate.rc != 0:
+        raise Reject("baseline", f"identical final metadata did not pass reuse and the final gate: {(done.text + done_gate.text).strip()[-300:]}")
+    return 3
+
+
+def task2_controls(ctx: Context) -> list:
+    items: list = [c_capture_contract, c_sanitizer]
+    items += [(lambda c, a=a: source_proof_control(c, *a)) for a in SOURCE_PROOF_CASES]
+    items += [(lambda c, a=a: draft_control(c, *a)) for a in DRAFT_CASES]
+    items += [(lambda c, a=a: recovery_control(c, *a)) for a in RECOVERY_CASES]
+    items += [(lambda c, a=a: sums_control(c, *a)) for a in SUMS_CASES]
+    return items
+
+
 TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_advisory_consumers, c_non_advisory,
                   c_unexpected_endpoint_in_script, c_live_publication)
 
@@ -1280,8 +1579,9 @@ def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tu
         results.append("the lab refuses a permissive replacement of a production gate")
     else:
         raise Reject("control-accepted", "lab integrity accepted a replaced production gate")
+    positives += positive_baselines(ctx)
     with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL) as pool:
-        futures = [pool.submit(fn, ctx) for fn in TASK1_CONTROLS]
+        futures = [pool.submit(fn, ctx) for fn in (*TASK1_CONTROLS, *task2_controls(ctx))]
         futures.append(pool.submit(control_transport, template))
         for future in futures:
             outcome = future.result()
@@ -1323,9 +1623,11 @@ def main(argv: list[str]) -> int:
             raw = {key: json.loads((raw_dir / name).read_text(encoding="utf-8")) for key, name in names.items()}
             output.write_text(capture_text(assemble_capture(raw)), encoding="utf-8", newline="\n")
             return 0
-        if not args.rev:
-            parser.error("--rev is required")
-        rev = resolve_rev(args.rev)
+        # Without --rev the checker resolves HEAD to its commit id once, and then reads only that commit's objects.
+        head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=60)
+        if not args.rev and (head.returncode != 0 or not SHA1.fullmatch(head.stdout.strip())):
+            parser.error("--rev is required when HEAD does not resolve to a commit")
+        rev = resolve_rev(args.rev or head.stdout.strip())
         if args.check_capture:
             files = {path: git_show(rev, path) for path in (CAPTURE, SOURCES)}
             capture = check_capture(files[CAPTURE], files[SOURCES].decode("utf-8"))
