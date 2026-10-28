@@ -2,11 +2,13 @@
 
 Completed stage: **Phase 17 execution, plans 17-01..07 implemented with targeted evidence**. Settled full suite at `7cb5739`: 1481/1482; the `test_budget` rejection of the two plan-07 advisory perf TIMEOUTs is fixed in `5701130` (base 60 s, measured ~7 s) with the affected tests passing. The hosted ASan fuzz timeout at `b3e57bc` is fixed in `f0591f4` (state path rules resolved once per field); full suite 1482/1482 at `f0591f4`. Windows portability fixes in `be8ec08` and `0c8fd56`; PR130 hosted checks all green at `0c8fd56` (41 pass, 3 path-skipped). Re-verify once at the final phase head.
 
-Next stage: **Phase 17 — Native Save State Core, wave 8 / plan 17-08**. Resume command: `/gsd-execute-phase 17`.
+Plan 17-08 implemented at `9de6089`; full suite 1486/1486 there after `cmake --preset phase1` (stale revision stamp otherwise); hosted checks pending at that head.
+
+Next stage: **Phase 17 — Native Save State Core, wave 9 / plan 17-09**. Resume command: `/gsd-execute-phase 17`.
 
 Next feature phase: **18 — Player Save Slots and Host Contract**, after Phase 17 execution/verification and owner choice. Both auto flags remain false. Never start Phase 18 automatically.
 
-Read seven completed summaries and `17-08-PLAN.md` with the existing context, research, patterns, source audit and validation. Reuse decisions and evidence. Four primary plans remain, plus the reserved gap slot. No formal phase review has begun; retain the two review-fix/one gap-round limits. RM-027 remains a Phase 19 entry blocker.
+Read eight completed summaries and `17-09-PLAN.md` with the existing context, research, patterns, source audit and validation. Reuse decisions and evidence. Three primary plans remain, plus the reserved gap slot. No formal phase review has begun; retain the two review-fix/one gap-round limits. RM-027 remains a Phase 19 entry blocker.
 
 Implemented: explicit 198-field codec; exact release/format/model/ROM identity; validation, refusal, observers, purity; full 2^62 horizon; 153 corpus snapshot forks and 14 model-applicable categories; 198 omission controls; three compiled platform pins with exact base dispositions; deep semantic fuzzing and whole-instance/RAM refusal oracle. Source, API, consumer and limitation notes remain coordinated.
 
