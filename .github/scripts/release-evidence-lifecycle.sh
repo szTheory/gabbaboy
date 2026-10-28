@@ -44,6 +44,9 @@ fuzz=$(present v02-fuzz-receipt.json); performance=$(present v02-performance-rec
 # follow the newest CI and rehearsal runs. On a retry the attached bytes are the qualified bytes: they replace the
 # regenerated copies here (never the other way round, and nothing is uploaded or replaced by this block). They are
 # still judged against the tag source by --check-v02-evidence in the platform manifest and final gates.
+# The attached bytes are fetched first and judged on their own, BEFORE any regenerated copy is replaced: identity,
+# bindings, digests and the allowed inventory are read from the attachments and the live release, never from the copies
+# a producer just made, and a refusal leaves the regenerated evidence untouched. Only then are they reused.
 if [[ "${RETRY:-}" == true ]]; then
   for pair in "build/evidence-corpus support-ledger.json" "build/evidence-corpus cgb-corpus-receipt.json" "build/evidence-fuzz v02-fuzz-receipt.json" "build/evidence-performance v02-performance-receipt.json"; do
     read -r dir name <<<"$pair"
@@ -51,6 +54,13 @@ if [[ "${RETRY:-}" == true ]]; then
       mkdir -p "$RUNNER_TEMP/attached-$name"
       gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir "$RUNNER_TEMP/attached-$name"
       test -s "$RUNNER_TEMP/attached-$name/$name"
+    fi
+  done
+  gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" > "$RUNNER_TEMP/attached-assets.json"
+  bash trusted/.github/scripts/verify-release-gates.sh --check-attached-evidence "$RELEASE_TAG" "$SOURCE_SHA" "$RUNNER_TEMP/attached-assets.json" "$RUNNER_TEMP"
+  for pair in "build/evidence-corpus support-ledger.json" "build/evidence-corpus cgb-corpus-receipt.json" "build/evidence-fuzz v02-fuzz-receipt.json" "build/evidence-performance v02-performance-receipt.json"; do
+    read -r dir name <<<"$pair"
+    if [[ "$(present "$name")" == 1 ]]; then
       cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"
     fi
   done
@@ -203,7 +213,7 @@ count=$(gh api "repos/$GH_REPO/releases/$release_id/assets?per_page=100" --jq '[
 if [[ "$count" == 1 ]]; then
   mkdir -p build/existing
   gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern candidate-platform-manifest.json --dir build/existing
-  cmp -s build/candidate-platform-manifest.json build/existing/candidate-platform-manifest.json || exit 1
+  cmp -s build/candidate-platform-manifest.json build/existing/candidate-platform-manifest.json || { echo "The attached platform manifest differs from the regenerated one and is never replaced." >&2; exit 1; }
 else
   gh release upload "$RELEASE_TAG" build/candidate-platform-manifest.json --repo "$GH_REPO"
 fi

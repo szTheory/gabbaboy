@@ -1553,6 +1553,187 @@ def task2_controls(ctx: Context) -> list:
     return items
 
 
+# ------------------------------------------------------------------------------------------- Task 3: retry ordering
+
+RETRY_ENV = {"RETRY": "true", "INPUT_RELEASE_ID": str(RELEASE_ID), "RELEASE_ID": str(RELEASE_ID)}
+EVIDENCE_DIRS = {"support-ledger.json": "evidence-corpus", "cgb-corpus-receipt.json": "evidence-corpus",
+                 "v02-fuzz-receipt.json": "evidence-fuzz", "v02-performance-receipt.json": "evidence-performance"}
+
+
+def regenerated_pair(ctx: Context) -> dict[str, bytes]:
+    """What a retry's producers make: a corpus receipt and sidecar with new run-specific bytes, bound to each other."""
+    corpus = b'{"corpus": "complete", "nonce": "retry-attempt"}\n'
+    sidecar = json.loads((ctx.t.evidence / "support-ledger.json").read_text())
+    sidecar.update(corpus_receipt_sha256=sha256_bytes(corpus), run_id="retry-attempt")
+    return {"cgb-corpus-receipt.json": corpus, "support-ledger.json": (json.dumps(sidecar, indent=2, sort_keys=True) + "\n").encode()}
+
+
+def retry_scenario(ctx: Context, name: str, stage: str = "attached") -> Scenario:
+    s = ctx.scenario(name, stage)
+    s.run_id, s.attempt = RUN_ID + 1, 1
+    s.set_runs(own_event="workflow_dispatch")
+    return s
+
+
+def regenerated_snapshot(ws: Path) -> dict[str, bytes]:
+    return {name: (ws / "build" / directory / name).read_bytes() for name, directory in EVIDENCE_DIRS.items()}
+
+
+def edit_json_asset(s: Scenario, name: str, change) -> None:
+    value = json.loads(s.asset_bytes(name))
+    change(value)
+    s.replace_asset(name, (json.dumps(value, indent=2, sort_keys=True) + "\n").encode())
+
+
+def retry_attach(ctx: Context, s: Scenario, tag: str, script: str | None = None) -> tuple[Path, Outcome, dict[str, bytes]]:
+    ws = s.attach_workspace("retry-attach", regenerated_pair(ctx), script=script)
+    before = regenerated_snapshot(ws)
+    return ws, s.run_mode(ws, "attach-evidence", **RETRY_ENV), before
+
+
+def downloads_of(outcome: Outcome) -> set[str]:
+    return {name for call in outcome.calls if call.get("kind") == "download" for name in call.get("names", [])}
+
+
+def refused_before_reuse(ctx: Context, label: str, needle: str, tamper, fetched: bool = True) -> str:
+    s = retry_scenario(ctx, "tamper-" + label)
+    tamper(s)
+    ws, outcome, before = retry_attach(ctx, s, label)
+    expect_fail(outcome, label, needle)
+    attached_names = {n for n in EVIDENCE_DIRS if n in s.asset_names()}
+    kinds = {c.get("kind") for c in outcome.calls}
+    if "workflow_runs" in kinds or outcome.mutations():
+        raise Reject("control-effect", f"{label}: the refusal was not independent of the recovery decision (it read live runs or wrote)")
+    if regenerated_snapshot(ws) != before:
+        raise Reject("control-effect", f"{label}: the refusal left the regenerated evidence replaced")
+    if fetched and (not attached_names or not attached_names <= downloads_of(outcome)):
+        raise Reject("control-unexercised", f"{label}: the attachments were not fetched before the refusal")
+    if not fetched and downloads_of(outcome):
+        raise Reject("control-unexercised", f"{label}: the earlier inventory check was expected to refuse before any download")
+    return f"retry tamper: {label} is refused before any reuse or recovery decision"
+
+
+RETRY_TAMPER_CASES = (
+    ("an altered corpus receipt with a recomputed API digest", "does not bind the attached corpus receipt bytes",
+     lambda s: s.replace_asset("cgb-corpus-receipt.json", s.asset_bytes("cgb-corpus-receipt.json") + b" ")),
+    ("a fuzz receipt of another source", "not bound to the exact source revision",
+     lambda s: edit_json_asset(s, "v02-fuzz-receipt.json", lambda v: v.update(source_sha="0" * 40))),
+    ("a sidecar of another tag", "not the schema-2 sidecar of this exact tag and source",
+     lambda s: edit_json_asset(s, "support-ledger.json", lambda v: v.update(tag="v9.9.9"))),
+    ("a sidecar of another source", "not the schema-2 sidecar of this exact tag and source",
+     lambda s: edit_json_asset(s, "support-ledger.json", lambda v: v.update(source_sha="0" * 40))),
+    ("attached bytes that differ from the digest GitHub reports", "differs from the digest GitHub reports",
+     lambda s: s.replace_asset("v02-fuzz-receipt.json", s.asset_bytes("v02-fuzz-receipt.json") + b" ", keep_digest=True)),
+    ("a performance receipt that did not pass", "not a passed receipt",
+     lambda s: edit_json_asset(s, "v02-performance-receipt.json", lambda v: v.update(result="failed"))),
+    ("an unknown extra asset", "unknown or duplicated asset", _extra_asset),
+    ("a duplicated performance receipt (refused by the inventory check that precedes the download)", "duplicate campaign or performance receipts",
+     lambda s: _duplicate_row(s, "v02-performance-receipt.json"), False),
+    ("a sidecar without its corpus receipt (refused by the inventory check that precedes the download)", "only partially attached",
+     lambda s: s.remove_asset("cgb-corpus-receipt.json"), False),
+)
+
+
+def c_retry_reuse(ctx: Context) -> str:
+    """Identical qualified bytes are reused after the independent check; the regenerated run-specific bytes never overwrite them."""
+    s = retry_scenario(ctx, "retry-reuse")
+    attached = {n: s.asset_bytes(n) for n in EVIDENCE_DIRS}
+    ws, outcome, before = retry_attach(ctx, s, "reuse")
+    if outcome.rc != 0:
+        raise Reject("replay-retry", f"identical attached evidence was refused: {outcome.text.strip()[-300:]}")
+    after = regenerated_snapshot(ws)
+    if after != attached or after["cgb-corpus-receipt.json"] == before["cgb-corpus-receipt.json"]:
+        raise Reject("replay-retry", "the retry did not reuse the attached bytes in place of the regenerated run-specific copies")
+    if outcome.mutations() or {n: s.asset_bytes(n) for n in EVIDENCE_DIRS} != attached:
+        raise Reject("replay-retry", "the retry uploaded or replaced an attached asset")
+    order = [c.get("kind") for c in outcome.calls]
+    if "download" not in order or "workflow_runs" not in order or order.index("download") > order.index("workflow_runs"):
+        raise Reject("control-unexercised", "the attachments were not fetched before the recovery decision")
+    return "a retry reuses the identical attached bytes, uploads nothing and replaces nothing"
+
+
+def c_downstream_refusals(ctx: Context) -> list[str]:
+    """Evidence that passes the independent check is still judged downstream; every refusal precedes the publish decision."""
+    results: list[str] = []
+
+    def stage(label: str, tamper, mode: str, needle: str, from_stage: str = "attached") -> None:
+        s = retry_scenario(ctx, "downstream-" + label, from_stage)
+        tamper(s)
+        if mode == "validate-evidence":
+            ws, outcome, _ = retry_attach(ctx, s, label)
+            require_ok({"retry attach": outcome}, label)
+            ws = s.subject_workspace("m")
+            outcome = s.run_mode(ws, "validate-evidence", **RETRY_ENV)
+        elif mode == "build-manifest":
+            ws = s.subject_workspace("m")
+            if from_stage == "attached":
+                require_ok({"validate-evidence": s.run_mode(ws, "validate-evidence", **RETRY_ENV)}, label)
+            outcome = s.run_mode(ws, "build-manifest", **RETRY_ENV)
+        else:
+            raise Reject("control-setup", mode)
+        expect_fail(outcome, label, needle)
+        if s.state()["decisions"] or "publish-decision" in s.mutations_logged():
+            raise Reject("control-effect", f"{label}: a decision was recorded")
+        results.append(f"retry downstream: {label} is refused before the publish decision")
+
+    stage("a campaign receipt that passes identity but is not a complete exploration",
+          lambda s: edit_json_asset(s, "v02-fuzz-receipt.json", lambda v: v.update(status="incomplete")),
+          "validate-evidence", "campaign is not a complete exploration")
+    stage("a consumer receipt of another source", lambda s: edit_json_asset(s, "v02-consumer-receipt.json", lambda v: v.update(source_sha="0" * 40)),
+          "validate-evidence", "downloaded C and C++ consumer receipt is malformed or not bound")
+    stage("a required platform asset removed", lambda s: s.remove_asset("gabbaboy-notices.txt"), "build-manifest", "candidate asset set mismatch")
+    stage("an unknown extra asset at the manifest step", _extra_asset, "build-manifest", "candidate asset set mismatch")
+    stage("final receipts without a platform manifest", lambda s: (s.add_asset("SHA256SUMS", b"x\n"), s.add_asset("release-receipt.json", b"{}\n")),
+          "build-manifest", "candidate asset set mismatch")
+    stage("an unknown extra asset beside the final receipts and manifest",
+          lambda s: (s.add_asset("candidate-platform-manifest.json", b"{}\n"), s.add_asset("SHA256SUMS", b"x\n"), _extra_asset(s)),
+          "build-manifest", "candidate asset set mismatch")
+    stage("a platform manifest entry altered after attachment",
+          lambda s: edit_json_asset(s, "candidate-platform-manifest.json", lambda v: v["assets"][0].update(sha256="0" * 64)),
+          "build-manifest", "differs from the regenerated one", "manifested")
+    return results
+
+
+ATTACH_CHECK_LINE = ('bash trusted/.github/scripts/verify-release-gates.sh --check-attached-evidence "$RELEASE_TAG" "$SOURCE_SHA" '
+                     '"$RUNNER_TEMP/attached-assets.json" "$RUNNER_TEMP"\n')
+REUSE_LOOP_END = '      cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"\n    fi\n  done\n'
+
+
+def c_ordering_mutants(ctx: Context) -> list[str]:
+    """IN-01: the unmutated lifecycle refuses a tampered attachment before it touches anything; a removed check lets it through
+    to the recovery decision, and a check moved after the destructive reuse destroys the regenerated evidence first."""
+    tamper = RETRY_TAMPER_CASES[0]
+    removed = mutate_script(ctx.script, ATTACH_CHECK_LINE, "true\n")
+    moved = mutate_script(mutate_script(ctx.script, ATTACH_CHECK_LINE, ""), REUSE_LOOP_END, REUSE_LOOP_END + "  " + ATTACH_CHECK_LINE)
+    outcomes = {}
+    for variant, script in (("real", ctx.script), ("removed", removed), ("moved", moved)):
+        s = retry_scenario(ctx, f"ordering-{variant}")
+        tamper[2](s)
+        ws, outcome, before = retry_attach(ctx, s, variant, script=script)
+        outcomes[variant] = (s, ws, outcome, before)
+    s, ws, real, before = outcomes["real"]
+    expect_fail(real, "real lifecycle", tamper[1])
+    if regenerated_snapshot(ws) != before or "workflow_runs" in {c.get("kind") for c in real.calls}:
+        raise Reject("control-effect", "the real lifecycle did not refuse before touching the regenerated evidence and the recovery decision")
+    s, ws, gone, before = outcomes["removed"]
+    if gone.rc != 0 or "workflow_runs" not in {c.get("kind") for c in gone.calls}:
+        raise Reject("mutant-unexercised", "without the tamper check the altered attachment did not reach the recovery decision: the check is not what refuses it")
+    s, ws, late, before = outcomes["moved"]
+    expect_fail(late, "check after reuse", tamper[1])
+    if regenerated_snapshot(ws) == before:
+        raise Reject("mutant-unexercised", "a check moved after the reuse still left the regenerated evidence untouched: the ordering control proves nothing")
+    if "download" not in {c.get("kind") for c in late.calls}:
+        raise Reject("mutant-unexercised", "the misordered lifecycle never fetched the attachments")
+    return ["a removed tamper check lets altered attachments reach the recovery decision; the real lifecycle refuses first",
+            "a tamper check moved after the reuse destroys the regenerated evidence before it refuses; the real lifecycle does not"]
+
+
+def task3_controls(ctx: Context) -> list:
+    items: list = [c_retry_reuse, c_downstream_refusals, c_ordering_mutants]
+    items += [(lambda c, a=a: refused_before_reuse(c, *a)) for a in RETRY_TAMPER_CASES]
+    return items
+
+
 TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_advisory_consumers, c_non_advisory,
                   c_unexpected_endpoint_in_script, c_live_publication)
 
@@ -1581,7 +1762,7 @@ def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tu
         raise Reject("control-accepted", "lab integrity accepted a replaced production gate")
     positives += positive_baselines(ctx)
     with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL) as pool:
-        futures = [pool.submit(fn, ctx) for fn in (*TASK1_CONTROLS, *task2_controls(ctx))]
+        futures = [pool.submit(fn, ctx) for fn in (*TASK1_CONTROLS, *task2_controls(ctx), *task3_controls(ctx))]
         futures.append(pool.submit(control_transport, template))
         for future in futures:
             outcome = future.result()

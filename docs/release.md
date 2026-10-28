@@ -173,6 +173,38 @@ remain an entry blocker for Phase 19; nothing here closes them, and the window
 gate has per-step timeouts because a new job has no completed run to cite in
 `.github/ci-timeouts.json`.
 
+## Evidence lifecycle and its local replay
+
+The attach, platform-manifest, final-gate and publication steps of
+`.github/workflows/release.yml` are the modes of
+`.github/scripts/release-evidence-lifecycle.sh` (`attach-evidence`,
+`validate-evidence`, `build-manifest`, `validate-draft`, `final-gate`,
+`publish-draft`). The workflow runs each from the trusted checkout, and the
+workflow policy judges every call as the body that runs, so the extracted code
+cannot be unused, misplaced or run from the tagged tree.
+
+`tests/scripts/verify-release-lifecycle.py` replays that lifecycle before a tag
+exists. It runs the production script and gates from a non-git workspace for the
+attacher and from a tag checkout for the judge jobs, with `GH_REPO` explicit,
+against a `gh` stand-in that serves response shapes taken from the sanitized
+captures in `tests/data/release-api/` (see its `SOURCES.md` for endpoints,
+sanitization and digest) and refuses any endpoint, repository, flag, mutation or
+reshaped response it was not told about. The publish command is intercepted and
+recorded as a decision; nothing reaches the network or a real tag, release or
+asset. The replay proves deterministic logic. It does not prove live GitHub
+permissions, hosted runner behavior, or the real corpus, fuzz, performance and
+archive owner validators (the delivery self-test runs those).
+
+On a retry the evidence a failed attempt already attached is downloaded and
+judged first by `verify-release-gates.sh --check-attached-evidence` (tag and
+source identity, the sidecar's binding to the attached corpus receipt, each
+digest GitHub reports, and the allowed inventory). Only then do the identical
+attached bytes replace the regenerated run-specific copies; nothing is uploaded,
+replaced or deleted, and a refusal leaves the regenerated evidence untouched.
+The platform-manifest step accepts the final receipts of an earlier attempt, so a
+retry that stopped after the final upload can reach the publish job, whose
+recovery decision then compares them byte for byte.
+
 ## Performance measurement and qualification
 
 The v0.2.0 DMG paired performance comparison is historical evidence: it reported

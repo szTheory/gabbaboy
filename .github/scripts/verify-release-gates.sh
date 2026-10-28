@@ -352,6 +352,69 @@ if expected != actual:
 PY
 }
 
+# The independent tamper check for evidence a failed earlier attempt already attached (IN-01). It reads only the attachments
+# and the live asset list, never the producer's regenerated copies, so it runs BEFORE those copies are replaced and its
+# verdict cannot depend on them. It binds identity (tag, version, source SHA), the sidecar to the attached corpus receipt
+# bytes, each attachment to the digest GitHub reports for it, and the draft to the allowed inventory. Semantic owner
+# validation of the same bytes still follows in --check-v02-evidence before any publication.
+check_attached_evidence() {
+  local tag=$1 source_sha=$2 api_json=$3 root=$4
+  python3 - "$tag" "$source_sha" "$api_json" "$root" <<'PY' || return $?
+import hashlib, json, os, pathlib, re, sys
+tag, source, api_path, root = sys.argv[1:]
+MAX = 8 * 1024 * 1024
+EVIDENCE = ("support-ledger.json", "cgb-corpus-receipt.json", "v02-fuzz-receipt.json", "v02-performance-receipt.json")
+if not re.fullmatch(r"v\d+\.\d+\.\d+", tag) or not re.fullmatch(r"[0-9a-f]{40}", source):
+    raise SystemExit("attached-evidence check: the tag or source SHA is malformed")
+allowed = set(os.environ["REQUIRED_ASSETS"].split()) | {"SHA256SUMS", "release-receipt.json"}
+try:
+    rows = json.loads(pathlib.Path(api_path).read_text(encoding="utf-8"))
+except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    raise SystemExit("attached-evidence check: the live asset list is unreadable")
+if not isinstance(rows, list) or len(rows) > 100 or any(not isinstance(row, dict) or not isinstance(row.get("name"), str) for row in rows):
+    raise SystemExit("attached-evidence check: the live asset list is malformed")
+names = [row["name"] for row in rows]
+if len(names) != len(set(names)) or not set(names) <= allowed:
+    raise SystemExit(f"draft carries an unknown or duplicated asset: unknown={sorted(set(names) - allowed)}")
+live = {row["name"]: row for row in rows}
+# The retry downloads each attached evidence asset to <root>/attached-<name>/<name>; an asset that was not attached has no file.
+paths = [pathlib.Path(root) / f"attached-{name}" / name for name in EVIDENCE if (pathlib.Path(root) / f"attached-{name}" / name).is_file()]
+got = {}
+for path in paths:
+    data = path.read_bytes()
+    if not data or len(data) > MAX:
+        raise SystemExit(f"attached {path.name} is empty or exceeds the {MAX}-byte bound")
+    row = live.get(path.name)
+    if row is None or row.get("digest") != "sha256:" + hashlib.sha256(data).hexdigest():
+        raise SystemExit(f"attached {path.name} differs from the digest GitHub reports for it")
+    try:
+        document = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise SystemExit(f"attached {path.name} is not valid UTF-8 JSON")
+    if not isinstance(document, dict):
+        raise SystemExit(f"attached {path.name} is not a JSON object")
+    got[path.name] = (data, document)
+sidecar, corpus = got.get("support-ledger.json"), got.get("cgb-corpus-receipt.json")
+if (sidecar is None) != (corpus is None):
+    raise SystemExit("the support sidecar and the corpus receipt must be attached together")
+if sidecar is not None:
+    if (sidecar[1].get("schema_version") != 2 or sidecar[1].get("tag") != tag or sidecar[1].get("source_sha") != source
+            or sidecar[1].get("version") != tag[1:]):
+        raise SystemExit("attached support sidecar is not the schema-2 sidecar of this exact tag and source")
+    if sidecar[1].get("corpus_receipt_sha256") != hashlib.sha256(corpus[0]).hexdigest():
+        raise SystemExit("attached support sidecar does not bind the attached corpus receipt bytes")
+fuzz = got.get("v02-fuzz-receipt.json")
+if fuzz is not None and fuzz[1].get("source_sha") != source:
+    raise SystemExit("attached fuzz receipt is not bound to the exact source revision")
+performance = got.get("v02-performance-receipt.json")
+if performance is not None:
+    candidate = (performance[1].get("source") or {}).get("candidate") or {}
+    if performance[1].get("result") != "passed" or not re.fullmatch(r"[0-9a-f]{40}", str(candidate.get("sha", ""))):
+        raise SystemExit("attached performance receipt is not a passed receipt with a candidate source revision")
+print(f"PASS: {len(got)} attached evidence assets are bound to {tag} before any reuse")
+PY
+}
+
 # Owner validators for the sidecar, performance, fuzz and source-archive receipts run from this script's own
 # checkout (the judge, $ROOT). The exact tag checkout the caller is standing in is data: it is passed to the
 # delivery checker as --source-root, and the performance and fuzz receipts bind that checkout's HEAD.
@@ -415,6 +478,68 @@ expect_reject() {
     fail "gate accepted $label"
   fi
   [[ "$output" == *"$reason"* ]] || fail "gate rejected $label for the wrong reason: $output"
+}
+
+# Fixture for the attached-evidence check: four consistent attachments and the live asset list that reports their digests.
+# $2 names one defect to build in.
+attached_fixture() {
+  local dir=$1 defect=${2:-}
+  python3 - "$dir" "$defect" <<'PY' || return $?
+import hashlib, json, pathlib, sys
+root, defect = pathlib.Path(sys.argv[1]), sys.argv[2]
+root.mkdir(parents=True)
+source, tag = "c" * 40, "v0.2.0"
+def digest(data): return hashlib.sha256(data).hexdigest()
+corpus = b'{"corpus": "complete"}\n'
+files = {
+    "cgb-corpus-receipt.json": corpus,
+    "v02-fuzz-receipt.json": json.dumps({"source_sha": "d" * 40 if defect == "fuzz-stale" else source, "status": "complete"}).encode(),
+    "v02-performance-receipt.json": json.dumps({"result": "passed", "source": {"candidate": {"sha": source}}}).encode(),
+}
+sidecar = {"schema_version": 2, "tag": "v9.9.9" if defect == "sidecar-tag" else tag, "version": "0.2.0", "source_sha": source,
+           "corpus_receipt_sha256": digest(b"altered\n" if defect == "sidecar-binding" else corpus)}
+files["support-ledger.json"] = json.dumps(sidecar).encode()
+if defect == "partial":
+    del files["cgb-corpus-receipt.json"]
+rows = [{"name": name, "id": 100 + i, "digest": "sha256:" + ("0" * 64 if defect == "digest" and name == "v02-fuzz-receipt.json" else digest(data))}
+        for i, (name, data) in enumerate(sorted(files.items()))]
+if defect == "unknown":
+    rows.append({"name": "unknown-extra-asset.bin", "id": 999, "digest": "sha256:" + "0" * 64})
+if defect == "duplicate":
+    rows.append(dict(rows[0], id=998))
+for name, data in files.items():
+    (root / f"attached-{name}").mkdir()
+    (root / f"attached-{name}" / name).write_bytes(data)
+(root / "api-assets.json").write_text(json.dumps(rows))
+PY
+}
+
+attached_self_test() {
+  local base=$1 defect good
+  good=$(printf 'c%.0s' {1..40})
+  attached_fixture "$base/good"
+  check_attached_evidence v0.2.0 "$good" "$base/good/api-assets.json" "$base/good" > /dev/null
+  rm -rf "$base"/good/attached-*
+  check_attached_evidence v0.2.0 "$good" "$base/good/api-assets.json" "$base/good" > /dev/null
+  for defect in sidecar-binding sidecar-tag fuzz-stale digest unknown duplicate partial; do
+    attached_fixture "$base/$defect" "$defect"
+  done
+  expect_reject 'a sidecar that binds other corpus bytes' 'does not bind the attached corpus receipt bytes' \
+    check_attached_evidence v0.2.0 "$good" "$base/sidecar-binding/api-assets.json" "$base/sidecar-binding"
+  expect_reject 'a sidecar of another tag' 'not the schema-2 sidecar of this exact tag and source' \
+    check_attached_evidence v0.2.0 "$good" "$base/sidecar-tag/api-assets.json" "$base/sidecar-tag"
+  expect_reject 'a fuzz receipt of another source' 'not bound to the exact source revision' \
+    check_attached_evidence v0.2.0 "$good" "$base/fuzz-stale/api-assets.json" "$base/fuzz-stale"
+  expect_reject 'bytes that differ from the digest GitHub reports' 'differs from the digest GitHub reports' \
+    check_attached_evidence v0.2.0 "$good" "$base/digest/api-assets.json" "$base/digest"
+  expect_reject 'an unknown extra asset in the draft' 'unknown or duplicated asset' \
+    check_attached_evidence v0.2.0 "$good" "$base/unknown/api-assets.json" "$base/unknown"
+  expect_reject 'a duplicated asset name in the draft' 'unknown or duplicated asset' \
+    check_attached_evidence v0.2.0 "$good" "$base/duplicate/api-assets.json" "$base/duplicate"
+  expect_reject 'a sidecar attached without its corpus receipt' 'must be attached together' \
+    check_attached_evidence v0.2.0 "$good" "$base/partial/api-assets.json" "$base/partial"
+  expect_reject 'a source SHA that is not full' 'malformed' check_attached_evidence v0.2.0 abc "$base/good/api-assets.json" "$base/good"
+  printf 'PASS: attached evidence is bound to the tag, its digests and the allowed inventory; rejected: stale, mismatched, partial and unknown attachments\n'
 }
 
 # Build one draft (or final) inventory from REQUIRED_ASSETS. $5 omits an asset, $6 breaks one binding.
@@ -846,6 +971,7 @@ PY
     python3 -I "$ROOT/tests/scripts/verify-v02-delivery.py" --self-test
     python3 -I "$ROOT/.github/scripts/verify-published-release-assets.py" --self-test
     recovery_self_test "$temp/recovery"
+    attached_self_test "$temp/attached"
     printf 'PASS: release configuration and exact-head required-check gate\n'
     ;;
   --check-pr)
@@ -938,10 +1064,14 @@ PY
     check_runner_evidence "$2" "$3" "$4" "$5" "$6"
     printf 'PASS: build and download-smoke runner evidence is independently bound\n'
     ;;
+  --check-attached-evidence)
+    [[ $# -eq 5 ]] || fail 'usage: verify-release-gates.sh --check-attached-evidence TAG SOURCE_SHA LIVE_ASSETS_JSON ATTACHED_ROOT'
+    check_attached_evidence "$2" "$3" "$4" "$5"
+    ;;
   --check-digest-sidecar)
     [[ $# -eq 3 ]] || fail 'usage: verify-release-gates.sh --check-digest-sidecar SIDECAR ARCHIVE'
     check_digest_sidecar "$2" "$3"
     printf 'PASS: downloaded archive matches its one-line digest sidecar\n'
     ;;
-  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-attached-evidence TAG SOURCE_SHA LIVE_ASSETS_JSON ATTACHED_ROOT | --check-digest-sidecar SIDECAR ARCHIVE' ;;
 esac
