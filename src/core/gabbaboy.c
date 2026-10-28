@@ -3757,6 +3757,14 @@ static void dma_start(gbb_instance *m) {
 /* MODEL: BOTH GATE-00 basis=see-branch-gates */
 static void dma_advance_half_dot(gbb_instance *m) {
     if (!m->dma_active) return;
+    /* An active transfer always has dma_index < 160: dma_start sets it to 0 and the
+     * tick below clears dma_active as it reaches 160. State validation refuses any
+     * other combination; this guard keeps the oam[] write in bounds even if a caller
+     * bypasses validation. Valid machines never take it, so it changes no output. */
+    if (m->dma_index >= GBB_OAM_BYTES) {
+        m->dma_active = 0;
+        return;
+    }
     /* MODEL: BOTH GATE-53 basis="OAM DMA byte period is measured in CPU ticks and remains common across profiles, D-10" -- DMA byte period */
     if (++m->dma_phase < GBB_T_PER_M) return;
     m->dma_phase = 0;
@@ -4555,6 +4563,7 @@ static int state_validate_relations(const gbb_instance *instance,
     uint64_t hdma_phase = 0u, hdma_source = 0u, hdma_destination = 0u;
     uint64_t svbk = 0u, wram_bank = 0u, vram_bank = 0u, key1_armed = 0u;
     uint64_t double_speed = 0u, cpu_stall = 0u, cpu_stall_time = 0u, switch_pending = 0u;
+    uint64_t dma_active = 0u;
 #define STATE_RELATION_READ(path, target) \
     if (!state_source_raw(instance, body, body_size, (path), 0u, &(target))) return 0
     STATE_RELATION_READ("ppu_objects_stalled", ppu_stalled);
@@ -4587,7 +4596,10 @@ static int state_validate_relations(const gbb_instance *instance,
     STATE_RELATION_READ("cpu_stall_kind", cpu_stall);
     STATE_RELATION_READ("cpu_stall_half_dots", cpu_stall_time);
     STATE_RELATION_READ("stop_switch_pending", switch_pending);
+    STATE_RELATION_READ("dma_active", dma_active);
 #undef STATE_RELATION_READ
+    /* OAM DMA writes oam[dma_index] on its next byte tick; 160 is the finished value. */
+    if (dma_active != 0u && dma_index >= GBB_OAM_BYTES) return 0;
     static const uint8_t timer_taps[4] = {9u, 3u, 5u, 7u};
     const uint64_t expected_timer_signal = (tac & 4u) != 0u
         ? ((divider_counter >> timer_taps[tac & 3u]) & 1u) : 0u;
