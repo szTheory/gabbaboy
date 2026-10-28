@@ -2540,7 +2540,66 @@ def check_ir_exception_env(root: Path) -> None:
                          f"or the expected review repository ({found.group(0)!r}); hosted runs fail closed for a widened limit")
 
 
+# WR-C01: rules for every workflow file, including ones the specific checks above do not know. The workflow set is
+# closed, so a new file is refused until it is listed and judged. No workflow may use a trigger that runs with the base
+# repository's token on contributed code (pull_request_target, workflow_run), forward secrets to a called workflow, or
+# interpolate event text an outsider controls (a branch name, a title, a body) into a run body. A write permission is
+# allowed only where it is listed below, scope by scope; every top level is read-only.
+WORKFLOW_FORBIDDEN_TRIGGERS = frozenset({"pull_request_target", "workflow_run"})
+WORKFLOW_WRITE_ALLOWLIST = {
+    ("release.yml", "release"): frozenset({"contents", "issues", "pull-requests"}),
+    ("release.yml", "candidate"): frozenset({"contents"}),
+    ("release.yml", "candidate-macos"): frozenset({"contents"}),
+    ("release.yml", "candidate-windows"): frozenset({"contents"}),
+    ("release.yml", "attach-v02-evidence"): frozenset({"contents"}),
+    ("release.yml", "candidate-platform-manifest"): frozenset({"contents"}),
+    ("release.yml", "publish-qualified-release"): frozenset({"contents"}),
+    ("release-please.yml", "release"): frozenset({"contents", "issues", "pull-requests"}),
+    ("nightly-asan.yml", "report-red"): frozenset({"issues"}),
+}
+# Event fields whose values are commit ids, not text an outsider writes; anything else under github.event, and
+# github.head_ref, reaches a run body only through env:.
+_EVENT_TEXT = re.compile(r"github\.head_ref|github\.event\.(?!(?:pull_request\.(?:head|base)\.sha|before|after)\b)\w")
+
+
+def check_workflow_set(root: Path) -> None:
+    """Runs first: an unlisted or vanished workflow file is refused before any rule reads a listed one."""
+    directory = root / ".github/workflows"
+    present = {path.name for path in [*directory.glob("*.yml"), *directory.glob("*.yaml")]}
+    if present != set(WORKFLOWS):
+        unknown, missing = sorted(present - set(WORKFLOWS)), sorted(set(WORKFLOWS) - present)
+        raise Reject("workflow-unlisted", f"the workflow set must be exactly the judged list: unlisted {unknown}, missing {missing}")
+
+
+def check_workflow_closed_world(root: Path) -> None:
+    """Runs last, so a defect a specific rule names keeps that rule's code."""
+    directory = root / ".github/workflows"
+    for name in WORKFLOWS:
+        tree = read_workflow(directory / name)
+        forbidden = sorted(_trigger_names(tree) & WORKFLOW_FORBIDDEN_TRIGGERS)
+        if forbidden:
+            raise Reject("workflow-trigger", f"{name} must not run on {', '.join(forbidden)}")
+        top = tree.get("permissions", {})
+        if not isinstance(top, dict) or _writes(top):
+            raise Reject("workflow-write-permissions", f"{name} top-level permissions must be an explicit read-only map")
+        for job_id, job in tree["jobs"].items():
+            if "secrets" in job:
+                raise Reject("workflow-secrets", f"{_where(name, job_id)} must not forward secrets to a called workflow")
+            perms = _permissions(job, tree)
+            writes = {scope for scope, value in perms.items() if value == "write"}
+            allowed = WORKFLOW_WRITE_ALLOWLIST.get((name, job_id), frozenset())
+            if writes - allowed:
+                raise Reject("workflow-write-permissions", f"{_where(name, job_id)} gains write access it is not listed for: "
+                             f"{', '.join(sorted(writes - allowed))}")
+            for step in job.get("steps", []):
+                for expression in _EXPRESSION.findall(str(step.get("run", ""))):
+                    if _EVENT_TEXT.search(expression):
+                        raise Reject("run-expression", f"{_where(name, job_id)} step {step.get('name', '?')!r} interpolates "
+                                     f"${{{{ {expression.strip()} }}}} into a run body; pass it through step-level env")
+
+
 def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
+    check_workflow_set(root)
     check_producer_script(root)
     check_ir_exception_env(root)
     check_rehearsal_flag_scope(root)
@@ -2554,6 +2613,7 @@ def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_release_gate_wiring(root)
     check_version_window(root)
     check_timeout_ledger(root, release_head)
+    check_workflow_closed_world(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
 
@@ -3343,6 +3403,26 @@ def _mutations():
         _m("G17-09 publisher gains actions: write", rel, "  publish-qualified-release:\n", "      actions: read\n", "      actions: write\n",
            "nightly-gate-permissions"),
         _m("G17-10 publisher loses actions: read", rel, "  publish-qualified-release:\n", "      actions: read\n", "", "nightly-gate-permissions"),
+        # WR-C01: generic rules over every workflow file.
+        _m("WR-C01 release-please caller forwards secrets", "release-please.yml", "  release:\n", "    permissions:\n      actions: read\n",
+           "    secrets: inherit\n    permissions:\n      actions: read\n", "workflow-secrets"),
+        _m("WR-C01 release-please caller gains packages and id-token write", "release-please.yml", "  release:\n",
+           "    permissions:\n      actions: read\n", "    permissions:\n      packages: write\n      id-token: write\n      actions: read\n",
+           "workflow-write-permissions"),
+        _m("WR-C01 release-please top level grants contents write", "release-please.yml", "", "permissions:\n  contents: read\n\njobs:",
+           "permissions:\n  contents: write\n\njobs:", "workflow-write-permissions"),
+        _m("WR-C01 release-please runs on pull_request_target", "release-please.yml", "", "on:\n  push:\n    branches: [main]\n",
+           "on:\n  pull_request_target:\n  push:\n    branches: [main]\n", "workflow-trigger"),
+        _m("WR-C01 rehearsal runs on workflow_run", "release-rehearsal.yml", "", "on:\n  push:\n",
+           "on:\n  workflow_run:\n    workflows: [ci]\n  push:\n", "workflow-trigger"),
+        _m("WR-C01 fixture-repro top level grants contents write", "fixture-repro.yml", "", "permissions:\n  contents: read\n",
+           "permissions:\n  contents: write\n", "workflow-write-permissions"),
+        _m("WR-C01 libbet-repro job grants contents write", "libbet-repro.yml", "  libbet-repro:\n", "    timeout-minutes: 20\n",
+           "    timeout-minutes: 20\n    permissions:\n      contents: write\n", "workflow-write-permissions"),
+        _m("WR-C01 ci run body interpolates the head ref", "ci.yml", "  perf-gate:\n", "          sudo apt-get update -qq\n",
+           '          echo "${{ github.head_ref }}"\n          sudo apt-get update -qq\n', "run-expression"),
+        _m("WR-C01 fixture-repro run body interpolates the PR title", "fixture-repro.yml", "", "        run: |\n",
+           '        run: |\n          echo "${{ github.event.pull_request.title }}"\n', "run-expression"),
         # WR-C02: edits outside the mode regions that disable the gates while every region and dispatch line survives.
         _m("WR-C02 lifecycle overrides python3 after the top-level set", "lifecycle", "", "set -euo pipefail\n\nlifecycle_attach_evidence() {",
            "set -euo pipefail\npython3() { return 0; }\n\nlifecycle_attach_evidence() {", "lifecycle-wiring"),
@@ -3663,6 +3743,24 @@ def self_test(root: Path) -> None:
             for item in WORKFLOWS:
                 (fixture / ".github/workflows" / item).write_text(baselines[item], encoding="utf-8")
         rejected += _ledger_boundary_controls()
+        # WR-C01: the workflow set is closed. A new file (here a pull_request_target job with contents: write) is refused
+        # before anything reads it, and so is a judged file that disappears.
+        intruder = fixture / ".github/workflows/evil.yml"
+        intruder.write_text("name: evil\non:\n  pull_request_target:\npermissions:\n  contents: write\njobs:\n  evil:\n"
+                            "    runs-on: ubuntu-22.04\n    steps:\n      - run: echo evil\n", encoding="utf-8")
+        for label, mutate, restore in (
+            ("WR-C01 an unlisted workflow file", lambda: None, intruder.unlink),
+            ("WR-C01 a judged workflow file renamed to .yaml",
+             lambda: (fixture / ".github/workflows/libbet-repro.yml").rename(fixture / ".github/workflows/libbet-repro.yaml"),
+             lambda: (fixture / ".github/workflows/libbet-repro.yaml").rename(fixture / ".github/workflows/libbet-repro.yml")),
+        ):
+            mutate()
+            result = _run_cli(fixture, work)
+            restore()
+            if result.returncode != 1 or "REJECT workflow-unlisted:" not in result.stderr or "PASS:" in result.stdout:
+                raise SystemExit(f"self-test negative {label!r} failed: exit={result.returncode} stderr={result.stderr.strip()!r}")
+            rejected += 1
+            print(f"rejected: {label}: {result.stderr.strip()}")
         # Equivalent shell formatting of a required call stays valid: continuation, quoting, extra spaces,
         # interleaved comments and blank lines do not change what runs.
         path = fixture / ".github/workflows/release-rehearsal.yml"
