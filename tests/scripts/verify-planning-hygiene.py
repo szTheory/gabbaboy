@@ -92,6 +92,8 @@ def phase_details(roadmap: str) -> list[str] | None:
 
 
 PlanTree = dict[str, dict[str, Callable[[], str]]]
+# The one spelling of the phases directory this checker uses: a path inside a named commit, read with git, never the live tree.
+PHASES_AT_REV = ".planning/phases"
 
 
 def is_gap_plan(text: str) -> bool:
@@ -128,13 +130,13 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree]:
     roadmap = git_run(repo, "show", f"{rev}:.planning/ROADMAP.md")
     if roadmap.returncode != 0:
         raise SystemExit(f"plan-cap-rev: .planning/ROADMAP.md cannot be read at {rev}")
-    listing = git_run(repo, "ls-tree", "-r", "--name-only", "-z", rev, "--", ".planning/phases")
+    listing = git_run(repo, "ls-tree", "-r", "--name-only", "-z", rev, "--", PHASES_AT_REV)
     if listing.returncode != 0:
-        raise SystemExit(f"plan-cap-rev: .planning/phases cannot be listed at {rev}")
+        raise SystemExit(f"plan-cap-rev: {PHASES_AT_REV} cannot be listed at {rev}")
     tree: PlanTree = {}
     for raw in listing.stdout.split(b"\0"):
         parts = raw.decode("utf-8", errors="replace").split("/")
-        if len(parts) != 4 or parts[:2] != [".planning", "phases"]:
+        if len(parts) != 4 or parts[:2] != PHASES_AT_REV.split("/"):
             continue
         directory, name = parts[2], parts[3]
         files = tree.setdefault(directory, {})
@@ -491,7 +493,7 @@ def self_test_plan_cap_rev(base: Path) -> int:
         raise SystemExit(f"planning-hygiene self-test FAIL: --rev {label} was accepted")
 
     git("init", "-q")
-    dir17 = ".planning/phases/GB-17-name/"
+    dir17 = PHASES_AT_REV + "/GB-17-name/"
     good = {".planning/ROADMAP.md": roadmap_text([("16", "8"), ("17", "4")]),
             dir17 + "17-01-PLAN.md": PRIMARY_FRONTMATTER_TEXT, dir17 + "17-02-PLAN.md": PRIMARY_FRONTMATTER_TEXT,
             dir17 + "17-03-PLAN.md": GAP_FRONTMATTER_TEXT, dir17 + "17-SUMMARY.md": ""}
