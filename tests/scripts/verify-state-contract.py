@@ -1489,6 +1489,28 @@ def run_purity(args: argparse.Namespace, root: Path) -> None:
           f"result={result.stdout.strip()} controls={controls.stdout.strip()}")
 
 
+def load_boundary_module():
+    """The boundary facts live in state_boundary.py; the other modes of this checker never read planning files."""
+    import importlib.util
+    path = Path(__file__).resolve().parent / "state_boundary.py"
+    spec = importlib.util.spec_from_file_location("gbb_state_boundary", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_boundary_mode(args: argparse.Namespace, root: Path) -> int:
+    module = load_boundary_module()
+    try:
+        if args.self_test:
+            return module.boundary_self_test(root, args.rev)
+        result = module.run_boundary(root, args.rev)
+    except module.ContractError as error:
+        raise ContractError(str(error)) from None
+    print("state boundary pass " + " ".join(f"{key}={value}" for key, value in result.items()))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inventory", action="store_true")
@@ -1499,6 +1521,7 @@ def main() -> int:
     parser.add_argument("--format-contract", action="store_true")
     parser.add_argument("--tracer", action="store_true")
     parser.add_argument("--purity", action="store_true")
+    parser.add_argument("--boundary", action="store_true")
     parser.add_argument("--state-release-from-cache", type=Path)
     parser.add_argument("--control", choices=("inventory", "field-census", "globals", "revision", "purity", "all"), default="all")
     parser.add_argument("--rev", required=False)
@@ -1528,6 +1551,8 @@ def main() -> int:
                                                      args.version_module, args.cmake, root, args.rev)
             print(".".join(version))
             return 0
+        if args.boundary:
+            return run_boundary_mode(args, root)
         if args.self_test:
             if args.control in ("inventory", "all"):
                 inventory_self_test()

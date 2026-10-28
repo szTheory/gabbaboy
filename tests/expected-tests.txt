@@ -1169,6 +1169,9 @@ release_lifecycle_replay
 release_lifecycle_controls
 release_review_approval
 release_review_controls
+release_nightly_gate
+release_nightly_controls
+state_boundary_controls
 v02_adoption_docs
 v02_adoption_docs_controls
 v02_consumer_controls_c

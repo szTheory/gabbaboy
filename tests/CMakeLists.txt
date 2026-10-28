@@ -5521,7 +5521,9 @@ endif()
 # must reach a minimum | minimum. Controls are parsed minimums: adding one is allowed, dropping one is rejected.
 foreach(gbb_gate_case IN ITEMS
     "release_review_approval|review-approval|controls|5"
-    "release_review_controls|review-controls|controls|36")
+    "release_review_controls|review-controls|controls|36"
+    "release_nightly_gate|nightly-gate|positives|7"
+    "release_nightly_controls|nightly-controls|controls|37")
   string(REPLACE "|" ";" gbb_gate_fields "${gbb_gate_case}")
   list(GET gbb_gate_fields 0 gbb_gate_name)
   list(GET gbb_gate_fields 1 gbb_gate_suite)
@@ -5536,6 +5538,21 @@ foreach(gbb_gate_case IN ITEMS
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   set_tests_properties(${gbb_gate_name} PROPERTIES TIMEOUT 60 LABELS "v02")
 endforeach()
+
+# Phase 17 boundary (17-11): the planning, requirement, route, receipt-timestamp and RM-027 facts of Phase 17 are read
+# with git from one literal commit, never from the working tree, the current HEAD or later ancestry. The commit is the
+# Phase 17 boundary (the last commit of the first two 17-11 tasks' predecessor: every plan, the ten completed summaries,
+# the Phase 16 receipts and the six RM-027 rows exist there). It is pinned here so a later phase cannot change it; the
+# control mutants run in disposable repositories seeded from its files. The test reads planning facts, hence the label.
+set(GBB_PHASE17_BOUNDARY_SHA "d53ec9c34e42094e6b468f5ca725afe28cb4e819")
+add_test(NAME state_boundary_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_STATE_CONTRACT_CHECKER};--boundary;--self-test;--rev;${GBB_PHASE17_BOUNDARY_SHA};--repo;${PROJECT_SOURCE_DIR}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=state boundary controls pass rev=${GBB_PHASE17_BOUNDARY_SHA} controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=31
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(state_boundary_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 
 gabbaboy_verify_registered_tests()
 
