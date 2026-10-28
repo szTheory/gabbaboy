@@ -21,7 +21,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1761,6 +1763,55 @@ NIGHTLY_COMMANDS = (
 )
 
 
+# The red report (IN-03). The replay is skipped by the dry run, which runs the same reporting body with every write replaced by a
+# recorded line; the open issue is reused only on an exact title AND the label, never on a title phrase.
+NIGHTLY_REPLAY_IF = "${{ !inputs.report_red_dry_run }}"
+NIGHTLY_REPORT_IF = "${{ failure() || (always() && inputs.report_red_dry_run) }}"
+NIGHTLY_ISSUE_TITLE = "nightly-red: asan-full-replay"
+NIGHTLY_ISSUE_LABEL = "nightly-red"
+NIGHTLY_DRY_RUN_ENV = "${{ inputs.report_red_dry_run && 'true' || 'false' }}"
+NIGHTLY_DEDUPE_FILTER = "[.[] | select(.title == env.ISSUE_TITLE and any(.labels[]; .name == env.ISSUE_LABEL))]"
+NIGHTLY_REPORT_STEP_TIMEOUT_MAX = 5
+_NIGHTLY_BARE_WRITE = re.compile(r"(?m)^\s*(?:gh\s+(?:issue\s+(?:create|comment|edit|close|reopen)|label\s+(?:create|edit|delete))\b)")
+
+
+def _check_nightly_report(job: dict) -> None:
+    where = "nightly-asan.report-red"
+    if _needs(job) != {"asan-full-replay"} or str(job.get("if", "")).strip() != NIGHTLY_REPORT_IF:
+        raise Reject("nightly-report-trigger", f"{where} must need asan-full-replay and run only if: {NIGHTLY_REPORT_IF}")
+    if job.get("permissions") != {"issues": "write"}:
+        raise Reject("nightly-report-permissions", f"{where} must hold issues: write as its only permission")
+    if _checkouts(job) or any("uses" in step for step in job.get("steps", [])):
+        raise Reject("nightly-report-checkout", f"{where} must not check out source or use any action")
+    # The job's own timeout needs a ledger row citing a completed report-red run, and none exists until the dry run has been
+    # dispatched on a pushed head (the job has only ever been skipped). Until then the bound is the reporting step's; once the
+    # row is cited, the job-level timeout-minutes and its ledger row are judged by check_timeout_ledger like any other job.
+    steps = job.get("steps", [])
+    if len(steps) != 1:
+        raise Reject("nightly-report-body", f"{where} must hold exactly the one reporting step")
+    step = steps[0]
+    minutes = str(step.get("timeout-minutes", ""))
+    if not minutes.isdigit() or not 1 <= int(minutes) <= NIGHTLY_REPORT_STEP_TIMEOUT_MAX:
+        raise Reject("nightly-report-timeout", f"{where} reporting step needs a timeout-minutes of at most {NIGHTLY_REPORT_STEP_TIMEOUT_MAX}")
+    env = step.get("env", {})
+    if env.get("ISSUE_TITLE") != NIGHTLY_ISSUE_TITLE or env.get("ISSUE_LABEL") != NIGHTLY_ISSUE_LABEL \
+            or env.get("DRY_RUN") != NIGHTLY_DRY_RUN_ENV:
+        raise Reject("nightly-report-body", f"{where} must pass the exact title, the label and the dry-run flag through env")
+    run = str(step.get("run", ""))
+    flat = _flat(step)
+    if NIGHTLY_DEDUPE_FILTER not in run or 'gh issue list --state open --label "$ISSUE_LABEL" --limit 100 ' not in run \
+            or "--search" in run or "in:title" in run:
+        raise Reject("nightly-report-dedupe", f"{where} must find the open issue by exact title and label, not by a title phrase search")
+    if 'issue_write issue create --title "$ISSUE_TITLE" --label "$ISSUE_LABEL"' not in run \
+            or 'issue_write issue comment "$number"' not in run or "issue_write label create" not in run:
+        raise Reject("nightly-report-dedupe", f"{where} must create the issue with the label, comment on a match and create the label when it is missing")
+    if 'if [ "$DRY_RUN" = true ]; then' not in run or "DRY-RUN not sent" not in run or 'gh "$@"' not in run:
+        raise Reject("nightly-report-dry-run", f"{where} must route every write through issue_write, which only records it in a dry run")
+    if _NIGHTLY_BARE_WRITE.search(run.replace('gh "$@"', "")) or re.search(r"\|\|\s*true", flat) \
+            or str(step.get("continue-on-error", "false")).lower() not in ("", "false"):
+        raise Reject("nightly-report-dry-run", f"{where} writes to GitHub outside issue_write or ignores a failure")
+
+
 def check_nightly(root: Path) -> None:
     """The scheduled full ASan stall replay (D-19, D-108): two triggers, a read-only replay job that runs the repository
     code, and a separate report job that alone holds issues: write, has no checkout and runs no repository code (T-16-07)."""
@@ -1768,6 +1819,11 @@ def check_nightly(root: Path) -> None:
     tree = read_workflow(root / ".github/workflows/nightly-asan.yml")
     if _trigger_names(tree) != {"schedule", "workflow_dispatch"}:
         raise Reject("workflow-trigger", "nightly-asan must trigger on schedule and workflow_dispatch only")
+    dispatch = tree["on"].get("workflow_dispatch") if isinstance(tree.get("on"), dict) else None
+    inputs = dispatch.get("inputs") if isinstance(dispatch, dict) else None
+    if not isinstance(inputs, dict) or set(inputs) != {"report_red_dry_run"} or not isinstance(inputs["report_red_dry_run"], dict) \
+            or inputs["report_red_dry_run"].get("type") != "boolean" or str(inputs["report_red_dry_run"].get("default")) != "false":
+        raise Reject("workflow-trigger", "nightly-asan workflow_dispatch may take only the boolean report_red_dry_run input, default false")
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "nightly-asan must declare only top-level contents: read")
     _check_actions(name, tree)
@@ -1786,15 +1842,11 @@ def check_nightly(root: Path) -> None:
         raise Reject("runner-image", "nightly-asan.asan-full-replay must run on the pinned ubuntu-24.04 image")
     if "timeout-minutes" not in replay:
         raise Reject("job-timeout", "nightly-asan.asan-full-replay must carry timeout-minutes")
+    if str(replay.get("if", "")).strip() != NIGHTLY_REPLAY_IF:
+        raise Reject("nightly-replay-trigger", f"nightly-asan.asan-full-replay may be skipped only by the dry run: if: {NIGHTLY_REPLAY_IF}")
     for command in NIGHTLY_COMMANDS:
         require_call(name, "asan-full-replay", replay, command)
-    report = tree["jobs"]["report-red"]
-    if _needs(report) != {"asan-full-replay"} or str(report.get("if", "")).strip() != "failure()":
-        raise Reject("nightly-report-trigger", "nightly-asan.report-red must need asan-full-replay and run if: failure()")
-    if report.get("permissions") != {"issues": "write"}:
-        raise Reject("nightly-report-permissions", "nightly-asan.report-red must hold issues: write as its only permission")
-    if _checkouts(report) or any("uses" in step for step in report.get("steps", [])):
-        raise Reject("nightly-report-checkout", "nightly-asan.report-red must not check out source or use any action")
+    _check_nightly_report(tree["jobs"]["report-red"])
 
 
 def _check_residual_classification(roles=None, subject=None, exempt=None, overlays=None) -> None:
@@ -2386,6 +2438,142 @@ def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     return {"residual": len(residual)}
 
 
+# --------------------------------------------------------------------------- red-report body replay (IN-03)
+# The reporting step's own run body is executed under bash against a `gh` stand-in that serves fixture-shaped label and issue
+# lists (applying the body's own --jq with the real jq), refuses every other call with exit 97 and records the calls that would
+# change GitHub. A comment is credited only for the exact title carrying the label, and a dry run must send nothing at all.
+_REPORT_RED_STUB = r"""#!/usr/bin/env bash
+set -eu
+expr=""
+previous=""
+for argument in "$@"; do
+  if [ "$previous" = "--jq" ]; then expr=$argument; fi
+  previous=$argument
+done
+case "$1 ${2:-}" in
+  "label list") printf '%s' "$STUB_LABELS" | jq -r "$expr" ;;
+  "issue list") printf '%s' "$STUB_ISSUES" | jq -r "$expr" ;;
+  "label create"|"issue create"|"issue comment") printf 'SENT gh %s\n' "$*" >> "$STUB_LOG" ;;
+  *) printf 'unexpected gh call: %s\n' "$*" >&2; exit 97 ;;
+esac
+"""
+_REPORT_TITLE = "nightly-red: asan-full-replay"
+_REPORT_LABEL = "nightly-red"
+
+
+def _report_issue(number: int, title: str, labels: tuple[str, ...]) -> dict:
+    return {"number": number, "title": title, "labels": [{"name": name, "color": "b60205", "description": ""} for name in labels]}
+
+
+# name, open issues the stand-in serves, labels that exist, dry run -> the calls expected (sent, then recorded-not-sent)
+_REPORT_SCENARIOS = (
+    ("no open issue creates one with the label", [], [_REPORT_LABEL], False,
+     [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("the exact title with the label is reused", [_report_issue(7, _REPORT_TITLE, (_REPORT_LABEL,))], [_REPORT_LABEL], False,
+     ["issue comment 7 --body"], []),
+    ("the lowest-numbered exact match is reused", [_report_issue(9, _REPORT_TITLE, (_REPORT_LABEL,)), _report_issue(4, _REPORT_TITLE, (_REPORT_LABEL, "bug"))],
+     [_REPORT_LABEL], False, ["issue comment 4 --body"], []),
+    ("an unrelated title containing the phrase opens a new issue", [_report_issue(7, f"Investigate {_REPORT_TITLE} flake", (_REPORT_LABEL,))],
+     [_REPORT_LABEL], False, [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("a title that only starts with the phrase opens a new issue", [_report_issue(7, _REPORT_TITLE + " (old)", (_REPORT_LABEL,))],
+     [_REPORT_LABEL], False, [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("the exact title under another label opens a new issue", [_report_issue(7, _REPORT_TITLE, ("bug",))],
+     [_REPORT_LABEL], False, [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("the exact title with no label at all opens a new issue", [_report_issue(7, _REPORT_TITLE, ())],
+     [_REPORT_LABEL], False, [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("a missing label is created before the issue", [], [], False,
+     [f"label create {_REPORT_LABEL} --description Nightly ASan stall replay failed --color B60205",
+      f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("a dry run with no open issue sends nothing", [], [_REPORT_LABEL], True, [],
+     [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"]),
+    ("a dry run with a match sends nothing", [_report_issue(7, _REPORT_TITLE, (_REPORT_LABEL,))], [_REPORT_LABEL], True, [],
+     ["issue comment 7 --body"]),
+    ("a dry run with a missing label sends nothing", [], [], True, [],
+     [f"label create {_REPORT_LABEL} --description Nightly ASan stall replay failed --color B60205",
+      f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"]),
+)
+
+
+def _replay_report_body(body: str, scratch: Path, issues: list, labels: list[str], dry_run: bool) -> tuple[list[str], list[str], int]:
+    """Run the body once. Returns (calls sent, calls recorded but not sent, exit status), each call cut before its --body text."""
+    stub_dir = scratch / "bin"
+    stub_dir.mkdir(exist_ok=True)
+    stub = stub_dir / "gh"
+    stub.write_bytes(_REPORT_RED_STUB.encode("utf-8"))
+    stub.chmod(0o755)
+    log = scratch / "calls.log"
+    log.write_bytes(b"")
+    env = {key: value for key, value in os.environ.items() if key in ("PATH", "TMPDIR", "HOME", "LANG")}
+    env.update(PATH=f"{stub_dir}{os.pathsep}{env.get('PATH', '')}", STUB_LOG=str(log),
+               STUB_ISSUES=json.dumps(issues), STUB_LABELS=json.dumps([{"name": name} for name in labels]),
+               RUN_URL="https://example.invalid/runs/1", ISSUE_TITLE=_REPORT_TITLE, ISSUE_LABEL=_REPORT_LABEL,
+               DRY_RUN="true" if dry_run else "false", GH_TOKEN="stub", GH_REPO="owner/repo")
+    done = subprocess.run(["bash", "-c", body], capture_output=True, text=True, check=False, env=env, timeout=30)
+
+    def cut(line: str) -> str:
+        line = line.split(" gh ", 1)[1] if " gh " in line else line
+        return line.split("--body", 1)[0].strip() + (" --body" if "--body" in line else "")
+    sent = [cut(line) for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("SENT gh ")]
+    recorded = [cut(line) for line in done.stdout.splitlines() if line.startswith("DRY-RUN not sent: gh ")]
+    return sent, recorded, done.returncode
+
+
+def report_red_replay_controls(root: Path) -> int:
+    """Positive scenarios on the production body and body mutants that the scenarios must tell apart. POSIX only: the body is
+    bash and the stand-in applies its jq filters with the real jq."""
+    if os.name == "nt":
+        print("skipped: red-report body replay (needs bash and jq; the static report-red rules above still apply)")
+        return 0
+    if shutil.which("bash") is None or shutil.which("jq") is None:
+        raise SystemExit("self-test red-report replay needs bash and jq on PATH")
+    tree = read_workflow(root / ".github/workflows/nightly-asan.yml")
+    steps = tree["jobs"]["report-red"]["steps"]
+    body = str(steps[0]["run"])
+    controls = 0
+    with tempfile.TemporaryDirectory(prefix="gbb-report-red.") as directory:
+        scratch = Path(directory)
+
+        def outcome(text: str, scenario: tuple) -> tuple[list[str], list[str], int]:
+            return _replay_report_body(text, scratch, scenario[1], scenario[2], scenario[3])
+
+        for scenario in _REPORT_SCENARIOS:
+            sent, recorded, status = outcome(body, scenario)
+            if status != 0 or sent != scenario[4] or recorded != scenario[5]:
+                raise SystemExit(f"self-test red-report replay: {scenario[0]}: exit={status} sent={sent} recorded={recorded}, "
+                                 f"wanted sent={scenario[4]} recorded={scenario[5]}")
+            controls += 1
+        # Each mutant must behave differently from the production body on the scenario that exists to catch it.
+        by_name = {scenario[0]: scenario for scenario in _REPORT_SCENARIOS}
+        mutants = (
+            ("a title phrase match", "select(.title == env.ISSUE_TITLE and", "select((.title | contains(env.ISSUE_TITLE)) and",
+             "an unrelated title containing the phrase opens a new issue"),
+            ("a title prefix match", "select(.title == env.ISSUE_TITLE and", "select((.title | startswith(env.ISSUE_TITLE)) and",
+             "a title that only starts with the phrase opens a new issue"),
+            ("no label match", " and any(.labels[]; .name == env.ISSUE_LABEL))]", ")]",
+             "the exact title under another label opens a new issue"),
+            ("a label match on any label", "any(.labels[]; .name == env.ISSUE_LABEL)", "(.labels | length) > 0",
+             "the exact title under another label opens a new issue"),
+            ("the newest match", "sort_by(.number) | .[0].number", "sort_by(.number) | .[-1].number",
+             "the lowest-numbered exact match is reused"),
+            ("an issue write outside the wrapper", 'issue_write issue create --title', 'gh issue create --title',
+             "a dry run with no open issue sends nothing"),
+            ("a wrapper that always sends", 'if [ "$DRY_RUN" = true ]; then', 'if [ "$DRY_RUN" = never ]; then',
+             "a dry run with a match sends nothing"),
+            ("a missing label that is never created", '!= true ]; then\n', '!= true ] && false; then\n',
+             "a missing label is created before the issue"),
+        )
+        for label, old, new, scenario_name in mutants:
+            if body.count(old) < 1:
+                raise SystemExit(f"self-test red-report replay: mutant anchor for {label!r} is absent from the production body")
+            scenario = by_name[scenario_name]
+            sent, recorded, status = outcome(body.replace(old, new, 1), scenario)
+            if status == 0 and sent == scenario[4] and recorded == scenario[5]:
+                raise SystemExit(f"self-test red-report replay: the mutant {label!r} behaved like the production body on {scenario_name!r}")
+            controls += 1
+    print(f"rejected: red-report body replay holds {len(_REPORT_SCENARIOS)} scenarios and refuses {len(mutants)} mutants")
+    return controls
+
+
 # --------------------------------------------------------------------------- self-test
 WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml", "libbet-repro.yml")
 
@@ -2547,6 +2735,41 @@ def _mutations():
            "        with:\n          persist-credentials: false\n", "nightly-report-checkout"),
         _m("nightly replay drops the full-replay ctest filter", "nightly-asan.yml", "  asan-full-replay:\n",
            "-R '^acceptance_stall_diagnosis(_replay_[12])?$'", "-R '^acceptance_'", "required-command-not-executed"),
+        _m("nightly report step loses its timeout", "nightly-asan.yml", "  report-red:\n", "        timeout-minutes: 5\n", "", "nightly-report-timeout"),
+        _m("nightly report step timeout is an hour", "nightly-asan.yml", "  report-red:\n", "timeout-minutes: 5", "timeout-minutes: 60", "nightly-report-timeout"),
+        _m("nightly report dedupes on a title phrase search", "nightly-asan.yml", "  report-red:\n",
+           "--state open --label", "--state open --search \"$ISSUE_TITLE in:title\" --label", "nightly-report-dedupe"),
+        _m("nightly report matches the title as a substring", "nightly-asan.yml", "  report-red:\n",
+           "select(.title == env.ISSUE_TITLE and", "select((.title | contains(env.ISSUE_TITLE)) and", "nightly-report-dedupe"),
+        _m("nightly report ignores the label when matching", "nightly-asan.yml", "  report-red:\n",
+           " and any(.labels[]; .name == env.ISSUE_LABEL))]", ")]", "nightly-report-dedupe"),
+        _m("nightly report lists without the label filter", "nightly-asan.yml", "  report-red:\n",
+           '--state open --label "$ISSUE_LABEL" --limit', "--state open --limit", "nightly-report-dedupe"),
+        _m("nightly report creates the issue without the label", "nightly-asan.yml", "  report-red:\n",
+           'issue_write issue create --title "$ISSUE_TITLE" --label "$ISSUE_LABEL"', 'issue_write issue create --title "$ISSUE_TITLE"', "nightly-report-dedupe"),
+        _m("nightly report title is another phrase", "nightly-asan.yml", "  report-red:\n",
+           'ISSUE_TITLE: "nightly-red: asan-full-replay"', 'ISSUE_TITLE: "nightly-red"', "nightly-report-body"),
+        _m("nightly report label is another label", "nightly-asan.yml", "  report-red:\n",
+           "ISSUE_LABEL: nightly-red", "ISSUE_LABEL: bug", "nightly-report-body"),
+        _m("nightly report dry-run flag is ignored", "nightly-asan.yml", "  report-red:\n",
+           "DRY_RUN: ${{ inputs.report_red_dry_run && 'true' || 'false' }}", "DRY_RUN: 'false'", "nightly-report-body"),
+        _m("nightly report writes the issue outside the recording wrapper", "nightly-asan.yml", "  report-red:\n",
+           'issue_write issue comment "$number" --body "$body"', 'gh issue comment "$number" --body "$body"', "nightly-report-dedupe"),
+        _m("nightly report wrapper always sends", "nightly-asan.yml", "  report-red:\n",
+           'if [ "$DRY_RUN" = true ]; then', 'if [ "$DRY_RUN" = never ]; then', "nightly-report-dry-run"),
+        _m("nightly report swallows a failed write", "nightly-asan.yml", "  report-red:\n",
+           '              gh "$@"\n', '              gh "$@" || true\n', "nightly-report-dry-run"),
+        _m("nightly report step continues on error", "nightly-asan.yml", "  report-red:\n",
+           "        timeout-minutes: 5\n", "        timeout-minutes: 5\n        continue-on-error: true\n", "ignored-gate"),
+        _m("nightly report runs on every success too", "nightly-asan.yml", "  report-red:\n",
+           "if: ${{ failure() || (always() && inputs.report_red_dry_run) }}", "if: ${{ always() }}", "nightly-report-trigger"),
+        _m("nightly report no longer needs the replay", "nightly-asan.yml", "  report-red:\n",
+           "    needs: asan-full-replay\n", "", "nightly-report-trigger"),
+        _m("nightly replay can be skipped by anything", "nightly-asan.yml", "  asan-full-replay:\n",
+           "if: ${{ !inputs.report_red_dry_run }}", "if: ${{ github.event_name == 'schedule' }}", "nightly-replay-trigger"),
+        _m("nightly dispatch gains a free-form input", "nightly-asan.yml", "",
+           "        default: false\n", "        default: false\n      note:\n        description: x\n        type: string\n", "workflow-trigger"),
+        _m("nightly dry run defaults to on", "nightly-asan.yml", "", "        default: false\n", "        default: true\n", "workflow-trigger"),
         _m("ci perf-gate no-op twin control removed", "ci.yml", "  perf-gate:\n",
            "bash tests/scripts/run-perf-gate.sh --noop-twin", "true", "required-command-not-executed"),
         _m("ci perf-gate checkout persists credentials", "ci.yml", "  perf-gate:\n", "persist-credentials: false",
@@ -3291,6 +3514,7 @@ def self_test(root: Path) -> None:
                 print(f"rejected: {label}: {exc}")
             else:
                 raise SystemExit(f"self-test negative {label!r} failed: accepted")
+    rejected += report_red_replay_controls(root)
     print(f"PASS: workflow policy self-test negative_controls={rejected} positive_controls={1 + accepted}")
 
 

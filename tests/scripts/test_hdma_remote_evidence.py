@@ -53,22 +53,24 @@ def valid_receipt() -> dict:
     }
 
 
-def rejected(checker, receipt: dict) -> bool:
+def rejected(checker, receipt: dict, reason: str) -> bool:
+    """True only when the receipt is refused AND the refusal names the intended defect. A refusal for any other reason
+    leaves the intended defect unexercised, so it is reported like an acceptance."""
     try:
         checker.validate_remote_evidence(receipt, EXPECTED_HEAD)
-    except checker.ContractError:
-        return True
+    except checker.ContractError as error:
+        return reason in str(error)
     return False
 
 
-def file_rejected(checker, payload: bytes) -> bool:
+def file_rejected(checker, payload: bytes, reason: str) -> bool:
     with tempfile.TemporaryDirectory(prefix="gabbaboy-remote-receipt-") as directory:
         path = Path(directory) / "remote-checks.json"
         path.write_bytes(payload)
         try:
             checker.load_remote_evidence(path)
-        except checker.ContractError:
-            return True
+        except checker.ContractError as error:
+            return reason in str(error)
     return False
 
 
@@ -114,37 +116,46 @@ def main() -> int:
     duplicate_required = valid_receipt()
     duplicate_required["requiredJobs"][-1] = duplicate_required["requiredJobs"][0]
 
+    skipped_conclusion = valid_receipt()
+    skipped_conclusion["results"][0] = dict(skipped_conclusion["results"][0], conclusion="skipped")
+
+    reused_run = valid_receipt()
+    reused_run["results"][1] = dict(reused_run["results"][1], databaseId=reused_run["results"][0]["databaseId"])
+
     stale_top_level = dict(valid_receipt(), headSha="b" * 40)
 
     unknown_field = valid_receipt()
     unknown_field["operatorOverride"] = True
 
+    # name -> (receipt, text the refusal must contain)
     controls = {
-        "missing-required-context": missing,
-        "contradictory-duplicate": duplicate,
-        "unrecognized-context": unrecognized,
-        "wrong-event": wrong_event,
-        "wrong-head": wrong_head,
-        "wrong-workflow-provenance": wrong_workflow,
-        "pending-status": pending,
-        "failed-conclusion": failed_conclusion,
-        "invalid-run-provenance": invalid_provenance,
-        "invalid-attempt": invalid_attempt,
-        "duplicate-required-context": duplicate_required,
-        "stale-top-level-head": stale_top_level,
-        "unrecognized-top-level-field": unknown_field,
+        "missing-required-context": (missing, "exactly the three authoritative PR context results"),
+        "contradictory-duplicate": (duplicate, "exactly the three authoritative PR context results"),
+        "unrecognized-context": (unrecognized, "must name the three authoritative PR contexts"),
+        "wrong-event": (wrong_event, "is not from a pull_request event"),
+        "wrong-head": (wrong_head, "is stale"),
+        "wrong-workflow-provenance": (wrong_workflow, "has the wrong workflow provenance"),
+        "pending-status": (pending, "is skipped, pending, or failed"),
+        "failed-conclusion": (failed_conclusion, "is skipped, pending, or failed"),
+        "skipped-conclusion": (skipped_conclusion, "is skipped, pending, or failed"),
+        "invalid-run-provenance": (invalid_provenance, "invalid GitHub run databaseId"),
+        "reused-run-id": (reused_run, "reuses a GitHub run databaseId"),
+        "invalid-attempt": (invalid_attempt, "invalid GitHub run attempt"),
+        "duplicate-required-context": (duplicate_required, "requiredJobs contains duplicates"),
+        "stale-top-level-head": (stale_top_level, "remote result head is stale"),
+        "unrecognized-top-level-field": (unknown_field, "must contain only headSha, requiredJobs, and results"),
     }
-    accepted = [name for name, receipt in controls.items() if not rejected(checker, receipt)]
+    accepted = [name for name, (receipt, reason) in controls.items() if not rejected(checker, receipt, reason)]
 
     with tempfile.TemporaryDirectory(prefix="gabbaboy-remote-receipt-") as directory:
         path = Path(directory) / "remote-checks.json"
         path.write_text(json.dumps(valid_receipt()), encoding="utf-8")
         checker.validate_remote_evidence(checker.load_remote_evidence(path), EXPECTED_HEAD)
-    if not file_rejected(checker, b" " * (checker.MAX_REMOTE_RECEIPT_BYTES + 1)):
+    if not file_rejected(checker, b" " * (checker.MAX_REMOTE_RECEIPT_BYTES + 1), "exceeds"):
         accepted.append("oversized-receipt-file")
-    if not file_rejected(checker, b"{malformed"):
+    if not file_rejected(checker, b"{malformed", "is malformed"):
         accepted.append("malformed-receipt-file")
-    if not file_rejected(checker, b'{"headSha":"a","headSha":"b"}'):
+    if not file_rejected(checker, b'{"headSha":"a","headSha":"b"}', "duplicate JSON field"):
         accepted.append("duplicate-json-field")
     if accepted:
         print("hdma-remote-evidence controls failed; invalid receipts accepted=" + ",".join(accepted),
