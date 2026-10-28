@@ -23,6 +23,10 @@ filter_expected_for_platform() {
         -e '/^age_repro_compare_tampered$/d' \
         -e '/^core_linkage_links$/d' \
         -e '/^core_linkage_controls$/d' \
+        -e '/^release_lifecycle_replay$/d' \
+        -e '/^release_lifecycle_controls$/d' \
+        -e '/^perf_advisory_pipeline$/d' \
+        -e '/^perf_advisory_controls$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -47,6 +51,10 @@ _self_test_platform_filter_cases() {
     age_repro_compare_tampered \
     core_linkage_links \
     core_linkage_controls \
+    release_lifecycle_replay \
+    release_lifecycle_controls \
+    perf_advisory_pipeline \
+    perf_advisory_controls \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -71,7 +79,11 @@ _self_test_platform_filter_cases() {
     age_repro_selfcheck_tampered \
     age_repro_compare_tampered \
     core_linkage_links \
-    core_linkage_controls; do
+    core_linkage_controls \
+    release_lifecycle_replay \
+    release_lifecycle_controls \
+    perf_advisory_pipeline \
+    perf_advisory_controls; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1

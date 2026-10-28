@@ -1,8 +1,51 @@
 #include <gabbaboy/gabbaboy.h>
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <type_traits>
+
+#define STATE_ASSERT_ERROR(name, value) static_assert((name) == (value), #name " changed value")
+STATE_ASSERT_ERROR(GBB_OK, 0);
+STATE_ASSERT_ERROR(GBB_INVALID_ARGUMENT, 1);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_PROFILE, 2);
+STATE_ASSERT_ERROR(GBB_INVALID_ROM, 3);
+STATE_ASSERT_ERROR(GBB_ROM_TRUNCATED, 4);
+STATE_ASSERT_ERROR(GBB_ROM_TOO_LARGE, 5);
+STATE_ASSERT_ERROR(GBB_ROM_SIZE_MISMATCH, 6);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_CARTRIDGE, 7);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_CARTRIDGE_VARIANT, 8);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_ROM_SIZE, 9);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_RAM_SIZE, 10);
+STATE_ASSERT_ERROR(GBB_NO_BATTERY, 11);
+STATE_ASSERT_ERROR(GBB_BUFFER_TOO_SMALL, 12);
+STATE_ASSERT_ERROR(GBB_BATTERY_SIZE_MISMATCH, 13);
+STATE_ASSERT_ERROR(GBB_OUT_OF_MEMORY, 14);
+STATE_ASSERT_ERROR(GBB_EVENT_QUEUE_FULL, 15);
+STATE_ASSERT_ERROR(GBB_INVALID_EVENT, 16);
+STATE_ASSERT_ERROR(GBB_FRAME_NOT_READY, 17);
+STATE_ASSERT_ERROR(GBB_NO_RUMBLE, 18);
+STATE_ASSERT_ERROR(GBB_NO_RTC, 19);
+STATE_ASSERT_ERROR(GBB_UNSUPPORTED_EXECUTION_MODE, 20);
+STATE_ASSERT_ERROR(GBB_STATE_NO_ROM, 21);
+STATE_ASSERT_ERROR(GBB_STATE_BAD_FORMAT, 22);
+STATE_ASSERT_ERROR(GBB_STATE_UNSUPPORTED_VERSION, 23);
+STATE_ASSERT_ERROR(GBB_STATE_IDENTITY_MISMATCH, 24);
+STATE_ASSERT_ERROR(GBB_STATE_SIZE_MISMATCH, 25);
+STATE_ASSERT_ERROR(GBB_STATE_CORRUPT, 26);
+STATE_ASSERT_ERROR(GBB_STATE_INVALID_CONTENT, 27);
+#undef STATE_ASSERT_ERROR
+
+using state_size_signature = gbb_error (*)(const gbb_instance *, std::size_t *);
+using save_state_signature = gbb_error (*)(const gbb_instance *, std::uint8_t *, std::size_t);
+using load_state_signature = gbb_error (*)(gbb_instance *, const std::uint8_t *, std::size_t);
+static_assert(std::is_same<decltype(&gbb_state_size), state_size_signature>::value,
+              "gbb_state_size signature changed");
+static_assert(std::is_same<decltype(&gbb_save_state), save_state_signature>::value,
+              "gbb_save_state signature changed");
+static_assert(std::is_same<decltype(&gbb_load_state), load_state_signature>::value,
+              "gbb_load_state signature changed");
 
 static int battery_api_smoke() {
     constexpr size_t rom_bytes = 32768u;
@@ -61,6 +104,178 @@ static int battery_api_smoke() {
 
 done:
     gbb_destroy(machine);
+    return passed ? 0 : 1;
+}
+
+static std::uint32_t state_smoke_crc_update(std::uint32_t crc, const std::uint8_t *bytes,
+                                           std::size_t length) {
+    for (std::size_t i = 0u; i < length; ++i) {
+        crc ^= bytes[i];
+        for (unsigned bit = 0u; bit < 8u; ++bit)
+            crc = (crc >> 1) ^ ((crc & 1u) != 0u ? UINT32_C(0xEDB88320) : 0u);
+    }
+    return crc;
+}
+
+static void state_smoke_rechecksum(std::uint8_t *bytes, std::size_t total_size) {
+    std::uint32_t crc = state_smoke_crc_update(UINT32_MAX, bytes, 60u);
+    crc = state_smoke_crc_update(crc, bytes + 64u, total_size - 64u) ^ UINT32_MAX;
+    for (unsigned i = 0u; i < 4u; ++i) bytes[60u + i] = static_cast<std::uint8_t>(crc >> (i * 8u));
+}
+
+static int state_smoke_same_run(gbb_run_result left, gbb_run_result right) {
+    return left.consumed_half_dots == right.consumed_half_dots && left.reason == right.reason &&
+           left.trace_count == right.trace_count && left.diagnostic_count == right.diagnostic_count &&
+           left.lockup_pc == right.lockup_pc && left.lockup_opcode == right.lockup_opcode;
+}
+
+static int state_smoke_run_audio(gbb_instance *instance, std::uint64_t budget,
+                                 gbb_audio_frame *frames, std::size_t capacity,
+                                 std::size_t *count, gbb_run_result *result) {
+    *result = gbb_run_audio(instance, budget, frames, capacity, count);
+    return result->reason == GBB_STOP_BUDGET && result->consumed_half_dots <= budget &&
+           result->consumed_half_dots != 0u;
+}
+
+static int state_smoke_refusal(gbb_instance *instance, const std::uint8_t *bytes,
+                               std::size_t length, std::size_t state_size,
+                               gbb_error expected) {
+    auto *before = static_cast<std::uint8_t *>(std::malloc(state_size));
+    auto *after = static_cast<std::uint8_t *>(std::malloc(state_size));
+    int unchanged = 0;
+    if (before != nullptr && after != nullptr &&
+        gbb_save_state(instance, before, state_size) == GBB_OK &&
+        gbb_load_state(instance, bytes, length) == expected &&
+        gbb_save_state(instance, after, state_size) == GBB_OK &&
+        std::memcmp(before, after, state_size) == 0) unchanged = 1;
+    std::free(before);
+    std::free(after);
+    return unchanged;
+}
+
+/* Public-only installed state API, exact errors/signatures and continuation smoke. */
+static int state_api_smoke() {
+    enum { ROM_BYTES = 32768, STATE_HEADER_BYTES = 64, AUDIO_CAPACITY = 2048 };
+    static const std::uint8_t program[] = {
+        0x21u, 0x00u, 0xC0u, 0x3Eu, 0x5Au, 0x77u, 0x23u,
+        0x3Eu, 0xA5u, 0x77u, 0x18u, 0xFEu
+    };
+    std::uint8_t rom[ROM_BYTES]{};
+    rom[0x100u] = 0xC3u; rom[0x101u] = 0x50u; rom[0x102u] = 0x01u;
+    std::memcpy(rom + 0x150u, program, sizeof(program));
+    std::uint8_t checksum = 0u;
+    for (std::size_t i = 0x134u; i <= 0x14Cu; ++i)
+        checksum = static_cast<std::uint8_t>(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+
+    gbb_instance *source = nullptr, *target = nullptr;
+    gbb_audio_frame prefix_source[AUDIO_CAPACITY], prefix_target[AUDIO_CAPACITY];
+    gbb_audio_frame future_source[AUDIO_CAPACITY], future_target[AUDIO_CAPACITY];
+    std::size_t prefix_source_count = 0u, prefix_target_count = 0u;
+    std::size_t future_source_count = 0u, future_target_count = 0u;
+    gbb_run_result prefix_source_run{}, prefix_target_run{};
+    gbb_run_result future_source_run{}, future_target_run{};
+    std::uint8_t no_rom_output[STATE_HEADER_BYTES + 4u];
+    std::size_t output_size = 731u;
+    auto *snapshot = static_cast<std::uint8_t *>(nullptr);
+    auto *mutated = static_cast<std::uint8_t *>(nullptr);
+    auto *expected = static_cast<std::uint8_t *>(nullptr);
+    auto *actual = static_cast<std::uint8_t *>(nullptr);
+    std::size_t state_size = 0u, target_size = 0u;
+    int passed = 0;
+
+    if (gbb_create(GBB_PROFILE_DMG_CPU_B, &source) != GBB_OK ||
+        gbb_create(GBB_PROFILE_DMG_CPU_B, &target) != GBB_OK) goto done;
+    if (gbb_state_size(source, &output_size) != GBB_STATE_NO_ROM || output_size != 731u ||
+        gbb_state_size(source, nullptr) != GBB_INVALID_ARGUMENT) goto done;
+    std::memset(no_rom_output, 0xA5, sizeof(no_rom_output));
+    if (gbb_save_state(source, no_rom_output, sizeof(no_rom_output)) != GBB_STATE_NO_ROM) goto done;
+    for (std::size_t i = 0u; i < sizeof(no_rom_output); ++i)
+        if (no_rom_output[i] != 0xA5u) goto done;
+    if (gbb_load_state(source, no_rom_output, STATE_HEADER_BYTES - 1u) != GBB_STATE_BAD_FORMAT ||
+        gbb_load_state(source, nullptr, STATE_HEADER_BYTES) != GBB_INVALID_ARGUMENT) goto done;
+
+    if (gbb_load_rom(source, rom, sizeof(rom)) != GBB_OK ||
+        gbb_load_rom(target, rom, sizeof(rom)) != GBB_OK) goto done;
+    if (gbb_state_size(source, &state_size) != GBB_OK || state_size <= STATE_HEADER_BYTES ||
+        gbb_state_size(target, &target_size) != GBB_OK || target_size != state_size) goto done;
+    snapshot = static_cast<std::uint8_t *>(std::malloc(state_size));
+    mutated = static_cast<std::uint8_t *>(std::malloc(state_size));
+    expected = static_cast<std::uint8_t *>(std::malloc(state_size));
+    actual = static_cast<std::uint8_t *>(std::malloc(state_size));
+    if (snapshot == nullptr || mutated == nullptr || expected == nullptr || actual == nullptr) goto done;
+
+    std::memset(mutated, 0xA5, state_size);
+    if (gbb_save_state(source, mutated, state_size - 1u) != GBB_BUFFER_TOO_SMALL) goto done;
+    for (std::size_t i = 0u; i < state_size; ++i)
+        if (mutated[i] != 0xA5u) goto done;
+    if (!state_smoke_run_audio(source, UINT64_C(100000), prefix_source, AUDIO_CAPACITY,
+                               &prefix_source_count, &prefix_source_run) ||
+        !state_smoke_run_audio(target, UINT64_C(100000), prefix_target, AUDIO_CAPACITY,
+                               &prefix_target_count, &prefix_target_run) ||
+        !state_smoke_same_run(prefix_source_run, prefix_target_run) ||
+        prefix_source_count != prefix_target_count ||
+        std::memcmp(prefix_source, prefix_target, prefix_source_count * sizeof(prefix_source[0])) != 0 ||
+        gbb_peek_ram(source, 0xC000u) != 0x5Au || gbb_peek_ram(source, 0xC001u) != 0xA5u) goto done;
+
+    std::memset(mutated, 0xA5, state_size);
+    if (gbb_save_state(source, mutated, state_size) != GBB_OK ||
+        std::memcmp(mutated, "GBBS", 4u) != 0) goto done;
+    std::memcpy(snapshot, mutated, state_size);
+    {
+        auto *with_tail = static_cast<std::uint8_t *>(std::malloc(state_size + 8u));
+        if (with_tail == nullptr) goto done;
+        std::memset(with_tail, 0xA5, state_size + 8u);
+        if (gbb_save_state(source, with_tail, state_size + 8u) != GBB_OK) {
+            std::free(with_tail); goto done;
+        }
+        for (std::size_t i = state_size; i < state_size + 8u; ++i)
+            if (with_tail[i] != 0xA5u) { std::free(with_tail); goto done; }
+        std::free(with_tail);
+    }
+
+    if (!state_smoke_refusal(target, snapshot, state_size - 1u, state_size, GBB_STATE_SIZE_MISMATCH))
+        goto done;
+    std::memcpy(mutated, snapshot, state_size); mutated[0] = static_cast<std::uint8_t>('X');
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_BAD_FORMAT)) goto done;
+    std::memcpy(mutated, snapshot, state_size); mutated[4] = 2u;
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_UNSUPPORTED_VERSION)) goto done;
+    std::memcpy(mutated, snapshot, state_size); mutated[20] ^= 1u;
+    mutated[52] = 0u; mutated[53] = 0u; mutated[54] = 0u; mutated[55] = 0u;
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_IDENTITY_MISMATCH)) goto done;
+    std::memcpy(mutated, snapshot, state_size); mutated[STATE_HEADER_BYTES] ^= 1u;
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_CORRUPT)) goto done;
+    std::memcpy(mutated, snapshot, state_size); mutated[18] = 1u;
+    state_smoke_rechecksum(mutated, state_size);
+    if (!state_smoke_refusal(target, mutated, state_size, state_size, GBB_STATE_INVALID_CONTENT)) goto done;
+
+    if (!state_smoke_run_audio(source, UINT64_C(200000), future_source, AUDIO_CAPACITY,
+                               &future_source_count, &future_source_run) ||
+        !state_smoke_run_audio(target, UINT64_C(200000), future_target, AUDIO_CAPACITY,
+                               &future_target_count, &future_target_run) ||
+        !state_smoke_same_run(future_source_run, future_target_run) ||
+        future_source_count != future_target_count ||
+        std::memcmp(future_source, future_target, future_source_count * sizeof(future_source[0])) != 0 ||
+        gbb_save_state(source, expected, state_size) != GBB_OK ||
+        gbb_save_state(target, actual, state_size) != GBB_OK ||
+        std::memcmp(expected, actual, state_size) != 0) goto done;
+
+    if (gbb_reset(target) != GBB_OK || gbb_load_state(target, snapshot, state_size) != GBB_OK ||
+        gbb_state_size(target, &target_size) != GBB_OK || target_size != state_size ||
+        !state_smoke_run_audio(target, UINT64_C(200000), future_target, AUDIO_CAPACITY,
+                               &future_target_count, &future_target_run) ||
+        !state_smoke_same_run(future_source_run, future_target_run) ||
+        future_source_count != future_target_count ||
+        std::memcmp(future_source, future_target, future_source_count * sizeof(future_source[0])) != 0 ||
+        gbb_save_state(target, actual, state_size) != GBB_OK ||
+        std::memcmp(expected, actual, state_size) != 0) goto done;
+    std::printf("state_api_smoke pass bytes=%zu prefix_audio=%zu future_audio=%zu\n",
+                state_size, prefix_source_count, future_source_count);
+    passed = 1;
+
+done:
+    std::free(snapshot); std::free(mutated); std::free(expected); std::free(actual);
+    gbb_destroy(source); gbb_destroy(target);
     return passed ? 0 : 1;
 }
 
@@ -641,7 +856,15 @@ int main(int argc, char **argv) {
     std::free(trace);
     std::free(diagnostics);
     if (!passed) std::fprintf(stderr, "C++ consumer API smoke failed (error=%d, stop=%d, frame=%d)\n", error, result.reason, frame_error);
-    if (!passed || battery_api_smoke() != 0) {
+    if (!passed) {
+        std::fprintf(stderr, "C++ consumer public core API smoke failed\n");
+        return 1;
+    }
+    if (state_api_smoke() != 0) {
+        std::fprintf(stderr, "C++ consumer public state API smoke failed\n");
+        return 1;
+    }
+    if (battery_api_smoke() != 0) {
         std::fprintf(stderr, "C++ consumer public battery API smoke failed\n");
         return 1;
     }

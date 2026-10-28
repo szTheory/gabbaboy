@@ -38,7 +38,14 @@ typedef enum {
     GBB_FRAME_NOT_READY,
     GBB_NO_RUMBLE,            /* loaded cartridge has no rumble line (or no ROM) */
     GBB_NO_RTC,               /* loaded cartridge has no MBC3 timer (or no ROM) */
-    GBB_UNSUPPORTED_EXECUTION_MODE /* PGB-flagged $143 on the CGB profile (D-03) */
+    GBB_UNSUPPORTED_EXECUTION_MODE, /* PGB-flagged $143 on the CGB profile (D-03) */
+    GBB_STATE_NO_ROM = 21,
+    GBB_STATE_BAD_FORMAT = 22,
+    GBB_STATE_UNSUPPORTED_VERSION = 23,
+    GBB_STATE_IDENTITY_MISMATCH = 24,
+    GBB_STATE_SIZE_MISMATCH = 25,
+    GBB_STATE_CORRUPT = 26,
+    GBB_STATE_INVALID_CONTENT = 27
 } gbb_error;
 
 typedef enum {
@@ -167,6 +174,21 @@ gbb_error gbb_reset(gbb_instance *instance);
  * New cartridge RAM starts at $FF as deterministic software policy, not a
  * hardware power-on claim. */
 gbb_error gbb_load_rom(gbb_instance *instance, const uint8_t *rom, size_t rom_size);
+/* Native save-state interface. State buffers use the explicit GBBS versioned
+ * format documented in docs/state-format.md. Size/save/load require a loaded
+ * ROM. The size query and save operation leave outputs/buffers unchanged on
+ * error; save writes exactly the queried size and preserves any trailing bytes.
+ * Load checks profile, execution mode and complete ROM SHA-256 identity before
+ * validating the exact byte count and CRC. It validates the whole body before
+ * applying any field. Calls on one instance must be externally serialized;
+ * separate instances and caller buffers are independent. Caller buffers must
+ * be stable and must not overlap the instance. The codec allocates and hashes
+ * nothing per call; ROM identity is hashed once after a successful ROM load. */
+gbb_error gbb_state_size(const gbb_instance *instance, size_t *out_size);
+gbb_error gbb_save_state(const gbb_instance *instance, uint8_t *out_bytes,
+                         size_t capacity_bytes);
+gbb_error gbb_load_state(gbb_instance *instance, const uint8_t *bytes,
+                         size_t size_bytes);
 /* Battery RAM is available only for supported battery-backed cartridges.
  * Query the exact size, then copy/import through caller-owned buffers. No core
  * filesystem access or mutable instance pointer is exposed. A successful
@@ -274,6 +296,13 @@ gbb_error gbb_copy_frame(const gbb_instance *instance, uint8_t *pixels,
  * consume master timeline ticks while CPU, divider, timer and internal serial
  * oscillator work remains frozen. An accepted wake is applied at its timestamp
  * before another CPU fetch. The caller's budget bounds all idle progression.
+ * Every run and acceptance wrapper shares the save-state ordinary-time limit
+ * of 2^62 half-dots. STOP may consume elapsed wait up to that limit; an atomic
+ * instruction, interrupt entry, HALT tick, DMA tick or CPU-stall tick that
+ * cannot fit returns GBB_STOP_NO_PROGRESS without starting that operation.
+ * Input events at the current timestamp are delivered before the next CPU or
+ * device operation, including at the limit. A live ordinary clock above the
+ * limit is rejected as GBB_STOP_INVALID_STATE before mutation.
  * Budget/consumed values are uint64 half-dot ticks. An instruction is
  * preflighted and won't start unless its full cost fits. GBB_STOP_NO_PROGRESS
  * is distinct from STOPPED, HALTED_IDLE, LOCKUP, UNSUPPORTED_BUS,

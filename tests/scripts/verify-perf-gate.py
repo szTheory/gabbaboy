@@ -7,8 +7,9 @@ see cache or branch effects, so it is a regression tripwire, not a performance c
 lives in the header of tests/baseline/perf-gate-v1.txt.
 
 Modes (stdlib only, refuses python -O):
-  --check-limits FILE [--root DIR]   validate the limits file (and ROM sha256 pins under DIR)
-  --evaluate --limits FILE --base DIR --head DIR [--realtime FILE]
+  --check-limits FILE [--root DIR] [--base-rev SHA]  validate pins and the immutable policy ratchet
+  --evaluate --limits FILE --base DIR --head DIR --base-rev SHA [--realtime FILE]
+             [--exception-receipt FILE ...identities] [--emit-exception-measurement FILE]
   --self-test                        run every control through the real CLI
 
 Every limit comparison is exact integer or fractions.Fraction arithmetic. No float decides a verdict.
@@ -22,6 +23,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unittest
 
 if not __debug__:
     sys.stderr.write("verify-perf-gate.py must not run with python -O\n")
@@ -34,6 +36,9 @@ WORKLOAD = "original-wram-tracer-1m-half-dots-v1"
 ROMS = ("tracer", "libbet", "visible-demo")
 ROM_FIELDS = ("path", "sha256", "digest", "consumed_half_dots")
 TOP_KEYS = ("schema", "ir_ratio_limit", "ir_floor", "determinism_limit", "realtime_floor")
+POLICY_FILE = "tests/baseline/perf-gate-v1.txt"
+LIMITS_BASE_REV = "947d6a9d177af6c04a5f9ea6abcc2c470ab9be57"
+EXCEPTION_SCHEMA = "perf-gate-deterministic-exception-v1"
 
 
 class Rejected(Exception):
@@ -166,33 +171,79 @@ def parse_measure_line(text, where):
 
 def read_side(directory, name, repeats, limits):
     side = {}
+    fixture_dir = os.path.realpath(directory)
+    immutable_canned_fixture = fixture_dir == os.path.realpath(DATA) or \
+        fixture_dir.startswith(os.path.realpath(DATA) + os.sep)
     for rom in ROMS:
         irs = [parse_cachegrind(os.path.join(directory, "%s.cg.%d" % (rom, n)))
                for n in range(1, repeats + 1)]
-        line = parse_measure_line(read_text(os.path.join(directory, rom + ".line"), "measure-line-format"),
-                                  "%s/%s.line" % (name, rom))
-        side[rom] = {"irs": irs, "line": line}
+        lines = []
+        for repeat in range(1, repeats + 1):
+            repeated_path = os.path.join(directory, "%s.line.%d" % (rom, repeat))
+            if os.path.isfile(repeated_path):
+                line_path = repeated_path
+            elif repeat == 1 or immutable_canned_fixture:
+                # Checked-in Phase 16 fixtures predate per-repeat measurement lines and are
+                # independently SHA-pinned by perf.cmake. Real run directories must provide every repeat.
+                line_path = os.path.join(directory, rom + ".line")
+            else:
+                reject("measure-line-repeat-missing", "%s/%s.line.%d is missing" % (name, rom, repeat))
+            line = parse_measure_line(read_text(line_path, "measure-line-format"),
+                                      "%s/%s.line.%d" % (name, rom, repeat))
+            lines.append(line)
+        side[rom] = {"irs": irs, "lines": lines}
     return side
 
 
 def guard_digest(side, name, limits):
     for rom in ROMS:
-        line = side[rom]["line"]
-        if line["workload"] != WORKLOAD or line["digest"] != limits["roms"][rom]["digest"]:
-            reject("workload-digest-mismatch", "%s %s: workload %s digest %s, pinned digest %s" %
-                   (name, rom, line["workload"], line["digest"], limits["roms"][rom]["digest"]))
+        for repeat, line in enumerate(side[rom]["lines"], 1):
+            if line["workload"] != WORKLOAD or line["digest"] != limits["roms"][rom]["digest"]:
+                reject("workload-digest-mismatch", "%s %s repeat %d: workload %s digest %s, pinned digest %s" %
+                       (name, rom, repeat, line["workload"], line["digest"], limits["roms"][rom]["digest"]))
 
 
 def guard_vacuous(side, name, limits):
     for rom in ROMS:
         pinned = limits["roms"][rom]["consumed_half_dots"]
-        if side[rom]["line"]["consumed"] != pinned:
-            reject("proxy-vacuous", "%s %s: consumed_half_dots %d, pinned %d" %
-                   (name, rom, side[rom]["line"]["consumed"], pinned))
+        for repeat, line in enumerate(side[rom]["lines"], 1):
+            if line["consumed"] != pinned:
+                reject("proxy-vacuous", "%s %s repeat %d: consumed_half_dots %d, pinned %d" %
+                       (name, rom, repeat, line["consumed"], pinned))
         for ir in side[rom]["irs"]:
             if ir <= limits["ir_floor"]:
                 reject("proxy-vacuous", "%s %s: Ir %d is not above the %d floor" %
                        (name, rom, ir, limits["ir_floor"]))
+
+
+def immutable_limits(base_rev):
+    if not isinstance(base_rev, str) or re.fullmatch(r"[0-9a-f]{40}", base_rev) is None:
+        reject("ratchet-base-invalid", "--base-rev must be a resolved immutable 40-hex commit")
+    resolved = subprocess.run(["git", "rev-parse", "--verify", "%s^{commit}" % base_rev],
+                              cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+    if resolved.returncode != 0 or resolved.stdout.strip() != base_rev:
+        reject("ratchet-base-not-commit", "--base-rev does not resolve to that exact commit")
+    blob = subprocess.run(["git", "show", "%s:%s" % (base_rev, POLICY_FILE)], cwd=REPO_ROOT,
+                          capture_output=True, text=True, check=False)
+    if blob.returncode != 0:
+        reject("ratchet-base-policy-missing", "the immutable base has no %s" % POLICY_FILE)
+    # Windows cannot reopen an open NamedTemporaryFile, so parse a closed file in a private directory.
+    with tempfile.TemporaryDirectory(prefix="gbb-perf-limits-") as directory:
+        path = os.path.join(directory, "perf-limits.txt")
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(blob.stdout)
+        limits = parse_limits(path)
+    return blob.stdout, limits
+
+
+def check_policy_ratchet(current, base):
+    for key in ("ir_floor", "determinism", "realtime_floor"):
+        if current[key] != base[key]:
+            reject("ratchet-hard-limit-changed", "%s changed from immutable value %s to %s" %
+                   (key, base[key], current[key]))
+    if current["roms"] != base["roms"]:
+        reject("ratchet-correctness-identity-changed", "ROM path, SHA, output digest, or consumed pin changed")
+    return current["ir_ratio"] > base["ir_ratio"]
 
 
 def guard_determinism(side, limits):
@@ -243,8 +294,130 @@ def realtime_multiples(path, limits):
     return result
 
 
-def evaluate(limits_path, base_dir, head_dir, realtime_path):
+def fraction_text(value):
+    return "%d/%d" % (value.numerator, value.denominator)
+
+
+def deterministic_exception_measurement(base_rev, base_limits_text, base, head, limits,
+                                        source_base_rev, source_head_rev,
+                                        build_base_identity, build_head_identity):
+    for name, revision in (("base", source_base_rev), ("head", source_head_rev)):
+        if not isinstance(revision, str) or re.fullmatch(r"[0-9a-f]{40}", revision) is None:
+            reject("exception-source-build-identity-missing", "%s source revision is not an immutable SHA" % name)
+        resolved = subprocess.run(["git", "rev-parse", "--verify", "%s^{commit}" % revision],
+                                  cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+        if resolved.returncode != 0 or resolved.stdout.strip() != revision:
+            reject("exception-source-build-identity-mismatch", "%s source revision is not readable" % name)
+    if source_base_rev != V020_SHA:
+        reject("exception-source-build-identity-mismatch", "base source is not the pinned v0.2.0 commit")
+    for name, identity in (("base", build_base_identity), ("head", build_head_identity)):
+        if not isinstance(identity, str) or re.fullmatch(r"[0-9a-f]{64}", identity) is None:
+            reject("exception-source-build-identity-missing", "%s build identity is not a SHA-256" % name)
+    return {
+        "limits_base_revision": base_rev,
+        "limits_base_sha256": hashlib.sha256(base_limits_text.encode("utf-8")).hexdigest(),
+        "source": {"base_revision": source_base_rev, "head_revision": source_head_rev},
+        "build": {"base_identity_sha256": build_base_identity,
+                  "head_identity_sha256": build_head_identity},
+        "workload": {
+            "id": WORKLOAD,
+            "roms": {rom: {"path": limits["roms"][rom]["path"],
+                            "sha256": limits["roms"][rom]["sha256"],
+                            "digest": limits["roms"][rom]["digest"],
+                            "consumed_half_dots": limits["roms"][rom]["consumed_half_dots"]}
+                     for rom in ROMS},
+        },
+        "per_rom": {
+            rom: {
+                "base_ir": base[rom]["irs"][0],
+                "head_ir_repeats": list(head[rom]["irs"]),
+                "ratio_band": {
+                    "min": fraction_text(min(fractions.Fraction(ir, base[rom]["irs"][0])
+                                               for ir in head[rom]["irs"])),
+                    "max": fraction_text(max(fractions.Fraction(ir, base[rom]["irs"][0])
+                                               for ir in head[rom]["irs"])),
+                },
+                "base_identity": {"workload": base[rom]["lines"][0]["workload"],
+                                  "digest": base[rom]["lines"][0]["digest"],
+                                  "consumed_half_dots": base[rom]["lines"][0]["consumed"]},
+                "head_repeat_identities": [
+                    {"workload": line["workload"], "digest": line["digest"],
+                     "consumed_half_dots": line["consumed"]}
+                    for line in head[rom]["lines"]
+                ],
+            }
+            for rom in ROMS
+        },
+    }
+
+
+def canonical_sha(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def verify_deterministic_exception(path, approved_limit, base_limit, measurement):
+    try:
+        receipt = json.loads(read_text(path, "exception-receipt-format"))
+    except ValueError as error:
+        reject("exception-receipt-schema", "exception receipt is not JSON: %s" % error)
+    if not isinstance(receipt, dict) or receipt.get("schema") != EXCEPTION_SCHEMA:
+        reject("exception-receipt-schema", "schema must be %s" % EXCEPTION_SCHEMA)
+    expected_keys = {"schema", "accepted_cause", "accepted_cause_reference", "approved_ir_ratio_limit",
+                     "measurement", "measurement_sha256", "external_verification"}
+    if set(receipt) != expected_keys:
+        reject("exception-receipt-schema", "exception receipt fields differ from the closed schema")
+    verification = receipt.get("external_verification")
+    if not isinstance(verification, dict) or set(verification) != {"status", "reference", "receipt_sha256"} or \
+            verification.get("status") != "verified":
+        reject("exception-receipt-unverified", "external verification is absent or not verified")
+    reference = verification.get("reference")
+    if not isinstance(reference, str) or not re.fullmatch(r"https://[^\s]+", reference):
+        reject("exception-receipt-unverified", "external verification reference is invalid")
+    cause = receipt.get("accepted_cause")
+    cause_reference = receipt.get("accepted_cause_reference")
+    if not isinstance(cause, str) or not cause.strip() or len(cause) > 512 or \
+            not isinstance(cause_reference, str) or not re.fullmatch(r"https://[^\s]+", cause_reference):
+        reject("exception-cause-unaccepted", "an accepted cause and durable reference are required")
+    verify_privacy(receipt)
+    if receipt.get("approved_ir_ratio_limit") != fraction_text(approved_limit) or approved_limit <= base_limit:
+        reject("exception-limit-mismatch", "approved Ir limit does not equal the widened policy value")
+    measurement_sha = canonical_sha(measurement)
+    if receipt.get("measurement") != measurement or receipt.get("measurement_sha256") != measurement_sha:
+        reject("exception-measurement-mismatch", "receipt is not bound to these source, build, workload and Ir observations")
+    unsigned = {key: value for key, value in receipt.items() if key != "external_verification"}
+    if verification.get("receipt_sha256") != canonical_sha(unsigned):
+        reject("exception-receipt-digest-mismatch", "external verification digest does not bind this receipt")
+    for rom in ROMS:
+        band = measurement["per_rom"][rom]["ratio_band"]
+        if fractions.Fraction(band["max"]) > approved_limit:
+            reject("exception-limit-below-measurement", "%s measured band exceeds the approved Ir limit" % rom)
+    if not any(fractions.Fraction(measurement["per_rom"][rom]["ratio_band"]["max"]) > base_limit
+               for rom in ROMS):
+        reject("exception-not-needed", "no per-ROM deterministic measurement exceeds the immutable limit")
+    return receipt
+
+
+def write_new_text(path, text):
+    """Exclusive create: an existing path is never overwritten (evidence is not replaced)."""
+    try:
+        with open(path, "x", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+    except OSError as error:
+        reject("exception-measurement-output", "cannot create %s: %s" % (path, error))
+
+
+def evaluate(limits_path, base_dir, head_dir, realtime_path, base_rev, exception_path=None,
+             source_base_rev=None, source_head_rev=None,
+             build_base_identity=None, build_head_identity=None, emit_measurement_path=None):
+    if base_rev is None:
+        reject("ratchet-base-required", "--evaluate requires --base-rev with an immutable committed limits base")
     limits = parse_limits(limits_path)
+    base_limits_text, base_limits = immutable_limits(base_rev)
+    needs_exception = check_policy_ratchet(limits, base_limits)
+    if needs_exception and exception_path is None and emit_measurement_path is None:
+        reject("ir-limit-widening-unapproved", "ir_ratio_limit was widened without a deterministic exception receipt")
+    if not needs_exception and exception_path is not None:
+        reject("exception-receipt-unexpected", "an exception receipt is only valid for an Ir-limit widening")
     attribution_floor_check(limits_path, limits)
     base = read_side(base_dir, "base", 1, limits)
     head = read_side(head_dir, "head", 2, limits)
@@ -253,6 +426,18 @@ def evaluate(limits_path, base_dir, head_dir, realtime_path):
     guard_vacuous(base, "base", limits)
     guard_vacuous(head, "head", limits)
     guard_determinism(head, limits)
+    if needs_exception:
+        measurement = deterministic_exception_measurement(
+            base_rev, base_limits_text, base, head, limits, source_base_rev, source_head_rev,
+            build_base_identity, build_head_identity)
+        if emit_measurement_path is not None:
+            # The exact object the owner approves by digest (verify-release-gates.py --digest). It is written before
+            # any verdict, so a refused widening still leaves the evidence the review needs.
+            write_new_text(emit_measurement_path, json.dumps(measurement, sort_keys=True, indent=2) + "\n")
+        if exception_path is None:
+            reject("ir-limit-widening-unapproved",
+                   "ir_ratio_limit was widened without a deterministic exception receipt")
+        verify_deterministic_exception(exception_path, limits["ir_ratio"], base_limits["ir_ratio"], measurement)
     parts = []
     for rom in ROMS:
         base_ir = base[rom]["irs"][0]
@@ -404,8 +589,8 @@ def emit_attribution(options, limits_path):
         guard_determinism(side, limits)
         ir = {rom: side[rom]["irs"] for rom in ROMS}
         measurements.append({"revision": sha, "ir": ir, "raw_row_sha256": raw_row_digest(ir),
-                             "digest": {rom: side[rom]["line"]["digest"] for rom in ROMS},
-                             "consumed_half_dots": {rom: side[rom]["line"]["consumed"] for rom in ROMS}})
+                             "digest": {rom: side[rom]["lines"][0]["digest"] for rom in ROMS},
+                             "consumed_half_dots": {rom: side[rom]["lines"][0]["consumed"] for rom in ROMS}})
     deltas = []
     for previous, current in zip(measurements, measurements[1:]):
         deltas.append({"revision": current["revision"], "previous": previous["revision"],
@@ -585,7 +770,8 @@ def self_test():
         controls += 1
 
     def evaluate_args(base, head, realtime=None, limits=limits_path):
-        arguments = ["--evaluate", "--limits", limits, "--base", base, "--head", head]
+        arguments = ["--evaluate", "--limits", limits, "--base", base, "--head", head,
+                     "--base-rev", LIMITS_BASE_REV]
         if realtime:
             arguments += ["--realtime", realtime]
         return arguments
@@ -632,24 +818,39 @@ def self_test():
         # Consumed pin: tracer must equal its pinned value exactly.
         shifted = os.path.join(scratch, "head-consumed")
         copy_tree(head("pass"), shifted)
-        edit(os.path.join(shifted, "tracer.line"), "consumed_half_dots=1000000", "consumed_half_dots=999999")
+        for repeat in (1, 2):
+            edit(os.path.join(shifted, "tracer.line.%d" % repeat),
+                 "consumed_half_dots=1000000", "consumed_half_dots=999999")
         expect("consumed 999999 on tracer is vacuous", 1, evaluate_args(base, shifted),
                stderr_has="REJECT proxy-vacuous")
 
-        # Realtime exactly at the floor passes; one nanosecond slower fails. The floor is built as an exact
-        # fraction from the elapsed time, so no rounding is involved.
-        elapsed = 100000000
-        exact_floor = fractions.Fraction(999992 * 10 ** 9, HALF_DOTS_PER_SECOND * elapsed)  # visible-demo is the tightest ROM
-        floor_text = "%d/%d" % (exact_floor.numerator, exact_floor.denominator)
-        at_floor = variant("at-floor.txt", realtime_text(elapsed, elapsed))
-        below = variant("below-by-one.txt", realtime_text(elapsed + 1, elapsed + 1))
-        floor_limits = variant("floor-limits.txt", re.sub(
-            r"(?m)^realtime_floor=.*$", "realtime_floor=" + floor_text, original))
-        # floor_text is a fraction; the realtime_floor grammar accepts decimals and fractions.
-        expect("realtime exactly at the floor passes", 0,
-               evaluate_args(base, head("pass"), at_floor, floor_limits), stdout_has="realtime_min=")
+        # Exercise the committed 4.02 floor without mutating the policy: each ROM's integer-nanosecond
+        # sample is rounded to the passing side, then moved by one nanosecond to the failing side.
+        def realtime_at_floor(one_ns_slower):
+            limits = parse_limits(limits_path)
+            rows = []
+            for rom in ROMS:
+                consumed = limits["roms"][rom]["consumed_half_dots"]
+                boundary = fractions.Fraction(consumed * 10 ** 9,
+                                              HALF_DOTS_PER_SECOND * limits["realtime_floor"])
+                elapsed_ns = boundary.numerator // boundary.denominator + int(one_ns_slower)
+                observed = fractions.Fraction(consumed * 10 ** 9, HALF_DOTS_PER_SECOND * elapsed_ns)
+                if (observed < limits["realtime_floor"]) != one_ns_slower:
+                    reject("self-test-failed", "%s did not straddle the immutable realtime floor" % rom)
+                for index in range(10):
+                    elapsed = elapsed_ns * 2 if index == 0 else elapsed_ns
+                    rows.append("rom=%s mode=no-trace workload=%s budget_half_dots=1000000 "
+                                "consumed_half_dots=%d stop_reason=0 elapsed_ns=%d "
+                                "correctness_digest_fnv1a64=%s" %
+                                (rom, WORKLOAD, consumed, elapsed, limits["roms"][rom]["digest"]))
+            return "\n".join(rows) + "\n"
+
+        at_floor = variant("at-floor.txt", realtime_at_floor(False))
+        below = variant("below-by-one.txt", realtime_at_floor(True))
+        expect("realtime at or just above the floor passes", 0,
+               evaluate_args(base, head("pass"), at_floor), stdout_has="realtime_min=")
         expect("realtime one step below the floor fails", 1,
-               evaluate_args(base, head("pass"), below, floor_limits), stderr_has="REJECT realtime-below-floor")
+               evaluate_args(base, head("pass"), below), stderr_has="REJECT realtime-below-floor")
 
         # A case a float comparison would misjudge: head/base exceeds 1.10 by 2e-17, which rounds to 1.1.
         big_base, big_head = 10 ** 17, 110000000000000002
@@ -739,10 +940,11 @@ def write_measurements(directory, shas):
             entry = limits["roms"][rom]
             for repeat in (1, 2):
                 write_cg(os.path.join(folder, "%s.cg.%d" % (rom, repeat)), 200000000 + 1000000 * index + offset)
-            with open(os.path.join(folder, rom + ".line"), "w", encoding="utf-8") as handle:
-                handle.write("mode=no-trace workload=%s budget_half_dots=1000000 consumed_half_dots=%d stop_reason=0 "
-                             "elapsed_ns=10000000 correctness_digest_fnv1a64=%s\n" %
-                             (WORKLOAD, entry["consumed_half_dots"], entry["digest"]))
+            for repeat in (1, 2):
+                with open(os.path.join(folder, "%s.line.%d" % (rom, repeat)), "w", encoding="utf-8") as handle:
+                    handle.write("mode=no-trace workload=%s budget_half_dots=1000000 consumed_half_dots=%d stop_reason=0 "
+                                 "elapsed_ns=10000000 correctness_digest_fnv1a64=%s\n" %
+                                 (WORKLOAD, entry["consumed_half_dots"], entry["digest"]))
 
 
 def attribution_self_test(limits_path, failures):
@@ -835,24 +1037,34 @@ def attribution_self_test(limits_path, failures):
             json.dump(original, handle)
         required = required_realtime_floor(fractions.Fraction(original["realtime"]["multiple"]))
         text = read_text(limits_path, "limits-schema")
-        for name, floor, code, needle, stream in (
-                ("realtime_floor below the receipt rule is refused", "2.0", 1, "REJECT realtime-floor-below-receipt:", "stderr"),
-                ("realtime_floor at the receipt rule passes", "%d.%02d" % divmod(int(required * 100), 100), 0,
-                 "perf-gate pass", "stdout")):
+        for name, floor, expected_error in (
+                ("realtime_floor below the receipt rule is refused", "2.0", "realtime-floor-below-receipt"),
+                ("realtime_floor at the receipt rule passes", "%d.%02d" % divmod(int(required * 100), 100), None)):
             limits_copy = os.path.join(beside, "perf-gate-v1.txt")
             with open(limits_copy, "w", encoding="utf-8") as handle:
                 handle.write(re.sub(r"(?m)^realtime_floor=.*$", "realtime_floor=" + floor, text))
-            expect(name, code, ["--evaluate", "--limits", limits_copy, "--base", os.path.join(DATA, "base"),
-                                "--head", os.path.join(DATA, "head-pass"), "--realtime",
-                                os.path.join(DATA, "realtime-pass.txt")], needle, stream)
+            try:
+                attribution_floor_check(limits_copy, parse_limits(limits_copy))
+                rejected = None
+            except Rejected as error:
+                rejected = error.code
+            if rejected != expected_error:
+                failures.append("%s: expected %r, got %r" % (name, expected_error, rejected))
+            controls += 1
     return controls
 
 
 def copy_tree(source, destination):
     os.makedirs(destination)
     for name in os.listdir(source):
-        with open(os.path.join(source, name), "rb") as src, open(os.path.join(destination, name), "wb") as dst:
-            dst.write(src.read())
+        with open(os.path.join(source, name), "rb") as src:
+            contents = src.read()
+        with open(os.path.join(destination, name), "wb") as dst:
+            dst.write(contents)
+        if name.endswith(".line"):
+            for repeat in (1, 2):
+                with open(os.path.join(destination, "%s.%d" % (name, repeat)), "wb") as dst:
+                    dst.write(contents)
 
 
 def edit(path, old, new):
@@ -881,6 +1093,200 @@ def realtime_text(warmup_ns, sample_ns):
     return "\n".join(rows) + "\n"
 
 
+POLICY_BASE_REV = "947d6a9d177af6c04a5f9ea6abcc2c470ab9be57"
+
+
+class PerfGateLimitRatchetTests(unittest.TestCase):
+    def evaluate(self, limits, *, base_rev=POLICY_BASE_REV, realtime=None, exception=None,
+                 source_base_rev=None, source_head_rev=None,
+                 build_base_identity=None, build_head_identity=None):
+        arguments = ["--evaluate", "--limits", limits, "--base", os.path.join(DATA, "base"),
+                     "--head", os.path.join(DATA, "head-pass")]
+        if base_rev is not None:
+            arguments += ["--base-rev", base_rev]
+        if realtime is not None:
+            arguments += ["--realtime", realtime]
+        if exception is not None:
+            arguments += ["--exception-receipt", exception]
+        for flag, value in (("--source-base-rev", source_base_rev), ("--source-head-rev", source_head_rev),
+                            ("--build-base-identity", build_base_identity),
+                            ("--build-head-identity", build_head_identity)):
+            if value is not None:
+                arguments += [flag, value]
+        return run_cli(arguments)
+
+    def test_unchanged_limits_pass_against_immutable_base(self):
+        rc, out, err = self.evaluate(DEFAULT_LIMITS)
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("perf-gate pass", out)
+
+    def test_unapproved_ir_limit_widening_is_rejected(self):
+        original = read_text(DEFAULT_LIMITS, "limits-schema")
+        with tempfile.TemporaryDirectory(prefix="perf-limit-ratchet-") as scratch:
+            path = os.path.join(scratch, "limits.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(re.sub(r"(?m)^ir_ratio_limit=.*$", "ir_ratio_limit=112/100", original))
+            rc, out, err = self.evaluate(path)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT ir-limit-widening-unapproved", err)
+
+    def test_realtime_floor_cannot_be_changed(self):
+        original = read_text(DEFAULT_LIMITS, "limits-schema")
+        with tempfile.TemporaryDirectory(prefix="perf-limit-floor-ratchet-") as scratch:
+            path = os.path.join(scratch, "limits.txt")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(re.sub(r"(?m)^realtime_floor=.*$", "realtime_floor=3.99", original))
+            rc, out, err = self.evaluate(path, realtime=os.path.join(DATA, "realtime-pass.txt"))
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT ratchet-hard-limit-changed", err)
+
+    def test_unresolved_base_revision_is_rejected(self):
+        rc, out, err = self.evaluate(DEFAULT_LIMITS, base_rev="f" * 40)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT ratchet-base-not-commit", err)
+
+    def test_missing_base_revision_is_rejected(self):
+        rc, out, err = self.evaluate(DEFAULT_LIMITS, base_rev=None)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT ratchet-base-required", err)
+
+    def test_unverified_exception_receipt_does_not_authorize_widening(self):
+        original = read_text(DEFAULT_LIMITS, "limits-schema")
+        with tempfile.TemporaryDirectory(prefix="perf-limit-exception-") as scratch:
+            limits = os.path.join(scratch, "limits.txt")
+            receipt = os.path.join(scratch, "exception.json")
+            with open(limits, "w", encoding="utf-8") as handle:
+                handle.write(re.sub(r"(?m)^ir_ratio_limit=.*$", "ir_ratio_limit=112/100", original))
+            with open(receipt, "w", encoding="utf-8") as handle:
+                json.dump({
+                    "schema": EXCEPTION_SCHEMA,
+                    "accepted_cause": "deterministic hosted regression",
+                    "accepted_cause_reference": "https://example.invalid/decision",
+                    "approved_ir_ratio_limit": "112/100",
+                    "measurement": {},
+                    "measurement_sha256": "0" * 64,
+                    "external_verification": {
+                        "status": "unverified",
+                        "reference": "https://example.invalid/verification",
+                        "receipt_sha256": "0" * 64,
+                    },
+                }, handle)
+            rc, out, err = self.evaluate(
+                limits, exception=receipt, source_base_rev=V020_SHA,
+                source_head_rev=POLICY_BASE_REV, build_base_identity="a" * 64,
+                build_head_identity="b" * 64)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT exception-receipt-unverified", err)
+
+
+class PerfGateExceptionMeasurementTests(unittest.TestCase):
+    """--emit-exception-measurement writes the exact object an owner approves by digest, and still refuses."""
+
+    def widened(self, scratch):
+        path = os.path.join(scratch, "limits.txt")
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(re.sub(r"(?m)^ir_ratio_limit=.*$", "ir_ratio_limit=112/100",
+                                read_text(DEFAULT_LIMITS, "limits-schema")))
+        return path
+
+    def evaluate(self, limits, head, *extra):
+        return run_cli(["--evaluate", "--limits", limits, "--base", os.path.join(DATA, "base"),
+                        "--head", os.path.join(DATA, head), "--base-rev", POLICY_BASE_REV,
+                        "--source-base-rev", V020_SHA, "--source-head-rev", POLICY_BASE_REV,
+                        "--build-base-identity", "a" * 64, "--build-head-identity", "b" * 64, *extra])
+
+    def test_widening_writes_the_measurement_and_is_still_unapproved(self):
+        with tempfile.TemporaryDirectory(prefix="perf-emit-measurement-") as scratch:
+            output = os.path.join(scratch, "measurement.json")
+            rc, out, err = self.evaluate(self.widened(scratch), "head-over", "--emit-exception-measurement", output)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT ir-limit-widening-unapproved", err)
+            measurement = json.loads(read_text(output, "measurement-format"))
+            self.assertEqual(sorted(measurement["per_rom"]), sorted(ROMS))
+            self.assertEqual(measurement["source"]["head_revision"], POLICY_BASE_REV)
+
+    def test_an_existing_measurement_file_is_never_overwritten(self):
+        with tempfile.TemporaryDirectory(prefix="perf-emit-existing-") as scratch:
+            output = os.path.join(scratch, "measurement.json")
+            with open(output, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("keep")
+            rc, out, err = self.evaluate(self.widened(scratch), "head-over", "--emit-exception-measurement", output)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT exception-measurement-output", err)
+            self.assertEqual(read_text(output, "measurement-format"), "keep")
+
+    def test_an_unwidened_run_does_not_emit_a_measurement(self):
+        with tempfile.TemporaryDirectory(prefix="perf-emit-none-") as scratch:
+            output = os.path.join(scratch, "measurement.json")
+            rc, out, err = self.evaluate(DEFAULT_LIMITS, "head-pass", "--emit-exception-measurement", output)
+            self.assertEqual(rc, 0, out + err)
+            self.assertFalse(os.path.exists(output))
+
+
+class PerfGateRepeatControlsTests(unittest.TestCase):
+    def evaluate_head(self, head):
+        return run_cli(["--evaluate", "--limits", DEFAULT_LIMITS, "--base", os.path.join(DATA, "base"),
+                        "--head", head, "--base-rev", POLICY_BASE_REV])
+
+    def repeated_head(self, directory):
+        copy_tree(os.path.join(DATA, "head-pass"), directory)
+        for rom in ROMS:
+            path = os.path.join(directory, rom + ".line")
+            line = read_text(path, "measure-line-format")
+            for repeat in (1, 2):
+                with open(os.path.join(directory, "%s.line.%d" % (rom, repeat)), "w", encoding="utf-8") as handle:
+                    handle.write(line)
+
+    def test_second_repeat_digest_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="perf-repeat-digest-") as scratch:
+            head = os.path.join(scratch, "head")
+            self.repeated_head(head)
+            path = os.path.join(head, "tracer.line.2")
+            edit(path, "correctness_digest_fnv1a64=4c7a57ff3d50d228",
+                 "correctness_digest_fnv1a64=0000000000000000")
+            rc, out, err = self.evaluate_head(head)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT workload-digest-mismatch", err)
+
+    def test_matching_second_repeat_identity_is_a_passing_control(self):
+        with tempfile.TemporaryDirectory(prefix="perf-repeat-matching-") as scratch:
+            head = os.path.join(scratch, "head")
+            self.repeated_head(head)
+            rc, out, err = self.evaluate_head(head)
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("perf-gate pass", out)
+
+    def test_second_repeat_workload_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="perf-repeat-workload-") as scratch:
+            head = os.path.join(scratch, "head")
+            self.repeated_head(head)
+            path = os.path.join(head, "tracer.line.2")
+            edit(path, "workload=original-wram-tracer-1m-half-dots-v1", "workload=other-workload")
+            rc, out, err = self.evaluate_head(head)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT workload-digest-mismatch", err)
+
+    def test_second_repeat_consumption_mismatch_is_rejected(self):
+        with tempfile.TemporaryDirectory(prefix="perf-repeat-consumption-") as scratch:
+            head = os.path.join(scratch, "head")
+            self.repeated_head(head)
+            path = os.path.join(head, "tracer.line.2")
+            edit(path, "consumed_half_dots=1000000", "consumed_half_dots=999999")
+            rc, out, err = self.evaluate_head(head)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("REJECT proxy-vacuous", err)
+
+
+def contract_self_test(test_case, label):
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_case)
+    result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2).run(suite)
+    controls = max(0, result.testsRun - 1)
+    if result.wasSuccessful() and controls > 0:
+        print("perf-gate %s self-test pass controls=%d" % (label, controls))
+        return 0
+    return 1
+
+
 def main(argv):
     def option(name):
         if name in argv:
@@ -891,7 +1297,13 @@ def main(argv):
         return None
 
     try:
-        if "--self-test" in argv:
+        if argv == ["--self-test-limit-ratchet"]:
+            return contract_self_test(PerfGateLimitRatchetTests, "limit-ratchet")
+        elif argv == ["--self-test-exception-measurement"]:
+            return contract_self_test(PerfGateExceptionMeasurementTests, "exception-measurement")
+        elif argv == ["--self-test-repeat-controls"]:
+            return contract_self_test(PerfGateRepeatControlsTests, "repeat-controls")
+        elif "--self-test" in argv:
             self_test()
         elif "--check-attribution" in argv:
             _, (revisions, merges, _) = check_attribution(
@@ -915,12 +1327,20 @@ def main(argv):
                 handle.write(adapted)
             print("harness_source_sha256=%s harness_sha256=%s" % (source_sha, adapted_sha))
         elif "--check-limits" in argv:
-            check_limits(option("--check-limits"), option("--root"))
+            limits = check_limits(option("--check-limits"), option("--root"))
+            if option("--base-rev") is not None:
+                _, base = immutable_limits(option("--base-rev"))
+                if check_policy_ratchet(limits, base):
+                    reject("ir-limit-widening-unapproved", "ir_ratio_limit was widened without a deterministic exception receipt")
             print("perf-gate limits ok")
         elif "--evaluate" in argv:
             if None in (option("--limits"), option("--base"), option("--head")):
                 reject("usage", "--evaluate needs --limits, --base and --head")
-            evaluate(option("--limits"), option("--base"), option("--head"), option("--realtime"))
+            evaluate(option("--limits"), option("--base"), option("--head"), option("--realtime"),
+                     option("--base-rev"), option("--exception-receipt"),
+                     option("--source-base-rev"), option("--source-head-rev"),
+                     option("--build-base-identity"), option("--build-head-identity"),
+                     option("--emit-exception-measurement"))
         else:
             reject("usage", "use --self-test, --check-limits, --evaluate, --check-attribution, --emit-attribution, --print-selection or --adapt-harness")
     except Rejected as error:

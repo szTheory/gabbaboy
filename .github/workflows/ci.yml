@@ -95,10 +95,36 @@ jobs:
         run: python3 tests/scripts/verify-support-ledger.py --self-test
       - name: Self-test the release gates
         run: bash .github/scripts/verify-release-gates.sh --self-test
+      # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
+      # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
+      - name: Resolve immutable state pin base
+        id: state_pin_base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE"
+            test -n "$base"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            base="$PUSH_BEFORE"
+            test -n "$base"
+            if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
+              base=$(git merge-base HEAD origin/main)
+            fi
+          else
+            echo "Unsupported CI event for immutable state pin base: $EVENT_NAME" >&2
+            exit 1
+          fi
+          git cat-file -e "${base}^{commit}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
       - name: Configure
+        env:
+          STATE_PIN_BASE: ${{ steps.state_pin_base.outputs.base }}
         run: |
           mkdir -p build/package-prefix
-          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix" -DGBB_STATE_PIN_BASE_REV="$STATE_PIN_BASE"
       - name: Resolve the per-test budget base commit
         id: budget_base
         env:
@@ -120,6 +146,11 @@ jobs:
         run: python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"
       - name: Build
         run: cmake --build --preset phase1 --verbose
+      - name: Run state pins against the immutable event base
+        env:
+          GBB_STATE_PIN_RECEIPT: ${{ github.workspace }}/build/state-pin-receipt.json
+          GBB_STATE_PLATFORM: linux-x64
+        run: ctest --test-dir build -R '^state_portable_pins$' --output-on-failure --no-tests=error
       - name: Record acceptance and Mooneye observations
         shell: bash
         run: |
@@ -149,6 +180,14 @@ jobs:
       - name: Verify required test inventory from the same CTest output
         if: always()
         run: bash .github/scripts/verify-test-inventory.sh "build/cgb-corpus-ctest-${{ steps.corpus_run.outputs.run_nonce }}.xml" tests/expected-tests.txt --installed
+      - name: Retain state pin receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: state-pins-linux-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/state-pin-receipt.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Require the full CTest run to pass
         if: always()
         env:
@@ -196,12 +235,43 @@ jobs:
           # v02 performance self-tests read the v0.1.0 baseline commit and tag.
           fetch-depth: 0
           persist-credentials: false
+      # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
+      # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
+      - name: Resolve immutable state pin base
+        id: state_pin_base
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE"
+            test -n "$base"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            base="$PUSH_BEFORE"
+            test -n "$base"
+            if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
+              base=$(git merge-base HEAD origin/main)
+            fi
+          else
+            echo "Unsupported CI event for immutable state pin base: $EVENT_NAME" >&2
+            exit 1
+          fi
+          git cat-file -e "${base}^{commit}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
       - name: Configure
+        env:
+          STATE_PIN_BASE: ${{ steps.state_pin_base.outputs.base }}
         run: |
           mkdir -p build/package-prefix
-          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix"
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$GITHUB_WORKSPACE/build/package-prefix" -DGBB_STATE_PIN_BASE_REV="$STATE_PIN_BASE"
       - name: Build
         run: cmake --build --preset phase1 --verbose
+      - name: Run state pins against the immutable event base
+        env:
+          GBB_STATE_PIN_RECEIPT: ${{ github.workspace }}/build/state-pin-receipt.json
+          GBB_STATE_PLATFORM: macos-arm64
+        run: ctest --test-dir build -R '^state_portable_pins$' --output-on-failure --no-tests=error
       - name: Record acceptance and Mooneye observations
         shell: bash
         run: |
@@ -219,6 +289,14 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Retain state pin receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: state-pins-macos-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/state-pin-receipt.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Print no-host-clock proof
         shell: bash
         run: ctest --test-dir build -R '^no_host_clock$' --no-tests=error -V
@@ -246,12 +324,44 @@ jobs:
           # v02 performance self-tests read the v0.1.0 baseline commit and tag.
           fetch-depth: 0
           persist-credentials: false
+      # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
+      # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
+      - name: Resolve immutable state pin base
+        id: state_pin_base
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE"
+            test -n "$base"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            base="$PUSH_BEFORE"
+            test -n "$base"
+            if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
+              base=$(git merge-base HEAD origin/main)
+            fi
+          else
+            echo "Unsupported CI event for immutable state pin base: $EVENT_NAME" >&2
+            exit 1
+          fi
+          git cat-file -e "${base}^{commit}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
       - name: Configure
+        env:
+          STATE_PIN_BASE: ${{ steps.state_pin_base.outputs.base }}
         run: |
           New-Item -ItemType Directory -Force build/package-prefix | Out-Null
-          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$env:GITHUB_WORKSPACE/build/package-prefix"
+          cmake --preset phase1 -DGBB_TEST_INSTALL_PREFIX="$env:GITHUB_WORKSPACE/build/package-prefix" -DGBB_STATE_PIN_BASE_REV="$env:STATE_PIN_BASE"
       - name: Build
         run: cmake --build --preset phase1 --verbose
+      - name: Run state pins against the immutable event base
+        env:
+          GBB_STATE_PIN_RECEIPT: ${{ github.workspace }}/build/state-pin-receipt.json
+          GBB_STATE_PLATFORM: windows-x64
+        run: ctest --test-dir build -R '^state_portable_pins$' --output-on-failure --no-tests=error
       - name: Record acceptance and Mooneye observations
         shell: bash
         run: |
@@ -281,6 +391,14 @@ jobs:
         run: |
           ctest --test-dir build --output-on-failure --no-tests=error --output-junit ctest.xml
           bash .github/scripts/verify-test-inventory.sh build/ctest.xml tests/expected-tests.txt --installed
+      - name: Retain state pin receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: state-pins-windows-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/state-pin-receipt.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Print no-host-clock proof
         shell: bash
         run: ctest --test-dir build -R '^no_host_clock$' --no-tests=error -V
@@ -527,6 +645,9 @@ jobs:
       - name: Prove the gate accepts a no-op twin patch
         shell: bash
         run: bash tests/scripts/run-perf-gate.sh --noop-twin
+      - name: Run the release gate controls (OWNER-approved Ir exception and exact-head nightly)
+        shell: bash
+        run: python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"
 
   required-native:
     name: required-native

@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 19
+open_count: 20
 waived_count: 0
 fixed_count: 0
-total_count: 19
-last_updated: 2026-10-15T22:11:43.086Z
+total_count: 20
+last_updated: 2026-10-28T18:41:39.658Z
 ---
 
 # Broken Windows Ledger
@@ -34,6 +34,7 @@ last_updated: 2026-10-15T22:11:43.086Z
 | 17 | 14 | deviation | tests/external/cgb-corpus-inventory.json |  | Six AGE ROM outputs were marked pending despite pinned ROM, source, and PNG admission evidence; image cases remain pending execution. | open |  | 2026-10-15T21:11:05.476Z |  |
 | 18 | 14 | deviation | tests/scripts/verify-age-phase14-contract.py |  | Added hostile AGE fixture bound controls and strict integer bounds after trust-boundary review. | open |  | 2026-10-15T22:11:30.748Z |  |
 | 19 | 14 | deviation | tests/scripts/verify-cgb-corpus-inventory.py |  | Updated the corpus selection self-test expected first unbound case after binding all 19 AGE identities. | open |  | 2026-10-15T22:11:43.086Z |  |
+| 20 | 17 | unrun-verify | .github/ci-timeouts.json |  | IN-03: report-red has no job-level timeout-minutes ledger row because it has never executed (all 8 nightly runs skipped it); dispatch nightly-asan.yml with report_red_dry_run=true on the pushed head, then add timeout-minutes 5 to the job and a ci-timeouts row citing that run | resolved | dry run 40749683012 at fe4c932 (report-red success, 4 s); job timeout-minutes 5 and provisional ci-timeouts row added | 2026-10-28T18:41:39.658Z | 2026-10-28T18:57:05.000Z |
 
 ````json
 [
@@ -283,6 +284,19 @@ last_updated: 2026-10-15T22:11:43.086Z
     "recorded_at": "2026-10-15T22:11:43.086Z",
     "resolved_at": null,
     "milestone": "v0.2"
+  },
+  {
+    "id": 20,
+    "kind": "unrun-verify",
+    "phase": "17",
+    "file": ".github/ci-timeouts.json",
+    "line": null,
+    "description": "IN-03: report-red has no job-level timeout-minutes ledger row because it has never executed (all 8 nightly runs skipped it); dispatch nightly-asan.yml with report_red_dry_run=true on the pushed head, then add timeout-minutes 5 to the job and a ci-timeouts row citing that run",
+    "status": "resolved",
+    "reason": "dry run 40749683012 at fe4c932 (report-red success, 4 s); job timeout-minutes 5 and provisional ci-timeouts row added",
+    "recorded_at": "2026-10-28T18:41:39.658Z",
+    "resolved_at": "2026-10-28T18:57:05.000Z",
+    "milestone": "v0.3"
   }
 ]
 ````

@@ -1,6 +1,6 @@
 # GabbaBoy research index
 
-Updated: 2026-10-24. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
+Updated: 2026-10-26. Target: original C Game Boy / Game Boy Color core. These documents establish research and recommendations; they do not establish an implemented emulator.
 
 ## Start here
 
@@ -18,6 +18,10 @@ Milestone research lives in [v0.3/](v0.3/). Start with [v0.3/SUMMARY.md](v0.3/SU
 - the [adversarial review](v0.3/ADVERSARIAL-REVIEW.md).
 
 Sibling observations stay evidence about other projects until a GabbaBoy check reproduces them.
+
+Phase 17 discussion adopted the reconciled [Native Save State Core context](../phases/GB-17-native-save-state-core/17-CONTEXT.md), recorded as D-113. It supersedes the old state proposal's advisory behavior revision, CRC-only ROM identity, palette exclusion, section framing and earlier phase split. It also resolves host-counter comparison and time-horizon closure contradictions, and names the inherited RM-026/028/029/030 release-tooling work. Reuse the research above; planning researches only the concrete gates in that context. This is a completed discussion, not implemented save-state evidence.
+
+Phase 17 planning is complete: [source-grounded research](../phases/GB-17-native-save-state-core/17-RESEARCH.md), [pattern map](../phases/GB-17-native-save-state-core/17-PATTERNS.md), [source audit and wave graph](../phases/GB-17-native-save-state-core/17-SOURCE-AUDIT.md), [validation contract](../phases/GB-17-native-save-state-core/17-VALIDATION.md) and [independent plan check](../phases/GB-17-native-save-state-core/17-PLAN-CHECK.md) define 11 plans / 32 tasks / 11 waves. Research pins the 64-byte header and prototypes the time horizon; permanent size/audio/closure proofs precede codec acceptance. All six STATE requirements and RM-026/028/029/030 are planned; RM-027 remains a Phase 19 entry blocker. This is planning evidence only. Next stage: **Phase 17 — Native Save State Core, execution**, `/gsd-execute-phase 17`; both auto flags remain false.
 
 ## v0.2 Color & Cartridge Breadth research (2026-10-10)
 

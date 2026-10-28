@@ -1,0 +1,2421 @@
+{
+  "schema": "gabbaboy-state-forks-v1",
+  "expected_case_count": 153,
+  "corpus_union": {
+    "fixture_manifest_rom_rows": 147,
+    "acceptance_rows": 6,
+    "oracle_replay_claim": false,
+    "preserve_original_outcomes": true,
+    "note": "The fork matrix covers every ROM row in all 20 admitted fixture manifests plus both existing acceptance lists. Expected failure, pass, prior observation and acceptance negative-control labels remain attached as provenance. Fork equality is snapshot-equivalence; it does not replay the original oracle."
+  },
+  "contract": {
+    "proof": "snapshot-equivalence",
+    "oracle_replay_claim": false,
+    "case_boundary": "deterministic public run budget then save",
+    "same_rom_profile_mode": true,
+    "fresh_target": true,
+    "poison": "all serialized storage through the private descriptor visitor while retaining ownership and identity",
+    "future_observations": [
+      "run-result-fields",
+      "every-pcm-sample",
+      "every-applicable-frame-and-metadata",
+      "projected-battery-bytes",
+      "rumble-line",
+      "final-canonical-state-bytes"
+    ],
+    "observer_history": "compare target-local battery and rumble counter deltas separately"
+  },
+  "generated_field_fixtures": [
+    {
+      "id": "apu_fields",
+      "sha256": "214cfda7c16b8b1337859ca4f593b716ccf1895e707a1f6e898d50abb3358b30",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_apu_rom",
+      "purpose": "Original looping DMG-compatible ROM powers pulse/noise/wave, triggers a negative pulse sweep, writes all wave RAM bytes, and witnesses serialized APU and resampler fields at a real public save boundary.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 140448,
+        "cgb": 140448
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "APU powered; generated channel triggers and wave RAM writes completed before save",
+      "required_fields": [],
+      "required_categories": []
+    },
+    {
+      "id": "bus_unsupported",
+      "sha256": "397b2f8f029a927d6b0fbebaee64bf0bcbb23b9e95e2c6eb448b731e3b92e92e",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_bus_rom",
+      "purpose": "Original ROM starts a serial transfer then writes the active transfer register, exposing the deferred unsupported-bus result and its consumed latch at the public save boundary.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 140448,
+        "cgb": 140448
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "Serial transfer register write returns GBB_STOP_UNSUPPORTED_BUS and consumes the deferred latch",
+      "required_boundary_values": {
+        "bus_unsupported": 0
+      },
+      "required_fields": [
+        "bus_unsupported_address"
+      ],
+      "required_categories": [
+        "serial"
+      ]
+    },
+    {
+      "id": "mbc1_fields",
+      "sha256": "e1f399c2d4b2a6b897ca930350ac22725767a4a552a3f56e836327f13ae71478",
+      "size_bytes": 2097152,
+      "source": "tests/test_state_fork.c:build_generated_mbc1_rom",
+      "purpose": "Original 128-bank MBC1 ROM writes upper ROM bank bits and RAM/ROM banking mode before a real public save boundary.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 140448,
+        "cgb": 140448
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "MBC1 upper bank and RAM/ROM mode writes have executed",
+      "required_fields": [],
+      "required_categories": []
+    },
+    {
+      "id": "mbc3_rtc_fields",
+      "sha256": "2ae48db503230ab38832ce5cd67e7eab72e0f7279c350427c111e6c3d2b8b7fa",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_mbc3_rtc_rom",
+      "purpose": "Original MBC3 timer/RAM ROM writes seconds/minutes/hours/day/flags, performs the 00-to-01 latch sequence, and advances the subsecond anchor before save.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 140448,
+        "cgb": 140448
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "RTC register writes and latch edge execute before a timed public save",
+      "required_fields": [
+        "cart.rtc_sub",
+        "cart.rtc_synced_at"
+      ],
+      "required_categories": [
+        "rtc_subsecond"
+      ]
+    },
+    {
+      "id": "stop_wake",
+      "sha256": "cc32d45b936d3e4e1e063fa13706aef3ac8392fc7f9d7142920ebe5858723e61",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_stop_rom",
+      "purpose": "Original DMG ROM enters STOP; the runner queues a future STOP_WAKE event and forks the stopped boundary.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 140448,
+        "cgb": 140448
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "stopped && input_event_count > 0 with the queued event kind STOP_WAKE",
+      "required_fields": [
+        "stopped",
+        "input_events[].kind"
+      ],
+      "required_categories": [
+        "queued_wake"
+      ]
+    },
+    {
+      "id": "key1_switch",
+      "sha256": "f85077a999ff650aab27efd18d8b5b3f98d95b4ffab13e6e6630e828fa098737",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_key1_switch_rom",
+      "purpose": "Original CGB-only ROM arms KEY1 and executes STOP; public boundary is during the resulting speed-switch stall after stop_switch_pending has been consumed.",
+      "profiles": [
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "cgb": 88
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "double_speed && cpu_stall_kind == GBB_STALL_SPEED_SWITCH && cpu_stall_half_dots > 0 && stop_switch_pending == 0",
+      "required_boundary_values": {
+        "stop_switch_pending": 0
+      },
+      "required_fields": [
+        "double_speed",
+        "cpu_stall_kind",
+        "cpu_stall_half_dots"
+      ],
+      "required_categories": [
+        "speed_switch_stall"
+      ]
+    },
+    {
+      "id": "lockup",
+      "sha256": "eca2aa6e3ae1b37072e931c899dc57d417a6e6437fcc091ca19b421f622a1a8e",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_lockup_rom",
+      "purpose": "Original DMG ROM executes invalid opcode D3 and reaches the public lockup result before save.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 140448,
+        "cgb": 140448
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "locked && lockup_pc/lockup_opcode identify the D3 instruction",
+      "required_fields": [
+        "locked",
+        "lockup_pc",
+        "lockup_opcode"
+      ],
+      "required_categories": [
+        "lockup"
+      ]
+    },
+    {
+      "id": "ei_delay",
+      "sha256": "3f0e250a1586e16f39097f8cc72b4bf1486bae8a52de5c3f9f7b7a7cdf6bbcab",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_ei_delay_rom",
+      "purpose": "Original DMG ROM stops after the EI retirement window while ime_delay is one.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 40,
+        "cgb": 40
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "ime_delay == 1 at public save",
+      "required_fields": [
+        "ime_delay"
+      ],
+      "required_categories": [
+        "ei_delay"
+      ]
+    },
+    {
+      "id": "halt_bug",
+      "sha256": "c9a6483c80b10ccfce04c15728a2c045c48f83420bf7e76d366fb4a2411050d1",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_halt_bug_rom",
+      "purpose": "Original DMG ROM enables and requests VBlank with IME clear, executes HALT, and saves the resulting halt-bug latch.",
+      "profiles": [
+        "dmg"
+      ],
+      "prefix_budgets": {
+        "dmg": 104
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "halt_bug == 1 after HALT with enabled pending VBlank and IME clear",
+      "required_fields": [
+        "halt_bug"
+      ],
+      "required_categories": []
+    },
+    {
+      "id": "oam_dma",
+      "sha256": "f33fa268d08fb5243ef062b507e8dd1dec7ab06c988faa9fbd2ebff24c856644",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_oam_dma_rom",
+      "purpose": "Original DMG ROM starts OAM DMA from work RAM; save occurs with DMA active and bytes already copied.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 300,
+        "cgb": 300
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "dma_active && 0 < dma_index < 160",
+      "required_fields": [
+        "dma_active",
+        "dma_index"
+      ],
+      "required_categories": [
+        "oam_dma"
+      ]
+    },
+    {
+      "id": "accepted_dma_phase",
+      "sha256": "f33fa268d08fb5243ef062b507e8dd1dec7ab06c988faa9fbd2ebff24c856644",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_oam_dma_rom + load_seeded_public_state",
+      "purpose": "Starts from the real active OAM-DMA guest boundary, changes only the accepted serialized byte phase, recomputes CRC, and reloads through gbb_load_state.",
+      "profiles": [
+        "dmg"
+      ],
+      "prefix_budgets": {
+        "dmg": 300
+      },
+      "boundary_origin": "crc-valid-public-load",
+      "boundary_predicate": "dma_active && 0 < dma_index < 160 && dma_phase == 1 after public state load",
+      "seeded_wire_fields": [
+        "dma_phase"
+      ],
+      "required_fields": [
+        "dma_active",
+        "dma_index",
+        "dma_phase"
+      ],
+      "required_categories": [
+        "oam_dma"
+      ]
+    },
+    {
+      "id": "timer_reload",
+      "sha256": "32d1e3d414a417523a17c4443d8f4152b322a423e2841341ccd2537ce91a3b2a",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_timer_reload_rom + load_seeded_public_state",
+      "purpose": "Guest setup configures the timer; a relation-valid pending reload is CRC-recomputed into state and admitted by the public loader for future continuation.",
+      "profiles": [
+        "dmg",
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "dmg": 250,
+        "cgb": 250
+      },
+      "boundary_origin": "crc-valid-public-load",
+      "boundary_predicate": "timer_reload_pending && 0 < timer_reload_remaining <= 4 at public save",
+      "seeded_wire_fields": [
+        "tima",
+        "tma",
+        "timer_reload_pending",
+        "timer_reload_remaining"
+      ],
+      "required_fields": [
+        "timer_reload_pending",
+        "timer_reload_remaining"
+      ],
+      "required_categories": [
+        "timer_reload"
+      ]
+    },
+    {
+      "id": "accepted_flags",
+      "sha256": "9512ac4c0f0e794b43f8d981a2eba00874680727f7d72e969b80ef8fd0859c5a",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_loop_rom + load_seeded_public_state",
+      "purpose": "CGB state round-trip seeds the accepted bus-error latch/address and stop-switch marker alongside valid non-default half-dot phases; no ordinary run-return reachability is claimed for these loaded representations.",
+      "profiles": [
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "cgb": 32
+      },
+      "boundary_origin": "crc-valid-public-load",
+      "boundary_predicate": "public loader accepts bus_unsupported=1/address=FF02, stop_switch_pending=1, divider_phase=1, and ppu_half_phase=1",
+      "seeded_wire_fields": [
+        "bus_unsupported",
+        "bus_unsupported_address",
+        "stop_switch_pending",
+        "divider_phase",
+        "ppu_half_phase"
+      ],
+      "required_fields": [
+        "bus_unsupported",
+        "bus_unsupported_address",
+        "stop_switch_pending",
+        "divider_phase",
+        "ppu_half_phase"
+      ],
+      "required_categories": []
+    },
+    {
+      "id": "joypad_applied",
+      "sha256": "031dee73e0fb72b4294ad3422ba610962bc4e898a0a09eec0ce44e1db7492ae3",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_loop_rom + gbb_queue_events",
+      "purpose": "The runner queues an A-button press at the next half-dot, advances through the public API, and saves after the event has changed the joypad projection.",
+      "profiles": [
+        "dmg"
+      ],
+      "prefix_budgets": {
+        "dmg": 32
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "joypad_buttons contains the queued A press and the input event has been consumed",
+      "required_fields": [
+        "joypad_buttons"
+      ],
+      "required_categories": []
+    },
+    {
+      "id": "irq_dma_pending",
+      "sha256": "1f51108f79fe09193f674dacc2fe2f693197d6299b1cdd79ad1dd6e600553a17",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_irq_dma_pending_rom",
+      "purpose": "IRQ service pushes the return PC high byte to FF46 with SP=FF47, then the public run returns before the normal post-instruction DMA-start consumer.",
+      "profiles": [
+        "dmg"
+      ],
+      "prefix_budgets": {
+        "dmg": 176
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "dma_start_pending == 1 after IRQ entry with SP crossing FF46 and before dma_start consumes it",
+      "required_fields": [
+        "dma_start_pending",
+        "dma_pending_page",
+        "sp"
+      ],
+      "required_categories": []
+    },
+    {
+      "id": "native_pipeline",
+      "sha256": "86e9d8166afdc735d8bc8fcad6bb9361ae927d7d3f1bf3c27c9386f71b999b92",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_native_pipeline_rom",
+      "purpose": "CGB-only scene writes CGB registers, OAM, fine scroll and window registers, starts HBlank DMA, and saves during FIFO/window composition.",
+      "profiles": [
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "cgb": 1320
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "ppu_fifo_count > 0 && ppu_window_started after visible mode-3/window scene",
+      "required_fields": [
+        "key1_armed",
+        "ppu_fifo",
+        "ppu_window_started",
+        "wx"
+      ],
+      "required_categories": [
+        "ppu_fifo_window"
+      ]
+    },
+    {
+      "id": "native_pipeline_hdma",
+      "sha256": "86e9d8166afdc735d8bc8fcad6bb9361ae927d7d3f1bf3c27c9386f71b999b92",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_native_pipeline_rom",
+      "purpose": "Same original CGB-only scene saved at a separate measured HBlank DMA byte boundary so HDMA field coverage is distinct from the later window/FIFO boundary.",
+      "profiles": [
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "cgb": 1601
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "hdma.active && hdma.byte_phase > 0 during an HBlank block",
+      "required_fields": [
+        "hdma.active",
+        "hdma.byte_phase",
+        "hdma.byte_index",
+        "hdma.destination_cursor",
+        "hdma.destination_high"
+      ],
+      "required_categories": [
+        "hdma_byte_phase"
+      ]
+    },
+    {
+      "id": "native_pipeline_pending",
+      "sha256": "86e9d8166afdc735d8bc8fcad6bb9361ae927d7d3f1bf3c27c9386f71b999b92",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_native_pipeline_rom + load_seeded_public_state",
+      "purpose": "Original CGB scene reaches an armed, not-yet-active HBlank transfer. A CRC-recomputed pending_hblank=1 state is admitted by the public loader and forked through future transfer output.",
+      "profiles": [
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "cgb": 1200
+      },
+      "boundary_origin": "crc-valid-public-load",
+      "boundary_predicate": "hdma.mode == 1 && hdma.active == 0 && hdma.pending_hblank == 1 && hdma.blocks_remaining > 0",
+      "seeded_wire_fields": [
+        "hdma.pending_hblank"
+      ],
+      "required_fields": [
+        "hdma.mode",
+        "hdma.pending_hblank",
+        "hdma.blocks_remaining"
+      ],
+      "required_categories": [
+        "ppu_fifo_window"
+      ]
+    },
+    {
+      "id": "native_pipeline_scroll",
+      "sha256": "86e9d8166afdc735d8bc8fcad6bb9361ae927d7d3f1bf3c27c9386f71b999b92",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_native_pipeline_rom",
+      "purpose": "Same original visible CGB scene saved while fine-scroll pixels remain to be discarded.",
+      "profiles": [
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "cgb": 1176
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "ppu_mode == 3 && ppu_scroll_discard == 3",
+      "required_fields": [
+        "ppu_scroll_discard"
+      ],
+      "required_categories": []
+    },
+    {
+      "id": "native_pipeline_stall",
+      "sha256": "86e9d8166afdc735d8bc8fcad6bb9361ae927d7d3f1bf3c27c9386f71b999b92",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_native_pipeline_rom",
+      "purpose": "Same original visible CGB scene saved during the window-induced mode-3 stall.",
+      "profiles": [
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "cgb": 1200
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "ppu_mode == 3 && ppu_mode3_stall > 0 && ppu_window_started",
+      "required_fields": [
+        "ppu_mode3_stall",
+        "ppu_window_started"
+      ],
+      "required_categories": [
+        "ppu_fifo_window"
+      ]
+    },
+    {
+      "id": "native_pipeline_fetch",
+      "sha256": "86e9d8166afdc735d8bc8fcad6bb9361ae927d7d3f1bf3c27c9386f71b999b92",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_native_pipeline_rom",
+      "purpose": "Same original visible CGB scene saved between fetch phases while FIFO/window state is active.",
+      "profiles": [
+        "cgb"
+      ],
+      "prefix_budgets": {
+        "cgb": 1248
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "ppu_fetch_phase == 1 && ppu_fifo_count > 0 && ppu_window_started",
+      "required_fields": [
+        "ppu_fetch_phase",
+        "ppu_fifo",
+        "ppu_window_started"
+      ],
+      "required_categories": [
+        "ppu_fifo_window"
+      ]
+    },
+    {
+      "id": "dmg_ppu_pipeline",
+      "sha256": "d69a6bfba9eea2ec073593b11fc8891bd88d2b11c1ae2d5c7cc3d1ebae28bbe6",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_dmg_pipeline_rom",
+      "purpose": "Original DMG visible mode-3 scene drives fine-scroll discard, window composition, FIFO output, and OAM selection before a real public save boundary.",
+      "profiles": [
+        "dmg"
+      ],
+      "prefix_budgets": {
+        "dmg": 616
+      },
+      "boundary_origin": "guest-run",
+      "boundary_predicate": "ppu_mode == 3 && ppu_fifo_count > 0 && ppu_window_started",
+      "required_fields": [
+        "ppu_fifo",
+        "ppu_fifo_count",
+        "ppu_window_started",
+        "ppu_fine_scroll"
+      ],
+      "required_categories": [
+        "ppu_fifo_window"
+      ]
+    },
+    {
+      "id": "div_read",
+      "sha256": "cdf0318ec170cd7b529ed5cbb6d076bf54c55215da01d7aa201c654652215356",
+      "size_bytes": 32768,
+      "source": "tests/test_state_fork.c:build_generated_div_read_rom + load_seeded_public_state",
+      "purpose": "The guest prefix stops with its next instruction reading FF04 and storing the value to work RAM; a CRC-valid public load seeds a relation-valid non-default DIV/counter projection. The core advances divider_counter and refreshes div before each timed FF04 bus read, so the omission proof is the immediate public load/save canonical-byte contract.",
+      "profiles": [
+        "dmg"
+      ],
+      "prefix_budgets": {
+        "dmg": 64
+      },
+      "boundary_origin": "crc-valid-public-load",
+      "boundary_predicate": "PC == 0x0204 && HL == 0xC000 after public load; next guest operation is timed read FF04 and store to C000",
+      "seeded_wire_fields": [
+        "div",
+        "divider_counter"
+      ],
+      "required_boundary_values": {
+        "pc": 516,
+        "hl": 49152
+      },
+      "required_fields": [
+        "div",
+        "divider_counter",
+        "pc",
+        "h",
+        "l"
+      ],
+      "required_categories": []
+    }
+  ],
+  "constant_dispositions": [],
+  "fixture_manifests": [
+    {
+      "path": "fixtures/age/manifest.json",
+      "sha256": "52a022327cc9b6eb9df2a6383b77cf8c006fca26e789c757c15dc2c58e1e4791",
+      "rom_rows": 19
+    },
+    {
+      "path": "fixtures/cgb-banking/manifest.json",
+      "sha256": "99777e6c8ea35df41c25dab2c9e68d72ba3e7255bf174373492d7c2dd5d2cb2d",
+      "rom_rows": 2
+    },
+    {
+      "path": "fixtures/cgb-colour/manifest.json",
+      "sha256": "d5ea2b36abb53b9efea4f004bdfaae70dc4e126eb323008e559196adea1854bc",
+      "rom_rows": 6
+    },
+    {
+      "path": "fixtures/cgb-hdma/manifest.json",
+      "sha256": "450a022cf8afdc6d6b061ac6188dc7ebe18c8c6e8871f0a7751bd291963871e6",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/cgb-speed/manifest.json",
+      "sha256": "5306847c203c018e76752be188658182b16a6efa12347eb8048f8c55d6767383",
+      "rom_rows": 2
+    },
+    {
+      "path": "fixtures/libbet/manifest.json",
+      "sha256": "512d1b4de7656795dba07dc81b025593bd57a74288605eac88684da6b744f08a",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/magentests/manifest.json",
+      "sha256": "73478d75c229fee715917e9e415dfd0285944f84cf4c14b65e18e88bc8bf2d77",
+      "rom_rows": 7
+    },
+    {
+      "path": "fixtures/mbc1-continuation/manifest.json",
+      "sha256": "1c25c570be98ece42ff9069635fb07cf4559b578817373ec3bd4d3552e8809d1",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/mbc2-continuation/manifest.json",
+      "sha256": "7dd0f0eada9a87e061b33c020669f52e0cafd2311598e599889e47bd2805d2e5",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/mbc3-rtc-continuation/manifest.json",
+      "sha256": "f92e89fb6466fbcafe448d2eab594baa374f5d8bde7b773dfe78263ddd85838e",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/mbc5-banking/manifest.json",
+      "sha256": "017ff445bbd8d26ff542d556062be030b99c961c8b080009d5f0e15ba70472ad",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/mbc5-continuation/manifest.json",
+      "sha256": "125038120297a6367b561b9c0fa200f9f825c9b96d7a6db402966701a4f83a09",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/mooneye-cgb/manifest.json",
+      "sha256": "6efe380d1eae6f2ef1cfc17375d7e71610c9135fdeb67a1452ecf72b26e02fe9",
+      "rom_rows": 9
+    },
+    {
+      "path": "fixtures/mooneye-mbc/manifest.json",
+      "sha256": "9800c795fcf033abd6bda2e171af6c22d27e745f2b5946fc49bd0f9ce2fb5801",
+      "rom_rows": 15
+    },
+    {
+      "path": "fixtures/mooneye/manifest.json",
+      "sha256": "98a1799b8be9c022ac13467a552890fb12bdd706017e42e12c944ec618d60527",
+      "rom_rows": 3
+    },
+    {
+      "path": "fixtures/rtc3test/manifest.json",
+      "sha256": "796d52f1da3af600e10d0a23c96d6dac7e6f7ff26077d1e29b3ce650da459443",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/samesuite/manifest.json",
+      "sha256": "19334fff5cd1427dff335ad22dba7436f58596bf07d5fd48167e4524e07195eb",
+      "rom_rows": 74
+    },
+    {
+      "path": "fixtures/save-envelope-v1/manifest.json",
+      "sha256": "fb4b85d23251a6d259b372424d8ad440966f3ee01ac3d6b6fd4bc7f7b36bbecc",
+      "rom_rows": 0
+    },
+    {
+      "path": "fixtures/tracer/manifest.json",
+      "sha256": "59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c",
+      "rom_rows": 1
+    },
+    {
+      "path": "fixtures/visible-demo/manifest.json",
+      "sha256": "8c695ef04d4f65e286aa444d0dfbbc98b354b944fef0dc6ac6dc453c264a31a3",
+      "rom_rows": 1
+    }
+  ],
+  "acceptance_lists": [
+    {
+      "path": "tests/acceptance/cases.txt",
+      "sha256": "4a7e99833e28f4cdc43b4a2ab86b8c30ed280fe1fc6fba5242ff72aebcf430a2",
+      "case_rows": 3
+    },
+    {
+      "path": "tests/acceptance/cases-cgb-colour.txt",
+      "sha256": "ce3f1c84b47a71a489c14383f6ee6ce9243dba1c6e29c16d2b769818d6ff70aa",
+      "case_rows": 3
+    }
+  ],
+  "disposition_catalogs": [
+    {
+      "path": "tests/external/cgb-corpus-inventory.json",
+      "sha256": "408814db2442dd4300f5c7ec1dfe51a639336c51e2ade4609cc3ebede78d7803",
+      "case_count": 107,
+      "expected_failure": 82,
+      "pass": 16,
+      "prior_observation": 9
+    },
+    {
+      "path": "tests/external/cgb-apu-dispositions.json",
+      "sha256": "5db26adbb0713547884b2cbdd50e9de31c94e8c359abb0a6f4d0f69046cc6200"
+    },
+    {
+      "path": "tests/external/cgb-hdma-dispositions.json",
+      "sha256": "38a1a6321f5b3e73e2ab6aa32f5b3e37a85add40de1edb6de12767345d62a798"
+    },
+    {
+      "path": "tests/external/cgb-ppu-dispositions.json",
+      "sha256": "638f6e7732dda3276665939e091f7117b9e1102100f97108a229b004ef72aed2"
+    },
+    {
+      "path": "tests/external/cgb-speed-dispositions.json",
+      "sha256": "9a5be5731e4b72be38dbded66dfbed2d15790ee550dbc05c4b3dbe1989dfa8cc"
+    }
+  ],
+  "excluded": [
+    {
+      "path": "tests/acid2/manifest.json",
+      "reason": "Optional local corpus is rights-gated (G1) and its ROM bytes are absent."
+    }
+  ],
+  "in_flight_categories": [
+    {
+      "id": "oam_dma",
+      "predicate": "dma_active && dma_index > 0 && dma_index < 160",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "hdma_byte_phase",
+      "predicate": "hdma.active && hdma.byte_phase > 0",
+      "model": "CGB native"
+    },
+    {
+      "id": "speed_switch_stall",
+      "predicate": "cpu_stall_kind == SPEED_SWITCH && cpu_stall_half_dots > 0",
+      "model": "CGB native"
+    },
+    {
+      "id": "halt",
+      "predicate": "halted",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "ei_delay",
+      "predicate": "ime_delay == 1",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "apu_sequencer",
+      "predicate": "apu_sequencer_step != reset value",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "rtc_subsecond",
+      "predicate": "cart.has_timer && cart.rtc_sub != 0",
+      "model": "MBC3 timer"
+    },
+    {
+      "id": "partial_frame",
+      "predicate": "ppu_dot != 0 || ppu_fifo_count != 0",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "timer_reload",
+      "predicate": "timer_reload_pending && timer_reload_remaining > 0",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "serial",
+      "predicate": "serial_active && serial_bits < 8",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "queued_input",
+      "predicate": "input_event_count > 0",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "queued_wake",
+      "predicate": "stopped && input_event_count > 0",
+      "model": "DMG and CGB"
+    },
+    {
+      "id": "ppu_fifo_window",
+      "predicate": "ppu_fifo_count > 0 && ppu_window_started",
+      "model": "CGB and DMG"
+    },
+    {
+      "id": "lockup",
+      "predicate": "locked && lockup_pc/lockup_opcode match the invalid instruction",
+      "model": "DMG and CGB"
+    }
+  ],
+  "required_mutant_fields": [
+    "pc",
+    "ime_delay",
+    "timer_reload_remaining",
+    "serial_edge_remaining",
+    "input_events[].at_half_dots",
+    "ppu_fifo",
+    "ppu_window_started",
+    "frame_working",
+    "frame_completed",
+    "compat_rgb555",
+    "frame_generation",
+    "dma_phase",
+    "hdma.byte_phase",
+    "hdma.destination_cursor",
+    "cpu_stall_half_dots",
+    "apu_sequencer_step",
+    "audio_event_ring",
+    "audio_hpf_input",
+    "cart.rom_bank_lo",
+    "cartridge_ram",
+    "cart.rtc_l",
+    "cart.rtc_sub",
+    "cart.rtc_synced_at",
+    "cart.rumble_on",
+    "bus_unsupported"
+  ],
+  "mutant_policy": "Every serialized descriptor path with a recorded non-default witness has one exact field/case/observation entry in field_mutants. Each mutation skips only that assignment while consuming its wire bytes, proves the target retained poison immediately after successful public load, and runs an unmutated control. Compare run result, every PCM sample, frames and metadata, battery and RTC projection, rumble line, observer deltas, post-load canonical save, and final canonical bytes; require every declared discrepancy. A path whose guest-visible effect is refreshed before the next sample, such as div from divider_counter, uses the explicit immediate public load/save canonical-byte discrepancy and still runs the later output comparison. Only the three explicitly reasoned input_events component mutants may stop at a rejected post-load canonical save; all other successful target saves must reach both future slices. Timeout, crash, setup, load, and generic failures are not semantic kills.",
+  "field_mutants": [
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "a"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.control"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.enabled"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.envelope"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.envelope_timer"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.length"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.length_reg"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.lfsr"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.polynomial"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.timer"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_noise.volume"
+    },
+    {
+      "case": "generated:apu_fields:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_nr50"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_nr51"
+    },
+    {
+      "case": "age:spsw-div-cgbBCE",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_power"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].control"
+    },
+    {
+      "case": "generated:apu_fields:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].duty_length"
+    },
+    {
+      "case": "generated:apu_fields:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].enabled"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].envelope"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].envelope_timer"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].frequency"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].frequency_low"
+    },
+    {
+      "case": "generated:apu_fields:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].length"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].phase"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].sweep"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].sweep_enabled"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].sweep_negate_used"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].sweep_shadow"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].sweep_timer"
+    },
+    {
+      "case": "generated:accepted_flags:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].timer"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_pulse[].volume"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "pcm"
+      ],
+      "field": "apu_sample_phase",
+      "observation_rationale": "At the accepted_dma_phase DMG cut, omitting the sample phase changes the two bounded PCM slices and final canonical bytes; the run-result remains equal."
+    },
+    {
+      "case": "accept:libbet-cgb-progress",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_sequencer_step"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.control"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.dac"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.enabled"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.frequency_low"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.length"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.length_reg"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.level"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.position"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.ram"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.sample_buffer",
+      "observation_rationale": "At the apu_fields CGB cut, the omitted sample buffer changes bounded PCM; it is consumed and reconverges before the final state comparison, so final canonical bytes remain equal."
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "apu_wave.timer"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "audio_event_head"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "audio_event_ring"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "audio_hpf_input"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "audio_hpf_output"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "audio_mix_level"
+    },
+    {
+      "case": "accept:libbet",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "b"
+    },
+    {
+      "case": "accept:cgb-colour-hblank",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "bcps"
+    },
+    {
+      "case": "accept:cgb-colour-hblank",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "bg_cram"
+    },
+    {
+      "case": "age:m3-bg-lcdc-cgbBCE",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "bgp"
+    },
+    {
+      "case": "generated:accepted_flags:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "bus_unsupported"
+    },
+    {
+      "case": "generated:accepted_flags:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "bus_unsupported_address"
+    },
+    {
+      "case": "accept:libbet-cgb-progress",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "c"
+    },
+    {
+      "case": "generated:mbc1_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "cart.mbc1_mode"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "cart.ram_bank"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "cart.ram_enabled"
+    },
+    {
+      "case": "generated:mbc1_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "cart.rom_bank_hi"
+    },
+    {
+      "case": "mooneye-mbc:mooneye-emulator-only-mbc2-bits-romb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "cart.rom_bank_lo"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "battery-projection-or-generation-delta",
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-line-or-counter-delta"
+      ],
+      "field": "cart.rtc_dh"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "battery-projection-or-generation-delta",
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-line-or-counter-delta"
+      ],
+      "field": "cart.rtc_dl"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "battery-projection-or-generation-delta",
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-line-or-counter-delta"
+      ],
+      "field": "cart.rtc_h"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "battery-projection-or-generation-delta",
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-line-or-counter-delta"
+      ],
+      "field": "cart.rtc_l"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "battery-projection-or-generation-delta",
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-line-or-counter-delta"
+      ],
+      "field": "cart.rtc_latch_prev"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "battery-projection-or-generation-delta",
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-line-or-counter-delta"
+      ],
+      "field": "cart.rtc_m"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "battery-projection-or-generation-delta",
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-line-or-counter-delta"
+      ],
+      "field": "cart.rtc_s"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "battery-projection-or-generation-delta",
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-line-or-counter-delta"
+      ],
+      "field": "cart.rtc_sub"
+    },
+    {
+      "case": "generated:mbc3_rtc_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "cart.rtc_synced_at"
+    },
+    {
+      "case": "mbc5-banking:mbc5-banking",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status",
+        "rumble-observer-counter"
+      ],
+      "field": "cart.rumble_on"
+    },
+    {
+      "case": "mbc1-continuation:mbc1-continuation",
+      "expected_observations": [
+        "battery-observer-counter",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "cartridge_ram"
+    },
+    {
+      "case": "generated:accepted_flags:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "compat_rgb555"
+    },
+    {
+      "case": "generated:key1_switch:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "cpu_stall_half_dots"
+    },
+    {
+      "case": "generated:key1_switch:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "cpu_stall_kind"
+    },
+    {
+      "case": "accept:libbet-cgb-progress",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "d"
+    },
+    {
+      "case": "generated:div_read:dmg",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "div",
+      "malformed_target_reason": "The div_read DMG seed ties div=0xAC to divider_counter=0xAC00, and the state invariant requires div to equal the counter high byte; omitting div therefore causes canonical save rejection."
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "divider_counter"
+    },
+    {
+      "case": "generated:accepted_flags:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "divider_phase"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "dma_active"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "dma_cpu_blocked"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "dma_index"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "dma_page"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "dma_pending_page"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "dma_phase"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "dma_register"
+    },
+    {
+      "case": "generated:irq_dma_pending:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "dma_start_pending"
+    },
+    {
+      "case": "generated:key1_switch:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "double_speed",
+      "observation_rationale": "At the key1_switch CGB speed-switch stall cut, omitting double_speed changes the future run result and final canonical state; the two bounded PCM slices remain equal."
+    },
+    {
+      "case": "accept:libbet-cgb-progress",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "e"
+    },
+    {
+      "case": "accept:libbet",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "f"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ff56"
+    },
+    {
+      "case": "mooneye-cgb:mooneye-misc-unused-hwio-c",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ff72"
+    },
+    {
+      "case": "mooneye-cgb:mooneye-misc-unused-hwio-c",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ff73"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ff74"
+    },
+    {
+      "case": "mooneye-cgb:mooneye-misc-unused-hwio-c",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ff75"
+    },
+    {
+      "case": "visible-demo:visible-demo",
+      "expected_observations": [
+        "frame-and-metadata",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "frame_completed",
+      "observation_rationale": "At the visible-demo cut, omission changes frame completion metadata in the bounded continuation; the later frame completion normalizes this field, so final canonical bytes match."
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "frame-and-metadata",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "frame_completion_half_dots",
+      "observation_rationale": "At the apu_fields CGB cut, omission changes the frame completion metadata observed in the bounded continuation; the timing field is normalized before the final canonical save, so final bytes remain equal."
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "frame-and-metadata",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "frame_generation"
+    },
+    {
+      "case": "visible-demo:visible-demo",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "frame_working"
+    },
+    {
+      "case": "accept:cgb-colour-hblank",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "h"
+    },
+    {
+      "case": "generated:halt_bug:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "halt_bug"
+    },
+    {
+      "case": "accept:libbet-cgb-progress",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "halted"
+    },
+    {
+      "case": "generated:native_pipeline_hdma:cgb",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "hdma.active",
+      "malformed_target_reason": "The native_pipeline_hdma CGB cut is mid-byte with nonzero HDMA byte phase; the accepted-state invariant requires an active transfer for that phase, so omitting hdma.active causes canonical save rejection."
+    },
+    {
+      "case": "generated:native_pipeline_hdma:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.block_vram_bank"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "hdma.blocks_remaining"
+    },
+    {
+      "case": "generated:native_pipeline_hdma:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.byte_index"
+    },
+    {
+      "case": "generated:native_pipeline_hdma:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "hdma.byte_phase"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.control_readback"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "hdma.destination_cursor"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.destination_high"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.destination_low"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "hdma.mode"
+    },
+    {
+      "case": "generated:native_pipeline_pending:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.pending_hblank"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.source_cursor"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.source_high"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hdma.source_low"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "hram"
+    },
+    {
+      "case": "generated:halt_bug:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ie"
+    },
+    {
+      "case": "accept:cgb-colour-hblank",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "ime"
+    },
+    {
+      "case": "generated:ei_delay:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ime_delay"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "input_event_count",
+      "malformed_target_reason": "The accepted_dma_phase DMG cut has a nonzero queued event in slot zero; the state invariant requires unused event slots to be zero, so omitting input_event_count makes the receiver invalid and canonical save rejects it."
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-save-rejected"
+      ],
+      "malformed_target_reason": "Skipping the active event timestamp makes it precede the saved machine clock; the runner stops after canonical save rejection.",
+      "field": "input_events[].at_half_dots"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-save-rejected"
+      ],
+      "malformed_target_reason": "Skipping the active event kind violates the public state validator's event-kind/value relation; the runner stops after canonical save rejection.",
+      "field": "input_events[].kind"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-save-rejected"
+      ],
+      "malformed_target_reason": "Skipping the active event value leaves the kind/value pair outside the public state validator's accepted relation; the runner stops after canonical save rejection.",
+      "field": "input_events[].value"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "instruction_start_half_dots"
+    },
+    {
+      "case": "generated:apu_fields:dmg",
+      "expected_observations": ["post-load-canonical-state-bytes-or-save-status"],
+      "field": "interrupt_flags",
+      "observation_rationale": "At the apu_fields DMG cut, omission changes immediate canonical bytes; the guest consumes or replaces the flag before the measured future outputs, so run results, PCM, frame metadata and final bytes match."
+    },
+    {
+      "case": "generated:joypad_applied:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "joypad_buttons"
+    },
+    {
+      "case": "visible-demo:visible-demo",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "joypad_select"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "key1_armed"
+    },
+    {
+      "case": "accept:cgb-colour-hblank",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "l"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "lcdc"
+    },
+    {
+      "case": "generated:lockup:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "locked"
+    },
+    {
+      "case": "generated:lockup:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "lockup_opcode"
+    },
+    {
+      "case": "generated:lockup:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "lockup_pc"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "frame-and-metadata",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ly"
+    },
+    {
+      "case": "generated:irq_dma_pending:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "lyc"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "oam"
+    },
+    {
+      "case": "age:m3-bg-lcdc-cgbBCE",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "obj_cram"
+    },
+    {
+      "case": "age:m3-bg-lcdc-cgbBCE",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "obp0"
+    },
+    {
+      "case": "age:m3-bg-lcdc-cgbBCE",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "obp1"
+    },
+    {
+      "case": "age:m3-bg-lcdc-cgbBCE",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ocps"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "opri"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "pc"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "frame-and-metadata",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_dot"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_fetch_enqueued"
+    },
+    {
+      "case": "generated:native_pipeline_fetch:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_fetch_phase"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_fetch_stage"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_fifo"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_fifo_count"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_fifo_head"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_fine_scroll"
+    },
+    {
+      "case": "generated:accepted_flags:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_half_phase"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_mode"
+    },
+    {
+      "case": "generated:native_pipeline_pending:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_mode3_stall"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_object_tiles_fetched"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_objects_stalled"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_output_x"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_scan_index"
+    },
+    {
+      "case": "generated:native_pipeline_scroll:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_scroll_discard"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_selected_attributes"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": ["post-load-canonical-state-bytes-or-save-status"],
+      "field": "ppu_selected_object_count",
+      "observation_rationale": "At the dmg_ppu_pipeline DMG cut, omission changes immediate canonical bytes; the selected-object count is consumed before later bounded output and final state observations, which match."
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_selected_objects"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_selected_tile"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_selected_x"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_selected_y"
+    },
+    {
+      "case": "age:stat-mode-window-cgbBCE",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_stat_line"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_transfer_age"
+    },
+    {
+      "case": "generated:native_pipeline_hdma:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_transfer_complete"
+    },
+    {
+      "case": "age:stat-mode-window-cgbBCE",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_window_line"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_window_line_drawn"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "ppu_window_started"
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "frame-and-metadata",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "rgb_completed",
+      "observation_rationale": "At the apu_fields CGB cut, omission changes frame data and metadata during the bounded continuation; later PPU output reconverges, so final canonical bytes match."
+    },
+    {
+      "case": "generated:apu_fields:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "rgb_working"
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "scx"
+    },
+    {
+      "case": "magentests:hblank_vram_dma",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "scy"
+    },
+    {
+      "case": "generated:bus_unsupported:cgb",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "serial_active",
+      "malformed_target_reason": "At the bus_unsupported CGB cut, serial_control=0x80 denotes an active external transfer; clearing serial_active while leaving that restored control bit set violates the serial relation, so canonical save rejects the omitted target."
+    },
+    {
+      "case": "cgb-speed:speed",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "serial_bits"
+    },
+    {
+      "case": "generated:bus_unsupported:cgb",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "serial_control",
+      "malformed_target_reason": "At the bus_unsupported CGB cut, an active external serial transfer has serial_control=0x80 and zero edge countdown; any distinct legal single-field control value breaks the active/control/countdown invariant, so canonical save rejects the omitted target."
+    },
+    {
+      "case": "cgb-speed:speed",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "serial_data"
+    },
+    {
+      "case": "mooneye-cgb:mooneye-acceptance-timer-tim00",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "serial_edge_remaining"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "sp"
+    },
+    {
+      "case": "accept:cgb-colour-hblank",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "stat"
+    },
+    {
+      "case": "generated:accepted_flags:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "stop_switch_pending"
+    },
+    {
+      "case": "generated:stop_wake:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "stopped"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "svbk",
+      "malformed_target_reason": "At the native_pipeline CGB cut, wram_bank is greater than one and the accepted-state invariant requires it to equal SVBK; raw SVBK zero only aliases effective bank one, so no distinct valid SVBK value exists and canonical save rejects the omitted target."
+    },
+    {
+      "case": "generated:timer_reload:cgb",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "tac",
+      "malformed_target_reason": "At the timer_reload CGB cut, divider_counter=0x005C and timer_signal=1; TAC value 5 is the only accepted selector in this fixture whose enabled tap is high, so omitting tac causes canonical save rejection."
+    },
+    {
+      "case": "age:spsw-interrupts-cgbE",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "tima"
+    },
+    {
+      "case": "generated:accepted_dma_phase:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "frame-and-metadata",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "time_half_dots"
+    },
+    {
+      "case": "generated:timer_reload:cgb",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "timer_reload_pending",
+      "malformed_target_reason": "At the timer_reload CGB cut, timer_reload_remaining is four; the accepted-state invariant requires a pending reload whenever remaining is nonzero, so omitting timer_reload_pending causes canonical save rejection."
+    },
+    {
+      "case": "generated:timer_reload:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "timer_reload_remaining",
+      "observation_rationale": "At the timer_reload CGB cut, the omitted remaining count changes immediate canonical bytes; the pending reload resolves before guest output diverges, so bounded run results, PCM, frame metadata and final canonical bytes match."
+    },
+    {
+      "case": "generated:timer_reload:cgb",
+      "expected_observations": [
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "timer_reloaded_at"
+    },
+    {
+      "case": "generated:timer_reload:cgb",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "timer_signal",
+      "malformed_target_reason": "At the timer_reload CGB cut, TAC=5 and divider_counter=0x005C derive timer_signal=1; omitting the derived signal breaks that accepted-state invariant, so canonical save rejects the target."
+    },
+    {
+      "case": "generated:timer_reload:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "tma"
+    },
+    {
+      "case": "cgb-banking:banking-cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "vram"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "vram_bank"
+    },
+    {
+      "case": "accept:libbet",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "frame-and-metadata",
+        "pcm",
+        "post-load-canonical-state-bytes-or-save-status",
+        "run-result"
+      ],
+      "field": "wram"
+    },
+    {
+      "case": "generated:native_pipeline:cgb",
+      "expected_observations": ["post-load-canonical-save-rejected"],
+      "field": "wram_bank",
+      "malformed_target_reason": "At the native_pipeline CGB cut, the effective WRAM bank is derived from the restored SVBK value; the accepted-state invariant requires wram_bank=(svbk==0 ? 1 : svbk), so omitting the cache assignment causes canonical save rejection."
+    },
+    {
+      "case": "generated:dmg_ppu_pipeline:dmg",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "wx"
+    },
+    {
+      "case": "age:stat-mode-window-cgbBCE",
+      "expected_observations": [
+        "final-canonical-state-bytes",
+        "post-load-canonical-state-bytes-or-save-status"
+      ],
+      "field": "wy"
+    }
+  ]
+}

@@ -24,10 +24,26 @@ string(RANDOM LENGTH 8 ALPHABET 0123456789abcdef gbb_policy_nonce)
 set(gbb_policy_root "${GBB_BINARY_DIR}/sanitizer-timeout-policy-${gbb_policy_nonce}")
 file(MAKE_DIRECTORY "${gbb_policy_root}")
 
+# The five probe configures use the outer build's generator. Without -G a script-mode cmake picks the platform
+# default, which on Windows is the Visual Studio generator: each LANGUAGES NONE configure then still locates an
+# instance and writes a solution, and five of them took 13-14 s of this test's 30 s on hosted native-windows-x64
+# (twice past 30 s when started alongside a full parallel suite, runs 40750680694 and 40756667458). Ninja configures
+# the same NONE project in a fraction of a second. The pass line names the generator each probe actually recorded,
+# and the CTest pass regex requires the outer one, so a dropped -G is a test failure rather than a slow pass.
+set(gbb_policy_generator_args "")
+if(DEFINED GBB_GENERATOR AND NOT GBB_GENERATOR STREQUAL "")
+  set(gbb_policy_generator_args -G "${GBB_GENERATOR}")
+  if(DEFINED GBB_MAKE_PROGRAM AND NOT GBB_MAKE_PROGRAM STREQUAL "")
+    list(APPEND gbb_policy_generator_args "-DCMAKE_MAKE_PROGRAM=${GBB_MAKE_PROGRAM}")
+  endif()
+endif()
+set(gbb_policy_generator "")
+
 function(gbb_configure_timeout_policy scenario sanitizers output_var)
   set(gbb_build_dir "${gbb_policy_root}/${scenario}")
   execute_process(
     COMMAND "${CMAKE_COMMAND}"
+      ${gbb_policy_generator_args}
       -S "${GBB_SOURCE_DIR}/tests/cmake/timeout-policy"
       -B "${gbb_build_dir}"
       "-DGBB_TIMEOUT_HELPER=${GBB_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake"
@@ -43,6 +59,12 @@ function(gbb_configure_timeout_policy scenario sanitizers output_var)
   endif()
   file(READ "${gbb_build_dir}/timeout-properties.txt" gbb_properties)
   set(${output_var} "${gbb_properties}" PARENT_SCOPE)
+  file(STRINGS "${gbb_build_dir}/CMakeCache.txt" gbb_generator_line REGEX "^CMAKE_GENERATOR:INTERNAL=")
+  string(REGEX REPLACE "^CMAKE_GENERATOR:INTERNAL=" "" gbb_generator_used "${gbb_generator_line}")
+  if(NOT gbb_policy_generator STREQUAL "" AND NOT gbb_policy_generator STREQUAL gbb_generator_used)
+    message(FATAL_ERROR "Timeout policy probes used different generators: ${gbb_policy_generator} and ${gbb_generator_used}")
+  endif()
+  set(gbb_policy_generator "${gbb_generator_used}" PARENT_SCOPE)
 endfunction()
 
 function(gbb_expect_timeout properties test_name expected)
@@ -132,4 +154,4 @@ gbb_expect_timeout("${gbb_parent_only_properties}" child_300 300)
 # means the policy passed, so remove the probe build trees.
 file(REMOVE_RECURSE "${gbb_policy_root}")
 
-message(STATUS "sanitizer timeout policy pass normal=unchanged scaled=120:360,240:720,60:180 child=120:360,240:720,300:900 early-scaler=detected double-scaler=detected parent-only=detected")
+message(STATUS "sanitizer timeout policy pass generator=${gbb_policy_generator} normal=unchanged scaled=120:360,240:720,60:180 child=120:360,240:720,300:900 early-scaler=detected double-scaler=detected parent-only=detected")

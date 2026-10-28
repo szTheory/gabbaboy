@@ -7,13 +7,18 @@ support. Live routes and HEAD ancestry deliberately have no role in this check.
 from __future__ import annotations
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 
 # The boundary is a durable annotated tag on the Phase 8 verification commit (D-12). It is resolved once to a
-# commit id and never falls back to a literal SHA, so an unreadable tag fails closed.
+# commit id and never falls back to a literal SHA, so an unreadable tag fails closed. A tag is mutable, so the commit
+# it must peel to is also pinned here (WR-02): a retargeted tag fails with its own message before any clause is read,
+# and the clauses themselves are read from the resolved commit, never from the working tree or later history.
 DEFAULT_BOUNDARY = 'historical/phase-08-boundary'
+EXPECTED_BOUNDARY = '96d5eec977bee99a0629499b89c737415e24184c'
 PHASE = '.planning/phases/GB-08-cartridge-seam-mbc5-and-mbc2/'
 # Each fragment represents a required claim or an explicit limit in the original
 # boundary. Normalize whitespace so wrapping alone does not weaken the contract.
@@ -78,15 +83,23 @@ FROZEN = ('cmake/VerifyMooneye.cmake', 'tests/scripts/reproduce-mooneye.sh') + t
         'selftest/CHANGES.md', 'selftest/junit.xml', 'selftest/ledger.txt', 'selftest/observed.txt'))
 OLD = '5673bed'
 
-def resolve_boundary(rev: str) -> str | None:
+def resolve_boundary(rev: str, repo: str | None = None) -> str | None:
     """Return the commit id for rev, or None when rev is empty, option-shaped or not a readable commit."""
     if not rev or rev.startswith('-'):
         return None
-    result = subprocess.run(['git', 'rev-parse', '--verify', '--quiet', f'{rev}^{{commit}}'], capture_output=True, text=True)
+    command = ['git'] + (['-C', repo] if repo else []) + ['rev-parse', '--verify', '--quiet', f'{rev}^{{commit}}']
+    result = subprocess.run(command, capture_output=True, text=True)
     sha = result.stdout.strip()
     if result.returncode or not re.fullmatch(r'[0-9a-f]{40}', sha):
         return None
     return sha
+
+def boundary_identity_error(rev: str, sha: str, expected: str = EXPECTED_BOUNDARY) -> str | None:
+    """The named tag must peel to the pinned commit. Any other revision is an explicit override (the wrong-boundary
+    controls use one), judged by its clauses alone."""
+    if rev == DEFAULT_BOUNDARY and sha != expected:
+        return f'boundary tag {rev} was retargeted: it resolves to {sha}, not {expected}'
+    return None
 
 def normalized(text: str) -> str:
     return ' '.join(text.split())
@@ -135,6 +148,55 @@ def verify(files: dict[str, str]) -> list[str]:
                 errors.append(f'private identifier in historical public artifact: {path}')
     return errors
 
+def boundary_identity_self_test(boundary: str) -> int:
+    """Retarget a disposable annotated and a disposable lightweight tag and require the pinned-commit rejection; the
+    repository's own tag is never touched. Returns the number of controls that held."""
+    controls = 0
+    if boundary_identity_error(DEFAULT_BOUNDARY, boundary) is not None and boundary == EXPECTED_BOUNDARY:
+        raise SystemExit('phase8-closure-contract FAIL boundary identity rejected the pinned commit')
+    if boundary_identity_error(DEFAULT_BOUNDARY, '0' * 40) is None:
+        raise SystemExit('phase8-closure-contract FAIL boundary identity accepted another commit for the tag')
+    if boundary_identity_error('v0.2.0', '0' * 40) is not None:
+        raise SystemExit('phase8-closure-contract FAIL boundary identity rejected an explicit override')
+    controls += 3
+    with tempfile.TemporaryDirectory(prefix='gbb-phase8-tag-') as tmp:
+        env = {k: v for k, v in os.environ.items() if k in ('PATH', 'SYSTEMROOT', 'TMPDIR', 'TEMP', 'TMP')}
+        env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, GIT_AUTHOR_NAME='fixture',
+                   GIT_AUTHOR_EMAIL='fixture@example.invalid', GIT_COMMITTER_NAME='fixture',
+                   GIT_COMMITTER_EMAIL='fixture@example.invalid')
+
+        def git(*args: str) -> str:
+            return subprocess.run(['git', '-C', tmp, *args], capture_output=True, text=True, check=True, env=env).stdout.strip()
+
+        git('init', '-q')
+        git('commit', '-q', '--allow-empty', '-m', 'boundary')
+        pinned = git('rev-parse', 'HEAD')
+        git('commit', '-q', '--allow-empty', '-m', 'other')
+        other = git('rev-parse', 'HEAD')
+        git('tag', '-a', '-m', 'boundary', DEFAULT_BOUNDARY, pinned)
+        resolved = resolve_boundary(DEFAULT_BOUNDARY, tmp)
+        if resolved != pinned or boundary_identity_error(DEFAULT_BOUNDARY, resolved, pinned) is not None:
+            raise SystemExit('phase8-closure-contract FAIL a disposable annotated tag at the pinned commit was rejected')
+        git('tag', '-f', '-a', '-m', 'retargeted', DEFAULT_BOUNDARY, other)
+        # The command line the CTest runs, from inside the disposable repository: the retargeted tag stops it with its own
+        # message, before any clause is judged.
+        run = subprocess.run([sys.executable, '-I', os.path.abspath(__file__)], cwd=tmp, capture_output=True, text=True, env=env)
+        if run.returncode != 1 or 'retargeted' not in run.stderr or 'missing historical clause' in run.stderr:
+            raise SystemExit(f'phase8-closure-contract FAIL the command did not stop on a retargeted tag: {run.returncode} {run.stderr[:200]}')
+        controls += 1
+        for label in ('annotated', 'lightweight'):
+            resolved = resolve_boundary(DEFAULT_BOUNDARY, tmp)
+            error = boundary_identity_error(DEFAULT_BOUNDARY, resolved or '', pinned)
+            if resolved != other or not error or 'retargeted' not in error:
+                raise SystemExit(f'phase8-closure-contract FAIL a retargeted {label} tag was not rejected')
+            git('tag', '-f', DEFAULT_BOUNDARY, other)
+            controls += 1
+        git('tag', '-d', DEFAULT_BOUNDARY)
+        if resolve_boundary(DEFAULT_BOUNDARY, tmp) is not None:
+            raise SystemExit('phase8-closure-contract FAIL a deleted tag still resolved')
+        controls += 2
+    return controls
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--self-test', action='store_true')
@@ -144,6 +206,10 @@ def main() -> int:
     boundary = resolve_boundary(args.boundary)
     if boundary is None:
         print(f'phase8-closure-contract FAIL: boundary unreadable: {args.boundary}', file=sys.stderr)
+        return 1
+    retargeted = boundary_identity_error(args.boundary, boundary)
+    if retargeted:
+        print(f'phase8-closure-contract FAIL: {retargeted}', file=sys.stderr)
         return 1
     paths = list(CONTRACT) + ['.planning/config.json', '.planning/context/DECISIONS.md',
                               '.planning/context/LESSONS.md', 'src/core/gabbaboy.c', 'tests/expected-tests.txt'] + list(FROZEN) + ['old:'+p for p in (*FROZEN, 'tests/expected-tests.txt')]
@@ -170,6 +236,7 @@ def main() -> int:
                 print(f'phase8-closure-contract FAIL ineffective unreadable-boundary control {bad!r}', file=sys.stderr)
                 return 1
             controls += 1
+        controls += boundary_identity_self_test(boundary)
         # Every clause must independently matter: remove one at a time without
         # fetching or mutating HEAD, the working tree or a remote service.
         for path, fragments in CONTRACT.items():

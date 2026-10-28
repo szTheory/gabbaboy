@@ -22,8 +22,8 @@ set(GBB_P12_ANCHOR_23_1 "if (!model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||
 set(GBB_P12_REPLACEMENT_23_1 "if (GBB_P12_MUT(23) || !model_is_cgb(m) || m->exec_mode != GBB_MODE_CGB ||\n        m->double_speed != 0u || (m->time_half_dots & 7u) != 4u) return; /* P12-M23 */")
 
 set(GBB_P12_SITES_22 1)
-set(GBB_P12_ANCHOR_22_1 "if (UINT64_MAX - instance->time_half_dots < switch_headroom) { /* P12-M22 */")
-set(GBB_P12_REPLACEMENT_22_1 "if (!GBB_P12_MUT(22) && UINT64_MAX - instance->time_half_dots < switch_headroom) { /* P12-M22 */")
+set(GBB_P12_ANCHOR_22_1 "if (!state_time_fits(instance->time_half_dots, switch_headroom)) { /* P12-M22 */")
+set(GBB_P12_REPLACEMENT_22_1 "if (!GBB_P12_MUT(22) && !state_time_fits(instance->time_half_dots, switch_headroom)) { /* P12-M22 */")
 
 set(GBB_P12_SITES_9 1)
 set(GBB_P12_ANCHOR_9_1 "if (budget_half_dots - result.consumed_half_dots < step) return result; /* P12-M9 */")

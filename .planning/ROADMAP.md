@@ -63,7 +63,7 @@ Milestone-wide rules:
 - **Scope limits.** Save states are same-version-only before 1.0 (D-106). INT-01b (RM-020), RTC footer interop (RM-021), BESS (RM-022) and libretro (RM-009) are out of scope.
 
 - [x] **Phase 16: Tune-up and v0.2 Debt Closure** - Archive v0.2 phase records behind a lint, wire the Phase 8 verifiers, add the perf gate and CI/planning hygiene checks, and ship v0.2.1 (completed 2026-10-26)
-- [ ] **Phase 17: Native Save State Core** - Public `gbb_state_size`/`gbb_save_state`/`gbb_load_state` with exact continuation, transactional bounded loads, machine-checked completeness and portable canonical bytes
+- [x] **Phase 17: Native Save State Core** - Public `gbb_state_size`/`gbb_save_state`/`gbb_load_state` with exact continuation, transactional bounded loads, machine-checked completeness and portable canonical bytes (completed 2026-10-28)
 - [ ] **Phase 18: Player Save Slots and Host Contract** - Numbered state slots in the SDL player and a `--rom`/`--save-dir` runner with atomic raw `.sav`, SIGTERM save-and-exit, an exit-code table and declared save-format ids
 - [ ] **Phase 19: Qualified v0.3.0 Release** - Publish `v0.3.0` from its exact tag after a green exact-tag rehearsal, with a scoped support ledger and tag-bound receipts
 
@@ -115,6 +115,9 @@ Plans:
 **Depends on**: Phase 16 (phase-path lint, CI budget, perf gate and plan-cap checks in place)
 **Requirements**: STATE-01, STATE-02, STATE-03, STATE-04, STATE-05, STATE-06
 **Plan cap**: 12
+**Inherited obligations**: RM-026, RM-028, RM-029, RM-030 (D-112 and Phase 16 handoff; explicit entry work, not new state requirements)
+**Canonical refs**: `.planning/phases/GB-17-native-save-state-core/17-CONTEXT.md`; `.planning/context/FUTURE-MILESTONES.md` RM-026..030; `.planning/context/DECISIONS.md` D-113
+**Planning budget**: At most 11 primary plans, retaining one slot for the single gap round; all mandatory state and tooling work must fit or be explicitly rescoped before execution.
 **Success Criteria** (what must be TRUE):
   1. Before any codec lands, a struct-inventory checker fails on an instance-struct member with no recorded serialize/reset treatment and an `nm`-based CTest fails on a seeded writable global in the core library; both pass on the tree.
   2. The installed C and C++ consumers call `gbb_state_size`, `gbb_save_state` and `gbb_load_state` through the compiled public API: the size is fixed per loaded ROM and mode, a check rejects a mutating or allocating save, typed errors are appended to the existing codes, and the API docs describe the calls.
@@ -122,7 +125,45 @@ Plans:
   4. Every refused load (truncation, byte flips, wrong magic/version/profile/mode/ROM, out-of-range fields, 64-bit time fields above 2^62) leaves the instance byte-identical; a closure property test shows any accepted state run N steps still saves to an accepted state; and a state-load fuzz target runs in the hosted fuzz campaign.
   5. State bytes are explicitly little-endian and re-saving a just-loaded state reproduces identical bytes; pinned state digests match on Linux, macOS and Windows CI (an altered pin fails); a load carries cart RAM and the full RTC without reading the wall clock or applying catch-up, and a test shows an unchanged-battery load leaves the battery generation alone while a changed one bumps it exactly once, with the docs stating that loading replaces save RAM and the clock.
 
-**Plans**: TBD
+  6. A valid paired wall-clock trigger produces successful advisory evidence through the production measurement, verifier, reuse, aggregate, attach and release paths; a control proves it no longer requires ordinary timing approval. The cumulative Ir gate and separate realtime floor remain blocking and reject their controls. An immutable-base ratchet rejects an unapproved Ir-limit widening and a state-golden refresh without its compatibility/token disposition (RM-026, RM-029).
+  7. The support-ledger generator renders the required historical performance disclosure without hand edits, and a control rejects its omission. Pre-tag replay invokes the production attach/manifest/publish-decision/retry code with captured, sanitized real API-shaped data, including non-git workspaces and check-run shapes; tampered, partial and stale evidence fails. A checked version-window input/regeneration/freeze rule protects reviewed content from release-please regeneration (RM-028).
+  8. All WR-01..05 and IN-01..04 from the Phase 16 review are fixed with intended negative controls, including producer/workflow/event/source binding, historical tag identity, duplicate manifests, budget/cap ratchets and retry/check-app/nightly/perf/HDMA controls. The D-112 `--review-approval` and `--nightly-gate` paths run in CTest and the applicable production gates, rejecting their eight and six specified mutants respectively; point-in-time boundary checks remain immutable (RM-030). RM-027 final timeout citations remain a named Phase 19 entry blocker.
+
+**Plans**: 0/11 complete (11 primary plans; one gap slot retained)
+
+Plans:
+**Wave 1**
+- [x] 17-01-PLAN.md — Establish a production state API with pre-codec completeness checks and an installed continuation tracer.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 17-02-PLAN.md — Expand the proven codec to strong identity and canonical validation across every mapper and hardware mode.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 17-03-PLAN.md — Guarantee whole-instance refusal, bounded buffers and exact RAM/RTC/palette restoration with local observers.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 17-04-PLAN.md — Make the 2^62 horizon closed across every public run, diagnostic/audio, event and peripheral path.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [x] 17-05-PLAN.md — Prove complete continuation with the admitted corpus, fresh poisoned destinations and field-specific omissions.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [x] 17-06-PLAN.md — Qualify canonical platform bytes and semantic hostile-state fuzzing in existing consumer/package/CI lanes.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [x] 17-07-PLAN.md — Make paired timing advisory end to end while keeping deterministic Ir and realtime limits blocking.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [x] 17-08-PLAN.md — Generate complete support disclosures and protect the future version-PR content window with managed inputs.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [x] 17-09-PLAN.md — Rehearse the actual attach/manifest/final-decision/retry lifecycle using bounded sanitized captured GitHub responses.
+
+**Wave 10** *(blocked on Wave 9 completion)*
+- [x] 17-10-PLAN.md — Close every remaining Phase 16 WR/IN finding with intended controls on production gates.
+
+**Wave 11** *(blocked on Wave 10 completion)*
+- [x] 17-11-PLAN.md — Enforce deterministic exception approval and nightly evidence in CTest and real release gates, then produce final-head evidence.
 
 ### Phase 18: Player Save Slots and Host Contract
 
@@ -158,13 +199,13 @@ Plans:
 |-----------|--------|-------|--------|---------|
 | v0.1 Limited DMG Preview | 7 | 64/64 | Complete | 2026-10-10 |
 | v0.2 Color & Cartridge Breadth | 10 | 170/170 | Complete | 2026-10-24 |
-| v0.3 Save States & Host Contract | 4 | 0/TBD (cap 38) | In progress | — |
+| v0.3 Save States & Host Contract | 4 | 7/18 planned (cap 38) | In progress | — |
 
 **v0.3 execution order:** 16 → 17 → 18 → 19
 
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
 | 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
-| 17. Native Save State Core | 0/TBD | 12 | Not started | - |
+| 17. Native Save State Core | 11/11 | 12 | Planned | 2026-10-28 |
 | 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |

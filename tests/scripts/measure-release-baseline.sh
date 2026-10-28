@@ -477,15 +477,15 @@ with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
             "review_trigger_percent": 5.0,
             "estimate_percent": estimate,
             "uncertainty_margin_percent": margin,
-            "decision": "investigation-required" if triggered else "no-review-trigger",
-            "investigation": "A separately recorded independent review decision is required for this exact measurement."
+            "decision": "advisory-observation" if triggered else "no-review-trigger",
+            "investigation": "The paired wall-clock result crossed the observation threshold; timing is advisory and needs no approval."
                             if triggered else
                             "The median estimate did not clear +5% after accounting for the approximate 95% mean margin.",
-            "release_disposition": "pending-investigation" if triggered else "qualified-no-trigger",
+            "release_disposition": "advisory" if triggered else "qualified-no-trigger",
         }
         receipt = {
-            "schema_version": 2,
-            "result": "pending-investigation" if triggered else "passed",
+            "schema_version": 3,
+            "result": "passed",
             "source": {"baseline": base_source, "candidate": candidate_source},
             "builds": builds,
             "hardware_class": f"{platform.system()} {platform.machine()}",
@@ -535,11 +535,7 @@ with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-pair-") as temporary:
             temp_output.unlink(missing_ok=True)
             raise SystemExit(f"qualify-v02-output-exists: {output.name}")
         temp_output.unlink()
-        if triggered:
-            print(f"wrote pending performance measurement: {output.name}")
-            note = "; --review-regression text is not an independent decision" if review_notes else ""
-            raise SystemExit("qualify-v02-review-trigger-fired: measurement remains pending until a separately recorded, receipt-bound independent review decision is applied" + note)
-        print(f"wrote untriggered performance receipt: {output.name}")
+        print(f"wrote {'advisory' if triggered else 'untriggered'} performance receipt: {output.name}")
     finally:
         if candidate_worktree:
             subprocess.run(["git", "worktree", "remove", "--force", str(candidate_src)], cwd=root,

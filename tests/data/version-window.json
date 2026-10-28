@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "kind": "release-version-window",
+  "state": "inactive",
+  "release_version": null,
+  "intended": null,
+  "managed_inputs": null,
+  "generated": null,
+  "review": null,
+  "rehearsal": null
+}

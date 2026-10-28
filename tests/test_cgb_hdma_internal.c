@@ -1505,25 +1505,25 @@ static int hdma_active_block_fixture(gbb_instance **out) {
     return 0;
 }
 
-static int hdma_start_headroom_case(uint8_t control, uint64_t headroom,
-                                    int expect_rejection) {
+static int hdma_start_headroom_case(uint8_t control, uint64_t start_time,
+                                    gbb_stop_reason expected_reason) {
     gbb_instance *m = NULL;
     REQUIRE(policy_fixture_create(&m, control, 0u, 0, 0, 0, 0u, 0u, 0u,
                                   (size_t)((control & 0x7Fu) + 1u) * 16u) == 0);
     m->pc = 0x112u;
     m->a = control;
-    m->time_half_dots = UINT64_MAX - headroom;
+    m->time_half_dots = start_time;
     const uint64_t before = hdma_partition_state_digest(m);
     gbb_trace_record trace[2];
     memset(trace, 0xA5, sizeof(trace));
     const gbb_run_result start = gbb_run_ex(m, 24u, trace, 1u, NULL, 0u);
-    if (expect_rejection) {
-        if (start.reason != GBB_STOP_INVALID_STATE || start.consumed_half_dots != 0u ||
-            m->time_half_dots != UINT64_MAX - headroom ||
+    if (expected_reason != GBB_STOP_BUDGET) {
+        if (start.reason != expected_reason || start.consumed_half_dots != 0u ||
+            m->time_half_dots != start_time ||
             hdma_partition_state_digest(m) != before) {
-            fprintf(stderr, "hdma-resource-start-headroom not-rejected blocks=%u headroom=%" PRIu64
+            fprintf(stderr, "hdma-resource-start-headroom not-rejected blocks=%u start=%" PRIu64
                             " reason=%d consumed=%" PRIu64 "\n",
-                    (unsigned)(control & 0x7Fu) + 1u, headroom, start.reason,
+                    (unsigned)(control & 0x7Fu) + 1u, start_time, start.reason,
                     start.consumed_half_dots);
             gbb_destroy(m);
             return 1;
@@ -1543,7 +1543,8 @@ static int hdma_start_headroom_case(uint8_t control, uint64_t headroom,
             m->hdma.mode == 2u && m->hdma.pending_hblank);
     const uint64_t work = (uint64_t)((control & 0x7Fu) + 1u) * 64u;
     const gbb_run_result transfer = gbb_run(m, work, NULL, 0u);
-    REQUIRE(transfer.consumed_half_dots == work && m->time_half_dots == UINT64_MAX &&
+    REQUIRE(transfer.reason == GBB_STOP_BUDGET && transfer.consumed_half_dots == work &&
+            m->time_half_dots == GBB_STATE_TIME_LIMIT &&
             m->hdma.mode == 0u && m->hdma.blocks_remaining == 0u);
     gbb_destroy(m);
     return 0;
@@ -1562,12 +1563,12 @@ static int hdma_rejected_store_case(const uint8_t *instruction, size_t size,
     else if (setup == 4u) { m->b = 0x02u; m->c = 0x00u; m->sp = 0xFF56u; }
     const decoded decoded_instruction = decode(m);
     const uint64_t cost = instruction_cost(m, decoded_instruction);
-    m->time_half_dots = UINT64_MAX - (cost + 3u * 64u - 1u);
+    m->time_half_dots = GBB_STATE_TIME_LIMIT - (cost + 3u * 64u - 1u);
     const uint64_t before = hdma_partition_state_digest(m);
     gbb_trace_record trace;
     memset(&trace, 0xA5, sizeof(trace));
     const gbb_run_result rejected = gbb_run_ex(m, cost, &trace, 1u, NULL, 0u);
-    const int unchanged = rejected.reason == GBB_STOP_INVALID_STATE &&
+    const int unchanged = rejected.reason == GBB_STOP_NO_PROGRESS &&
         rejected.consumed_half_dots == 0u && hdma_partition_state_digest(m) == before;
     const uint8_t *trace_bytes = (const uint8_t *)&trace;
     for (size_t i = 0u; i < sizeof(trace); ++i)
@@ -1633,8 +1634,12 @@ static int test_hdma_resource_bounds(void) {
         gbb_destroy(m);
     }
 
-    REQUIRE(hdma_start_headroom_case(0x02u, 215u, 1) == 0);
-    REQUIRE(hdma_start_headroom_case(0x02u, 216u, 0) == 0);
+    REQUIRE(hdma_start_headroom_case(0x02u, UINT64_MAX - 215u,
+                                     GBB_STOP_INVALID_STATE) == 0);
+    REQUIRE(hdma_start_headroom_case(0x02u, GBB_STATE_TIME_LIMIT - 215u,
+                                     GBB_STOP_NO_PROGRESS) == 0);
+    REQUIRE(hdma_start_headroom_case(0x02u, GBB_STATE_TIME_LIMIT - 216u,
+                                     GBB_STOP_BUDGET) == 0);
     REQUIRE(hdma_check_store_headroom_forms() == 0);
 
     gbb_instance *lcd_off_halt = NULL;
@@ -1655,10 +1660,11 @@ static int test_hdma_resource_bounds(void) {
     gbb_instance *near_byte = NULL;
     REQUIRE(hdma_active_block_fixture(&near_byte) == 0);
     near_byte->time_half_dots = UINT64_MAX - 5u;
+    const uint64_t near_byte_before = hdma_partition_state_digest(near_byte);
     const gbb_run_result partial = gbb_run(near_byte, 8u, NULL, 0u);
-    REQUIRE(partial.reason == GBB_STOP_INVALID_STATE && partial.consumed_half_dots == 5u &&
-            near_byte->time_half_dots == UINT64_MAX && near_byte->hdma.active &&
-            near_byte->hdma.byte_index == 1u && near_byte->hdma.byte_phase == 1u);
+    REQUIRE(partial.reason == GBB_STOP_INVALID_STATE && partial.consumed_half_dots == 0u &&
+            near_byte->time_half_dots == UINT64_MAX - 5u &&
+            hdma_partition_state_digest(near_byte) == near_byte_before);
     gbb_destroy(near_byte);
 
     gbb_instance *near_block = NULL;
@@ -1666,10 +1672,10 @@ static int test_hdma_resource_bounds(void) {
     near_block->hdma.blocks_remaining = 1u;
     near_block->hdma.byte_index = 15u;
     near_block->hdma.byte_phase = 3u;
-    near_block->time_half_dots = UINT64_MAX - 1u;
+    near_block->time_half_dots = GBB_STATE_TIME_LIMIT - 1u;
     const gbb_run_result final_byte = gbb_run(near_block, 1u, NULL, 0u);
     REQUIRE(final_byte.reason == GBB_STOP_BUDGET && final_byte.consumed_half_dots == 1u &&
-            near_block->time_half_dots == UINT64_MAX && near_block->hdma.mode == 0u &&
+            near_block->time_half_dots == GBB_STATE_TIME_LIMIT && near_block->hdma.mode == 0u &&
             near_block->hdma.blocks_remaining == 0u);
     gbb_destroy(near_block);
 

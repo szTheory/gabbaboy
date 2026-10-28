@@ -197,6 +197,14 @@ def main() -> int:
                                    cwd=mutant_root, timeout=180)
             require(mutant_configure.returncode == 0,
                     f"mutant CMake configure failed:\n{mutant_configure.stdout}")
+            ninja_files = (mutant_build / "build.ninja").read_text(encoding="utf-8")
+            gitless_core_definitions = [
+                line for line in ninja_files.splitlines()
+                if '-DGBB_BUILD_REVISION=\\"unknown\\"' in line and
+                "-DGBB_BUILD_QUALIFIED=0" in line
+            ]
+            require(gitless_core_definitions,
+                    "gitless source archive did not retain the unqualified unknown revision")
             mutant_compile = run(["cmake", "--build", str(mutant_build), "--target", "gabbaboy-runner"],
                                  cwd=mutant_root, timeout=300)
             require(mutant_compile.returncode == 0,

@@ -86,7 +86,15 @@ set(GBB_CI_LANE_EXTRA_ARGS)
 # D-20/D-21: every workflow-policy control from plans 16-02 to 16-04 is reachable from CTest.
 gbb_add_ci_lane_test(workflow_policy_check 0 "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+" 60 ""
   "${GBB_WORKFLOW_POLICY}" --check --root "${PROJECT_SOURCE_DIR}")
-set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=negative_controls -DGBB_EXPECT_MIN_VALUE=220)
+# The floor is the count each platform actually executes. Windows skips the red-report body replay (bash and jq:
+# 11 scenarios and 8 body mutants), so it runs 19 fewer: hosted native-windows-x64 reported 347 where POSIX ran 366
+# at 6199487 (run 40756667458), and 17-REVIEW round 1 added 28 controls that run on both.
+if(WIN32)
+  set(gbb_workflow_policy_floor 375)
+else()
+  set(gbb_workflow_policy_floor 394)
+endif()
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=negative_controls -DGBB_EXPECT_MIN_VALUE=${gbb_workflow_policy_floor})
 gbb_add_ci_lane_test(workflow_policy_controls 0 "PASS: workflow policy self-test negative_controls=[0-9]+ positive_controls=[0-9]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --root "${PROJECT_SOURCE_DIR}")
 set(GBB_CI_LANE_EXTRA_ARGS)

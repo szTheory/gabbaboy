@@ -1017,29 +1017,63 @@ static int cgb_speed_stall_devices_advance(void) {
     return 0;
 }
 
+static int make_headroom_switch_machine(gbb_instance **out) {
+    const uint8_t program[] = {0x10u, 0x00u, 0x04u, 0x18u, 0xFDu};
+    if (make_stop_test_machine(program, sizeof(program), out) != 0) return 1;
+    (*out)->double_speed = 0u;
+    (*out)->divider_counter = 0u;
+    (*out)->divider_phase = 0u;
+    (*out)->div = 0u;
+    (*out)->key1_armed = 1u;
+    (*out)->joypad_select = 0x30u;
+    (*out)->ie = 0u;
+    (*out)->interrupt_flags = 0u;
+    (*out)->ime = 0;
+    return 0;
+}
+
 static int cgb_speed_headroom(void) {
     gbb_instance *machine = NULL;
-    REQUIRE(make_switch_test_machine(0u, 0u, 0u, 0u, 0, &machine) == 0);
+    REQUIRE(make_headroom_switch_machine(&machine) == 0);
     const uint8_t cost = instruction_cost(machine, decode(machine));
     const uint64_t required = (uint64_t)cost +
         2u * (uint64_t)GBB_SPEED_SWITCH_STALL_T + 4u;
-    const uint64_t short_headroom_time = UINT64_MAX - required + 1u;
+    const uint64_t actual_stall = (uint64_t)GBB_SPEED_SWITCH_STALL_T *
+        GBB_HALF_DOTS_PER_T_DOUBLE;
+    const uint64_t short_headroom_time = GBB_STATE_TIME_LIMIT -
+        ((uint64_t)cost + actual_stall) + 1u;
     machine->time_half_dots = short_headroom_time;
     cgb_speed_state_digest before, after;
     capture_cgb_speed_state(machine, &before);
     gbb_run_result run = gbb_run(machine, cost, NULL, 0u);
     capture_cgb_speed_state(machine, &after);
-    REQUIRE(run.reason == GBB_STOP_INVALID_STATE && run.consumed_half_dots == 0u);
+    REQUIRE(run.reason == GBB_STOP_NO_PROGRESS && run.consumed_half_dots == 0u);
     REQUIRE(memcmp(&before, &after, sizeof(before)) == 0);
     gbb_destroy(machine);
 
-    REQUIRE(make_switch_test_machine(0u, 0u, 0u, 0u, 0, &machine) == 0);
-    machine->time_half_dots = short_headroom_time - 1u;
+    REQUIRE(make_headroom_switch_machine(&machine) == 0);
+    machine->time_half_dots = GBB_STATE_TIME_LIMIT - required;
     run = gbb_run(machine, cost, NULL, 0u);
     REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == cost);
     REQUIRE(machine->double_speed == 1u &&
             machine->cpu_stall_kind == GBB_STALL_SPEED_SWITCH &&
             machine->key1_armed == 0u);
+    run = gbb_run(machine, actual_stall, NULL, 0u);
+    REQUIRE(run.reason == GBB_STOP_BUDGET && run.consumed_half_dots == actual_stall &&
+            machine->cpu_stall_kind == GBB_STALL_NONE);
+    const uint64_t unused_headroom = required - cost - actual_stall;
+    REQUIRE(machine->time_half_dots == GBB_STATE_TIME_LIMIT - unused_headroom);
+    size_t state_size = 0u;
+    REQUIRE(gbb_state_size(machine, &state_size) == GBB_OK);
+    uint8_t *state = (uint8_t *)malloc(state_size);
+    uint8_t *roundtrip = (uint8_t *)malloc(state_size);
+    REQUIRE(state != NULL && roundtrip != NULL);
+    REQUIRE(gbb_save_state(machine, state, state_size) == GBB_OK &&
+            gbb_load_state(machine, state, state_size) == GBB_OK &&
+            gbb_save_state(machine, roundtrip, state_size) == GBB_OK &&
+            memcmp(state, roundtrip, state_size) == 0);
+    free(roundtrip);
+    free(state);
     gbb_destroy(machine);
     return 0;
 }

@@ -55,6 +55,209 @@ patch release (for example v0.1.1 or v0.1.2) binds the unchanged
 The source ledger intentionally does not contain its future commit SHA, so its
 own source can be reviewed before tagging without a self-reference.
 
+## Support-ledger generator and managed inputs
+
+`python3 -I tests/scripts/verify-support-ledger.py --write-current --receipt
+build/cgb-corpus-receipt.json` renders the versioned support ledger for the
+tree's own version. The historical performance disclosure below is part of that
+generator output, not prose added afterwards: its facts live in
+[`tests/data/release-disclosure.json`](../tests/data/release-disclosure.json)
+and are rendered into every generated ledger. The input is validated before it
+is used. Every field is classified, and the candidate and baseline source
+identities must be the commits of the `v0.2.0` and `v0.1.0` tags, and the
+fixture digest must be the candidate-source blob's digest, all read from Git
+objects. A current advisory interpretation is rendered only for ledgers after
+the last tagged one (v0.2.1); it states that paired wall-clock timing is
+advisory and that the instruction-count ratio and realtime floor remain
+blocking. It never rewrites the historical metric.
+
+To preview without touching a tracked file, add `--output PATH`; the default
+target is refused when that version already has its tag, because a tagged
+ledger's bytes are historical. A generated ledger is accepted only if
+rendering its own structured data reproduces its exact bytes, so a hand edit
+(including a hand-inserted disclosure) is rejected.
+
+```sh
+python3 -I tests/scripts/verify-support-ledger.py --check-disclosure
+python3 -I tests/scripts/verify-support-ledger.py --self-test-disclosure
+```
+
+The first command requires the tracked v0.2.0 and v0.2.1 ledgers to be exact
+generator output, the v0.2.1 ledger to equal its tag blob, and the adoption
+verifier to accept the result. The second runs omission, altered-value,
+unbound-source, handwritten-bypass and tagged-rewrite controls. Both run as the
+`release_disclosure_generator` and `release_disclosure_controls` tests.
+
+## Version-PR content window
+
+A version PR is generated content. release-please rewrites `CHANGELOG.md`, the
+version files and the PR body, and the support ledger is rendered from the
+managed generator inputs above. A short review freeze therefore protects exact
+content, never elapsed time: no clock, expiry or run counter appears in the
+record or in any proof of it.
+
+The freeze begins only after the managed outputs are generated and the checks
+and rehearsal are green on one exact head. It ends immediately when main, the
+source tree, the release notes, a generator input or the regenerated PR body
+changes. Only the window record itself may differ between the reviewed head and
+the revision being merged. The window is reopened only by regenerating the
+managed outputs, recomputing the digests and rerunning the exact-head required
+checks and rehearsal. Required checks are never disabled, and release-note paths
+are never excluded wholesale, to make a window easier to hold.
+
+The record is [`tests/data/version-window.json`](../tests/data/version-window.json).
+In normal development it is the inactive example: every window field is null and
+the record cannot assert a frozen identity or release readiness. An active record
+carries the release version, the frozen head and main base, the SHA-256 of each
+managed generator input (the disclosure input, the ledger generator and the
+release-please configuration), the SHA-256 of each regenerated file (the ledger,
+`CHANGELOG.md` and the manifest) and of the PR body, and the exact-head review and
+rehearsal run identities.
+
+```sh
+# draft the digests of a freshly regenerated head, then fill in the run identities
+python3 -I tests/scripts/verify-version-window.py --rev HEAD_SHA --base MAIN_SHA \
+  --body pr-body.md --pull-request N --ci-run-id ID --rehearsal-run-id ID --digest
+# judge the committed record at the revision about to merge
+python3 -I tests/scripts/verify-version-window.py --rev REV_SHA --base MAIN_SHA \
+  --check tests/data/version-window.json --body pr-body.md
+```
+
+The PR body is compared after normalizing line endings and trailing newlines
+(`gh`, the API and the web editor differ in both); every other byte of it is
+reviewed content.
+
+`--rev` and `--base` are full 40-hex commits. The record, the generator inputs and
+the regenerated files are read from Git objects at `--rev`, so the working tree
+is never a fallback. The checker proves content bindings only; the recorded run
+identities name hosted evidence that the required checks on the exact head, not
+this script, authenticate. The `release_window_contract` and
+`release_window_controls` tests cover the tracked record and the body-overwrite,
+stale-head, stale-input, changed-path, regeneration-mismatch and revalidation
+cases.
+
+### Production regeneration route and operator sequence
+
+The `version-window` job in `.github/workflows/release-please.yml` runs after the
+`release` job, on every push to main, so it judges the version PR that
+release-please has just regenerated. With no open version PR, or with the
+inactive record (the normal state), it passes and the existing release policy is
+unchanged. With an active record it runs the checker from the trusted main
+commit against the version-PR head, which is checked out as data and never
+executed, and the job fails while the freeze is broken. It cannot be skipped by
+a failed release job, a paths filter on the trigger, a masked failure
+(`|| true`, `continue-on-error`) or a path exclusion in
+`release-please-config.json`; `.github/scripts/verify-workflow-policy.py`
+enforces each of these. A regenerated body, a moved main or any changed source,
+release note or generator input therefore invalidates the old reviewed digests
+rather than preserving stale hand edits. Phase 17 does not open, regenerate or
+merge a live version PR and ships only the inactive record.
+
+For a future version PR, in order:
+
+1. Let release-please regenerate the PR, then render the ledger with
+   `--write-current` from the managed inputs; commit no hand-edited generated
+   file.
+2. Run the required checks on that exact head and push the matching
+   `rehearsal/vX.Y.Z` branch for the rehearsal.
+3. When both are green on the same head, run `--digest` for that head, main and
+   the PR body, fill in the run identities, and commit only the resulting
+   `tests/data/version-window.json` as the next commit. Run `--check` on that
+   commit before asking for merge.
+4. Any later change reopens the work: regenerate, repeat steps 1 to 3 on the new
+   exact head, and merge only a commit whose `--check` passes with the current
+   main.
+
+The six release-bound timeout citations tracked as RM-027 are separate and
+remain an entry blocker for Phase 19; nothing here closes them, and the window
+gate has per-step timeouts because a new job has no completed run to cite in
+`.github/ci-timeouts.json`.
+
+## Evidence lifecycle and its local replay
+
+The attach, platform-manifest, final-gate and publication steps of
+`.github/workflows/release.yml` are the modes of
+`.github/scripts/release-evidence-lifecycle.sh` (`attach-evidence`,
+`validate-evidence`, `build-manifest`, `validate-draft`, `final-gate`,
+`nightly-gate`, `publish-draft`). The workflow runs each from the trusted checkout, and the
+workflow policy judges every call as the body that runs, so the extracted code
+cannot be unused, misplaced or run from the tagged tree.
+
+`tests/scripts/verify-release-lifecycle.py` replays that lifecycle before a tag
+exists. It runs the production script and gates from a non-git workspace for the
+attacher and from a tag checkout for the judge jobs, with `GH_REPO` explicit,
+against a `gh` stand-in that serves response shapes taken from the sanitized
+captures in `tests/data/release-api/` (see its `SOURCES.md` for endpoints,
+sanitization and digest) and refuses any endpoint, repository, flag, mutation or
+reshaped response it was not told about. The publish command is intercepted and
+recorded as a decision; nothing reaches the network or a real tag, release or
+asset. The replay proves deterministic logic. It does not prove live GitHub
+permissions, hosted runner behavior, or the real corpus, fuzz, performance and
+archive owner validators (the delivery self-test runs those).
+
+On a retry the evidence a failed attempt already attached is downloaded and
+judged first by `verify-release-gates.sh --check-attached-evidence` (tag and
+source identity, the sidecar's binding to the attached corpus receipt, each
+digest GitHub reports, and the allowed inventory). Only then do the identical
+attached bytes replace the regenerated run-specific copies; nothing is uploaded,
+replaced or deleted, and a refusal leaves the regenerated evidence untouched.
+The platform-manifest step accepts the final receipts of an earlier attempt, so a
+retry that stopped after the final upload can reach the publish job, whose
+recovery decision then compares them byte for byte.
+
+## Owner approval of a deterministic Ir exception and the nightly replay gate
+
+Two gates live in `tests/scripts/verify-release-gates.py` (stdlib only, refuses
+`python -O`, every refusal is `REJECT code: reason` with exit 1).
+
+**Ir exception approval.** Ordinary advisory paired timing never needs an
+approval and no approval can excuse a wrong correctness digest, a failed safety
+check or a realtime miss: `verify-perf-gate.py` still judges all of those. The
+only approvable event is a deliberate widening of `ir_ratio_limit`. The
+evaluator writes the exact measurement the owner approves
+(`--evaluate ... --emit-exception-measurement FILE`, which still refuses the
+unapproved widening), `verify-release-gates.py --digest --measurement FILE`
+prints its full canonical digest, and the owner comments on the recorded review
+issue with the exact wording the gate derives from the decision (the full
+digest, the approved limit, the accepted cause and its reference, and the
+per-ROM ratio bands). `--review-approval --comment-json FILE --decision FILE
+--measurement FILE --rev SHA [--repository OWNER/REPO] [--output FILE
+--exception-receipt FILE]` requires `author_association` `OWNER`, a review
+issue, comment link and approving login in the expected repository (the
+`--repository` argument, `$GITHUB_REPOSITORY` on hosted runs and
+`szTheory/gabbaboy` otherwise; never a repository the decision file names, since
+any repository's owner is `OWNER` there), the stored issue URL and number, a comment newer
+than the issue, empty owner fields, a measurement taken at `--rev`, and that
+exact wording (a wrong, prefix-only or absent digest, a changed cause, limit or
+band all refuse). Only after every check does it copy the verified comment's
+identity, link and time into new files; the input is never edited and a refusal
+writes nothing. `tests/scripts/run-perf-gate.sh --gate` is the production path:
+with the two exception environment variables named in its header set (the saved
+owner comment and the decision file) it asks the gate for the receipt and hands
+only that receipt to the ratchet. No workflow sets those variables, and
+`verify-workflow-policy.py` refuses any workflow file that names them (or assigns
+`GITHUB_REPOSITORY`), so a hosted run fails closed for a widened limit; there is
+no trusted step that fetches the owner comment from the API.
+
+**Nightly replay gate.** Before the one publication transition the
+`nightly-gate` lifecycle mode runs `--nightly-gate --runs-json FILE --run-json
+FILE --head SHA --output FILE [--rev SHA --branch NAME]` on saved `gh run list`
+and `gh run view` JSON. The head is the rehearsed head proved to have the
+tagged tree. The newest eligible `nightly-asan` run at that head must be
+completed with success and its `asan-full-replay` job must have succeeded (a
+skipped job does not count). A newer red or in-progress run at the head, a
+newer run at another head, no run at the head, a different tree than the tagged
+source and out-of-order timestamps all refuse, and the source-bound receipt is
+written exclusively and on success alone. `verify-state-contract.py --boundary
+--rev SHA` reads a phase boundary (plans, summaries, requirements, route flags,
+receipt timestamps and the Phase 16 receipts) from that one commit and never
+from the live tree or later ancestry.
+
+The six `release_bound` rows of `.github/ci-timeouts.json` remain a named Phase
+19 entry blocker (RM-027): they must be replaced by verified tree-equality
+citations before `VERSION` exceeds 0.2.1, and the boundary check refuses a
+seventh row or a version that moved past 0.2.1 with any row left.
+
 ## Performance measurement and qualification
 
 The v0.2.0 DMG paired performance comparison is historical evidence: it reported
@@ -132,6 +335,16 @@ artifact, requires that run to be a `release-rehearsal` run on a commit with the
 same tree as this run, applies the decision as shown above, verifies
 the result and uploads the qualified receipt. With neither input the step is
 the plain paired measurement.
+
+The release workflow may reuse the performance receipt of a rehearsal run instead
+of measuring again, but only under a judge it takes from the trusted workflow
+revision. It considers the newest successful run of `release-rehearsal.yml` on
+`rehearsal/vX.Y.Z` and requires a push or manual dispatch of this repository (no
+fork), a completed successful conclusion, and a head that is the tagged commit or
+has exactly the tagged tree, proved from git objects. It then requires the one
+artifact that exact run and attempt uploaded. If the newest run is stale or any
+check fails, the release measures afresh and never falls back to an older run or
+trusts a branch or artifact name alone.
 
 `release.yml` reuses that qualified receipt for the paired gate only when
 `python3 -I tests/scripts/verify-v02-performance.py --verify-reuse PATH --tag-tree TREE`

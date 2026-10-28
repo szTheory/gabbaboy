@@ -628,8 +628,24 @@ endforeach()
 
 # CGB profile API (CGB-01): probe/info contract, the $143 x profile matrix, the PGB rejection and
 # probe/load parity with a skewed-validator negative control.
+add_library(gabbaboy_core_probe_parity STATIC EXCLUDE_FROM_ALL
+  "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")
+target_include_directories(gabbaboy_core_probe_parity PUBLIC "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_core_probe_parity PUBLIC c_std_17)
+set_target_properties(gabbaboy_core_probe_parity PROPERTIES C_EXTENSIONS OFF)
+target_compile_definitions(gabbaboy_core_probe_parity PRIVATE
+  GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
+  GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+# The parity matrix loads every accepted multi-megabyte case so the real loader and probe remain
+# compared for the complete matrix. Build this exact core source with normal release optimization
+# in Debug trees; repeated production SHA-256 and ROM-copy work must fit the normal test budget.
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|IntelLLVM")
+  target_compile_options(gabbaboy_core_probe_parity PRIVATE "$<$<CONFIG:Debug>:-O2>")
+elseif(MSVC)
+  target_compile_options(gabbaboy_core_probe_parity PRIVATE "$<$<CONFIG:Debug>:/O2>")
+endif()
 add_executable(test_cgb_profile test_cgb_profile.c)
-target_link_libraries(test_cgb_profile PRIVATE GabbaBoy::core)
+target_link_libraries(test_cgb_profile PRIVATE gabbaboy_core_probe_parity)
 target_compile_features(test_cgb_profile PRIVATE c_std_17)
 set_target_properties(test_cgb_profile PROPERTIES C_EXTENSIONS OFF)
 foreach(case probe_tracer info_no_rom info_after_load info_reset_constant info_failed_load_unchanged
@@ -815,6 +831,14 @@ target_compile_features(test_fuzz_core PRIVATE c_std_17)
 target_compile_definitions(test_fuzz_core PRIVATE GBB_FUZZ_STANDALONE_TEST=1)
 set_target_properties(test_fuzz_core PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME fuzz_core_regressions COMMAND test_fuzz_core)
+add_executable(test_state_fuzz fuzz_core.c)
+target_link_libraries(test_state_fuzz PRIVATE GabbaBoy::core)
+target_compile_features(test_state_fuzz PRIVATE c_std_17)
+target_compile_definitions(test_state_fuzz PRIVATE
+  GBB_FUZZ_STANDALONE_TEST=1 GBB_STATE_FUZZ_STANDALONE_MAIN=1)
+set_target_properties(test_state_fuzz PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_load_fuzz COMMAND test_state_fuzz)
+set_tests_properties(state_load_fuzz PROPERTIES TIMEOUT 60)
 add_test(NAME cgb_fuzz_io_regressions COMMAND test_fuzz_core cgb)
 add_test(NAME cgb_fuzz_profile_select COMMAND test_fuzz_core cgb_profile_select)
 add_test(NAME cgb_fuzz_palette_regressions COMMAND test_fuzz_core cgb_palette)
@@ -1442,6 +1466,30 @@ gbb_add_ledger_contract(support_ledger_binding_controls
   [=[support-ledger binding self-test pass controls=[0-9]+]=]
   --self-test-binding)
 unset(GBB_LEDGER_MIN)
+# Phase 17 RM-028 / D-19 (17-08): the historical performance disclosure is generator output rendered from the validated,
+# source-bound tests/data/release-disclosure.json. The generator test requires the tagged ledgers to be unchanged tag
+# bytes, exact generator fixed points and accepted by the adoption verifier; the controls reject input omission, a
+# rewritten historical value, unbound sources, a handwritten-success bypass and rewriting a tagged ledger (both read
+# the v0.2.0/v0.2.1 tags the full-suite jobs fetch).
+gbb_add_ledger_contract(release_disclosure_generator
+  [=[release-disclosure generator pass ledgers=[2-9] tagged=[1-9]]=]
+  --check-disclosure)
+set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=15)
+gbb_add_ledger_contract(release_disclosure_controls
+  [=[release-disclosure controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  --self-test-disclosure)
+unset(GBB_LEDGER_MIN)
+# Phase 17 RM-028 / D-19 (17-08): the version-PR content window. The contract test checks the tracked record is a
+# well-formed inactive (or statically valid active) record and that every generator input the window digests exists in
+# the tree; the controls run the checker over disposable repositories (body overwrite, stale head/input, a changed
+# relevant path, mismatch after regeneration, a valid revalidation) and read only Git objects, never the live tree.
+# A window is a content/event rule: no clock appears in the record or in any proof.
+gbb_add_v02_contract(release_window_contract 60
+  [=[version-window contract pass state=(inactive|active) rev=[0-9a-f]+ inputs=[1-9][0-9]*]=]
+  verify-version-window.py --check-tracked)
+gbb_add_v02_contract(release_window_controls 60
+  [=[version-window controls pass positives=[1-9][0-9]* controls=([2-9][0-9]|[1-9][0-9][0-9]+)]=]
+  verify-version-window.py --self-test)
 # Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
 # so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
 gbb_add_v02_contract(v02_consumer_controls_c 600
@@ -2679,6 +2727,20 @@ function(gbb_add_model_gate_test name code regex)
   set_tests_properties(${name} PROPERTIES TIMEOUT 60)
 endfunction()
 
+function(gbb_add_model_gate_count_test name regex)
+  set(command "${Python3_EXECUTABLE}" -I "${GBB_MODEL_GATE_SCANNER}" ${ARGN})
+  list(JOIN command "$<SEMICOLON>" joined)
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${joined}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=${regex}"
+      -DGBB_EXPECT_MIN_KEY=functions
+      -DGBB_EXPECT_MIN_VALUE=126
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+
 # Tracer corpus: two tagged functions, a matching doc, and a copy whose GATE-01 class is wrong.
 file(MAKE_DIRECTORY "${GBB_MODEL_GATE_DIR}")
 set(GBB_MODEL_GATE_TRACER_SOURCE [=[
@@ -2711,9 +2773,9 @@ gbb_add_model_gate_test(model_gates_tracer_pass 0 "model-gates pass functions=2"
 gbb_add_model_gate_test(model_gates_tracer_doc_mismatch 1 "gate-doc-mismatch"
   --source "${GBB_MODEL_GATE_DIR}/tracer.c" --doc "${GBB_MODEL_GATE_DIR}/tracer-bad.md")
 # The real core and the real gate table (Plan 10-02): every function and model-differing branch is tagged.
-gbb_add_model_gate_test(model_gates 0 "model-gates pass functions=1[2-9][0-9] gates=")
-gbb_add_model_gate_test(model_gates_selftest 0
-  "model-gates self-test pass mutants=[1-9][0-9]* functions=1[2-9][0-9]" --self-test)
+gbb_add_model_gate_count_test(model_gates "model-gates pass functions=[0-9]+ gates=")
+gbb_add_model_gate_count_test(model_gates_selftest
+  "model-gates self-test pass mutants=[1-9][0-9]* functions=[0-9]+" --self-test)
 
 # Real-file negative controls (Plan 10-02). Each mutant is a configure-time copy of the real source or
 # doc under build/model-gates/real, with its anchor asserted to occur exactly once (forward and
@@ -2830,7 +2892,7 @@ add_test(NAME test_budget_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_TEST_BUDGET_CHECKER};--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=test-budget self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=50
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(test_budget_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 # Many allowlisted tests register only under if(NOT WIN32), so a Windows inventory is partial by design and
@@ -4051,7 +4113,7 @@ set_tests_properties(cgb_speed_m28_normal_unchanged_control PROPERTIES TIMEOUT 6
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 9 stall_budget_unbounded
   cgb_speed_budget_semantics "run\.consumed_half_dots == expected_consumed|run\.consumed_half_dots <= budget")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 22 switch_headroom_omitted
-  cgb_speed_headroom "GBB_STOP_INVALID_STATE|memcmp")
+  cgb_speed_headroom "GBB_STOP_NO_PROGRESS|memcmp")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 5 stall_sets_stopped_never
   cgb_speed_never_stopped "GBB_STOP_STOPPED|machine->stopped")
 gbb_p12_mutant_test(test_cgb_speed_internal_p12 7 devices_frozen_never
@@ -4807,11 +4869,15 @@ set_tests_properties(cgb_speed_docs_no_stale_claims_mutated PROPERTIES TIMEOUT 3
 
 # Configure-only regression for the shared sanitizer timeout policy. This is last so adding a
 # test after the scaler cannot silently escape the policy pass.
+# The exit code and the pass line are both required, and the pass line pins the probes to this build's generator
+# (see the script: the Windows default generator made the five probe configures cost most of the budget). Generator
+# names contain no regex metacharacters.
 add_test(NAME sanitizer_timeout_policy_selftest
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-    "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
-    -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR};-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR};-DGBB_GENERATOR=${CMAKE_GENERATOR};-DGBB_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM};-P;${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=sanitizer timeout policy pass generator=${CMAKE_GENERATOR} "
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
 # D-23: the same script in assert-clean mode proves the selftest above removed its probe directory.
 add_test(NAME sanitizer_timeout_policy_temp_clean
@@ -4860,6 +4926,654 @@ endforeach()
 # Per-area CTest fragments (Phase 16 D-02a). Fragments run in directory scope, so they must be included
 # before the inventory check and before the sanitizer timeout scaling below.
 include("${PROJECT_SOURCE_DIR}/tests/cmake/areas.cmake")
+
+# Phase 17 pre-codec state gate. The source revision is captured at configure time
+# and every checker reads it with git show; it never falls back to the live tree.
+execute_process(
+  COMMAND git rev-parse HEAD
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  RESULT_VARIABLE GBB_STATE_REV_RESULT
+  OUTPUT_VARIABLE GBB_STATE_SOURCE_REV
+  ERROR_VARIABLE GBB_STATE_REV_ERROR
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(LENGTH "${GBB_STATE_SOURCE_REV}" GBB_STATE_SOURCE_REV_LENGTH)
+if(NOT GBB_STATE_REV_RESULT EQUAL 0 OR NOT GBB_STATE_SOURCE_REV_LENGTH EQUAL 40 OR
+   NOT GBB_STATE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+  set(GBB_STATE_SOURCE_REV "unknown")
+  message(STATUS
+    "State evidence CTests remain registered with an unresolved revision and will fail closed when invoked")
+endif()
+set(GBB_STATE_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-contract.py")
+add_executable(test_state_api test_state_api.c)
+target_include_directories(test_state_api PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_api PRIVATE c_std_17)
+set_target_properties(test_state_api PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_size_bound COMMAND test_state_api size_bound)
+add_test(NAME state_audio_bound COMMAND test_state_api audio_bound)
+add_test(NAME state_format_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --format-contract --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --version-module "${PROJECT_SOURCE_DIR}/cmake/StateVersion.cmake"
+    --api "$<TARGET_FILE:test_state_api>"
+    --rom "${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb"
+    --cmake "${CMAKE_COMMAND}")
+add_test(NAME state_tracer
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --tracer --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --build-dir "${PROJECT_BINARY_DIR}" --configuration "$<CONFIG>" --cmake "${CMAKE_COMMAND}"
+    --cc "${CMAKE_C_COMPILER}" --generator "${CMAKE_GENERATOR}"
+    --rom "${PROJECT_SOURCE_DIR}/fixtures/tracer/tracer.gb")
+add_test(NAME state_inventory
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --inventory --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+add_test(NAME state_inventory_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --self-test --control inventory --objdump "${CMAKE_OBJDUMP}" --cc "${CMAKE_C_COMPILER}")
+add_test(NAME state_globals
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --globals --library "$<TARGET_FILE:gabbaboy_core>" --rev "${GBB_STATE_SOURCE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}" --objdump "${CMAKE_OBJDUMP}")
+add_test(NAME state_globals_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --self-test --control globals --objdump "${CMAKE_OBJDUMP}" --cc "${CMAKE_C_COMPILER}")
+add_test(NAME state_revision_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --self-test --control revision --repo "${PROJECT_SOURCE_DIR}")
+add_test(NAME state_precodec_gate
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --precodec --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --build-dir "${PROJECT_BINARY_DIR}" --configuration "$<CONFIG>"
+    --output "${PROJECT_BINARY_DIR}/state-precodec-proof.json"
+    --objdump "${CMAKE_OBJDUMP}" --cc "${CMAKE_C_COMPILER}")
+set_tests_properties(state_size_bound state_audio_bound state_format_contract
+  state_inventory state_inventory_controls state_globals state_globals_controls state_revision_controls
+  state_precodec_gate PROPERTIES TIMEOUT 30)
+set_tests_properties(state_tracer PROPERTIES TIMEOUT 60)
+set_tests_properties(state_precodec_gate PROPERTIES FIXTURES_SETUP gbb_state_precodec_receipt)
+set_tests_properties(state_tracer PROPERTIES FIXTURES_REQUIRED gbb_state_precodec_receipt)
+
+add_executable(test_state_codec test_state_codec.c)
+target_include_directories(test_state_codec PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/core"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_codec PRIVATE c_std_17)
+set_target_properties(test_state_codec PROPERTIES C_EXTENSIONS OFF)
+add_executable(test_state_codec_override test_state_codec.c)
+target_include_directories(test_state_codec_override PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/core"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_codec_override PRIVATE c_std_17)
+target_compile_definitions(test_state_codec_override PRIVATE GBB_TEST_CGB_PCM_WRITABLE=1)
+set_target_properties(test_state_codec_override PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_identity COMMAND test_state_codec state_identity)
+add_test(NAME state_codec_matrix COMMAND test_state_codec state_codec_matrix)
+add_test(NAME state_canonical COMMAND test_state_codec state_canonical)
+add_test(NAME state_semantic_bounds COMMAND test_state_codec state_semantic_bounds)
+add_test(NAME state_override_isolation COMMAND test_state_codec_override state_override_isolation)
+# Reachable-state saveability property (review WR-A04): synthetic sprite, palette and
+# HDMA-cursor guests plus in-repository fixtures must be saveable at sampled instants and
+# reload to identical resave bytes. One case per profile keeps each well under its budget.
+add_test(NAME state_reachable_saveable_dmg
+  COMMAND test_state_codec state_reachable_saveable dmg "${PROJECT_SOURCE_DIR}/fixtures")
+add_test(NAME state_reachable_saveable_cgb
+  COMMAND test_state_codec state_reachable_saveable cgb "${PROJECT_SOURCE_DIR}/fixtures")
+add_test(NAME state_field_census
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --field-census --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --census-exe "$<TARGET_FILE:test_state_codec>")
+add_test(NAME state_field_census_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --self-test --control field-census)
+add_test(NAME state_codec_mutant_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-mutants.py"
+    --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}" --cc "${CMAKE_C_COMPILER}")
+set_tests_properties(state_identity state_codec_matrix state_canonical state_semantic_bounds
+  state_override_isolation state_reachable_saveable_dmg state_reachable_saveable_cgb
+  PROPERTIES TIMEOUT 60)
+set_tests_properties(state_field_census state_field_census_controls PROPERTIES TIMEOUT 30)
+set_tests_properties(state_codec_mutant_controls PROPERTIES TIMEOUT 60)
+
+set(GBB_STATE_PIN_BASE_REV "${GBB_STATE_SOURCE_REV}" CACHE STRING
+  "Immutable state-pin compatibility baseline commit")
+add_test(NAME state_portable_pins
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-pins.py"
+    --rev "${GBB_STATE_SOURCE_REV}" --base "${GBB_STATE_PIN_BASE_REV}"
+    --check "$<TARGET_FILE:test_state_codec>" --repo "${PROJECT_SOURCE_DIR}")
+add_test(NAME state_pin_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-pins.py"
+    --self-test)
+add_test(NAME state_pin_planning
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-pins.py"
+    --planning-check --rev "${GBB_STATE_SOURCE_REV}" --base "${GBB_STATE_PIN_BASE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(state_portable_pins state_pin_controls state_pin_planning PROPERTIES TIMEOUT 60)
+set_tests_properties(state_pin_planning PROPERTIES LABELS "planning" FIXTURES_SETUP gbb_state_pin_evidence)
+set_tests_properties(state_portable_pins PROPERTIES FIXTURES_REQUIRED gbb_state_pin_evidence)
+
+# The state-fuzz refusal oracle must detect a mutation that changes only the excluded local battery
+# observer. Build the mutant from the configured immutable source revision and retain an unrelated
+# accepted-load control in the same mutant executable.
+if(NOT GBB_STATE_SOURCE_REV STREQUAL "unknown")
+  set(GBB_STATE_FUZZ_MUTANT_SOURCE "${PROJECT_BINARY_DIR}/state_fuzz_observer_mutant.c")
+  execute_process(
+    COMMAND git show "${GBB_STATE_SOURCE_REV}:src/core/gabbaboy.c"
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    OUTPUT_FILE "${GBB_STATE_FUZZ_MUTANT_SOURCE}"
+    RESULT_VARIABLE GBB_STATE_FUZZ_MUTANT_SOURCE_RESULT
+    ERROR_VARIABLE GBB_STATE_FUZZ_MUTANT_SOURCE_ERROR)
+  if(NOT GBB_STATE_FUZZ_MUTANT_SOURCE_RESULT EQUAL 0)
+    message(FATAL_ERROR "Could not materialize immutable state-fuzz mutation source: ${GBB_STATE_FUZZ_MUTANT_SOURCE_ERROR}")
+  endif()
+  file(READ "${GBB_STATE_FUZZ_MUTANT_SOURCE}" gbb_state_fuzz_mutant_core_text)
+  set(GBB_STATE_FUZZ_MUTANT_ANCHOR
+    "if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;")
+  set(GBB_STATE_FUZZ_MUTANT_REPLACEMENT
+    "if (!state_validate(instance, body, body_size)) {\n        ++instance->cart.rumble_changes;\n        return GBB_STATE_INVALID_CONTENT;\n    }")
+  string(FIND "${gbb_state_fuzz_mutant_core_text}" "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" first)
+  string(FIND "${gbb_state_fuzz_mutant_core_text}" "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" last REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL last)
+    message(FATAL_ERROR "State-fuzz observer mutant anchor must occur exactly once")
+  endif()
+  string(REPLACE "${GBB_STATE_FUZZ_MUTANT_ANCHOR}" "${GBB_STATE_FUZZ_MUTANT_REPLACEMENT}"
+    gbb_state_fuzz_mutant_core_text "${gbb_state_fuzz_mutant_core_text}")
+  file(WRITE "${GBB_STATE_FUZZ_MUTANT_SOURCE}" "${gbb_state_fuzz_mutant_core_text}")
+  add_library(gabbaboy_state_fuzz_observer_mutant STATIC "${GBB_STATE_FUZZ_MUTANT_SOURCE}")
+  target_include_directories(gabbaboy_state_fuzz_observer_mutant PUBLIC "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(gabbaboy_state_fuzz_observer_mutant PUBLIC c_std_17)
+  target_compile_definitions(gabbaboy_state_fuzz_observer_mutant PRIVATE
+    GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
+    GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+  set_target_properties(gabbaboy_state_fuzz_observer_mutant PROPERTIES C_EXTENSIONS OFF)
+  add_executable(test_state_fuzz_observer_mutant fuzz_core.c)
+  target_link_libraries(test_state_fuzz_observer_mutant PRIVATE gabbaboy_state_fuzz_observer_mutant)
+  target_compile_features(test_state_fuzz_observer_mutant PRIVATE c_std_17)
+  target_compile_definitions(test_state_fuzz_observer_mutant PRIVATE
+    GBB_FUZZ_STANDALONE_TEST=1 GBB_STATE_FUZZ_STANDALONE_MAIN=1)
+  set_target_properties(test_state_fuzz_observer_mutant PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME state_fuzz_controls
+    COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-fuzz.py"
+      --state-self-test --rev "${GBB_STATE_SOURCE_REV}"
+      --census-exe "$<TARGET_FILE:test_state_codec>"
+      --probe "$<TARGET_FILE:test_state_fuzz>"
+      --mutant-probe "$<TARGET_FILE:test_state_fuzz_observer_mutant>")
+else()
+  # Git-free source archives stay buildable, while any request for qualified fuzz evidence rejects unknown.
+  add_test(NAME state_fuzz_controls
+    COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-fuzz.py"
+      --state-self-test --rev "${GBB_STATE_SOURCE_REV}"
+      --census-exe "${PROJECT_SOURCE_DIR}/tests/fuzz_core.c"
+      --probe "${PROJECT_SOURCE_DIR}/tests/fuzz_core.c"
+      --mutant-probe "${PROJECT_SOURCE_DIR}/tests/fuzz_core.c")
+endif()
+set_tests_properties(state_fuzz_controls PROPERTIES TIMEOUT 60)
+
+# White-box state-load tests seed valid ownership with different receiving RTC,
+# RAM, palette and observer histories. They compile the production core in one TU
+# so the tests can prove exact lazy-RTC restoration without a private public API.
+add_executable(test_state_internal test_state_internal.c)
+target_include_directories(test_state_internal PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_state_internal PRIVATE c_std_17)
+set_target_properties(test_state_internal PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_observers COMMAND test_state_internal state_observers)
+add_test(NAME state_apu_pulse_timer COMMAND test_state_internal state_apu_pulse_timer)
+add_test(NAME state_apu_noise_timer COMMAND test_state_internal state_apu_noise_timer)
+add_test(NAME state_rtc_palette COMMAND test_state_internal state_rtc_palette)
+add_test(NAME state_refusal COMMAND test_state_internal state_refusal)
+add_test(NAME state_refusal_controls COMMAND test_state_internal state_refusal_controls)
+set_tests_properties(state_observers state_apu_pulse_timer state_apu_noise_timer state_rtc_palette state_refusal state_refusal_controls
+  PROPERTIES TIMEOUT 60)
+
+# Public save/load continuation forks use a private descriptor visitor only to poison the
+# receiving instance and emit save-boundary witnesses. All behavior under comparison goes
+# through the public API; no core object is linked a second time.
+add_executable(test_state_fork test_state_fork.c)
+target_include_directories(test_state_fork PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/core"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_fork PRIVATE c_std_17)
+set_target_properties(test_state_fork PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_slice_invariance COMMAND test_state_fork state_slice_invariance)
+set_tests_properties(state_slice_invariance PROPERTIES TIMEOUT 60)
+set(GBB_STATE_FORK_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-forks.py")
+set(GBB_STATE_FORK_REPORT "${PROJECT_BINARY_DIR}/state-fork-matrix.json")
+set(GBB_STATE_FORK_SHARDS 16)
+math(EXPR GBB_STATE_FORK_SHARD_LAST "${GBB_STATE_FORK_SHARDS} - 1")
+foreach(gbb_state_fork_shard RANGE 0 ${GBB_STATE_FORK_SHARD_LAST})
+  add_test(NAME "state_fork_matrix_shard_${gbb_state_fork_shard}"
+    COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+      --matrix-shard --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+      --test-exe "$<TARGET_FILE:test_state_fork>"
+      --shard ${gbb_state_fork_shard} --shards ${GBB_STATE_FORK_SHARDS}
+      --report "${PROJECT_BINARY_DIR}/state-fork-matrix-shard-${gbb_state_fork_shard}.json")
+  set_tests_properties("state_fork_matrix_shard_${gbb_state_fork_shard}"
+    PROPERTIES TIMEOUT 60 FIXTURES_SETUP gbb_state_fork_matrix_shards)
+endforeach()
+add_test(NAME state_fork_matrix
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --matrix-summary --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --shards ${GBB_STATE_FORK_SHARDS} --report-dir "${PROJECT_BINARY_DIR}"
+    --report "${GBB_STATE_FORK_REPORT}")
+set_tests_properties(state_fork_matrix PROPERTIES
+  TIMEOUT 30 FIXTURES_REQUIRED gbb_state_fork_matrix_shards
+  FIXTURES_SETUP gbb_state_fork_matrix_complete)
+add_test(NAME state_fork_census
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --check "${GBB_STATE_FORK_REPORT}" --rev "${GBB_STATE_SOURCE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}")
+add_test(NAME state_fork_census_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --check "${GBB_STATE_FORK_REPORT}" --rev "${GBB_STATE_SOURCE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}" --self-test)
+set_tests_properties(state_fork_census state_fork_census_controls PROPERTIES
+  TIMEOUT 30 FIXTURES_REQUIRED gbb_state_fork_matrix_complete)
+add_test(NAME state_fork_mutant_controls
+  COMMAND "${Python3_EXECUTABLE}" -I
+    "${PROJECT_SOURCE_DIR}/tests/scripts/test-state-fork-mutant-controls.py"
+    "${GBB_STATE_FORK_CHECKER}" "${PROJECT_SOURCE_DIR}" "${GBB_STATE_SOURCE_REV}"
+    "${GBB_STATE_FORK_REPORT}")
+set_tests_properties(state_fork_mutant_controls PROPERTIES
+  TIMEOUT 30 FIXTURES_REQUIRED gbb_state_fork_matrix_complete)
+set(GBB_STATE_FORK_MUTANT_CORE "${PROJECT_BINARY_DIR}/state-fork-mutant-core.c")
+add_custom_command(OUTPUT "${GBB_STATE_FORK_MUTANT_CORE}"
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --materialize-mutant-core --rev "${GBB_STATE_SOURCE_REV}"
+    --repo "${PROJECT_SOURCE_DIR}" --output "${GBB_STATE_FORK_MUTANT_CORE}"
+  DEPENDS "${GBB_STATE_FORK_CHECKER}" "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c"
+  VERBATIM)
+add_custom_target(state_fork_mutant_source DEPENDS "${GBB_STATE_FORK_MUTANT_CORE}")
+add_executable(test_state_fork_mutant test_state_fork.c)
+add_dependencies(test_state_fork_mutant state_fork_mutant_source)
+target_include_directories(test_state_fork_mutant PRIVATE
+  "${PROJECT_SOURCE_DIR}/include"
+  "${PROJECT_SOURCE_DIR}/src/core"
+  "${PROJECT_SOURCE_DIR}/src/accept")
+target_compile_features(test_state_fork_mutant PRIVATE c_std_17)
+target_compile_definitions(test_state_fork_mutant PRIVATE GBB_STATE_FORK_MUTANT=1
+  "GBB_CORE_SOURCE_PATH=\"${GBB_STATE_FORK_MUTANT_CORE}\"")
+set_target_properties(test_state_fork_mutant PROPERTIES C_EXTENSIONS OFF)
+set(GBB_STATE_FORK_MUTANT_SHARDS 16)
+math(EXPR GBB_STATE_FORK_MUTANT_SHARD_LAST "${GBB_STATE_FORK_MUTANT_SHARDS} - 1")
+foreach(gbb_state_fork_mutant_shard RANGE 0 ${GBB_STATE_FORK_MUTANT_SHARD_LAST})
+  add_test(NAME "state_fork_mutants_shard_${gbb_state_fork_mutant_shard}"
+    COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+      --mutants --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+      --build-dir "${PROJECT_BINARY_DIR}"
+      --test-exe "$<TARGET_FILE:test_state_fork_mutant>"
+      --control-exe "$<TARGET_FILE:test_state_fork>"
+      --mutant-core "${GBB_STATE_FORK_MUTANT_CORE}"
+      --shard ${gbb_state_fork_mutant_shard} --shards ${GBB_STATE_FORK_MUTANT_SHARDS}
+      --report "${PROJECT_BINARY_DIR}/state-fork-mutants-shard-${gbb_state_fork_mutant_shard}.json")
+  set_tests_properties("state_fork_mutants_shard_${gbb_state_fork_mutant_shard}"
+    PROPERTIES TIMEOUT 60 FIXTURES_REQUIRED gbb_state_fork_matrix_complete
+    FIXTURES_SETUP gbb_state_fork_mutant_shards)
+endforeach()
+add_test(NAME state_fork_mutants
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_FORK_CHECKER}"
+    --mutant-summary --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --shards ${GBB_STATE_FORK_MUTANT_SHARDS} --report-dir "${PROJECT_BINARY_DIR}"
+    --report "${PROJECT_BINARY_DIR}/state-fork-mutants.json")
+set_tests_properties(state_fork_mutants PROPERTIES TIMEOUT 30
+  FIXTURES_REQUIRED gbb_state_fork_mutant_shards)
+set_tests_properties(state_fork_mutant_controls PROPERTIES FIXTURES_REQUIRED
+  "gbb_state_fork_matrix_complete;gbb_state_fork_mutant_shards")
+
+# Every run mode shares the operational time-horizon scheduler. These white-box
+# cases seed genuine codec-valid boundary states and exercise the independent
+# STOP, stall, HDMA, IRQ, HALT, instruction and reservation paths.
+add_executable(test_state_horizon test_state_horizon.c)
+target_include_directories(test_state_horizon PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_state_horizon PRIVATE c_std_17)
+set_target_properties(test_state_horizon PROPERTIES C_EXTENSIONS OFF)
+# The closure matrix exhausts the audio ring's distinct persisted phase bounds;
+# keep the same source and full case set, but optimize this state-validation
+# translation unit in Debug builds so the normal 60-second budget covers it.
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|IntelLLVM")
+  target_compile_options(test_state_horizon PRIVATE "$<$<CONFIG:Debug>:-O2>")
+elseif(MSVC)
+  target_compile_options(test_state_horizon PRIVATE "$<$<CONFIG:Debug>:/O2>")
+endif()
+add_test(NAME state_horizon COMMAND test_state_horizon horizon_matrix)
+add_test(NAME state_horizon_wrappers COMMAND test_state_horizon horizon_wrappers)
+add_test(NAME state_horizon_sentinels COMMAND test_state_horizon horizon_sentinels)
+add_test(NAME state_horizon_events COMMAND test_state_horizon horizon_events)
+# Native hosted runs exceeded the standard budgets with 16 shards. Each of
+# these 128 balanced shards retains 44 or 45 of the same 5,644 cases and every
+# production codec comparison; selecting the named gate requires all shards.
+set(GBB_HORIZON_CLOSURE_SHARD_COUNT 128)
+math(EXPR GBB_HORIZON_CLOSURE_SHARDS "${GBB_HORIZON_CLOSURE_SHARD_COUNT} - 1")
+add_test(NAME state_horizon_closure
+  COMMAND test_state_horizon horizon_closure 0 ${GBB_HORIZON_CLOSURE_SHARD_COUNT})
+set(GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES "")
+foreach(shard RANGE 1 ${GBB_HORIZON_CLOSURE_SHARDS})
+  add_test(NAME "state_horizon_closure_${shard}"
+    COMMAND test_state_horizon horizon_closure ${shard} ${GBB_HORIZON_CLOSURE_SHARD_COUNT})
+  set(fixture "gabbaboy_horizon_closure_${shard}")
+  list(APPEND GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES "${fixture}")
+  set_tests_properties("state_horizon_closure_${shard}"
+    PROPERTIES FIXTURES_SETUP "${fixture}" TIMEOUT 60)
+endforeach()
+set_tests_properties(state_horizon state_horizon_wrappers state_horizon_sentinels
+  state_horizon_events
+  PROPERTIES TIMEOUT 30)
+set_tests_properties(state_horizon_closure PROPERTIES
+  FIXTURES_SETUP gabbaboy_horizon_closure_0
+  FIXTURES_REQUIRED "${GBB_HORIZON_CLOSURE_REQUIRED_FIXTURES}"
+  TIMEOUT 60)
+set(GBB_STATE_HORIZON_CHECKER
+  "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-horizon.py")
+add_test(NAME state_horizon_mutants
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_HORIZON_CHECKER}"
+    --rev "${GABBABOY_BUILD_REVISION}" --build-dir "${PROJECT_BINARY_DIR}")
+add_test(NAME state_horizon_mutant_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_HORIZON_CHECKER}"
+    --rev "${GABBABOY_BUILD_REVISION}" --build-dir "${PROJECT_BINARY_DIR}" --self-test)
+set_tests_properties(state_horizon_mutants state_horizon_mutant_controls
+  PROPERTIES TIMEOUT 60)
+# The full mutant run builds on a pool of MUTANT_WORKERS (verify-state-horizon.py); reserve that
+# many slots so a parallel ctest does not oversubscribe the runner.
+set_tests_properties(state_horizon_mutants PROPERTIES PROCESSORS 4)
+
+# Each observer/RTC mutant is a disposable core-source copy. Its named contract
+# test must fail on the intended assertion while the unrelated size/save control
+# passes, so a broken mutant cannot masquerade as semantic evidence.
+set(GBB_STATE_INTERNAL_CORE_SOURCE "${PROJECT_SOURCE_DIR}/src/core/gabbaboy.c")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_STATE_INTERNAL_CORE_SOURCE}")
+file(READ "${GBB_STATE_INTERNAL_CORE_SOURCE}" gbb_state_internal_core_text)
+function(gbb_state_internal_mutant name failing_case failing_regex control_case anchor replacement)
+  set(text "${gbb_state_internal_core_text}")
+  set(anchor_text "${anchor}")
+  set(replacement_text "${replacement}")
+  string(FIND "${text}" "${anchor_text}" first)
+  string(FIND "${text}" "${anchor_text}" last REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL last)
+    message(FATAL_ERROR "State internal mutant ${name}: anchor must occur exactly once (first=${first}, last=${last})")
+  endif()
+  string(REPLACE "${anchor_text}" "${replacement_text}" text "${text}")
+  set(source "${CMAKE_CURRENT_BINARY_DIR}/state_internal_mutant_${name}.c")
+  file(WRITE "${source}" "${text}")
+  set(target "test_state_internal_mutant_${name}")
+  add_executable(${target} test_state_internal.c)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE "GBB_CORE_SOURCE_PATH=\"${source}\"")
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME state_observer_mutant_${name}
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;${failing_case}"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  add_test(NAME state_observer_mutant_${name}_control
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;${control_case}"
+      -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=state_control
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  set_tests_properties(state_observer_mutant_${name} state_observer_mutant_${name}_control
+    PROPERTIES TIMEOUT 30)
+endfunction()
+
+gbb_state_internal_mutant(palette_omitted state_rtc_palette same_palette state_control
+  [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
+            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=]
+  [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
+            if (strcmp(field->path, "compat_rgb555") == 0) {
+                offset += field->wire_width;
+                continue;
+            }
+            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=])
+gbb_state_internal_mutant(catch_up_on_load state_rtc_palette same_rtc state_control
+  [=[static void state_apply_observers(gbb_instance *instance, uint8_t old_rumble,
+                                  int battery_changed) {]=]
+  [=[static void state_apply_observers(gbb_instance *instance, uint8_t old_rumble,
+                                  int battery_changed) {
+    (void)gbb_rtc_catch_up(instance, 1);]=])
+gbb_state_internal_mutant(raw_rtc_equality state_observers "battery_generation == 7u" state_control
+  [=[rtc_sync(&old_projected, instance->time_half_dots);
+    rtc_sync(&saved_projected, saved_time);]=]
+  [=[/* mutant: compare unprojected raw RTC representations */]=])
+gbb_state_internal_mutant(battery_bump_duplicate state_observers "battery_generation == 8u" state_control
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;]=]
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX) {
+        ++instance->battery_generation;
+        ++instance->battery_generation;
+    }]=])
+gbb_state_internal_mutant(battery_bump_missing state_observers "battery_generation == 8u" state_control
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX)
+        ++instance->battery_generation;]=]
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX) { /* mutant: omitted observer bump */ }]=])
+gbb_state_internal_mutant(rumble_bump_duplicate state_observers "rumble_changes == 6u" state_control
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)
+        ++instance->cart.rumble_changes;]=]
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX) {
+        ++instance->cart.rumble_changes;
+        ++instance->cart.rumble_changes;
+    }]=])
+gbb_state_internal_mutant(rumble_bump_missing state_observers "rumble_changes == 6u" state_control
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)
+        ++instance->cart.rumble_changes;]=]
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX) { /* mutant: omitted observer bump */ }]=])
+gbb_state_internal_mutant(battery_observer_serialized state_observers "memcmp\\(saved, counter_variant" state_control
+  [=[if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;]=]
+  [=[if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;
+    if (strcmp(field->path, "frame_generation") == 0) {
+        *out_value = instance->frame_generation + instance->battery_generation;
+        return 1;
+    }]=])
+gbb_state_internal_mutant(rumble_observer_serialized state_observers "memcmp\\(saved, counter_variant" state_control
+  [=[if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;]=]
+  [=[if (instance == NULL || field == NULL || out_value == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;
+    if (strcmp(field->path, "frame_generation") == 0) {
+        *out_value = instance->frame_generation + instance->cart.rumble_changes;
+        return 1;
+    }]=])
+gbb_state_internal_mutant(battery_bump_wrap state_observers "battery_generation == UINT64_MAX" state_control
+  [=[if (battery_changed && instance->cart.has_battery &&
+        instance->battery_generation != UINT64_MAX)]=]
+  [=[if (battery_changed && instance->cart.has_battery)]=])
+gbb_state_internal_mutant(rumble_bump_wrap state_observers "rumble_changes == UINT64_MAX" state_control
+  [=[if (old_rumble != instance->cart.rumble_on && instance->cart.rumble_changes != UINT64_MAX)]=]
+  [=[if (old_rumble != instance->cart.rumble_on)]=])
+
+# Refusal mutants exercise the whole-instance/RAM oracle and exact output extent.
+function(gbb_state_refusal_mutant name anchor replacement)
+  set(text "${gbb_state_internal_core_text}")
+  string(FIND "${text}" "${anchor}" first)
+  string(FIND "${text}" "${anchor}" last REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL last)
+    message(FATAL_ERROR "State refusal mutant ${name}: anchor must occur exactly once (first=${first}, last=${last})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${text}")
+  set(source "${CMAKE_CURRENT_BINARY_DIR}/state_refusal_mutant_${name}.c")
+  file(WRITE "${source}" "${text}")
+  set(target "test_state_refusal_mutant_${name}")
+  add_executable(${target} test_state_internal.c)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE "GBB_CORE_SOURCE_PATH=\"${source}\"")
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME state_refusal_mutant_${name}
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_refusal"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL state_refusal"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  add_test(NAME state_refusal_mutant_${name}_control
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_control"
+      -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=state_control
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  set_tests_properties(state_refusal_mutant_${name} state_refusal_mutant_${name}_control
+    PROPERTIES TIMEOUT 30)
+endfunction()
+
+gbb_state_refusal_mutant(apply_before_validation
+  [=[if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;]=]
+  [=[state_apply(instance, body, body_size);
+    if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;]=])
+gbb_state_refusal_mutant(counter_on_invalid_content
+  [=[if (!state_validate(instance, body, body_size)) return GBB_STATE_INVALID_CONTENT;]=]
+  [=[if (!state_validate(instance, body, body_size)) {
+        ++instance->battery_generation;
+        return GBB_STATE_INVALID_CONTENT;
+    }]=])
+gbb_state_refusal_mutant(short_save_prefix_write
+  [=[if (capacity_bytes < total_size) return GBB_BUFFER_TOO_SMALL;]=]
+  [=[if (capacity_bytes < total_size) { out_bytes[0] = 'G'; return GBB_BUFFER_TOO_SMALL; }]=])
+gbb_state_refusal_mutant(save_tail_write
+  [=[state_put_u32(header + 60u, crc);
+    return GBB_OK;]=]
+  [=[state_put_u32(header + 60u, crc);
+    out_bytes[total_size] = 0u;
+    return GBB_OK;]=])
+
+# Allocation/hash instrumentation includes the production core with allocator
+# wrappers and the private SHA call counter. The contract CTest validates every
+# relevant source against its immutable revision before invoking the probe.
+add_executable(test_state_alloc test_state_alloc.c)
+target_include_directories(test_state_alloc PRIVATE "${PROJECT_SOURCE_DIR}/include")
+target_compile_features(test_state_alloc PRIVATE c_std_17)
+target_compile_definitions(test_state_alloc PRIVATE
+  "GBB_STATE_SOURCE_REV=\"${GBB_STATE_SOURCE_REV}\"")
+set_target_properties(test_state_alloc PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME state_purity
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_STATE_CONTRACT_CHECKER}"
+    --purity --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --probe "$<TARGET_FILE:test_state_alloc>")
+add_test(NAME state_purity_controls COMMAND test_state_alloc state_purity_controls)
+set_tests_properties(state_purity state_purity_controls PROPERTIES TIMEOUT 30)
+
+# Each mutant names the probe diagnostic that only its own defect produces, so a mutant that dies for an unrelated
+# reason (a lost CRC write, a crash) cannot satisfy the control. The anchor and replacement contain `;`, so callers
+# must quote them; an unquoted expansion splits into extra arguments and the ARGC check refuses it at configure time
+# (17-REVIEW CR-B01: the split once made all three mutants the same CRC-omission edit).
+function(gbb_state_alloc_mutant name anchor replacement failing_regex)
+  if(NOT ARGC EQUAL 4)
+    message(FATAL_ERROR "State allocation mutant ${name}: expected 4 arguments, got ${ARGC}; quote the anchor and replacement")
+  endif()
+  set(text "${gbb_state_internal_core_text}")
+  string(FIND "${text}" "${anchor}" first)
+  string(FIND "${text}" "${anchor}" last REVERSE)
+  if(first EQUAL -1 OR NOT first EQUAL last)
+    message(FATAL_ERROR "State allocation mutant ${name}: anchor must occur exactly once (first=${first}, last=${last})")
+  endif()
+  string(REPLACE "${anchor}" "${replacement}" text "${text}")
+  set(source "${CMAKE_CURRENT_BINARY_DIR}/state_alloc_mutant_${name}.c")
+  file(WRITE "${source}" "${text}")
+  set(target "test_state_alloc_mutant_${name}")
+  add_executable(${target} test_state_alloc.c)
+  target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include")
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE
+    "GBB_CORE_SOURCE_PATH=\"${source}\""
+    "GBB_STATE_SOURCE_REV=\"${GBB_STATE_SOURCE_REV}\"")
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME state_purity_mutant_${name}
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_purity"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${failing_regex}"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  add_test(NAME state_purity_mutant_${name}_control
+    COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:${target}>;state_purity_controls"
+      -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=state_purity_controls
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  set_tests_properties(state_purity_mutant_${name} state_purity_mutant_${name}_control
+    PROPERTIES TIMEOUT 30)
+endfunction()
+
+set(GBB_STATE_SAVE_SUCCESS_ANCHOR
+  [=[state_put_u32(header + 60u, crc);
+    return GBB_OK;]=])
+gbb_state_alloc_mutant(allocation_in_save "${GBB_STATE_SAVE_SUCCESS_ANCHOR}"
+  [=[void *state_probe_allocation = malloc(1u);
+    free(state_probe_allocation);
+    state_put_u32(header + 60u, crc);
+    return GBB_OK;]=]
+  "state_purity failure: operation=save_success heap_calls=[1-9][0-9]* request_bytes=[1-9]")
+gbb_state_alloc_mutant(hash_in_save "${GBB_STATE_SAVE_SUCCESS_ANCHOR}"
+  [=[uint8_t state_probe_hash[32];
+    state_sha256(out_bytes, total_size, state_probe_hash);
+    state_put_u32(header + 60u, crc);
+    return GBB_OK;]=]
+  "state_purity failure: operation=save_success heap_calls=0 request_bytes=0 largest=0 hashes=[1-9]")
+gbb_state_alloc_mutant(save_overwrites_tail "${GBB_STATE_SAVE_SUCCESS_ANCHOR}"
+  [=[state_put_u32(header + 60u, crc);
+    out_bytes[total_size] = 0u;
+    return GBB_OK;]=]
+  "state_purity failure: save tail modified")
+
+# Phase 17 RM-028 / D-20 (17-09): the release evidence lifecycle (attach, manifest, final gates, publish decision and
+# retry) is rehearsed by running the production lifecycle script and gates against a bounded `gh` transport that serves
+# captured response shapes and records the publish decision without publishing. The lifecycle runs on ubuntu-22.04 only
+# (bash, jq and a POSIX `gh` shim), so the replay is POSIX-only like the other bash-bound checks. The revision is the
+# configure-time HEAD, read with git show; nothing falls back to the live tree.
+if(NOT WIN32)
+  # Each case: name | checker mode | output regex | key whose value must reach a minimum | minimum.
+  foreach(gbb_lifecycle_case IN ITEMS
+      "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0|uploads|7"
+      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95")
+    string(REPLACE "|" ";" gbb_lifecycle_fields "${gbb_lifecycle_case}")
+    list(GET gbb_lifecycle_fields 0 gbb_lifecycle_name)
+    list(GET gbb_lifecycle_fields 1 gbb_lifecycle_mode)
+    list(GET gbb_lifecycle_fields 2 gbb_lifecycle_regex)
+    list(GET gbb_lifecycle_fields 3 gbb_lifecycle_key)
+    list(GET gbb_lifecycle_fields 4 gbb_lifecycle_min)
+    add_test(NAME ${gbb_lifecycle_name}
+      COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};${gbb_lifecycle_mode}"
+        -DGBB_EXPECT_CODE=0
+        "-DGBB_EXPECT_REGEX=${gbb_lifecycle_regex}"
+        -DGBB_EXPECT_MIN_KEY=${gbb_lifecycle_key} -DGBB_EXPECT_MIN_VALUE=${gbb_lifecycle_min}
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+    set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
+  endforeach()
+endif()
+
+# Phase 17 RM-030 / D-22 (17-11): release gates. The owner-approval gate (a deterministic Ir exception bound to the
+# exact measurement digest, cause, band and approved limit) and the exact-head nightly gate run on captured GitHub
+# API shapes and the canned perf-gate fixtures, so they need no network and run on every platform. The revision is
+# the configure-time HEAD, read with git; nothing falls back to the live tree. Each case: name | suite | key whose value
+# must reach a minimum | minimum. Controls are parsed minimums: adding one is allowed, dropping one is rejected.
+foreach(gbb_gate_case IN ITEMS
+    "release_review_approval|review-approval|controls|5"
+    "release_review_controls|review-controls|controls|44"
+    "release_nightly_gate|nightly-gate|positives|7"
+    "release_nightly_controls|nightly-controls|controls|37")
+  string(REPLACE "|" ";" gbb_gate_fields "${gbb_gate_case}")
+  list(GET gbb_gate_fields 0 gbb_gate_name)
+  list(GET gbb_gate_fields 1 gbb_gate_suite)
+  list(GET gbb_gate_fields 2 gbb_gate_key)
+  list(GET gbb_gate_fields 3 gbb_gate_min)
+  add_test(NAME ${gbb_gate_name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-gates.py;--self-test;${gbb_gate_suite};--rev;${GBB_STATE_SOURCE_REV}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=release-gates self-test pass suite=${gbb_gate_suite} controls=[0-9]+ positives=[0-9]+"
+      -DGBB_EXPECT_MIN_KEY=${gbb_gate_key} -DGBB_EXPECT_MIN_VALUE=${gbb_gate_min}
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${gbb_gate_name} PROPERTIES TIMEOUT 60 LABELS "v02")
+endforeach()
+
+# Phase 17 boundary (17-11): the planning, requirement, route, receipt-timestamp and RM-027 facts of Phase 17 are read
+# with git from one literal commit, never from the working tree, the current HEAD or later ancestry. The commit is the
+# Phase 17 boundary (the last commit of the first two 17-11 tasks' predecessor: every plan, the ten completed summaries,
+# the Phase 16 receipts and the six RM-027 rows exist there). It is pinned here so a later phase cannot change it; the
+# control mutants run in disposable repositories seeded from its files. The test reads planning facts, hence the label.
+set(GBB_PHASE17_BOUNDARY_SHA "d53ec9c34e42094e6b468f5ca725afe28cb4e819")
+add_test(NAME state_boundary_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_STATE_CONTRACT_CHECKER};--boundary;--self-test;--rev;${GBB_PHASE17_BOUNDARY_SHA};--repo;${PROJECT_SOURCE_DIR}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=state boundary controls pass rev=${GBB_PHASE17_BOUNDARY_SHA} controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=39
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(state_boundary_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 
 gabbaboy_verify_registered_tests()
 

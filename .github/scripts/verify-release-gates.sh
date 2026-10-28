@@ -39,7 +39,9 @@ if not excluded_path(".github/workflows/release.yml") or not excluded_path(".git
     raise SystemExit("release-control-plane paths are not excluded from release parsing")
 if excluded_path("src/gabbaboy.c") or excluded_path("CMakeLists.txt"):
     raise SystemExit("release-please exclusion incorrectly hides product source/version paths")
-workflow = (root / ".github/workflows/release.yml").read_text()
+# The attach, manifest, final-gate and publication steps are bodies of the lifecycle script; the declarations and commands
+# judged below are the text of both files, exactly as the hosted workflow runs them.
+workflow = (root / ".github/workflows/release.yml").read_text() + "\n" + (root / ".github/scripts/release-evidence-lifecycle.sh").read_text()
 entrypoint = (root / ".github/workflows/release-please.yml").read_text()
 gate_source = (root / ".github/scripts/verify-release-gates.sh").read_text()
 # Which gate runs which validator is proved by running the gates on defective fixtures in --self-test below,
@@ -74,7 +76,8 @@ def validate_downloaded_sidecars(text):
     required = (
         'bash "$RUNNER_TEMP/verify-release-gates.sh" --check-digest-sidecar \\\n            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz',
         'bash build/verify-release-gates.sh --check-digest-sidecar \\\n            build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 \\\n            build/downloaded/gabbaboy-core-windows-x64.tar.gz',
-        'bash build/verify-release-gates.sh --check-digest-sidecar \\\n            build/downloaded/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n            build/downloaded/gabbaboy-core-macos-arm64.tar.gz',
+        # the manifest step is the build-manifest body of the lifecycle script, two columns deep after the extraction
+        'bash build/verify-release-gates.sh --check-digest-sidecar \\\n  build/downloaded/gabbaboy-core-macos-arm64.tar.gz.sha256 \\\n  build/downloaded/gabbaboy-core-macos-arm64.tar.gz',
     )
     if "sha256sum --check" in text or any(call not in text for call in required):
         raise ValueError("every downloaded Mac/Windows digest-only sidecar must use the strict byte-check helper")
@@ -187,17 +190,25 @@ runs = json.loads(pathlib.Path(sys.argv[2]).read_text())
 expected = sys.argv[3]
 if not re.fullmatch(r"[0-9a-f]{40}", expected):
     raise SystemExit("expected PR head is not a full commit SHA")
+# The same App identity verify-release-source-proof.py requires at release time (IN-02). The branch rule's own app_id may
+# be null, which GitHub reads as "any source"; the evidence is then still held to this identity, so a wildcard rule can
+# never let a check posted by another App satisfy a recorded context.
+TRUSTED_APP_ID, TRUSTED_APP_SLUG = 15368, "github-actions"
 checks = rules.get("required_status_checks", {}).get("checks")
 if checks is None:
     checks = [{"context": name} for name in rules.get("required_status_checks", {}).get("contexts", [])]
 required = {item.get("context"): item.get("app_id") for item in checks if item.get("context")}
 if not {"required-native", "fixture-repro", "preview-package-smoke"}.issubset(required):
     raise SystemExit("repository branch rules omit one of the three recorded required contexts")
+for context in ("required-native", "fixture-repro", "preview-package-smoke"):
+    rule_app = required[context]
+    if rule_app is not None and (type(rule_app) is not int or rule_app != TRUSTED_APP_ID):
+        raise SystemExit(f"branch rule for {context!r} does not trust the recorded GitHub App")
 observed = {}
 for run in runs.get("check_runs", []):
     if run.get("name") in required:
         observed.setdefault(run.get("name"), []).append(run)
-for context, app_id in required.items():
+for context in required:
     matches = observed.get(context, [])
     if not matches:
         raise SystemExit(f"required context {context!r} has no check-run evidence")
@@ -206,7 +217,8 @@ for context, app_id in required.items():
             raise SystemExit(f"required context {context!r} has stale check evidence")
         if run.get("status") != "completed" or run.get("conclusion") != "success":
             raise SystemExit(f"required context {context!r} is incomplete or concluded {run.get('conclusion')!r}")
-        if app_id is not None and run.get("app", {}).get("id") != app_id:
+        app = run.get("app") if isinstance(run.get("app"), dict) else {}
+        if type(app.get("id")) is not int or app["id"] != TRUSTED_APP_ID or app.get("slug") != TRUSTED_APP_SLUG:
             raise SystemExit(f"required context {context!r} came from the wrong GitHub App")
 PY
 }
@@ -250,7 +262,20 @@ if not re.fullmatch(r"[0-9a-f]{40}", sidecar.get("ledger", {}).get("git_blob_oid
 manifest = json.loads((root / "candidate-platform-manifest.json").read_text())
 if manifest.get("source_sha") != source_sha:
     raise SystemExit("platform manifest source SHA differs from candidate")
-listed = {item["name"]: item["sha256"] for item in manifest.get("assets", [])}
+# The manifest is parsed strictly before any name-keyed map is built (WR-03): a repeated name cannot hide a wrong digest
+# behind a right one, and a path-like name, a wrong-length or upper-case digest, or a missing key is a named refusal.
+rows = manifest.get("assets")
+if not isinstance(rows, list):
+    raise SystemExit("platform manifest has a malformed asset list")
+listed = {}
+for item in rows:
+    if (not isinstance(item, dict) or set(item) != {"name", "sha256"} or not isinstance(item["name"], str)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", item["name"])
+            or not isinstance(item["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])):
+        raise SystemExit(f"platform manifest has a malformed asset entry: {str(item)[:80]!r}")
+    if item["name"] in listed:
+        raise SystemExit(f"platform manifest names {item['name']} more than once")
+    listed[item["name"]] = item["sha256"]
 for name in required - {"candidate-platform-manifest.json"}:
     if name not in listed or listed[name] != hashlib.sha256((root / name).read_bytes()).hexdigest():
         raise SystemExit(f"platform manifest does not bind downloaded bytes: {name}")
@@ -261,7 +286,7 @@ PY
 check_final_receipt() {
   local assets_json=$1 directory=$2 tag=$3 source_sha=$4 release_id=$5
   python3 - "$assets_json" "$directory" "$tag" "$source_sha" "$release_id" <<'PY' || return $?
-import hashlib, json, os, pathlib, sys
+import hashlib, json, os, pathlib, re, sys
 assets = json.loads(pathlib.Path(sys.argv[1]).read_text())
 root = pathlib.Path(sys.argv[2])
 tag, source, release_id = sys.argv[3:]
@@ -274,10 +299,25 @@ if receipt.get("tag") != tag or receipt.get("source_sha") != source or str(recei
 manifest_sha = hashlib.sha256((root / "SHA256SUMS").read_bytes()).hexdigest()
 if receipt.get("sha256sums_sha256") != manifest_sha:
     raise SystemExit("release receipt does not bind the final SHA256SUMS manifest")
+# The manifest is parsed strictly before any map is built, so a repeated name cannot collapse into one entry and a
+# malformed, path-like or differently spaced line cannot be read as something else. The producer writes exactly
+# "<64 hex>  <asset name>\n" per asset.
+try:
+    sums_text = (root / "SHA256SUMS").read_bytes().decode("utf-8")
+except UnicodeDecodeError:
+    raise SystemExit("SHA256SUMS is not UTF-8")
+sums_lines = sums_text.split("\n")
+if sums_lines.pop() != "":
+    raise SystemExit("SHA256SUMS must end with a newline")
 listed = {}
-for line in (root / "SHA256SUMS").read_text().splitlines():
-    digest, name = line.split(None, 1)
-    listed[name.lstrip("* ")] = digest
+for line in sums_lines:
+    entry = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9][A-Za-z0-9._-]*)", line)
+    if not entry:
+        raise SystemExit(f"SHA256SUMS has a malformed or path-like line: {line[:80]!r}")
+    digest, name = entry.groups()
+    if name in listed:
+        raise SystemExit(f"SHA256SUMS names {name} more than once")
+    listed[name] = digest
 for name, digest in listed.items():
     if name not in {asset["name"] for asset in assets}:
         raise SystemExit(f"SHA256SUMS names an absent API asset: {name}")
@@ -331,6 +371,69 @@ expected = match.group(1).decode("ascii").lower()
 actual = hashlib.sha256(archive_path.read_bytes()).hexdigest().lower()
 if expected != actual:
     raise SystemExit("digest sidecar does not match downloaded archive bytes")
+PY
+}
+
+# The independent tamper check for evidence a failed earlier attempt already attached (IN-01). It reads only the attachments
+# and the live asset list, never the producer's regenerated copies, so it runs BEFORE those copies are replaced and its
+# verdict cannot depend on them. It binds identity (tag, version, source SHA), the sidecar to the attached corpus receipt
+# bytes, each attachment to the digest GitHub reports for it, and the draft to the allowed inventory. Semantic owner
+# validation of the same bytes still follows in --check-v02-evidence before any publication.
+check_attached_evidence() {
+  local tag=$1 source_sha=$2 api_json=$3 root=$4
+  python3 - "$tag" "$source_sha" "$api_json" "$root" <<'PY' || return $?
+import hashlib, json, os, pathlib, re, sys
+tag, source, api_path, root = sys.argv[1:]
+MAX = 8 * 1024 * 1024
+EVIDENCE = ("support-ledger.json", "cgb-corpus-receipt.json", "v02-fuzz-receipt.json", "v02-performance-receipt.json")
+if not re.fullmatch(r"v\d+\.\d+\.\d+", tag) or not re.fullmatch(r"[0-9a-f]{40}", source):
+    raise SystemExit("attached-evidence check: the tag or source SHA is malformed")
+allowed = set(os.environ["REQUIRED_ASSETS"].split()) | {"SHA256SUMS", "release-receipt.json"}
+try:
+    rows = json.loads(pathlib.Path(api_path).read_text(encoding="utf-8"))
+except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+    raise SystemExit("attached-evidence check: the live asset list is unreadable")
+if not isinstance(rows, list) or len(rows) > 100 or any(not isinstance(row, dict) or not isinstance(row.get("name"), str) for row in rows):
+    raise SystemExit("attached-evidence check: the live asset list is malformed")
+names = [row["name"] for row in rows]
+if len(names) != len(set(names)) or not set(names) <= allowed:
+    raise SystemExit(f"draft carries an unknown or duplicated asset: unknown={sorted(set(names) - allowed)}")
+live = {row["name"]: row for row in rows}
+# The retry downloads each attached evidence asset to <root>/attached-<name>/<name>; an asset that was not attached has no file.
+paths = [pathlib.Path(root) / f"attached-{name}" / name for name in EVIDENCE if (pathlib.Path(root) / f"attached-{name}" / name).is_file()]
+got = {}
+for path in paths:
+    data = path.read_bytes()
+    if not data or len(data) > MAX:
+        raise SystemExit(f"attached {path.name} is empty or exceeds the {MAX}-byte bound")
+    row = live.get(path.name)
+    if row is None or row.get("digest") != "sha256:" + hashlib.sha256(data).hexdigest():
+        raise SystemExit(f"attached {path.name} differs from the digest GitHub reports for it")
+    try:
+        document = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise SystemExit(f"attached {path.name} is not valid UTF-8 JSON")
+    if not isinstance(document, dict):
+        raise SystemExit(f"attached {path.name} is not a JSON object")
+    got[path.name] = (data, document)
+sidecar, corpus = got.get("support-ledger.json"), got.get("cgb-corpus-receipt.json")
+if (sidecar is None) != (corpus is None):
+    raise SystemExit("the support sidecar and the corpus receipt must be attached together")
+if sidecar is not None:
+    if (sidecar[1].get("schema_version") != 2 or sidecar[1].get("tag") != tag or sidecar[1].get("source_sha") != source
+            or sidecar[1].get("version") != tag[1:]):
+        raise SystemExit("attached support sidecar is not the schema-2 sidecar of this exact tag and source")
+    if sidecar[1].get("corpus_receipt_sha256") != hashlib.sha256(corpus[0]).hexdigest():
+        raise SystemExit("attached support sidecar does not bind the attached corpus receipt bytes")
+fuzz = got.get("v02-fuzz-receipt.json")
+if fuzz is not None and fuzz[1].get("source_sha") != source:
+    raise SystemExit("attached fuzz receipt is not bound to the exact source revision")
+performance = got.get("v02-performance-receipt.json")
+if performance is not None:
+    candidate = (performance[1].get("source") or {}).get("candidate") or {}
+    if performance[1].get("result") != "passed" or not re.fullmatch(r"[0-9a-f]{40}", str(candidate.get("sha", ""))):
+        raise SystemExit("attached performance receipt is not a passed receipt with a candidate source revision")
+print(f"PASS: {len(got)} attached evidence assets are bound to {tag} before any reuse")
 PY
 }
 
@@ -399,6 +502,68 @@ expect_reject() {
   [[ "$output" == *"$reason"* ]] || fail "gate rejected $label for the wrong reason: $output"
 }
 
+# Fixture for the attached-evidence check: four consistent attachments and the live asset list that reports their digests.
+# $2 names one defect to build in.
+attached_fixture() {
+  local dir=$1 defect=${2:-}
+  python3 - "$dir" "$defect" <<'PY' || return $?
+import hashlib, json, pathlib, sys
+root, defect = pathlib.Path(sys.argv[1]), sys.argv[2]
+root.mkdir(parents=True)
+source, tag = "c" * 40, "v0.2.0"
+def digest(data): return hashlib.sha256(data).hexdigest()
+corpus = b'{"corpus": "complete"}\n'
+files = {
+    "cgb-corpus-receipt.json": corpus,
+    "v02-fuzz-receipt.json": json.dumps({"source_sha": "d" * 40 if defect == "fuzz-stale" else source, "status": "complete"}).encode(),
+    "v02-performance-receipt.json": json.dumps({"result": "passed", "source": {"candidate": {"sha": source}}}).encode(),
+}
+sidecar = {"schema_version": 2, "tag": "v9.9.9" if defect == "sidecar-tag" else tag, "version": "0.2.0", "source_sha": source,
+           "corpus_receipt_sha256": digest(b"altered\n" if defect == "sidecar-binding" else corpus)}
+files["support-ledger.json"] = json.dumps(sidecar).encode()
+if defect == "partial":
+    del files["cgb-corpus-receipt.json"]
+rows = [{"name": name, "id": 100 + i, "digest": "sha256:" + ("0" * 64 if defect == "digest" and name == "v02-fuzz-receipt.json" else digest(data))}
+        for i, (name, data) in enumerate(sorted(files.items()))]
+if defect == "unknown":
+    rows.append({"name": "unknown-extra-asset.bin", "id": 999, "digest": "sha256:" + "0" * 64})
+if defect == "duplicate":
+    rows.append(dict(rows[0], id=998))
+for name, data in files.items():
+    (root / f"attached-{name}").mkdir()
+    (root / f"attached-{name}" / name).write_bytes(data)
+(root / "api-assets.json").write_text(json.dumps(rows))
+PY
+}
+
+attached_self_test() {
+  local base=$1 defect good
+  good=$(printf 'c%.0s' {1..40})
+  attached_fixture "$base/good"
+  check_attached_evidence v0.2.0 "$good" "$base/good/api-assets.json" "$base/good" > /dev/null
+  rm -rf "$base"/good/attached-*
+  check_attached_evidence v0.2.0 "$good" "$base/good/api-assets.json" "$base/good" > /dev/null
+  for defect in sidecar-binding sidecar-tag fuzz-stale digest unknown duplicate partial; do
+    attached_fixture "$base/$defect" "$defect"
+  done
+  expect_reject 'a sidecar that binds other corpus bytes' 'does not bind the attached corpus receipt bytes' \
+    check_attached_evidence v0.2.0 "$good" "$base/sidecar-binding/api-assets.json" "$base/sidecar-binding"
+  expect_reject 'a sidecar of another tag' 'not the schema-2 sidecar of this exact tag and source' \
+    check_attached_evidence v0.2.0 "$good" "$base/sidecar-tag/api-assets.json" "$base/sidecar-tag"
+  expect_reject 'a fuzz receipt of another source' 'not bound to the exact source revision' \
+    check_attached_evidence v0.2.0 "$good" "$base/fuzz-stale/api-assets.json" "$base/fuzz-stale"
+  expect_reject 'bytes that differ from the digest GitHub reports' 'differs from the digest GitHub reports' \
+    check_attached_evidence v0.2.0 "$good" "$base/digest/api-assets.json" "$base/digest"
+  expect_reject 'an unknown extra asset in the draft' 'unknown or duplicated asset' \
+    check_attached_evidence v0.2.0 "$good" "$base/unknown/api-assets.json" "$base/unknown"
+  expect_reject 'a duplicated asset name in the draft' 'unknown or duplicated asset' \
+    check_attached_evidence v0.2.0 "$good" "$base/duplicate/api-assets.json" "$base/duplicate"
+  expect_reject 'a sidecar attached without its corpus receipt' 'must be attached together' \
+    check_attached_evidence v0.2.0 "$good" "$base/partial/api-assets.json" "$base/partial"
+  expect_reject 'a source SHA that is not full' 'malformed' check_attached_evidence v0.2.0 abc "$base/good/api-assets.json" "$base/good"
+  printf 'PASS: attached evidence is bound to the tag, its digests and the allowed inventory; rejected: stale, mismatched, partial and unknown attachments\n'
+}
+
 # Build one draft (or final) inventory from REQUIRED_ASSETS. $5 omits an asset, $6 breaks one binding.
 inventory_fixture() {
   local dir=$1 tag=$2 sha=$3 release_id=$4 omit=${5:-} defect=${6:-} final=${7:-}
@@ -418,13 +583,44 @@ for platform in ("macos-arm64", "windows-x64"):
     content[f"gabbaboy-core-{platform}.tar.gz.sha256"] = (digest(content[f"gabbaboy-core-{platform}.tar.gz"]) + "\n").encode()
 if defect == "sidecar":
     content["gabbaboy-core-macos-arm64.tar.gz.sha256"] = ("0" * 64 + "\n").encode()
-content["candidate-platform-manifest.json"] = json.dumps({"source_sha": sha, "assets": [
-    {"name": n, "sha256": digest(content[n])} for n in names if n != "candidate-platform-manifest.json"]}).encode()
+manifest_rows = [{"name": n, "sha256": digest(content[n])} for n in names if n != "candidate-platform-manifest.json"]
+if defect == "manifest-duplicate":
+    # A wrong digest first and the right one last: a name-keyed map keeps only the last entry and would pass.
+    manifest_rows.insert(0, dict(manifest_rows[0], sha256="0" * 64))
+elif defect == "manifest-malformed-name":
+    manifest_rows[0] = dict(manifest_rows[0], name="../" + manifest_rows[0]["name"])
+elif defect == "manifest-short-digest":
+    manifest_rows[0] = dict(manifest_rows[0], sha256=manifest_rows[0]["sha256"][:63])
+elif defect == "manifest-upper-digest":
+    manifest_rows[0] = dict(manifest_rows[0], sha256=manifest_rows[0]["sha256"].upper())
+elif defect == "manifest-no-digest":
+    manifest_rows[0] = {"name": manifest_rows[0]["name"]}
+elif defect == "manifest-not-a-list":
+    manifest_rows = {"name": "x"}
+content["candidate-platform-manifest.json"] = json.dumps({"source_sha": sha, "assets": manifest_rows}).encode()
 if defect == "stale":
     content["v02-fuzz-receipt.json"] = b"altered after the platform manifest\n"
 if final:
-    sums = "".join(f"{digest(content[n])}  {n}\n" for n in sorted(names))
-    content["SHA256SUMS"] = sums.encode()
+    lines = [f"{digest(content[n])}  {n}\n" for n in sorted(names)]
+    if defect == "sums-duplicate":
+        lines.append(lines[0])
+    elif defect == "sums-malformed":
+        lines[0] = lines[0].replace("  ", " ", 1)
+    elif defect == "sums-pathlike":
+        lines[0] = lines[0].replace("  ", "  ../", 1)
+    elif defect == "sums-no-newline":
+        lines[-1] = lines[-1].rstrip("\n")
+    elif defect == "sums-short-digest":
+        lines[0] = lines[0][1:]
+    elif defect == "sums-upper-digest":
+        lines[0] = lines[0][:64].upper() + lines[0][64:]
+    elif defect == "sums-blank-line":
+        lines.insert(1, "\n")
+    elif defect == "sums-crlf":
+        lines = [line[:-1] + "\r\n" for line in lines]
+    elif defect == "sums-extra-space":
+        lines[0] = lines[0].replace("  ", "   ", 1)
+    content["SHA256SUMS"] = "".join(lines).encode()
     content["release-receipt.json"] = json.dumps({"tag": tag, "source_sha": sha, "release_id": release_id,
                                                   "sha256sums_sha256": digest(content["SHA256SUMS"])}).encode()
     if final == "final-short":
@@ -621,7 +817,7 @@ rules = {"required_status_checks": {"checks": [
     {"context": "fixture-repro", "app_id": 15368},
     {"context": "preview-package-smoke", "app_id": None}]}}
 runs = {"check_runs": [{"name": name, "head_sha": head, "status": "completed", "conclusion": "success",
-                         "app": {"id": app_id}}
+                         "app": {"id": app_id, "slug": "github-actions"}}
                         for name, app_id in (("required-native", 15368), ("fixture-repro", 15368),
                                              ("preview-package-smoke", 15368))]}
 (root / "rules.json").write_text(json.dumps(rules))
@@ -666,6 +862,42 @@ PY
       fi
       printf 'rejected: %s required-check evidence\n' "$mutation"
     done
+    # IN-02: the same trusted GitHub App identity (id 15368, slug github-actions) is required of every recorded context at
+    # PR time as at release time, whatever the branch rule says. A wildcard rule (app_id null) still gets the identity check on
+    # the run itself, and a rule that names another App is refused outright.
+    python3 - "$temp" <<'PY'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+rules = json.loads((root / "rules.json").read_text())
+runs = json.loads((root / "runs.json").read_text())
+def variant(name, mutate_rules=None, mutate_runs=None):
+    r, c = json.loads(json.dumps(rules)), json.loads(json.dumps(runs))
+    if mutate_rules: mutate_rules(r)
+    if mutate_runs: mutate_runs(c)
+    (root / f"in02-{name}-rules.json").write_text(json.dumps(r))
+    (root / f"in02-{name}-runs.json").write_text(json.dumps(c))
+# The wildcard context (preview-package-smoke) is the last run; its App is replaced.
+variant("wildcard-other-app", mutate_runs=lambda c: c["check_runs"][2]["app"].update(id=1))
+variant("wildcard-other-slug", mutate_runs=lambda c: c["check_runs"][2]["app"].update(slug="other-app"))
+variant("wildcard-no-slug", mutate_runs=lambda c: c["check_runs"][2]["app"].pop("slug"))
+variant("wildcard-no-app", mutate_runs=lambda c: c["check_runs"][2].pop("app"))
+variant("rule-other-app", mutate_rules=lambda r: r["required_status_checks"]["checks"][0].update(app_id=1),
+        mutate_runs=lambda c: c["check_runs"][0]["app"].update(id=1))
+variant("rule-string-app", mutate_rules=lambda r: r["required_status_checks"]["checks"][1].update(app_id="15368"))
+PY
+    expect_reject 'a wildcard rule whose run came from another App' 'wrong GitHub App' \
+      check_required_checks "$temp/in02-wildcard-other-app-rules.json" "$temp/in02-wildcard-other-app-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a wildcard rule whose run has another App slug' 'wrong GitHub App' \
+      check_required_checks "$temp/in02-wildcard-other-slug-rules.json" "$temp/in02-wildcard-other-slug-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a wildcard rule whose run has no App slug' 'wrong GitHub App' \
+      check_required_checks "$temp/in02-wildcard-no-slug-rules.json" "$temp/in02-wildcard-no-slug-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a wildcard rule whose run has no App at all' 'wrong GitHub App' \
+      check_required_checks "$temp/in02-wildcard-no-app-rules.json" "$temp/in02-wildcard-no-app-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a branch rule that trusts another App' 'does not trust the recorded GitHub App' \
+      check_required_checks "$temp/in02-rule-other-app-rules.json" "$temp/in02-rule-other-app-runs.json" "$(printf 'a%.0s' {1..40})"
+    expect_reject 'a branch rule whose App id is not the integer id' 'does not trust the recorded GitHub App' \
+      check_required_checks "$temp/in02-rule-string-app-rules.json" "$temp/in02-rule-string-app-runs.json" "$(printf 'a%.0s' {1..40})"
+    printf 'rejected: required-check evidence from an untrusted App, whether the branch rule is a wildcard or names another App\n'
     mkdir -p "$temp/runner"
     python3 - "$temp/runner" <<'PY'
 import hashlib, json, pathlib, sys
@@ -774,6 +1006,17 @@ PY
     expect_reject 'a schema-1 support sidecar' 'schema-2 support sidecar' \
       check_asset_inventory "$temp/schema1/api.json" "$temp/schema1/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
     printf 'rejected: schema-1 support sidecar\n'
+    # WR-03: the platform manifest is parsed strictly before a name-keyed map exists, so a repeated name cannot hide a wrong
+    # digest behind a right one and a malformed row is a named refusal, never a traceback.
+    inventory_fixture "$temp/manifest-duplicate" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" manifest-duplicate
+    expect_reject 'a platform manifest that lists one name twice' 'platform manifest names' \
+      check_asset_inventory "$temp/manifest-duplicate/api.json" "$temp/manifest-duplicate/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    for defect in manifest-malformed-name manifest-short-digest manifest-upper-digest manifest-no-digest manifest-not-a-list; do
+      inventory_fixture "$temp/$defect" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "$defect"
+      expect_reject "a platform manifest with $defect" 'platform manifest has a malformed' \
+        check_asset_inventory "$temp/$defect/api.json" "$temp/$defect/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    done
+    printf 'rejected: duplicate and malformed platform manifest entries before any map is built\n'
     # The draft and final gates reach the sidecar helper through the inventory check: a defective platform sidecar
     # must stop the real inventory gate, and the same fixture without the defect must pass it.
     inventory_fixture "$temp/bad-sidecar" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" sidecar
@@ -805,10 +1048,26 @@ PY
     inventory_fixture "$temp/final-short" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "" final-short
     expect_reject 'an incomplete final inventory' 'must contain exactly' \
       check_final_receipt "$temp/final-short/api.json" "$temp/final-short/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
-    printf 'PASS: final inventory binds every asset; rejected: incomplete final inventory\n'
+    for defect in sums-duplicate sums-malformed sums-pathlike sums-no-newline sums-short-digest sums-upper-digest sums-blank-line sums-crlf sums-extra-space; do
+      inventory_fixture "$temp/final-$defect" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242 "" "$defect" final
+    done
+    expect_reject 'a SHA256SUMS name listed twice' 'more than once' \
+      check_final_receipt "$temp/final-sums-duplicate/api.json" "$temp/final-sums-duplicate/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    expect_reject 'a malformed SHA256SUMS line' 'malformed or path-like line' \
+      check_final_receipt "$temp/final-sums-malformed/api.json" "$temp/final-sums-malformed/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    expect_reject 'a path-like SHA256SUMS name' 'malformed or path-like line' \
+      check_final_receipt "$temp/final-sums-pathlike/api.json" "$temp/final-sums-pathlike/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    expect_reject 'a SHA256SUMS without its final newline' 'must end with a newline' \
+      check_final_receipt "$temp/final-sums-no-newline/api.json" "$temp/final-sums-no-newline/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    for defect in sums-short-digest sums-upper-digest sums-blank-line sums-crlf sums-extra-space; do
+      expect_reject "a SHA256SUMS line that is $defect" 'malformed or path-like line' \
+        check_final_receipt "$temp/final-$defect/api.json" "$temp/final-$defect/dir" v0.2.0 "$(printf 'c%.0s' {1..40})" 424242
+    done
+    printf 'PASS: final inventory binds every asset; rejected: incomplete final inventory, duplicate, malformed, path-like, wrongly sized, upper-case, blank, CRLF and unterminated SHA256SUMS\n'
     python3 -I "$ROOT/tests/scripts/verify-v02-delivery.py" --self-test
     python3 -I "$ROOT/.github/scripts/verify-published-release-assets.py" --self-test
     recovery_self_test "$temp/recovery"
+    attached_self_test "$temp/attached"
     printf 'PASS: release configuration and exact-head required-check gate\n'
     ;;
   --check-pr)
@@ -901,10 +1160,14 @@ PY
     check_runner_evidence "$2" "$3" "$4" "$5" "$6"
     printf 'PASS: build and download-smoke runner evidence is independently bound\n'
     ;;
+  --check-attached-evidence)
+    [[ $# -eq 5 ]] || fail 'usage: verify-release-gates.sh --check-attached-evidence TAG SOURCE_SHA LIVE_ASSETS_JSON ATTACHED_ROOT'
+    check_attached_evidence "$2" "$3" "$4" "$5"
+    ;;
   --check-digest-sidecar)
     [[ $# -eq 3 ]] || fail 'usage: verify-release-gates.sh --check-digest-sidecar SIDECAR ARCHIVE'
     check_digest_sidecar "$2" "$3"
     printf 'PASS: downloaded archive matches its one-line digest sidecar\n'
     ;;
-  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-digest-sidecar SIDECAR ARCHIVE' ;;
+  *) fail 'usage: verify-release-gates.sh --self-test | --check-pr PR_NUMBER EXPECTED_HEAD_SHA | --check-merged-source SOURCE_SHA TAG RELEASE_ID SOURCE_RECEIPT PROOF_VERIFIER | --check-draft RELEASE_ID TAG SOURCE_SHA | --check-draft-final RELEASE_ID TAG SOURCE_SHA | --check-v02-evidence EVIDENCE_DIR TAG SOURCE_SHA SOURCE_ARCHIVE | --check-recovery RELEASE_ID TAG SOURCE_SHA EXPECTED_INVENTORY_JSON RUN_ID RUN_ATTEMPT full|subset | --check-runner-evidence CANDIDATE_RECEIPT BUILD_RECEIPT TAG SOURCE_SHA SMOKE_RUNNER | --check-attached-evidence TAG SOURCE_SHA LIVE_ASSETS_JSON ATTACHED_ROOT | --check-digest-sidecar SIDECAR ARCHIVE' ;;
 esac

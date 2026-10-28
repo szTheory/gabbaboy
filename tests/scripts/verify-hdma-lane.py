@@ -128,31 +128,45 @@ def lane_self_test(root: Path) -> None:
             target = scratch / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(root / relative, target)
-        # (label, file, token on the line to delete, substring the rejection must contain)
+        # (label, file, anchor of the line to delete, substring the rejection must contain). Every anchor names one whole
+        # registration or entry, and a rejection for any other reason fails the control: "something failed" proves nothing.
         controls = (
-            ("missing-case", "tests/expected-tests.txt", "cgb_hdma_claims_contract_native",
-             "exact core inventory must contain"),
-            ("skipped-lane", "tests/CMakeLists.txt", "cgb_hdma_lane_contract",
-             None),
-            ("missing-fixture-repro-needle", ".github/workflows/fixture-repro.yml", FIXTURE_REPRO_NEEDLES[0],
+            ("missing-case", "tests/expected-tests.txt", r"(?m)^cgb_hdma_claims_contract_native$",
+             "exact core inventory must contain cgb_hdma_claims_contract_native once"),
+            ("skipped-lane", "tests/CMakeLists.txt", r"(?m)^[ \t]*add_test\(NAME cgb_hdma_lane_contract(?![A-Za-z0-9_]).*$",
+             "CTest must register cgb_hdma_lane_contract exactly once"),
+            ("skipped-lane-selftest", "tests/CMakeLists.txt", r"(?m)^[ \t]*add_test\(NAME cgb_hdma_lane_contract_selftest(?![A-Za-z0-9_]).*$",
+             "CTest must register cgb_hdma_lane_contract_selftest exactly once"),
+            ("missing-fixture-repro-needle", ".github/workflows/fixture-repro.yml", re.escape(FIXTURE_REPRO_NEEDLES[0]),
              "fixture-repro workflow is missing source-pinned check"),
         )
-        for label, relative, token, reason in controls:
+        for label, relative, anchor, reason in controls:
             source = scratch / relative
             original = source.read_text(encoding="utf-8")
-            line = next((line for line in original.splitlines() if token in line), "")
-            mutated = original.replace(line + "\n", "", 1)
-            require(line != "" and mutated != original,
-                    f"{label} mutation anchor did not occur")
+            found = re.search(anchor, original)
+            require(found is not None, f"{label} mutation anchor did not occur")
+            line_start = original.rfind("\n", 0, found.start()) + 1
+            line_end = original.find("\n", found.end())
+            mutated = original[:line_start] + original[line_end + 1:]
+            require(mutated != original, f"{label} mutation changed nothing")
             source.write_text(mutated, encoding="utf-8")
             try:
                 lane_contract(scratch)
             except ContractError as error:
-                if reason is not None:
-                    require(reason in str(error), f"{label} failed for the wrong reason: {error}")
+                require(reason in str(error), f"{label} failed for the wrong reason: {error}")
             else:
                 raise ContractError(f"lane self-test did not reject {label}")
-            source.write_text(original, encoding="utf-8")
+            finally:
+                source.write_text(original, encoding="utf-8")
+        # An edit that touches none of the lane's registrations must still pass, so the rejections above are the mutations' doing.
+        unrelated = scratch / "tests/CMakeLists.txt"
+        original = unrelated.read_text(encoding="utf-8")
+        unrelated.write_text(original + "\n# unrelated trailing comment\n", encoding="utf-8")
+        try:
+            lane_contract(scratch)
+        finally:
+            unrelated.write_text(original, encoding="utf-8")
+        controls = controls + (("unrelated-edit-still-passes",),)
     print("hdma-lane self-test pass controls=%d" % len(controls))
 
 

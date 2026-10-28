@@ -10,6 +10,12 @@
 #                             build the selection (or one revision) with the DMG-only adapted harness and check
 #                             each ROM's consumed_half_dots and digest pins; needs no valgrind
 #
+# Deterministic Ir exception (D-22): a widened ir_ratio_limit passes --gate only when GBB_IR_EXCEPTION_COMMENT_JSON (the saved
+# owner comment) and GBB_IR_EXCEPTION_DECISION (the decision file) name inputs that verify-release-gates.py --review-approval
+# accepts for this run's measurement. Without them a widening is refused; ordinary runs need neither. The review issue must
+# be in this repository ($GITHUB_REPOSITORY on hosted runs, szTheory/gabbaboy otherwise), never one the decision names.
+# No workflow sets either variable (verify-workflow-policy.py refuses one that does), so hosted runs fail closed.
+#
 # The evaluator is tests/scripts/verify-perf-gate.py. This script only builds, runs and collects. It never
 # writes the real repository tree: every patched or extracted tree lives in a temporary directory.
 set -euo pipefail
@@ -17,13 +23,15 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 LIMITS="$ROOT/tests/baseline/perf-gate-v1.txt"
 CHECKER="$ROOT/tests/scripts/verify-perf-gate.py"
+GATES="$ROOT/tests/scripts/verify-release-gates.py"
 V020_EXPECTED=ab301aa69b1f085050fd66bf7b1378863a0821f2
+LIMITS_BASE_REV=947d6a9d177af6c04a5f9ea6abcc2c470ab9be57
 ROMS=(tracer libbet visible-demo)
 # Lines added to the seeded patch: about 12 Ir per half-dot. The iteration count per half-dot is sized from the
 # first hosted gate run's ratio margin; override with GBB_SEED_ITERS_PER_HALF_DOT when resizing.
 SEED_ITERS_PER_HALF_DOT=${GBB_SEED_ITERS_PER_HALF_DOT:-2}
 SEED_ANCHOR='static void advance_devices_to(gbb_instance *m, uint64_t target) {'
-BUILD_COMMAND='cc -std=c17 -O3 -DNDEBUG -I$REV/include $HARNESS $REV/src/core/*.c'
+BUILD_COMMAND='cmake -S $REV -B $BUILD -DCMAKE_BUILD_TYPE=Release; validate CMAKE_PROJECT_VERSION with cmake/StateVersion.cmake; cc -std=c17 -O3 -DNDEBUG -DGBB_STATE_RELEASE_MAJOR=$MAJOR -DGBB_STATE_RELEASE_MINOR=$MINOR -DGBB_STATE_RELEASE_PATCH=$PATCH -I$REV/include $HARNESS $REV/src/core/*.c'
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/gbb-perf-gate.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
@@ -44,11 +52,34 @@ check_rom_pins() {
   done
 }
 
-# build_measure TREE HARNESS OUT: one fixed compiler command for every tree (the Release flags CMake uses for
-# gcc), so an Ir delta reflects src/ alone.
+validated_release_triplet() {
+  local tree=$1 configure_dir=$2 revision=$3 output
+  cmake -S "$tree" -B "$configure_dir" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    -DGABBABOY_BUILD_PLAYER=OFF >"$configure_dir.log" 2>&1 || {
+      cat "$configure_dir.log" >&2
+      fail harness-version-configure-failed "CMake could not resolve source version for $tree"
+    }
+  output=$(python3 -I "$ROOT/tests/scripts/verify-state-contract.py" \
+    --state-release-from-cache "$configure_dir/CMakeCache.txt" \
+    --version-module "$ROOT/cmake/StateVersion.cmake" --cmake cmake \
+    --rev "$revision" --repo "$ROOT") ||
+    fail harness-version-invalid "StateVersion.cmake rejected the release version in $tree"
+  [[ "$output" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+    fail harness-version-invalid "validated source release triplet was malformed for $tree"
+  echo "$output"
+}
+
+# build_measure TREE HARNESS OUT: configure the source tree to obtain its own project version,
+# validate it through StateVersion.cmake, then keep one fixed compiler command for every tree.
 build_measure() {
-  cc -std=c17 -O3 -DNDEBUG -I"$1/include" "$2" "$1"/src/core/*.c -o "$3" ||
-    fail harness-build-failed "build failed for $1"
+  local tree=$1 harness=$2 out=$3 revision=$4 configure_dir="$WORK/cmake-measure-$(basename "$1")" triplet major minor patch
+  rm -rf "$configure_dir" "$configure_dir.log"
+  triplet=$(validated_release_triplet "$tree" "$configure_dir" "$revision")
+  IFS=. read -r major minor patch <<<"$triplet"
+  cc -std=c17 -O3 -DNDEBUG \
+    -DGBB_STATE_RELEASE_MAJOR="$major" -DGBB_STATE_RELEASE_MINOR="$minor" \
+    -DGBB_STATE_RELEASE_PATCH="$patch" -I"$tree/include" "$harness" "$tree"/src/core/*.c -o "$out" ||
+    fail harness-build-failed "build failed for $tree"
 }
 
 require_valgrind() {
@@ -68,9 +99,30 @@ collect() {
     for ((repeat = 1; repeat <= repeats; repeat++)); do
       cachegrind_run "$bin" "$ROOT/$(limit "rom.$rom.path")" "$dir/$rom.cg.$repeat" >"$dir/$rom.line.$repeat"
     done
-    mv "$dir/$rom.line.1" "$dir/$rom.line"
-    rm -f "$dir"/"$rom".line.[0-9]*
   done
+}
+
+# build_identity BIN REV: hash the exact executable together with its committed source identity,
+# compiler identity, and the fixed command template. The receipt contains only this digest.
+build_identity() {
+  local binary=$1 revision=$2 compiler
+  compiler=$(cc --version | head -n 1)
+  python3 -I - "$binary" "$revision" "$compiler" "$BUILD_COMMAND" <<'PY'
+import hashlib
+import json
+import sys
+
+with open(sys.argv[1], "rb") as executable:
+    binary_sha256 = hashlib.sha256(executable.read()).hexdigest()
+identity = {
+    "binary_sha256": binary_sha256,
+    "source_revision": sys.argv[2],
+    "compiler": sys.argv[3],
+    "build_command": sys.argv[4],
+}
+payload = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+print(hashlib.sha256(payload).hexdigest())
+PY
 }
 
 # timing_set BIN OUTFILE: one discarded warm-up run, then nine timed runs, for every ROM.
@@ -92,17 +144,42 @@ versions() {
 # evaluate_tree HEADTREE [realtime]: builds v0.2.0 and the head tree, collects Ir and runs the evaluator.
 # Prints the evaluator's verdict; returns its exit status.
 evaluate_tree() {
-  local head_tree=$1 with_realtime=$2 status=1 attempt
+  local head_tree=$1 with_realtime=$2 status=1 attempt head_revision base_identity head_identity
   [[ "$(git -C "$ROOT" rev-parse 'v0.2.0^{commit}')" == "$V020_EXPECTED" ]] ||
     fail workload-digest-mismatch "v0.2.0 is not $V020_EXPECTED"
   rm -rf "$WORK/base-tree" "$WORK/base" "$WORK/head"
   mkdir -p "$WORK/base-tree"
-  git -C "$ROOT" archive v0.2.0 src include | tar -x -C "$WORK/base-tree"
-  build_measure "$WORK/base-tree" "$ROOT/tests/measure_core.c" "$WORK/base-measure"
-  build_measure "$head_tree" "$ROOT/tests/measure_core.c" "$WORK/head-measure"
+  git -C "$ROOT" archive v0.2.0 CMakeLists.txt cmake src include | tar -x -C "$WORK/base-tree"
+  build_measure "$WORK/base-tree" "$ROOT/tests/measure_core.c" "$WORK/base-measure" "$V020_EXPECTED"
+  head_revision=$(git -C "$ROOT" rev-parse HEAD)
+  build_measure "$head_tree" "$ROOT/tests/measure_core.c" "$WORK/head-measure" "$head_revision"
+  base_identity=$(build_identity "$WORK/base-measure" "$V020_EXPECTED")
+  head_identity=$(build_identity "$WORK/head-measure" "$head_revision")
   collect "$WORK/base" "$WORK/base-measure" 1
   collect "$WORK/head" "$WORK/head-measure" 2
-  local args=(--evaluate --limits "$LIMITS" --base "$WORK/base" --head "$WORK/head")
+  local args=(--evaluate --limits "$LIMITS" --base "$WORK/base" --head "$WORK/head"
+    --base-rev "$LIMITS_BASE_REV" --source-base-rev "$V020_EXPECTED" --source-head-rev "$head_revision"
+    --build-base-identity "$base_identity" --build-head-identity "$head_identity")
+  # A widened Ir limit passes only with a deterministic exception receipt that verify-release-gates.py --review-approval
+  # derived from a verified OWNER comment (D-22, RM-030): the evaluator writes the exact measurement the owner approves by
+  # digest, the release gate checks the comment against it, and only the receipt that gate wrote reaches the ratchet. No
+  # receipt can be handed to the evaluator directly, ordinary runs need no approval, and an approval never excuses a
+  # correctness, safety or realtime failure: the evaluator below still judges all of those.
+  if [[ -n "${GBB_IR_EXCEPTION_COMMENT_JSON:-}" || -n "${GBB_IR_EXCEPTION_DECISION:-}" ]]; then
+    [[ -n "${GBB_IR_EXCEPTION_COMMENT_JSON:-}" && -n "${GBB_IR_EXCEPTION_DECISION:-}" ]] ||
+      fail exception-approval-incomplete "GBB_IR_EXCEPTION_COMMENT_JSON and GBB_IR_EXCEPTION_DECISION are both required"
+    rm -f "$WORK/exception-measurement.json" "$WORK/exception-decision.json" "$WORK/exception-receipt.json"
+    python3 -I "$CHECKER" "${args[@]}" --emit-exception-measurement "$WORK/exception-measurement.json" \
+      >"$WORK/exception-measure.out" 2>"$WORK/exception-measure.err" || true
+    [[ -s "$WORK/exception-measurement.json" ]] ||
+      fail exception-not-needed "no deterministic Ir exception is requested by this run: $(cat "$WORK/exception-measure.err")"
+    python3 -I "$GATES" --review-approval --comment-json "$GBB_IR_EXCEPTION_COMMENT_JSON" \
+      --decision "$GBB_IR_EXCEPTION_DECISION" --measurement "$WORK/exception-measurement.json" \
+      --rev "$head_revision" --output "$WORK/exception-decision.json" --exception-receipt "$WORK/exception-receipt.json" \
+      --repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" ||
+      fail exception-approval-refused "the OWNER approval was refused; the limit stays unapproved"
+    args+=(--exception-receipt "$WORK/exception-receipt.json")
+  fi
   if [[ "$with_realtime" == yes ]]; then
     for attempt in 1 2; do
       timing_set "$WORK/head-measure" "$WORK/realtime.txt"
@@ -122,10 +199,12 @@ evaluate_tree() {
 }
 
 digests_equal() {
-  local rom
+  local rom repeat
   for rom in "${ROMS[@]}"; do
-    [[ "$(grep -o 'correctness_digest_fnv1a64=[0-9a-f]*' "$WORK/base/$rom.line")" == \
-       "$(grep -o 'correctness_digest_fnv1a64=[0-9a-f]*' "$WORK/head/$rom.line")" ]] || return 1
+    for repeat in 1 2; do
+      [[ "$(grep -o 'correctness_digest_fnv1a64=[0-9a-f]*' "$WORK/base/$rom.line.1")" == \
+         "$(grep -o 'correctness_digest_fnv1a64=[0-9a-f]*' "$WORK/head/$rom.line.$repeat")" ]] || return 1
+    done
   done
 }
 
@@ -134,7 +213,7 @@ seeded_tree() {
   local mode=$1 tree="$WORK/seeded-tree" file count
   rm -rf "$tree"
   mkdir -p "$tree"
-  cp -R "$ROOT/src" "$ROOT/include" "$tree/"
+  cp -R "$ROOT/CMakeLists.txt" "$ROOT/cmake" "$ROOT/src" "$ROOT/include" "$tree/"
   file="$tree/src/core/gabbaboy.c"
   count=$(grep -Fxc -- "$SEED_ANCHOR" "$file" || true)
   [[ "$count" == 1 ]] || fail seeded-anchor-missing "the definition anchor matched $count lines, expected 1"
@@ -189,10 +268,17 @@ adapt_harness() {
 # build_revision SHA: extract src and include of that revision and build the adapted harness against them.
 build_revision() {
   local sha=$1 tree="$WORK/rev-$1"
+  local configure_dir="$WORK/cmake-revision-$1" triplet major minor patch
   rm -rf "$tree"
   mkdir -p "$tree"
-  git -C "$ROOT" archive "$sha" src include | tar -x -C "$tree"
-  cc -std=c17 -O3 -DNDEBUG -I"$tree/include" "$WORK/measure_core_dmg.c" "$tree"/src/core/*.c -o "$tree/measure" ||
+  git -C "$ROOT" archive "$sha" CMakeLists.txt cmake src include | tar -x -C "$tree"
+  rm -rf "$configure_dir" "$configure_dir.log"
+  triplet=$(validated_release_triplet "$tree" "$configure_dir" "$sha")
+  IFS=. read -r major minor patch <<<"$triplet"
+  cc -std=c17 -O3 -DNDEBUG \
+    -DGBB_STATE_RELEASE_MAJOR="$major" -DGBB_STATE_RELEASE_MINOR="$minor" \
+    -DGBB_STATE_RELEASE_PATCH="$patch" -I"$tree/include" \
+    "$WORK/measure_core_dmg.c" "$tree"/src/core/*.c -o "$tree/measure" ||
     fail harness-build-failed "revision $sha did not build with the adapted harness"
 }
 

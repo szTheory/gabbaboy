@@ -12,6 +12,10 @@
 # 6.7027 (hosted run 40156286321), so the PR B value is 4.02, the floor of 0.6 x 6.7027 to two decimals.
 # The visible-demo consumed_half_dots pin of 999992 is the measured per-ROM exception recorded in D-107; the
 # guard is an exact equality per ROM.
+# The immutable ratchet base is GB-17 entry commit 947d6a9d177af6c04a5f9ea6abcc2c470ab9be57. The published
+# Ir limit may widen only with a deterministic exception receipt that binds both Ir repeats, all output
+# digests and consumption counts, the exact workload, source commits, build identities, and per-ROM bands.
+# This policy does not authorize changing the Ir floor, determinism tolerance, realtime floor, or ROM pins.
 #
 # Blind spots (read before trusting a pass).
 #   - PPU, sprite, DMA and banking paths are barely exercised by these three ROMs.

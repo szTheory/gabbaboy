@@ -21,7 +21,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -362,16 +364,20 @@ def _download(job: dict, workflow: str, job_id: str, name: str) -> None:
         raise Reject("artifact-flow", f"{_where(workflow, job_id)} must download retained artifact {name}")
 
 
-# D-30 (16-06): the paired-performance review path needs one read-only gh step in a producer job: the rehearsal's dispatch
-# path fetches the pending measurement of an earlier run of the same workflow, and release.yml fetches the newest
-# successful rehearsal run's receipt. That step alone may hold GH_TOKEN (exactly `${{ github.token }}`) under a job-level
-# `actions: read`, may run only `gh run view`, `gh run download` and `gh run list`, and never runs tagged-tree code.
+# Release reuses a successful rehearsal receipt for the exact tag tree. Paired wall-clock timing itself is advisory,
+# so rehearsal producer jobs have no decision input or tokened measurement-fetch step.
 PERFORMANCE_TOKEN_STEPS = {
-    ("release-rehearsal", "performance"): "Fetch the pending measurement that the review decision covers",
-    ("release-rehearsal", "aggregate"): "Fetch the pending measurement that the review decision covers",
     ("release", "candidate-performance"): "Fetch the newest successful rehearsal run's performance receipt for this tag",
 }
 _GH_READ = re.compile(r"gh\s+run\s+(?:view|download|list)\b")
+# The two read-only listings the rehearsal-reuse selection judges (WR-01): the rehearsal workflow's successful runs on this tag's
+# branch, and one run's artifacts. Any other `gh api` form, method flag or path stays a repository-write/API command.
+_GH_API_READ = re.compile(r'gh\s+api\s+"repos/\$GITHUB_REPOSITORY/actions/(?:workflows/release-rehearsal\.yml/runs\?[A-Za-z0-9_=&/$]+'
+                          r'|runs/\$run_id/artifacts\?per_page=100)"')
+
+
+def _gh_reads(text: str, replacement: str) -> str:
+    return _GH_API_READ.sub(replacement, _GH_READ.sub(replacement, text))
 
 
 def _check_unprivileged(workflow: str, tree: dict, job_id: str) -> None:
@@ -394,9 +400,9 @@ def _check_unprivileged(workflow: str, tree: dict, job_id: str) -> None:
             raise Reject("producer-token", f"{_where(workflow, job_id)} step {token_step!r} must be the one step holding GH_TOKEN: ${{{{ github.token }}}}")
         holder = holders[0]
         holder["env"] = {key: value for key, value in holder["env"].items() if key != "GH_TOKEN"}
-        if _TOKEN.search(str(holder.get("run", ""))) or SUBJECT_EXECUTION.search(_GH_READ.sub("", str(holder.get("run", "")))):
+        if _TOKEN.search(str(holder.get("run", ""))) or SUBJECT_EXECUTION.search(_gh_reads(str(holder.get("run", "")), "")):
             raise Reject("producer-token", f"{_where(workflow, job_id)} step {token_step!r} runs tagged-tree code while holding the token")
-        holder["run"] = _GH_READ.sub("gh-read", str(holder.get("run", "")))
+        holder["run"] = _gh_reads(str(holder.get("run", "")), "gh-read")
         scanned = {k: (steps if k == "steps" else v) for k, v in scanned.items()}
     if any(_TOKEN.search(text) for text in _strings(scanned)):
         raise Reject("producer-token", f"{_where(workflow, job_id)} references the job token or a secret")
@@ -1091,22 +1097,10 @@ PERF_GATE_COMMANDS = (
     "bash tests/scripts/run-perf-gate.sh --gate",
     "bash tests/scripts/run-perf-gate.sh --seeded-regression",
     "bash tests/scripts/run-perf-gate.sh --noop-twin",
+    # RM-030: the release gate controls (eight owner-approval and six nightly mutants plus the extras) run beside the gate.
+    'python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"',
 )
 PERFORMANCE_MEASURE = "bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json"
-# D-30 (16-06): a decision is applied only to the retained measurement of a release-rehearsal run on the same branch whose commit has this
-# run's tree, to a decision file written outside the checkout; the fetch step and the apply step are separate so the token never meets subject code.
-PERFORMANCE_FETCH_PINS = (
-    'gh run download "$MEASUREMENT_RUN_ID"',
-    '"$run_workflow" == release-rehearsal',
-    '"$run_branch" == "$GITHUB_REF_NAME"',
-    'git rev-parse "$run_sha^{tree}"',
-    'git rev-parse "$GITHUB_SHA^{tree}"',
-    "performance-decision-tree-mismatch",
-)
-PERFORMANCE_APPLY_PINS = (
-    "--apply-decision --measurement",
-    '--decision "$RUNNER_TEMP/performance-decision.json" --output build/v02-performance-receipt.json',
-)
 PERFORMANCE_UPLOAD = "rehearsal-performance-${{ github.run_id }}-${{ github.run_attempt }}"
 REHEARSAL_REQUIRED = {
     "perf-gate": PERF_GATE_COMMANDS,
@@ -1157,6 +1151,11 @@ REHEARSAL_REQUIRED = {
         'python3 -I trusted-judge/tests/scripts/verify-support-ledger.py --derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject',
     ),
 }
+# RM-030 (D-22): the exact-tree nightly ASan replay gate runs from the trusted revision, bound to the tagged source, after the
+# final downloaded-byte gate and before the one publication transition.
+NIGHTLY_GATE_CALL = ('python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate --runs-json "$RUNNER_TEMP/nightly-runs.json" '
+                     '--run-json "$RUNNER_TEMP/nightly-run.json" --head "$head" --rev "$SOURCE_SHA" --branch "rehearsal/$RELEASE_TAG" '
+                     '--output "$RUNNER_TEMP/nightly-gate-receipt.json"')
 _PUBLISH_INVENTORY = 'python3 -I trusted/.github/scripts/verify-published-release-assets.py --inventory "$RUNNER_TEMP/expected-inventory.json" build/release-final'
 _PUBLISH_RECOVERY = ('bash trusted/.github/scripts/verify-release-gates.sh --check-recovery "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA" '
                      '"$RUNNER_TEMP/expected-inventory.json" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" full')
@@ -1287,6 +1286,33 @@ CI_REQUIRED = (
     "cmake --build --preset phase1-asan",
     "GBB_BUILD_DIR=build-asan bash tests/scripts/run-bounded-fuzz.sh --fast",
 )
+STATE_PIN_NATIVE_JOBS = {
+    "native-linux": ("linux-x64", "state-pins-linux"),
+    "native-macos": ("macos-arm64", "state-pins-macos"),
+    "native-windows": ("windows-x64", "state-pins-windows"),
+}
+STATE_PIN_TEST_COMMAND = "ctest --test-dir build -R '^state_portable_pins$' --output-on-failure --no-tests=error"
+# The state pin base step body, pinned byte for byte (17-REVIEW WR-C02): a substring check let an inserted
+# `base=$(git rev-parse HEAD)` keep every token while the ratchet compared HEAD with itself. A push parent that is all
+# zeros or no longer reachable (a rebase or force-push, WR-C05) falls back to the merge base with origin/main, as the
+# budget base step does; anything else that does not resolve fails the step.
+STATE_PIN_BASE_RUN = (
+    'if [ "$EVENT_NAME" = "pull_request" ]; then\n'
+    '  base="$PR_BASE"\n'
+    '  test -n "$base"\n'
+    'elif [ "$EVENT_NAME" = "push" ]; then\n'
+    '  base="$PUSH_BEFORE"\n'
+    '  test -n "$base"\n'
+    '  if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then\n'
+    '    base=$(git merge-base HEAD origin/main)\n'
+    '  fi\n'
+    'else\n'
+    '  echo "Unsupported CI event for immutable state pin base: $EVENT_NAME" >&2\n'
+    '  exit 1\n'
+    'fi\n'
+    'git cat-file -e "${base}^{commit}"\n'
+    'echo "base=$base" >> "$GITHUB_OUTPUT"'
+)
 # The ASan inventory runs in two jobs apart from the fuzz campaign, which keeps its pinned 45-minute bound. Their
 # exact filters are complementary, and each checks exactly its slice of the expected inventory (LESSONS GB-CI-010).
 _ASAN_SHARD_BUILD = ("cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=", "cmake --build --preset phase1-asan")
@@ -1394,21 +1420,44 @@ def _flat(step: dict) -> str:
 
 
 def _check_performance_qualification(workflow: str, job: dict, job_id: str) -> None:
-    fetch_name = PERFORMANCE_TOKEN_STEPS[(workflow, job_id)]
+    if workflow != "release-rehearsal" or job_id not in ("performance", "aggregate"):
+        raise Reject("performance-advisory-path", f"unexpected advisory performance job {workflow}.{job_id}")
     steps = job.get("steps", [])
-    fetch = [step for step in steps if step.get("name") == fetch_name]
-    if len(fetch) != 1 or any(" ".join(pin.split()) not in _flat(fetch[0]) for pin in PERFORMANCE_FETCH_PINS):
-        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must fetch a decision's measurement only from a same-branch release-rehearsal run of this tree")
-    apply_steps = [step for step in steps if "--apply-decision" in _flat(step)]
-    if len(apply_steps) != 1 or any(pin not in _flat(apply_steps[0]) for pin in PERFORMANCE_APPLY_PINS) or apply_steps[0].get("env", {}).get("GH_TOKEN"):
-        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must apply the decision to the fetched measurement in a tokenless step with the decision outside the checkout")
-    if steps.index(fetch[0]) > steps.index(apply_steps[0]):
-        raise Reject("performance-decision-unbound", f"{_where(workflow, job_id)} must fetch the measurement before applying a decision")
+    flattened = " ".join(_flat(step) for step in steps)
+    if any(token in flattened for token in ("--apply-decision", "performance_decision", "measurement_run_id",
+                                           "pending-investigation")):
+        raise Reject("performance-advisory-path", f"{_where(workflow, job_id)} routes ordinary timing through review approval")
+    measures = [step for step in steps if PERFORMANCE_MEASURE in _flat(step)]
+    verify_command = "python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json"
+    verifies = [step for step in steps if verify_command in _flat(step)]
+    valid_order = len(measures) == 1 and len(verifies) == 1
+    if valid_order:
+        measure_step, verify_step = measures[0], verifies[0]
+        valid_order = steps.index(measure_step) <= steps.index(verify_step)
+        if valid_order and measure_step is verify_step:
+            valid_order = _flat(measure_step).index(PERFORMANCE_MEASURE) < _flat(verify_step).index(verify_command)
+    if not valid_order:
+        raise Reject("performance-advisory-path", f"{_where(workflow, job_id)} must measure and verify one advisory receipt unconditionally")
     if job_id == "performance":
         uploads = [step for step in _artifact_steps(job, "upload") if step.get("with", {}).get("name") == PERFORMANCE_UPLOAD]
         if len(uploads) != 1 or str(uploads[0].get("if", "")).strip() not in ("always()", "${{ always() }}") \
                 or uploads[0]["with"].get("path") != "build/v02-performance-receipt.json":
-            raise Reject("artifact-flow", f"{_where(workflow, job_id)} must retain the measurement or qualified receipt with if: always()")
+            raise Reject("artifact-flow", f"{_where(workflow, job_id)} must retain the advisory receipt with if: always()")
+
+
+def _check_release_performance_consumer(job: dict) -> None:
+    steps = job.get("steps", [])
+    flattened = " ".join(_flat(step) for step in steps)
+    if "--apply-decision" in flattened or "performance_decision" in flattened or "pending-investigation" in flattened:
+        raise Reject("performance-advisory-path", "release candidate-performance routes ordinary timing through review approval")
+    consumer = [step for step in steps if "--verify build/v02-performance-receipt.json" in _flat(step)]
+    if len(consumer) != 1:
+        raise Reject("performance-advisory-consumer", "release candidate-performance must verify the final advisory receipt")
+    producer = [step for step in steps if PERFORMANCE_MEASURE in _flat(step)]
+    reuse = [step for step in steps if "--verify-reuse" in _flat(step)]
+    if len(producer) != 1 or len(reuse) != 1 or producer[0] is not reuse[0] or \
+            steps.index(consumer[0]) < steps.index(reuse[0]):
+        raise Reject("performance-advisory-consumer", "release candidate-performance must verify either the exact-tree reused receipt or a measured advisory receipt")
 
 
 def _check_performance_reuse(workflow: str, job: dict) -> None:
@@ -1416,9 +1465,18 @@ def _check_performance_reuse(workflow: str, job: dict) -> None:
     steps = job.get("steps", [])
     fetch = [step for step in steps if step.get("name") == PERFORMANCE_TOKEN_STEPS[(workflow, "candidate-performance")]]
     run = _flat(fetch[0]) if len(fetch) == 1 else ""
-    for pin in ('--workflow release-rehearsal.yml --branch "rehearsal/$RELEASE_TAG" --status success', "gh run download"):
+    judge = '"$RUNNER_TEMP/verify-release-source-proof.py"'
+    for pin in ('git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > ' + judge,
+                "release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success",
+                f"if run_id=$(python3 -I {judge} --select-performance-run ",
+                '--tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo "$GITHUB_REPOSITORY" --selected-run ',
+                "actions/runs/$run_id/artifacts?per_page=100",
+                f"if artifact=$(python3 -I {judge} --select-performance-artifact ",
+                'gh run download "$run_id"', '--name "$artifact"'):
         if pin not in run:
-            raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must fetch only from a successful rehearsal run of this tag: {pin}")
+            raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must fetch only the validated artifact of a successful rehearsal run of this tag, judged by the trusted revision: {pin}")
+    if re.search(r"python3?\s+(?:-\w+\s+)*\.?/?\.github/scripts/verify-release-source-proof\.py|\|\|\s*true", run):
+        raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must not judge reuse with the tagged tree's copy or swallow a refusal")
     reuse = [step for step in steps if "--verify-reuse" in _flat(step)]
     if len(reuse) != 1 or '--tag-tree "$tag_tree"' not in _flat(reuse[0]) or 'tag_tree=$(git rev-parse "$SOURCE_SHA^{tree}")' not in _flat(reuse[0]) \
             or reuse[0].get("env", {}).get("GH_TOKEN"):
@@ -1437,6 +1495,10 @@ def check_rehearsal(root: Path) -> None:
     _check_run_expressions(name, tree)
     _check_no_duplicate_setup(name, tree)
     _check_checkout_credentials(name, tree, tree["jobs"])
+    dispatch = tree.get("on", {}).get("workflow_dispatch", {})
+    inputs = dispatch.get("inputs", {}) if isinstance(dispatch, dict) else {}
+    if isinstance(inputs, dict) and {"performance_decision", "measurement_run_id"} & set(inputs):
+        raise Reject("performance-advisory-path", "release rehearsal must not expose ordinary timing decision inputs")
     for job_id, job in tree["jobs"].items():
         if _writes(_permissions(job, tree["permissions"])):
             raise Reject("producer-write-authority", f"{_where(name, job_id)} holds write authority in a non-publishing rehearsal")
@@ -1463,8 +1525,7 @@ def check_rehearsal(root: Path) -> None:
             raise Reject("judge-subject-execution", f"{_where(name, 'judge')} names a path inside the subject tree; subject files are data only")
     for job_id, commands in REHEARSAL_REQUIRED.items():
         for command in commands:
-            # The paired measurement is the no-decision branch of the qualification step (D-30); the verifier after it is unconditional.
-            require_call(name, job_id, tree["jobs"][job_id], command, conditional=command == PERFORMANCE_MEASURE and job_id in ("performance", "aggregate"))
+            require_call(name, job_id, tree["jobs"][job_id], command)
     for job_id in ("performance", "aggregate"):
         _check_performance_qualification(name, tree["jobs"][job_id], job_id)
 
@@ -1612,6 +1673,80 @@ def check_ci(root: Path) -> None:
             require_call(name, shard, shard_job, command)
     for command, var, conditional in CI_STATUS_CALLS:
         require_call(name, "linux-sanitizers", job, command, conditional=conditional, errexit_off=True, status_var=var)
+    _check_state_pin_native_jobs(root, tree)
+
+
+def _check_state_pin_native_jobs(root: Path, tree: dict) -> None:
+    """Require immutable-base state pins and installed package consumers on each existing native OS lane."""
+    workflow = "ci"
+    expected_path = root / "tests/expected-tests.txt"
+    try:
+        expected_tests = set(expected_path.read_text(encoding="utf-8").splitlines())
+    except OSError as error:
+        raise Reject("state-pin-inventory", "tests/expected-tests.txt is unavailable") from error
+    required_inventory = {"state_portable_pins", "state_pin_controls", "installed_consumer_c",
+                          "installed_consumer_cpp", "preview_package_smoke"}
+    if not required_inventory <= expected_tests:
+        raise Reject("state-pin-inventory", "expected test inventory omits a state pin control or installed consumer")
+
+    for job_id, (platform, artifact_prefix) in STATE_PIN_NATIVE_JOBS.items():
+        job = _require_job(workflow, tree, job_id)
+        checkout = _checkouts(job)
+        if len(checkout) != 1 or str(checkout[0].get("with", {}).get("fetch-depth")) != "0":
+            raise Reject("state-pin-base", f"ci.{job_id} must fetch full history for an immutable PR/push base")
+        base_steps = [step for step in job.get("steps", []) if step.get("id") == "state_pin_base"]
+        if len(base_steps) != 1:
+            raise Reject("state-pin-base", f"ci.{job_id} must resolve exactly one immutable state pin base")
+        base_step = base_steps[0]
+        base_env = base_step.get("env", {})
+        base_run = str(base_step.get("run", ""))
+        for key, expression in (("EVENT_NAME", "${{ github.event_name }}"),
+                                ("PR_BASE", "${{ github.event.pull_request.base.sha }}"),
+                                ("PUSH_BEFORE", "${{ github.event.before }}")):
+            if base_env.get(key) != expression:
+                raise Reject("state-pin-base", f"ci.{job_id} state pin base must read the immutable PR/push event SHA")
+        if base_run.strip("\n") != STATE_PIN_BASE_RUN or set(base_env) != {"EVENT_NAME", "PR_BASE", "PUSH_BEFORE"} or \
+                set(base_step) - {"name", "id", "shell", "env", "run"} or base_step.get("shell", "bash") != "bash":
+            raise Reject("state-pin-base", f"ci.{job_id} state pin base must be exactly the pinned event-base resolution")
+        configure = [step for step in job.get("steps", []) if step.get("name") == "Configure"]
+        if len(configure) != 1 or configure[0].get("env", {}).get("STATE_PIN_BASE") != \
+                "${{ steps.state_pin_base.outputs.base }}":
+            raise Reject("state-pin-base", f"ci.{job_id} Configure must consume the resolved immutable base")
+        configure_run = str(configure[0].get("run", ""))
+        if job_id == "native-windows":
+            base_arg = '-DGBB_STATE_PIN_BASE_REV="$env:STATE_PIN_BASE"'
+        else:
+            base_arg = '-DGBB_STATE_PIN_BASE_REV="$STATE_PIN_BASE"'
+        if base_arg not in configure_run:
+            raise Reject("state-pin-base", f"ci.{job_id} Configure must pass the event base into the pin ratchet")
+
+        pin_steps = [step for step in job.get("steps", [])
+                     if step.get("name") == "Run state pins against the immutable event base"]
+        if len(pin_steps) != 1 or STATE_PIN_TEST_COMMAND not in str(pin_steps[0].get("run", "")):
+            raise Reject("state-pin-target", f"ci.{job_id} must execute the compiled state_portable_pins target")
+        pin_env = pin_steps[0].get("env", {})
+        if pin_env.get("GBB_STATE_PIN_RECEIPT") != "${{ github.workspace }}/build/state-pin-receipt.json" or \
+                pin_env.get("GBB_STATE_PLATFORM") != platform:
+            raise Reject("state-pin-receipt", f"ci.{job_id} must write a path-free, platform-labelled pin receipt")
+        require_call(workflow, job_id, job, STATE_PIN_TEST_COMMAND)
+
+        uploads = [step for step in _artifact_steps(job, "upload")
+                   if str(step.get("with", {}).get("name", "")).startswith(artifact_prefix + "-")]
+        if len(uploads) != 1:
+            raise Reject("state-pin-receipt", f"ci.{job_id} must retain exactly one platform pin receipt")
+        upload = uploads[0]
+        details = upload.get("with", {})
+        if upload.get("if") != "always()" or details.get("path") != "build/state-pin-receipt.json" or \
+                details.get("if-no-files-found") != "error" or str(details.get("retention-days")) != "7" or \
+                "${{ github.run_id }}" not in details.get("name", "") or \
+                "${{ github.run_attempt }}" not in details.get("name", ""):
+            raise Reject("state-pin-receipt", f"ci.{job_id} pin receipt artifact must be run-scoped and retained")
+
+        require_call(workflow, job_id, job, "cmake --install build --prefix build/package-prefix")
+        require_call(workflow, job_id, job, "ctest --test-dir build")
+        require_call(workflow, job_id, job, "bash .github/scripts/verify-test-inventory.sh",
+                     contains=("tests/expected-tests.txt", "--installed"),
+                     allow_always=(job_id == "native-linux"))
 
 
 PERF_ATTRIBUTION_COMMANDS = (
@@ -1653,6 +1788,55 @@ NIGHTLY_COMMANDS = (
 )
 
 
+# The red report (IN-03). The replay is skipped by the dry run, which runs the same reporting body with every write replaced by a
+# recorded line; the open issue is reused only on an exact title AND the label, never on a title phrase.
+NIGHTLY_REPLAY_IF = "${{ !inputs.report_red_dry_run }}"
+NIGHTLY_REPORT_IF = "${{ failure() || (always() && inputs.report_red_dry_run) }}"
+NIGHTLY_ISSUE_TITLE = "nightly-red: asan-full-replay"
+NIGHTLY_ISSUE_LABEL = "nightly-red"
+NIGHTLY_DRY_RUN_ENV = "${{ inputs.report_red_dry_run && 'true' || 'false' }}"
+NIGHTLY_DEDUPE_FILTER = "[.[] | select(.title == env.ISSUE_TITLE and any(.labels[]; .name == env.ISSUE_LABEL))]"
+NIGHTLY_REPORT_STEP_TIMEOUT_MAX = 5
+_NIGHTLY_BARE_WRITE = re.compile(r"(?m)^\s*(?:gh\s+(?:issue\s+(?:create|comment|edit|close|reopen)|label\s+(?:create|edit|delete))\b)")
+
+
+def _check_nightly_report(job: dict) -> None:
+    where = "nightly-asan.report-red"
+    if _needs(job) != {"asan-full-replay"} or str(job.get("if", "")).strip() != NIGHTLY_REPORT_IF:
+        raise Reject("nightly-report-trigger", f"{where} must need asan-full-replay and run only if: {NIGHTLY_REPORT_IF}")
+    if job.get("permissions") != {"issues": "write"}:
+        raise Reject("nightly-report-permissions", f"{where} must hold issues: write as its only permission")
+    if _checkouts(job) or any("uses" in step for step in job.get("steps", [])):
+        raise Reject("nightly-report-checkout", f"{where} must not check out source or use any action")
+    # The job's own timeout needs a ledger row citing a completed report-red run, and none exists until the dry run has been
+    # dispatched on a pushed head (the job has only ever been skipped). Until then the bound is the reporting step's; once the
+    # row is cited, the job-level timeout-minutes and its ledger row are judged by check_timeout_ledger like any other job.
+    steps = job.get("steps", [])
+    if len(steps) != 1:
+        raise Reject("nightly-report-body", f"{where} must hold exactly the one reporting step")
+    step = steps[0]
+    minutes = str(step.get("timeout-minutes", ""))
+    if not minutes.isdigit() or not 1 <= int(minutes) <= NIGHTLY_REPORT_STEP_TIMEOUT_MAX:
+        raise Reject("nightly-report-timeout", f"{where} reporting step needs a timeout-minutes of at most {NIGHTLY_REPORT_STEP_TIMEOUT_MAX}")
+    env = step.get("env", {})
+    if env.get("ISSUE_TITLE") != NIGHTLY_ISSUE_TITLE or env.get("ISSUE_LABEL") != NIGHTLY_ISSUE_LABEL \
+            or env.get("DRY_RUN") != NIGHTLY_DRY_RUN_ENV:
+        raise Reject("nightly-report-body", f"{where} must pass the exact title, the label and the dry-run flag through env")
+    run = str(step.get("run", ""))
+    flat = _flat(step)
+    if NIGHTLY_DEDUPE_FILTER not in run or 'gh issue list --state open --label "$ISSUE_LABEL" --limit 100 ' not in run \
+            or "--search" in run or "in:title" in run:
+        raise Reject("nightly-report-dedupe", f"{where} must find the open issue by exact title and label, not by a title phrase search")
+    if 'issue_write issue create --title "$ISSUE_TITLE" --label "$ISSUE_LABEL"' not in run \
+            or 'issue_write issue comment "$number"' not in run or "issue_write label create" not in run:
+        raise Reject("nightly-report-dedupe", f"{where} must create the issue with the label, comment on a match and create the label when it is missing")
+    if 'if [ "$DRY_RUN" = true ]; then' not in run or "DRY-RUN not sent" not in run or 'gh "$@"' not in run:
+        raise Reject("nightly-report-dry-run", f"{where} must route every write through issue_write, which only records it in a dry run")
+    if _NIGHTLY_BARE_WRITE.search(run.replace('gh "$@"', "")) or re.search(r"\|\|\s*true", flat) \
+            or str(step.get("continue-on-error", "false")).lower() not in ("", "false"):
+        raise Reject("nightly-report-dry-run", f"{where} writes to GitHub outside issue_write or ignores a failure")
+
+
 def check_nightly(root: Path) -> None:
     """The scheduled full ASan stall replay (D-19, D-108): two triggers, a read-only replay job that runs the repository
     code, and a separate report job that alone holds issues: write, has no checkout and runs no repository code (T-16-07)."""
@@ -1660,6 +1844,11 @@ def check_nightly(root: Path) -> None:
     tree = read_workflow(root / ".github/workflows/nightly-asan.yml")
     if _trigger_names(tree) != {"schedule", "workflow_dispatch"}:
         raise Reject("workflow-trigger", "nightly-asan must trigger on schedule and workflow_dispatch only")
+    dispatch = tree["on"].get("workflow_dispatch") if isinstance(tree.get("on"), dict) else None
+    inputs = dispatch.get("inputs") if isinstance(dispatch, dict) else None
+    if not isinstance(inputs, dict) or set(inputs) != {"report_red_dry_run"} or not isinstance(inputs["report_red_dry_run"], dict) \
+            or inputs["report_red_dry_run"].get("type") != "boolean" or str(inputs["report_red_dry_run"].get("default")) != "false":
+        raise Reject("workflow-trigger", "nightly-asan workflow_dispatch may take only the boolean report_red_dry_run input, default false")
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "nightly-asan must declare only top-level contents: read")
     _check_actions(name, tree)
@@ -1678,15 +1867,11 @@ def check_nightly(root: Path) -> None:
         raise Reject("runner-image", "nightly-asan.asan-full-replay must run on the pinned ubuntu-24.04 image")
     if "timeout-minutes" not in replay:
         raise Reject("job-timeout", "nightly-asan.asan-full-replay must carry timeout-minutes")
+    if str(replay.get("if", "")).strip() != NIGHTLY_REPLAY_IF:
+        raise Reject("nightly-replay-trigger", f"nightly-asan.asan-full-replay may be skipped only by the dry run: if: {NIGHTLY_REPLAY_IF}")
     for command in NIGHTLY_COMMANDS:
         require_call(name, "asan-full-replay", replay, command)
-    report = tree["jobs"]["report-red"]
-    if _needs(report) != {"asan-full-replay"} or str(report.get("if", "")).strip() != "failure()":
-        raise Reject("nightly-report-trigger", "nightly-asan.report-red must need asan-full-replay and run if: failure()")
-    if report.get("permissions") != {"issues": "write"}:
-        raise Reject("nightly-report-permissions", "nightly-asan.report-red must hold issues: write as its only permission")
-    if _checkouts(report) or any("uses" in step for step in report.get("steps", [])):
-        raise Reject("nightly-report-checkout", "nightly-asan.report-red must not check out source or use any action")
+    _check_nightly_report(tree["jobs"]["report-red"])
 
 
 def _check_residual_classification(roles=None, subject=None, exempt=None, overlays=None) -> None:
@@ -1777,13 +1962,115 @@ def _check_release_entrypoint(root: Path) -> None:
         raise Reject("release-entrypoint", f"{RELEASE_ENTRYPOINT_WORKFLOW} must call {RELEASE_LOCAL_PATH} from a job")
 
 
+# --------------------------------------------------------------------------- release lifecycle script (RM-028, D-20)
+# The attach, manifest, final-gate and publication steps of release.yml are bodies of .github/scripts/release-evidence-lifecycle.sh,
+# so the production workflow and the local replay run the same commands. The judge therefore reads each step that calls the
+# script as if its body were inline: every rule below (command reachability, order, trusted-judge paths, token scope) keeps
+# judging the exact text that runs. A mode that is not called, called from the wrong job, called with a path outside the trusted
+# checkout, or defined twice is rejected, so extracted code can never be unused or substituted.
+LIFECYCLE_SCRIPT = ".github/scripts/release-evidence-lifecycle.sh"
+LIFECYCLE_MODES = {
+    "attach-evidence": "attach-v02-evidence",
+    "validate-evidence": "candidate-platform-manifest",
+    "build-manifest": "candidate-platform-manifest",
+    "validate-draft": "publish-qualified-release",
+    "final-gate": "publish-qualified-release",
+    "nightly-gate": "publish-qualified-release",
+    "publish-draft": "publish-qualified-release",
+}
+_LIFECYCLE_CALL = re.compile(r"^bash trusted/\.github/scripts/release-evidence-lifecycle\.sh ([a-z-]+)$")
+
+
+def lifecycle_regions(text: str) -> dict[str, str]:
+    """The verbatim body of every mode: the lines between its BEGIN and END markers, each defined exactly once."""
+    regions: dict[str, str] = {}
+    for mode in LIFECYCLE_MODES:
+        begin, end = f"\n# BEGIN {mode}\n", f"\n# END {mode}\n"
+        if text.count(begin) != 1 or text.count(end) != 1 or text.find(begin) > text.find(end):
+            raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} must define the mode {mode} exactly once between its BEGIN and END markers")
+        function = f"\nlifecycle_{mode.replace('-', '_')}() {{{begin}"
+        if text.count(function) != 1:
+            raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} mode {mode} must be the body of its own function")
+        if f"\n  {mode}) lifecycle_{mode.replace('-', '_')} ;;\n" not in text:
+            raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} does not dispatch the mode {mode} to its function")
+        regions[mode] = text[text.find(begin) + len(begin):text.find(end)]
+    _check_lifecycle_skeleton(text)
+    return regions
+
+
+# WR-C02: the script outside the regions is a pinned skeleton. Without it a function override (`python3() { return 0; }`),
+# a `trap 'exit 0' ERR`, or an extra first `case` arm (`nightly-gate) exit 0 ;;`, which bash takes before the real one)
+# kept every region and dispatch line intact while the gates never ran. Comment and blank lines are free.
+LIFECYCLE_USAGE_ARM = ("  *) printf 'usage: release-evidence-lifecycle.sh " + "|".join(LIFECYCLE_MODES) +
+                       "\\n' >&2; exit 2 ;;")
+
+
+def _check_lifecycle_skeleton(text: str) -> None:
+    outside = text
+    for mode in LIFECYCLE_MODES:
+        begin, end = f"\n# BEGIN {mode}\n", f"\n# END {mode}\n"
+        start, stop = outside.find(begin), outside.find(end)
+        outside = outside[:start + 1] + outside[stop + len(end):]
+    lines = [line.rstrip() for line in outside.split("\n") if line.strip() and not line.lstrip().startswith("#")]
+    functions = [f"lifecycle_{mode.replace('-', '_')}" for mode in LIFECYCLE_MODES]
+    expected = ["set -euo pipefail"]
+    for function in functions:
+        expected += [f"{function}() {{", "}"]
+    expected.append('case "${1:-}" in')
+    expected += [f"  {mode}) {function} ;;" for mode, function in zip(LIFECYCLE_MODES, functions)]
+    expected += [LIFECYCLE_USAGE_ARM, "esac"]
+    if lines != expected:
+        first = next((index for index, (got, want) in enumerate(zip(lines, expected)) if got != want), min(len(lines), len(expected)))
+        got = lines[first] if first < len(lines) else "<end of script>"
+        want = expected[first] if first < len(expected) else "<end of script>"
+        raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} outside its mode regions must be the pinned skeleton: "
+                     f"found {got[:80]!r} where {want[:80]!r} belongs")
+
+
+def expand_lifecycle(workflow: str, tree: dict, root: Path) -> None:
+    path = root / LIFECYCLE_SCRIPT
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise Reject("lifecycle-wiring", f"{workflow} calls {LIFECYCLE_SCRIPT}, which cannot be read: {exc.strerror}") from exc
+    regions = lifecycle_regions(text)
+    called: dict[str, str] = {}
+    for job_id, job in tree["jobs"].items():
+        for step in job.get("steps", []):
+            run = str(step.get("run", "")).strip()
+            if "release-evidence-lifecycle.sh" not in run:
+                continue
+            match = _LIFECYCLE_CALL.fullmatch(run)
+            if not match or match.group(1) not in LIFECYCLE_MODES:
+                raise Reject("lifecycle-wiring", f"{_where(workflow, job_id)} must call the lifecycle script exactly as "
+                             "'bash trusted/.github/scripts/release-evidence-lifecycle.sh MODE' with a known mode")
+            mode = match.group(1)
+            if LIFECYCLE_MODES[mode] != job_id or mode in called:
+                raise Reject("lifecycle-wiring", f"{_where(workflow, job_id)} must not call the lifecycle mode {mode}: "
+                             f"it belongs to {LIFECYCLE_MODES[mode]} and runs once")
+            called[mode] = job_id
+            step["run"] = regions[mode]
+    missing = sorted(set(LIFECYCLE_MODES) - set(called))
+    if missing:
+        raise Reject("lifecycle-wiring", f"{workflow} never calls the extracted lifecycle mode(s) {', '.join(missing)}: extracted code must be executed by the workflow")
+
+
 ATTACH_REUSE_GUARD = 'if [[ "${RETRY:-}" == true ]]; then'
 ATTACH_REUSE_DOWNLOAD = 'gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern "$name" --dir "$RUNNER_TEMP/attached-$name"'
 
 
+# IN-01: the attached bytes are judged on their own BEFORE any regenerated copy is replaced. The check reads the attachments
+# (downloaded first) and the live asset list; a refusal must leave the regenerated evidence untouched, so it precedes the
+# copy that reuses the attachments and the recovery decision.
+ATTACH_TAMPER_CHECK = ('bash trusted/.github/scripts/verify-release-gates.sh --check-attached-evidence "$RELEASE_TAG" "$SOURCE_SHA" '
+                       '"$RUNNER_TEMP/attached-assets.json" "$RUNNER_TEMP"')
+ATTACH_REUSE_COPY = 'cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"'
+
+
 def _check_attach_reuse(workflow: str, job: dict) -> None:
-    """Evidence already attached to the draft replaces regenerated bytes only on a retry, before the recovery decision,
-    and without any write; the downstream owner validators then judge those bytes against the tag source."""
+    """Evidence already attached to the draft replaces regenerated bytes only on a retry, after an independent tamper check
+    of the attached bytes and before the recovery decision, and without any write; the downstream owner validators then
+    judge those bytes against the tag source."""
     if job.get("env", {}).get("RETRY") != "${{ inputs.retry }}":
         raise Reject("attach-reuse-env", f"{_where(workflow, 'attach-v02-evidence')} RETRY must be the workflow's inputs.retry")
     runs = [step.get("run", "") for step in job.get("steps", []) if "attach evidence without replacing any asset" in step.get("name", "")]
@@ -1796,12 +2083,20 @@ def _check_attach_reuse(workflow: str, job: dict) -> None:
     block = text[guard:decision]
     if re.search(r"gh release (upload|edit|delete)|gh api[^\n]*(-X|--method)", block):
         raise Reject("attach-reuse-write", f"{_where(workflow, 'attach-v02-evidence')} reuse of attached evidence must not write to the release")
+    check, copy = text.find(ATTACH_TAMPER_CHECK), text.find(ATTACH_REUSE_COPY)
+    if check < 0 or copy < 0 or text.count(ATTACH_TAMPER_CHECK) != 1 or text.count(ATTACH_REUSE_COPY) != 1:
+        raise Reject("attach-tamper-order", f"{_where(workflow, 'attach-v02-evidence')} must judge the attached evidence with --check-attached-evidence "
+                     "once and reuse it with one copy")
+    if not (guard < download < check < copy < decision):
+        raise Reject("attach-tamper-order", f"{_where(workflow, 'attach-v02-evidence')} must download the attached evidence, run the independent "
+                     "tamper check, and only then replace the regenerated copies, all before the recovery decision")
 
 
 def check_release(root: Path) -> None:
     name = "release"
     _check_residual_classification()
     tree = read_workflow(root / ".github/workflows/release.yml")
+    expand_lifecycle(name, tree, root)
     if tree.get("permissions") != {"contents": "read"}:
         raise Reject("workflow-permissions", "release must declare only top-level contents: read")
     _check_release_triggers(name, tree)
@@ -1868,6 +2163,7 @@ def check_release(root: Path) -> None:
         for command in commands:
             require_call(name, job_id, jobs[job_id], command, conditional=command == PERFORMANCE_MEASURE and job_id == "candidate-performance")
     _check_performance_reuse(name, jobs["candidate-performance"])
+    _check_release_performance_consumer(jobs["candidate-performance"])
     _check_attach_reuse(name, jobs["attach-v02-evidence"])
     _check_fuzz_source_binding(name, tree)
     _check_fuzz_wait_budget(name, tree)
@@ -1884,6 +2180,12 @@ def check_release(root: Path) -> None:
     upload_at = require_call(name, "publish-qualified-release", publisher, upload, conditional=True)
     if not inventory_at < recovery_at < upload_at:
         raise Reject("recovery-order", f"{_where(name, 'publish-qualified-release')} must decide recovery from live state before any final-metadata upload")
+    nightly_at = require_call(name, "publish-qualified-release", publisher, NIGHTLY_GATE_CALL)
+    if not gate_at < nightly_at < publish_at:
+        raise Reject("nightly-gate-order", f"{_where(name, 'publish-qualified-release')} must run the nightly ASan replay gate after the final "
+                     "downloaded-byte gate and before the one publication transition")
+    if _permissions(publisher, tree["permissions"]).get("actions") != "read":
+        raise Reject("nightly-gate-permissions", f"{_where(name, 'publish-qualified-release')} needs exactly actions: read to list the nightly runs")
     readback_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][3] + ' "$assets" build/release-final/api-assets.json')
     if readback_at <= publish_at:
         raise Reject("publication-order", f"{_where(name, 'publish-qualified-release')} must read published assets back after the publication transition")
@@ -1895,6 +2197,7 @@ def check_release(root: Path) -> None:
     _check_release_entrypoint(root)
     attach = jobs["attach-v02-evidence"]
     require_call(name, "attach-v02-evidence", attach, 'gh release upload "$RELEASE_TAG" "$1/$2" --repo "$GH_REPO"', conditional=True)
+    require_call(name, "attach-v02-evidence", attach, ATTACH_TAMPER_CHECK, conditional=True)
     attach_call = require_call(name, "attach-v02-evidence", attach, 'attach "$dir" "$name"', conditional=True)
     attach_inventory_at = require_call(name, "attach-v02-evidence", attach, _ATTACH_INVENTORY)
     attach_recovery_at = require_call(name, "attach-v02-evidence", attach, _ATTACH_RECOVERY)
@@ -2087,6 +2390,10 @@ def check_rehearsal_flag_scope(root: Path) -> None:
         if path.name != "release-rehearsal.yml":
             if REHEARSAL_FLAG.search(path.read_text(encoding="utf-8")):
                 raise Reject("rehearsal-flag-scope", f"{path.name} must not pass --rehearsal; only the rehearsal aggregate may")
+    # The release steps now live in the lifecycle script, so the same rule covers it.
+    lifecycle = root / LIFECYCLE_SCRIPT
+    if lifecycle.is_file() and REHEARSAL_FLAG.search(lifecycle.read_text(encoding="utf-8")):
+        raise Reject("rehearsal-flag-scope", f"{LIFECYCLE_SCRIPT} must not pass --rehearsal; only the rehearsal aggregate may")
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
     for job_id, job in tree["jobs"].items():
         for step in job.get("steps", []):
@@ -2094,8 +2401,207 @@ def check_rehearsal_flag_scope(root: Path) -> None:
                 raise Reject("rehearsal-flag-scope", f"release-rehearsal.{job_id} must not pass --rehearsal; only the aggregate may")
 
 
+# --------------------------------------------------------------------------- version-PR content window (RM-028, D-19)
+# release-please regenerates the version PR (body, changelog, version files) and the ledger is rendered from managed
+# inputs, so a reviewed window is judged AFTER regeneration by the trusted checker, with the version-PR head read as
+# Git objects and never executed. The gate is fatal, runs even when the release job fails, keeps the push trigger
+# unfiltered and the release-note paths in release-please's own change set. It does not open or merge a version PR.
+WINDOW_WORKFLOW = "release-please.yml"
+WINDOW_JOB = "version-window"
+WINDOW_IF = "${{ !cancelled() && inputs.retry != true }}"
+WINDOW_CHECKER = "tests/scripts/verify-version-window.py"
+WINDOW_RECORD = "tests/data/version-window.json"
+WINDOW_CONFIG = "release-please-config.json"
+WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
+               '--base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
+WINDOW_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
+WINDOW_STEP_TIMEOUT_MAX = 10
+# release-please already ignores its own workflow and script paths when attributing commits; anything wider would hide
+# a source, release-note or generator-input change from the version PR the window freezes.
+WINDOW_EXCLUDED_PATHS_ALLOWED = (".github/workflows", ".github/scripts")
+
+
+def _check_window_config(root: Path) -> None:
+    try:
+        config = json.loads((root / WINDOW_CONFIG).read_text(encoding="utf-8"), object_pairs_hook=_ledger_pairs)
+    except OSError as exc:
+        raise Reject("window-config", f"cannot read {WINDOW_CONFIG}: {exc.strerror}") from exc
+    except (ValueError, Reject) as exc:
+        raise Reject("window-config", f"{WINDOW_CONFIG} is not strict JSON: {exc}") from exc
+    package = config.get("packages", {}).get(".") if isinstance(config, dict) else None
+    if not isinstance(package, dict):
+        raise Reject("window-config", f"{WINDOW_CONFIG} must configure the root package")
+    for scope, holder in (("top level", config), ("root package", package)):
+        excluded = holder.get("exclude-paths", [])
+        if not isinstance(excluded, list) or any(path not in WINDOW_EXCLUDED_PATHS_ALLOWED for path in excluded):
+            raise Reject("window-path-excluded",
+                         f"{WINDOW_CONFIG} {scope} exclude-paths may only be {list(WINDOW_EXCLUDED_PATHS_ALLOWED)}, not {excluded!r}: "
+                         "excluding source, release-note or generator-input paths hides changes from the version PR")
+        if holder.get("skip-changelog") not in (None, False) or holder.get("skip-github-release") not in (None, False):
+            raise Reject("window-config", f"{WINDOW_CONFIG} {scope} may not skip the changelog or the GitHub release")
+    if package.get("changelog-path") != "CHANGELOG.md" or "CMakeLists.txt" not in package.get("extra-files", []):
+        raise Reject("window-config", f"{WINDOW_CONFIG} must keep CHANGELOG.md and the CMakeLists.txt version file under release-please")
+
+
+def check_version_window(root: Path) -> None:
+    name = WINDOW_WORKFLOW
+    tree = read_workflow(root / ".github/workflows" / WINDOW_WORKFLOW)
+    for path in (WINDOW_CHECKER, WINDOW_RECORD):
+        if not (root / path).is_file():
+            raise Reject("window-gate-missing", f"{path} is required by the {WINDOW_JOB} gate and is not in the tree")
+    push = tree.get("on", {}).get("push") if isinstance(tree.get("on"), dict) else None
+    if not isinstance(push, dict) or push.get("branches") != ["main"] or {"paths", "paths-ignore"} & set(push):
+        raise Reject("window-trigger-filtered", f"{name} must start on every push to main; a paths filter would let a relevant change skip regeneration")
+    job = tree["jobs"].get(WINDOW_JOB)
+    if job is None:
+        raise Reject("window-gate-missing", f"{name} has no {WINDOW_JOB} job, so a regenerated version PR is never judged against its window")
+    if _needs(job) != {"release"}:
+        raise Reject("window-gate-order", f"{_where(name, WINDOW_JOB)} must depend on exactly the release job so it judges the PR after regeneration")
+    if str(job.get("if", "")).strip() != WINDOW_IF:
+        raise Reject("window-gate-skipped", f"{_where(name, WINDOW_JOB)} must run with {WINDOW_IF}, so a failed release job cannot skip it")
+    if _permissions(job, tree.get("permissions", {})) != WINDOW_PERMISSIONS:
+        raise Reject("window-gate-permissions", f"{_where(name, WINDOW_JOB)} needs exactly {WINDOW_PERMISSIONS}")
+    _check_checkout_credentials(name, tree, (WINDOW_JOB,))
+    checkouts = _checkouts(job)
+    by_path = {step.get("with", {}).get("path"): step.get("with", {}) for step in checkouts}
+    if len(checkouts) != 2 or set(by_path) != {"trusted", "version-pr"}:
+        raise Reject("window-gate-trust", f"{_where(name, WINDOW_JOB)} needs exactly a trusted checkout and a version-pr data checkout")
+    if by_path["trusted"].get("ref") != TRUSTED_SHA_REF:
+        raise Reject("window-gate-trust", f"{_where(name, WINDOW_JOB)} must take the checker from the trusted main commit {TRUSTED_SHA_REF}")
+    if str(by_path["version-pr"].get("fetch-depth", "")) != "0":
+        raise Reject("window-gate-history", f"{_where(name, WINDOW_JOB)} needs the full history of the version PR to prove ancestry")
+    for step in job.get("steps", []):
+        minutes = str(step.get("timeout-minutes", ""))
+        if not minutes.isdigit() or not 1 <= int(minutes) <= WINDOW_STEP_TIMEOUT_MAX:
+            raise Reject("window-gate-timeout", f"{_where(name, WINDOW_JOB)} step {step.get('name', '?')!r} needs a timeout-minutes of at most {WINDOW_STEP_TIMEOUT_MAX}")
+    _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
+    _check_bounded_downloads(name, tree)
+    require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
+    _check_window_config(root)
+
+
+
+PERF_GATE_SCRIPT = "tests/scripts/run-perf-gate.sh"
+RELEASE_GATES_CLI = "tests/scripts/verify-release-gates.py"
+PERF_GATE_APPROVAL_PARTS = (
+    # (fragment, how many times it must appear, the reason)
+    ('--emit-exception-measurement "$WORK/exception-measurement.json"', 1, "the evaluator must write the measurement the owner approves"),
+    ('python3 -I "$GATES" --review-approval --comment-json "$GBB_IR_EXCEPTION_COMMENT_JSON"', 1, "the release gate must verify the owner comment"),
+    ('--measurement "$WORK/exception-measurement.json" \\\n      --rev "$head_revision" --output "$WORK/exception-decision.json" --exception-receipt "$WORK/exception-receipt.json" \\\n'
+     '      --repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" ||\n      fail exception-approval-refused', 1,
+     "the approval must be bound to the measurement, the head and this repository, and its refusal must be fatal"),
+    ('args+=(--exception-receipt "$WORK/exception-receipt.json")', 1, "only the receipt the gate wrote may reach the evaluator"),
+)
+
+
+def check_release_gate_wiring(root: Path) -> None:
+    """RM-030: the actual conditional Ir exception path verifies an OWNER approval before the ratchet sees a receipt."""
+    try:
+        text = (root / PERF_GATE_SCRIPT).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT} cannot be read: {exc.strerror}") from exc
+    if not (root / RELEASE_GATES_CLI).is_file():
+        raise Reject("release-gate-wiring", f"{RELEASE_GATES_CLI} is absent, so the approval path is defined but cannot run")
+    for fragment, count, reason in PERF_GATE_APPROVAL_PARTS:
+        if text.count(fragment) != count:
+            raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT}: {reason} (expected {count} of: {fragment[:70]})")
+    if "GBB_PERF_EXCEPTION_RECEIPT" in text or text.count("--exception-receipt") != 2:
+        raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT} must not accept an exception receipt that the approval gate did not write")
+    emit, review, handed = (text.find(part) for part in ('--emit-exception-measurement "$WORK', 'python3 -I "$GATES" --review-approval',
+                                                          'args+=(--exception-receipt'))
+    if not 0 < emit < review < handed:
+        raise Reject("release-gate-wiring", f"{PERF_GATE_SCRIPT} must emit the measurement, verify the approval and only then hand over the receipt")
+
+
+# CR-C01: the owner-approval inputs of a widened Ir limit reach run-perf-gate.sh only through these two environment
+# names, and no workflow has a legitimate reason to supply them: an approval is verified locally by the owner, and no
+# trusted step fetches the comment from the API. A workflow, job or step `env:`, a `$GITHUB_ENV` write, or any other
+# text naming them (a split name included, so the suffixes are matched on their own, and case-insensitively because
+# Windows environment names are) is refused in every workflow file, listed or not. The expected review repository
+# comes from $GITHUB_REPOSITORY, so a workflow that assigns that name is refused too. With both rules, a hosted run
+# fails closed for a widened limit.
+IR_EXCEPTION_ENV = re.compile(r"GBB_IR_EXCEPTION|EXCEPTION_COMMENT_JSON|EXCEPTION_DECISION|GITHUB_REPOSITORY\s*[:=]", re.I)
+
+
+def check_ir_exception_env(root: Path) -> None:
+    directory = root / ".github/workflows"
+    for path in sorted([*directory.glob("*.yml"), *directory.glob("*.yaml")]):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise Reject("ir-exception-env", f"{path.name} cannot be read: {exc.strerror}") from exc
+        found = IR_EXCEPTION_ENV.search(text)
+        if found:
+            line = text.count("\n", 0, found.start()) + 1
+            raise Reject("ir-exception-env", f"{path.name}:{line}: a workflow must not supply the Ir exception approval inputs "
+                         f"or the expected review repository ({found.group(0)!r}); hosted runs fail closed for a widened limit")
+
+
+# WR-C01: rules for every workflow file, including ones the specific checks above do not know. The workflow set is
+# closed, so a new file is refused until it is listed and judged. No workflow may use a trigger that runs with the base
+# repository's token on contributed code (pull_request_target, workflow_run), forward secrets to a called workflow, or
+# interpolate event text an outsider controls (a branch name, a title, a body) into a run body. A write permission is
+# allowed only where it is listed below, scope by scope; every top level is read-only.
+WORKFLOW_FORBIDDEN_TRIGGERS = frozenset({"pull_request_target", "workflow_run"})
+WORKFLOW_WRITE_ALLOWLIST = {
+    ("release.yml", "release"): frozenset({"contents", "issues", "pull-requests"}),
+    ("release.yml", "candidate"): frozenset({"contents"}),
+    ("release.yml", "candidate-macos"): frozenset({"contents"}),
+    ("release.yml", "candidate-windows"): frozenset({"contents"}),
+    ("release.yml", "attach-v02-evidence"): frozenset({"contents"}),
+    ("release.yml", "candidate-platform-manifest"): frozenset({"contents"}),
+    ("release.yml", "publish-qualified-release"): frozenset({"contents"}),
+    ("release-please.yml", "release"): frozenset({"contents", "issues", "pull-requests"}),
+    ("nightly-asan.yml", "report-red"): frozenset({"issues"}),
+}
+# Event fields whose values are commit ids, not text an outsider writes; anything else under github.event, and
+# github.head_ref, reaches a run body only through env:.
+_EVENT_TEXT = re.compile(r"github\.head_ref|github\.event\.(?!(?:pull_request\.(?:head|base)\.sha|before|after)\b)\w")
+
+
+def check_workflow_set(root: Path) -> None:
+    """Runs first: an unlisted or vanished workflow file is refused before any rule reads a listed one."""
+    directory = root / ".github/workflows"
+    present = {path.name for path in [*directory.glob("*.yml"), *directory.glob("*.yaml")]}
+    if present != set(WORKFLOWS):
+        unknown, missing = sorted(present - set(WORKFLOWS)), sorted(set(WORKFLOWS) - present)
+        raise Reject("workflow-unlisted", f"the workflow set must be exactly the judged list: unlisted {unknown}, missing {missing}")
+
+
+def check_workflow_closed_world(root: Path) -> None:
+    """Runs last, so a defect a specific rule names keeps that rule's code."""
+    directory = root / ".github/workflows"
+    for name in WORKFLOWS:
+        tree = read_workflow(directory / name)
+        forbidden = sorted(_trigger_names(tree) & WORKFLOW_FORBIDDEN_TRIGGERS)
+        if forbidden:
+            raise Reject("workflow-trigger", f"{name} must not run on {', '.join(forbidden)}")
+        top = tree.get("permissions", {})
+        if not isinstance(top, dict) or _writes(top):
+            raise Reject("workflow-write-permissions", f"{name} top-level permissions must be an explicit read-only map")
+        for job_id, job in tree["jobs"].items():
+            if "secrets" in job:
+                raise Reject("workflow-secrets", f"{_where(name, job_id)} must not forward secrets to a called workflow")
+            perms = _permissions(job, tree)
+            writes = {scope for scope, value in perms.items() if value == "write"}
+            allowed = WORKFLOW_WRITE_ALLOWLIST.get((name, job_id), frozenset())
+            if writes - allowed:
+                raise Reject("workflow-write-permissions", f"{_where(name, job_id)} gains write access it is not listed for: "
+                             f"{', '.join(sorted(writes - allowed))}")
+            for step in job.get("steps", []):
+                for expression in _EXPRESSION.findall(str(step.get("run", ""))):
+                    if _EVENT_TEXT.search(expression):
+                        raise Reject("run-expression", f"{_where(name, job_id)} step {step.get('name', '?')!r} interpolates "
+                                     f"${{{{ {expression.strip()} }}}} into a run body; pass it through step-level env")
+
+
 def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
+    check_workflow_set(root)
     check_producer_script(root)
+    check_ir_exception_env(root)
     check_rehearsal_flag_scope(root)
     check_rehearsal(root)
     check_ci(root)
@@ -2104,9 +2610,148 @@ def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_readonly_workflows(root)
     check_preview_player_lane(root)
     check_release(root)
+    check_release_gate_wiring(root)
+    check_version_window(root)
     check_timeout_ledger(root, release_head)
+    check_workflow_closed_world(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
+
+
+# --------------------------------------------------------------------------- red-report body replay (IN-03)
+# The reporting step's own run body is executed under bash against a `gh` stand-in that serves fixture-shaped label and issue
+# lists (applying the body's own --jq with the real jq), refuses every other call with exit 97 and records the calls that would
+# change GitHub. A comment is credited only for the exact title carrying the label, and a dry run must send nothing at all.
+_REPORT_RED_STUB = r"""#!/usr/bin/env bash
+set -eu
+expr=""
+previous=""
+for argument in "$@"; do
+  if [ "$previous" = "--jq" ]; then expr=$argument; fi
+  previous=$argument
+done
+case "$1 ${2:-}" in
+  "label list") printf '%s' "$STUB_LABELS" | jq -r "$expr" ;;
+  "issue list") printf '%s' "$STUB_ISSUES" | jq -r "$expr" ;;
+  "label create"|"issue create"|"issue comment") printf 'SENT gh %s\n' "$*" >> "$STUB_LOG" ;;
+  *) printf 'unexpected gh call: %s\n' "$*" >&2; exit 97 ;;
+esac
+"""
+_REPORT_TITLE = "nightly-red: asan-full-replay"
+_REPORT_LABEL = "nightly-red"
+
+
+def _report_issue(number: int, title: str, labels: tuple[str, ...]) -> dict:
+    return {"number": number, "title": title, "labels": [{"name": name, "color": "b60205", "description": ""} for name in labels]}
+
+
+# name, open issues the stand-in serves, labels that exist, dry run -> the calls expected (sent, then recorded-not-sent)
+_REPORT_SCENARIOS = (
+    ("no open issue creates one with the label", [], [_REPORT_LABEL], False,
+     [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("the exact title with the label is reused", [_report_issue(7, _REPORT_TITLE, (_REPORT_LABEL,))], [_REPORT_LABEL], False,
+     ["issue comment 7 --body"], []),
+    ("the lowest-numbered exact match is reused", [_report_issue(9, _REPORT_TITLE, (_REPORT_LABEL,)), _report_issue(4, _REPORT_TITLE, (_REPORT_LABEL, "bug"))],
+     [_REPORT_LABEL], False, ["issue comment 4 --body"], []),
+    ("an unrelated title containing the phrase opens a new issue", [_report_issue(7, f"Investigate {_REPORT_TITLE} flake", (_REPORT_LABEL,))],
+     [_REPORT_LABEL], False, [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("a title that only starts with the phrase opens a new issue", [_report_issue(7, _REPORT_TITLE + " (old)", (_REPORT_LABEL,))],
+     [_REPORT_LABEL], False, [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("the exact title under another label opens a new issue", [_report_issue(7, _REPORT_TITLE, ("bug",))],
+     [_REPORT_LABEL], False, [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("the exact title with no label at all opens a new issue", [_report_issue(7, _REPORT_TITLE, ())],
+     [_REPORT_LABEL], False, [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("a missing label is created before the issue", [], [], False,
+     [f"label create {_REPORT_LABEL} --description Nightly ASan stall replay failed --color B60205",
+      f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"], []),
+    ("a dry run with no open issue sends nothing", [], [_REPORT_LABEL], True, [],
+     [f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"]),
+    ("a dry run with a match sends nothing", [_report_issue(7, _REPORT_TITLE, (_REPORT_LABEL,))], [_REPORT_LABEL], True, [],
+     ["issue comment 7 --body"]),
+    ("a dry run with a missing label sends nothing", [], [], True, [],
+     [f"label create {_REPORT_LABEL} --description Nightly ASan stall replay failed --color B60205",
+      f"issue create --title {_REPORT_TITLE} --label {_REPORT_LABEL} --body"]),
+)
+
+
+def _replay_report_body(body: str, scratch: Path, issues: list, labels: list[str], dry_run: bool) -> tuple[list[str], list[str], int]:
+    """Run the body once. Returns (calls sent, calls recorded but not sent, exit status), each call cut before its --body text."""
+    stub_dir = scratch / "bin"
+    stub_dir.mkdir(exist_ok=True)
+    stub = stub_dir / "gh"
+    stub.write_bytes(_REPORT_RED_STUB.encode("utf-8"))
+    stub.chmod(0o755)
+    log = scratch / "calls.log"
+    log.write_bytes(b"")
+    env = {key: value for key, value in os.environ.items() if key in ("PATH", "TMPDIR", "HOME", "LANG")}
+    env.update(PATH=f"{stub_dir}{os.pathsep}{env.get('PATH', '')}", STUB_LOG=str(log),
+               STUB_ISSUES=json.dumps(issues), STUB_LABELS=json.dumps([{"name": name} for name in labels]),
+               RUN_URL="https://example.invalid/runs/1", ISSUE_TITLE=_REPORT_TITLE, ISSUE_LABEL=_REPORT_LABEL,
+               DRY_RUN="true" if dry_run else "false", GH_TOKEN="stub", GH_REPO="owner/repo")
+    done = subprocess.run(["bash", "-c", body], capture_output=True, text=True, check=False, env=env, timeout=30)
+
+    def cut(line: str) -> str:
+        line = line.split(" gh ", 1)[1] if " gh " in line else line
+        return line.split("--body", 1)[0].strip() + (" --body" if "--body" in line else "")
+    sent = [cut(line) for line in log.read_text(encoding="utf-8").splitlines() if line.startswith("SENT gh ")]
+    recorded = [cut(line) for line in done.stdout.splitlines() if line.startswith("DRY-RUN not sent: gh ")]
+    return sent, recorded, done.returncode
+
+
+def report_red_replay_controls(root: Path) -> int:
+    """Positive scenarios on the production body and body mutants that the scenarios must tell apart. POSIX only: the body is
+    bash and the stand-in applies its jq filters with the real jq."""
+    if os.name == "nt":
+        print("skipped: red-report body replay (needs bash and jq; the static report-red rules above still apply)")
+        return 0
+    if shutil.which("bash") is None or shutil.which("jq") is None:
+        raise SystemExit("self-test red-report replay needs bash and jq on PATH")
+    tree = read_workflow(root / ".github/workflows/nightly-asan.yml")
+    steps = tree["jobs"]["report-red"]["steps"]
+    body = str(steps[0]["run"])
+    controls = 0
+    with tempfile.TemporaryDirectory(prefix="gbb-report-red.") as directory:
+        scratch = Path(directory)
+
+        def outcome(text: str, scenario: tuple) -> tuple[list[str], list[str], int]:
+            return _replay_report_body(text, scratch, scenario[1], scenario[2], scenario[3])
+
+        for scenario in _REPORT_SCENARIOS:
+            sent, recorded, status = outcome(body, scenario)
+            if status != 0 or sent != scenario[4] or recorded != scenario[5]:
+                raise SystemExit(f"self-test red-report replay: {scenario[0]}: exit={status} sent={sent} recorded={recorded}, "
+                                 f"wanted sent={scenario[4]} recorded={scenario[5]}")
+            controls += 1
+        # Each mutant must behave differently from the production body on the scenario that exists to catch it.
+        by_name = {scenario[0]: scenario for scenario in _REPORT_SCENARIOS}
+        mutants = (
+            ("a title phrase match", "select(.title == env.ISSUE_TITLE and", "select((.title | contains(env.ISSUE_TITLE)) and",
+             "an unrelated title containing the phrase opens a new issue"),
+            ("a title prefix match", "select(.title == env.ISSUE_TITLE and", "select((.title | startswith(env.ISSUE_TITLE)) and",
+             "a title that only starts with the phrase opens a new issue"),
+            ("no label match", " and any(.labels[]; .name == env.ISSUE_LABEL))]", ")]",
+             "the exact title under another label opens a new issue"),
+            ("a label match on any label", "any(.labels[]; .name == env.ISSUE_LABEL)", "(.labels | length) > 0",
+             "the exact title under another label opens a new issue"),
+            ("the newest match", "sort_by(.number) | .[0].number", "sort_by(.number) | .[-1].number",
+             "the lowest-numbered exact match is reused"),
+            ("an issue write outside the wrapper", 'issue_write issue create --title', 'gh issue create --title',
+             "a dry run with no open issue sends nothing"),
+            ("a wrapper that always sends", 'if [ "$DRY_RUN" = true ]; then', 'if [ "$DRY_RUN" = never ]; then',
+             "a dry run with a match sends nothing"),
+            ("a missing label that is never created", '!= true ]; then\n', '!= true ] && false; then\n',
+             "a missing label is created before the issue"),
+        )
+        for label, old, new, scenario_name in mutants:
+            if body.count(old) < 1:
+                raise SystemExit(f"self-test red-report replay: mutant anchor for {label!r} is absent from the production body")
+            scenario = by_name[scenario_name]
+            sent, recorded, status = outcome(body.replace(old, new, 1), scenario)
+            if status == 0 and sent == scenario[4] and recorded == scenario[5]:
+                raise SystemExit(f"self-test red-report replay: the mutant {label!r} behaved like the production body on {scenario_name!r}")
+            controls += 1
+    print(f"rejected: red-report body replay holds {len(_REPORT_SCENARIOS)} scenarios and refuses {len(mutants)} mutants")
+    return controls
 
 
 # --------------------------------------------------------------------------- self-test
@@ -2118,7 +2763,8 @@ def _copy_fixture(root: Path, target: Path) -> None:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
-    for extra in (LEDGER_PATH, "CMakeLists.txt"):
+    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD, LIFECYCLE_SCRIPT,
+                  PERF_GATE_SCRIPT, RELEASE_GATES_CLI):
         if (root / extra).is_file():
             (target / extra).parent.mkdir(parents=True, exist_ok=True)
             (target / extra).write_bytes((root / extra).read_bytes())
@@ -2189,9 +2835,9 @@ def _mutations():
            '"$RUNNER_TEMP/source-archive.tar.gz" --rehearsal', '"$RUNNER_TEMP/source-archive.tar.gz"', "required-command-not-executed"),
         _m("rehearsal judge verifies the fuzz receipt without its source", reh, "  judge:\n",
            ' --source-sha "$GITHUB_SHA"', "", "required-command-not-executed"),
-        _m("release passes --rehearsal to the evidence gate", rel, "  candidate-platform-manifest:\n",
-           '"$RUNNER_TEMP/source-archive.tar.gz"\n      - name: Validate the exact candidate asset set',
-           '"$RUNNER_TEMP/source-archive.tar.gz" --rehearsal\n      - name: Validate the exact candidate asset set', "rehearsal-flag-scope"),
+        _m("release passes --rehearsal to the evidence gate", "lifecycle", "# BEGIN validate-evidence\n",
+           '"$RUNNER_TEMP/source-archive.tar.gz"\n# END validate-evidence',
+           '"$RUNNER_TEMP/source-archive.tar.gz" --rehearsal\n# END validate-evidence', "rehearsal-flag-scope"),
         _m("a rehearsal producer job passes --rehearsal", reh, "  fuzz:\n",
            "run-bounded-fuzz.sh --self-test", "run-bounded-fuzz.sh --self-test --rehearsal", "rehearsal-flag-scope"),
         _m("rehearsal fuzz producer gains contents: write", reh, "  fuzz:\n", "    runs-on: ubuntu-24.04\n",
@@ -2209,6 +2855,8 @@ def _mutations():
         _m("rehearsal judge stops waiting for the perf-gate producer", reh, "  judge:\n",
          "needs: [corpus, fuzz, performance, perf-gate, package, aggregate]", "needs: [corpus, fuzz, performance, package, aggregate]",
          "workflow-dependency"),
+        _m("rehearsal perf-gate deterministic and realtime gate removed", reh, "  perf-gate:\n",
+         "bash tests/scripts/run-perf-gate.sh --gate", "true", "required-command-not-executed"),
         _m("rehearsal perf-gate seeded-regression control removed", reh, "  perf-gate:\n",
          "bash tests/scripts/run-perf-gate.sh --seeded-regression", "true", "required-command-not-executed"),
         # Planning-only lane (16-04, D-21): each mutation removes one piece of the fail-toward-full wiring.
@@ -2221,6 +2869,28 @@ def _mutations():
            "planning-lane-condition"),
         _m("heavy job runs for kind planning", "ci.yml", "  native-windows:\n", "kind == 'full'", "kind == 'planning'", "planning-lane-condition"),
         _m("heavy job stops needing changes", "ci.yml", "  cmake-floor-3-25-3:\n", "    needs: changes\n", "", "planning-lane-condition"),
+        _m("native macOS state pin lane is missing", "ci.yml", "", "  native-macos:\n", "  native-macos-disabled:\n", "workflow-job-missing"),
+        _m("native state pin ratchet uses its own source as the base", "ci.yml", "  native-linux:\n",
+           '-DGBB_STATE_PIN_BASE_REV="$STATE_PIN_BASE"', '-DGBB_STATE_PIN_BASE_REV="$GITHUB_SHA"',
+           "state-pin-base"),
+        _m("ordinary push state pin base bypasses its event before SHA", "ci.yml", "  native-linux:\n",
+           'base="$PUSH_BEFORE"', 'base=$(git merge-base HEAD origin/main)', "state-pin-base"),
+        # WR-C05: an unreachable push parent (a rebase or force-push) must fall back to the merge base, not fail.
+        _m("WR-C05 state pin base fails on an unreachable push parent", "ci.yml", "  native-macos:\n",
+           'if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then', 'if [ -z "${base//0/}" ]; then',
+           "state-pin-base"),
+        # WR-C02: every token kept, but the resolved base is replaced by HEAD (the ratchet compares HEAD with itself).
+        _m("WR-C02 state pin base overwritten with HEAD after validation", "ci.yml", "  native-windows:\n",
+           'echo "base=$base" >> "$GITHUB_OUTPUT"', 'base=$(git rev-parse HEAD)\n{I}echo "base=$base" >> "$GITHUB_OUTPUT"',
+           "state-pin-base"),
+        _m("WR-C02 state pin base gains an environment override", "ci.yml", "  native-linux:\n",
+           "          PUSH_BEFORE: ${{ github.event.before }}\n        run: |\n          if [ \"$EVENT_NAME\"",
+           "          PUSH_BEFORE: ${{ github.event.before }}\n          BASH_ENV: build/override.sh\n        run: |\n          if [ \"$EVENT_NAME\"",
+           "state-pin-base"),
+        _m("native state pin target is replaced by its controls test", "ci.yml", "  native-linux:\n",
+           "state_portable_pins", "state_pin_controls", "state-pin-target"),
+        _m("native installed consumer route drops its inventory gate", "ci.yml", "  native-linux:\n",
+           "--installed", "", "required-command-not-executed"),
         _m("required-native loses if: always()", "ci.yml", "  required-native:\n", "    if: always()\n", "", "workflow-dependency"),
         _m("required-native stops waiting for planning-checks", "ci.yml", "  required-native:\n", "      - planning-checks\n", "", "workflow-dependency"),
         _m("required-native stops reading the classification", "ci.yml", "  required-native:\n",
@@ -2245,9 +2915,9 @@ def _mutations():
         _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
            'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
            "required-command-not-executed"),
-        _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "  native-linux:\n",
+        _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "      - name: Resolve the per-test budget base commit\n",
            ' || ! git cat-file -e "${base}^{commit}"; then', "; then", "budget-base-fallback"),
-        _m("ci budget base stops failing closed", "ci.yml", "  native-linux:\n",
+        _m("ci budget base stops failing closed", "ci.yml", "      - name: Resolve the per-test budget base commit\n",
            '          git cat-file -e "${base}^{commit}"\n          echo', "          echo", "budget-base-fallback"),
         _m("nightly gains a pull_request trigger", "nightly-asan.yml", "", "  workflow_dispatch:\n",
            "  workflow_dispatch:\n  pull_request:\n", "workflow-trigger"),
@@ -2258,6 +2928,43 @@ def _mutations():
            "        with:\n          persist-credentials: false\n", "nightly-report-checkout"),
         _m("nightly replay drops the full-replay ctest filter", "nightly-asan.yml", "  asan-full-replay:\n",
            "-R '^acceptance_stall_diagnosis(_replay_[12])?$'", "-R '^acceptance_'", "required-command-not-executed"),
+        _m("nightly report step loses its timeout", "nightly-asan.yml", "  report-red:\n", "        timeout-minutes: 5\n", "", "nightly-report-timeout"),
+        _m("nightly report step timeout is an hour", "nightly-asan.yml", "  report-red:\n", "        timeout-minutes: 5", "        timeout-minutes: 60", "nightly-report-timeout"),
+        _m("nightly report job loses its ledgered timeout", "nightly-asan.yml", "  report-red:\n", "    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n",
+           "    runs-on: ubuntu-24.04\n", "timeout-ledger-stale"),
+        _m("nightly report dedupes on a title phrase search", "nightly-asan.yml", "  report-red:\n",
+           "--state open --label", "--state open --search \"$ISSUE_TITLE in:title\" --label", "nightly-report-dedupe"),
+        _m("nightly report matches the title as a substring", "nightly-asan.yml", "  report-red:\n",
+           "select(.title == env.ISSUE_TITLE and", "select((.title | contains(env.ISSUE_TITLE)) and", "nightly-report-dedupe"),
+        _m("nightly report ignores the label when matching", "nightly-asan.yml", "  report-red:\n",
+           " and any(.labels[]; .name == env.ISSUE_LABEL))]", ")]", "nightly-report-dedupe"),
+        _m("nightly report lists without the label filter", "nightly-asan.yml", "  report-red:\n",
+           '--state open --label "$ISSUE_LABEL" --limit', "--state open --limit", "nightly-report-dedupe"),
+        _m("nightly report creates the issue without the label", "nightly-asan.yml", "  report-red:\n",
+           'issue_write issue create --title "$ISSUE_TITLE" --label "$ISSUE_LABEL"', 'issue_write issue create --title "$ISSUE_TITLE"', "nightly-report-dedupe"),
+        _m("nightly report title is another phrase", "nightly-asan.yml", "  report-red:\n",
+           'ISSUE_TITLE: "nightly-red: asan-full-replay"', 'ISSUE_TITLE: "nightly-red"', "nightly-report-body"),
+        _m("nightly report label is another label", "nightly-asan.yml", "  report-red:\n",
+           "ISSUE_LABEL: nightly-red", "ISSUE_LABEL: bug", "nightly-report-body"),
+        _m("nightly report dry-run flag is ignored", "nightly-asan.yml", "  report-red:\n",
+           "DRY_RUN: ${{ inputs.report_red_dry_run && 'true' || 'false' }}", "DRY_RUN: 'false'", "nightly-report-body"),
+        _m("nightly report writes the issue outside the recording wrapper", "nightly-asan.yml", "  report-red:\n",
+           'issue_write issue comment "$number" --body "$body"', 'gh issue comment "$number" --body "$body"', "nightly-report-dedupe"),
+        _m("nightly report wrapper always sends", "nightly-asan.yml", "  report-red:\n",
+           'if [ "$DRY_RUN" = true ]; then', 'if [ "$DRY_RUN" = never ]; then', "nightly-report-dry-run"),
+        _m("nightly report swallows a failed write", "nightly-asan.yml", "  report-red:\n",
+           '              gh "$@"\n', '              gh "$@" || true\n', "nightly-report-dry-run"),
+        _m("nightly report step continues on error", "nightly-asan.yml", "  report-red:\n",
+           "        timeout-minutes: 5\n", "        timeout-minutes: 5\n        continue-on-error: true\n", "ignored-gate"),
+        _m("nightly report runs on every success too", "nightly-asan.yml", "  report-red:\n",
+           "if: ${{ failure() || (always() && inputs.report_red_dry_run) }}", "if: ${{ always() }}", "nightly-report-trigger"),
+        _m("nightly report no longer needs the replay", "nightly-asan.yml", "  report-red:\n",
+           "    needs: asan-full-replay\n", "", "nightly-report-trigger"),
+        _m("nightly replay can be skipped by anything", "nightly-asan.yml", "  asan-full-replay:\n",
+           "if: ${{ !inputs.report_red_dry_run }}", "if: ${{ github.event_name == 'schedule' }}", "nightly-replay-trigger"),
+        _m("nightly dispatch gains a free-form input", "nightly-asan.yml", "",
+           "        default: false\n", "        default: false\n      note:\n        description: x\n        type: string\n", "workflow-trigger"),
+        _m("nightly dry run defaults to on", "nightly-asan.yml", "", "        default: false\n", "        default: true\n", "workflow-trigger"),
         _m("ci perf-gate no-op twin control removed", "ci.yml", "  perf-gate:\n",
            "bash tests/scripts/run-perf-gate.sh --noop-twin", "true", "required-command-not-executed"),
         _m("ci perf-gate checkout persists credentials", "ci.yml", "  perf-gate:\n", "persist-credentials: false",
@@ -2354,24 +3061,26 @@ def _mutations():
         _m("release performance verifier skipped by if false", "release.yml", "  candidate-performance:\n",
            "      - name: Reuse the qualified rehearsal receipt of this exact tree, else measure the clean paired v0.1.0 baseline and exact-tag candidate\n",
            "      - name: Reuse the qualified rehearsal receipt of this exact tree, else measure the clean paired v0.1.0 baseline and exact-tag candidate\n        if: ${{ false }}\n", "disabled-gate"),
-        # Receipt-bound performance review path (16-06, D-30, T-16-17/T-16-18): each mutation removes one binding.
-        *[_m(f"{job} applies a decision without the tree-equality check", reh, f"  {job}:\n", 'git rev-parse "$run_sha^{tree}"', 'echo "$run_sha"',
-             "performance-decision-unbound") for job in ("performance", "aggregate")],
-        *[_m(f"{job} applies a decision measured by another workflow", reh, f"  {job}:\n", '"$run_workflow" == release-rehearsal', '"$run_workflow" == ci',
-             "performance-decision-unbound") for job in ("performance", "aggregate")],
-        *[_m(f"{job} applies a decision measured on another branch", reh, f"  {job}:\n", '"$run_branch" == "$GITHUB_REF_NAME"', '"$run_branch" == main',
-             "performance-decision-unbound") for job in ("performance", "aggregate")],
-        *[_m(f"{job} writes the decision inside the checkout", reh, f"  {job}:\n", '--decision "$RUNNER_TEMP/performance-decision.json"',
-             "--decision performance-decision.json", "performance-decision-unbound") for job in ("performance", "aggregate")],
-        *[_m(f"{job} gives the token to the step that applies the decision", reh, f"  {job}:\n", "        env:\n          MEASUREMENT_RUN_ID",
-             "        env:\n          GH_TOKEN: ${{ github.token }}\n          MEASUREMENT_RUN_ID", "producer-token") for job in ("performance", "aggregate")],
-        *[_m(f"rehearsal {job} gains actions: write", reh, f"  {job}:\n", "      actions: read\n", "      actions: write\n", "producer-write-authority")
+        _m("rehearsal dispatch restores ordinary timing approval input", reh, "  workflow_dispatch:\n", "permissions:\n",
+           "    inputs:\n      performance_decision:\n        required: false\n        type: string\npermissions:\n", "performance-advisory-path"),
+        *[_m(f"rehearsal {job} restores an ordinary timing decision", reh, f"  {job}:\n",
+             "          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json\n",
+             "          bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json\n          python3 -I tests/scripts/verify-v02-performance.py --apply-decision --measurement m --decision d --output build/v02-performance-receipt.json\n",
+             "performance-advisory-path") for job in ("performance", "aggregate")],
+        *[_m(f"rehearsal {job} gains actions: write", reh, f"  {job}:\n", "      contents: read\n",
+             "      contents: read\n      actions: write\n", "producer-write-authority")
           for job in ("performance", "aggregate")],
-        *[_m(f"rehearsal {job} gains issues: read", reh, f"  {job}:\n", "      actions: read\n", "      actions: read\n      issues: read\n", "producer-permissions")
+        *[_m(f"rehearsal {job} gains actions: read", reh, f"  {job}:\n", "      contents: read\n",
+             "      contents: read\n      actions: read\n", "producer-permissions")
           for job in ("performance", "aggregate")],
         _m("rehearsal performance receipt retained only on success", reh, "  performance:\n", "        if: ${{ always() }}\n", "", "artifact-flow"),
-        _m("rehearsal fetch step runs tagged code while holding the token", reh, "  performance:\n", 'mkdir -p "$RUNNER_TEMP/measurement"\n',
-           'mkdir -p "$RUNNER_TEMP/measurement"\n          bash tests/scripts/measure-release-baseline.sh\n', "producer-token"),
+        _m("release candidate performance route requires the advisory verifier", "release.yml", "  candidate-performance:\n",
+           "python3 -I tests/scripts/verify-v02-performance.py --verify build/v02-performance-receipt.json",
+           "true", "required-command-not-executed"),
+        _m("release candidate performance route adds timing review approval", "release.yml", "  candidate-performance:\n",
+           "bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json",
+           "bash tests/scripts/measure-release-baseline.sh --qualify-v02 --output build/v02-performance-receipt.json\n            python3 -I tests/scripts/verify-v02-performance.py --apply-decision --measurement m --decision d --output build/v02-performance-receipt.json",
+           "performance-advisory-path"),
         _m("rehearsal judge stops cross-checking the tree version", reh, "  judge:\n", '--derive-rehearsal-tag "$GITHUB_REF_NAME" --root subject',
            '--derive-rehearsal-tag "rehearsal/v0.2.0" --root subject', "required-command-not-executed"),
         _m("rehearsal corpus falls back to a fixed tag", reh, "  corpus:\n", '--derive-rehearsal-tag "$GITHUB_REF_NAME"',
@@ -2381,9 +3090,33 @@ def _mutations():
         _m("release reuse compares against the wrong tree", "release.yml", "  candidate-performance:\n",
            'tag_tree=$(git rev-parse "$SOURCE_SHA^{tree}")', 'tag_tree=$(git rev-parse "HEAD^{tree}")', "performance-reuse-unbound"),
         _m("release fetches the receipt from any branch", "release.yml", "  candidate-performance:\n",
-           '--branch "rehearsal/$RELEASE_TAG"', "--branch main", "performance-reuse-unbound"),
+           "runs?branch=rehearsal/$RELEASE_TAG&", "runs?branch=main&", "performance-reuse-unbound"),
         _m("release fetches the receipt of an unsuccessful run", "release.yml", "  candidate-performance:\n",
-           "--status success", "--status failure", "performance-reuse-unbound"),
+           "&status=success&", "&status=failure&", "performance-reuse-unbound"),
+        _m("release picks the newest run without judging it", "release.yml", "  candidate-performance:\n",
+           'if run_id=$(python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --select-performance-run "$RUNNER_TEMP/rehearsal-runs.json"',
+           'if run_id=$(jq -r ".workflow_runs[0].id" "$RUNNER_TEMP/rehearsal-runs.json"; true',
+           "performance-reuse-unbound"),
+        _m("release judges the run with the tagged tree's copy", "release.yml", "  candidate-performance:\n",
+           'if run_id=$(python3 -I "$RUNNER_TEMP/verify-release-source-proof.py"', "if run_id=$(python3 -I .github/scripts/verify-release-source-proof.py",
+           "performance-reuse-unbound"),
+        _m("release stops binding the run to the tag source", "release.yml", "  candidate-performance:\n",
+           '--tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo', '--tag "$RELEASE_TAG" --source-sha "$GITHUB_SHA" --repo',
+           "performance-reuse-unbound"),
+        _m("release downloads any rehearsal artifact of the run", "release.yml", "  candidate-performance:\n",
+           '--name "$artifact"', "--pattern 'rehearsal-performance-*'", "performance-reuse-unbound"),
+        _m("release skips the artifact binding", "release.yml", "  candidate-performance:\n",
+           'if artifact=$(python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --select-performance-artifact',
+           'if artifact=$(echo rehearsal-performance-x; true', "performance-reuse-unbound"),
+        _m("release swallows a refused selection", "release.yml", "  candidate-performance:\n",
+           '--selected-run "$RUNNER_TEMP/rehearsal-run.json"); then', '--selected-run "$RUNNER_TEMP/rehearsal-run.json" || true); then',
+           "performance-reuse-unbound"),
+        _m("release fetch step gains a write API call", "release.yml", "  candidate-performance:\n",
+           'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n', 'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n          gh api -X POST "repos/$GITHUB_REPOSITORY/issues" -f title=x\n',
+           "producer-write-command"),
+        _m("release fetch step reads an unlisted API path", "release.yml", "  candidate-performance:\n",
+           'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n', 'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n          gh api "repos/$GITHUB_REPOSITORY/issues?per_page=100" > x\n',
+           "producer-write-command"),
         _m("release performance job gains actions: write", "release.yml", "  candidate-performance:\n", "      actions: read\n", "      actions: write\n",
            "producer-write-authority"),
         _m("release performance job gains contents: write", "release.yml", "  candidate-performance:\n", "      actions: read\n", "      actions: read\n      pull-requests: write\n",
@@ -2398,12 +3131,12 @@ def _mutations():
            'bash .github/scripts/verify-release-gates.sh --check-v02-evidence', "subject-judge-execution"),
         _m("release manifest trusted checkout points at the tag", "release.yml", "  candidate-platform-manifest:\n", "          ref: ${{ github.sha }}\n          path: trusted",
            "          ref: ${{ env.SOURCE_SHA }}\n          path: trusted", "judge-trust"),
-        _m("release publisher final gate taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final',
-           'run: bash .github/scripts/verify-release-gates.sh --check-draft-final', "subject-judge-execution"),
+        _m("release publisher final gate taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final',
+           'bash .github/scripts/verify-release-gates.sh --check-draft-final', "subject-judge-execution"),
         _m("release publisher published-asset verifier taken from the subject checkout", "release.yml", "  publish-qualified-release:\n", "python3 -I trusted/.github/scripts/verify-published-release-assets.py",
            "python3 .github/scripts/verify-published-release-assets.py", "subject-judge-execution"),
         ("release publication runs before the final downloaded-byte gate", "release.yml", [
-            ("  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "run: true"),
+            ("  publish-qualified-release:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "true"),
             ("  publish-qualified-release:\n", 'echo "Published the exact qualified release', 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"\n{I}echo "Published the exact qualified release')],
          "publication-order"),
         _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-platform-manifest]",
@@ -2636,7 +3369,7 @@ def _mutations():
         _m("W6-12 windows no longer needs macOS", rel, "  candidate-windows:\n", "needs: [release, candidate-macos]", "needs: [release]", "workflow-dependency"),
         _m("W6-14 release gains pull_request_target", rel, "", "  workflow_call:\n", "  pull_request_target:\n    branches: [main]\n  workflow_call:\n", "workflow-trigger"),
         ("W6-15 final gate moved after publish", rel, [
-            ("  publish-qualified-release:\n", 'run: bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "run: true"),
+            ("  publish-qualified-release:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "true"),
             ("  publish-qualified-release:\n", 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag',
              'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag\n{I}bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"')],
          "publication-order"),
@@ -2646,8 +3379,183 @@ def _mutations():
            "required-command-not-executed"),
         _m("W6-19 entrypoint stops calling release.yml", "release-please.yml", "", "uses: ./.github/workflows/release.yml",
            "uses: ./.github/workflows/release-renamed.yml", "release-entrypoint"),
+        # RM-030 (17-11): the nightly gate and the owner-approval gate are called by the real paths, in order, from the trusted revision.
+        _m("G17-01 workflow stops calling the nightly gate", rel, "  publish-qualified-release:\n",
+           "run: bash trusted/.github/scripts/release-evidence-lifecycle.sh nightly-gate", "run: true", "lifecycle-wiring"),
+        _m("G17-02 nightly gate replaced by echo", "lifecycle", "# BEGIN nightly-gate\n",
+           "python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate", "echo python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate",
+           "required-command-not-executed"),
+        _m("G17-03 nightly gate taken from the tagged checkout", "lifecycle", "# BEGIN nightly-gate\n",
+           "python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate", "python3 -I tests/scripts/verify-release-gates.py --nightly-gate",
+           "token-subject-execution"),
+        _m("G17-04 nightly gate failure swallowed", "lifecycle", "# BEGIN nightly-gate\n",
+           '--output "$RUNNER_TEMP/nightly-gate-receipt.json"\n', '--output "$RUNNER_TEMP/nightly-gate-receipt.json" || true\n',
+           "required-command-not-executed"),
+        _m("G17-05 nightly gate loses the tagged-source binding", "lifecycle", "# BEGIN nightly-gate\n",
+           ' --rev "$SOURCE_SHA" --branch', ' --branch', "required-command-not-executed"),
+        _m("G17-06 nightly gate loses the rehearsal branch filter", "lifecycle", "# BEGIN nightly-gate\n",
+           ' --branch "rehearsal/$RELEASE_TAG" --output', ' --output', "required-command-not-executed"),
+        _m("G17-07 nightly gate judges a different head than the rehearsed one", "lifecycle", "# BEGIN nightly-gate\n",
+           '--head "$head" --rev', '--head "$SOURCE_SHA" --rev', "required-command-not-executed"),
+        ("G17-08 nightly gate moved after the publication transition", "lifecycle", [
+            ("# BEGIN nightly-gate\n", "python3 -I trusted/tests/scripts/verify-release-gates.py --nightly-gate", "echo skipped")],
+         "required-command-not-executed"),
+        _m("G17-09 publisher gains actions: write", rel, "  publish-qualified-release:\n", "      actions: read\n", "      actions: write\n",
+           "nightly-gate-permissions"),
+        _m("G17-10 publisher loses actions: read", rel, "  publish-qualified-release:\n", "      actions: read\n", "", "nightly-gate-permissions"),
+        # WR-C01: generic rules over every workflow file.
+        _m("WR-C01 release-please caller forwards secrets", "release-please.yml", "  release:\n", "    permissions:\n      actions: read\n",
+           "    secrets: inherit\n    permissions:\n      actions: read\n", "workflow-secrets"),
+        _m("WR-C01 release-please caller gains packages and id-token write", "release-please.yml", "  release:\n",
+           "    permissions:\n      actions: read\n", "    permissions:\n      packages: write\n      id-token: write\n      actions: read\n",
+           "workflow-write-permissions"),
+        _m("WR-C01 release-please top level grants contents write", "release-please.yml", "", "permissions:\n  contents: read\n\njobs:",
+           "permissions:\n  contents: write\n\njobs:", "workflow-write-permissions"),
+        _m("WR-C01 release-please runs on pull_request_target", "release-please.yml", "", "on:\n  push:\n    branches: [main]\n",
+           "on:\n  pull_request_target:\n  push:\n    branches: [main]\n", "workflow-trigger"),
+        _m("WR-C01 rehearsal runs on workflow_run", "release-rehearsal.yml", "", "on:\n  push:\n",
+           "on:\n  workflow_run:\n    workflows: [ci]\n  push:\n", "workflow-trigger"),
+        _m("WR-C01 fixture-repro top level grants contents write", "fixture-repro.yml", "", "permissions:\n  contents: read\n",
+           "permissions:\n  contents: write\n", "workflow-write-permissions"),
+        _m("WR-C01 libbet-repro job grants contents write", "libbet-repro.yml", "  libbet-repro:\n", "    timeout-minutes: 20\n",
+           "    timeout-minutes: 20\n    permissions:\n      contents: write\n", "workflow-write-permissions"),
+        _m("WR-C01 ci run body interpolates the head ref", "ci.yml", "  perf-gate:\n", "          sudo apt-get update -qq\n",
+           '          echo "${{ github.head_ref }}"\n          sudo apt-get update -qq\n', "run-expression"),
+        _m("WR-C01 fixture-repro run body interpolates the PR title", "fixture-repro.yml", "", "        run: |\n",
+           '        run: |\n          echo "${{ github.event.pull_request.title }}"\n', "run-expression"),
+        # WR-C02: edits outside the mode regions that disable the gates while every region and dispatch line survives.
+        _m("WR-C02 lifecycle overrides python3 after the top-level set", "lifecycle", "", "set -euo pipefail\n\nlifecycle_attach_evidence() {",
+           "set -euo pipefail\npython3() { return 0; }\n\nlifecycle_attach_evidence() {", "lifecycle-wiring"),
+        _m("WR-C02 lifecycle overrides bash before the dispatch", "lifecycle", "", '\ncase "${1:-}" in\n',
+           '\nbash() { return 0; }\ncase "${1:-}" in\n', "lifecycle-wiring"),
+        _m("WR-C02 lifecycle traps errors to success", "lifecycle", "", "set -euo pipefail\n\nlifecycle_attach_evidence() {",
+           "set -euo pipefail\ntrap 'exit 0' ERR\n\nlifecycle_attach_evidence() {", "lifecycle-wiring"),
+        _m("WR-C02 lifecycle dispatch gains an earlier nightly-gate arm", "lifecycle", "", '\ncase "${1:-}" in\n',
+           '\ncase "${1:-}" in\n  nightly-gate) exit 0 ;;\n', "lifecycle-wiring"),
+        _m("WR-C02 lifecycle exits between two mode functions", "lifecycle", "", "\n# END final-gate\n}\n",
+           "\n# END final-gate\n}\nexit 0\n", "lifecycle-wiring"),
+        _m("G17-11 owner approval gate no longer called", "perfgate", "", "python3 -I \"$GATES\" --review-approval", "python3 -I \"$GATES\" --digest", "release-gate-wiring"),
+        _m("G17-12 a receipt is handed to the evaluator without the approval", "perfgate", "",
+           "  if [[ -n \"${GBB_IR_EXCEPTION_COMMENT_JSON:-}\" || -n \"${GBB_IR_EXCEPTION_DECISION:-}\" ]]; then\n",
+           "  if [[ -n \"${GBB_PERF_EXCEPTION_RECEIPT:-}\" ]]; then args+=(--exception-receipt \"$GBB_PERF_EXCEPTION_RECEIPT\"); fi\n"
+           "  if [[ -n \"${GBB_IR_EXCEPTION_COMMENT_JSON:-}\" || -n \"${GBB_IR_EXCEPTION_DECISION:-}\" ]]; then\n", "release-gate-wiring"),
+        _m("G17-13 approval refusal swallowed", "perfgate", "", '--repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" ||',
+           '--repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" || true ||', "release-gate-wiring"),
+        # CR-C01: the approval is bound to this repository, and no workflow may supply the approval inputs.
+        _m("CR-C01-1 approval not bound to this repository", "perfgate", "", ' \\\n      --repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}" ||', " ||",
+           "release-gate-wiring"),
+        _m("CR-C01-2 approval bound to a repository the caller chose", "perfgate", "", '--repository "${GITHUB_REPOSITORY:-szTheory/gabbaboy}"',
+           '--repository "${GBB_REVIEW_REPOSITORY:-szTheory/gabbaboy}"', "release-gate-wiring"),
+        _m("CR-C01-3 ci perf-gate step sets the approval comment", "ci.yml", "  perf-gate:\n", "        run: bash tests/scripts/run-perf-gate.sh --gate\n",
+           "        env:\n          GBB_IR_EXCEPTION_COMMENT_JSON: tests/data/approval-comment.json\n"
+           "          GBB_IR_EXCEPTION_DECISION: tests/data/approval-decision.json\n        run: bash tests/scripts/run-perf-gate.sh --gate\n", "ir-exception-env"),
+        _m("CR-C01-4 rehearsal perf-gate job sets the approval decision", "release-rehearsal.yml", "  perf-gate:\n", "    timeout-minutes: 40\n",
+           "    timeout-minutes: 40\n    env:\n      GBB_IR_EXCEPTION_DECISION: tests/data/approval-decision.json\n", "ir-exception-env"),
+        _m("CR-C01-5 ci workflow-level env sets the approval inputs", "ci.yml", "", "permissions:\n  contents: read\n",
+           "env:\n  GBB_IR_EXCEPTION_COMMENT_JSON: c.json\n  GBB_IR_EXCEPTION_DECISION: d.json\npermissions:\n  contents: read\n", "ir-exception-env"),
+        _m("CR-C01-6 ci writes the approval inputs to GITHUB_ENV", "ci.yml", "  perf-gate:\n", "          sudo apt-get update -qq\n",
+           "          echo \"GBB_IR_EXCEPTION_DECISION=tests/data/d.json\" >> \"$GITHUB_ENV\"\n          sudo apt-get update -qq\n", "ir-exception-env"),
+        _m("CR-C01-7 ci writes a split approval name to GITHUB_ENV", "ci.yml", "  perf-gate:\n", "          sudo apt-get update -qq\n",
+           "          p=GBB_IR; echo \"${p}_EXCEPTION_COMMENT_JSON=c.json\" >> \"$GITHUB_ENV\"\n          sudo apt-get update -qq\n", "ir-exception-env"),
+        _m("CR-C01-8 perf-attribution sets a lower-case approval name", "perf-attribution.yml", "", "permissions:\n",
+           "env:\n  gbb_ir_exception_decision: d.json\npermissions:\n", "ir-exception-env"),
+        _m("CR-C01-9 ci perf-gate step redefines the expected review repository", "ci.yml", "  perf-gate:\n",
+           "        run: bash tests/scripts/run-perf-gate.sh --gate\n",
+           "        env:\n          GITHUB_REPOSITORY: example-owner/example-repo\n        run: bash tests/scripts/run-perf-gate.sh --gate\n", "ir-exception-env"),
+        _m("G17-14 evaluator never receives the derived receipt", "perfgate", "", 'args+=(--exception-receipt "$WORK/exception-receipt.json")', "true", "release-gate-wiring"),
+        _m("G17-15 evaluator stops writing the measurement", "perfgate", "", '--emit-exception-measurement "$WORK/exception-measurement.json"', "", "release-gate-wiring"),
+        _m("G17-16 approval bound to another head", "perfgate", "", '--rev "$head_revision" --output', '--rev "$V020_EXPECTED" --output', "release-gate-wiring"),
+        _m("G17-17 ci perf-gate loses the release gate controls", "ci.yml", "  perf-gate:\n",
+           'run: python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"', "run: true", "required-command-not-executed"),
+        _m("G17-18 rehearsal perf-gate loses the release gate controls", reh, "  perf-gate:\n",
+           'run: python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"', "run: true", "required-command-not-executed"),
+        _m("G17-19 rehearsal release gate controls replaced by echo", reh, "  perf-gate:\n",
+           'run: python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"',
+           'run: echo python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"', "required-command-not-executed"),
+        # RM-028 lifecycle extraction (17-09): extracted code must be executed by the workflow, from the trusted checkout, once.
+        _m("L17-01 workflow stops calling an extracted mode", rel, "  publish-qualified-release:\n",
+           "run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft", "run: true", "lifecycle-wiring"),
+        _m("L17-02 workflow calls one mode twice", rel, "  candidate-platform-manifest:\n",
+           "release-evidence-lifecycle.sh validate-evidence", "release-evidence-lifecycle.sh build-manifest", "lifecycle-wiring"),
+        _m("L17-03 workflow runs the lifecycle script from the tagged checkout", rel, "  attach-v02-evidence:\n",
+           "bash trusted/.github/scripts/release-evidence-lifecycle.sh attach-evidence",
+           "bash .github/scripts/release-evidence-lifecycle.sh attach-evidence", "lifecycle-wiring"),
+        _m("L17-04 workflow calls a mode from another job", rel, "  attach-v02-evidence:\n",
+           "release-evidence-lifecycle.sh attach-evidence", "release-evidence-lifecycle.sh publish-draft", "lifecycle-wiring"),
+        _m("L17-05 lifecycle mode loses its end marker", "lifecycle", "", "# END final-gate\n", "", "lifecycle-wiring"),
+        _m("L17-06 lifecycle dispatch drops a mode", "lifecycle", "", "  publish-draft) lifecycle_publish_draft ;;\n", "", "lifecycle-wiring"),
+        _m("L17-07 lifecycle mode is not the body of its own function", "lifecycle", "", "lifecycle_final_gate() {\n# BEGIN final-gate",
+           "lifecycle_other() {\n# BEGIN final-gate", "lifecycle-wiring"),
+        # IN-01: the retry tamper check is independent and runs before attached bytes replace regenerated ones.
+        _m("L17-08 retry tamper check removed", "lifecycle", "# BEGIN attach-evidence\n",
+           ATTACH_TAMPER_CHECK + '\n', "true\n", "attach-tamper-order"),
+        _m("L17-09 retry tamper check masked", "lifecycle", "# BEGIN attach-evidence\n",
+           ATTACH_TAMPER_CHECK + '\n', ATTACH_TAMPER_CHECK + ' || true\n',
+           "required-command-not-executed"),
+        _m("L17-10 retry tamper check replaced by echo", "lifecycle", "# BEGIN attach-evidence\n",
+           ATTACH_TAMPER_CHECK + '\n', "echo " + ATTACH_TAMPER_CHECK + "\n", "required-command-not-executed"),
+        ("L17-11 retry tamper check moved after the reuse copy", "lifecycle", [
+            ("# BEGIN attach-evidence\n", ATTACH_TAMPER_CHECK + '\n', "true\n"),
+            ("# BEGIN attach-evidence\n", '      cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"\n    fi\n  done\n',
+             '      cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"\n    fi\n  done\n  ' + ATTACH_TAMPER_CHECK + '\n')],
+         "attach-tamper-order"),
+        ("L17-12 retry tamper check moved after the recovery decision", "lifecycle", [
+            ("# BEGIN attach-evidence\n", ATTACH_TAMPER_CHECK + '\n', "true\n"),
+            ("# BEGIN attach-evidence\n", 'decision=$(cat "$RUNNER_TEMP/recovery-decision.txt")\n',
+             'decision=$(cat "$RUNNER_TEMP/recovery-decision.txt")\n' + ATTACH_TAMPER_CHECK + '\n')],
+         "attach-tamper-order"),
+        _m("L17-13 retry tamper check taken from the tagged checkout", "lifecycle", "# BEGIN attach-evidence\n",
+           ATTACH_TAMPER_CHECK, ATTACH_TAMPER_CHECK.replace("trusted/.github", ".github"), "attach-tamper-order"),
+        _m("L17-14 retry copies the attachments twice", "lifecycle", "# BEGIN attach-evidence\n",
+           '      cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"\n',
+           '      cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"\n      cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"\n', "attach-tamper-order"),
     ]
 
+
+
+def _window_mutations():
+    """Version-window gate wiring (RM-028): each defect must be rejected with its own code while the baseline passes."""
+    rp = WINDOW_WORKFLOW
+    window = f"  {WINDOW_JOB}:\n"
+    return [
+        _m("W17-01 window gate job removed", rp, "", window, "  version-window-renamed:\n", "window-gate-missing"),
+        _m("W17-02 gate no longer waits for regeneration", rp, window, "needs: [release]", "needs: []", "window-gate-order"),
+        _m("W17-03 gate skipped when the release job fails", rp, window, "if: ${{ !cancelled() && inputs.retry != true }}",
+           "if: ${{ success() && inputs.retry != true }}", "window-gate-skipped"),
+        _m("W17-04 gate disabled by a constant condition", rp, window, "if: ${{ !cancelled() && inputs.retry != true }}",
+           "if: ${{ false }}", "window-gate-skipped"),
+        _m("W17-05 gate gains write authority", rp, window, "pull-requests: read", "pull-requests: write", "window-gate-permissions"),
+        _m("W17-06 version PR checkout persists credentials", rp, "path: version-pr\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("W17-07 checker taken from the version PR head", rp, "name: Check out the trusted main commit\n", "ref: ${{ github.sha }}",
+           "ref: ${{ steps.discover.outputs.head }}", "window-gate-trust"),
+        _m("W17-08 version PR history shallow", rp, "path: version-pr\n", "fetch-depth: 0", "fetch-depth: 1", "window-gate-history"),
+        _m("W17-09 step without a timeout", rp, "name: Judge the regenerated version PR against its frozen window\n",
+           "        timeout-minutes: 5\n", "", "window-gate-timeout"),
+        _m("W17-10 window validation call removed", rp, "Judge the regenerated version PR against its frozen window", WINDOW_CALL,
+           'echo "window judged"', "required-command-not-executed"),
+        _m("W17-11 fake green stale window (|| true)", rp, "Judge the regenerated version PR against its frozen window", WINDOW_CALL,
+           WINDOW_CALL + " || true", "required-command-not-executed"),
+        _m("W17-12 fake green stale window (continue-on-error)", rp, "name: Judge the regenerated version PR against its frozen window\n",
+           "        timeout-minutes: 5\n", "        timeout-minutes: 5\n        continue-on-error: true\n", "ignored-gate"),
+        _m("W17-13 judge compares against the PR head as base", rp, "Judge the regenerated version PR against its frozen window",
+           '--base "$MAIN_SHA"', '--base "$PR_HEAD"', "required-command-not-executed"),
+        _m("W17-14 judge stops reading the regenerated body", rp, "Judge the regenerated version PR against its frozen window",
+           ' --body "$RUNNER_TEMP/version-pr-body.md"', "", "required-command-not-executed"),
+        _m("W17-15 judge runs the version PR's own checker", rp, "Judge the regenerated version PR against its frozen window",
+           "python3 -I trusted/tests/scripts/verify-version-window.py", "python3 -I version-pr/tests/scripts/verify-version-window.py",
+           "required-command-not-executed"),
+        _m("W17-16 release-please push trigger path-filtered", rp, "", "    branches: [main]\n",
+           "    branches: [main]\n    paths-ignore: [CHANGELOG.md]\n", "window-trigger-filtered"),
+        _m("W17-17 blanket path exclusion", "config", "", '"exclude-paths": [".github/workflows", ".github/scripts"]',
+           '"exclude-paths": [".github/workflows", ".github/scripts", "."]', "window-path-excluded"),
+        _m("W17-18 release-note path excluded", "config", "", '"exclude-paths": [".github/workflows", ".github/scripts"]',
+           '"exclude-paths": [".github/workflows", ".github/scripts", "docs/support"]', "window-path-excluded"),
+        _m("W17-19 changelog skipped", "config", "", '"include-v-in-tag": true,', '"include-v-in-tag": true,\n      "skip-changelog": true,',
+           "window-config"),
+        _m("W17-20 changelog path moved", "config", "", '"changelog-path": "CHANGELOG.md"', '"changelog-path": "docs/CHANGELOG.md"',
+           "window-config"),
+    ]
 
 
 def _ledger_edit(fixture: Path, edit) -> None:
@@ -2737,6 +3645,41 @@ def _ledger_boundary_controls() -> int:
     return done
 
 
+_LIFECYCLE_JOB_ANCHORS = {f"  {job}:\n": next(mode for mode, owner in LIFECYCLE_MODES.items() if owner == job) for job in set(LIFECYCLE_MODES.values())}
+_JOB_HEADER = re.compile(r"\n  [a-z0-9-]+:\n")
+
+
+def _outdent(text: str) -> str:
+    """A step body sits ten columns deep in release.yml (a run block under a step) and at column zero in the script."""
+    return "\n".join(line[10:] if line.startswith(" " * 10) else line for line in text.split("\n"))
+
+
+def _route_lifecycle(workflow: str, edits, workflow_text: str, script_text: str):
+    """A mutation written against release.yml whose anchor text now lives in the lifecycle script is applied to the script.
+
+    The edit keeps its meaning (the same text in the same job, in the same order); only the file that holds the text moved
+    with the extraction. An edit whose text is in neither file is a stale mutant and fails the self-test loudly."""
+    if workflow != "release.yml":
+        return workflow, edits
+    routed, kept = [], []
+    for after, old, replacement in edits:
+        start = workflow_text.find(after) if after else 0
+        end = len(workflow_text)
+        if after in _LIFECYCLE_JOB_ANCHORS and start >= 0:
+            following = _JOB_HEADER.search(workflow_text, start + len(after))
+            end = following.start() if following else end
+        if start >= 0 and 0 <= workflow_text.find(old, start) < end:
+            kept.append((after, old, replacement))
+        elif _outdent(old) in script_text:
+            routed.append((f"# BEGIN {_LIFECYCLE_JOB_ANCHORS[after]}\n" if after in _LIFECYCLE_JOB_ANCHORS else "",
+                           _outdent(old), _outdent(replacement)))
+        else:
+            kept.append((after, old, replacement))
+    if routed and kept:
+        raise SystemExit(f"self-test mutation mixes release.yml and lifecycle-script edits: {routed[0][1][:60]!r}")
+    return ("lifecycle", routed) if routed else (workflow, edits)
+
+
 def self_test(root: Path) -> None:
     rejected = 0
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
@@ -2749,11 +3692,21 @@ def self_test(root: Path) -> None:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
         baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
+        baselines["config"] = (fixture / WINDOW_CONFIG).read_text(encoding="utf-8")
+        baselines["lifecycle"] = (fixture / LIFECYCLE_SCRIPT).read_text(encoding="utf-8")
+        baselines["perfgate"] = (fixture / PERF_GATE_SCRIPT).read_text(encoding="utf-8")
 
         def target(workflow: str) -> Path:
+            if workflow == "perfgate":
+                return fixture / PERF_GATE_SCRIPT
+            if workflow == "config":
+                return fixture / WINDOW_CONFIG
+            if workflow == "lifecycle":
+                return fixture / LIFECYCLE_SCRIPT
             return fixture / (PRODUCER_SCRIPT if workflow == "script" else f".github/workflows/{workflow}")
 
-        for label, workflow, edits, expected in _mutations():
+        for label, workflow, edits, expected in (*_mutations(), *_window_mutations()):
+            workflow, edits = _route_lifecycle(workflow, edits, baselines["release.yml"], baselines["lifecycle"])
             text = baselines[workflow]
             for after, old, replacement in edits:
                 split = text.find(after) if after else 0
@@ -2790,6 +3743,24 @@ def self_test(root: Path) -> None:
             for item in WORKFLOWS:
                 (fixture / ".github/workflows" / item).write_text(baselines[item], encoding="utf-8")
         rejected += _ledger_boundary_controls()
+        # WR-C01: the workflow set is closed. A new file (here a pull_request_target job with contents: write) is refused
+        # before anything reads it, and so is a judged file that disappears.
+        intruder = fixture / ".github/workflows/evil.yml"
+        intruder.write_text("name: evil\non:\n  pull_request_target:\npermissions:\n  contents: write\njobs:\n  evil:\n"
+                            "    runs-on: ubuntu-22.04\n    steps:\n      - run: echo evil\n", encoding="utf-8")
+        for label, mutate, restore in (
+            ("WR-C01 an unlisted workflow file", lambda: None, intruder.unlink),
+            ("WR-C01 a judged workflow file renamed to .yaml",
+             lambda: (fixture / ".github/workflows/libbet-repro.yml").rename(fixture / ".github/workflows/libbet-repro.yaml"),
+             lambda: (fixture / ".github/workflows/libbet-repro.yaml").rename(fixture / ".github/workflows/libbet-repro.yml")),
+        ):
+            mutate()
+            result = _run_cli(fixture, work)
+            restore()
+            if result.returncode != 1 or "REJECT workflow-unlisted:" not in result.stderr or "PASS:" in result.stdout:
+                raise SystemExit(f"self-test negative {label!r} failed: exit={result.returncode} stderr={result.stderr.strip()!r}")
+            rejected += 1
+            print(f"rejected: {label}: {result.stderr.strip()}")
         # Equivalent shell formatting of a required call stays valid: continuation, quoting, extra spaces,
         # interleaved comments and blank lines do not change what runs.
         path = fixture / ".github/workflows/release-rehearsal.yml"
@@ -2852,6 +3823,7 @@ def self_test(root: Path) -> None:
                 print(f"rejected: {label}: {exc}")
             else:
                 raise SystemExit(f"self-test negative {label!r} failed: accepted")
+    rejected += report_red_replay_controls(root)
     print(f"PASS: workflow policy self-test negative_controls={rejected} positive_controls={1 + accepted}")
 
 
