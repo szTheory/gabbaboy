@@ -1780,15 +1780,18 @@ def task3_controls(ctx: Context) -> list:
     return items
 
 
-def nightly_control(ctx: Context, label: str, needle: str, change) -> str:
-    """The production nightly-gate mode against a hostile run history: refused in the gate's own words, before publication."""
-    s = Scenario(ctx.t, "nightly-" + label)
-    state = s.state()
+def nightly_control(s: Scenario, ws: Path, base_state: dict, ctx: Context, label: str, needle: str, change) -> str:
+    """The production nightly-gate mode against a hostile run history: refused in the gate's own words, before publication.
+
+    One scenario and one workspace serve every case (the mode only reads the transport and writes under RUNNER_TEMP), so each
+    case costs one mode run, not one repository clone."""
+    state = copy.deepcopy(base_state)
     change(state, ctx.t)
     s.write_state(state)
-    out = s.run_mode(s.subject_workspace("publish"), "nightly-gate", RELEASE_ID=str(RELEASE_ID))
+    before = len(s.mutations_logged())
+    out = s.run_mode(ws, "nightly-gate", RELEASE_ID=str(RELEASE_ID))
     expect_fail(out, f"nightly gate: {label}", needle)
-    if s.mutations_logged():
+    if len(s.mutations_logged()) != before:
         raise Reject("control-effect", f"nightly gate {label}: a refused gate still wrote to the release")
     return f"the nightly gate refuses {label}"
 
@@ -1835,7 +1838,8 @@ def c_nightly_gate(ctx: Context) -> list:
         ("no successful rehearsal run", "no successful rehearsal run", lambda st, t: st.update(rehearsal_runs=[])),
         ("no nightly run at all", "No nightly-asan run exists", lambda st, t: st.update(nightly_runs=[])),
     )
-    return [nightly_control(ctx, label, needle, change) for label, needle, change in cases]
+    base_state = positive.state()
+    return [nightly_control(positive, ws, base_state, ctx, label, needle, change) for label, needle, change in cases]
 
 
 TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_advisory_consumers, c_non_advisory,
