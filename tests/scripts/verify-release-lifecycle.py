@@ -1788,11 +1788,14 @@ def nightly_control(s: Scenario, ws: Path, base_state: dict, ctx: Context, label
     state = copy.deepcopy(base_state)
     change(state, ctx.t)
     s.write_state(state)
+    (ws / "runner-temp" / "nightly-gate-receipt.json").unlink(missing_ok=True)  # a hosted job starts with a fresh RUNNER_TEMP
     before = len(s.mutations_logged())
     out = s.run_mode(ws, "nightly-gate", RELEASE_ID=str(RELEASE_ID))
     expect_fail(out, f"nightly gate: {label}", needle)
     if len(s.mutations_logged()) != before:
         raise Reject("control-effect", f"nightly gate {label}: a refused gate still wrote to the release")
+    if (ws / "runner-temp" / "nightly-gate-receipt.json").exists():
+        raise Reject("control-effect", f"nightly gate {label}: a refused gate still wrote a receipt")
     return f"the nightly gate refuses {label}"
 
 
