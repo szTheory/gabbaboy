@@ -5,10 +5,10 @@ milestone_name: Save States & Host Contract
 current_phase: 17
 current_phase_name: Native Save State Core
 status: executing
-Phase 17 plans 1-7 implemented; settled full suite 1481/1482 at 7cb5739 with test_budget fixed in 5701130; next plan 17-08; hosted qualification pending
+Phase 17 plans 1-7 implemented; full suite 1482/1482 at f0591f4; PR130 hosted green at 0c8fd56; next plan 17-08
 last_updated: "2026-10-28T00:00:00.000Z"
 last_activity: 2026-10-28
-last_activity_desc: Phase 17 plans 1-7 implemented; 17-08 is next; hosted evidence pending
+last_activity_desc: Phase 17 plans 1-7 implemented and hosted green at 0c8fd56; 17-08 is next
 state_head: 570113052a356227545dded8b1ec05135bfae754
 progress:
   total_phases: 4
@@ -33,13 +33,13 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 Phase: 17 (Native Save State Core) — EXECUTING
 Plan: 8 of 11
 Status: Executing Phase 17
-Last activity: 2026-10-28 — Plans 17-01..07 implemented. Settled full suite at `7cb5739`: 1481/1482; the one failure (`test_budget` rejecting the two 120 s advisory perf TIMEOUTs with no allowlist row) is fixed in `5701130` (TIMEOUT 60, measured ~7 s) and the affected tests pass. Hosted ASan fuzzing at `b3e57bc` then hit the 2 s per-input timeout because state validation repeated ~100 path `strcmp`s per body byte; `f0591f4` resolves path rules once per field (Debug save/load 15/29 ms → ~6/6 ms) with late-element refusal rows as negative controls. Full suite at `f0591f4`: 1482/1482. Next 17-08. Current-head hosted qualification pending.
+Last activity: 2026-10-28 — Plans 17-01..07 implemented. Settled full suite at `7cb5739`: 1481/1482; the one failure (`test_budget` rejecting the two 120 s advisory perf TIMEOUTs with no allowlist row) is fixed in `5701130` (TIMEOUT 60, measured ~7 s) and the affected tests pass. Hosted ASan fuzzing at `b3e57bc` then hit the 2 s per-input timeout because state validation repeated ~100 path `strcmp`s per body byte; `f0591f4` resolves path rules once per field (Debug save/load 15/29 ms → ~6/6 ms) with late-element refusal rows as negative controls. Full suite at `f0591f4`: 1482/1482. Windows portability fixes (`be8ec08`, `0c8fd56`: closed temp limits file, byte-mode mutant core, eol-aware stale-source check, POSIX-only advisory producer controls skipped on Windows) make PR130 hosted checks all green at `0c8fd56` (41 pass, 3 path-skipped, 0 fail; first green Windows lane since `2eea1e8`). Next 17-08.
 
 Prior phase evidence: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
 
 Prior phase evidence: **Phase 16 verification** — [16-UAT.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-UAT.md) closes 51/51 deliverables automatically (zero human checkpoints, `verify-uat-closure.py` 21 controls); full suite 1234/1234 at `be4cee8`; goal verification re-run at the final head `passed` 5/5 (the prior report was stale only because `boundary_sha` was appended to 16-07-SUMMARY.md, LESSONS GB-GSD-027); [16-SECURITY.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-SECURITY.md) `threats_open: 0` (32 threats; T-16-22/T-16-25 owner-accepted under D-112 as AR-16-01/02, gate code added to RM-030).
 
-Completed stage: **Phase 17 execution, plans 17-01..07 implemented with targeted evidence**. Settled full suite at `7cb5739`: 1481/1482 pass; the only failure, `test_budget` (two plan-07 advisory perf controls declared 120 s TIMEOUTs without an allowlist row), is fixed in `5701130` by restoring the base 60 s budget, and test_budget plus both controls pass. The hosted fuzz timeout at `b3e57bc` (per-byte path comparisons in state validation) is fixed in `f0591f4`; full suite 1482/1482 there. Plan 05 fork-harness integration fixes (Windows Git path separators, invariant-aware poison, bounded omission probes, separate child streams) landed through `7cb5739`; they still need current-head hosted proof, since PR130 checks last ran at `f192100`. No crash counts as a semantic kill. Next stage: **Phase 17 — Native Save State Core, wave 8 / plan 17-08**. Resume command: `/gsd-execute-phase 17`. Four plans and phase qualification remain. Next feature phase: **18 — Player Save Slots and Host Contract**, after Phase 17 execution/verification and owner choice.
+Completed stage: **Phase 17 execution, plans 17-01..07 implemented with targeted evidence**. Settled full suite at `7cb5739`: 1481/1482 pass; the only failure, `test_budget` (two plan-07 advisory perf controls declared 120 s TIMEOUTs without an allowlist row), is fixed in `5701130` by restoring the base 60 s budget, and test_budget plus both controls pass. The hosted fuzz timeout at `b3e57bc` (per-byte path comparisons in state validation) is fixed in `f0591f4`; full suite 1482/1482 there. Plan 05 fork-harness integration fixes (Windows Git path separators, invariant-aware poison, bounded omission probes, separate child streams) landed through `7cb5739`; hosted checks are green at `0c8fd56` after Windows portability fixes. No crash counts as a semantic kill. Next stage: **Phase 17 — Native Save State Core, wave 8 / plan 17-08**. Resume command: `/gsd-execute-phase 17`. Four plans and phase qualification remain. Next feature phase: **18 — Player Save Slots and Host Contract**, after Phase 17 execution/verification and owner choice.
 Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false; stop at the Phase 17 boundary.
 
 Runtime configuration (2026-10-26): owner switched future OpenGSD work to Codex, retaining the `adaptive` profile. Heavy/opus uses `gpt-6.1-sol` at `high` effort; standard/sonnet and light/haiku use `gpt-6-luna` at `xhigh` effort. Project `.planning/config.json` is authoritative; resolve each role's model and effort before dispatch. This configuration change does not start Phase 17.
@@ -86,7 +86,7 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 ## Session Continuity
 
 **Last session:** 2026-10-28
-**Stopped at:** Phase 17 plans 1-7 implemented; settled suite fixed at 5701130; next plan 17-08; hosted qualification pending
+**Stopped at:** Phase 17 plans 1-7 implemented; full suite 1482/1482 at f0591f4; PR130 hosted green at 0c8fd56; next plan 17-08
 **Resume file:** .planning/phases/GB-17-native-save-state-core/continue.md
 
 Completed stage: **Phase 17 execution, plans 1–7 implemented with targeted evidence**. Next stage: **Phase 17 — Native Save State Core, wave 8 / plan 17-08**, `/gsd-execute-phase 17`. The next feature phase remains **18 — Player Save Slots and Host Contract**, after Phase 17 execution and verification and an owner-selected handoff. Both automatic advance flags stay false.

@@ -1,6 +1,6 @@
 # Phase 17 continuation
 
-Completed stage: **Phase 17 execution, plans 17-01..07 implemented with targeted evidence**. Settled full suite at `7cb5739`: 1481/1482; the `test_budget` rejection of the two plan-07 advisory perf TIMEOUTs is fixed in `5701130` (base 60 s, measured ~7 s) with the affected tests passing. The hosted ASan fuzz timeout at `b3e57bc` is fixed in `f0591f4` (state path rules resolved once per field); full suite 1482/1482 at `f0591f4`. Current-head hosted qualification remains pending (PR130 checks last ran at `f192100`).
+Completed stage: **Phase 17 execution, plans 17-01..07 implemented with targeted evidence**. Settled full suite at `7cb5739`: 1481/1482; the `test_budget` rejection of the two plan-07 advisory perf TIMEOUTs is fixed in `5701130` (base 60 s, measured ~7 s) with the affected tests passing. The hosted ASan fuzz timeout at `b3e57bc` is fixed in `f0591f4` (state path rules resolved once per field); full suite 1482/1482 at `f0591f4`. Windows portability fixes in `be8ec08` and `0c8fd56`; PR130 hosted checks all green at `0c8fd56` (41 pass, 3 path-skipped). Re-verify once at the final phase head.
 
 Next stage: **Phase 17 — Native Save State Core, wave 8 / plan 17-08**. Resume command: `/gsd-execute-phase 17`.
 
