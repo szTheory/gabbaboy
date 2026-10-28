@@ -5,7 +5,7 @@ milestone_name: Save States & Host Contract
 current_phase: 17
 current_phase_name: Native Save State Core
 status: executing
-Phase 17 plans 1-10 implemented (IN-03 closed by dry run 40749683012); full suite 1488/1488 at 716aab2; next plan 17-11
+Phase 17 plans 1-11 implemented; review-fix round 1 closed 5 critical review findings; full suite 1496/1496 at e9e2d57; verifying
 last_updated: "2026-10-28T00:00:00.000Z"
 last_activity: 2026-10-28
 last_activity_desc: Phase 17 plan 17-10 implemented, macOS horizon-mutants timeout fixed, full suite 1488/1488 at 716aab2; 17-11 is next
@@ -86,7 +86,7 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 ## Session Continuity
 
 **Last session:** 2026-10-28
-**Stopped at:** Phase 17 plans 1-10 implemented (IN-03 closed by dry run 40749683012); full suite 1488/1488 at 716aab2; next plan 17-11
+**Stopped at:** Phase 17 plans 1-11 implemented; review-fix round 1 closed 5 critical review findings; full suite 1496/1496 at e9e2d57; verifying
 **Resume file:** .planning/phases/GB-17-native-save-state-core/continue.md
 
 Completed stage: **Phase 17 execution, plans 1–10 implemented with targeted evidence**. Next stage: **Phase 17 — Native Save State Core, wave 11 / plan 17-11**, `/gsd-execute-phase 17`. The next feature phase remains **18 — Player Save Slots and Host Contract**, after Phase 17 execution and verification and an owner-selected handoff. Both automatic advance flags stay false.
