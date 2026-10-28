@@ -226,10 +226,12 @@ def immutable_limits(base_rev):
                           capture_output=True, text=True, check=False)
     if blob.returncode != 0:
         reject("ratchet-base-policy-missing", "the immutable base has no %s" % POLICY_FILE)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix="-perf-limits.txt") as handle:
-        handle.write(blob.stdout)
-        handle.flush()
-        limits = parse_limits(handle.name)
+    # Windows cannot reopen an open NamedTemporaryFile, so parse a closed file in a private directory.
+    with tempfile.TemporaryDirectory(prefix="gbb-perf-limits-") as directory:
+        path = os.path.join(directory, "perf-limits.txt")
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(blob.stdout)
+        limits = parse_limits(path)
     return blob.stdout, limits
 
 

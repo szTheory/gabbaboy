@@ -124,7 +124,8 @@ def materialize_mutant_core(args: argparse.Namespace) -> None:
         qualified = True
     mutated = fork_mutant_source(source)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(mutated, encoding="utf-8")
+    # Bytes, not text mode: Windows newline translation would change the digested mutant core.
+    args.output.write_bytes(mutated.encode("utf-8"))
     print(f"state-fork mutant core materialized qualified={str(qualified).lower()} source_sha256={digest(source.encode())} mutant_sha256={digest(mutated.encode())}")
 
 

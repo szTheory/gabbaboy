@@ -20,6 +20,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -176,12 +177,18 @@ def source_manifest(commit: str, *, compare_worktree: bool = True, repo: Path = 
             raise ReceiptError(f"source input absent at source SHA: {relative}")
         digest = sha256_bytes(committed.stdout)
         if compare_worktree:
-            try:
-                actual = (ROOT / relative).read_bytes()
-            except OSError as exc:
-                raise ReceiptError(f"source input unavailable: {relative}") from exc
-            if sha256_bytes(actual) != digest:
+            if not (repo / relative).is_file():
+                raise ReceiptError(f"source input unavailable: {relative}")
+            # Git applies the checkout's eol conversion, so a Windows CRLF checkout of an
+            # unchanged blob is not stale; any content change still differs.
+            changed = subprocess.run(
+                ["git", "diff", "--quiet", commit, "--", relative], cwd=repo,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+            )
+            if changed.returncode == 1:
                 raise ReceiptError(f"stale source input differs from source SHA: {relative}")
+            if changed.returncode != 0:
+                raise ReceiptError(f"source input unavailable: {relative}")
         result[relative] = digest
     return result
 
@@ -2045,6 +2052,26 @@ class ReceiptContractTests(unittest.TestCase):
             self.verify_rejects(Path(directory) / "stale.json", {
                 "schema_version": SCHEMA_VERSION, "status": "complete", "mode": "explore", "source_sha": "a" * 40,
             }, "stale receipt source SHA")
+
+    def test_worktree_source_check_is_eol_aware_and_rejects_edits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            def git(*args: str) -> str:
+                return subprocess.run(["git", *args], cwd=repo, check=True, text=True,
+                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.strip()
+            git("init", "-q")
+            git("config", "user.name", "fixture"); git("config", "user.email", "fixture@example.invalid")
+            (repo / "input.txt").write_bytes(b"line\n")
+            git("add", "input.txt"); git("commit", "-q", "-m", "fixture")
+            commit = git("rev-parse", "HEAD")
+            with mock.patch.dict(globals(), {"SOURCE_FILES": ("input.txt",)}):
+                git("config", "core.autocrlf", "true")
+                (repo / "input.txt").write_bytes(b"line\r\n")
+                self.assertEqual(list(source_manifest(commit, repo=repo)), ["input.txt"])
+                (repo / "input.txt").write_bytes(b"edited\r\n")
+                with self.assertRaises(ReceiptError) as caught:
+                    source_manifest(commit, repo=repo)
+                self.assertIn("stale source input differs from source SHA", str(caught.exception))
 
     def source_bound_receipt(self, head: str) -> bytes:
         return self.hosted_fixture_receipt(head, 17001, 1, 27001)
