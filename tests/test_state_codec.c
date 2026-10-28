@@ -754,6 +754,14 @@ static int state_semantic_bounds(void) {
      * with the transfer finished. Accepting {active, 160} would let the next DMA tick
      * write oam[160], past the 160-byte array. */
     REQUIRE_CASE("state_semantic_bounds", test_dma_state_relation(target, saved, size));
+    /* WR-A01: LY counts lines 0..153 and wraps at 154; LCD off holds it at 0. */
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "ly", 0u, GBB_LINES_PER_FRAME));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "ly", 0u, 0xFFu));
+    const test_state_edit last_line[] = {{"ly", 0u, GBB_LINES_PER_FRAME - 1u}};
+    REQUIRE_CASE("state_semantic_bounds", test_load_accepts_mutations(target, saved, size,
+                                    last_line, 1u));
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_header_unchanged(target, saved,
                                     size, 18u, 1u, GBB_STATE_INVALID_CONTENT));
     gbb_destroy(source); gbb_destroy(target); free(saved);
@@ -764,6 +772,8 @@ static int state_semantic_bounds(void) {
     REQUIRE_CASE("state_semantic_bounds", gbb_save_state(source, saved, size) == GBB_OK);
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "ie", 0u, 0x20u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "ly", 0u, 200u));
     gbb_destroy(source); gbb_destroy(target); free(saved);
 
     source = NULL; target = NULL; saved = NULL; size = 0u;
