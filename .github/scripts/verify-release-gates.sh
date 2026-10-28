@@ -190,17 +190,25 @@ runs = json.loads(pathlib.Path(sys.argv[2]).read_text())
 expected = sys.argv[3]
 if not re.fullmatch(r"[0-9a-f]{40}", expected):
     raise SystemExit("expected PR head is not a full commit SHA")
+# The same App identity verify-release-source-proof.py requires at release time (IN-02). The branch rule's own app_id may
+# be null, which GitHub reads as "any source"; the evidence is then still held to this identity, so a wildcard rule can
+# never let a check posted by another App satisfy a recorded context.
+TRUSTED_APP_ID, TRUSTED_APP_SLUG = 15368, "github-actions"
 checks = rules.get("required_status_checks", {}).get("checks")
 if checks is None:
     checks = [{"context": name} for name in rules.get("required_status_checks", {}).get("contexts", [])]
 required = {item.get("context"): item.get("app_id") for item in checks if item.get("context")}
 if not {"required-native", "fixture-repro", "preview-package-smoke"}.issubset(required):
     raise SystemExit("repository branch rules omit one of the three recorded required contexts")
+for context in ("required-native", "fixture-repro", "preview-package-smoke"):
+    rule_app = required[context]
+    if rule_app is not None and (type(rule_app) is not int or rule_app != TRUSTED_APP_ID):
+        raise SystemExit(f"branch rule for {context!r} does not trust the recorded GitHub App")
 observed = {}
 for run in runs.get("check_runs", []):
     if run.get("name") in required:
         observed.setdefault(run.get("name"), []).append(run)
-for context, app_id in required.items():
+for context in required:
     matches = observed.get(context, [])
     if not matches:
         raise SystemExit(f"required context {context!r} has no check-run evidence")
@@ -209,7 +217,8 @@ for context, app_id in required.items():
             raise SystemExit(f"required context {context!r} has stale check evidence")
         if run.get("status") != "completed" or run.get("conclusion") != "success":
             raise SystemExit(f"required context {context!r} is incomplete or concluded {run.get('conclusion')!r}")
-        if app_id is not None and run.get("app", {}).get("id") != app_id:
+        app = run.get("app") if isinstance(run.get("app"), dict) else {}
+        if type(app.get("id")) is not int or app["id"] != TRUSTED_APP_ID or app.get("slug") != TRUSTED_APP_SLUG:
             raise SystemExit(f"required context {context!r} came from the wrong GitHub App")
 PY
 }
@@ -253,7 +262,20 @@ if not re.fullmatch(r"[0-9a-f]{40}", sidecar.get("ledger", {}).get("git_blob_oid
 manifest = json.loads((root / "candidate-platform-manifest.json").read_text())
 if manifest.get("source_sha") != source_sha:
     raise SystemExit("platform manifest source SHA differs from candidate")
-listed = {item["name"]: item["sha256"] for item in manifest.get("assets", [])}
+# The manifest is parsed strictly before any name-keyed map is built (WR-03): a repeated name cannot hide a wrong digest
+# behind a right one, and a path-like name, a wrong-length or upper-case digest, or a missing key is a named refusal.
+rows = manifest.get("assets")
+if not isinstance(rows, list):
+    raise SystemExit("platform manifest has a malformed asset list")
+listed = {}
+for item in rows:
+    if (not isinstance(item, dict) or set(item) != {"name", "sha256"} or not isinstance(item["name"], str)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", item["name"])
+            or not isinstance(item["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])):
+        raise SystemExit(f"platform manifest has a malformed asset entry: {str(item)[:80]!r}")
+    if item["name"] in listed:
+        raise SystemExit(f"platform manifest names {item['name']} more than once")
+    listed[item["name"]] = item["sha256"]
 for name in required - {"candidate-platform-manifest.json"}:
     if name not in listed or listed[name] != hashlib.sha256((root / name).read_bytes()).hexdigest():
         raise SystemExit(f"platform manifest does not bind downloaded bytes: {name}")

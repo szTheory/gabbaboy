@@ -283,6 +283,16 @@ same tree as this run, applies the decision as shown above, verifies
 the result and uploads the qualified receipt. With neither input the step is
 the plain paired measurement.
 
+The release workflow may reuse the performance receipt of a rehearsal run instead
+of measuring again, but only under a judge it takes from the trusted workflow
+revision. It considers the newest successful run of `release-rehearsal.yml` on
+`rehearsal/vX.Y.Z` and requires a push or manual dispatch of this repository (no
+fork), a completed successful conclusion, and a head that is the tagged commit or
+has exactly the tagged tree, proved from git objects. It then requires the one
+artifact that exact run and attempt uploaded. If the newest run is stale or any
+check fails, the release measures afresh and never falls back to an older run or
+trusts a branch or artifact name alone.
+
 `release.yml` reuses that qualified receipt for the paired gate only when
 `python3 -I tests/scripts/verify-v02-performance.py --verify-reuse PATH --tag-tree TREE`
 accepts it, which requires a fully verified `passed` receipt whose measured

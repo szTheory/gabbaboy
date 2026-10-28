@@ -1163,9 +1163,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/rehearsal-performance"
-          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow release-rehearsal.yml --branch "rehearsal/$RELEASE_TAG" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [[ -n "$run_id" ]]; then
-            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --pattern 'rehearsal-performance-*' --dir "$RUNNER_TEMP/rehearsal-performance" || true
+          # The newest successful rehearsal run is reused only when it provably built the tagged tree. The judge is the
+          # trusted workflow revision's copy, never the tagged tree's: it binds the run to the rehearsal workflow, an allowed
+          # event, completed success, this tag's rehearsal branch and this repository, and the head to the tagged tree from git
+          # objects. The artifact must be this exact run and attempt's upload. A refusal means a fresh measurement, never an
+          # older run, and the reason stays in the log.
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success&per_page=100" > "$RUNNER_TEMP/rehearsal-runs.json"
+          if run_id=$(python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --select-performance-run "$RUNNER_TEMP/rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo "$GITHUB_REPOSITORY" --selected-run "$RUNNER_TEMP/rehearsal-run.json"); then
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100" > "$RUNNER_TEMP/rehearsal-artifacts.json"
+            if artifact=$(python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --select-performance-artifact "$RUNNER_TEMP/rehearsal-artifacts.json" --selected-run "$RUNNER_TEMP/rehearsal-run.json"); then
+              gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact" --dir "$RUNNER_TEMP/rehearsal-performance" || echo "::notice::The rehearsal performance artifact could not be downloaded; the receipt is measured instead."
+            else
+              echo "::notice::No reusable rehearsal performance artifact; the receipt is measured instead."
+            fi
+          else
+            echo "::notice::No rehearsal run of the tagged tree is reusable; the receipt is measured instead."
           fi
       - name: Reuse the qualified rehearsal receipt of this exact tree, else measure the clean paired v0.1.0 baseline and exact-tag candidate
         shell: bash

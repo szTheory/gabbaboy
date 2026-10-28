@@ -368,6 +368,14 @@ PERFORMANCE_TOKEN_STEPS = {
     ("release", "candidate-performance"): "Fetch the newest successful rehearsal run's performance receipt for this tag",
 }
 _GH_READ = re.compile(r"gh\s+run\s+(?:view|download|list)\b")
+# The two read-only listings the rehearsal-reuse selection judges (WR-01): the rehearsal workflow's successful runs on this tag's
+# branch, and one run's artifacts. Any other `gh api` form, method flag or path stays a repository-write/API command.
+_GH_API_READ = re.compile(r'gh\s+api\s+"repos/\$GITHUB_REPOSITORY/actions/(?:workflows/release-rehearsal\.yml/runs\?[A-Za-z0-9_=&/$]+'
+                          r'|runs/\$run_id/artifacts\?per_page=100)"')
+
+
+def _gh_reads(text: str, replacement: str) -> str:
+    return _GH_API_READ.sub(replacement, _GH_READ.sub(replacement, text))
 
 
 def _check_unprivileged(workflow: str, tree: dict, job_id: str) -> None:
@@ -390,9 +398,9 @@ def _check_unprivileged(workflow: str, tree: dict, job_id: str) -> None:
             raise Reject("producer-token", f"{_where(workflow, job_id)} step {token_step!r} must be the one step holding GH_TOKEN: ${{{{ github.token }}}}")
         holder = holders[0]
         holder["env"] = {key: value for key, value in holder["env"].items() if key != "GH_TOKEN"}
-        if _TOKEN.search(str(holder.get("run", ""))) or SUBJECT_EXECUTION.search(_GH_READ.sub("", str(holder.get("run", "")))):
+        if _TOKEN.search(str(holder.get("run", ""))) or SUBJECT_EXECUTION.search(_gh_reads(str(holder.get("run", "")), "")):
             raise Reject("producer-token", f"{_where(workflow, job_id)} step {token_step!r} runs tagged-tree code while holding the token")
-        holder["run"] = _GH_READ.sub("gh-read", str(holder.get("run", "")))
+        holder["run"] = _gh_reads(str(holder.get("run", "")), "gh-read")
         scanned = {k: (steps if k == "steps" else v) for k, v in scanned.items()}
     if any(_TOKEN.search(text) for text in _strings(scanned)):
         raise Reject("producer-token", f"{_where(workflow, job_id)} references the job token or a secret")
@@ -1427,9 +1435,18 @@ def _check_performance_reuse(workflow: str, job: dict) -> None:
     steps = job.get("steps", [])
     fetch = [step for step in steps if step.get("name") == PERFORMANCE_TOKEN_STEPS[(workflow, "candidate-performance")]]
     run = _flat(fetch[0]) if len(fetch) == 1 else ""
-    for pin in ('--workflow release-rehearsal.yml --branch "rehearsal/$RELEASE_TAG" --status success', "gh run download"):
+    judge = '"$RUNNER_TEMP/verify-release-source-proof.py"'
+    for pin in ('git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > ' + judge,
+                "release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success",
+                f"if run_id=$(python3 -I {judge} --select-performance-run ",
+                '--tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo "$GITHUB_REPOSITORY" --selected-run ',
+                "actions/runs/$run_id/artifacts?per_page=100",
+                f"if artifact=$(python3 -I {judge} --select-performance-artifact ",
+                'gh run download "$run_id"', '--name "$artifact"'):
         if pin not in run:
-            raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must fetch only from a successful rehearsal run of this tag: {pin}")
+            raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must fetch only the validated artifact of a successful rehearsal run of this tag, judged by the trusted revision: {pin}")
+    if re.search(r"python3?\s+(?:-\w+\s+)*\.?/?\.github/scripts/verify-release-source-proof\.py|\|\|\s*true", run):
+        raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must not judge reuse with the tagged tree's copy or swallow a refusal")
     reuse = [step for step in steps if "--verify-reuse" in _flat(step)]
     if len(reuse) != 1 or '--tag-tree "$tag_tree"' not in _flat(reuse[0]) or 'tag_tree=$(git rev-parse "$SOURCE_SHA^{tree}")' not in _flat(reuse[0]) \
             or reuse[0].get("env", {}).get("GH_TOKEN"):
@@ -2655,9 +2672,33 @@ def _mutations():
         _m("release reuse compares against the wrong tree", "release.yml", "  candidate-performance:\n",
            'tag_tree=$(git rev-parse "$SOURCE_SHA^{tree}")', 'tag_tree=$(git rev-parse "HEAD^{tree}")', "performance-reuse-unbound"),
         _m("release fetches the receipt from any branch", "release.yml", "  candidate-performance:\n",
-           '--branch "rehearsal/$RELEASE_TAG"', "--branch main", "performance-reuse-unbound"),
+           "runs?branch=rehearsal/$RELEASE_TAG&", "runs?branch=main&", "performance-reuse-unbound"),
         _m("release fetches the receipt of an unsuccessful run", "release.yml", "  candidate-performance:\n",
-           "--status success", "--status failure", "performance-reuse-unbound"),
+           "&status=success&", "&status=failure&", "performance-reuse-unbound"),
+        _m("release picks the newest run without judging it", "release.yml", "  candidate-performance:\n",
+           'if run_id=$(python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --select-performance-run "$RUNNER_TEMP/rehearsal-runs.json"',
+           'if run_id=$(jq -r ".workflow_runs[0].id" "$RUNNER_TEMP/rehearsal-runs.json"; true',
+           "performance-reuse-unbound"),
+        _m("release judges the run with the tagged tree's copy", "release.yml", "  candidate-performance:\n",
+           'if run_id=$(python3 -I "$RUNNER_TEMP/verify-release-source-proof.py"', "if run_id=$(python3 -I .github/scripts/verify-release-source-proof.py",
+           "performance-reuse-unbound"),
+        _m("release stops binding the run to the tag source", "release.yml", "  candidate-performance:\n",
+           '--tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo', '--tag "$RELEASE_TAG" --source-sha "$GITHUB_SHA" --repo',
+           "performance-reuse-unbound"),
+        _m("release downloads any rehearsal artifact of the run", "release.yml", "  candidate-performance:\n",
+           '--name "$artifact"', "--pattern 'rehearsal-performance-*'", "performance-reuse-unbound"),
+        _m("release skips the artifact binding", "release.yml", "  candidate-performance:\n",
+           'if artifact=$(python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --select-performance-artifact',
+           'if artifact=$(echo rehearsal-performance-x; true', "performance-reuse-unbound"),
+        _m("release swallows a refused selection", "release.yml", "  candidate-performance:\n",
+           '--selected-run "$RUNNER_TEMP/rehearsal-run.json"); then', '--selected-run "$RUNNER_TEMP/rehearsal-run.json" || true); then',
+           "performance-reuse-unbound"),
+        _m("release fetch step gains a write API call", "release.yml", "  candidate-performance:\n",
+           'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n', 'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n          gh api -X POST "repos/$GITHUB_REPOSITORY/issues" -f title=x\n',
+           "producer-write-command"),
+        _m("release fetch step reads an unlisted API path", "release.yml", "  candidate-performance:\n",
+           'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n', 'mkdir -p "$RUNNER_TEMP/rehearsal-performance"\n          gh api "repos/$GITHUB_REPOSITORY/issues?per_page=100" > x\n',
+           "producer-write-command"),
         _m("release performance job gains actions: write", "release.yml", "  candidate-performance:\n", "      actions: read\n", "      actions: write\n",
            "producer-write-authority"),
         _m("release performance job gains contents: write", "release.yml", "  candidate-performance:\n", "      actions: read\n", "      actions: read\n      pull-requests: write\n",
