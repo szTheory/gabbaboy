@@ -5484,6 +5484,29 @@ gbb_state_alloc_mutant(save_overwrites_tail ${GBB_STATE_SAVE_SUCCESS_ANCHOR}
     out_bytes[total_size] = 0u;
     return GBB_OK;]=])
 
+# Phase 17 RM-028 / D-20 (17-09): the release evidence lifecycle (attach, manifest, final gates, publish decision and
+# retry) is rehearsed by running the production lifecycle script and gates against a bounded `gh` transport that serves
+# captured response shapes and records the publish decision without publishing. The lifecycle runs on ubuntu-22.04 only
+# (bash, jq and a POSIX `gh` shim), so the replay is POSIX-only like the other bash-bound checks. The revision is the
+# configure-time HEAD, read with git show; nothing falls back to the live tree.
+if(NOT WIN32)
+  foreach(gbb_lifecycle_case IN ITEMS
+      "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=1 live_mutations=0"
+      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*")
+    string(REPLACE "|" ";" gbb_lifecycle_fields "${gbb_lifecycle_case}")
+    list(GET gbb_lifecycle_fields 0 gbb_lifecycle_name)
+    list(GET gbb_lifecycle_fields 1 gbb_lifecycle_mode)
+    list(GET gbb_lifecycle_fields 2 gbb_lifecycle_regex)
+    add_test(NAME ${gbb_lifecycle_name}
+      COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};${gbb_lifecycle_mode}"
+        -DGBB_EXPECT_CODE=0
+        "-DGBB_EXPECT_REGEX=${gbb_lifecycle_regex}"
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+    set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
+  endforeach()
+endif()
+
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times
