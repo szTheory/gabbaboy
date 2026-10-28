@@ -95,6 +95,8 @@ jobs:
         run: python3 tests/scripts/verify-support-ledger.py --self-test
       - name: Self-test the release gates
         run: bash .github/scripts/verify-release-gates.sh --self-test
+      # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
+      # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
       - name: Resolve immutable state pin base
         id: state_pin_base
         env:
@@ -108,7 +110,7 @@ jobs:
           elif [ "$EVENT_NAME" = "push" ]; then
             base="$PUSH_BEFORE"
             test -n "$base"
-            if [ -z "${base//0/}" ]; then
+            if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
               base=$(git merge-base HEAD origin/main)
             fi
           else
@@ -233,6 +235,8 @@ jobs:
           # v02 performance self-tests read the v0.1.0 baseline commit and tag.
           fetch-depth: 0
           persist-credentials: false
+      # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
+      # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
       - name: Resolve immutable state pin base
         id: state_pin_base
         env:
@@ -246,7 +250,7 @@ jobs:
           elif [ "$EVENT_NAME" = "push" ]; then
             base="$PUSH_BEFORE"
             test -n "$base"
-            if [ -z "${base//0/}" ]; then
+            if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
               base=$(git merge-base HEAD origin/main)
             fi
           else
@@ -320,6 +324,8 @@ jobs:
           # v02 performance self-tests read the v0.1.0 baseline commit and tag.
           fetch-depth: 0
           persist-credentials: false
+      # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
+      # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
       - name: Resolve immutable state pin base
         id: state_pin_base
         shell: bash
@@ -334,7 +340,7 @@ jobs:
           elif [ "$EVENT_NAME" = "push" ]; then
             base="$PUSH_BEFORE"
             test -n "$base"
-            if [ -z "${base//0/}" ]; then
+            if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then
               base=$(git merge-base HEAD origin/main)
             fi
           else

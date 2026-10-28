@@ -1292,6 +1292,27 @@ STATE_PIN_NATIVE_JOBS = {
     "native-windows": ("windows-x64", "state-pins-windows"),
 }
 STATE_PIN_TEST_COMMAND = "ctest --test-dir build -R '^state_portable_pins$' --output-on-failure --no-tests=error"
+# The state pin base step body, pinned byte for byte (17-REVIEW WR-C02): a substring check let an inserted
+# `base=$(git rev-parse HEAD)` keep every token while the ratchet compared HEAD with itself. A push parent that is all
+# zeros or no longer reachable (a rebase or force-push, WR-C05) falls back to the merge base with origin/main, as the
+# budget base step does; anything else that does not resolve fails the step.
+STATE_PIN_BASE_RUN = (
+    'if [ "$EVENT_NAME" = "pull_request" ]; then\n'
+    '  base="$PR_BASE"\n'
+    '  test -n "$base"\n'
+    'elif [ "$EVENT_NAME" = "push" ]; then\n'
+    '  base="$PUSH_BEFORE"\n'
+    '  test -n "$base"\n'
+    '  if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then\n'
+    '    base=$(git merge-base HEAD origin/main)\n'
+    '  fi\n'
+    'else\n'
+    '  echo "Unsupported CI event for immutable state pin base: $EVENT_NAME" >&2\n'
+    '  exit 1\n'
+    'fi\n'
+    'git cat-file -e "${base}^{commit}"\n'
+    'echo "base=$base" >> "$GITHUB_OUTPUT"'
+)
 # The ASan inventory runs in two jobs apart from the fuzz campaign, which keeps its pinned 45-minute bound. Their
 # exact filters are complementary, and each checks exactly its slice of the expected inventory (LESSONS GB-CI-010).
 _ASAN_SHARD_BUILD = ("cmake --preset phase1-asan -DGBB_TEST_INSTALL_PREFIX=", "cmake --build --preset phase1-asan")
@@ -1684,12 +1705,9 @@ def _check_state_pin_native_jobs(root: Path, tree: dict) -> None:
                                 ("PUSH_BEFORE", "${{ github.event.before }}")):
             if base_env.get(key) != expression:
                 raise Reject("state-pin-base", f"ci.{job_id} state pin base must read the immutable PR/push event SHA")
-        if any(token not in base_run for token in
-               ('if [ "$EVENT_NAME" = "pull_request" ]; then', 'base="$PR_BASE"', 'test -n "$base"',
-                'elif [ "$EVENT_NAME" = "push" ]; then', 'base="$PUSH_BEFORE"',
-                'if [ -z "${base//0/}" ]; then', "base=$(git merge-base HEAD origin/main)",
-                'git cat-file -e "${base}^{commit}"', 'echo "base=$base" >> "$GITHUB_OUTPUT"')):
-            raise Reject("state-pin-base", f"ci.{job_id} state pin base must resolve and validate the event base")
+        if base_run.strip("\n") != STATE_PIN_BASE_RUN or set(base_env) != {"EVENT_NAME", "PR_BASE", "PUSH_BEFORE"} or \
+                set(base_step) - {"name", "id", "shell", "env", "run"} or base_step.get("shell", "bash") != "bash":
+            raise Reject("state-pin-base", f"ci.{job_id} state pin base must be exactly the pinned event-base resolution")
         configure = [step for step in job.get("steps", []) if step.get("name") == "Configure"]
         if len(configure) != 1 or configure[0].get("env", {}).get("STATE_PIN_BASE") != \
                 "${{ steps.state_pin_base.outputs.base }}":
@@ -1976,7 +1994,37 @@ def lifecycle_regions(text: str) -> dict[str, str]:
         if f"\n  {mode}) lifecycle_{mode.replace('-', '_')} ;;\n" not in text:
             raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} does not dispatch the mode {mode} to its function")
         regions[mode] = text[text.find(begin) + len(begin):text.find(end)]
+    _check_lifecycle_skeleton(text)
     return regions
+
+
+# WR-C02: the script outside the regions is a pinned skeleton. Without it a function override (`python3() { return 0; }`),
+# a `trap 'exit 0' ERR`, or an extra first `case` arm (`nightly-gate) exit 0 ;;`, which bash takes before the real one)
+# kept every region and dispatch line intact while the gates never ran. Comment and blank lines are free.
+LIFECYCLE_USAGE_ARM = ("  *) printf 'usage: release-evidence-lifecycle.sh " + "|".join(LIFECYCLE_MODES) +
+                       "\\n' >&2; exit 2 ;;")
+
+
+def _check_lifecycle_skeleton(text: str) -> None:
+    outside = text
+    for mode in LIFECYCLE_MODES:
+        begin, end = f"\n# BEGIN {mode}\n", f"\n# END {mode}\n"
+        start, stop = outside.find(begin), outside.find(end)
+        outside = outside[:start + 1] + outside[stop + len(end):]
+    lines = [line.rstrip() for line in outside.split("\n") if line.strip() and not line.lstrip().startswith("#")]
+    functions = [f"lifecycle_{mode.replace('-', '_')}" for mode in LIFECYCLE_MODES]
+    expected = ["set -euo pipefail"]
+    for function in functions:
+        expected += [f"{function}() {{", "}"]
+    expected.append('case "${1:-}" in')
+    expected += [f"  {mode}) {function} ;;" for mode, function in zip(LIFECYCLE_MODES, functions)]
+    expected += [LIFECYCLE_USAGE_ARM, "esac"]
+    if lines != expected:
+        first = next((index for index, (got, want) in enumerate(zip(lines, expected)) if got != want), min(len(lines), len(expected)))
+        got = lines[first] if first < len(lines) else "<end of script>"
+        want = expected[first] if first < len(expected) else "<end of script>"
+        raise Reject("lifecycle-wiring", f"{LIFECYCLE_SCRIPT} outside its mode regions must be the pinned skeleton: "
+                     f"found {got[:80]!r} where {want[:80]!r} belongs")
 
 
 def expand_lifecycle(workflow: str, tree: dict, root: Path) -> None:
@@ -2767,6 +2815,18 @@ def _mutations():
            "state-pin-base"),
         _m("ordinary push state pin base bypasses its event before SHA", "ci.yml", "  native-linux:\n",
            'base="$PUSH_BEFORE"', 'base=$(git merge-base HEAD origin/main)', "state-pin-base"),
+        # WR-C05: an unreachable push parent (a rebase or force-push) must fall back to the merge base, not fail.
+        _m("WR-C05 state pin base fails on an unreachable push parent", "ci.yml", "  native-macos:\n",
+           'if [ -z "${base//0/}" ] || ! git cat-file -e "${base}^{commit}"; then', 'if [ -z "${base//0/}" ]; then',
+           "state-pin-base"),
+        # WR-C02: every token kept, but the resolved base is replaced by HEAD (the ratchet compares HEAD with itself).
+        _m("WR-C02 state pin base overwritten with HEAD after validation", "ci.yml", "  native-windows:\n",
+           'echo "base=$base" >> "$GITHUB_OUTPUT"', 'base=$(git rev-parse HEAD)\n{I}echo "base=$base" >> "$GITHUB_OUTPUT"',
+           "state-pin-base"),
+        _m("WR-C02 state pin base gains an environment override", "ci.yml", "  native-linux:\n",
+           "          PUSH_BEFORE: ${{ github.event.before }}\n        run: |\n          if [ \"$EVENT_NAME\"",
+           "          PUSH_BEFORE: ${{ github.event.before }}\n          BASH_ENV: build/override.sh\n        run: |\n          if [ \"$EVENT_NAME\"",
+           "state-pin-base"),
         _m("native state pin target is replaced by its controls test", "ci.yml", "  native-linux:\n",
            "state_portable_pins", "state_pin_controls", "state-pin-target"),
         _m("native installed consumer route drops its inventory gate", "ci.yml", "  native-linux:\n",
@@ -3283,6 +3343,17 @@ def _mutations():
         _m("G17-09 publisher gains actions: write", rel, "  publish-qualified-release:\n", "      actions: read\n", "      actions: write\n",
            "nightly-gate-permissions"),
         _m("G17-10 publisher loses actions: read", rel, "  publish-qualified-release:\n", "      actions: read\n", "", "nightly-gate-permissions"),
+        # WR-C02: edits outside the mode regions that disable the gates while every region and dispatch line survives.
+        _m("WR-C02 lifecycle overrides python3 after the top-level set", "lifecycle", "", "set -euo pipefail\n\nlifecycle_attach_evidence() {",
+           "set -euo pipefail\npython3() { return 0; }\n\nlifecycle_attach_evidence() {", "lifecycle-wiring"),
+        _m("WR-C02 lifecycle overrides bash before the dispatch", "lifecycle", "", '\ncase "${1:-}" in\n',
+           '\nbash() { return 0; }\ncase "${1:-}" in\n', "lifecycle-wiring"),
+        _m("WR-C02 lifecycle traps errors to success", "lifecycle", "", "set -euo pipefail\n\nlifecycle_attach_evidence() {",
+           "set -euo pipefail\ntrap 'exit 0' ERR\n\nlifecycle_attach_evidence() {", "lifecycle-wiring"),
+        _m("WR-C02 lifecycle dispatch gains an earlier nightly-gate arm", "lifecycle", "", '\ncase "${1:-}" in\n',
+           '\ncase "${1:-}" in\n  nightly-gate) exit 0 ;;\n', "lifecycle-wiring"),
+        _m("WR-C02 lifecycle exits between two mode functions", "lifecycle", "", "\n# END final-gate\n}\n",
+           "\n# END final-gate\n}\nexit 0\n", "lifecycle-wiring"),
         _m("G17-11 owner approval gate no longer called", "perfgate", "", "python3 -I \"$GATES\" --review-approval", "python3 -I \"$GATES\" --digest", "release-gate-wiring"),
         _m("G17-12 a receipt is handed to the evaluator without the approval", "perfgate", "",
            "  if [[ -n \"${GBB_IR_EXCEPTION_COMMENT_JSON:-}\" || -n \"${GBB_IR_EXCEPTION_DECISION:-}\" ]]; then\n",
