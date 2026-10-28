@@ -1413,6 +1413,45 @@ def tagged_file(repo_root: pathlib.Path, tag: str, relative: str, limit: int) ->
     return raw
 
 
+def tagged_files(repo_root: pathlib.Path, tag: str, names: list[str], limit: int) -> dict[str, bytes]:
+    """Read many tagged blobs through one `git cat-file --batch` process.
+
+    A sidecar build reads every covered source input from the tag; one `git show` per file costs a
+    process spawn each, which made the self-test brush the Windows CTest budget. Names that cannot
+    travel on a batch input line (CR/LF) keep the single-file path, so no accepted path is lost.
+    """
+    contents: dict[str, bytes] = {}
+    batch = [name for name in dict.fromkeys(names) if "\n" not in name and "\r" not in name]
+    for name in batch:
+        relative_path(name, "tagged-input-path-invalid")
+    if batch:
+        request = "".join(f"{tag}:{name}\n" for name in batch).encode("utf-8")
+        try:
+            output = subprocess.run(["git", "cat-file", "--batch"], cwd=repo_root, input=request,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True).stdout
+        except subprocess.CalledProcessError as error:
+            fail(f"git cat-file --batch failed: {error.stderr.decode(errors='replace').strip()}")
+        offset = 0
+        for name in batch:
+            end = output.find(b"\n", offset)
+            header = output[offset:end].split(b" ") if end >= 0 else []
+            if len(header) != 3 or header[1] != b"blob" or not header[2].isdigit():
+                fail(f"git show {tag}:{name} failed: tagged object is missing or not a file")
+            size = int(header[2])
+            start = end + 1
+            if output[start + size:start + size + 1] != b"\n":
+                fail(f"git show {tag}:{name} failed: truncated batch output")
+            raw = output[start:start + size]
+            offset = start + size + 1
+            if len(raw) > limit:
+                fail("tagged-input-too-large:" + name)
+            contents[name] = raw
+    for name in names:
+        if name not in contents:
+            contents[name] = tagged_file(repo_root, tag, name, limit)
+    return contents
+
+
 def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
                      ledger: str, ledger_raw: bytes, data: dict,
                      receipt_path: pathlib.Path | None) -> dict:
@@ -1438,8 +1477,10 @@ def build_v2_sidecar(tag: str, source_sha: str, repo_root: pathlib.Path,
     for row in source_rows:
         if type(row) is not dict:
             fail("tagged source input identity is malformed")
-        name = relative_path(row.get("path"))
-        raw = tagged_file(repo_root, tag, name, MAX_INPUT_BYTES)
+    names = [relative_path(row.get("path")) for row in source_rows]
+    blobs = tagged_files(repo_root, tag, names, MAX_INPUT_BYTES)
+    for name, row in zip(names, source_rows):
+        raw = blobs[name]
         if sha256(raw) != row.get("sha256") or len(raw) != row.get("size_bytes"):
             fail("tagged source input differs from ledger:" + name)
         tagged_inputs[name] = raw
