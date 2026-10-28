@@ -683,10 +683,10 @@ static int state_apu_pulse_timer(void) {
     REQUIRE_CASE(case_name, timer_field != NULL &&
                             state_field_value_valid(source, timer_field, 0u,
                                 GBB_APU_PULSE_TIMER_MAX,
-                                source->audio_event_head, source->apu_sample_phase) &&
+                                source->audio_event_head, source->apu_sample_phase, NULL) &&
                             !state_field_value_valid(source, timer_field, 0u,
                                 GBB_APU_PULSE_TIMER_MAX + 1u,
-                                source->audio_event_head, source->apu_sample_phase));
+                                source->audio_event_head, source->apu_sample_phase, NULL));
     uint8_t *saved = malloc(size);
     uint8_t *resaved = malloc(size);
     uint8_t *above_bound = malloc(size);
@@ -771,10 +771,10 @@ static int state_apu_noise_timer(void) {
     REQUIRE_CASE(case_name, timer_field != NULL &&
                             state_field_value_valid(source, timer_field, 0u,
                                 GBB_APU_NOISE_TIMER_MAX,
-                                source->audio_event_head, source->apu_sample_phase) &&
+                                source->audio_event_head, source->apu_sample_phase, NULL) &&
                             !state_field_value_valid(source, timer_field, 0u,
                                 GBB_APU_NOISE_TIMER_MAX + 1u,
-                                source->audio_event_head, source->apu_sample_phase));
+                                source->audio_event_head, source->apu_sample_phase, NULL));
     uint8_t *saved = malloc(size);
     uint8_t *resaved = malloc(size);
     uint8_t *above_bound = malloc(size);

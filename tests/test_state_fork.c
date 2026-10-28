@@ -705,7 +705,7 @@ static uint64_t poison_value(const gbb_instance *source,
     size_t complete_state_trials = 0u;
     const size_t count = state_field_count_for_instance(source, field);
     if (proposed != value && state_field_value_valid(source, field, index,
-            proposed, audio_head, sample_phase)) {
+            proposed, audio_head, sample_phase, NULL)) {
         /* Check at most four scalar alternatives for fields with cross-field
          * relations, using the public loader against the complete source state.
          * Other fields use their exact per-field validator. Arrays avoid one full
@@ -726,7 +726,7 @@ static uint64_t poison_value(const gbb_instance *source,
     };
     for (size_t i = 0u; i < sizeof(candidates) / sizeof(candidates[0]); ++i) {
         if (candidates[i] != value && state_field_value_valid(source, field, index,
-                candidates[i], audio_head, sample_phase)) {
+                candidates[i], audio_head, sample_phase, NULL)) {
             if (count != 1u || !poison_needs_full_state_probe(field))
                 return candidates[i];
             if (complete_state_trials >= 4u) break;
@@ -738,7 +738,7 @@ static uint64_t poison_value(const gbb_instance *source,
     if (field->wire_width == 1u) {
         for (uint64_t candidate = 0u; candidate <= UINT8_MAX; ++candidate) {
             if (candidate != value && state_field_value_valid(source, field, index,
-                    candidate, audio_head, sample_phase)) {
+                    candidate, audio_head, sample_phase, NULL)) {
                 if (count != 1u || !poison_needs_full_state_probe(field))
                     return candidate;
                 if (complete_state_trials >= 4u) break;
@@ -937,7 +937,7 @@ static int state_fork_case(const char *case_id, const char *rom_path,
                 uint64_t raw = 0u;
                 if (!state_host_value(source, field, i, &raw) ||
                     !state_field_value_valid(source, field, i, raw,
-                        source->audio_event_head, phase))
+                        source->audio_event_head, phase, NULL))
                     fprintf(stderr, "state-fork invalid-live-field id=%s index=%zu raw=%016llx\n",
                         field->path, i, (unsigned long long)raw);
             }

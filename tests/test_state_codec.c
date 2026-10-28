@@ -508,6 +508,13 @@ static int state_semantic_bounds(void) {
                                     "rgb_working", GBB_FRAME_PIXELS - 1u, 0x8000u));
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "frame_completed", 0u, 4u));
+    /* Path rules are resolved on a field's first element; later elements must keep them. */
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "frame_completed", GBB_FRAME_PIXELS - 1u, 4u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "frame_working", GBB_FRAME_PIXELS - 1u, 4u));
+    REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
+                                    "obj_cram", 63u, 0x80u));
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,
                                     "bg_cram", 1u, 0x80u));
     REQUIRE_CASE("state_semantic_bounds", test_load_rejects_unchanged(target, saved, size,

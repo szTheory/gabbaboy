@@ -4210,10 +4210,7 @@ static int state_source_raw(const gbb_instance *instance, const uint8_t *body,
 }
 
 /* MODEL: BOTH GATE-00 basis="state validation preserves profile-specific machine state" */
-static int state_field_value_valid(const gbb_instance *instance,
-                                   const state_field_descriptor *field,
-                                   size_t index, uint64_t raw,
-                                   uint8_t audio_head, uint64_t sample_phase) {
+static int state_field_kind_valid(const state_field_descriptor *field, uint64_t raw) {
     const uint64_t maximum = field->wire_width == 8u ? UINT64_MAX
         : ((UINT64_C(1) << (field->wire_width * 8u)) - 1u);
     if (raw > maximum) return 0;
@@ -4221,156 +4218,179 @@ static int state_field_value_valid(const gbb_instance *instance,
     if (field->kind == STATE_VALUE_COUNT && raw > GBB_INPUT_EVENT_CAPACITY) return 0;
     if (field->kind == STATE_VALUE_EVENT_KIND &&
         (raw < (uint64_t)GBB_INPUT_STOP_WAKE || raw > (uint64_t)GBB_INPUT_BUTTON_RELEASE)) return 0;
+    return 1;
+}
+
+/* Every path rule in state_field_value_valid is selected only by field->path, so a field that
+ * reaches its final return without matching one has no path rule for any element. A non-NULL
+ * path_rule records a match, which lets state_walk check large unconstrained arrays (VRAM, WRAM)
+ * with state_field_kind_valid instead of about a hundred path comparisons per byte. */
+/* MODEL: BOTH GATE-00 basis="state validation preserves profile-specific machine state" */
+static int state_value_path_is(const state_field_descriptor *field, const char *path,
+                               int *path_rule) {
+    if (strcmp(field->path, path) != 0) return 0;
+    if (path_rule != NULL) *path_rule = 1;
+    return 1;
+}
+
+/* MODEL: BOTH GATE-00 basis="state validation preserves profile-specific machine state" */
+static int state_field_value_valid(const gbb_instance *instance,
+                                   const state_field_descriptor *field,
+                                   size_t index, uint64_t raw,
+                                   uint8_t audio_head, uint64_t sample_phase, int *path_rule) {
+#define STATE_PATH(name) state_value_path_is(field, (name), path_rule)
+    if (!state_field_kind_valid(field, raw)) return 0;
     if (field->kind == STATE_VALUE_I64) {
         uint8_t encoded[8]; int64_t value;
         state_put_u64(encoded, raw, 8u);
         if (!state_decode_i64(encoded, &value)) return 0;
-        if (strcmp(field->path, "audio_event_ring") != 0) return 0;
+        if (!STATE_PATH("audio_event_ring")) return 0;
         const uint64_t phase = sample_phase;
         return state_audio_ring_slot_valid(audio_head, index % GBB_AUDIO_EVENT_TAPS, phase, value);
     }
     if (field->kind == STATE_VALUE_I32) {
         int32_t value;
         if (!state_bits_to_i32((uint32_t)raw, &value)) return 0;
-        if (strcmp(field->path, "audio_mix_level") == 0)
+        if (STATE_PATH("audio_mix_level"))
             return state_audio_mix_level_valid(value);
-        if (strcmp(field->path, "audio_hpf_input") == 0 ||
-            strcmp(field->path, "audio_hpf_output") == 0)
+        if (STATE_PATH("audio_hpf_input") ||
+            STATE_PATH("audio_hpf_output"))
             return value >= INT16_MIN && value <= INT16_MAX;
         return 0;
     }
-    if (strcmp(field->path, "frame_working") == 0 ||
-        strcmp(field->path, "frame_completed") == 0) return raw <= 3u;
-    if (strcmp(field->path, "rgb_working") == 0 ||
-        strcmp(field->path, "rgb_completed") == 0 ||
-        strcmp(field->path, "compat_rgb555") == 0) return raw <= 0x7FFFu;
-    if ((strcmp(field->path, "bg_cram") == 0 || strcmp(field->path, "obj_cram") == 0) &&
+    if (STATE_PATH("frame_working") ||
+        STATE_PATH("frame_completed")) return raw <= 3u;
+    if (STATE_PATH("rgb_working") ||
+        STATE_PATH("rgb_completed") ||
+        STATE_PATH("compat_rgb555")) return raw <= 0x7FFFu;
+    if ((STATE_PATH("bg_cram") || STATE_PATH("obj_cram")) &&
         (index & 1u) != 0u) return (raw & 0x80u) == 0u;
-    if (strcmp(field->path, "cartridge_ram") == 0 && instance->cart.kind == CART_MBC2)
+    if (STATE_PATH("cartridge_ram") && instance->cart.kind == CART_MBC2)
         return (raw & 0xF0u) == 0xF0u;
-    if (strcmp(field->path, "cart.ram_enabled") == 0 ||
-        strcmp(field->path, "cart.rumble_on") == 0 ||
-        strcmp(field->path, "cart.mbc1_mode") == 0 ||
-        strcmp(field->path, "cart.rtc_latch_prev") == 0) {
-        if (strcmp(field->path, "cart.rtc_latch_prev") == 0) return 1;
+    if (STATE_PATH("cart.ram_enabled") ||
+        STATE_PATH("cart.rumble_on") ||
+        STATE_PATH("cart.mbc1_mode") ||
+        STATE_PATH("cart.rtc_latch_prev")) {
+        if (STATE_PATH("cart.rtc_latch_prev")) return 1;
         return raw <= 1u;
     }
-    if (strcmp(field->path, "cart.rtc_s") == 0 ||
-        strcmp(field->path, "cart.rtc_m") == 0) return raw <= 0x3Fu;
-    if (strcmp(field->path, "cart.rtc_h") == 0) return raw <= 0x1Fu;
-    if (strcmp(field->path, "cart.rtc_dh") == 0) return (raw & 0x3Eu) == 0u;
-    if (strcmp(field->path, "cart.rtc_l") == 0)
+    if (STATE_PATH("cart.rtc_s") ||
+        STATE_PATH("cart.rtc_m")) return raw <= 0x3Fu;
+    if (STATE_PATH("cart.rtc_h")) return raw <= 0x1Fu;
+    if (STATE_PATH("cart.rtc_dh")) return (raw & 0x3Eu) == 0u;
+    if (STATE_PATH("cart.rtc_l"))
         return index < 5u && (index == 0u || index == 1u ? raw <= 0x3Fu
             : index == 2u ? raw <= 0x1Fu : index == 4u ? (raw & 0x3Eu) == 0u : 1);
-    if (strcmp(field->path, "cart.rtc_sub") == 0) return raw <= RTC_SUB_MASK;
-    if (strcmp(field->path, "f") == 0) return (raw & 0x0Fu) == 0u;
-    if (strcmp(field->path, "vram_bank") == 0 ||
-        strcmp(field->path, "hdma.block_vram_bank") == 0)
+    if (STATE_PATH("cart.rtc_sub")) return raw <= RTC_SUB_MASK;
+    if (STATE_PATH("f")) return (raw & 0x0Fu) == 0u;
+    if (STATE_PATH("vram_bank") ||
+        STATE_PATH("hdma.block_vram_bank"))
         return raw <= 1u;
-    if (strcmp(field->path, "wram_bank") == 0) return raw >= 1u && raw <= 7u;
-    if (strcmp(field->path, "svbk") == 0) return raw <= 7u;
-    if (strcmp(field->path, "key1_armed") == 0) return raw <= 1u;
+    if (STATE_PATH("wram_bank")) return raw >= 1u && raw <= 7u;
+    if (STATE_PATH("svbk")) return raw <= 7u;
+    if (STATE_PATH("key1_armed")) return raw <= 1u;
     /* BCPS/OCPS retain the post-boot $40 read-as-one bit and preserve all written
      * index/autoincrement bits. Their consumers mask the palette address to 6 bits. */
-    if (strcmp(field->path, "bcps") == 0 || strcmp(field->path, "ocps") == 0) return 1;
-    if (strcmp(field->path, "opri") == 0) return raw <= 1u;
-    if (strcmp(field->path, "ppu_fifo") == 0)
+    if (STATE_PATH("bcps") || STATE_PATH("ocps")) return 1;
+    if (STATE_PATH("opri")) return raw <= 1u;
+    if (STATE_PATH("ppu_fifo"))
         return raw == UINT8_MAX || raw < GBB_FRAME_WIDTH;
-    if (strcmp(field->path, "ppu_dot") == 0) return raw < GBB_DOTS_PER_LINE;
-    if (strcmp(field->path, "ppu_half_phase") == 0 || strcmp(field->path, "ppu_stat_line") == 0 ||
-        strcmp(field->path, "ppu_window_started") == 0 ||
-        strcmp(field->path, "ppu_transfer_complete") == 0) return raw <= 1u;
-    if (strcmp(field->path, "ppu_mode") == 0) return raw <= 3u;
-    if (strcmp(field->path, "ppu_fifo_head") == 0) return raw < GBB_PPU_FIFO_CAPACITY;
-    if (strcmp(field->path, "ppu_fifo_count") == 0) return raw <= GBB_PPU_FIFO_CAPACITY;
-    if (strcmp(field->path, "ppu_fetch_stage") == 0) return raw <= 3u;
-    if (strcmp(field->path, "ppu_fetch_phase") == 0) return raw <= 1u;
-    if (strcmp(field->path, "ppu_fetch_enqueued") == 0)
+    if (STATE_PATH("ppu_dot")) return raw < GBB_DOTS_PER_LINE;
+    if (STATE_PATH("ppu_half_phase") || STATE_PATH("ppu_stat_line") ||
+        STATE_PATH("ppu_window_started") ||
+        STATE_PATH("ppu_transfer_complete")) return raw <= 1u;
+    if (STATE_PATH("ppu_mode")) return raw <= 3u;
+    if (STATE_PATH("ppu_fifo_head")) return raw < GBB_PPU_FIFO_CAPACITY;
+    if (STATE_PATH("ppu_fifo_count")) return raw <= GBB_PPU_FIFO_CAPACITY;
+    if (STATE_PATH("ppu_fetch_stage")) return raw <= 3u;
+    if (STATE_PATH("ppu_fetch_phase")) return raw <= 1u;
+    if (STATE_PATH("ppu_fetch_enqueued"))
         return raw <= GBB_FRAME_WIDTH + 7u;
-    if (strcmp(field->path, "ppu_transfer_age") == 0) return raw <= 12u;
-    if (strcmp(field->path, "ppu_output_x") == 0) return raw <= GBB_FRAME_WIDTH;
-    if (strcmp(field->path, "ppu_scroll_discard") == 0 ||
-        strcmp(field->path, "ppu_fine_scroll") == 0) return raw <= 7u;
-    if (strcmp(field->path, "ppu_selected_objects") == 0) return raw < 40u;
-    if (strcmp(field->path, "ppu_selected_object_count") == 0) return raw <= GBB_LINE_OBJECT_LIMIT;
-    if (strcmp(field->path, "ppu_scan_index") == 0) return raw <= 40u;
-    if (strcmp(field->path, "ppu_window_line") == 0) return raw <= GBB_FRAME_HEIGHT;
-    if (strcmp(field->path, "dma_active") == 0 || strcmp(field->path, "dma_start_pending") == 0 ||
-        strcmp(field->path, "dma_cpu_blocked") == 0) return raw <= 1u;
-    if (strcmp(field->path, "dma_index") == 0) return raw <= GBB_OAM_BYTES;
-    if (strcmp(field->path, "dma_phase") == 0) return raw < GBB_T_PER_M;
-    if (strcmp(field->path, "hdma.mode") == 0) return raw <= 2u;
-    if (strcmp(field->path, "hdma.active") == 0 ||
-        strcmp(field->path, "hdma.pending_hblank") == 0) return raw <= 1u;
-    if (strcmp(field->path, "hdma.source_low") == 0 ||
-        strcmp(field->path, "hdma.destination_low") == 0) return (raw & 0x0Fu) == 0u;
-    if (strcmp(field->path, "hdma.destination_high") == 0) return raw <= 0x1Fu;
-    if (strcmp(field->path, "hdma.byte_index") == 0) return raw < 16u;
-    if (strcmp(field->path, "hdma.byte_phase") == 0) return raw <= 3u;
-    if (strcmp(field->path, "hdma.destination_cursor") == 0)
+    if (STATE_PATH("ppu_transfer_age")) return raw <= 12u;
+    if (STATE_PATH("ppu_output_x")) return raw <= GBB_FRAME_WIDTH;
+    if (STATE_PATH("ppu_scroll_discard") ||
+        STATE_PATH("ppu_fine_scroll")) return raw <= 7u;
+    if (STATE_PATH("ppu_selected_objects")) return raw < 40u;
+    if (STATE_PATH("ppu_selected_object_count")) return raw <= GBB_LINE_OBJECT_LIMIT;
+    if (STATE_PATH("ppu_scan_index")) return raw <= 40u;
+    if (STATE_PATH("ppu_window_line")) return raw <= GBB_FRAME_HEIGHT;
+    if (STATE_PATH("dma_active") || STATE_PATH("dma_start_pending") ||
+        STATE_PATH("dma_cpu_blocked")) return raw <= 1u;
+    if (STATE_PATH("dma_index")) return raw <= GBB_OAM_BYTES;
+    if (STATE_PATH("dma_phase")) return raw < GBB_T_PER_M;
+    if (STATE_PATH("hdma.mode")) return raw <= 2u;
+    if (STATE_PATH("hdma.active") ||
+        STATE_PATH("hdma.pending_hblank")) return raw <= 1u;
+    if (STATE_PATH("hdma.source_low") ||
+        STATE_PATH("hdma.destination_low")) return (raw & 0x0Fu) == 0u;
+    if (STATE_PATH("hdma.destination_high")) return raw <= 0x1Fu;
+    if (STATE_PATH("hdma.byte_index")) return raw < 16u;
+    if (STATE_PATH("hdma.byte_phase")) return raw <= 3u;
+    if (STATE_PATH("hdma.destination_cursor"))
         return raw == 0u || (raw >= 0x8000u && raw <= 0xA000u);
-    if (strcmp(field->path, "hdma.blocks_remaining") == 0) return raw <= 128u;
-    if (strcmp(field->path, "ime_delay") == 0) return raw <= 2u;
-    if (strcmp(field->path, "tac") == 0) return raw <= 7u;
-    if (strcmp(field->path, "divider_phase") == 0) return raw < GBB_HALF_DOTS_PER_T_NORMAL;
-    if (strcmp(field->path, "timer_reload_pending") == 0 ||
-        strcmp(field->path, "timer_signal") == 0 || strcmp(field->path, "serial_active") == 0 ||
-        strcmp(field->path, "bus_unsupported") == 0 || strcmp(field->path, "halted") == 0 ||
-        strcmp(field->path, "stopped") == 0 || strcmp(field->path, "halt_bug") == 0 ||
-        strcmp(field->path, "locked") == 0 || strcmp(field->path, "apu_wave.enabled") == 0 ||
-        strcmp(field->path, "apu_noise.enabled") == 0) return raw <= 1u;
-    if (strcmp(field->path, "serial_bits") == 0) return raw <= 8u;
-    if (strcmp(field->path, "cpu_stall_kind") == 0) return raw <= GBB_STALL_SWITCH_REALIGN;
-    if (strcmp(field->path, "stop_switch_pending") == 0 || strcmp(field->path, "double_speed") == 0)
+    if (STATE_PATH("hdma.blocks_remaining")) return raw <= 128u;
+    if (STATE_PATH("ime_delay")) return raw <= 2u;
+    if (STATE_PATH("tac")) return raw <= 7u;
+    if (STATE_PATH("divider_phase")) return raw < GBB_HALF_DOTS_PER_T_NORMAL;
+    if (STATE_PATH("timer_reload_pending") ||
+        STATE_PATH("timer_signal") || STATE_PATH("serial_active") ||
+        STATE_PATH("bus_unsupported") || STATE_PATH("halted") ||
+        STATE_PATH("stopped") || STATE_PATH("halt_bug") ||
+        STATE_PATH("locked") || STATE_PATH("apu_wave.enabled") ||
+        STATE_PATH("apu_noise.enabled")) return raw <= 1u;
+    if (STATE_PATH("serial_bits")) return raw <= 8u;
+    if (STATE_PATH("cpu_stall_kind")) return raw <= GBB_STALL_SWITCH_REALIGN;
+    if (STATE_PATH("stop_switch_pending") || STATE_PATH("double_speed"))
         return raw <= 1u;
-    if (strcmp(field->path, "timer_reloaded_at") == 0)
+    if (STATE_PATH("timer_reloaded_at"))
         return raw == UINT64_MAX || raw <= GBB_STATE_TIME_LIMIT;
-    if (strcmp(field->path, "timer_reload_remaining") == 0) return raw <= 4u;
-    if (strcmp(field->path, "serial_edge_remaining") == 0) return raw <= 512u;
-    if (strcmp(field->path, "serial_control") == 0)
+    if (STATE_PATH("timer_reload_remaining")) return raw <= 4u;
+    if (STATE_PATH("serial_edge_remaining")) return raw <= 512u;
+    if (STATE_PATH("serial_control"))
         return raw <= 1u || raw == 0x7Eu || raw == 0x7Fu || raw == 0x80u || raw == 0x81u;
-    if (strcmp(field->path, "joypad_select") == 0) return (raw & ~0x30u) == 0u;
-    if (strcmp(field->path, "interrupt_flags") == 0) return (raw & ~0x1Fu) == 0u;
-    if (strcmp(field->path, "ie") == 0)
+    if (STATE_PATH("joypad_select")) return (raw & ~0x30u) == 0u;
+    if (STATE_PATH("interrupt_flags")) return (raw & ~0x1Fu) == 0u;
+    if (STATE_PATH("ie"))
         return instance->profile == GBB_PROFILE_CGB_CPU_E || (raw & ~0x1Fu) == 0u;
-    if (strcmp(field->path, "stat") == 0) return (raw & ~0x78u) == 0u;
-    if (strcmp(field->path, "time_half_dots") == 0 ||
-        strcmp(field->path, "frame_completion_half_dots") == 0 ||
-        strcmp(field->path, "instruction_start_half_dots") == 0 ||
-        strcmp(field->path, "cart.rtc_synced_at") == 0 ||
-        strcmp(field->path, "input_events[].at_half_dots") == 0)
+    if (STATE_PATH("stat")) return (raw & ~0x78u) == 0u;
+    if (STATE_PATH("time_half_dots") ||
+        STATE_PATH("frame_completion_half_dots") ||
+        STATE_PATH("instruction_start_half_dots") ||
+        STATE_PATH("cart.rtc_synced_at") ||
+        STATE_PATH("input_events[].at_half_dots"))
         return raw <= GBB_STATE_TIME_LIMIT;
-    if (strcmp(field->path, "apu_sample_phase") == 0) return raw < GBB_AUDIO_CLOCK_HALF_DOTS;
-    if (strcmp(field->path, "audio_event_head") == 0) return raw < GBB_AUDIO_EVENT_TAPS;
-    if (strcmp(field->path, "apu_power") == 0) return raw <= 1u;
-    if (strcmp(field->path, "apu_sequencer_step") == 0) return raw <= 7u;
-    if (strcmp(field->path, "apu_pulse[].phase") == 0) return raw <= 7u;
-    if (strcmp(field->path, "apu_pulse[].volume") == 0) return raw <= 15u;
-    if (strcmp(field->path, "apu_pulse[].envelope_timer") == 0 ||
-        strcmp(field->path, "apu_pulse[].sweep_timer") == 0) return raw <= 8u;
-    if (strcmp(field->path, "apu_pulse[].frequency") == 0 ||
-        strcmp(field->path, "apu_pulse[].sweep_shadow") == 0) return raw <= 2047u;
-    if (strcmp(field->path, "apu_pulse[].length") == 0) return raw <= 64u;
-    if (strcmp(field->path, "apu_pulse[].sweep") == 0) return raw <= 0x7Fu;
-    if (strcmp(field->path, "apu_pulse[].control") == 0) return (raw & ~0x47u) == 0u;
-    if (strcmp(field->path, "apu_wave.dac") == 0) return raw == 0u || raw == 0x80u;
-    if (strcmp(field->path, "apu_wave.level") == 0) return (raw & ~0x60u) == 0u;
-    if (strcmp(field->path, "apu_wave.control") == 0) return (raw & ~0x47u) == 0u;
-    if (strcmp(field->path, "apu_wave.position") == 0) return raw <= 31u;
-    if (strcmp(field->path, "apu_wave.length") == 0) return raw <= 256u;
-    if (strcmp(field->path, "apu_wave.timer") == 0) return raw <= 4096u;
-    if (strcmp(field->path, "apu_pulse[].timer") == 0)
+    if (STATE_PATH("apu_sample_phase")) return raw < GBB_AUDIO_CLOCK_HALF_DOTS;
+    if (STATE_PATH("audio_event_head")) return raw < GBB_AUDIO_EVENT_TAPS;
+    if (STATE_PATH("apu_power")) return raw <= 1u;
+    if (STATE_PATH("apu_sequencer_step")) return raw <= 7u;
+    if (STATE_PATH("apu_pulse[].phase")) return raw <= 7u;
+    if (STATE_PATH("apu_pulse[].volume")) return raw <= 15u;
+    if (STATE_PATH("apu_pulse[].envelope_timer") ||
+        STATE_PATH("apu_pulse[].sweep_timer")) return raw <= 8u;
+    if (STATE_PATH("apu_pulse[].frequency") ||
+        STATE_PATH("apu_pulse[].sweep_shadow")) return raw <= 2047u;
+    if (STATE_PATH("apu_pulse[].length")) return raw <= 64u;
+    if (STATE_PATH("apu_pulse[].sweep")) return raw <= 0x7Fu;
+    if (STATE_PATH("apu_pulse[].control")) return (raw & ~0x47u) == 0u;
+    if (STATE_PATH("apu_wave.dac")) return raw == 0u || raw == 0x80u;
+    if (STATE_PATH("apu_wave.level")) return (raw & ~0x60u) == 0u;
+    if (STATE_PATH("apu_wave.control")) return (raw & ~0x47u) == 0u;
+    if (STATE_PATH("apu_wave.position")) return raw <= 31u;
+    if (STATE_PATH("apu_wave.length")) return raw <= 256u;
+    if (STATE_PATH("apu_wave.timer")) return raw <= 4096u;
+    if (STATE_PATH("apu_pulse[].timer"))
         return raw <= GBB_APU_PULSE_TIMER_MAX;
-    if (strcmp(field->path, "apu_noise.volume") == 0) return raw <= 15u;
-    if (strcmp(field->path, "apu_noise.envelope_timer") == 0) return raw <= 8u;
-    if (strcmp(field->path, "apu_noise.length") == 0) return raw <= 64u;
-    if (strcmp(field->path, "apu_noise.length_reg") == 0) return raw <= 0x3Fu;
-    if (strcmp(field->path, "apu_noise.control") == 0) return raw == 0u || raw == 0x40u;
-    if (strcmp(field->path, "apu_noise.timer") == 0)
+    if (STATE_PATH("apu_noise.volume")) return raw <= 15u;
+    if (STATE_PATH("apu_noise.envelope_timer")) return raw <= 8u;
+    if (STATE_PATH("apu_noise.length")) return raw <= 64u;
+    if (STATE_PATH("apu_noise.length_reg")) return raw <= 0x3Fu;
+    if (STATE_PATH("apu_noise.control")) return raw == 0u || raw == 0x40u;
+    if (STATE_PATH("apu_noise.timer"))
         return raw <= GBB_APU_NOISE_TIMER_MAX;
-    if (strcmp(field->path, "apu_noise.lfsr") == 0) return raw <= 0x7FFFu;
+    if (STATE_PATH("apu_noise.lfsr")) return raw <= 0x7FFFu;
     (void)index;
     return 1;
+#undef STATE_PATH
 }
 
 typedef enum {
@@ -4414,6 +4434,8 @@ static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
     for (size_t f = 0u; f < field_count; ++f) {
         const state_field_descriptor *field = &STATE_FIELDS[f];
         const size_t count = state_field_count_for_instance(instance, field);
+        const int input_event_field = strncmp(field->path, "input_events[].", 15u) == 0;
+        int path_rule = 0, path_rule_known = 0;
         for (size_t i = 0u; i < count; ++i) {
             uint64_t raw = 0u;
             int unused_event_slot = 0;
@@ -4422,7 +4444,7 @@ static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
             } else {
                 raw = state_get_u64(read_body + offset, field->wire_width);
             }
-            if (strncmp(field->path, "input_events[].", 15u) == 0) {
+            if (input_event_field) {
                 uint64_t active_count = 0u;
                 const int from_body = mode == STATE_WALK_VALIDATE_BODY;
                 if (!state_source_raw(instance, from_body ? read_body : NULL,
@@ -4434,10 +4456,16 @@ static int state_walk(const gbb_instance *instance, uint8_t *mutable_body,
                     if (mode == STATE_WALK_ENCODE || mode == STATE_WALK_VALIDATE_LIVE) raw = 0u;
                 }
             }
-            if (mode == STATE_WALK_VALIDATE_LIVE && !unused_event_slot &&
-                    !state_field_value_valid(instance, field, i, raw, (uint8_t)head_raw, phase)) return 0;
-            if (mode == STATE_WALK_VALIDATE_BODY && !unused_event_slot &&
-                    !state_field_value_valid(instance, field, i, raw, (uint8_t)head_raw, phase)) return 0;
+            if ((mode == STATE_WALK_VALIDATE_LIVE || mode == STATE_WALK_VALIDATE_BODY) &&
+                    !unused_event_slot) {
+                if (path_rule_known && !path_rule) {
+                    if (!state_field_kind_valid(field, raw)) return 0;
+                } else {
+                    if (!state_field_value_valid(instance, field, i, raw, (uint8_t)head_raw, phase,
+                                                 &path_rule)) return 0;
+                    path_rule_known = 1;
+                }
+            }
             if (mode == STATE_WALK_ENCODE) state_put_u64(mutable_body + offset, raw, field->wire_width);
             offset += field->wire_width;
         }
