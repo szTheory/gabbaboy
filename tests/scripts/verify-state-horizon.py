@@ -355,6 +355,19 @@ def self_test_helpers() -> None:
         pass
     else:
         raise HorizonCheckError("self-test: unwitnessed failure was accepted as a kill")
+    # Every mutant: a transcript with all its witnesses and the failing assertion is a kill only when that assertion
+    # reports the intended discrepancy. With another reason (or the probe's default) it is refused, so a witness line
+    # that repeats the reason cannot stand in for the diagnostic.
+    for mutant in MUTANTS:
+        witnessed = "TAP version 13\n1..1\n" + "".join(f"{witness}\n" for witness in mutant.witnesses)
+        failing = f"not ok 1 - {mutant.case}\n  ---\n  message: %s\n  ...\n"
+        check_semantic_rejection(1, witnessed + failing % mutant.expected_failure, mutant)
+        for other in ("unclassified horizon failure", "fixture: valid DMG machine creation"):
+            try:
+                check_semantic_rejection(1, witnessed + failing % other, mutant)
+            except HorizonCheckError:
+                continue
+            raise HorizonCheckError(f"self-test: {mutant.name} was killed by an unrelated assertion ({other})")
 
 
 def check_semantic_rejection(exit_code: int, output: str, mutant: Mutant) -> None:
@@ -366,8 +379,13 @@ def check_semantic_rejection(exit_code: int, output: str, mutant: Mutant) -> Non
     missing = [witness for witness in mutant.witnesses if witness not in output]
     if missing:
         raise HorizonCheckError(f"{mutant.name}: missing branch witness: {missing[0]}")
-    if mutant.expected_failure not in output:
-        raise HorizonCheckError(f"{mutant.name}: intended semantic discrepancy was not reported")
+    # The discrepancy must be the failing assertion's own diagnostic: the probe prints `message: <reason>` only after
+    # `not ok`, from the reason the failing REQUIRE_CASE/fail_case recorded. Seven witness lines contain the reason
+    # text too and are printed before the code under test runs, so a bare substring check could never fail for them
+    # (17-REVIEW WR-B02).
+    reported = f"{expected_assertion}\n  ---\n  message: {mutant.expected_failure}\n"
+    if reported not in output:
+        raise HorizonCheckError(f"{mutant.name}: intended semantic discrepancy was not reported by the failing assertion")
     assertion_at = output.index(expected_assertion)
     late_witnesses = [witness for witness in mutant.witnesses
                       if output.index(witness) > assertion_at]
