@@ -4869,11 +4869,15 @@ set_tests_properties(cgb_speed_docs_no_stale_claims_mutated PROPERTIES TIMEOUT 3
 
 # Configure-only regression for the shared sanitizer timeout policy. This is last so adding a
 # test after the scaler cannot silently escape the policy pass.
+# The exit code and the pass line are both required, and the pass line pins the probes to this build's generator
+# (see the script: the Windows default generator made the five probe configures cost most of the budget). Generator
+# names contain no regex metacharacters.
 add_test(NAME sanitizer_timeout_policy_selftest
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-    "-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR}"
-    -P "${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake")
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIR=${PROJECT_SOURCE_DIR};-DGBB_BINARY_DIR=${PROJECT_BINARY_DIR};-DGBB_GENERATOR=${CMAKE_GENERATOR};-DGBB_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM};-P;${PROJECT_SOURCE_DIR}/tests/check_sanitizer_timeout_policy.cmake"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=sanitizer timeout policy pass generator=${CMAKE_GENERATOR} "
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 set_tests_properties(sanitizer_timeout_policy_selftest PROPERTIES TIMEOUT 30)
 # D-23: the same script in assert-clean mode proves the selftest above removed its probe directory.
 add_test(NAME sanitizer_timeout_policy_temp_clean
