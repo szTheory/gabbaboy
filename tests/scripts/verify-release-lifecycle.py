@@ -767,6 +767,7 @@ class Template:
                        check=True, capture_output=True, timeout=60)
         self.source = run_git(repo, "rev-parse", "HEAD")
         run_git(repo, "tag", "-f", self.tag, self.source)
+        source = self.source
         for relative in JUDGE_FILES:
             target = repo / relative
             target.parent.mkdir(parents=True, exist_ok=True)
