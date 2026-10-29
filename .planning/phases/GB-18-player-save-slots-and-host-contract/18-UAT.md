@@ -2,8 +2,8 @@
 status: complete
 phase: GB-18-player-save-slots-and-host-contract
 source: 18-01-SUMMARY.md, 18-02-SUMMARY.md, 18-03-SUMMARY.md, 18-04-SUMMARY.md, 18-05-SUMMARY.md, 18-06-SUMMARY.md, 18-07-SUMMARY.md, 18-08-SUMMARY.md, 18-09-SUMMARY.md
-started: 2026-10-29T11:28:40.444430+00:00
-updated: 2026-10-29T11:28:40.444430+00:00
+started: 2026-10-29T11:29:03.677298+00:00
+updated: 2026-10-29T11:29:03.677298+00:00
 ---
 
 ## Automated Evidence
@@ -16,6 +16,7 @@ Phase 18 verification closed with no human checkpoint (DECISIONS D-069). Every d
 - Found and fixed at verification: `test_budget` rejected six `player_slot_*` tests at TIMEOUT 120 (`135c6cc5`), and `planning_labels` rejected `host_signal_term` after IN-07 (`70a29b29`). See LESSONS GB-GSD-030.
 - API coverage: `COVERAGE.md` passes the `api-coverage` verify-pre gate.
 - Hosted evidence: exact-head CI for PR #132 is reconciled at the boundary and recorded in STATE.md and the continuation note, outside the verifier's covered files.
+- Superseded wording: the criteria below are copied verbatim from the plan SUMMARYs, and round 2 later changed three of them. Test 51's 2.0 s kill-to-wait ceiling was removed by IN-07 (`3eeec7da`), because a clock is not evidence. The stop is now proven by exit 0 and a byte-equal `--frames K` replay. Test 40: a non-regular slot entry now reads `unreadable` (IN-05, `a312201a`), and the stat-failure row stays `saved` per D-25. Test 53: exit row 1 now also covers a failed pacing clock (IN-06, `c125cc80`). The current tests, `host_signal_term`, `slot_select_message` and `host_exit_pacing_unavailable`, pass in the 1676/1676 run.
 
 Not passes: the player-build `core_linkage_links` and `core_linkage_controls` failures predate Phase 18 (present at the Phase 17 boundary `f4082a6`). No CI lane runs them. They are tracked as FUTURE-MILESTONES RM-031 and are not counted as Phase 18 evidence.
 
