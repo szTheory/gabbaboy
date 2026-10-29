@@ -278,12 +278,14 @@ if(NOT WIN32)
 
   # ---- mutant runners (build-tree executables only; nothing mutated is installed) ----
   # gbb_host_mutant_runner(name mutant_library): gabbaboy-runner's main.c linked against a mutant host
-  # library instead of gabbaboy_host. The core arrives once, through gabbaboy_runner_support.
+  # library instead of gabbaboy_host. The core arrives once, through gabbaboy_runner_support, and it is the
+  # NORMAL core: only the host library is mutated. The executable is therefore named `hostvariant`, not
+  # `mutant`, because verify-core-linkage.py requires every target named *mutant* to link a mutant core.
   function(gbb_host_mutant_runner name mutant_library)
-    add_executable(gabbaboy-runner-mutant-${name} "${PROJECT_SOURCE_DIR}/src/runner/main.c")
-    target_link_libraries(gabbaboy-runner-mutant-${name} PRIVATE gabbaboy_runner_support ${mutant_library})
-    target_compile_features(gabbaboy-runner-mutant-${name} PRIVATE c_std_17)
-    set_target_properties(gabbaboy-runner-mutant-${name} PROPERTIES C_EXTENSIONS OFF)
+    add_executable(gabbaboy-runner-hostvariant-${name} "${PROJECT_SOURCE_DIR}/src/runner/main.c")
+    target_link_libraries(gabbaboy-runner-hostvariant-${name} PRIVATE gabbaboy_runner_support ${mutant_library})
+    target_compile_features(gabbaboy-runner-hostvariant-${name} PRIVATE c_std_17)
+    set_target_properties(gabbaboy-runner-hostvariant-${name} PROPERTIES C_EXTENSIONS OFF)
   endfunction()
 
   # gbb_add_host_mutant_scenario(test runner_target scenario reason): the harness scenario against a mutant
@@ -302,7 +304,7 @@ if(NOT WIN32)
   gbb_host_mutant_library(ignore_import host_run.c "gbb_import_battery(" "0 && gbb_import_battery(")
   gbb_host_mutant_runner(ignore_import gabbaboy_host_mutant_ignore_import)
   gbb_add_host_mutant_scenario(host_continuation_mutant_ignore_import
-    gabbaboy-runner-mutant-ignore_import continuation
+    gabbaboy-runner-hostvariant-ignore_import continuation
     "second run counter is 0x01, expected 0x02")
 
   # D-06: open_dir first creates the directory, so a missing save dir silently exists.
@@ -311,13 +313,13 @@ if(NOT WIN32)
     "(void)mkdirat(AT_FDCWD, path, 0700);
     const int fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);")
   gbb_host_mutant_runner(mkdir gabbaboy_host_mutant_mkdir)
-  gbb_add_host_mutant_scenario(host_savedir_mutant_mkdir gabbaboy-runner-mutant-mkdir savedir-missing
+  gbb_add_host_mutant_scenario(host_savedir_mutant_mkdir gabbaboy-runner-hostvariant-mkdir savedir-missing
     "exit 0, expected 2")
 
   # D-08: the import open follows symlinks, so a link to a valid-size file is accepted.
   gbb_host_mutant_library(follow host_save_io.c "O_RDONLY | O_NOFOLLOW | O_NONBLOCK" "O_RDONLY | O_NONBLOCK")
   gbb_host_mutant_runner(follow gabbaboy_host_mutant_follow)
-  gbb_add_host_mutant_scenario(host_import_mutant_follow gabbaboy-runner-mutant-follow import-symlink
+  gbb_add_host_mutant_scenario(host_import_mutant_follow gabbaboy-runner-hostvariant-follow import-symlink
     "exit [01], expected 2")
 
   # ---- D-09/T-18-13: no fault seam in any shipped artifact ----
