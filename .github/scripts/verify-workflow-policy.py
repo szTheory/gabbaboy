@@ -364,6 +364,50 @@ def _download(job: dict, workflow: str, job_id: str, name: str) -> None:
         raise Reject("artifact-flow", f"{_where(workflow, job_id)} must download retained artifact {name}")
 
 
+def perf_gate_artifact_name(ci_tree: dict, release_tree: dict) -> None:
+    """Bind the release reader's run-scoped artifact name to the CI producer's exact upload name."""
+    ci_job = _require_job("ci.yml", ci_tree, "perf-gate")
+    release_job = _require_job("release.yml", release_tree, "candidate-fuzz")
+    uploads = [step for step in _artifact_steps(ci_job, "upload")
+               if str(step.get("with", {}).get("name", "")).startswith("perf-gate-")]
+    download_commands = [line for step in release_job.get("steps", [])
+                         for line in str(step.get("run", "")).splitlines()
+                         if 'gh run download "$run_id"' in line and '--name "perf-gate-' in line]
+    downloads = [re.search(r'--name\s+"([^"]+)"', command) for command in download_commands]
+    downloads = [match.group(1) for match in downloads if match is not None]
+    if len(uploads) != 1 or len(downloads) != 1:
+        raise Reject("perf-gate-artifact-name", "CI must upload and candidate-fuzz must select exactly one run-scoped perf-gate artifact")
+    produced = str(uploads[0].get("with", {}).get("name", ""))
+    expected = produced.replace("${{ github.run_id }}", "$run_id").replace("${{ github.run_attempt }}", "$attempt")
+    if downloads[0] != expected:
+        raise Reject("perf-gate-artifact-name", f"candidate-fuzz selects {downloads[0]!r}, but CI uploads {expected!r}")
+
+
+PRE_PUBLISH_INVENTORY_NAME = "release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}"
+PRE_PUBLISH_INVENTORY_PATH = "build/release-final/pre-publish-inventory.json"
+
+
+def _check_pre_publish_inventory(workflow: str, publisher: dict) -> None:
+    uploads = [step for step in _artifact_steps(publisher, "upload")
+               if step.get("with", {}).get("name") == PRE_PUBLISH_INVENTORY_NAME]
+    steps = publisher.get("steps", [])
+    final_gate = [i for i, step in enumerate(steps)
+                  if "--check-draft-final" in str(step.get("run", ""))]
+    nightly = [i for i, step in enumerate(steps)
+               if step.get("name") == "Require the successful exact-tree nightly ASan replay"]
+    publish = [i for i, step in enumerate(steps)
+               if step.get("name") == "Publish the one qualified draft"]
+    if len(uploads) != 1 or len(final_gate) != 1 or len(nightly) != 1 or len(publish) != 1:
+        raise Reject("pre-publish-inventory-order", "the publisher needs one inventory upload between final-gate and nightly-gate")
+    upload = uploads[0]
+    inputs = upload.get("with", {})
+    if (inputs.get("path") != PRE_PUBLISH_INVENTORY_PATH or inputs.get("if-no-files-found") != "error"
+            or str(inputs.get("retention-days")) != "90"
+            or not final_gate[0] < steps.index(upload) < nightly[0] < publish[0]
+            or steps.index(upload) != final_gate[0] + 1):
+        raise Reject("pre-publish-inventory-order", "the sorted inventory artifact must be required directly after final-gate and before publication")
+
+
 # Release reuses a successful rehearsal receipt for the exact tag tree. Paired wall-clock timing itself is advisory,
 # so rehearsal producer jobs have no decision input or tokened measurement-fetch step.
 PERFORMANCE_TOKEN_STEPS = {
@@ -1235,7 +1279,7 @@ RELEASE_GUARD_EXPRESSIONS = {
     ("candidate",): "always() && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
     ("candidate-macos",): "always() && needs.candidate.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
     ("candidate-windows",): "always() && needs.candidate-macos.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
-    ("publish-qualified-release",): "always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-platform-manifest.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
+    ("publish-qualified-release",): "always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-fuzz.result == 'success' && needs.candidate-platform-manifest.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
     ("candidate-macos", "Build and package macOS arm64 core once"): _REUSE_MACOS_GUARD,
     ("candidate-macos", "Build pinned SDL player and verify extracted package"): _REUSE_MACOS_GUARD,
     ("candidate-macos", "Attach macOS candidate bytes to the unpublished draft"): _REUSE_MACOS_GUARD,
@@ -2186,6 +2230,7 @@ def check_release(root: Path) -> None:
     _check_ignored_failures(name, tree)
     _check_run_expressions(name, tree)
     jobs = tree["jobs"]
+    perf_gate_artifact_name(read_workflow(root / ".github/workflows/ci.yml"), tree)
     for job_id in jobs:
         if job_id not in RELEASE_ROLES:
             raise Reject("job-unclassified", f"{_where(name, job_id)} has no declared trust role; classify it in the policy")
@@ -2232,6 +2277,9 @@ def check_release(root: Path) -> None:
                 raise Reject("attacher-subject-execution", f"{_where(name, job_id)} must execute trusted code only")
     _require_needs(name, "candidate-platform-manifest", jobs["candidate-platform-manifest"], {"attach-v02-evidence"}, "workflow-dependency")
     _require_needs(name, "publish-qualified-release", jobs["publish-qualified-release"], {"candidate-platform-manifest"}, "workflow-dependency")
+    _require_needs(name, "publish-qualified-release", jobs["publish-qualified-release"], {"candidate-fuzz"}, "workflow-dependency")
+    if "needs.candidate-fuzz.result == 'success'" not in str(jobs["publish-qualified-release"].get("if", "")):
+        raise Reject("workflow-dependency", "release publisher must wait for the exact-source performance receipt producer")
     for job_id in ("candidate-platform-manifest", "publish-qualified-release"):
         job = jobs[job_id]
         _check_checkout_credentials(name, tree, (job_id,))
@@ -2257,6 +2305,8 @@ def check_release(root: Path) -> None:
     publish_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][4])
     if gate_at >= publish_at:
         raise Reject("publication-order", f"{_where(name, 'publish-qualified-release')} must run the final downloaded-byte gate before the one publication transition")
+    _download(publisher, name, "publish-qualified-release", RELEASE_ARTIFACTS["candidate-fuzz"][0])
+    _check_pre_publish_inventory(name, publisher)
     # Recovery decides from independently read live state BEFORE any retry write (P15-09): inventory, then the decision,
     # then the upload; and the published-asset readback only after the one publication transition.
     upload = 'gh release upload "$RELEASE_TAG" "build/release-final/$name" --repo "$GH_REPO"'
@@ -3194,6 +3244,40 @@ def _mutations():
         _m("release candidate perf gate receipt verifier is removed", rel, "  candidate-fuzz:\n",
            "python3 -I tests/scripts/verify-perf-gate.py --verify-receipt",
            "# python3 -I tests/scripts/verify-perf-gate.py --verify-receipt", "required-command-not-executed"),
+        _m("release candidate renames the same-run perf-gate artifact", rel, "  candidate-fuzz:\n",
+           '--name "perf-gate-$run_id-$attempt"', '--name "perf-gate-$run_id"', "perf-gate-artifact-name"),
+        _m("release publisher stops downloading the verified perf-gate artifact", rel, "  publish-qualified-release:\n",
+           "uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+           "uses: actions/upload-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", "artifact-flow"),
+        ("release publisher removes the persisted pre-publish inventory", rel, [
+            ("  publish-qualified-release:\n", "      - name: Persist the exact pre-publish asset inventory\n"
+             "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+             "        with:\n"
+             "          name: release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}\n"
+             "          path: build/release-final/pre-publish-inventory.json\n"
+             "          if-no-files-found: error\n"
+             "          retention-days: 90\n", "")], "pre-publish-inventory-order"),
+        ("release publisher uploads the inventory after the publish decision", rel, [
+            ("  publish-qualified-release:\n", "      - name: Persist the exact pre-publish asset inventory\n"
+             "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+             "        with:\n"
+             "          name: release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}\n"
+             "          path: build/release-final/pre-publish-inventory.json\n"
+             "          if-no-files-found: error\n"
+             "          retention-days: 90\n", ""),
+            ("  publish-qualified-release:\n", "      - name: Publish the one qualified draft\n"
+             "        shell: bash\n"
+             "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft\n",
+             "      - name: Publish the one qualified draft\n"
+             "        shell: bash\n"
+             "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft\n"
+             "      - name: Persist the exact pre-publish asset inventory\n"
+             "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+             "        with:\n"
+             "          name: release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}\n"
+             "          path: build/release-final/pre-publish-inventory.json\n"
+             "          if-no-files-found: error\n"
+             "          retention-days: 90\n")], "pre-publish-inventory-order"),
         _m("CI perf gate receipt upload is not retained on failure", "ci.yml", "  perf-gate:\n",
            "        if: always()\n", "        if: success()\n", "artifact-flow"),
         _m("CI perf gate receipt upload is removed", "ci.yml", "  perf-gate:\n",
@@ -3544,8 +3628,8 @@ def _mutations():
             ("  publish-qualified-release:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "true"),
             ("  publish-qualified-release:\n", 'echo "Published the exact qualified release', 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"\n{I}echo "Published the exact qualified release')],
          "publication-order"),
-        _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-platform-manifest]",
-           "candidate-windows]", "workflow-dependency"),
+        _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-fuzz, candidate-platform-manifest]",
+           "candidate-windows, candidate-fuzz]", "workflow-dependency"),
         _m("required-native stops waiting for the sanitizer lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers\n", "", "workflow-dependency"),
         _m("required-native stops waiting for the sanitizer test lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers-tests\n", "",
            "workflow-dependency"),

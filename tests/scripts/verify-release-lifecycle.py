@@ -73,6 +73,8 @@ MODES = {
     "publish-draft": "publish-qualified-release",
 }
 NIGHTLY_RUN_ID = 40245698754
+PERF_SOURCE_REV = "b93137f00d07b11dc74e40330e0ddf6029c0677d"
+PERF_LIMITS_BASE_REV = "947d6a9d177af6c04a5f9ea6abcc2c470ab9be57"
 LOAD_VERIFIERS_STEP = "Load trusted release evidence verifiers"
 EVIDENCE_ATTACHED = ("support-ledger.json", "cgb-corpus-receipt.json", "v02-fuzz-receipt.json", "v02-performance-receipt.json")
 FINAL_NAMES = ("SHA256SUMS", "release-receipt.json")
@@ -174,7 +176,7 @@ POST_TAG_ENDPOINTS = (
      "sources": (WORKFLOW,), "consumer": "rehearsal performance artifact selection",
      "coverage": "pinned:check_release"},
     {"form": "gh api repos/{}/actions/runs/{}",
-     "sources": (SOURCES,), "consumer": "19-05 exact-source CI performance receipt verifier input",
+     "sources": (SOURCES, WORKFLOW), "consumer": "19-05 exact-source CI performance receipt verifier input",
      "coverage": "replayed:ci_run", "route": "actions/runs/[0-9]+"},
     {"form": "gh api repos/{}/actions/workflows/ci.yml/runs?head_sha={}&event=push&branch=main&per_page=100",
      "sources": (WORKFLOW,), "consumer": "candidate fuzz receipt source-run lookup",
@@ -227,6 +229,9 @@ POST_TAG_ENDPOINTS = (
      "route": '["release", "upload"]'},
     {"form": "gh run download",
      "sources": (WORKFLOW,), "consumer": "candidate and rehearsal artifact download", "coverage": "pinned:check_release"},
+    {"form": "gh run download {} --name perf-gate-{}-{}",
+     "sources": (WORKFLOW,), "consumer": "same-run performance gate receipt download",
+     "coverage": "pinned:perf_gate_artifact_name"},
     {"form": "gh run list",
      "sources": (LIFECYCLE, "tests/scripts/verify-release-gates.py"), "consumer": "newest nightly-asan run selection", "coverage": "replayed:workflow_runs",
      "route": "run command is allowed only as the two nightly gate reads"},
@@ -735,6 +740,33 @@ class Template:
         self.judge_parent = base / "judge"
         repo, producer, source = self.delivery.make_fixture_repo(self.judge_parent)
         self.judge, self.source, self.tag = repo, source, "v0.2.0"
+        # The production perf-receipt verifier reads immutable Git objects from both the tagged source and the
+        # ratchet base. Give this synthetic source those exact committed bytes and an alternates link to the project
+        # object database; the temporary replay repository itself remains isolated and has no network access.
+        objects = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-path", "objects"],
+                                 capture_output=True, text=True, timeout=60)
+        if objects.returncode != 0 or not Path(objects.stdout.strip()).is_dir():
+            raise Reject("fixture-perf-receipt", "the immutable project Git object store is unavailable")
+        alternates = repo / ".git/objects/info/alternates"
+        alternates.parent.mkdir(parents=True, exist_ok=True)
+        alternates.write_text(objects.stdout.strip() + "\n", encoding="utf-8")
+        perf_source_files = ("tests/baseline/perf-gate-v1.txt", "fixtures/tracer/tracer.gb",
+                             "fixtures/libbet/libbet.gb", "fixtures/visible-demo/demo.gb")
+        for relative in perf_source_files:
+            done = subprocess.run(["git", "-C", str(ROOT), "show", f"{PERF_SOURCE_REV}:{relative}"],
+                                  capture_output=True, timeout=60)
+            if done.returncode != 0:
+                raise Reject("fixture-perf-receipt", f"the immutable performance source lacks {relative}")
+            target = repo / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(done.stdout)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                        "add", "--", *perf_source_files], check=True, capture_output=True, timeout=60)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                        "-c", "commit.gpgsign=false", "commit", "-q", "-m", "source: pinned performance policy and ROMs"],
+                       check=True, capture_output=True, timeout=60)
+        self.source = run_git(repo, "rev-parse", "HEAD")
+        run_git(repo, "tag", "-f", self.tag, self.source)
         for relative in JUDGE_FILES:
             target = repo / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -742,6 +774,23 @@ class Template:
         run_git(repo, "add", "-A")
         run_git(repo, "commit", "-q", "-m", "judge: production scripts at the replay revision")
         self.judge_sha = run_git(repo, "rev-parse", "HEAD")
+        fixture_data = repo / "tests/data/perf-gate"
+        shutil.copytree(ROOT / "tests/data/perf-gate", fixture_data)
+        perf_receipt = base / "perf-gate-receipt.json"
+        perf_env = os.environ.copy()
+        perf_env.update(GITHUB_RUN_ID="40259198255", GITHUB_RUN_ATTEMPT="1")
+        perf = subprocess.run([sys.executable, "-I", str(repo / "tests/scripts/verify-perf-gate.py"), "--evaluate",
+                               "--limits", "tests/baseline/perf-gate-v1.txt", "--base", "tests/data/perf-gate/base",
+                               "--head", "tests/data/perf-gate/head-pass", "--realtime", "tests/data/perf-gate/realtime-pass.txt",
+                               "--base-rev", PERF_LIMITS_BASE_REV, "--source-head-rev", self.source,
+                               "--build-base-identity", "a" * 64, "--build-head-identity", "b" * 64,
+                               "--emit-receipt", str(perf_receipt)], cwd=repo, env=perf_env,
+                              capture_output=True, text=True, timeout=60)
+        if perf.returncode != 0 or not perf_receipt.is_file():
+            raise Reject("fixture-perf-receipt", f"the exact source performance receipt fixture failed: {perf.stderr.strip()[-250:]}")
+        self.perf_gate_receipt = perf_receipt.read_bytes()
+        self.perf_gate_run = (json.dumps({"event": "push", "head_sha": self.source, "path": ".github/workflows/ci.yml",
+                                          "id": 40259198255, "run_attempt": 1}, sort_keys=True, indent=2) + "\n").encode()
         # The rehearsed head: another commit with exactly the tagged tree (a squash commit differs, its tree does not), kept
         # on a branch so every clone of the judge repository holds it.
         self.rehearsal_head = run_git(repo, "commit-tree", f"{source}^{{tree}}", "-p", source, "-m", "rehearsal head")
@@ -1011,6 +1060,10 @@ class Scenario:
         run_git(self.root, "clone", "-q", "--no-hardlinks", str(self.t.judge), str(ws))
         run_git(ws, "checkout", "-q", "--detach", self.t.source)
         self.trusted(ws, script)
+        perf_dir = ws / "build/evidence-fuzz/perf-gate"
+        perf_dir.mkdir(parents=True, exist_ok=True)
+        (perf_dir / "perf-gate-receipt.json").write_bytes(self.t.perf_gate_receipt)
+        (ws / "build/evidence-fuzz/perf-gate-run.json").write_bytes(self.t.perf_gate_run)
         self.workspaces[name] = ws
         return ws
 
@@ -1136,6 +1189,23 @@ def replay(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> dict
         raise Reject("replay-mutations", f"the lifecycle wrote something other than the evidence, manifest, final receipts and one decision: {uploads}")
     if len(state["decisions"]) != 1 or "--draft=false" not in state["decisions"][0]["argv"]:
         raise Reject("replay-decision", "the publish decision was not recorded exactly once")
+    release_receipt = json.loads(s.asset_bytes("release-receipt.json"))
+    if release_receipt.get("perf_gate") != json.loads(template.perf_gate_receipt):
+        raise Reject("replay-perf-gate", "release-receipt.json does not carry the verified CI performance gate receipt")
+    expected_profile = f"{template.tag} deterministic software profiles DMG-CPU-B and CGB-CPU-E as scoped by docs/support/{template.tag}.md"
+    if release_receipt.get("limits", [None])[0] != expected_profile:
+        raise Reject("replay-profile", "release receipt does not name both version-scoped software profiles")
+    inventory_path = s.workspaces["publish"] / "build/release-final/pre-publish-inventory.json"
+    if not inventory_path.is_file():
+        raise Reject("replay-pre-publish-inventory", "final-gate did not write the durable pre-publish inventory")
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    expected_assets = sorted(({"name": row["name"], "id": row["id"], "digest": row["digest"]}
+                              for row in state["assets"]), key=lambda row: row["name"])
+    expected_inventory = {"schema_version": 1, "kind": "pre-publish-inventory", "tag": template.tag,
+                          "source_sha": template.source, "release_id": RELEASE_ID, "run_id": RUN_ID,
+                          "run_attempt": 1, "assets": expected_assets}
+    if inventory != expected_inventory:
+        raise Reject("replay-pre-publish-inventory", "pre-publish inventory does not bind the exact sorted draft asset names, ids and digests")
     sums = s.asset_bytes("SHA256SUMS").decode().splitlines()
     if sorted(line.split("  ", 1)[1] for line in sums) != sorted(n for n in names if n not in FINAL_NAMES):
         raise Reject("replay-sha256sums", "SHA256SUMS does not cover exactly the qualified inventory")
@@ -1424,6 +1494,9 @@ def _gh_forms(source: str) -> set[str]:
         forms.add("gh api " + _normalize_endpoint_path(endpoint))
     for match in re.finditer(r"\bgh\s+(run|release|pr)\s+(list|view|download|checks|upload|edit)\b", source):
         forms.add(f"gh {match.group(1)} {match.group(2)}")
+    if ('gh run download "$run_id"' in source and
+            '--name "perf-gate-$run_id-$attempt"' in source):
+        forms.add("gh run download {} --name perf-gate-{}-{}")
     return forms
 
 
@@ -1581,6 +1654,93 @@ def c_endpoint_inventory(ctx: Context) -> str:
         else:
             raise Reject("control-accepted", f"{label}: endpoint inventory accepted it")
     return f"endpoint inventory covers {count} forms and rejects an unlisted lifecycle endpoint, a run-block endpoint, and missing REQUIRED_PATHS"
+
+
+def c_perf_receipt_ci_run(ctx: Context) -> str:
+    """Generate against the captured source and prove ci_run passes while the neighboring release-please run fails."""
+    ci_run = ctx.t.capture["responses"]["ci_run"]
+    release_run = ctx.t.capture["responses"]["workflow_run"]
+    source = ci_run["head_sha"]
+    if (ci_run.get("id") != 40259198255 or ci_run.get("run_attempt") != 1
+            or source != PERF_SOURCE_REV or ci_run.get("path") != ".github/workflows/ci.yml"):
+        raise Reject("perf-receipt-capture", "the immutable ci_run fixture no longer matches the declared exact-source campaign")
+    with tempfile.TemporaryDirectory(prefix="perf-receipt-ci-run-") as scratch:
+        receipt = Path(scratch) / "receipt.json"
+        ci_path = Path(scratch) / "ci-run.json"
+        release_path = Path(scratch) / "release-run.json"
+        ci_path.write_text(json.dumps(ci_run, sort_keys=True), encoding="utf-8", newline="\n")
+        release_path.write_text(json.dumps(release_run, sort_keys=True), encoding="utf-8", newline="\n")
+        env = os.environ.copy()
+        env.update(GITHUB_RUN_ID=str(ci_run["id"]), GITHUB_RUN_ATTEMPT=str(ci_run["run_attempt"]))
+        generated = subprocess.run([sys.executable, "-I", str(ROOT / "tests/scripts/verify-perf-gate.py"), "--evaluate",
+                                     "--limits", "tests/baseline/perf-gate-v1.txt",
+                                     "--base", "tests/data/perf-gate/base", "--head", "tests/data/perf-gate/head-pass",
+                                     "--realtime", "tests/data/perf-gate/realtime-pass.txt", "--base-rev", PERF_LIMITS_BASE_REV,
+                                     "--source-head-rev", source, "--build-base-identity", "a" * 64,
+                                     "--build-head-identity", "b" * 64, "--emit-receipt", str(receipt)],
+                                    cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
+        if generated.returncode != 0 or not receipt.is_file():
+            raise Reject("perf-receipt-fixture", f"the captured ci_run receipt could not be generated: {generated.stderr.strip()[-250:]}")
+        command = [sys.executable, "-I", str(ROOT / "tests/scripts/verify-perf-gate.py"), "--verify-receipt",
+                   str(receipt), "--source-sha", source, "--run-json", str(ci_path), "--run-id", str(ci_run["id"]),
+                   "--attempt", str(ci_run["run_attempt"]), "--repo", str(ROOT)]
+        positive = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=60)
+        if positive.returncode != 0:
+            raise Reject("perf-receipt-capture", f"the captured ci_run did not verify: {positive.stderr.strip()[-250:]}")
+        release_command = command.copy()
+        release_command[release_command.index(str(ci_path))] = str(release_path)
+        rejected = subprocess.run(release_command, cwd=ROOT, capture_output=True, text=True, timeout=60)
+        if rejected.returncode != 1 or "REJECT perf-receipt-run" not in rejected.stderr:
+            raise Reject("perf-receipt-capture", "the same receipt did not reject the captured release-please run with perf-receipt-run")
+    return "the immutable ci_run response verifies the receipt; the captured release-please workflow response is rejected"
+
+
+def c_perf_receipt_tamper(ctx: Context) -> str:
+    s = ctx.scenario("perf-receipt-tamper", "finalized")
+    ws = s.subject_workspace("publish")
+    path = ws / "build/evidence-fuzz/perf-gate/perf-gate-receipt.json"
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["run_id"] += 1
+    path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+    before = s.asset_names()
+    outcome = s.run_mode(ws, "validate-draft", **PUBLISH_ENV)
+    expect_fail(outcome, "tampered perf-gate receipt run id", "perf-receipt-run")
+    if s.asset_names() != before or s.mutations_logged():
+        raise Reject("control-effect", "a tampered perf-gate receipt changed the draft before refusal")
+    return "the trusted draft validator rejects a receipt bound to another CI run without writing"
+
+
+def c_profile_string(ctx: Context) -> str:
+    s = ctx.scenario("profile-string", "finalized")
+    receipt = json.loads(s.asset_bytes("release-receipt.json"))
+    expected = f"{ctx.t.tag} deterministic software profiles DMG-CPU-B and CGB-CPU-E as scoped by docs/support/{ctx.t.tag}.md"
+    if receipt.get("limits", [None])[0] != expected:
+        raise Reject("profile-string", "the release receipt does not carry the exact version-aware DMG and CGB profile contract")
+    mutant = json.loads(json.dumps(receipt))
+    mutant["limits"][0] = "DMG-CPU-B deterministic software profile only"
+    if mutant["limits"][0] == expected:
+        raise Reject("profile-string-control", "the profile assertion accepted the old single-profile contract")
+    return "the receipt carries both version-scoped profiles, and the former single-profile text fails the contract"
+
+
+def c_pre_publish_inventory(ctx: Context) -> str:
+    real = ctx.scenario("inventory-write-present", "finalized")
+    workspace = real.subject_workspace("publish")
+    outcome = real.run_mode(workspace, "final-gate", **PUBLISH_ENV)
+    if outcome.rc != 0:
+        raise Reject("inventory-control", f"the real final gate failed: {outcome.text.strip()[-200:]}")
+    inventory = workspace / "build/release-final/pre-publish-inventory.json"
+    if not inventory.is_file():
+        raise Reject("inventory-control", "the real final gate omitted its persisted asset inventory")
+    mutant_text = mutate_script(ctx.script,
+        'assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")\n',
+        ': # omitted pre-publish inventory writer\n')
+    mutant = ctx.scenario("inventory-write-omitted", "finalized")
+    mutant_workspace = mutant.subject_workspace("publish", mutant_text)
+    omitted = mutant.run_mode(mutant_workspace, "final-gate", **PUBLISH_ENV)
+    if omitted.rc != 0 or (mutant_workspace / "build/release-final/pre-publish-inventory.json").exists():
+        raise Reject("inventory-control", "the omitted-write mutant did not leave the required inventory absent")
+    return "the final gate persists the draft inventory; omitting its writer leaves the required artifact absent"
 
 
 # ----------------------------------------------------------------------------------------- Task 2: captured shapes
@@ -2140,7 +2300,9 @@ TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_mis
 
 # Keep the established control CTest's 95-control floor stable while running every release-plan control through its own
 # bounded CTest. Task 4's endpoint mutants and the ci_run capture contract are included with the Task 1-3 trust controls.
-POST_TAG_CONTROLS = (TASK1_CONTROLS, task2_controls, task3_controls, (c_endpoint_inventory,))
+POST_TAG_CONTROLS = (TASK1_CONTROLS, task2_controls, task3_controls,
+                     (c_endpoint_inventory, c_perf_receipt_ci_run, c_perf_receipt_tamper,
+                      c_profile_string, c_pre_publish_inventory))
 
 
 def _post_tag_control_functions(ctx: Context) -> tuple:

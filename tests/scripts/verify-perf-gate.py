@@ -246,14 +246,15 @@ def guard_vacuous(side, name, limits):
                        (name, rom, ir, limits["ir_floor"]))
 
 
-def immutable_limits(base_rev):
+def immutable_limits(base_rev, repo=None):
+    repo = REPO_ROOT if repo is None else repo
     if not isinstance(base_rev, str) or re.fullmatch(r"[0-9a-f]{40}", base_rev) is None:
         reject("ratchet-base-invalid", "--base-rev must be a resolved immutable 40-hex commit")
     resolved = subprocess.run(["git", "rev-parse", "--verify", "%s^{commit}" % base_rev],
-                              cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+                              cwd=repo, capture_output=True, text=True, check=False)
     if resolved.returncode != 0 or resolved.stdout.strip() != base_rev:
         reject("ratchet-base-not-commit", "--base-rev does not resolve to that exact commit")
-    blob = subprocess.run(["git", "show", "%s:%s" % (base_rev, POLICY_FILE)], cwd=REPO_ROOT,
+    blob = subprocess.run(["git", "show", "%s:%s" % (base_rev, POLICY_FILE)], cwd=repo,
                           capture_output=True, text=True, check=False)
     if blob.returncode != 0:
         reject("ratchet-base-policy-missing", "the immutable base has no %s" % POLICY_FILE)
@@ -470,7 +471,7 @@ def source_limits(repo, source_sha):
                              "%s:%s" % (source_sha, entry["path"]))
             if hashlib.sha256(data).hexdigest() != entry["sha256"]:
                 reject("perf-receipt-limits-blob", "the source revision ROM pin does not match %s" % entry["path"])
-        base_limits_text, base_limits = immutable_limits(LIMITS_BASE_REV)
+        base_limits_text, base_limits = immutable_limits(LIMITS_BASE_REV, repo)
         if check_policy_ratchet(limits, base_limits):
             reject("perf-receipt-limits-blob", "the source revision widens the immutable Ir policy")
         attribution_floor_check(path, limits)
@@ -1650,6 +1651,46 @@ class PerfGateReceiptTests(unittest.TestCase):
             self.assertEqual(rc, 1, out + err)
             self.assertIn("REJECT realtime-format", err)
             self.assertIsNone(json.loads(read_text(valid_path, "perf-receipt-invalid"))["realtime_min"])
+
+    def test_source_sha_mismatch_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-source-mismatch-") as scratch:
+            source_sha, receipt_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-pass"), os.path.join(DATA, "realtime-pass.txt"))
+            self.assertEqual(rc, 0, out + err)
+            receipt = json.loads(read_text(receipt_path, "perf-receipt-invalid"))
+            receipt["source_sha"] = "f" * 40
+            with open(receipt_path, "w", encoding="utf-8", newline="\n") as handle:
+                json.dump(receipt, handle, sort_keys=True)
+                handle.write("\n")
+            run_path = self.run_json(scratch, source_sha)
+            rc, out, err = self.verify(receipt_path, source_sha, run_path)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT perf-receipt-source-mismatch", err)
+
+    def test_pull_request_event_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-event-") as scratch:
+            source_sha, receipt_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-pass"), os.path.join(DATA, "realtime-pass.txt"))
+            self.assertEqual(rc, 0, out + err)
+            run_path = self.run_json(scratch, source_sha, event="pull_request")
+            rc, out, err = self.verify(receipt_path, source_sha, run_path)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT perf-receipt-event", err)
+
+    def test_wrong_limits_blob_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-limits-blob-") as scratch:
+            source_sha, receipt_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-pass"), os.path.join(DATA, "realtime-pass.txt"))
+            self.assertEqual(rc, 0, out + err)
+            receipt = json.loads(read_text(receipt_path, "perf-receipt-invalid"))
+            receipt["limits_blob"] = "0" * 40
+            with open(receipt_path, "w", encoding="utf-8", newline="\n") as handle:
+                json.dump(receipt, handle, sort_keys=True)
+                handle.write("\n")
+            run_path = self.run_json(scratch, source_sha)
+            rc, out, err = self.verify(receipt_path, source_sha, run_path)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT perf-receipt-limits-blob", err)
 
 
 def contract_self_test(test_case, label):

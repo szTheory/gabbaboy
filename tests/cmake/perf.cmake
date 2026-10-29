@@ -73,7 +73,7 @@ endfunction()
 # The control count is a parsed minimum: adding controls is allowed, dropping one is rejected.
 set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=34)
 gbb_add_perf_gate_test(perf_gate_controls 0 "perf-gate self-test pass controls=[0-9]+" --self-test)
-set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=3)
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=6)
 gbb_add_perf_gate_test(perf_gate_receipt_controls 0 "perf-gate receipt self-test pass controls=[0-9]+"
   --self-test-receipt)
 set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=4)

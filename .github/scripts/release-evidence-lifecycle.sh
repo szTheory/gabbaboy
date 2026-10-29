@@ -231,12 +231,19 @@ api_assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
 printf '%s\n' "$api_assets" > build/release-final/api-assets.json
 bash trusted/.github/scripts/verify-release-gates.sh --check-merged-source "$SOURCE_SHA" "$RELEASE_TAG" "$RELEASE_ID" \
   build/release-final/source-receipt.json "$RUNNER_TEMP/verify-release-source-proof.py"
+perf_run_id=$(jq -er '.run_id' build/evidence-fuzz/perf-gate/perf-gate-receipt.json)
+perf_run_attempt=$(jq -er '.run_attempt' build/evidence-fuzz/perf-gate/perf-gate-receipt.json)
+python3 -I trusted/tests/scripts/verify-perf-gate.py --verify-receipt \
+  build/evidence-fuzz/perf-gate/perf-gate-receipt.json --source-sha "$SOURCE_SHA" \
+  --run-json build/evidence-fuzz/perf-gate-run.json --run-id "$perf_run_id" --attempt "$perf_run_attempt" --repo trusted
 # shellcheck disable=SC2016
-python3 - "$api_assets" build/release-final "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" <<'PY'
+python3 - "$api_assets" build/release-final "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+  build/evidence-fuzz/perf-gate/perf-gate-receipt.json <<'PY'
 import hashlib, json, pathlib, sys
 rows = json.loads(sys.argv[1])
 root = pathlib.Path(sys.argv[2])
-tag, source, release_id = sys.argv[3:]
+tag, source, release_id, perf_gate_path = sys.argv[3:]
+perf_gate = json.loads(pathlib.Path(perf_gate_path).read_text())
 names = [row["name"] for row in rows]
 if len(names) != len(set(names)):
     raise SystemExit("duplicate draft asset names")
@@ -272,9 +279,11 @@ release = {
     "evidence_sha256": {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
                         for name in ("cgb-corpus-receipt.json", "v02-performance-receipt.json", "v02-fuzz-receipt.json",
                                      "source-archive-receipt.json", "v02-consumer-receipt.json")},
+    "perf_gate": perf_gate,
     "candidate_manifest_sha256": hashlib.sha256((root / "candidate-platform-manifest.json").read_bytes()).hexdigest(),
     "builds": manifest.get("builds", {}),
-    "limits": ["DMG-CPU-B deterministic software profile only", "no physical DMG observation", "no Developer ID signature or notarization"],
+    "limits": [f"{tag} deterministic software profiles DMG-CPU-B and CGB-CPU-E as scoped by docs/support/{tag}.md",
+               "no physical DMG observation", "no Developer ID signature or notarization"],
 }
 (root / "release-receipt.json").write_text(json.dumps(release, indent=2, sort_keys=True) + "\n")
 PY
@@ -301,6 +310,20 @@ fi
 lifecycle_final_gate() {
 # BEGIN final-gate
 bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
+assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+python3 - "$assets" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" <<'PY'
+import json, pathlib, sys
+rows = json.loads(sys.argv[1])
+tag, source, release_id, run_id, run_attempt = sys.argv[2:]
+assets = sorted(({"name": row["name"], "id": row["id"], "digest": row["digest"]} for row in rows),
+                key=lambda row: row["name"])
+inventory = {"schema_version": 1, "kind": "pre-publish-inventory", "tag": tag,
+             "source_sha": source, "release_id": int(release_id), "run_id": int(run_id),
+             "run_attempt": int(run_attempt), "assets": assets}
+path = pathlib.Path("build/release-final/pre-publish-inventory.json")
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps(inventory, sort_keys=True, indent=2) + "\n", encoding="utf-8", newline="\n")
+PY
 # END final-gate
 }
 
