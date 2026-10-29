@@ -2078,7 +2078,8 @@ class ReceiptContractTests(unittest.TestCase):
     def test_public_header_is_bound_to_the_receipt_source(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
-            header = repo / "include/gabbaboy/gabbaboy.h"
+            public_header = next(path for path in SOURCE_FILES if path.endswith("/gabbaboy.h"))
+            header = repo / public_header
             header.parent.mkdir(parents=True)
             header.write_bytes(b"/* public API */\n")
 
@@ -2089,19 +2090,19 @@ class ReceiptContractTests(unittest.TestCase):
             git("init", "-q")
             git("config", "user.name", "fixture")
             git("config", "user.email", "fixture@example.invalid")
-            git("add", "include/gabbaboy/gabbaboy.h")
+            git("add", public_header)
             git("commit", "-q", "-m", "fixture")
             commit = git("rev-parse", "HEAD")
-            with mock.patch.dict(globals(), {"SOURCE_FILES": ("include/gabbaboy/gabbaboy.h",)}):
+            with mock.patch.dict(globals(), {"SOURCE_FILES": (public_header,)}):
                 self.assertEqual(
                     list(source_manifest(commit, compare_worktree=False, repo=repo)),
-                    ["include/gabbaboy/gabbaboy.h"],
+                    [public_header],
                 )
                 header.write_bytes(b"/* public APi */\n")
                 with self.assertRaises(ReceiptError) as caught:
                     source_manifest(commit, repo=repo)
                 self.assertIn(
-                    "stale source input differs from source SHA: include/gabbaboy/gabbaboy.h",
+                    f"stale source input differs from source SHA: {public_header}",
                     str(caught.exception),
                 )
 
