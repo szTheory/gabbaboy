@@ -5317,13 +5317,19 @@ endfunction()
 
 gbb_state_internal_mutant(palette_omitted state_rtc_palette same_palette state_control
   [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
-            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=]
+            uint8_t *address = field->storage == STATE_STORAGE_CARTRIDGE_RAM
+                ? &instance->cartridge_ram[i]
+                : (uint8_t *)(void *)instance + field->offset + i * field->stride;
+            state_raw_to_host(address, field, raw);]=]
   [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
             if (strcmp(field->path, "compat_rgb555") == 0) {
                 offset += field->wire_width;
                 continue;
             }
-            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=])
+            uint8_t *address = field->storage == STATE_STORAGE_CARTRIDGE_RAM
+                ? &instance->cartridge_ram[i]
+                : (uint8_t *)(void *)instance + field->offset + i * field->stride;
+            state_raw_to_host(address, field, raw);]=])
 gbb_state_internal_mutant(catch_up_on_load state_rtc_palette same_rtc state_control
   [=[static void state_apply_observers(gbb_instance *instance, uint8_t old_rumble,
                                   int battery_changed) {]=]

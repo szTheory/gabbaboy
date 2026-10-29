@@ -546,7 +546,7 @@ static int state_canonical(void) {
         state_field_by_path("input_event_count"), 0u,
         (uint64_t)GBB_INPUT_EVENT_CAPACITY + 1u));
     REQUIRE_CASE("state_canonical", !state_store_host_value(source,
-        state_field_by_path("cart.ram_enabled"), 0u, 2u));
+        state_field_by_path("ime"), 0u, 2u));
     REQUIRE_CASE("state_canonical", !state_store_host_value(source,
         state_field_by_path("input_events[].kind"), 0u,
         (uint64_t)GBB_INPUT_BUTTON_RELEASE + 1u));
@@ -720,7 +720,6 @@ static int state_semantic_bounds(void) {
     REQUIRE_CASE("state_semantic_bounds", gbb_save_state(source, saved, size) == GBB_OK);
     REQUIRE_CASE("state_semantic_bounds", gbb_load_state(target, saved, size) == GBB_OK);
     static const struct { const char *path; size_t index; uint64_t value; } cgb_invalid[] = {
-        {"cart.ram_enabled", 0u, 2u},
         {"hdma.source_low", 0u, 0x01u},
         {"hdma.destination_high", 0u, 0x20u},
         {"hdma.destination_low", 0u, 0x01u},

@@ -120,6 +120,9 @@ def main() -> int:
                 "if (0 && (div != (divider_counter >> 8) || timer_signal != expected_timer_signal)) return 0;",
                 "skipped-cross-field-check")
 
+            range_anchor = "if (field->kind == STATE_VALUE_BOOL && raw > 1u) return 0;"
+            range_mutant = replace_once(core, range_anchor, "", "range-check-removed")
+
             endian_anchor = "if (mode == STATE_WALK_ENCODE) state_put_u64(mutable_body + offset, raw, field->wire_width);"
             endian_mutant = replace_once(core, endian_anchor,
                 "if (mode == STATE_WALK_ENCODE) {\n"
@@ -139,6 +142,7 @@ def main() -> int:
             mutants = (
                 ("normalize-on-load", normalization_mutant, False, "state_canonical", "normalization guard:"),
                 ("skipped-cross-field-check", relation_mutant, False, "state_semantic_bounds", "div[0]=0x1"),
+                ("range-check-removed", range_mutant, False, "state_semantic_bounds", "FAIL state_semantic_bounds:"),
                 ("native-endian-encoding", endian_mutant, False, "state_canonical", "wire endian guard:"),
                 ("test-override-leakage", census_mutant, True, "state_override_isolation", "test_state_field_census(source)"),
             )
@@ -149,7 +153,7 @@ def main() -> int:
                 exe = build(mutant_root, args.cc, version, pcm_override=pcm_override)
                 detail = check_killed(exe, case, diagnostic, label)
                 print(f"state mutant killed name={label} target={case} evidence={detail}")
-        print(f"state mutation controls pass source={args.rev} controls=4 baseline=3")
+        print(f"state mutation controls pass source={args.rev} controls=5 baseline=3")
         return 0
     except (MutantError, OSError) as error:
         parser.exit(1, f"state mutant control failure: {error}\n")

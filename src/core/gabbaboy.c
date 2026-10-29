@@ -5,6 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__GNUC__) || defined(__clang__)
+#define GBB_MAYBE_UNUSED __attribute__((unused))
+#else
+#define GBB_MAYBE_UNUSED
+#endif
+
 typedef struct {
     uint32_t h[8];
     uint64_t bits;
@@ -643,7 +649,7 @@ typedef struct {
     const char *reason;
 } state_field_treatment_rule;
 
-static const state_field_treatment_rule STATE_FIELD_TREATMENT[] = {
+static const state_field_treatment_rule STATE_FIELD_TREATMENT[] GBB_MAYBE_UNUSED = {
     { "rom", STATE_TREAT_EXCLUDE, "ROM bytes are immutable loaded identity and are hashed once at replacement." },
     { "rom_size", STATE_TREAT_DERIVE, "ROM length is fixed by the loaded identity." },
     { "rom_sha256", STATE_TREAT_DERIVE, "Complete ROM identity is hashed once after successful validation and allocation." },
@@ -1021,8 +1027,8 @@ static int state_descriptor_max_body_size(const state_field_descriptor *fields, 
 }
 
 /* MODEL: BOTH GATE-00 basis="state descriptor bounds are profile-neutral metadata checks" */
-static int state_descriptor_max_total_size(const state_field_descriptor *fields, size_t count,
-                                           size_t *total_size_out) {
+static int GBB_MAYBE_UNUSED state_descriptor_max_total_size(
+    const state_field_descriptor *fields, size_t count, size_t *total_size_out) {
     size_t body_size = 0u;
     if (total_size_out == NULL ||
         !state_descriptor_max_body_size(fields, count, &body_size) ||
@@ -1043,7 +1049,7 @@ static int state_audio_mix_level_valid(int32_t value) {
 }
 
 /* MODEL: BOTH GATE-00 basis="audio state validity checks preserve identical stored samples" */
-static int state_audio_hpf_history_valid(int32_t input, int32_t output) {
+static int GBB_MAYBE_UNUSED state_audio_hpf_history_valid(int32_t input, int32_t output) {
     return input >= INT16_MIN && input <= INT16_MAX &&
            output >= INT16_MIN && output <= INT16_MAX;
 }
@@ -4001,7 +4007,7 @@ static int ranges_overlap(uintptr_t a, size_t a_size, uintptr_t b, size_t b_size
 }
 
 /* MODEL: BOTH GATE-00 basis="state wire encoding is profile-independent" */
-static void state_encode_i64(int64_t value, uint8_t out[8]) {
+static void GBB_MAYBE_UNUSED state_encode_i64(int64_t value, uint8_t out[8]) {
     const uint64_t bits = (uint64_t)value;
     for (unsigned i = 0u; i < 8u; ++i) out[i] = (uint8_t)(bits >> (i * 8u));
 }
@@ -4045,7 +4051,7 @@ static uint32_t state_crc32_update(uint32_t crc, const uint8_t *bytes, size_t le
 }
 
 /* MODEL: BOTH GATE-00 basis="state wire integrity is profile-independent" */
-static uint32_t state_crc32(const uint8_t *bytes, size_t length) {
+static uint32_t GBB_MAYBE_UNUSED state_crc32(const uint8_t *bytes, size_t length) {
     if (bytes == NULL && length != 0u) return 0u;
     return state_crc32_update(UINT32_MAX, bytes, length) ^ UINT32_MAX;
 }
@@ -4141,51 +4147,68 @@ static int state_host_value(const gbb_instance *instance,
     }
 }
 
-/* MODEL: BOTH GATE-00 basis="state wire traversal preserves profile-bound guest fields" */
-static int state_store_host_value(gbb_instance *instance,
-                                  const state_field_descriptor *field,
-                                  size_t index, uint64_t raw) {
-    if (instance == NULL || field == NULL ||
-        index >= state_field_count_for_instance(instance, field)) return 0;
-    if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {
-        if (instance->cartridge_ram == NULL) return 0;
-        instance->cartridge_ram[index] = (uint8_t)raw;
-        return 1;
-    }
-    if (field->stride != 0u && index > (SIZE_MAX - field->offset) / field->stride)
-        return 0;
-    uint8_t *address = (uint8_t *)(void *)instance + field->offset + index * field->stride;
+static int state_field_kind_valid(const state_field_descriptor *field, uint64_t raw);
+
+/* MODEL: BOTH GATE-00 basis="validated state values convert without fallible branches" */
+static void state_raw_to_host(uint8_t *address, const state_field_descriptor *field,
+                              uint64_t raw) {
     switch (field->kind) {
-    case STATE_VALUE_U8: { const uint8_t v = (uint8_t)raw; memcpy(address, &v, sizeof(v)); return 1; }
-    case STATE_VALUE_U16: { const uint16_t v = (uint16_t)raw; memcpy(address, &v, sizeof(v)); return 1; }
-    case STATE_VALUE_U32: { const uint32_t v = (uint32_t)raw; memcpy(address, &v, sizeof(v)); return 1; }
-    case STATE_VALUE_U64: { const uint64_t v = raw; memcpy(address, &v, sizeof(v)); return 1; }
+    case STATE_VALUE_U8: { const uint8_t v = (uint8_t)raw; memcpy(address, &v, sizeof(v)); break; }
+    case STATE_VALUE_U16: { const uint16_t v = (uint16_t)raw; memcpy(address, &v, sizeof(v)); break; }
+    case STATE_VALUE_U32: { const uint32_t v = (uint32_t)raw; memcpy(address, &v, sizeof(v)); break; }
+    case STATE_VALUE_U64: { const uint64_t v = raw; memcpy(address, &v, sizeof(v)); break; }
     case STATE_VALUE_I32: {
-        int32_t v;
-        if (!state_bits_to_i32((uint32_t)raw, &v)) return 0;
-        memcpy(address, &v, sizeof(v)); return 1;
+        const uint32_t bits = (uint32_t)raw;
+        int32_t value;
+        if (bits <= (uint32_t)INT32_MAX) value = (int32_t)bits;
+        else value = -1 - (int32_t)(UINT32_MAX - bits);
+        memcpy(address, &value, sizeof(value));
+        break;
     }
     case STATE_VALUE_I64: {
-        uint8_t bytes[8]; int64_t v;
-        state_put_u64(bytes, raw, 8u);
-        if (!state_decode_i64(bytes, &v)) return 0;
-        memcpy(address, &v, sizeof(v)); return 1;
+        int64_t value;
+        if (raw <= (uint64_t)INT64_MAX) value = (int64_t)raw;
+        else value = -1 - (int64_t)(UINT64_MAX - raw);
+        memcpy(address, &value, sizeof(value));
+        break;
     }
     case STATE_VALUE_BOOL: {
-        if (raw > 1u) return 0;
-        const int v = (int)raw; memcpy(address, &v, sizeof(v)); return 1;
+        const int value = (int)raw;
+        memcpy(address, &value, sizeof(value));
+        break;
     }
     case STATE_VALUE_COUNT: {
-        if (raw > SIZE_MAX) return 0;
-        const size_t v = (size_t)raw; memcpy(address, &v, sizeof(v)); return 1;
+        const size_t value = (size_t)raw;
+        memcpy(address, &value, sizeof(value));
+        break;
     }
     case STATE_VALUE_EVENT_KIND: {
-        if (raw > (uint64_t)GBB_INPUT_BUTTON_RELEASE) return 0;
-        const gbb_input_event_kind v = (gbb_input_event_kind)raw;
-        memcpy(address, &v, sizeof(v)); return 1;
+        const gbb_input_event_kind value = (gbb_input_event_kind)raw;
+        memcpy(address, &value, sizeof(value));
+        break;
     }
-    default: return 0;
+    default: break;
     }
+}
+
+/* MODEL: BOTH GATE-00 basis="state wire traversal preserves profile-bound guest fields" */
+static int GBB_MAYBE_UNUSED state_store_host_value(gbb_instance *instance,
+                                                   const state_field_descriptor *field,
+                                                   size_t index, uint64_t raw) {
+    if (instance == NULL || field == NULL ||
+        index >= state_field_count_for_instance(instance, field)) return 0;
+    if (!state_field_kind_valid(field, raw)) return 0;
+    uint8_t *address = NULL;
+    if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {
+        if (instance->cartridge_ram == NULL) return 0;
+        address = &instance->cartridge_ram[index];
+    } else {
+        if (field->stride != 0u && index > (SIZE_MAX - field->offset) / field->stride)
+            return 0;
+        address = (uint8_t *)(void *)instance + field->offset + index * field->stride;
+    }
+    state_raw_to_host(address, field, raw);
+    return 1;
 }
 
 /* MODEL: BOTH GATE-00 basis="state wire traversal preserves profile-bound guest fields" */
@@ -4728,40 +4751,10 @@ static void state_apply(gbb_instance *instance, const uint8_t *body, size_t body
         const size_t count = state_field_count_for_instance(instance, field);
         for (size_t i = 0u; i < count; ++i) {
             const uint64_t raw = state_get_u64(body + offset, field->wire_width);
-            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {
-                instance->cartridge_ram[i] = (uint8_t)raw;
-            } else {
-                uint8_t *address = (uint8_t *)(void *)instance + field->offset + i * field->stride;
-                switch (field->kind) {
-                case STATE_VALUE_U8: { const uint8_t v = (uint8_t)raw; memcpy(address, &v, sizeof(v)); break; }
-                case STATE_VALUE_U16: { const uint16_t v = (uint16_t)raw; memcpy(address, &v, sizeof(v)); break; }
-                case STATE_VALUE_U32: { const uint32_t v = (uint32_t)raw; memcpy(address, &v, sizeof(v)); break; }
-                case STATE_VALUE_U64: { const uint64_t v = raw; memcpy(address, &v, sizeof(v)); break; }
-                case STATE_VALUE_I32: {
-                    const uint32_t bits = (uint32_t)raw;
-                    int32_t value;
-                    if (bits <= (uint32_t)INT32_MAX) value = (int32_t)bits;
-                    else value = -1 - (int32_t)(UINT32_MAX - bits);
-                    memcpy(address, &value, sizeof(value));
-                    break;
-                }
-                case STATE_VALUE_I64: {
-                    int64_t value;
-                    if (raw <= (uint64_t)INT64_MAX) value = (int64_t)raw;
-                    else value = -1 - (int64_t)(UINT64_MAX - raw);
-                    memcpy(address, &value, sizeof(value));
-                    break;
-                }
-                case STATE_VALUE_BOOL: { const int v = (int)raw; memcpy(address, &v, sizeof(v)); break; }
-                case STATE_VALUE_COUNT: { const size_t v = (size_t)raw; memcpy(address, &v, sizeof(v)); break; }
-                case STATE_VALUE_EVENT_KIND: {
-                    const gbb_input_event_kind v = (gbb_input_event_kind)raw;
-                    memcpy(address, &v, sizeof(v));
-                    break;
-                }
-                default: break;
-                }
-            }
+            uint8_t *address = field->storage == STATE_STORAGE_CARTRIDGE_RAM
+                ? &instance->cartridge_ram[i]
+                : (uint8_t *)(void *)instance + field->offset + i * field->stride;
+            state_raw_to_host(address, field, raw);
             offset += field->wire_width;
         }
     }
@@ -4784,8 +4777,9 @@ static size_t state_body_field_offset(const gbb_instance *instance,
 }
 
 /* MODEL: BOTH GATE-00 basis="state field census records the explicit wire descriptor without mutation" */
-static int state_record_field(const gbb_instance *instance, size_t descriptor_index,
-                              state_field_record *record) {
+static int GBB_MAYBE_UNUSED state_record_field(const gbb_instance *instance,
+                                               size_t descriptor_index,
+                                               state_field_record *record) {
     if (instance == NULL || record == NULL ||
         descriptor_index >= sizeof(STATE_FIELDS) / sizeof(STATE_FIELDS[0])) return 0;
     const state_field_descriptor *field = &STATE_FIELDS[descriptor_index];
