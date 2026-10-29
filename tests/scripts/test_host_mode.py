@@ -173,12 +173,107 @@ def scenario_rom_unreadable(runner: str, work: Path) -> None:
     require(listing(saves) == [], f"refused run changed the save directory: {listing(saves)}")
     forbid_work_path(base, out, err)
 
+STEM_TOKENS = ("stem-empty", "stem-leading-dot", "stem-control", "stem-del", "stem-backslash",
+               "stem-bad-utf8", "stem-too-long")
+
+
+def snapshot(save_dir: Path) -> dict[str, tuple[int, bytes]]:
+    """Every entry's name, mtime and bytes, plus the directory's own mtime under the key ''."""
+    state: dict[str, tuple[int, bytes]] = {"": (save_dir.stat().st_mtime_ns, b"")}
+    for entry in sorted(save_dir.iterdir()):
+        state[entry.name] = (entry.stat().st_mtime_ns, entry.read_bytes())
+    return state
+
+
+def scenario_stem_refusal(runner: str, work: Path) -> None:
+    """D-07 end to end: a hostile ROM name is refused with its own stem token before any filesystem
+    access, the save directory is byte-for-byte unchanged, and the stem is never rewritten into a
+    different accepted name (a rewrite of `a\\b` would create `a_b.sav`)."""
+    base = fresh_dir(work)
+    roms = fresh_dir(base / "roms")
+    saves = fresh_dir(base / "saves")
+    (saves / "keep.sav").write_bytes(bytes(range(256)) * 32)
+    rom_bytes = host_fixture.build_rom("counter", MBC1_RAM_BATTERY, RAM_8K)
+    (roms / "dir").mkdir()
+
+    # name is raw bytes; os.fsdecode keeps it byte-exact on POSIX (surrogateescape) for argv.
+    cases = [
+        ("stem-empty", b"dir/"),
+        ("stem-leading-dot", b".gb"),
+        ("stem-leading-dot", b"..gb"),
+        ("stem-control", b"a\x01b.gb"),
+        ("stem-control", b"a\x1fb.gb"),
+        ("stem-del", b"a\x7fb.gb"),
+        ("stem-backslash", b"a\\b.gb"),
+        ("stem-bad-utf8", b"a\xc0\x80b.gb"),
+        ("stem-bad-utf8", b"a\xed\xa0\x80b.gb"),
+        ("stem-bad-utf8", b"a\xf4\x90\x80\x80b.gb"),
+        ("stem-bad-utf8", b"a\xe2\x82.gb"),
+        ("stem-too-long", b"a" * 201 + b".gb"),
+    ]
+    created = 0
+    for token, name in cases:
+        rom_path = os.path.join(os.fsencode(str(roms)), name)
+        if not name.endswith(b"/"):
+            try:
+                with open(rom_path, "wb") as handle:
+                    handle.write(rom_bytes)
+                created += 1
+            except OSError:
+                # macOS APFS refuses non-UTF-8 names. Stem validation precedes any filesystem
+                # access, so the refusal must not depend on the file existing.
+                pass
+        before = snapshot(saves)
+        code, out, err = host_fixture.run_runner(
+            runner, ["--rom", os.fsdecode(rom_path), "--save-dir", str(saves), "--frames", "1"],
+            str(base), RUN_TIMEOUT)
+        label = f"{token} for {name!r}"
+        expect_refusal(code, out, err, token, *(f"reason={other}" for other in STEM_TOKENS if other != token))
+        require(snapshot(saves) == before, f"{label}: the save directory changed")
+        forbid_work_path(base, out, err)
+    require(created >= 7, f"only {created} hostile ROM files could be created; the scenario lost its teeth")
+
+
+def scenario_platform_gate(runner: str, work: Path) -> None:
+    """D-05: `--save-dir` mode is refused on Windows before any filesystem access, and the gate does
+    not fire on POSIX."""
+    base = fresh_dir(work)
+    saves = fresh_dir(base / "saves")
+    rom = Path(__file__).resolve().parents[2] / "fixtures" / "mbc1-continuation" / "continuation.gb"
+    require(rom.is_file(), "fixtures/mbc1-continuation/continuation.gb is missing")
+    code, out, err = run(runner, rom, saves, 2, base)
+    if os.name == "nt":
+        expect_refusal(code, out, err, "windows-unsupported")
+        require(listing(saves) == [], f"refused run changed the save directory: {listing(saves)}")
+    else:
+        expect_clean_exit(code, err, 2)
+        require("windows-unsupported" not in err, "the Windows gate fired on POSIX")
+        require(listing(saves) == ["continuation.sav"], f"unexpected directory entries {listing(saves)}")
+    forbid_work_path(base, out, err)
+
+
+def scenario_grammar_empty_value(runner: str, work: Path) -> None:
+    """D-02 empty-value: an empty `--rom` or `--save-dir` operand is its own token. CMake cannot pass an
+    empty list element, so this one grammar case runs here instead of in a CTest command."""
+    base = fresh_dir(work)
+    for args in (["--rom", "", "--save-dir", "d"], ["--rom", "r", "--save-dir", ""],
+                 ["--rom", "r", "--save-dir", "d", "--frames", ""]):
+        code, out, err = host_fixture.run_runner(runner, args, str(base), RUN_TIMEOUT)
+        require(code == 2, f"exit {code}, expected 2 for {args}: {err.strip()!r}")
+        require("invalid-arguments: reason=empty-value\n" in err,
+                f"missing 'invalid-arguments: reason=empty-value' for {args}: {err.strip()!r}")
+        require("gbb-host: ready" not in err, "a refused run must not print 'gbb-host: ready'")
+    require(listing(base) == [], "a grammar refusal touched the filesystem")
+
 
 SCENARIOS = {
     "continuation": scenario_continuation,
     "rom-max": scenario_rom_max,
     "rom-oversize": scenario_rom_oversize,
     "rom-unreadable": scenario_rom_unreadable,
+    "stem-refusal": scenario_stem_refusal,
+    "platform-gate": scenario_platform_gate,
+    "grammar-empty-value": scenario_grammar_empty_value,
 }
 
 

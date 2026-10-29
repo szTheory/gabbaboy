@@ -18,6 +18,7 @@ foreach(expected
     "--manifest <manifest.json> --case <id> [--profile dmg|cgb] [--receipt]"
     "--manifest <manifest.json> --suite [--profile dmg|cgb] [--receipt]"
     "--profile dmg|cgb"
+    "--rom <rom.gb> --save-dir <dir>"
     "--acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>)"
     "--acceptance <cases.txt> --case <id> --observe")
   string(FIND "${help_text}" "${expected}" found)
