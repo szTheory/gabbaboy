@@ -44,7 +44,7 @@ static bool slot_clock_unsafe(const gbb_input_clock *clock) {
 
 #ifndef _WIN32
 
-typedef enum { NAME_SLOT, NAME_UNDO, NAME_PRELOAD } name_kind;
+typedef enum { NAME_SLOT, NAME_UNDO, NAME_PRELOAD, NAME_GUARD } name_kind;
 
 static const char *profile_token(gbb_profile profile) {
     if (profile == GBB_PROFILE_DMG_CPU_B) return "dmg";
@@ -60,8 +60,10 @@ static bool build_name(const player_slot_store *store, name_kind kind, unsigned 
         length = snprintf(out, capacity, "%s-slot%u.gbbs", store->prefix, slot);
     } else if (kind == NAME_UNDO) {
         length = snprintf(out, capacity, "%s-undo.gbbs", store->prefix);
-    } else {
+    } else if (kind == NAME_PRELOAD) {
         length = snprintf(out, capacity, "%s-battery-preload.bin", store->prefix);
+    } else {
+        length = snprintf(out, capacity, "%s-battery-guard.bin", store->prefix);
     }
     return length > 0 && (size_t)length < capacity;
 }
@@ -155,14 +157,32 @@ player_slot_result player_slot_save(player_slot_store *store, const gbb_instance
     return result;
 }
 
-/* True when the battery differs from the one recorded right after the last slot load, or no load has
- * happened this session: the in-game save that a load is about to replace has not been backed up. */
+/* True when the battery differs from the one the slot engine last left in the machine, or none is known: the
+ * in-game save that a load is about to replace has not been backed up. */
 static bool battery_differs_from_guard(const player_slot_store *store, const uint8_t *battery, size_t size) {
     return !store->guard_valid || store->guard_size != size || memcmp(store->guard, battery, size) != 0;
 }
 
-/* Records the battery right after a load. An allocation failure drops the guard, which only makes the
- * next load write one more preload file. */
+/* The guard outlives the process in `<prefix>-battery-guard.bin`. Kept only in memory it started empty every
+ * session, so the first load of the next session saw the battery the previous load had produced (already in a
+ * slot) as an unbacked in-game save and overwrote the one real backup, the user's own progress in the preload
+ * file. A missing, wrong-sized or unreadable file leaves the guard invalid, which only costs one more preload. */
+static void seed_guard_from_disk(player_slot_store *store, const char *guard_name, size_t size) {
+    if (store->guard_valid) return;
+    uint8_t *copy = malloc(size + 1u); /* read_exact owns want + 1 bytes of the caller's buffer */
+    if (copy == NULL) return;
+    if (host_save_io_read_exact(store->dirfd, guard_name, copy, size) != HOST_IO_OK) {
+        free(copy);
+        return;
+    }
+    free(store->guard);
+    store->guard = copy;
+    store->guard_size = size;
+    store->guard_valid = true;
+}
+
+/* Records the battery right after a load, in memory and beside the slots. An allocation or write failure only
+ * makes the next load write one more preload file. */
 static void record_guard(player_slot_store *store, const gbb_instance *instance) {
     free(store->guard);
     store->guard = NULL;
@@ -181,6 +201,9 @@ static void record_guard(player_slot_store *store, const gbb_instance *instance)
     store->guard = copy;
     store->guard_size = size;
     store->guard_valid = true;
+    char guard_name[160];
+    if (build_name(store, NAME_GUARD, 0u, guard_name, sizeof(guard_name)))
+        (void)host_save_io_replace(store->dirfd, guard_name, copy, size);
 }
 
 /* D-23, all-or-nothing. Each step returns before any later step on failure, and a refusal is found in the
@@ -192,10 +215,12 @@ player_slot_result player_slot_load(player_slot_store *store, gbb_instance *inst
     char name[160];
     char undo_name[160];
     char preload_name[160];
+    char guard_name[160];
     if (store == NULL || store->rom == NULL || instance == NULL ||
         !build_name(store, source == PLAYER_SLOT_SOURCE_UNDO ? NAME_UNDO : NAME_SLOT, slot, name, sizeof(name)) ||
         !build_name(store, NAME_UNDO, 0u, undo_name, sizeof(undo_name)) ||
-        !build_name(store, NAME_PRELOAD, 0u, preload_name, sizeof(preload_name)))
+        !build_name(store, NAME_PRELOAD, 0u, preload_name, sizeof(preload_name)) ||
+        !build_name(store, NAME_GUARD, 0u, guard_name, sizeof(guard_name)))
         return result;
 
     size_t state_size = 0u;
@@ -254,6 +279,7 @@ player_slot_result player_slot_load(player_slot_store *store, gbb_instance *inst
         }
         result.error = (int)gbb_copy_battery(instance, battery, battery_size);
         if (result.error != GBB_OK) goto done;
+        seed_guard_from_disk(store, guard_name, battery_size);
         const bool needs_preload = battery_differs_from_guard(store, battery, battery_size);
         if (needs_preload && host_save_io_replace(store->dirfd, preload_name, battery, battery_size) != HOST_IO_OK) {
             result.outcome = PLAYER_SLOT_BACKUP_FAILED;

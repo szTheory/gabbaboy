@@ -96,7 +96,7 @@ typedef struct {
     char prefix[80];          /* `<rom sha256 hex>-<dmg|cgb>` */
     uint8_t *rom;             /* the store's own heap copy of the ROM, for scratch validation */
     size_t rom_size;
-    uint8_t *guard;           /* the battery right after the last slot load */
+    uint8_t *guard;           /* the battery right after the last slot load; persisted as <prefix>-battery-guard.bin */
     size_t guard_size;
     bool guard_valid;
 } player_slot_store;

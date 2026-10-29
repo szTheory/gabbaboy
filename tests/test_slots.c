@@ -893,6 +893,47 @@ static int case_battery_guard(void) {
     return 0;
 }
 
+/* A new player session over the same pref directory: the store is rebuilt, so only what is on disk survives. */
+static bool new_session(fixture *fx) {
+    player_slot_store_free(&fx->store);
+    fx->store_ready = player_slot_store_init(&fx->store, fx->dirfd, fx->digest, fx->profile, fx->rom, fx->rom_size);
+    return fx->store_ready;
+}
+
+/* WR-03. Session 1 loads a slot over the in-game save X, so the preload file holds X and the battery becomes Y
+ * (which the .gbb then keeps). Session 2 starts with Y: its first load must leave the preload at X, because Y is
+ * not an in-game save, and a genuine in-game save W made later still has to be backed up. */
+static int case_battery_guard_sessions(void) {
+    pair_fixture pf;
+    CHECK(pair_open(&pf));
+    size_t size = 0u;
+    REQUIRE(gbb_battery_size(pf.live, &size) == GBB_OK && size == 8192u);
+    uint8_t *x = malloc(size);
+    uint8_t *w = malloc(size);
+    REQUIRE(x != NULL && w != NULL);
+    REQUIRE(gbb_copy_battery(pf.live, x, size) == GBB_OK);
+    fill_pattern(w, size, 0x44u);
+    char preload[160];
+    preload_file(&pf.fx, preload);
+
+    REQUIRE(player_slot_load(&pf.fx.store, pf.live, PLAYER_SLOT_SOURCE_SLOT, 1u).outcome == PLAYER_SLOT_LOADED);
+    REQUIRE(file_equals(&pf.fx, preload, x, size));
+
+    REQUIRE(new_session(&pf.fx));
+    REQUIRE(player_slot_load(&pf.fx.store, pf.live, PLAYER_SLOT_SOURCE_SLOT, 2u).outcome == PLAYER_SLOT_LOADED);
+    REQUIRE(file_equals(&pf.fx, preload, x, size)); /* still the real in-game save, not a copy of slot 1's battery */
+
+    REQUIRE(gbb_import_battery(pf.live, w, size) == GBB_OK);
+    REQUIRE(new_session(&pf.fx));
+    REQUIRE(player_slot_load(&pf.fx.store, pf.live, PLAYER_SLOT_SOURCE_SLOT, 1u).outcome == PLAYER_SLOT_LOADED);
+    REQUIRE(file_equals(&pf.fx, preload, w, size));
+
+    free(x);
+    free(w);
+    pair_close(&pf);
+    return 0;
+}
+
 static int case_unsafe_queued_input(void) {
     fixture fx;
     REQUIRE(fx_setup(&fx, GBB_PROFILE_DMG_CPU_B, 'A'));
@@ -1187,6 +1228,7 @@ static const slot_case g_cases[] = {
     {"undo_swap", case_undo_swap},
     {"no_undo", case_no_undo},
     {"battery_guard", case_battery_guard},
+    {"battery_guard_sessions", case_battery_guard_sessions},
     {"unsafe_queued_input", case_unsafe_queued_input},
     {"save_failure_keeps_old", case_save_failure_keeps_old},
     {"reanchor_later", case_reanchor_later},

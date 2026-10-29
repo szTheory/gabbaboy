@@ -79,6 +79,7 @@ function(gabbaboy_verify_registered_tests)
       slot_undo_swap
       slot_no_undo
       slot_battery_guard
+      slot_battery_guard_sessions
       slot_unsafe_queued_input
       slot_save_failure_keeps_old
       slot_stale_temp_sweep
@@ -87,6 +88,8 @@ function(gabbaboy_verify_registered_tests)
       slot_mutant_undo_before_load
       slot_mutant_preload_before_validate
       slot_mutant_no_guard
+      slot_mutant_guard_not_persisted
+      slot_mutant_guard_not_seeded
       slot_mutant_no_rollback
       slot_fault_rollback_refused
       slot_mutant_rollback_ignored

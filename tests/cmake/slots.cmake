@@ -104,7 +104,7 @@ if(NOT WIN32)
       refusal_dmg_in_cgb refusal_version_token refusal_text_file refusal_flipped_byte refusal_truncated
       refusal_oversize refusal_symlink undo_write_failure backup_write_failure undo_swap no_undo
       battery_guard unsafe_queued_input save_failure_keeps_old reanchor_later reanchor_earlier
-      select_message stale_temp_sweep)
+      select_message stale_temp_sweep battery_guard_sessions)
     add_test(NAME slot_${case} COMMAND test_slots ${case}
       WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/slots-work")
     set_tests_properties(slot_${case} PROPERTIES PASS_REGULAR_EXPRESSION "PASS ${case}")
@@ -141,6 +141,17 @@ if(NOT WIN32)
     [=[const bool needs_preload = battery_differs_from_guard(store, battery, battery_size);]=]
     [=[const bool needs_preload = false;]=]
     battery_guard "FAIL battery_guard")
+  # WR-03: the guard is not persisted, or not read back, so a new session overwrites the real in-game backup.
+  gbb_slots_mutant(guard_not_persisted
+    [=[(void)host_save_io_replace(store->dirfd, guard_name, copy, size);]=]
+    [=[(void)guard_name;]=]
+    battery_guard_sessions "FAIL battery_guard_sessions")
+  gbb_slots_mutant(guard_not_seeded
+    [=[    if (store->guard_valid) return;
+    uint8_t *copy = malloc(size + 1u);]=]
+    [=[    if (true) return;
+    uint8_t *copy = malloc(size + 1u);]=]
+    battery_guard_sessions "FAIL battery_guard_sessions")
   # D-23 step 5: a failed undo write no longer rolls the machine back.
   gbb_slots_mutant(no_rollback
     [=[const gbb_error rollback = gbb_load_state(instance, snapshot, state_size);]=]

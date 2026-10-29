@@ -88,6 +88,7 @@ filter_expected_for_platform() {
         -e '/^slot_undo_swap$/d' \
         -e '/^slot_no_undo$/d' \
         -e '/^slot_battery_guard$/d' \
+        -e '/^slot_battery_guard_sessions$/d' \
         -e '/^slot_unsafe_queued_input$/d' \
         -e '/^slot_save_failure_keeps_old$/d' \
         -e '/^slot_stale_temp_sweep$/d' \
@@ -96,6 +97,8 @@ filter_expected_for_platform() {
         -e '/^slot_mutant_undo_before_load$/d' \
         -e '/^slot_mutant_preload_before_validate$/d' \
         -e '/^slot_mutant_no_guard$/d' \
+        -e '/^slot_mutant_guard_not_persisted$/d' \
+        -e '/^slot_mutant_guard_not_seeded$/d' \
         -e '/^slot_mutant_no_rollback$/d' \
         -e '/^slot_fault_rollback_refused$/d' \
         -e '/^slot_mutant_rollback_ignored$/d' \
@@ -213,6 +216,7 @@ _self_test_platform_filter_cases() {
     slot_undo_swap \
     slot_no_undo \
     slot_battery_guard \
+    slot_battery_guard_sessions \
     slot_unsafe_queued_input \
     slot_save_failure_keeps_old \
     slot_stale_temp_sweep \
@@ -221,6 +225,8 @@ _self_test_platform_filter_cases() {
     slot_mutant_undo_before_load \
     slot_mutant_preload_before_validate \
     slot_mutant_no_guard \
+    slot_mutant_guard_not_persisted \
+    slot_mutant_guard_not_seeded \
     slot_mutant_no_rollback \
     slot_fault_rollback_refused \
     slot_mutant_rollback_ignored \
@@ -339,6 +345,7 @@ _self_test_platform_filter_cases() {
     slot_undo_swap \
     slot_no_undo \
     slot_battery_guard \
+    slot_battery_guard_sessions \
     slot_unsafe_queued_input \
     slot_save_failure_keeps_old \
     slot_stale_temp_sweep \
@@ -347,6 +354,8 @@ _self_test_platform_filter_cases() {
     slot_mutant_undo_before_load \
     slot_mutant_preload_before_validate \
     slot_mutant_no_guard \
+    slot_mutant_guard_not_persisted \
+    slot_mutant_guard_not_seeded \
     slot_mutant_no_rollback \
     slot_fault_rollback_refused \
     slot_mutant_rollback_ignored \

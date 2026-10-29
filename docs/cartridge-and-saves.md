@@ -448,7 +448,9 @@ machine's cartridge RAM and clock, and the player's autosave then writes that
 RAM as the battery save like any other change. Before the first load, and
 whenever the battery has changed since the previous load, the player writes the
 in-game battery to a battery-preload backup file, so loading slot A and then slot
-B still keeps the save you had before A. Each load also writes the state it
+B still keeps the save you had before A. The player remembers the battery each
+load left behind in a small guard file beside the slots, so the next session's
+first load does not mistake it for an in-game save and overwrite that backup. Each load also writes the state it
 replaced to an undo file; `⌘Z` swaps the live state with it, so pressing it twice
 returns to where you started. If either backup cannot be
 written the load is not applied and the live game is unchanged. Loading a slot
