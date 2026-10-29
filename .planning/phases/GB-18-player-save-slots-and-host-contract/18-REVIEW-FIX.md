@@ -7,6 +7,13 @@ findings_in_scope: 6
 fixed: 6
 skipped: 0
 status: all_fixed
+round_2_iteration: 2
+round_2_fixed_at: 2026-10-29T11:13:23Z
+round_2_scope: IN-01..IN-09
+round_2_findings_in_scope: 9
+round_2_fixed: 9
+round_2_skipped: 0
+round_2_status: all_fixed
 ---
 
 # Phase 18: Code Review Fix Report
@@ -151,8 +158,81 @@ reconfigure:
 - The gates ran in the isolated worktree, not the main checkout, and the numbers are not reproducible from the main
   checkout until the commits are fast-forwarded in and it is reconfigured.
 
+## Round 2 (Info findings)
+
+**Fixed at:** 2026-10-29T11:13:23Z
+**Iteration:** 2 (review-fix round 2 of at most 2)
+**Scope:** IN-01..IN-09. WR-01..WR-06 were not touched.
+
+**Summary:** 9 in scope, 9 fixed, 0 skipped. Two findings were only partly applied as written: IN-04 part (b) and the
+stat-failure row of IN-05. The reasons are in the notes below. One commit per finding on the phase branch. Each
+behaviour change has a CTest-wired check with a negative control. Every new name is in `tests/expected-tests.txt`
+(or `tests/player/expected-tests.txt`). POSIX-only names are also removed from the Windows expectation in
+`cmake/ExpectedTests.cmake` and `.github/scripts/verify-test-inventory.sh`. No new TIMEOUT was added, and the core was
+not touched.
+
+| Id | Status | Commit | Test | Negative control |
+|---|---|---|---|---|
+| IN-01 | fixed | 84e20cdc | `host_sweep_batches`: 150 temps (more than two 64-name batches) are all removed, non-matching names are kept, and 65 unremovable temp-named directories end the sweep | `host_writer_mutant_sweep_single_pass` (stops after the first pass) must fail |
+| IN-02 | fixed | 4515a548 | `host_writer_name_cap`: a name at `GBB_HOST_REPLACE_NAME_MAX` (204) is written; cap+1 and 240 are refused with EINVAL and leave the directory empty | `host_writer_mutant_name_cap_240` (old 240-byte cap) must fail |
+| IN-03 | fixed | 6c0a3c65 | `player_input_rebase_guard` (player build): safe (56 events) re-anchors; unsafe (60, 200) returns false, pauses input, keeps the mirror counted (clamped to 64) and the releases pending; no key reaches the core queue; resume is refused | `player_input_mutant_rebase_silent` (old silent early return, in a copy of input.c) must fail |
+| IN-04 | fixed (part a; part b not changed, see note) | 8332aab1 | `host_import_mbc2_noncanonical`: a `$0N`-style 512-byte MBC2 `.sav` with an idle guest gives `flush=unchanged`; bytes, inode and mtime are kept | `host_import_mutant_raw_baseline` (raw-file baseline) must fail with "a non-canonical MBC2 save was rewritten" |
+| IN-05 | fixed (stat-failure row kept per D-25, see note) | a312201a | `slot_select_message` extended: a dangling symlink (slot 6) and a directory (slot 7) read "Slot N selected: unreadable", and loading either gives READ_FAILED | `slot_mutant_selection_any_entry` (no regular-file check) must fail |
+| IN-06 | fixed | c125cc80 | `host_exit_pacing_unavailable`: a fault-variant runner whose clock fails from the third pacing wait ends by itself with one `gbb-host: pacing unavailable` line, `exit status=failure reason=pacing`, a written flush, exit 1 and a `--frames K` replay of the same bytes | `host_signal_decoy_pacing_ignored` (same fault, result ignored) must fail the watchdog with "the runner kept running after its pacing clock failed" |
+| IN-07 | fixed | 3eeec7da | none new: the 2.0 s kill-to-wait assertion, its constant, the timestamps and the `--sanitized` flag that only toggled it were removed; `host_signal_term` keeps the replay-equality evidence | existing `host_signal_decoy_partial_frame` (stops mid-frame) still fails on the replay comparison |
+| IN-08 | fixed | a87cfd37 | the pass patterns of `save_format_files`, `save_format_completeness`, `host_contract_json` and `host_contract_docs` accept any positive count (cadence=6 and profiles=2 stay pinned); `host_contract_controls` requires the derived pass line and gains the control "an appended exit row" (exit_codes=5), now controls=11 | against the old pinned literal the appended-row control fails ("expected exit_codes=4 ... got exit_codes=5"), shown by hand on a scratch copy of the checker; the existing reject controls (missing crash row, renumbered row, empty rows list) still fail |
+| IN-09 | fixed | b7589dfa | comment-only (orphaned slots.cmake lines deleted; dir-sync asymmetry documented at the directory fsync) | n/a |
+
+**Notes and decisions:**
+
+- **IN-01:** On the local filesystem (APFS) an unlink during readdir does not cause entries to be skipped, so that
+  hazard cannot be reproduced here. The test covers the collect-then-unlink batching the fix introduces. A pass that
+  fills the buffer and removes something is followed by another pass. A pass that removes nothing ends the sweep, so
+  the work is bounded. The `host_save_io_sweep` signature is unchanged.
+- **IN-02:** The cap is derived (`GBB_HOST_STEM_MAX_BYTES + 4`). Two `_Static_assert`s check that the worst-case temp
+  name (a 20-byte pid and a two-digit sequence) fits in 255. All current callers are inside the cap: host stems are at
+  most 204 bytes and slot names about 88.
+- **IN-03:** `player_input_rebase` now returns `bool`. Its only caller, `apply_slot_load`, keeps the game paused when it
+  returns false. The anchor of `player_slot_mutant_no_rebase` follows the new call site.
+- **IN-04 part (b) was not changed.** The cartridge's battery presence and the exact file size are both checked before
+  import, so the only refusal `gbb_import_battery` can return for those bytes is a malformed clock block
+  (GBB_INVALID_ARGUMENT from `rtc_block_parse`). Mapping the other `gbb_error` values would add branches that no input
+  can reach. I wrote that invariant next to the `save-rtc-block` refusal instead.
+- **IN-05:** D-25 (18-CONTEXT.md) adopted the bare "saved" for an entry whose stat fails. The reviewer suggested
+  replacing that row too. I kept it to respect the adopted decision and changed only the non-regular-entry case,
+  which no decision covered. The cartridge guide now names the "unreadable" state.
+- **IN-06:** I used the fail-closed option. Exit code 1's meaning now reads "I/O or flush failure, allocation failure,
+  a failed pacing clock, or a core stop mid-run". It is changed together in `src/host/host_exit.h`,
+  `docs/host-contract.json` and the guide table, and the checkers compare these cell by cell. The guide's paced-mode
+  paragraph describes the stop. A clock that fails at start is caught at the first frame boundary. The fault variant
+  and the decoy are build-tree `hostvariant` runners; nothing mutated is installed.
+- **IN-07:** No clock remains as evidence in `test_host_signals.py`. `PROCESSORS 2` stays, so the watchdogs are not
+  starved on a 4-wide hosted ctest.
+
+**Verification (round 2):**
+
+- **Where it ran:** the gates ran in the isolated review-fix worktree, in its own build directories, which I
+  configured like the main checkout's. `build` is phase1 Debug with Ninja. `build-player` adds
+  `GABBABOY_BUILD_PLAYER=ON` and the main checkout's SDL3 prefix. I did not rebuild the main checkout's `build` and
+  `build-player`, because a full `ctest` was running in `build` when this pass started. After the fast-forward they
+  still hold the pre-round-2 binaries and need `cmake --build build -j8` and `cmake --build build-player -j8` before
+  the numbers can be reproduced there. The worktree has been removed.
+- **phase1 (`build`):** `ctest -R '^host_|^slot_|^save_format|contract|^doc_|test_budget|inventory|summary_coverage|hygiene|no_host_clock|core_linkage|installed_|^unreleased|^readme|^cartridge_guide|^native_guide'`
+  gave 243 of 243 passing at b7589dfa. The contract checkers read the committed HEAD, so they were run after each
+  commit. One run before the IN-06 commit showed `host_contract_docs_missing_control` failing: it compared the edited
+  working tree with the old HEAD (the documented commit-before-run rule), and it passed after the commit.
+  `verify-test-inventory.sh --self-test` passed.
+- **Player (`build-player`):** `ctest -R '^player_'` gave 108 of 108 passing, including `player_slot_*`,
+  `player_input_rebase_guard` and `player_input_mutant_rebase_silent`. `test_budget` passed. `core_linkage_links` and
+  `core_linkage_controls` still fail with the pre-existing player mutant-topology findings (RM-031, recorded in
+  3b196457). None of the new round-2 targets appears in their output.
+- I confirmed that each negative control fails for its own reason (the `FAIL <case>:` line or the named harness
+  reason), not by crashing.
+- **Not run:** the full 1,600+ test `ctest` at the new head, and `phase1-asan` (sanitizers are Linux-only).
+
 ---
 
 _Fixed: 2026-10-29_
 _Fixer: Claude (gsd-code-fixer)_
 _Iteration: 1_
+_Round 2 fixed: 2026-10-29T11:13:23Z (iteration 2)_
