@@ -49,7 +49,11 @@ typedef enum {
     PLAYER_SLOT_READ_FAILED,
     PLAYER_SLOT_REFUSED,
     PLAYER_SLOT_BACKUP_FAILED,
-    PLAYER_SLOT_UNSAFE_INPUT
+    PLAYER_SLOT_UNSAFE_INPUT,
+    /* The live machine now holds the loaded state and the load could not finish cleanly: the rollback after a
+     * failed undo write was refused, or the input clock could not be read. `error` is the gbb_error. The
+     * "nothing changed" outcomes above are only ever returned when that is true. */
+    PLAYER_SLOT_RESTORE_FAILED
 } player_slot_outcome;
 
 typedef struct {

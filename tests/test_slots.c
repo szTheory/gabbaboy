@@ -706,6 +706,40 @@ static int case_undo_write_failure(void) {
     return 0;
 }
 
+/* WR-01. Run only against the fault variants in tests/cmake/slots.cmake, which make the engine's own call fail:
+ * the shipped engine cannot be made to refuse a snapshot it just produced, so there is no unmodified run.
+ * Both cases need the undo write to fail first (rollback_failure) or the load to succeed (clock_failure). */
+static int case_rollback_failure(void) {
+    pair_fixture pf;
+    CHECK(pair_open(&pf));
+    /* Load 1 makes the preload guard hold the loaded battery, so the one-shot rename failure hits the undo write. */
+    REQUIRE(player_slot_load(&pf.fx.store, pf.live, PLAYER_SLOT_SOURCE_SLOT, 1u).outcome == PLAYER_SLOT_LOADED);
+    host_save_io_test_fail_next(HOST_IO_ERENAME, EIO);
+    const player_slot_result result = player_slot_load(&pf.fx.store, pf.live, PLAYER_SLOT_SOURCE_SLOT, 2u);
+    /* The rollback was refused, so the machine holds slot 2: "nothing changed" would be false. */
+    REQUIRE(result.outcome == PLAYER_SLOT_RESTORE_FAILED);
+    REQUIRE(result.error != GBB_OK);
+    REQUIRE(live_state_is(pf.live, pf.s2, pf.s2_len));
+    char message[160];
+    player_slot_format_message(&result, message, sizeof(message));
+    REQUIRE(strstr(message, "nothing changed") == NULL);
+    pair_close(&pf);
+    return 0;
+}
+
+static int case_clock_failure(void) {
+    pair_fixture pf;
+    CHECK(pair_open(&pf));
+    const player_slot_result result = player_slot_load(&pf.fx.store, pf.live, PLAYER_SLOT_SOURCE_SLOT, 1u);
+    /* The load applied but the clock could not be read: re-anchoring at time 0 would swallow all input. */
+    REQUIRE(result.outcome == PLAYER_SLOT_RESTORE_FAILED);
+    REQUIRE(result.error != GBB_OK);
+    REQUIRE(result.clock.now_half_dots == 0u);
+    REQUIRE(live_state_is(pf.live, pf.s1, pf.s1_len));
+    pair_close(&pf);
+    return 0;
+}
+
 static int case_backup_write_failure(void) {
     pair_fixture pf;
     CHECK(pair_open(&pf));
@@ -1109,6 +1143,8 @@ static const slot_case g_cases[] = {
     {"refusal_symlink", case_refusal_symlink},
     {"undo_write_failure", case_undo_write_failure},
     {"backup_write_failure", case_backup_write_failure},
+    {"rollback_failure", case_rollback_failure},
+    {"clock_failure", case_clock_failure},
     {"undo_swap", case_undo_swap},
     {"no_undo", case_no_undo},
     {"battery_guard", case_battery_guard},

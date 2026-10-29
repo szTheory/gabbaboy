@@ -234,20 +234,29 @@ player_slot_result player_slot_load(player_slot_store *store, gbb_instance *inst
         goto done;
     }
 
-    /* Step 5: the undo snapshot. If it cannot be written, put the machine back. */
+    /* Step 5: the undo snapshot. If it cannot be written, put the machine back. A rollback that is itself
+     * refused leaves the loaded state live, so that is reported as RESTORE_FAILED and never as "nothing
+     * changed". */
     if (host_save_io_replace(store->dirfd, undo_name, snapshot, state_size) != HOST_IO_OK) {
-        (void)gbb_load_state(instance, snapshot, state_size);
-        result.outcome = PLAYER_SLOT_BACKUP_FAILED;
-        result.error = GBB_OK;
+        const gbb_error rollback = gbb_load_state(instance, snapshot, state_size);
+        result.outcome = rollback == GBB_OK ? PLAYER_SLOT_BACKUP_FAILED : PLAYER_SLOT_RESTORE_FAILED;
+        result.error = (int)rollback;
         goto done;
     }
 
-    /* Step 6: remember the battery of the loaded state and report the input clock to re-anchor to. */
+    /* Step 6: remember the battery of the loaded state and report the input clock to re-anchor to. An
+     * unreadable clock would re-anchor the player at time 0 on a machine far past it, so it is not LOADED. */
     record_guard(store, instance);
+    result.clock.struct_size = GBB_INPUT_CLOCK_SIZE_V1;
+    const gbb_error clock_error = gbb_get_input_clock(instance, &result.clock);
+    if (clock_error != GBB_OK) {
+        memset(&result.clock, 0, sizeof(result.clock));
+        result.outcome = PLAYER_SLOT_RESTORE_FAILED;
+        result.error = (int)clock_error;
+        goto done;
+    }
     result.outcome = source == PLAYER_SLOT_SOURCE_UNDO ? PLAYER_SLOT_UNDONE : PLAYER_SLOT_LOADED;
     result.error = GBB_OK;
-    result.clock.struct_size = GBB_INPUT_CLOCK_SIZE_V1;
-    (void)gbb_get_input_clock(instance, &result.clock);
 
 done:
     free(battery);
@@ -394,6 +403,9 @@ void player_slot_format_message(const player_slot_result *result, char *out, siz
     case PLAYER_SLOT_UNSAFE_INPUT:
         (void)snprintf(out, capacity, "%s contains unsafe queued input; nothing changed", subject);
         break;
+    case PLAYER_SLOT_RESTORE_FAILED:
+        (void)snprintf(out, capacity, "%s could not be fully applied; the game state may have changed", subject);
+        break;
     }
 }
 
@@ -414,6 +426,7 @@ void player_slot_format_log(const player_slot_result *result, char *out, size_t 
     case PLAYER_SLOT_REFUSED: token = "refused"; break;
     case PLAYER_SLOT_BACKUP_FAILED: token = "backup-failed"; break;
     case PLAYER_SLOT_UNSAFE_INPUT: token = "unsafe-input"; break;
+    case PLAYER_SLOT_RESTORE_FAILED: token = "restore-failed"; break;
     }
     const char *operation = "load";
     if (result->outcome == PLAYER_SLOT_SAVED || result->outcome == PLAYER_SLOT_SAVE_FAILED) operation = "save";

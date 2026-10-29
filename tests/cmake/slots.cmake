@@ -8,17 +8,27 @@
 # Generated ROMs, states and pref directories live under ${PROJECT_BINARY_DIR}/slots-work; nothing binary is
 # committed, because state bytes embed the release token.
 
-# gbb_slots_mutant(name anchor replacement case regex [PURE]): src/player/slots.c with one edit, built as its
-# own library and linked into a copy of test_slots (or of test_slots_pure with PURE). The anchor must occur
-# exactly once. The variant must exit 1 with its own `FAIL <case>` line, so a crash cannot satisfy it. The
-# executable is named `variant`, not `mutant`, because verify-core-linkage.py requires every target named
+# gbb_slots_mutant(name anchor replacement case regex [PURE] [PASS]): src/player/slots.c with one edit, built as
+# its own library and linked into a copy of test_slots (or of test_slots_pure with PURE). The anchor must occur
+# exactly once. A mutant must exit 1 with its own `FAIL <case>` line, so a crash cannot satisfy it. PASS makes the
+# edit a fault injection instead: the engine's own call is made to fail, which the shipped engine cannot be made
+# to do through the public API, and the variant must exit 0 with `regex` (named slot_fault_<name>). Every fault
+# has a mutant beside it that removes the handling under the same fault, so the fault test cannot pass vacuously.
+# The executable is named `variant`, not `mutant`, because verify-core-linkage.py requires every target named
 # *mutant* that links the acceptance helpers to carry a mutant core, and only the slot engine is mutated here.
 function(gbb_slots_mutant name anchor replacement case regex)
-  # The optional sixth argument PURE builds the variant from test_slots_pure.c instead of test_slots.c.
+  # Optional trailing keywords: PURE builds the variant from test_slots_pure.c instead of test_slots.c.
   set(pure FALSE)
-  if("${ARGV5}" STREQUAL "PURE")
-    set(pure TRUE)
-  endif()
+  set(expect_pass FALSE)
+  foreach(flag IN LISTS ARGN)
+    if(flag STREQUAL "PURE")
+      set(pure TRUE)
+    elseif(flag STREQUAL "PASS")
+      set(expect_pass TRUE)
+    else()
+      message(FATAL_ERROR "Slots mutant ${name}: unknown option ${flag}")
+    endif()
+  endforeach()
   file(READ "${PROJECT_SOURCE_DIR}/src/player/slots.c" text)
   string(FIND "${text}" "${anchor}" first)
   string(FIND "${text}" "${anchor}" last REVERSE)
@@ -54,16 +64,25 @@ function(gbb_slots_mutant name anchor replacement case regex)
   target_compile_features(${variant_target} PRIVATE c_std_17)
   set_target_properties(${variant_target} PROPERTIES C_EXTENSIONS OFF)
 
-  add_test(NAME slot_mutant_${name}
+  if(expect_pass)
+    set(test_name slot_fault_${name})
+    set(expect_code 0)
+  else()
+    set(test_name slot_mutant_${name})
+    set(expect_code 1)
+  endif()
+  add_test(NAME ${test_name}
     COMMAND ${CMAKE_COMMAND}
       "-DGBB_CMD=$<TARGET_FILE:${variant_target}>;${case}"
       "-DGBB_WORKDIR=${variant_workdir}"
-      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${regex}"
+      -DGBB_EXPECT_CODE=${expect_code} "-DGBB_EXPECT_REGEX=${regex}"
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
   # A mutant trips a REQUIRE, which returns early without freeing the fixture. Under phase1-asan on Linux,
   # LeakSanitizer would then exit through _exit with its own report, dropping the buffered `FAIL <case>` line,
   # so leak detection is off for this deliberately failing run only (as for the earlier mutant tests).
-  set_tests_properties(slot_mutant_${name} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+  if(NOT expect_pass)
+    set_tests_properties(${test_name} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+  endif()
 endfunction()
 
 # registers is removed from the Windows expectation in BOTH cmake/ExpectedTests.cmake and
@@ -124,9 +143,33 @@ if(NOT WIN32)
     battery_guard "FAIL battery_guard")
   # D-23 step 5: a failed undo write no longer rolls the machine back.
   gbb_slots_mutant(no_rollback
-    [=[(void)gbb_load_state(instance, snapshot, state_size);]=]
-    [=[(void)0;]=]
+    [=[const gbb_error rollback = gbb_load_state(instance, snapshot, state_size);]=]
+    [=[const gbb_error rollback = GBB_OK;]=]
     undo_write_failure "FAIL undo_write_failure")
+  # WR-01: a refused rollback is reported as RESTORE_FAILED, never as "nothing changed". The fault makes the
+  # rollback load fail; the mutant keeps that fault but returns to the old ignore-the-result handling.
+  gbb_slots_mutant(rollback_refused
+    [=[const gbb_error rollback = gbb_load_state(instance, snapshot, state_size);]=]
+    [=[const gbb_error rollback = GBB_STATE_CORRUPT;]=]
+    rollback_failure "PASS rollback_failure" PASS)
+  gbb_slots_mutant(rollback_ignored
+    [=[const gbb_error rollback = gbb_load_state(instance, snapshot, state_size);
+        result.outcome = rollback == GBB_OK ? PLAYER_SLOT_BACKUP_FAILED : PLAYER_SLOT_RESTORE_FAILED;]=]
+    [=[const gbb_error rollback = GBB_STATE_CORRUPT;
+        (void)rollback;
+        result.outcome = PLAYER_SLOT_BACKUP_FAILED;]=]
+    rollback_failure "FAIL rollback_failure")
+  # WR-01: an unreadable input clock after the load is RESTORE_FAILED, not a LOADED result that re-anchors at 0.
+  gbb_slots_mutant(clock_unreadable
+    [=[const gbb_error clock_error = gbb_get_input_clock(instance, &result.clock);]=]
+    [=[const gbb_error clock_error = GBB_STATE_CORRUPT;]=]
+    clock_failure "PASS clock_failure" PASS)
+  gbb_slots_mutant(clock_ignored
+    [=[const gbb_error clock_error = gbb_get_input_clock(instance, &result.clock);
+    if (clock_error != GBB_OK) {]=]
+    [=[const gbb_error clock_error = GBB_STATE_CORRUPT;
+    if (false && clock_error != GBB_OK) {]=]
+    clock_failure "FAIL clock_failure")
 
   # D-24: the plan ignores the restored queue, so the press is queued at now, which precedes the last
   # restored event and is refused.

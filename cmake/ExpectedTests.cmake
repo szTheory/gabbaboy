@@ -85,6 +85,10 @@ function(gabbaboy_verify_registered_tests)
       slot_mutant_preload_before_validate
       slot_mutant_no_guard
       slot_mutant_no_rollback
+      slot_fault_rollback_refused
+      slot_mutant_rollback_ignored
+      slot_fault_clock_unreadable
+      slot_mutant_clock_ignored
       slot_reanchor_later
       slot_reanchor_earlier
       slot_select_message

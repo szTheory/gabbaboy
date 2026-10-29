@@ -94,6 +94,10 @@ filter_expected_for_platform() {
         -e '/^slot_mutant_preload_before_validate$/d' \
         -e '/^slot_mutant_no_guard$/d' \
         -e '/^slot_mutant_no_rollback$/d' \
+        -e '/^slot_fault_rollback_refused$/d' \
+        -e '/^slot_mutant_rollback_ignored$/d' \
+        -e '/^slot_fault_clock_unreadable$/d' \
+        -e '/^slot_mutant_clock_ignored$/d' \
         -e '/^slot_reanchor_later$/d' \
         -e '/^slot_reanchor_earlier$/d' \
         -e '/^slot_select_message$/d' \
@@ -212,6 +216,10 @@ _self_test_platform_filter_cases() {
     slot_mutant_preload_before_validate \
     slot_mutant_no_guard \
     slot_mutant_no_rollback \
+    slot_fault_rollback_refused \
+    slot_mutant_rollback_ignored \
+    slot_fault_clock_unreadable \
+    slot_mutant_clock_ignored \
     slot_reanchor_later \
     slot_reanchor_earlier \
     slot_select_message \
@@ -331,6 +339,10 @@ _self_test_platform_filter_cases() {
     slot_mutant_preload_before_validate \
     slot_mutant_no_guard \
     slot_mutant_no_rollback \
+    slot_fault_rollback_refused \
+    slot_mutant_rollback_ignored \
+    slot_fault_clock_unreadable \
+    slot_mutant_clock_ignored \
     slot_reanchor_later \
     slot_reanchor_earlier \
     slot_select_message \

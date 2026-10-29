@@ -88,6 +88,9 @@ static int case_message_table(void) {
                            ? "Undo not applied: undo backup failed; nothing changed"
                            : "Slot 4 not loaded: undo backup failed; nothing changed");
 
+        (void)snprintf(want, sizeof(want), "%s could not be fully applied; the game state may have changed", subject);
+        EXPECT_MESSAGE(make_result(PLAYER_SLOT_RESTORE_FAILED, GBB_STATE_CORRUPT, slot, from), want);
+
         /* Every state error code maps to its own class; anything else is "could not be loaded". */
         for (int error = GBB_OK; error <= GBB_STATE_INVALID_CONTENT; ++error) {
             (void)snprintf(want, sizeof(want), "%s %s; nothing changed", subject, refusal_phrase(error));
@@ -143,7 +146,7 @@ static int case_message_table(void) {
         {PLAYER_SLOT_SAVE_FAILED, "save-failed"}, {PLAYER_SLOT_LOADED, "loaded"},
         {PLAYER_SLOT_EMPTY, "empty"},             {PLAYER_SLOT_NO_UNDO, "no-undo"},
         {PLAYER_SLOT_READ_FAILED, "read-failed"}, {PLAYER_SLOT_BACKUP_FAILED, "backup-failed"},
-        {PLAYER_SLOT_UNSAFE_INPUT, "unsafe-input"},
+        {PLAYER_SLOT_UNSAFE_INPUT, "unsafe-input"}, {PLAYER_SLOT_RESTORE_FAILED, "restore-failed"},
     };
     for (size_t i = 0u; i < sizeof(tokens) / sizeof(tokens[0]); ++i) {
         const player_slot_result one = make_result(tokens[i].outcome, GBB_OK, 2u, PLAYER_SLOT_SOURCE_SLOT);

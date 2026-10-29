@@ -1494,8 +1494,13 @@ static void handle_slot_key(player *app, player_slot_key_action action, unsigned
         result = player_slot_load(&app->slots, app->machine, PLAYER_SLOT_SOURCE_SLOT, app->selected_slot);
     else
         result = player_slot_load(&app->slots, app->machine, PLAYER_SLOT_SOURCE_UNDO, 0u);
-    if (result.outcome == PLAYER_SLOT_LOADED || result.outcome == PLAYER_SLOT_UNDONE)
+    if (result.outcome == PLAYER_SLOT_LOADED || result.outcome == PLAYER_SLOT_UNDONE) {
         apply_slot_load(app, &result);
+    } else if (result.outcome == PLAYER_SLOT_RESTORE_FAILED) {
+        /* The machine holds a state the player's input mirror knows nothing about; stop feeding it input. */
+        app->user_paused = true;
+        player_input_pause(&app->input);
+    }
     player_slot_format_message(&result, message, sizeof(message));
     set_slot_status(app, message);
     char log_line[160];
