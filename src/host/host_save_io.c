@@ -87,14 +87,37 @@ int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t wa
 }
 
 #ifdef GBB_HOST_TESTING
-/* Test builds only. RED stub: the injection arrives with the writer wiring. */
+/* Test builds only (gabbaboy_host_testing). One file-static, one-shot fault: the next writer call that
+ * reaches `stage` fails with `err`, mirroring session.c's consume_test_fault. The shipped library and
+ * the runner are built without GBB_HOST_TESTING and define none of these symbols. */
+static int test_fault_stage = HOST_IO_OK;
+static int test_fault_errno = 0;
+static unsigned test_sync_calls = 0u;
+
 void host_save_io_test_fail_next(int stage_code, int err) {
-    (void)stage_code;
-    (void)err;
+    test_fault_stage = stage_code;
+    test_fault_errno = err;
 }
 
-unsigned host_save_io_test_sync_calls(void) { return 0u; }
+unsigned host_save_io_test_sync_calls(void) { return test_sync_calls; }
+
+static bool consume_test_fault(int stage) {
+    if (test_fault_stage != stage) return false;
+    test_fault_stage = HOST_IO_OK;
+    errno = test_fault_errno;
+    return true;
+}
 #endif
+
+/* True when a test build asked this stage to fail (errno is already set); constant false otherwise. */
+static bool injected(int stage) {
+#ifdef GBB_HOST_TESTING
+    return consume_test_fault(stage);
+#else
+    (void)stage;
+    return false;
+#endif
+}
 
 static bool write_all(int fd, const uint8_t *bytes, size_t size) {
     size_t written = 0u;
@@ -111,6 +134,10 @@ static bool write_all(int fd, const uint8_t *bytes, size_t size) {
  * failure: after EIO the kernel may already have dropped the dirty pages, so a second success would
  * be a lie (D-09 step 3). */
 static int sync_file(int fd) {
+#ifdef GBB_HOST_TESTING
+    ++test_sync_calls;
+#endif
+    if (injected(HOST_IO_ESYNC)) return -1;
 #ifdef F_FULLFSYNC
     if (fcntl(fd, F_FULLFSYNC) == 0) return 0;
     if (errno != ENOTSUP && errno != ENOTTY && errno != EINVAL) return -1;
@@ -132,6 +159,7 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
     const long pid = (long)getpid();
     for (unsigned seq = 0u; seq < GBB_HOST_TEMP_RETRIES; ++seq) {
         (void)snprintf(temp, sizeof(temp), ".%s.tmp-%ld-%u", name, pid, seq);
+        if (injected(HOST_IO_ETEMP)) return HOST_IO_ETEMP;
         fd = openat(dirfd, temp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
         if (fd >= 0) break;
         if (errno != EEXIST) return HOST_IO_ETEMP;
@@ -141,15 +169,20 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
     int code = HOST_IO_OK;
     int failure_errno = 0;
     struct stat target;
-    if (!write_all(fd, bytes, len)) {
+    if (injected(HOST_IO_EWRITE) || !write_all(fd, bytes, len)) {
         code = HOST_IO_EWRITE;
         failure_errno = errno;
     } else if (sync_file(fd) != 0) {
         code = HOST_IO_ESYNC;
         failure_errno = errno;
     }
-    if (close(fd) != 0 && code == HOST_IO_OK) { /* checked, never retried */
+    const bool close_failed = close(fd) != 0 || injected(HOST_IO_ECLOSE); /* the real close always runs */
+    if (close_failed && code == HOST_IO_OK) { /* checked, never retried */
         code = HOST_IO_ECLOSE;
+        failure_errno = errno;
+    }
+    if (code == HOST_IO_OK && injected(HOST_IO_ETARGET)) {
+        code = HOST_IO_ETARGET;
         failure_errno = errno;
     }
     if (code == HOST_IO_OK) {
@@ -160,7 +193,7 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
             failure_errno = errno;
         }
     }
-    if (code == HOST_IO_OK && renameat(dirfd, temp, dirfd, name) != 0) {
+    if (code == HOST_IO_OK && (injected(HOST_IO_ERENAME) || renameat(dirfd, temp, dirfd, name) != 0)) {
         code = HOST_IO_ERENAME;
         failure_errno = errno;
     }
@@ -170,6 +203,7 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
         return code;
     }
     /* The rename happened. A directory-sync failure is reported but the temp is already the target. */
+    if (injected(HOST_IO_EDIRSYNC)) return HOST_IO_EDIRSYNC;
     if (fsync(dirfd) != 0 && errno != EINVAL && errno != ENOTSUP && errno != EOPNOTSUPP)
         return HOST_IO_EDIRSYNC;
     return HOST_IO_OK;
