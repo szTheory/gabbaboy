@@ -2,21 +2,21 @@
 status: complete
 phase: GB-18-player-save-slots-and-host-contract
 source: 18-01-SUMMARY.md, 18-02-SUMMARY.md, 18-03-SUMMARY.md, 18-04-SUMMARY.md, 18-05-SUMMARY.md, 18-06-SUMMARY.md, 18-07-SUMMARY.md, 18-08-SUMMARY.md, 18-09-SUMMARY.md
-started: 2026-10-29T11:29:03.677298+00:00
-updated: 2026-10-29T11:29:03.677298+00:00
+started: 2026-10-29T11:43:48.368564+00:00
+updated: 2026-10-29T11:43:48.368564+00:00
 ---
 
 ## Automated Evidence
 
 Phase 18 verification closed with no human checkpoint (DECISIONS D-069). Every deliverable below is copied from the coverage blocks of plan SUMMARYs 18-01..18-09, and every verification item is automated and passing. `tests/scripts/verify-uat-closure.py --write` wrote this closure, and its `--self-test` rejects weakened copies.
 
-- Regression gate: at `70a29b29`, after a fresh configure, rebuild and refreshed install prefix, the full suite passed 1676/1676 (`build/18-gate-ctest-70a29b29.log`). The player build (`build-player`, `^player_|^test_budget`) passed 110/110.
+- Regression gate: at `abd8ceed` (final code head), after a fresh configure, rebuild and refreshed install prefix, the full suite passed 1678/1678 (`build/18-gate-ctest-abd8ceed.log`). The player build (`build-player`, `^player_|^test_budget`) passed 110/110.
 - Phase verifier: `18-VERIFICATION.md` is a re-verification with status passed, score 4/4. Requirements PLAY-01 and HOST-01..03 are traced to plans and are Complete. The verifier read the round-2 diff `3b196457..70a29b29` and found no defect introduced.
 - Code review: `18-REVIEW.md` found 0 critical, 6 warning and 9 info findings. All 15 are `fixed` in `18-REVIEW-DISPOSITION.md`: WR-01..06 in round 1 and IN-01..09 in round 2, which is the D-102 cap. Each behavioural fix has a test with a negative control.
-- Found and fixed at verification: `test_budget` rejected six `player_slot_*` tests at TIMEOUT 120 (`135c6cc5`), and `planning_labels` rejected `host_signal_term` after IN-07 (`70a29b29`). See LESSONS GB-GSD-030.
+- Found and fixed at verification: `test_budget` rejected six `player_slot_*` tests at TIMEOUT 120 (`135c6cc5`, LESSONS GB-GSD-030), and `planning_labels` rejected `host_signal_term` after IN-07 (`70a29b29`). Hosted CI at `6f8e8f6a` failed `contract_rev_wiring` on every CMake 3.x lane, because 3.25.3 writes `add_test([=[name]=]`. The fix is `abd8ceed`, with two controls, confirmed against a real 3.25.3 CTestTestfile (LESSONS GB-CI-013). The package-smoke failures there were cascades.
 - API coverage: `COVERAGE.md` passes the `api-coverage` verify-pre gate.
 - Hosted evidence: exact-head CI for PR #132 is reconciled at the boundary and recorded in STATE.md and the continuation note, outside the verifier's covered files.
-- Superseded wording: the criteria below are copied verbatim from the plan SUMMARYs, and round 2 later changed three of them. Test 51's 2.0 s kill-to-wait ceiling was removed by IN-07 (`3eeec7da`), because a clock is not evidence. The stop is now proven by exit 0 and a byte-equal `--frames K` replay. Test 40: a non-regular slot entry now reads `unreadable` (IN-05, `a312201a`), and the stat-failure row stays `saved` per D-25. Test 53: exit row 1 now also covers a failed pacing clock (IN-06, `c125cc80`). The current tests, `host_signal_term`, `slot_select_message` and `host_exit_pacing_unavailable`, pass in the 1676/1676 run.
+- Superseded wording: the criteria below are copied verbatim from the plan SUMMARYs, and round 2 later changed three of them. Test 51's 2.0 s kill-to-wait ceiling was removed by IN-07 (`3eeec7da`), because a clock is not evidence. The stop is now proven by exit 0 and a byte-equal `--frames K` replay. Test 40: a non-regular slot entry now reads `unreadable` (IN-05, `a312201a`), and the stat-failure row stays `saved` per D-25. Test 53: exit row 1 now also covers a failed pacing clock (IN-06, `c125cc80`). The current tests, `host_signal_term`, `slot_select_message` and `host_exit_pacing_unavailable`, pass in the 1678/1678 run.
 
 Not passes: the player-build `core_linkage_links` and `core_linkage_controls` failures predate Phase 18 (present at the Phase 17 boundary `f4082a6`). No CI lane runs them. They are tracked as FUTURE-MILESTONES RM-031 and are not counted as Phase 18 evidence.
 

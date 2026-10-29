@@ -78,7 +78,7 @@ covered_files:
   - "tests/test_save_format_completeness.c"
   - "tests/test_slots.c"
   - "tests/test_slots_pure.c"
-covered_digest: "v4:sha256:b9ce65334b0bbd9168c25e91518c91cdacea8b20eb0a1444ed7f27d7299cf1c1"
+covered_digest: "v4:sha256:eb91cf370f57d701288429f1eee42aed9535efba3b5812c64375fdf987369304"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -96,7 +96,7 @@ re_verification:
 **Phase Goal:** Players can save and load numbered state slots in the SDL player without risking the running game, and a host process can drive the runner with a predictable save directory, atomic battery saves, a clean SIGTERM save-and-exit and documented exit codes and save formats.
 **Verified:** 2026-10-29
 **Status:** passed
-**Re-verification:** Yes. The prior report (head 1f749b01) went stale when review-fix rounds 1 and 2 changed covered files. This report is re-derived at head 80246140 (code head 70a29b29; 80246140 only adds `COVERAGE.md`).
+**Re-verification:** Yes. The prior report (head 1f749b01) went stale when review-fix rounds 1 and 2 changed covered files. This report was first re-derived at head 80246140 (code head 70a29b29) and refreshed at head abd8ceed, which adds one more fix (`cmake/CheckContractRevWiring.cmake`, see "Late commit abd8ceed"). 18-UAT.md (73 automated, 0 human) and 18-SECURITY.md (33/33 closed) were added since and are planning-root documents outside the covered set.
 
 ## Goal Achievement
 
@@ -151,7 +151,7 @@ REQUIREMENTS.md shows all four checked and "Complete".
 |----------|---------|--------|--------|
 | Phase 18 host, slot, save-format, contract, input-clock, no-host-clock, doc, inventory, planning and budget suites | `ctest --test-dir build -R "^(host_\|slot_\|save_format\|installed_host\|input_clock\|no_host_clock\|doc_no_interop\|native_guide_host\|cartridge_guide_slots\|readme_host\|summary_coverage\|state_format_contract\|state_portable\|contract_\|test_budget\|planning_labels\|inventory)"` | 192/192 passed; slowest `host_signal_decoy_pacing_ignored` at 15.05 s (a watchdog, under the 45 s budget) | PASS |
 | Player build | `ctest --test-dir build-player -R '^player_\|^test_budget'` | 110/110 passed | PASS |
-| Full suite at the code head | `build/18-gate-ctest-70a29b29.log` (orchestrator-run, not re-run by me) | "100% tests passed out of 1676", 0 Failed lines. The only change from 70a29b29 to 80246140 is `COVERAGE.md` | PASS |
+| Full suite at the final head | `build/18-gate-ctest-abd8ceed.log` (orchestrator-run, not re-run by me; the earlier 70a29b29 log was 1676) | "100% tests passed out of 1678", 0 Failed lines, fresh configure, rebuild and refreshed install prefix | PASS |
 | Real SIGTERM latency | one-off script driving `paced_spin` from `test_host_signals.py`, five runs | exit 0 each time, 9 to 38 ms, `.sav` 32,768 B | PASS |
 | Phase 18 test time budget | slowest Phase 18 tests in the gate log and my run | all under 45 s. Only non-Phase-18 tests exceed 45 s in the gate log (`workflow_policy_controls`, `v02_fuzz_controls`), and `test_budget` passes | PASS |
 
@@ -181,26 +181,33 @@ Round 1 (WR-01..WR-06) I also re-read where it touches the goal: the persisted b
 
 All 15 findings (0 critical, 6 warnings, 9 info) are `fixed` in `18-REVIEW-DISPOSITION.md` (`open: 0`), each with a CTest-wired check and a negative control per `18-REVIEW-FIX.md`. D-102's two-round cap is used up and nothing is left unresolved, so no rescope is forced.
 
+### Late commit abd8ceed (`git diff e2bbd576 abd8ceed -- cmake tests`)
+
+Reviewed for correctness; no defect found.
+
+- **Cause:** CMake 3.25.3 (the floor, and the hosted runners) writes `add_test([=[name]=] ...)` into `CTestTestfile.cmake`, while the local CMake 4 writes `add_test("name" ...)`. The old `contract_rev_wiring` regex matched only the quoted form, so it failed on every CMake 3.x lane at 6f8e8f6a.
+- **Fix:** the regex is now `add_test\((\"|\[=*\[)?NAME(\"|\]=*\]|[ \t])[^\n]*`, so it accepts the quoted, bracket and bare forms. The name must end at a quote, a bracket or a space/tab. A longer name that merely starts with the wanted one (`host_contract_docs_control`, `save_format_files_extra`) therefore still does not match. Test names are alphanumeric plus underscore, so no regex metacharacter can leak in. The match stays on one line, and the later `--rev` extraction is unchanged. The opening and closing delimiters are not required to pair, which is looser than strictly necessary but cannot produce a false pass for a wrongly registered name.
+- **Tests:** `contract_rev_wiring_bare_form` (a bare name and a bracket name in one file, both must pass with `tests=2 rev=HEAD`; it fails on the old checker) and `contract_rev_wiring_bare_prefix_control` (only a longer-named test is registered, so the checker must report "test save_format_files is not registered"). Both are in `tests/expected-tests.txt`. I re-ran `contract_rev_wiring*`: 5/5 pass in `build`. The coordinator confirmed the fix against a `CTestTestfile.cmake` generated by the official CMake 3.25.3.
+- **Full suite:** `build/18-gate-ctest-abd8ceed.log`: "100% tests passed out of 1678", 0 Failed lines, after a fresh configure, rebuild and refreshed install prefix. This replaces the 1676-test log at 70a29b29 as the full-suite evidence.
+
 ### Hosted CI (PR #132)
 
-Machine-checked with `gh pr checks 132` and `gh pr view 132`. The PR head and the remote branch are 70a29b29 (the local-only 80246140 adds `COVERAGE.md` and is not pushed).
+Machine-checked with `gh pr checks 132`, `gh pr view 132` and `gh run list`. The PR head and the local HEAD are abd8ceed.
 
-- Run sets for 70a29b29 (`ci` 40864481966 and 40864488739, `preview-package-smoke` 40864488975): 22 checks SUCCESS, 11 IN_PROGRESS, 5 QUEUED, 3 SKIPPED, **0 failing**. Passing already include `linux-asan-ubsan`, `perf-gate`, `player-gate` and every `*-repro` lane.
-- Pending at the time of check: `native-linux-x64`, `native-macos-arm64`, `native-windows-x64`, `linux-asan-ubsan-tests`, `linux-asan-ubsan-acceptance`, `cmake-floor-3.25.3`, `macos-player-package`, `installed-package-smoke-*`.
-- Three checks show SKIPPED (`planning-checks` twice, `macos-player-package` once). Per AGENTS.md a skipped check is not proof, so the orchestrator should confirm those after the lanes settle.
-- The earlier red `ci` run on 6f8e8f6a is superseded by the test_budget and planning_labels fixes (135c6cc5, 70a29b29).
+- **Earlier failure explained:** the red `ci` run at 6f8e8f6a failed `contract_rev_wiring` on every CMake 3.x lane. That was the CMake-version format gap fixed in abd8ceed, not a defect in the delivered behaviour. The package-smoke failures were cascades from it, because those jobs wait for an exact-head green `ci` run.
+- **Current state at abd8ceed:** 22 checks SUCCESS, 16 IN_PROGRESS, 3 SKIPPED, **0 failing**. `fixture-repro` is complete and green. The `ci` and `preview-package-smoke` runs for abd8ceed were still in progress when I checked. The previous head 6662cef3 shows its `ci` and `preview-package-smoke` runs cancelled (superseded by the new push), not failed.
+- Three checks show SKIPPED. Per AGENTS.md a skip is not proof, so the orchestrator should confirm those once the lanes settle.
 
-**Pending CI evidence, not a human item.** The orchestrator re-checks `gh pr checks 132` at closure. If any lane fails on 70a29b29, that is a new gap to reopen. I saw none failing.
+**Pending CI evidence, not a human item.** The orchestrator re-checks `gh pr checks 132` at closure. A failing lane on abd8ceed would reopen the phase. I saw none failing.
 
 ### Notes (not gaps)
 
 - **Pre-existing player-build failures:** `core_linkage_links` and `core_linkage_controls` fail on the player build. They are present at the Phase 17 boundary f4082a6 with an unchanged checker, are tracked as RM-031 in `.planning/context/FUTURE-MILESTONES.md`, and CI runs only `^player_` on the player build. I did not run them and take the orchestrator's confirmation.
 - **SC-3 wall-clock:** the repo no longer asserts the 2 s bound by design (see Truth 3). The latency is bounded by one frame period plus a bounded write, and I observed 9 to 38 ms.
-- **Unpushed commit:** 80246140 (`COVERAGE.md`) is local only; the covered digest includes it as a phase document. Push it with the next push.
 
 ### Gaps Summary
 
-No gaps. All four success criteria and all four requirement IDs are backed by implementation I read and tests I re-ran at the current head, and the round-2 diff introduces no correctness defect. The remaining item is hosted CI on 70a29b29, which is machine-checkable, shows no failure so far, and is for the orchestrator to re-check.
+No gaps. All four success criteria and all four requirement IDs are backed by implementation I read and tests I re-ran at the current head, and the round-2 diff introduces no correctness defect. The remaining item is hosted CI on abd8ceed, which is machine-checkable, shows no failure so far, and is for the orchestrator to re-check.
 
 ---
 
