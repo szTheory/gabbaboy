@@ -101,3 +101,13 @@ None. Every phase behavior has automated verification (D-069). The owner-only de
 - [ ] `nyquist_compliant: true` set in frontmatter
 
 **Approval:** pending
+
+## Wave 1 Integration Evidence
+
+The full phase1 build and 1,681-test run at `01e3354a279a68158735b02cd42386e9cb837620` found 19 failed or dependency-blocked cases. This was a failing integration run, not a release qualification pass. The original JUnit is `build/phase19-wave1.xml`.
+
+- State inventory parsing and invariant-aware count poisoning were repaired in `7efc2c3da28d3edfcb3416d4f5cfbc401c0863ac`; the affected state selection passed 48/48, including all fork-mutant shards and their dependencies. Evidence is recorded in 19-02-SUMMARY.md.
+- The new adoption test's timeout returned to 60 seconds, and performance floor validation now binds the original policy receipt at the immutable limits base in `3d6e0a6debb7c3a2b31b8acb7b268cacfd96dd5a`. Limits and the refreshed notes receipt were unchanged. Fifteen focused cases passed; the remaining approval case was sandbox-blocked. Evidence is recorded in 19-03-SUMMARY.md and `build/phase19-wave1-perf-fix-3d6e0a6d.xml`.
+- At `cb1bb07440f8df5cf1c845eb8c638b86c673bdb4`, the scoped rerun with access for temporary Git worktrees passed 3/3: `v02_performance_controls`, `v02_delivery_controls`, and `release_review_approval`. JUnit: `build/phase19-wave1-sandbox-rerun.xml`.
+
+All failures from the Wave 1 run are covered by these repairs and focused reruns. Schema/UI gates were non-blocking; codebase drift skipped because no structure map exists. This closes Wave 1 integration only; REL-01 and phase verification remain pending.

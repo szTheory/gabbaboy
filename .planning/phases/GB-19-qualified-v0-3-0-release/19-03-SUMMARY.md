@@ -199,6 +199,8 @@ The first post-commit CTest run was configured with the default symbolic `HEAD`,
 
 ## User Setup Required
 
+The orchestrator resolved the Wave 1 sandbox limitation at `cb1bb07440f8df5cf1c845eb8c638b86c673bdb4`: a scoped rerun passed 3/3 (`v02_performance_controls`, `v02_delivery_controls`, `release_review_approval`). Evidence: `build/phase19-wave1-sandbox-rerun.xml`. The earlier failed and blocked runs remain recorded above.
+
 None.
 
 ## Next Phase Readiness
