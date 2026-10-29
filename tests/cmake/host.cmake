@@ -469,3 +469,36 @@ if(NOT WIN32)
   gbb_add_host_signal_decoy(host_signal_decoy_in_place_write gabbaboy-runner-hostvariant-in_place_write
     crash-storm "round [0-9]+: a completed flush kept inode")
 endif()
+
+# ---- D-18: the core carries no signal code (portable: the script reads symbols with nm, llvm-nm or dumpbin) ----
+# CheckCoreNoHostClock.cmake denies signal, sigaction, raise, kill, sigprocmask, pthread_sigmask, alarm and
+# setitimer at the source layer (a call token) and at the object layer (an undefined symbol). Two seeded
+# controls fail for their own token. The object control is compiled with the project's strict flags
+# (c_std_17, C_EXTENSIONS OFF) and declares `kill` itself, so no <signal.h> is involved and only the symbol
+# layer can catch it; the source control calls sigaction.
+set(GBB_SIGNAL_SEED_DIR "${PROJECT_BINARY_DIR}/no-host-clock-signal-seed")
+file(MAKE_DIRECTORY "${GBB_SIGNAL_SEED_DIR}" "${GBB_SIGNAL_SEED_DIR}/clean" "${GBB_SIGNAL_SEED_DIR}/call")
+file(WRITE "${GBB_SIGNAL_SEED_DIR}/seed.c"
+  "/* Seeded control: an object that imports kill without including a signal header. */\n"
+  "int kill(int, int);\n"
+  "int signal_seed_probe(void) { return kill(0, 0); }\n")
+file(WRITE "${GBB_SIGNAL_SEED_DIR}/clean/clean.c" "int signal_seed_clean(void) { return 0; }\n")
+file(WRITE "${GBB_SIGNAL_SEED_DIR}/call/bad.c"
+  "int host_install(void) { return sigaction(15, 0, 0); }\n")
+add_library(no_host_clock_signal_seed STATIC "${GBB_SIGNAL_SEED_DIR}/seed.c")
+target_compile_features(no_host_clock_signal_seed PRIVATE c_std_17)
+set_target_properties(no_host_clock_signal_seed PROPERTIES C_EXTENSIONS OFF)
+
+add_test(NAME no_host_clock_signal_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIRS=${GBB_SIGNAL_SEED_DIR}/clean;-DGBB_CORE_LIBRARY=$<TARGET_FILE:no_host_clock_signal_seed>;-DGBB_NM=${CMAKE_NM};-DGBB_LINKER=${CMAKE_LINKER};-DGBB_C_COMPILER=${CMAKE_C_COMPILER};-P;${GBB_NO_HOST_CLOCK_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=no-host-clock-symbol: kill"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+
+add_test(NAME no_host_clock_signal_call_selftest
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_SOURCE_DIRS=${GBB_SIGNAL_SEED_DIR}/call;-DGBB_SYMBOLS_FILE=;-P;${GBB_NO_HOST_CLOCK_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=no-host-clock-call: [^\n]*bad[.]c [(]sigaction[)]"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
