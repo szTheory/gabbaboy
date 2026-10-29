@@ -5,18 +5,18 @@ milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
 status: executing
-stopped_at: Phase 19 planned
-last_updated: "2026-10-29T17:03:30.182Z"
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-10-29T18:33:12.943Z"
 last_activity: 2026-10-29
-last_activity_desc: Phase 18 verified (UAT 73/73 automated, 0 human; verification passed 4/4; security 33/33 closed; Nyquist-compliant); exact-head CI green at abd8ceed
-state_head: cc3460a469c66b022507a3b69956f94f7924be5b
+last_activity_desc: Plan 19-01 complete; ready for 19-02
+state_head: 6b35be140b9c5823f0a1866601e8133cb012525b
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 34
-  completed_plans: 27
+  completed_plans: 28
   percent: 75
-current_plan: 0
+current_plan: 2
 ---
 
 # Project State
@@ -30,12 +30,12 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 ## Current Position
 
-Phase: 19 (Qualified v0.3.0 Release) — READY TO EXECUTE
-Plan: Not started
+Phase: 19 (Qualified v0.3.0 Release) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-10-29 — Phase 19 planned (7 plans in 5 waves; 19-08 reserved gap slot); next is Phase 19 execution
+Last activity: 2026-10-29 — Plan 19-01 complete; ready for 19-02
 
-Completed stage: **Phase 19 planning (plan-phase)**. Research (19-RESEARCH.md, OQ-1..OQ-5 resolved), validation strategy (19-VALIDATION.md), pattern map and plans [19-01..19-07](phases/GB-19-qualified-v0-3-0-release/) are written: W1 19-01/02/03 (run serially), W2 19-04, W3 19-05, W4 19-06 (pre-flight + PR A), W5 19-07 (window, tag, publish, PR B); 19-08 is the reserved gap slot (D-27). Decision coverage 30/30; REL-01 in all plans. Plan check ran 3 revision rounds plus 2 owner-guided narrow rounds; the owner waived the 15-file/four-task per-plan threshold for 19-01, 19-04..19-07. Carried plan-check items (fix during execution) are listed at the end of 19-05 (receipt `build/` dir blocker, Ir verdict order), 19-06 (judge checkout depth, worktree assertion) and 19-07 (L-4 timing record). No implementation is claimed; PR #131 must not be merged before the D-26 sequence. Next stage: **Phase 19 — Qualified v0.3.0 Release, execution**. Command: `/gsd-execute-phase 19`, run only when the owner chooses. Both automatic advance flags stay false.
+Completed stage: **Phase 19 execution, plan 19-01**. [19-01-SUMMARY.md](phases/GB-19-qualified-v0-3-0-release/19-01-SUMMARY.md) records the four task commits and automated evidence for timeout-ledger citations, release-head object retention, player linkage and CI trust pins. The six former `release_bound` rows and RM-031 linkage findings are closed; two SDL menu-shortcut tests remain unverified on the available headless host. The exact v0.3.0 tag is not published, so REL-01 remains pending. Next stage: **Phase 19 execution, plan 19-02 — Review leftovers and state conversion**. Run Wave 1 serially (19-02 then 19-03), then continue the planned waves; execution stops at the PR B boundary and then routes to `/gsd-verify-work 19`. Exact next command: `/gsd-execute-phase 19`, when the owner chooses. Both automatic advance flags stay false.
 
 Prior stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
 
@@ -49,6 +49,8 @@ Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false; sto
 Runtime configuration (2026-10-26): owner switched future OpenGSD work to Codex, retaining the `adaptive` profile. Heavy/opus uses `gpt-6.1-sol` at `high` effort; standard/sonnet and light/haiku use `gpt-6-luna` at `xhigh` effort. Project `.planning/config.json` is authoritative; resolve each role's model and effort before dispatch. This configuration change does not start Phase 17.
 
 Runtime configuration (2026-10-28): owner moved OpenGSD work from Codex to Claude Code (`runtime: claude`, `adaptive` profile; opus/sonnet/haiku resolve to `claude-opus-5-5`/`claude-sonnet-5-5`/`claude-haiku-5-5`). The stale Codex `milestone.lock` and its uncommitted `state.json` route regression are left for owner cleanup.
+
+Runtime configuration (2026-10-29, current): owner switched future OpenGSD work back to **Codex**, retaining the **adaptive** profile. Heavy/opus uses `gpt-6.1-sol` at `high` effort; standard/sonnet and light/haiku use `gpt-6-luna` at `xhigh` effort. Project `.planning/config.json` is authoritative; retain the Claude mappings for future switches and resolve both model and effort before each dispatch. Completed workflow stage remains **Phase 19 planning**; next is **Phase 19 — Qualified v0.3.0 Release, execution**, command `/gsd-execute-phase 19`, only when the owner chooses. Both automatic advance flags remain false.
 
 ## Accumulated Context
 
@@ -77,6 +79,9 @@ Historical decisions, including the per-plan records of Phases 1-16, moved to [v
 - [Phase 18]: 18-08: a re-sorted canonical JSON is still self-consistent, so canonical form also requires keys in the written order (REJECT non-canonical); the table claims no emulator interoperability (REJECT interop-claim)
 - [Phase 18]: 18-09: installed_host_smoke is a stdlib Python harness (NUL bytes cannot be held in CMake strings); the interop-claim scan is its own planning-labelled script
 - [Phase 18]: 18-09: five planner discretion choices recorded as D-115..D-119 in DECISIONS.md; Linux LeakSanitizer fix for deliberately failing mutants routed to 18-02 and 18-05 (detect_leaks=0)
+- [Phase 19]: Release-head object retention applies to tree-equal citations only; plain rows can cite merged PR heads no longer present in the checkout.
+- [Phase 19]: Keep package settings unchanged and use a distinct Debug player build for linkage identity checks.
+- [Phase 19]: REL-01 remains pending until exact v0.3.0 publication and readback; 19-01 closes only release-entry work.
 
 ### Pending Todos
 
@@ -111,9 +116,9 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T13:18:12.680Z
-**Stopped at:** Phase 19 context gathered
-**Resume file:** .planning/phases/GB-19-qualified-v0-3-0-release/19-CONTEXT.md
+**Last session:** 2026-10-29T18:33:12.831Z
+**Stopped at:** Completed 19-01-PLAN.md
+**Resume file:** .planning/phases/GB-19-qualified-v0-3-0-release/19-02-PLAN.md
 
 Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Plan 18-04 (host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep) is complete at `8335fba` with SUMMARY `ac01321`; full suite 1581/1581. Plan 18-05 (SDL-free slot engine) is complete at `4c9962b` with SUMMARY `f246619`; full suite 1610/1610. Plan 18-06 (player slot keys, status line, input rebase, help/limitations, macOS menu-shortcut scan) is complete at `67bb2bd` with SUMMARY `60acda6`; player suite 106/106 through `--build-package`, main suite 1610/1610 after reconfiguring the revision-pinned tests. Plan 18-07 (SIGTERM/SIGINT/SIGHUP handling, exit table, real-signal harness with decoys, core no-signal check) is complete at `64c6749b` with SUMMARY `1ff9698a`; full suite 1628/1628. Plan 18-08 (`docs/host-contract.json`, `--print-save-format`, save-format completeness/produced-file/freeze checks with 36 seeded controls) is complete at `c2239bef` with SUMMARY `5266f422`; full suite 1637/1637 at `befd624c`. Next plan within Phase 18: **18-09 — installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification** (wave 8, the last primary plan). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
 
@@ -137,3 +142,4 @@ Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**.
 | Phase 18 P07 | 18 min | 3 tasks | 13 files |
 | Phase 18 P08 | 17min | 3 tasks | 13 files |
 | Phase 18 P09 | 50 min | 3 tasks | 18 files |
+| Phase 19 P01 | 35min | 4 tasks | 8 files |
