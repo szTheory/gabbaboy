@@ -379,6 +379,13 @@ if(NOT WIN32)
   gbb_host_save_mode_mutant(sweep_single_pass host_save_io.c sweep_batches
     "if (!full || pass_removed == 0) break;" "break;")
 
+  # IN-02: every name the writer accepts has a temp that fits NAME_MAX, and a longer one is refused with EINVAL
+  # before any file exists. The control restores the old 240-byte cap.
+  add_test(NAME host_writer_name_cap COMMAND test_host_save_mode name_cap)
+  set_tests_properties(host_writer_name_cap PROPERTIES PASS_REGULAR_EXPRESSION "PASS name_cap")
+  gbb_host_save_mode_mutant(name_cap_240 host_save_io.c name_cap
+    "name_len > GBB_HOST_REPLACE_NAME_MAX" "name_len > 240u")
+
   # ---- D-09/T-18-13: no fault seam in any shipped artifact ----
   # The shipped archive and the runner must define no host_save_io_test_ symbol; the same check on the
   # test-seam archive must reject it, so the check cannot pass vacuously.

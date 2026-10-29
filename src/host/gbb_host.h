@@ -29,6 +29,11 @@
 /* The longest stem keeps `.<stem>.sav.tmp-<pid>-<seq>` inside NAME_MAX (255). */
 #define GBB_HOST_STEM_MAX_BYTES 200u
 #define GBB_HOST_TEMP_RETRIES 16u
+/* The longest name host_save_io_replace accepts: `<stem>.sav` at the longest stem. Its temp
+ * `.<name>.tmp-<pid>-<seq>` adds 1 + 5 bytes, at most 20 for the pid and 3 for `-<seq>`, which stays inside
+ * NAME_MAX (255); host_save_io.c asserts that at compile time. A longer name is refused before any file
+ * is created, instead of failing later at the temp create with ENAMETOOLONG. */
+#define GBB_HOST_REPLACE_NAME_MAX (GBB_HOST_STEM_MAX_BYTES + 4u)
 
 /* D-11 cadence, in host frames. A generation change flushes after 16 quiet frames, or once the first
  * unflushed change is 300 frames old; the image is exported and compared every 3,600 frames. */

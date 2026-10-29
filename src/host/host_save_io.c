@@ -180,11 +180,17 @@ static int sync_file(int fd) {
     return fsync(fd);
 }
 
+/* `.` + name + `.tmp-` + a long pid (at most 20 bytes with its sign) + `-` + a sequence below
+ * GBB_HOST_TEMP_RETRIES (two digits) must fit NAME_MAX for every name the writer accepts. */
+_Static_assert(GBB_HOST_TEMP_RETRIES <= 100u, "a temp sequence number must stay at two digits");
+_Static_assert(1u + GBB_HOST_REPLACE_NAME_MAX + 5u + 20u + 1u + 2u <= 255u,
+               "the temp name of the longest accepted name must fit NAME_MAX");
+
 int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size_t len) {
     if (name == NULL || (bytes == NULL && len != 0u)) { errno = EINVAL; return HOST_IO_ETEMP; }
     const size_t name_len = strlen(name);
     /* The name is one component of a host-built stem; a separator would escape the directory. */
-    if (name_len == 0u || name_len > 240u || strchr(name, '/') != NULL) {
+    if (name_len == 0u || name_len > GBB_HOST_REPLACE_NAME_MAX || strchr(name, '/') != NULL) {
         errno = EINVAL;
         return HOST_IO_ETEMP;
     }

@@ -1,6 +1,6 @@
 /* Writer and sweep behaviour checked without the fault seams.
  *
- *   test_host_save_mode preserve_mode|sweep_batches
+ *   test_host_save_mode preserve_mode|sweep_batches|name_cap
  *
  * A separate program from test_host_save_io so a mutant host library (built without GBB_HOST_TESTING) can be
  * linked against the same cases. Prints `PASS <case>` or `FAIL <case>: file:line expr`. POSIX only.
@@ -10,13 +10,17 @@
  *                  (0644, 0664) or read by a supervisor under another uid. A first write stays 0600.
  *   sweep_batches  IN-01: the sweep collects names before it unlinks them, at most one fixed batch per pass, and
  *                  still removes every stale temp when there are more than a batch; a pass that removes nothing
- *                  (temp-named directories, which unlinkat cannot remove) ends the sweep. */
+ *                  (temp-named directories, which unlinkat cannot remove) ends the sweep.
+ *   name_cap       IN-02: the longest name host_save_io_replace accepts is written (its temp fits NAME_MAX), and
+ *                  a longer one is refused with EINVAL before anything is created. */
 #define _POSIX_C_SOURCE 200809L
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
 #endif
 #include "gbb_host.h"
 
+#include <dirent.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -149,9 +153,72 @@ static int sweep_batches(void) {
     return result;
 }
 
+/* True when the directory holds no entries, not counting . and .. (read through a duplicate descriptor). */
+static bool directory_empty(int dirfd) {
+    const int duplicate = dup(dirfd);
+    if (duplicate < 0) return false;
+    DIR *directory = fdopendir(duplicate);
+    if (directory == NULL) { (void)close(duplicate); return false; }
+    rewinddir(directory);
+    bool empty = true;
+    struct dirent *entry;
+    while ((entry = readdir(directory)) != NULL)
+        if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) empty = false;
+    (void)closedir(directory);
+    return empty;
+}
+
+static int name_cap_in(int dirfd) {
+    uint8_t image[IMAGE_BYTES];
+    memset(image, 0x42, sizeof(image));
+    char name[GBB_HOST_REPLACE_NAME_MAX + 64u];
+
+    /* The longest accepted name is written, and its temp fitted (the write succeeded and left no temp). */
+    memset(name, 'a', GBB_HOST_REPLACE_NAME_MAX);
+    name[GBB_HOST_REPLACE_NAME_MAX] = '\0';
+    REQUIRE(host_save_io_replace(dirfd, name, image, sizeof(image)) == HOST_IO_OK);
+    REQUIRE(exists(dirfd, name));
+    REQUIRE(unlinkat(dirfd, name, 0) == 0);
+    REQUIRE(directory_empty(dirfd));
+
+    /* One byte more, and the old 240-byte cap, are refused up front: EINVAL, nothing created. The old cap let
+     * names through whose temp could exceed NAME_MAX, which failed later as a temp-stage ENAMETOOLONG. */
+    static const size_t refused[] = {GBB_HOST_REPLACE_NAME_MAX + 1u, 240u};
+    for (size_t i = 0u; i < sizeof(refused) / sizeof(refused[0]); ++i) {
+        memset(name, 'b', refused[i]);
+        name[refused[i]] = '\0';
+        errno = 0;
+        REQUIRE(host_save_io_replace(dirfd, name, image, sizeof(image)) == HOST_IO_ETEMP);
+        REQUIRE(errno == EINVAL);
+        REQUIRE(!exists(dirfd, name));
+        REQUIRE(directory_empty(dirfd));
+    }
+    return 0;
+}
+
+static int name_cap(void) {
+    char root[512];
+    REQUIRE(make_root(root, sizeof(root), "name-cap"));
+    int dirfd = -1;
+    REQUIRE(host_save_io_open_dir(root, &dirfd) == HOST_IO_OK);
+    const int result = name_cap_in(dirfd);
+    char name[GBB_HOST_REPLACE_NAME_MAX + 64u];
+    static const struct { char fill; size_t length; } leftovers[] = {
+        {'a', GBB_HOST_REPLACE_NAME_MAX}, {'b', GBB_HOST_REPLACE_NAME_MAX + 1u}, {'b', 240u}
+    };
+    for (size_t i = 0u; i < sizeof(leftovers) / sizeof(leftovers[0]); ++i) {
+        memset(name, leftovers[i].fill, leftovers[i].length);
+        name[leftovers[i].length] = '\0';
+        (void)unlinkat(dirfd, name, 0);
+    }
+    (void)close(dirfd);
+    (void)rmdir(root);
+    return result;
+}
+
 int main(int argc, char **argv) {
     static const struct { const char *name; int (*run)(void); } cases[] = {
-        {"preserve_mode", preserve_mode}, {"sweep_batches", sweep_batches}
+        {"preserve_mode", preserve_mode}, {"sweep_batches", sweep_batches}, {"name_cap", name_cap}
     };
     if (argc == 2) {
         for (size_t i = 0u; i < sizeof(cases) / sizeof(cases[0]); ++i) {
@@ -162,6 +229,6 @@ int main(int argc, char **argv) {
             return 0;
         }
     }
-    fprintf(stderr, "usage: test_host_save_mode preserve_mode|sweep_batches\n");
+    fprintf(stderr, "usage: test_host_save_mode preserve_mode|sweep_batches|name_cap\n");
     return 2;
 }
