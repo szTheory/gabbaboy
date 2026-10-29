@@ -117,8 +117,68 @@ def scenario_continuation(runner: str, work: Path) -> None:
     forbid_work_path(base, out, err)
 
 
+def expect_refusal(code: int, stdout: str, stderr: str, reason: str, *forbidden: str) -> None:
+    """A start-up refusal: exit 2, its own `gbb-host: refused reason=` token, no frame ever ran."""
+    require(code == 2, f"exit {code}, expected 2: {stderr.strip()!r}")
+    require(f"gbb-host: refused reason={reason}\n" in stderr,
+            f"missing 'gbb-host: refused reason={reason}': {stderr.strip()!r}")
+    require("gbb-host: ready" not in stderr, "a refused run must not print 'gbb-host: ready'")
+    for token in forbidden:
+        require(token not in stderr, f"unexpected {token!r} in a {reason} refusal")
+
+
+def scenario_rom_max(runner: str, work: Path) -> None:
+    """D-04: the host ROM bound is the core's 8 MiB, not the 32 KiB acceptance cap."""
+    base = fresh_dir(work)
+    rom = base / "maxrom.gb"
+    saves = fresh_dir(base / "saves")
+    try:
+        data = host_fixture.build_rom("write5a", MBC5_RAM_BATTERY, RAM_8K, rom_code=8)
+        require(len(data) == 8 * 1024 * 1024, "fixture is not exactly 8 MiB")
+        rom.write_bytes(data)
+        code, out, err = run(runner, rom, saves, 2, base)
+        expect_clean_exit(code, err, 2)
+        image = (saves / "maxrom.sav").read_bytes()
+        require(len(image) == 8192, f"image is {len(image)} bytes, expected 8192")
+        require(image[0] == 0x5A, f"byte 0 is {image[0]:#04x}, expected 0x5a")
+        require(listing(saves) == ["maxrom.sav"], f"unexpected directory entries {listing(saves)}")
+        forbid_work_path(base, out, err)
+    finally:
+        rom.unlink(missing_ok=True)  # an 8 MiB image has no business surviving the scenario
+
+
+def scenario_rom_oversize(runner: str, work: Path) -> None:
+    """D-04: one byte over 8 MiB is refused by the host (rom-size) before the core ever sees it."""
+    base = fresh_dir(work)
+    rom = base / "oversize.gb"
+    saves = fresh_dir(base / "saves")
+    try:
+        rom.write_bytes(host_fixture.build_rom("write5a", MBC5_RAM_BATTERY, RAM_8K, rom_code=8) + b"\x00")
+        require(rom.stat().st_size == 8 * 1024 * 1024 + 1, "fixture is not exactly 8 MiB + 1")
+        code, out, err = run(runner, rom, saves, 2, base)
+        # rom-unsupported would mean the core, not the host cap, refused the image.
+        expect_refusal(code, out, err, "rom-size", "reason=rom-unsupported")
+        require(listing(saves) == [], f"refused run changed the save directory: {listing(saves)}")
+        forbid_work_path(base, out, err)
+    finally:
+        rom.unlink(missing_ok=True)
+
+
+def scenario_rom_unreadable(runner: str, work: Path) -> None:
+    """A missing ROM is rom-unreadable, never a crash and never a created save."""
+    base = fresh_dir(work)
+    saves = fresh_dir(base / "saves")
+    code, out, err = run(runner, base / "absent.gb", saves, 2, base)
+    expect_refusal(code, out, err, "rom-unreadable", "reason=rom-size", "reason=rom-unsupported")
+    require(listing(saves) == [], f"refused run changed the save directory: {listing(saves)}")
+    forbid_work_path(base, out, err)
+
+
 SCENARIOS = {
     "continuation": scenario_continuation,
+    "rom-max": scenario_rom_max,
+    "rom-oversize": scenario_rom_oversize,
+    "rom-unreadable": scenario_rom_unreadable,
 }
 
 

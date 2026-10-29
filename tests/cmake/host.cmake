@@ -21,4 +21,7 @@ endfunction()
 
 if(NOT WIN32)
   gbb_add_host_mode_test(host_continuation continuation)
+  gbb_add_host_mode_test(host_rom_max_size rom-max)
+  gbb_add_host_mode_test(host_rom_oversize rom-oversize)
+  gbb_add_host_mode_test(host_rom_unreadable rom-unreadable)
 endif()

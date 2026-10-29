@@ -1495,3 +1495,6 @@ state_purity_mutant_save_overwrites_tail_control
 planning_hygiene_controls
 playstead_docs
 host_continuation
+host_rom_max_size
+host_rom_oversize
+host_rom_unreadable

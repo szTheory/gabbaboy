@@ -28,6 +28,9 @@ filter_expected_for_platform() {
         -e '/^perf_advisory_pipeline$/d' \
         -e '/^perf_advisory_controls$/d' \
         -e '/^host_continuation$/d' \
+        -e '/^host_rom_max_size$/d' \
+        -e '/^host_rom_oversize$/d' \
+        -e '/^host_rom_unreadable$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -57,6 +60,9 @@ _self_test_platform_filter_cases() {
     perf_advisory_pipeline \
     perf_advisory_controls \
     host_continuation \
+    host_rom_max_size \
+    host_rom_oversize \
+    host_rom_unreadable \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -86,7 +92,10 @@ _self_test_platform_filter_cases() {
     release_lifecycle_controls \
     perf_advisory_pipeline \
     perf_advisory_controls \
-    host_continuation; do
+    host_continuation \
+    host_rom_max_size \
+    host_rom_oversize \
+    host_rom_unreadable; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1

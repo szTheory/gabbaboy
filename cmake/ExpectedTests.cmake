@@ -23,7 +23,7 @@ function(gabbaboy_verify_registered_tests)
       core_linkage_links core_linkage_controls
       release_lifecycle_replay release_lifecycle_controls
       perf_advisory_pipeline perf_advisory_controls
-      host_continuation)
+      host_continuation host_rom_max_size host_rom_oversize host_rom_unreadable)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)
