@@ -8,7 +8,7 @@ one real signal per row, and prints `host-signals scenario=<name> pass` or `FAIL
 POSIX only: Windows never generates SIGTERM and has no host mode (D-05). Assertions are explicit checks,
 never `assert`, and python -O is refused.
 
-Time is never evidence (AGENTS.md: no clocks as evidence). Every wait is a watchdog that fails with a reason;
+Time is never evidence (project policy: no clocks as evidence). Every wait is a watchdog that fails with a reason;
 the `term` row proves its stop with a `--frames K` replay of the same bytes, not with a kill-to-wait time.
 """
 from __future__ import annotations
