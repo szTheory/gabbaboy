@@ -12,6 +12,7 @@ provides:
   - Shared infallible raw-to-host conversion with validated ranges before state mutation
   - Public-header binding for v0.2 fuzz evidence and pinned IN-02 format documentation
   - Immutable RM-024 and RM-032 planning checks with omission controls
+  - Wave 1 state inventory and fork mutant integration repair with negative controls
 affects: [19-03, Phase 19 release qualification]
 actuals:
   tokens: 9889
@@ -40,6 +41,8 @@ key-files:
     - .planning/context/FUTURE-MILESTONES.md
     - tests/scripts/verify-planning-hygiene.py
     - tests/cmake/hygiene.cmake
+    - tests/test_state_fork.c
+    - tests/data/state-forks.json
 key-decisions: []
 patterns-established:
   - One infallible state conversion shared by load and validated store paths
@@ -81,6 +84,17 @@ coverage:
         status: pass
       - kind: other
         ref: "python3 -I tests/scripts/verify-planning-hygiene.py --check deferrals --rev 6c330e48ca94095fb77fa0ef63da6456a7677e83 --repo .; deferrals pass pins=8; eight omission controls and an unrelated positive twin passed"
+        status: pass
+  - id: W1
+    description: Wave 1 state inventory and fork omission evidence remain integrated with range-safe state validation.
+    requirement: REL-01
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --test-dir build --output-on-failure --tests-regex '^(state_inventory|state_inventory_controls|state_precodec_gate|state_tracer|state_format_contract|state_size_bound|state_audio_bound|state_codec_matrix|state_canonical|state_semantic_bounds|state_codec_mutant_controls|state_refusal|state_refusal_controls|state_fork_mutant_controls|state_fork_mutants_shard_7|state_fork_mutants)$' --parallel 2; 48/48 passed at 7efc2c3da28d3edfcb3416d4f5cfbc401c0863ac, including fixture prerequisites; build/phase19-wave1-ctest.log; ctest --test-dir build -R '^summary_coverage$' --output-on-failure; 1/1 passed"
+        status: pass
+      - kind: other
+        ref: "state inventory controls accept GBB_MAYBE_UNUSED table placement and reject a missing table; fork mutant controls require the in-range input_event_count omission to produce canonical-byte discrepancies through continuation"
         status: pass
 metrics:
   duration: 23min
@@ -135,6 +149,7 @@ status: complete
 - The Task 2 CTest group passed 7/7. The fuzz self-test passed 34 tests with 51 negative controls; its optional real campaign receipt test was skipped because no real receipt was supplied.
 - The prescribed compiler command removed all seven planned unused-symbol warnings: 9 total warnings before (7 targeted, 2 unrelated) and 2 unrelated warnings after.
 - The Task 3 planning group passed 4/4; the measured hygiene suite printed `controls=87`, and the live immutable deferral check printed `deferrals pass pins=8`.
+- **Wave 1 integration follow-up:** `state_inventory` and `state_precodec_gate` now parse `STATE_FIELD_TREATMENT[] GBB_MAYBE_UNUSED =`; the inventory controls cover annotated-table acceptance and a missing-table rejection. The fork harness uses an in-range `input_event_count` poison, and its mutant record requires a canonical-byte discrepancy and continuation instead of counting setup failure. At full source SHA `7efc2c3da28d3edfcb3416d4f5cfbc401c0863ac`, the requested state CTest selection and fixture prerequisites passed 48/48, and the summary coverage validator passed 1/1; details are in `build/phase19-wave1-ctest.log`.
 - A stale cached `GBB_STATE_PIN_BASE_REV` from a different commit history first made `state_pin_planning` reject its baseline. Clearing only that CMake cache key restored the source-revision default; the pin tests and the full targeted Task 1 group then passed.
 - Only plan-targeted suites were run; this was not a full repository test run.
 
@@ -169,7 +184,15 @@ RESEARCH Drift 5 found no single test-seam flag: `GBB_TEST_STATE_HASH_COUNTER` i
 - **Verification:** Both the existing palette mutant control and state-fork mutant materializer/build passed.
 - **Committed in:** `0024d028`, `e3211012`.
 
-**Total deviations:** 1 implementation compatibility adjustment, plus the recorded D-09 amendment candidate.
+**2. [Rule 3 - Blocking] Restored state inventory and fork-mutation integration checks after Wave 1 surfaced regressions.**
+- **Found during:** Phase 19 Wave 1 integration.
+- **Issue:** The inventory parser did not allow the unused-symbol annotation between the table declarator and initializer. Fork poison fell back to an out-of-range input-event count after full-state probes rejected all relational alternatives, so shard 7 failed during setup.
+- **Fix:** Accept `GBB_MAYBE_UNUSED` with positive and negative inventory controls; poison the count with an in-range value and assert the omitted assignment causes the named canonical-byte discrepancy through continuation.
+- **Files modified:** `tests/scripts/verify-state-contract.py`, `tests/scripts/verify-state-forks.py`, `tests/test_state_fork.c`, `tests/data/state-forks.json`.
+- **Verification:** The inventory, precodec/tracer, codec/refusal, fork shard, mutant controls, and mutant summary selection passed 48/48 tests at the full source SHA above.
+- **Committed in:** `7efc2c3d`.
+
+**Total deviations:** 2 implementation compatibility adjustments, plus the recorded D-09 amendment candidate.
 **Impact on plan:** All required behavior and negative controls passed; no later plan work was pulled forward.
 
 ## Issues Encountered and Limitations
@@ -180,7 +203,7 @@ RESEARCH Drift 5 found no single test-seam flag: `GBB_TEST_STATE_HASH_COUNTER` i
 
 ## Next Phase Readiness
 
-Plan 19-02 is complete. Continue within Phase 19 to **plan 19-03 — scoped v0.3.0 claims, managed input, ledger rendering, release-note rules, and the regenerated Ir figure**. Run only when the owner chooses: `/gsd-execute-phase 19`. Automatic advance remains disabled.
+Plan 19-02 is complete. After plan 19-03, the current next incomplete plan is **19-04 — Rehearsal Binding** (Wave 2). Run only when the owner chooses: `/gsd-execute-phase 19`. Automatic advance remains disabled; REL-01 remains pending through publication and readback.
 
 ---
 *Phase: GB-19-qualified-v0-3-0-release*
@@ -189,4 +212,5 @@ Plan 19-02 is complete. Continue within Phase 19 to **plan 19-03 — scoped v0.3
 ## Self-Check: PASSED
 
 - The summary file exists and all nine task commits are ancestors of the current branch head.
-- The coverage classifier recognized all three deliverables as automated, with passing verification entries and no schema errors.
+- The corrective integration commit `7efc2c3d` is an ancestor of the current branch head.
+- The coverage classifier recognized all four deliverables as automated, with passing verification entries and no schema errors.
