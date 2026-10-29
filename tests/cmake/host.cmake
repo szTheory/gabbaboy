@@ -25,6 +25,10 @@ if(NOT WIN32)
   gbb_add_host_mode_test(host_rom_oversize rom-oversize)
   gbb_add_host_mode_test(host_rom_unreadable rom-unreadable)
   gbb_add_host_mode_test(host_cli_stem_refusal stem-refusal)
+  gbb_add_host_mode_test(host_periodic_flush periodic-flush)
+  gbb_add_host_mode_test(host_first_write first-write)
+  gbb_add_host_mode_test(host_idempotent_rerun idempotent-rerun)
+  gbb_add_host_mode_test(host_sweep_after_checks sweep)
 endif()
 
 # ---- D-07: the stem rule, one CTest per class (portable: no filesystem is touched) ----------------------

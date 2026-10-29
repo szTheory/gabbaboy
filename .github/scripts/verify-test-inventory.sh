@@ -34,6 +34,10 @@ filter_expected_for_platform() {
         -e '/^host_cli_stem_refusal$/d' \
         -e '/^host_api_surface$/d' \
         -e '/^host_api_surface_controls$/d' \
+        -e '/^host_periodic_flush$/d' \
+        -e '/^host_first_write$/d' \
+        -e '/^host_idempotent_rerun$/d' \
+        -e '/^host_sweep_after_checks$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -69,6 +73,10 @@ _self_test_platform_filter_cases() {
     host_cli_stem_refusal \
     host_api_surface \
     host_api_surface_controls \
+    host_periodic_flush \
+    host_first_write \
+    host_idempotent_rerun \
+    host_sweep_after_checks \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -104,7 +112,11 @@ _self_test_platform_filter_cases() {
     host_rom_unreadable \
     host_cli_stem_refusal \
     host_api_surface \
-    host_api_surface_controls; do
+    host_api_surface_controls \
+    host_periodic_flush \
+    host_first_write \
+    host_idempotent_rerun \
+    host_sweep_after_checks; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1

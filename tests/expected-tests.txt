@@ -1533,3 +1533,7 @@ input_clock_mutant_last_is_now
 input_clock_mutant_last_is_now_control
 input_clock_consumer_symbols
 input_clock_consumer_symbols_selftest
+host_periodic_flush
+host_first_write
+host_idempotent_rerun
+host_sweep_after_checks

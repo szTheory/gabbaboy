@@ -266,7 +266,119 @@ def scenario_grammar_empty_value(runner: str, work: Path) -> None:
     require(listing(base) == [], "a grammar refusal touched the filesystem")
 
 
+FLUSH_LINE = re.compile(
+    r"gbb-host: flush reason=(generation|rtc-drift|final) frame=(\d+) result=(written|unchanged|failed)"
+    r"(?: stage=(\S+))?")
+
+
+def flush_lines(stderr: str) -> list[tuple[str, int, str]]:
+    return [(m.group(1), int(m.group(2)), m.group(3)) for m in FLUSH_LINE.finditer(stderr)]
+
+
+def scenario_periodic_flush(runner: str, work: Path) -> None:
+    """D-11 end to end: a guest write is flushed by the generation trigger long before the final
+    flush, the image is not rewritten when nothing changed, and the final flush is identical."""
+    base = fresh_dir(work)
+    rom = base / "write5a.gb"
+    rom.write_bytes(host_fixture.build_rom("write5a", MBC1_RAM_BATTERY, RAM_8K))
+    saves = fresh_dir(base / "saves")
+    code, out, err = run(runner, rom, saves, 120, base)
+    expect_clean_exit(code, err, 120)
+    flushes = flush_lines(err)
+    generation = [f for f in flushes if f[0] == "generation"]
+    require(len(generation) == 1, f"expected one generation flush, got {flushes}")
+    reason, frame, result = generation[0]
+    require(16 <= frame <= 24, f"generation flush at frame {frame}, expected 16..24")
+    require(result == "written", f"generation flush result {result}, expected written")
+    final = [f for f in flushes if f[0] == "final"]
+    require(final == [("final", 120, "unchanged")], f"final flush {final}, expected unchanged at 120")
+    require("flush=unchanged" in err, "exit line must report flush=unchanged")
+    image = (saves / "write5a.sav").read_bytes()
+    require(len(image) == 8192 and image[0] == 0x5A, f"image is {len(image)} bytes, byte0 {image[:1]!r}")
+    require(listing(saves) == ["write5a.sav"], f"unexpected directory entries {listing(saves)}")
+    forbid_work_path(base, out, err)
+
+
+def scenario_first_write(runner: str, work: Path) -> None:
+    """D-11 first write: a battery cart with an absent .sav creates it at the latest at the final
+    flush, even when the guest never touched cartridge RAM."""
+    base = fresh_dir(work)
+    rom = base / "idle.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC1_RAM_BATTERY, RAM_8K))
+    saves = fresh_dir(base / "saves")
+    code, out, err = run(runner, rom, saves, 2, base)
+    expect_clean_exit(code, err, 2)
+    require(flush_lines(err) == [("final", 2, "written")], f"flushes {flush_lines(err)}")
+    require("flush=written" in err, "exit line must report flush=written")
+    size = (saves / "idle.sav").stat().st_size
+    require(size == 8192, f".sav is {size} bytes, expected 8192")
+    forbid_work_path(base, out, err)
+
+
+def scenario_idempotent_rerun(runner: str, work: Path) -> None:
+    """HOST-01: a second run that changes nothing leaves the .sav inode and mtime alone."""
+    base = fresh_dir(work)
+    rom = base / "idle.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC1_RAM_BATTERY, RAM_8K))
+    saves = fresh_dir(base / "saves")
+    code, out, err = run(runner, rom, saves, 4, base)
+    expect_clean_exit(code, err, 4)
+    require("flush=written" in err, "first run must report flush=written")
+    first = (saves / "idle.sav").stat()
+    code, out, err = run(runner, rom, saves, 4, base)
+    expect_clean_exit(code, err, 4)
+    require("flush=unchanged" in err, f"second run must report flush=unchanged: {err.strip()!r}")
+    second = (saves / "idle.sav").stat()
+    require(second.st_ino == first.st_ino, "the .sav inode changed on an unchanged rerun")
+    require(second.st_mtime_ns == first.st_mtime_ns, "the .sav mtime changed on an unchanged rerun")
+    require(listing(saves) == ["idle.sav"], f"unexpected directory entries {listing(saves)}")
+    forbid_work_path(base, out, err)
+
+
+def scenario_sweep(runner: str, work: Path) -> None:
+    """D-10: only entries with the exact prefix `.<stem>.sav.tmp-` are swept, links are never
+    followed, the sweep runs after every refusal check and before the first frame."""
+    base = fresh_dir(work)
+    rom = base / "game.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC1_RAM_BATTERY, RAM_8K))
+    saves = fresh_dir(base / "saves")
+    outside = base / "outside.txt"
+    outside.write_bytes(b"keep me")
+    stale = [".game.sav.tmp-1-0", ".game.sav.tmp-99-3"]
+    near = [".game.sav.tmp", "game.sav.tmp-1", ".other.sav.tmp-1"]
+    (saves / stale[0]).write_bytes(b"stale")
+    os.symlink(str(outside), str(saves / stale[1]))
+    for name in near:
+        (saves / name).write_bytes(b"near")
+
+    # A refused start (short .sav) must leave every pre-existing temp in place.
+    (saves / "game.sav").write_bytes(b"\x00" * 8191)
+    before = snapshot(saves)
+    code, out, err = run(runner, rom, saves, 1, base)
+    expect_refusal(code, out, err, "save-size")
+    require("sweep removed" not in err, "a refused start must not sweep")
+    require(snapshot(saves) == before, "a refused run changed the save directory")
+    require(os.path.islink(saves / stale[1]), "the symlink temp was removed by a refused run")
+    (saves / "game.sav").unlink()
+
+    code, out, err = run(runner, rom, saves, 1, base)
+    expect_clean_exit(code, err, 1)
+    require("gbb-host: sweep removed=2\n" in err, f"missing 'sweep removed=2': {err.strip()!r}")
+    require(err.find("gbb-host: sweep") < err.find("gbb-host: ready"), "the sweep must precede ready")
+    for name in stale:
+        require(not os.path.lexists(saves / name), f"stale temp {name} survived the sweep")
+    require(outside.read_bytes() == b"keep me", "the sweep followed a symlink and touched its target")
+    for name in near:
+        require((saves / name).is_file(), f"near-miss {name} was removed")
+    require(listing(saves) == sorted(near + ["game.sav"]), f"unexpected entries {listing(saves)}")
+    forbid_work_path(base, out, err)
+
+
 SCENARIOS = {
+    "periodic-flush": scenario_periodic_flush,
+    "first-write": scenario_first_write,
+    "idempotent-rerun": scenario_idempotent_rerun,
+    "sweep": scenario_sweep,
     "continuation": scenario_continuation,
     "rom-max": scenario_rom_max,
     "rom-oversize": scenario_rom_oversize,
