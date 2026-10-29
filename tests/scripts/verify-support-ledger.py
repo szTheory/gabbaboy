@@ -3199,15 +3199,110 @@ def self_test_claims(root: pathlib.Path, rev: str) -> tuple[int, int]:
     positives += 1
 
     controls = 0
-    invalid_scope = copy.deepcopy(claims)
-    invalid_scope["claims"][0]["platforms"] = []
+
+    def reject_claim(name: str, mutate, reason: str) -> None:
+        nonlocal controls, positives
+        # Each refusal is paired with the unmodified, unrelated positive claim set.
+        validate_claims(copy.deepcopy(claims), root, rev)
+        positives += 1
+        altered = copy.deepcopy(claims)
+        mutate(altered)
+        try:
+            validate_claims(altered, root, rev)
+        except ValueError as error:
+            if reason not in str(error):
+                fail(f"claim control {name} was rejected for the wrong reason: {error}")
+        else:
+            fail(f"claim control {name} was accepted")
+        controls += 1
+
+    reject_claim("empty-platforms", lambda v: v["claims"][0].update(platforms=[]), "claim-scope-missing")
+    reject_claim("empty-models", lambda v: v["claims"][0].update(models=[]), "claim-scope-missing")
+    reject_claim("empty-corpus", lambda v: v["claims"][0].update(corpus=[]), "claim-scope-missing")
+    reject_claim("empty-surface", lambda v: v["claims"][0].update(surface=""), "claim-scope-missing")
+    reject_claim("wildcard-platform", lambda v: v["claims"][0].update(platforms=["*"]),
+                 "claim-platform-unpackaged")
+    reject_claim("unpackaged-linux-arm64", lambda v: v["claims"][0].update(platforms=["linux-arm64"]),
+                 "claim-platform-unpackaged")
+    reject_claim("windows-signal-test-excluded",
+                 lambda v: v["claims"][6]["platforms"].append("windows-x64"),
+                 "claim-platform-unexercised")
+    reject_claim("player-surface-on-linux",
+                 lambda v: v["claims"][8].update(platforms=["linux-x64"]),
+                 "claim-platform-unexercised")
+    reject_claim("empty-evidence", lambda v: v["claims"][0].update(evidence=[]), "claim-unbacked")
+    reject_claim("unregistered-evidence", lambda v: v["claims"][0]["evidence"].append("not_a_real_ctest"),
+                 "claim-evidence-unregistered")
+    reject_claim("corpus-count-drift", lambda v: v["claims"][1]["corpus"][0].update(count=152),
+                 "claim-corpus-drift")
+    reject_claim("required-non-claim-removed",
+                 lambda v: v["non_claims"].__setitem__(slice(None),
+                     [row for row in v["non_claims"] if row["id"] != "no-cross-version-state"]),
+                 "non-claim-missing")
+    reject_claim("retired-host-smoke-evidence-removed",
+                 lambda v: [row.update(evidence=[name for name in row["evidence"]
+                                                if name != "installed_host_smoke"])
+                            for row in v["claims"]],
+                 "claim-unbacked")
+    reject_claim("retired-play-requirement-removed",
+                 lambda v: [row.update(requirements=[name for name in row["requirements"]
+                                                     if name != "PLAY-01"])
+                            for row in v["claims"]],
+                 "claim-unbacked")
+
+    # A pin mismatch is a source mutation, so exercise it in an isolated immutable Git fixture.
+    validate_claims(copy.deepcopy(claims), root, rev)
+    positives += 1
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-stale-pins-") as temporary:
+        fixture_root = pathlib.Path(temporary)
+        fixture_env = {**os.environ,
+                       "GIT_AUTHOR_NAME": "GabbaBoy Automation",
+                       "GIT_AUTHOR_EMAIL": "automation@users.noreply.github.com",
+                       "GIT_COMMITTER_NAME": "GabbaBoy Automation",
+                       "GIT_COMMITTER_EMAIL": "automation@users.noreply.github.com"}
+        git_args = ["git", "-C", str(fixture_root)]
+        subprocess.run([*git_args, "init", "-q", "-b", "main"], check=True, env=fixture_env)
+        required_sources = (
+            "CMakeLists.txt", "tests/data/state-forks.json", "tests/baseline/state-goldens-v1.json",
+            "docs/host-contract.json", "tests/expected-tests.txt", "tests/player/expected-tests.txt",
+            "cmake/ExpectedTests.cmake",
+        )
+        for path in required_sources:
+            target = fixture_root / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(immutable_git_file(root, rev, path, MAX_INPUT_BYTES))
+        goldens_path = fixture_root / "tests/baseline/state-goldens-v1.json"
+        goldens = strict_json(goldens_path.read_bytes(), "claim-derived-input")
+        goldens["release"]["patch"] += 1
+        goldens_path.write_text(json.dumps(goldens, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        subprocess.run([*git_args, "add", *required_sources], check=True, env=fixture_env)
+        subprocess.run([*git_args, "commit", "-q", "-m", "stale pin source"], check=True, env=fixture_env)
+        stale_rev = subprocess.check_output([*git_args, "rev-parse", "HEAD"], env=fixture_env,
+                                            text=True).strip()
+        try:
+            validate_claims(copy.deepcopy(claims), fixture_root, stale_rev)
+        except ValueError as error:
+            if "claim-pins-stale" not in str(error):
+                fail(f"stale state pins were rejected for the wrong reason: {error}")
+        else:
+            fail("stale state pins were accepted")
+        controls += 1
+
+    # Adoption accepts the hand-edited prose, but the immutable renderer fixed
+    # point refuses those bytes for their own reason (D-14 control 9).
+    edited_ledger = synthetic.replace(
+        b"## Reconciled prior scope entries", b"## Reconciled earlier scope entries", 1)
+    if edited_ledger == synthetic:
+        fail("handwritten v0.3 edit control did not alter the ledger")
+    run_adoption_over_ledger("docs/support/v0.3.0.md", edited_ledger, root)
+    positives += 1
     try:
-        validate_claims(invalid_scope, root, rev)
+        require_generated(edited_ledger, "synthetic v0.3.0 ledger", "0.3.0", disclosure, root, rev)
     except ValueError as error:
-        if "claim-scope-missing" not in str(error):
-            fail(f"claim scope control was rejected for the wrong reason: {error}")
+        if "ledger-not-generated" not in str(error):
+            fail(f"handwritten v0.3 edit was rejected for the wrong reason: {error}")
     else:
-        fail("claim scope control was accepted")
+        fail("handwritten v0.3 edit was accepted by the generator fixed point")
     controls += 1
 
     # Use create_current_ledger for a private 0.2 data seed, then render the

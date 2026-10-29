@@ -46,6 +46,7 @@ VERSION = re.compile(r"\d+\.\d+\.\d+")
 # Generator inputs: a change to any of them changes what release-please or --write-current would render.
 REQUIRED_MANAGED_INPUTS = (
     "tests/data/release-disclosure.json",
+    "tests/data/support-claims-v0.3.json",
     "tests/scripts/verify-support-ledger.py",
     "release-please-config.json",
 )
@@ -438,12 +439,14 @@ def build_fixture(directory: Path) -> tuple[Fixture, str, str, bytes]:
     fx.write("CHANGELOG.md", "# Changelog\n")
     fx.write("release-please-config.json", '{"release-type": "simple"}\n')
     fx.write("tests/data/release-disclosure.json", '{"schema_version": 1}\n')
+    fx.write("tests/data/support-claims-v0.3.json", '{"schema_version": 1, "kind": "scoped-support-claims"}\n')
     fx.write("tests/scripts/verify-support-ledger.py", "# stand-in generator\n")
     fx.write("docs/support/v0.2.1.md", "# v0.2.1 ledger\n")
     fx.write("src/core/gabbaboy.c", "int core(void) { return 0; }\n")
     fx.write(RECORD_PATH, render_record(inactive_record()))
     base = fx.commit("main", "CMakeLists.txt", ".release-please-manifest.json", "CHANGELOG.md",
                      "release-please-config.json", "tests/data/release-disclosure.json",
+                     "tests/data/support-claims-v0.3.json",
                      "tests/scripts/verify-support-ledger.py", "docs/support/v0.2.1.md",
                      "src/core/gabbaboy.c", RECORD_PATH)
     fx.run("checkout", "-q", "-b", "release-please--branches--main")
@@ -614,9 +617,13 @@ def self_test() -> tuple[int, int]:
                                      "rehearsal": {**reviewed["rehearsal"], "ref": "rehearsal/v0.2.9"}})
         rejected("record-for-another-version", lambda: check(wrong_version, base), "window-version-mismatch")
         fx.reset(frozen)
-        dropped_input = copy.deepcopy(reviewed)
-        del dropped_input["managed_inputs"]["tests/scripts/verify-support-ledger.py"]
-        rejected("generator-input-omitted", lambda: check(with_record(dropped_input), base), "window-input-missing")
+        for omitted_input in REQUIRED_MANAGED_INPUTS:
+            fx.reset(frozen)
+            dropped_input = copy.deepcopy(reviewed)
+            del dropped_input["managed_inputs"][omitted_input]
+            rejected("generator-input-omitted-" + Path(omitted_input).name,
+                     lambda: check(with_record(dropped_input), base), "window-input-missing",
+                     omitted_input)
         fx.reset(frozen)
         with_clock = {**reviewed, "expires_at": "2026-12-31T00:00:00Z"}
         rejected("clock-field-rejected", lambda: check(with_record(with_clock), base), "window-record-invalid",
