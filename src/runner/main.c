@@ -440,8 +440,9 @@ static void print_usage(FILE *stream, const char *program) {
       "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) [--model <id> | --profile dmg|cgb] [--revision <r>] [--failure-dir <dir>] [--receipt]\n"
       "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>] [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n"
       "  %s --acceptance <cases.txt> --case <id> --raw-verdict [--receipt]\n"
-      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) --mutate drop:<BUTTON> [--receipt]\n",
-      program, program, program, program, program, program, program);
+      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) --mutate drop:<BUTTON> [--receipt]\n"
+      "  %s --rom <rom.gb> --save-dir <dir> [--profile dmg|cgb] [--frames <n>]\n",
+      program, program, program, program, program, program, program, program);
 }
 
 /* Strict decimal parse for --frame-digest-at: digits only, at most the 600 s script bound. */
