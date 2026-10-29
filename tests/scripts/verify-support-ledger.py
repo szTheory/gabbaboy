@@ -3192,7 +3192,7 @@ def self_test_claims(root: pathlib.Path, rev: str) -> tuple[int, int]:
     v3_data["version"] = "0.3.0"
     v3_data["scope"]["modes"] = ["cgb-compat", "cgb-native", "dmg"]
     synthetic = render_v3_ledger(v3_data, disclosure, claims).encode("utf-8")
-    if "## Scoped support claims" not in synthetic or "## Non-claims" not in synthetic:
+    if b"## Scoped support claims" not in synthetic or b"## Non-claims" not in synthetic:
         fail("v0.3 synthetic generator omitted the managed claims section")
     if require_generated(synthetic, "synthetic v0.3.0 ledger", "0.3.0", disclosure, root, rev) != synthetic:
         fail("v0.3 synthetic ledger was not a generator fixed point")
