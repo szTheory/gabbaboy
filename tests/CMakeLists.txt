@@ -4944,6 +4944,9 @@ if(NOT GBB_STATE_REV_RESULT EQUAL 0 OR NOT GBB_STATE_SOURCE_REV_LENGTH EQUAL 40 
   message(STATUS
     "State evidence CTests remain registered with an unresolved revision and will fail closed when invoked")
 endif()
+gbb_add_ledger_contract(support_claims
+  [=[support-claims pass claims=9 non_claims=10 rev=[0-9a-f]{40}]=]
+  verify-support-ledger.py --check-claims --rev "${GBB_STATE_SOURCE_REV}")
 set(GBB_STATE_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-contract.py")
 add_executable(test_state_api test_state_api.c)
 target_include_directories(test_state_api PRIVATE

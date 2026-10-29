@@ -1163,6 +1163,7 @@ support_ledger_binding
 support_ledger_binding_controls
 release_disclosure_generator
 release_disclosure_controls
+support_claims
 release_window_contract
 release_window_controls
 release_lifecycle_replay

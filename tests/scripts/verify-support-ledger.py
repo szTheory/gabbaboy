@@ -582,21 +582,28 @@ def _count_receipt_cases(observations: list[dict]) -> dict:
 def validate_data_v2(data: dict, expected_version: str, expected_case_count: int = V2_REQUIRED_CASES) -> None:
     if type(data) is not dict or data.get("schema_version") != 2:
         fail("unsupported ledger schema")
-    if not re.fullmatch(r"0\.2\.[0-9]+", expected_version) or data.get("version") != expected_version:
-        fail("v0.2 ledger version/profile identity is missing or unstable")
+    if not re.fullmatch(r"0\.[23]\.[0-9]+", expected_version) or data.get("version") != expected_version:
+        fail("v0.2/v0.3 ledger version/profile identity is missing or unstable")
     game = data.get("game_evidence")
     if (type(game) is not dict or game.get("status") != "absent" or
             game.get("statement") != "No CGB game-level evidence exists"):
         fail("v0.2 CGB game-evidence absence statement is missing")
     scope = data.get("scope")
-    if scope != {
+    expected_scope = ({
         "models": ["CGB-CPU-E", "DMG-CPU-B"],
         "corpus_model": "CGB-CPU-E",
         "modes": ["compat", "native"],
         "boot": "skipped",
         "physical_cgb_e": "UNKNOWN/POLICY",
-    }:
-        fail("v0.2 model, execution-mode, boot, or physical-evidence scope mismatch")
+    } if expected_version.startswith("0.2.") else {
+        "models": ["CGB-CPU-E", "DMG-CPU-B"],
+        "corpus_model": "CGB-CPU-E",
+        "modes": ["cgb-compat", "cgb-native", "dmg"],
+        "boot": "skipped",
+        "physical_cgb_e": "UNKNOWN/POLICY",
+    })
+    if scope != expected_scope:
+        fail("v0.2/v0.3 model, execution-mode, boot, or physical-evidence scope mismatch")
 
     source_inputs = data.get("source_inputs")
     if type(source_inputs) is not list or not source_inputs:
@@ -1039,7 +1046,8 @@ def build_v2_data(receipt: dict, receipt_raw: bytes, inventory: dict, inventory_
         "scope": {
             "models": ["CGB-CPU-E", "DMG-CPU-B"],
             "corpus_model": "CGB-CPU-E",
-            "modes": ["compat", "native"],
+            "modes": (["compat", "native"] if version.startswith("0.2.") else
+                      ["cgb-compat", "cgb-native", "dmg"]),
             "boot": "skipped",
             "physical_cgb_e": "UNKNOWN/POLICY",
         },
@@ -1149,31 +1157,49 @@ def render_v2_ledger(data: dict, disclosure: dict | None = None) -> str:
     return "\n".join(lines)
 
 
-def create_current_ledger(receipt_path: pathlib.Path, output: pathlib.Path | None = None) -> dict:
+def render_v3_ledger(data: dict, disclosure: dict | None = None, claims: dict | None = None) -> str:
+    """Render the v2 fixed point plus a section sourced only from validated v0.3 claims."""
+    if disclosure is None:
+        disclosure = load_disclosure(ROOT)
+    if claims is None:
+        claims = load_claims(ROOT, current_git_revision())
+    if not str(data.get("version", "")).startswith("0.3."):
+        fail("v0.3 renderer requires a v0.3.x ledger")
+    rendered = render_v2_ledger(data, disclosure)
+    disclosure_block = "\n".join(disclosure_paragraphs(disclosure, data["version"]))
+    position = rendered.find(disclosure_block)
+    if position < 0 or rendered.find(disclosure_block, position + 1) >= 0:
+        fail("v0.3 renderer could not locate the historical disclosure block exactly once")
+    claim_block = "\n".join(claim_paragraphs(claims, data["version"]))
+    return rendered[:position] + claim_block + "\n" + rendered[position:]
+
+
+def create_current_ledger(receipt_path: pathlib.Path, output: pathlib.Path | None = None,
+                          root: pathlib.Path = ROOT) -> dict:
     receipt_path = receipt_path.resolve(strict=True)
     try:
-        receipt_rel = receipt_path.relative_to(ROOT.resolve()).as_posix()
+        receipt_rel = receipt_path.relative_to(root.resolve()).as_posix()
     except ValueError:
         fail("receipt path must stay inside the repository")
     if receipt_rel != "build/cgb-corpus-receipt.json":
         fail("current support ledger requires the canonical build/cgb-corpus-receipt.json path")
-    inventory_path = ROOT / "tests/external/cgb-corpus-inventory.json"
+    inventory_path = root / "tests/external/cgb-corpus-inventory.json"
     inventory_raw = bounded_file(inventory_path, MAX_INPUT_BYTES, "inventory")
     inventory = strict_json(inventory_raw, "inventory")
     receipt_raw = bounded_file(receipt_path, MAX_RECEIPT_BYTES, "receipt")
     receipt = strict_json(receipt_raw, "receipt")
-    run_inventory_validator()
-    version = tree_version()
-    data = build_v2_data(receipt, receipt_raw, inventory, inventory_raw, ROOT, receipt_rel, version=version)
+    run_inventory_validator(root)
+    version = tree_version(root)
+    data = build_v2_data(receipt, receipt_raw, inventory, inventory_raw, root, receipt_rel, version=version)
     identity = receipt.get("identity", {})
-    current = current_git_revision()
+    current = current_git_revision(root)
     if identity.get("core_revision") == current:
         run_existing_receipt_validator(receipt_path, inventory)
     else:
-        check_source_ancestry(identity.get("core_revision", ""), current)
+        check_source_ancestry(identity.get("core_revision", ""), current, root)
     validate_data_v2(data, version)
-    validate_source_bindings(data, ROOT)
-    write_generated_ledger(data, ROOT, output)
+    validate_source_bindings(data, root)
+    write_generated_ledger(data, root, output)
     return data
 
 
@@ -1183,7 +1209,16 @@ def write_generated_ledger(data: dict, root: pathlib.Path, output: pathlib.Path 
     target = output if output is not None else default_target
     refuse_tagged_target(root, data["version"], target, default_target)
     # Bytes, not text mode: the ledger is digest-bound and must not gain CRLF on Windows (GB-CI-011).
-    target.write_bytes(render_v2_ledger(data).encode("utf-8"))
+    if tuple(int(part) for part in data["version"].split(".")) >= (0, 3, 0):
+        try:
+            rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
+                                          stderr=subprocess.DEVNULL, text=True).strip()
+        except (OSError, subprocess.CalledProcessError):
+            fail("REJECT claims-input-invalid: immutable revision is unavailable")
+        claims = load_claims(root, rev)
+        target.write_bytes(render_v3_ledger(data, load_disclosure(root), claims).encode("utf-8"))
+    else:
+        target.write_bytes(render_v2_ledger(data).encode("utf-8"))
     return target
 
 
@@ -1274,8 +1309,8 @@ def build_evidence_scope(receipt: dict, repo_root: pathlib.Path) -> dict:
     }
 
 
-def current_git_revision() -> str:
-    return git("rev-parse", "HEAD").decode("ascii", "strict").strip()
+def current_git_revision(repo_root: pathlib.Path = ROOT) -> str:
+    return git("rev-parse", "HEAD", cwd=repo_root).decode("ascii", "strict").strip()
 
 
 def check_source_ancestry(source_revision: str, current_revision: str,
@@ -2782,6 +2817,265 @@ def load_disclosure(root: pathlib.Path = ROOT, bind: bool = True) -> dict:
     return validate_disclosure(strict_json(raw, "disclosure-input"), root, bind)
 
 
+# D-11 / D-13: support claims are reviewed managed input. Their enums and required
+# exclusions live here so editing the JSON cannot widen the supported surface.
+CLAIMS_PATH = "tests/data/support-claims-v0.3.json"
+MAX_CLAIMS_BYTES = 64 * 1024
+CLAIMS_TOP_KEYS = {"schema_version", "kind", "applies_from_version", "claims", "non_claims"}
+CLAIM_KEYS = {"id", "requirements", "statement", "models", "modes", "corpus",
+              "platforms", "surface", "evidence", "non_claims"}
+CLAIM_MODELS = {"DMG-CPU-B", "CGB-CPU-E"}
+CLAIM_MODES = {"dmg", "cgb-compat", "cgb-native"}
+CLAIM_PLATFORMS = {"linux-x64", "macos-arm64", "windows-x64"}
+CLAIM_SURFACES = {"core-api", "runner-host-mode", "macos-player"}
+REQUIRED_CLAIM_IDS = {
+    "state-api", "state-continuation", "state-refusal", "state-canonical-pins",
+    "state-battery-rtc", "host-raw-save", "host-signals-exit", "host-format-table", "player-slots",
+}
+REQUIRED_NON_CLAIMS = {
+    "no-cross-version-state", "no-third-party-state-interop", "no-power-loss-durability",
+    "no-windows-host-mode", "no-linux-windows-player", "no-cgb-game-level-evidence",
+    "no-oracle-replay-from-forks", "no-crc-authentication", "no-runner-wall-clock",
+    "no-playstead-live-integration",
+}
+REQUIRED_CLAIM_EVIDENCE = {
+    "host_continuation", "host_cadence_retry", "host_signal_term", "host_exit_table_codes",
+    "save_format_files", "save_format_completeness", "save_format_freeze", "host_contract_json",
+    "host_contract_docs", "installed_host_smoke", "slot_message_table", "slot_reanchor_plan",
+    "input_clock_after_load",
+}
+REQUIRED_CLAIM_REQUIREMENTS = {"HOST-01", "HOST-02", "HOST-03", "PLAY-01"}
+CLAIM_TEXT = re.compile(r"[\x20-\x7e]{1,600}")
+CLAIM_ID = re.compile(r"[a-z][a-z0-9-]{1,63}")
+CLAIM_REQUIREMENT = re.compile(r"[A-Z]+-[0-9]{2}")
+
+
+def _claims_invalid(reason: str) -> None:
+    fail("REJECT claims-input-invalid: " + reason)
+
+
+def _claims_keys(value: object, name: str, expected: set[str]) -> dict:
+    if type(value) is not dict:
+        _claims_invalid(f"{name} must be an object")
+    missing = sorted(expected - set(value))
+    unknown = sorted(set(value) - expected)
+    if missing:
+        _claims_invalid(f"{name} omits {','.join(missing)}")
+    if unknown:
+        _claims_invalid(f"{name} has unclassified field {','.join(unknown)}")
+    return value
+
+
+def _claims_tree_version(root: pathlib.Path, rev: str) -> str:
+    raw = immutable_git_file(root, rev, "CMakeLists.txt", MAX_INPUT_BYTES)
+    match = re.search(rb"^project\(\s*\w+\s+VERSION\s+(\d+\.\d+\.\d+)[\s)]", raw, re.M)
+    if match is None:
+        _claims_invalid("CMakeLists.txt has no plain X.Y.Z project VERSION")
+    return match.group(1).decode("ascii")
+
+
+def _claim_inventory(raw: bytes, path: str) -> set[str]:
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        _claims_invalid(f"{path} is not UTF-8")
+    names = {line.strip() for line in text.splitlines()
+             if line.strip() and not line.lstrip().startswith("#")}
+    if not names or any(re.fullmatch(r"[A-Za-z0-9_-]+", name) is None for name in names):
+        _claims_invalid(f"{path} is not a plain CTest name inventory")
+    return names
+
+
+def validate_claims(data: object, root: pathlib.Path, rev: str) -> dict:
+    """Validate claim shape and recompute scope counts from immutable source objects."""
+    data = _claims_keys(data, "claims", CLAIMS_TOP_KEYS)
+    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
+        _claims_invalid("schema_version must be 1")
+    if data["kind"] != "scoped-support-claims" or data["applies_from_version"] != "0.3.0":
+        _claims_invalid("kind or applies_from_version is not the v0.3.0 claims profile")
+
+    tree_version = _claims_tree_version(root, rev)
+    facts: dict[str, int] = {}
+    for path, key, name in (
+        ("tests/data/state-forks.json", "expected_case_count", "state-forks continuation cases"),
+        ("tests/baseline/state-goldens-v1.json", "fixtures", "state portable golden pins"),
+        ("docs/host-contract.json", "save_formats", "host save-format contract sections"),
+        ("docs/host-contract.json", "exit_codes", "host exit-code definitions"),
+    ):
+        raw = immutable_git_file(root, rev, path, MAX_INPUT_BYTES)
+        source = strict_json(raw, "claim-derived-input")
+        if key == "expected_case_count":
+            count = source.get(key)
+        elif path.endswith("state-goldens-v1.json"):
+            count = len(source.get(key, [])) if type(source.get(key)) is list else None
+            release = source.get("release")
+            pin_version = ".".join(str(release.get(part)) for part in ("major", "minor", "patch")) \
+                if type(release) is dict else None
+            if pin_version != tree_version:
+                fail("REJECT claim-pins-stale: state goldens release differs from the CMake tree version")
+        else:
+            value = source.get(key)
+            count = len(value) if type(value) in (dict, list) else None
+        if type(count) is not int or count < 0:
+            _claims_invalid(f"{path} does not contain a countable {key}")
+        facts[name] = count
+
+    state_forks = strict_json(immutable_git_file(root, rev, "tests/data/state-forks.json", MAX_INPUT_BYTES),
+                              "claim-derived-input")
+    if type(state_forks.get("expected_case_count")) is not int:
+        _claims_invalid("state-forks expected_case_count is malformed")
+    inventories = {
+        "tests/expected-tests.txt": _claim_inventory(
+            immutable_git_file(root, rev, "tests/expected-tests.txt", MAX_INPUT_BYTES),
+            "tests/expected-tests.txt"),
+        "tests/player/expected-tests.txt": _claim_inventory(
+            immutable_git_file(root, rev, "tests/player/expected-tests.txt", MAX_INPUT_BYTES),
+            "tests/player/expected-tests.txt"),
+    }
+    registered = set.union(*inventories.values())
+    slot_tests = {name for name in registered
+                  if name.startswith(("slot_", "player_slot_")) or name == "input_clock_after_load"}
+    facts["player slot test inventory"] = len(slot_tests)
+
+    cmake = immutable_git_file(root, rev, "cmake/ExpectedTests.cmake", MAX_INPUT_BYTES)
+    try:
+        cmake_text = cmake.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        _claims_invalid("cmake/ExpectedTests.cmake is not UTF-8")
+    cmake_text = re.sub(r"(?m)#.*$", "", cmake_text)
+    excluded_blocks = re.findall(r"list\s*\(\s*REMOVE_ITEM\s+expected_tests(.*?)\)", cmake_text, re.S)
+    if not excluded_blocks:
+        _claims_invalid("cmake/ExpectedTests.cmake has no expected_tests WIN32 removal list")
+    win_excluded = set()
+    for block in excluded_blocks:
+        win_excluded.update(re.findall(r"[A-Za-z][A-Za-z0-9_]*", block))
+
+    claims = data["claims"]
+    if type(claims) is not list or len(claims) != len(REQUIRED_CLAIM_IDS):
+        _claims_invalid("claims must contain exactly nine rows")
+    non_claims = data["non_claims"]
+    if type(non_claims) is not list:
+        _claims_invalid("non_claims must be a list")
+    non_claim_ids = set()
+    for row in non_claims:
+        row = _claims_keys(row, "non-claim", {"id", "statement"})
+        if type(row["id"]) is not str or CLAIM_ID.fullmatch(row["id"]) is None:
+            _claims_invalid("non-claim id is malformed")
+        if type(row["statement"]) is not str or CLAIM_TEXT.fullmatch(row["statement"]) is None:
+            _claims_invalid("non-claim statement is malformed ASCII text")
+        if row["id"] in non_claim_ids:
+            _claims_invalid(f"duplicate non-claim id {row['id']}")
+        non_claim_ids.add(row["id"])
+    if non_claim_ids != REQUIRED_NON_CLAIMS:
+        missing = sorted(REQUIRED_NON_CLAIMS - non_claim_ids)
+        fail("REJECT non-claim-missing: " + ",".join(missing or sorted(non_claim_ids - REQUIRED_NON_CLAIMS)))
+
+    claim_ids = set()
+    evidence_union: set[str] = set()
+    requirement_union: set[str] = set()
+    for index, raw_claim in enumerate(claims):
+        if type(raw_claim) is not dict:
+            _claims_invalid(f"claims[{index}] must be an object")
+        # Scope omissions have their own stable D-14 diagnostic, including an omitted key.
+        for axis in ("models", "platforms", "corpus", "surface"):
+            value = raw_claim.get(axis)
+            if axis == "surface":
+                if type(value) is not str or not value:
+                    fail(f"REJECT claim-scope-missing: claims[{index}] has missing or empty {axis}")
+            elif type(value) is not list or not value:
+                fail(f"REJECT claim-scope-missing: claims[{index}] has missing or empty {axis}")
+        claim = _claims_keys(raw_claim, f"claims[{index}]", CLAIM_KEYS)
+        claim_id = claim["id"]
+        if type(claim_id) is not str or CLAIM_ID.fullmatch(claim_id) is None:
+            _claims_invalid(f"claims[{index}].id is malformed")
+        if claim_id in claim_ids:
+            _claims_invalid(f"duplicate claim id {claim_id}")
+        claim_ids.add(claim_id)
+        if type(claim["statement"]) is not str or CLAIM_TEXT.fullmatch(claim["statement"]) is None:
+            _claims_invalid(f"{claim_id}.statement is malformed ASCII text")
+        if type(claim["models"]) is not list or not claim["models"] or any(
+                type(item) is not str or item not in CLAIM_MODELS for item in claim["models"]):
+            _claims_invalid(f"{claim_id}.models is outside the declared model enum")
+        if type(claim["modes"]) is not list or not claim["modes"] or \
+                any(type(item) is not str or item not in CLAIM_MODES for item in claim["modes"]):
+            _claims_invalid(f"{claim_id}.modes is outside the declared mode enum")
+        if type(claim["surface"]) is not str or claim["surface"] not in CLAIM_SURFACES:
+            _claims_invalid(f"{claim_id}.surface is outside the declared surface enum")
+        if type(claim["platforms"]) is not list or not claim["platforms"]:
+            fail(f"REJECT claim-scope-missing: {claim_id}.platforms is empty")
+        if any(type(item) is not str or item not in CLAIM_PLATFORMS for item in claim["platforms"]):
+            fail(f"REJECT claim-platform-unpackaged: {claim_id} names a platform outside the package matrix")
+        requirements = claim["requirements"]
+        if type(requirements) is not list or not requirements or any(
+                type(item) is not str or CLAIM_REQUIREMENT.fullmatch(item) is None for item in requirements):
+            fail(f"REJECT claim-unbacked: {claim_id} has no valid requirement backing")
+        requirement_union.update(requirements)
+        corpus = claim["corpus"]
+        if type(corpus) is not list or not corpus:
+            fail(f"REJECT claim-scope-missing: {claim_id}.corpus is empty")
+        for item in corpus:
+            item = _claims_keys(item, f"{claim_id}.corpus row", {"name", "count"})
+            name, count = item["name"], item["count"]
+            if type(name) is not str or name not in facts or type(count) is not int:
+                _claims_invalid(f"{claim_id}.corpus contains an unknown corpus or malformed count")
+            if count != facts[name]:
+                fail(f"REJECT claim-corpus-drift: {claim_id} {name} expected {facts[name]} observed {count}")
+        evidence = claim["evidence"]
+        if type(evidence) is not list or not evidence:
+            fail(f"REJECT claim-unbacked: {claim_id} has no deciding CTest evidence")
+        for name in evidence:
+            if type(name) is not str or name not in registered:
+                fail(f"REJECT claim-evidence-unregistered: {claim_id} cites {name!r}")
+        evidence_union.update(evidence)
+        if claim["surface"] == "macos-player" and set(claim["platforms"]) - {"macos-arm64"}:
+            fail(f"REJECT claim-platform-unexercised: {claim_id} player surface is not packaged there")
+        if "windows-x64" in claim["platforms"] and set(evidence) & win_excluded:
+            fail(f"REJECT claim-platform-unexercised: {claim_id} cites a CTest removed on Windows")
+        if type(claim["non_claims"]) is not list or not claim["non_claims"] or any(
+                type(item) is not str or item not in non_claim_ids for item in claim["non_claims"]):
+            _claims_invalid(f"{claim_id}.non_claims must reference declared non-claim ids")
+    if claim_ids != REQUIRED_CLAIM_IDS:
+        _claims_invalid("claim id set differs from the required nine D-13 rows")
+    missing_evidence = sorted(REQUIRED_CLAIM_EVIDENCE - evidence_union)
+    missing_requirements = sorted(REQUIRED_CLAIM_REQUIREMENTS - requirement_union)
+    if missing_evidence or missing_requirements:
+        missing = [*("evidence:" + item for item in missing_evidence),
+                   *("requirement:" + item for item in missing_requirements)]
+        fail("REJECT claim-unbacked: missing " + ",".join(missing))
+    return data
+
+
+def load_claims(root: pathlib.Path, rev: str) -> dict:
+    raw = immutable_git_file(root, rev, CLAIMS_PATH, MAX_CLAIMS_BYTES)
+    return validate_claims(strict_json(raw, "claims-input"), root, rev)
+
+
+def claim_paragraphs(claims: dict, version: str) -> list[str]:
+    """Render reviewed claim data as Markdown paragraphs with blank separators."""
+    paragraphs = [
+        "## Scoped support claims",
+        f"Applies from v{claims['applies_from_version']} and describes software evidence for v{version}.",
+        "**Boot:** skipped. The following claims are bounded by model, mode, corpus, platform, and surface.",
+        "",
+    ]
+    for claim in claims["claims"]:
+        models = ", ".join(claim["models"])
+        modes = ", ".join(claim["modes"])
+        platforms = ", ".join(claim["platforms"])
+        corpus = "; ".join(f"{row['name']} ({row['count']})" for row in claim["corpus"])
+        evidence = ", ".join(f"`{name}`" for name in claim["evidence"])
+        paragraphs.extend([
+            f"- **{claim['id']}:** {claim['statement']} Scope: models {models}; modes {modes}; "
+            f"platforms {platforms}; surface {claim['surface']}; corpus {corpus}.",
+            f"  Requirements: {', '.join(claim['requirements'])}. Evidence: {evidence}.",
+            "",
+        ])
+    paragraphs.extend(["## Non-claims", ""])
+    for item in claims["non_claims"]:
+        paragraphs.extend([f"- **{item['id']}:** {item['statement']}", ""])
+    return paragraphs
+
+
 def disclosure_paragraphs(disclosure: dict, version: str) -> list[str]:
     """The ledger paragraphs, each followed by the blank separator line."""
     h = disclosure["historical"]
@@ -2862,13 +3156,147 @@ def first_difference(expected: bytes, observed: bytes) -> str:
     return "none"
 
 
-def require_generated(raw: bytes, label: str, version: str, disclosure: dict) -> bytes:
+def require_generated(raw: bytes, label: str, version: str, disclosure: dict,
+                      root: pathlib.Path = ROOT, rev: str | None = None) -> bytes:
     """The bytes the actual generator renders from this ledger's own structured data; they must equal the ledger."""
-    generated = render_v2_ledger(parse_ledger(raw, version), disclosure).encode("utf-8")
+    data = parse_ledger(raw, version)
+    if tuple(int(part) for part in version.split(".")) >= (0, 3, 0):
+        if rev is None:
+            try:
+                rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
+                                              stderr=subprocess.DEVNULL, text=True).strip()
+            except (OSError, subprocess.CalledProcessError):
+                fail("REJECT claims-input-invalid: immutable revision is unavailable")
+        claims = load_claims(root, rev)
+        generated = render_v3_ledger(data, disclosure, claims).encode("utf-8")
+    else:
+        generated = render_v2_ledger(data, disclosure).encode("utf-8")
     if generated != raw:
         fail(f"REJECT ledger-not-generated: {label} is not the exact generator output "
              f"(first difference at {first_difference(generated, raw)})")
     return generated
+
+
+def self_test_claims(root: pathlib.Path, rev: str) -> tuple[int, int]:
+    """Prove the v0.3 generator path and one scoped-input refusal beside positives."""
+    claims = load_claims(root, rev)
+    positives = 1
+    raw_v021 = immutable_git_file(root, rev, "docs/support/v0.2.1.md", MAX_LEDGER_BYTES)
+    disclosure_raw = immutable_git_file(root, rev, DISCLOSURE_PATH, MAX_DISCLOSURE_BYTES)
+    disclosure = validate_disclosure(strict_json(disclosure_raw, "disclosure-input"), root)
+    old_data = parse_ledger(raw_v021, "0.2.1")
+    require_generated(raw_v021, "docs/support/v0.2.1.md", "0.2.1", disclosure, root, rev)
+    positives += 1
+
+    v3_data = copy.deepcopy(old_data)
+    v3_data["version"] = "0.3.0"
+    v3_data["scope"]["modes"] = ["cgb-compat", "cgb-native", "dmg"]
+    synthetic = render_v3_ledger(v3_data, disclosure, claims).encode("utf-8")
+    if "## Scoped support claims" not in synthetic or "## Non-claims" not in synthetic:
+        fail("v0.3 synthetic generator omitted the managed claims section")
+    if require_generated(synthetic, "synthetic v0.3.0 ledger", "0.3.0", disclosure, root, rev) != synthetic:
+        fail("v0.3 synthetic ledger was not a generator fixed point")
+    positives += 1
+
+    controls = 0
+    invalid_scope = copy.deepcopy(claims)
+    invalid_scope["claims"][0]["platforms"] = []
+    try:
+        validate_claims(invalid_scope, root, rev)
+    except ValueError as error:
+        if "claim-scope-missing" not in str(error):
+            fail(f"claim scope control was rejected for the wrong reason: {error}")
+    else:
+        fail("claim scope control was accepted")
+    controls += 1
+
+    # Use create_current_ledger for a private 0.2 data seed, then render the
+    # synthetic 0.3.0 ledger and exercise the production schema-2 sidecar path.
+    from unittest import mock
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-claims-sidecar-") as temporary:
+        fixture = pathlib.Path(temporary) / "repo"
+        fixture.mkdir()
+
+        def fixture_git(*arguments: str, capture: bool = False) -> str:
+            result = subprocess.run(["git", *arguments], cwd=fixture, check=True,
+                                    stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+                                    stderr=subprocess.PIPE, text=True)
+            return result.stdout.strip() if capture else ""
+
+        fixture_git("init", "-q")
+        fixture_git("config", "user.name", "GabbaBoy Automation")
+        fixture_git("config", "user.email", "automation@users.noreply.github.com")
+        (fixture / "CMakeLists.txt").write_text(
+            "project(GabbaBoy VERSION 0.2.1 LANGUAGES C) # x-release-please-version\n", encoding="utf-8")
+        (fixture / ".release-please-manifest.json").write_text('{".":"0.2.1"}\n', encoding="utf-8")
+        (fixture / "tests/external").mkdir(parents=True)
+        (fixture / "tests/external/cgb-corpus-inventory.json").write_text('{"synthetic":true}\n', encoding="utf-8")
+        (fixture / "docs/support").mkdir(parents=True)
+        (fixture / "build").mkdir()
+        for path in ("CMakeLists.txt", ".release-please-manifest.json", "tests/external/cgb-corpus-inventory.json"):
+            fixture_git("add", path)
+        fixture_git("commit", "-q", "-m", "fixture base")
+        fixture_revision = fixture_git("rev-parse", "HEAD", capture=True)
+        receipt_path = fixture / "build/cgb-corpus-receipt.json"
+        receipt_path.write_text(json.dumps({"identity": {"core_revision": fixture_revision}}) + "\n",
+                                 encoding="utf-8")
+        preview_path = fixture / "build/generated-v2.md"
+        module = sys.modules[__name__]
+        with mock.patch.object(module, "run_inventory_validator"), \
+                mock.patch.object(module, "build_v2_data", return_value=copy.deepcopy(old_data)), \
+                mock.patch.object(module, "run_existing_receipt_validator"), \
+                mock.patch.object(module, "validate_data_v2"), \
+                mock.patch.object(module, "validate_source_bindings"):
+            synthetic_data = create_current_ledger(receipt_path, preview_path, fixture)
+
+        synthetic_data = copy.deepcopy(synthetic_data)
+        synthetic_data["version"] = "0.3.0"
+        synthetic_data["scope"]["modes"] = ["cgb-compat", "cgb-native", "dmg"]
+        source_raw = b'{"source":"claims fixture"}\n'
+        inventory_raw = b'{"inventory":"claims fixture"}\n'
+        source_path = "tests/data/claims-fixture.json"
+        inventory_path = "tests/data/inventory-fixture.json"
+        (fixture / "tests/data").mkdir(parents=True)
+        (fixture / source_path).write_bytes(source_raw)
+        (fixture / inventory_path).write_bytes(inventory_raw)
+        synthetic_data["source_inputs"] = [
+            {"path": source_path, "sha256": sha256(source_raw), "size_bytes": len(source_raw)},
+            {"path": inventory_path, "sha256": sha256(inventory_raw), "size_bytes": len(inventory_raw)},
+        ]
+        synthetic_data["inventory"] = {"path": inventory_path, "sha256": sha256(inventory_raw)}
+        synthetic_data["manifest_identities"] = []
+        synthetic_data["disposition_identities"] = []
+        synthetic_data["receipt"]["path"] = "build/cgb-corpus-receipt.json"
+        ledger_rel = "docs/support/v0.3.0.md"
+        ledger_raw = render_v3_ledger(synthetic_data, disclosure, claims).encode("utf-8")
+        (fixture / ledger_rel).write_bytes(ledger_raw)
+        for path in (source_path, inventory_path, ledger_rel):
+            fixture_git("add", path)
+        fixture_git("commit", "-q", "-m", "synthetic v0.3.0 ledger")
+        fixture_git("tag", "v0.3.0")
+        source_sha = fixture_git("rev-parse", "HEAD", capture=True)
+        fixture_git("commit", "--allow-empty", "-q", "-m", "post-tag fixture head")
+        with mock.patch.object(module, "_validate_run_identity", return_value={"core_revision": source_sha}), \
+                mock.patch.object(module, "check_source_ancestry"), \
+                mock.patch.object(module, "build_v2_data", return_value=copy.deepcopy(synthetic_data)), \
+                mock.patch.object(module, "validate_data_v2"), \
+                mock.patch.object(module, "stable_v2_evidence", return_value="same"), \
+                mock.patch.object(module, "validate_source_bindings"), \
+                mock.patch.object(module, "build_evidence_scope", return_value={"scope": "receipt-only"}):
+            sidecar = build_v2_sidecar("v0.3.0", source_sha, fixture, ledger_rel, ledger_raw,
+                                       synthetic_data, receipt_path)
+        expected_oid = fixture_git("rev-parse", f"v0.3.0:{ledger_rel}", capture=True)
+        if (sidecar.get("schema_version") != 2 or
+                sidecar.get("ledger", {}).get("git_blob_oid") != expected_oid or
+                sidecar.get("ledger", {}).get("sha256") != sha256(ledger_raw)):
+            fail("synthetic v0.3 sidecar did not bind its ledger blob and claims bytes")
+        positives += 1
+    return positives, controls
+
+
+def check_claims(root: pathlib.Path, rev: str) -> tuple[int, int]:
+    claims = load_claims(root, rev)
+    return len(claims["claims"]), len(claims["non_claims"])
 
 
 def run_adoption_over_ledger(ledger_rel: str, ledger_raw: bytes, root: pathlib.Path = ROOT) -> None:
@@ -3084,6 +3512,11 @@ def main() -> int:
     parser.add_argument("--check-disclosure", action="store_true",
                         help="the tagged ledgers are unchanged tag bytes and exact generator output (RM-028, D-19)")
     parser.add_argument("--self-test-disclosure", action="store_true")
+    parser.add_argument("--check-claims", action="store_true",
+                        help="validate the immutable v0.3.0 managed support claims at --rev")
+    parser.add_argument("--self-test-claims", action="store_true",
+                        help="run v0.3.0 claim renderer positives and seeded rejection controls at --rev")
+    parser.add_argument("--rev", help="full immutable 40-hex commit id for claims input and source facts")
     parser.add_argument("--write-current", action="store_true")
     parser.add_argument("--receipt", type=pathlib.Path)
     parser.add_argument("--attached-evidence", action="store_true",
@@ -3154,6 +3587,18 @@ def main() -> int:
         if args.check_disclosure:
             checked, tagged = check_disclosure_generator()
             print(f"release-disclosure generator pass ledgers={checked} tagged={tagged}")
+            return 0
+        if args.check_claims:
+            if args.rev is None:
+                parser.error("--check-claims requires --rev FULL_SHA")
+            claims_count, non_claim_count = check_claims(ROOT, args.rev)
+            print(f"support-claims pass claims={claims_count} non_claims={non_claim_count} rev={args.rev}")
+            return 0
+        if args.self_test_claims:
+            if args.rev is None:
+                parser.error("--self-test-claims requires --rev FULL_SHA")
+            positives, controls = self_test_claims(ROOT, args.rev)
+            print(f"support-claims controls pass positives={positives} controls={controls}")
             return 0
         if args.write_current:
             if not args.receipt:

@@ -1,0 +1,129 @@
+{
+  "applies_from_version": "0.3.0",
+  "claims": [
+    {
+      "corpus": [
+        {"count": 153, "name": "state-forks continuation cases"}
+      ],
+      "evidence": ["state_format_contract", "state_codec_matrix", "state_portable_pins", "state_refusal", "state_semantic_bounds"],
+      "id": "state-api",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-cross-version-state", "no-third-party-state-interop", "no-power-loss-durability", "no-cgb-game-level-evidence"],
+      "platforms": ["linux-x64", "macos-arm64", "windows-x64"],
+      "requirements": ["STATE-01", "STATE-02"],
+      "statement": "The public state API saves and loads validated state for the supported monochrome and color CPU models.",
+      "surface": "core-api"
+    },
+    {
+      "corpus": [{"count": 153, "name": "state-forks continuation cases"}],
+      "evidence": ["state_fork_matrix", "state_fork_mutant_controls", "state_fork_census"],
+      "id": "state-continuation",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-cross-version-state", "no-oracle-replay-from-forks", "no-cgb-game-level-evidence"],
+      "platforms": ["linux-x64", "macos-arm64", "windows-x64"],
+      "requirements": ["STATE-01", "STATE-02"],
+      "statement": "State continuation is covered by the declared fork corpus and its platform-specific regression lanes.",
+      "surface": "core-api"
+    },
+    {
+      "corpus": [{"count": 153, "name": "state-forks continuation cases"}],
+      "evidence": ["state_refusal", "state_refusal_controls", "state_codec_mutant_controls", "state_semantic_bounds"],
+      "id": "state-refusal",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-cross-version-state", "no-crc-authentication", "no-power-loss-durability"],
+      "platforms": ["linux-x64", "macos-arm64", "windows-x64"],
+      "requirements": ["STATE-01", "STATE-02"],
+      "statement": "Invalid and incompatible state inputs are refused without partially mutating the core.",
+      "surface": "core-api"
+    },
+    {
+      "corpus": [{"count": 3, "name": "state portable golden pins"}],
+      "evidence": ["state_portable_pins"],
+      "id": "state-canonical-pins",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-cross-version-state", "no-cgb-game-level-evidence"],
+      "platforms": ["linux-x64", "macos-arm64", "windows-x64"],
+      "requirements": ["STATE-01", "STATE-02"],
+      "statement": "Each platform verifies the committed state-format golden pins in its own state_portable_pins lane.",
+      "surface": "core-api"
+    },
+    {
+      "corpus": [{"count": 2, "name": "host save-format contract sections"}],
+      "evidence": ["state_rtc_palette", "state_refusal"],
+      "id": "state-battery-rtc",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-runner-wall-clock", "no-power-loss-durability"],
+      "platforms": ["linux-x64", "macos-arm64", "windows-x64"],
+      "requirements": ["STATE-01", "STATE-02"],
+      "statement": "Battery-backed state restoration follows the declared emulated RTC policy.",
+      "surface": "core-api"
+    },
+    {
+      "corpus": [{"count": 2, "name": "host save-format contract sections"}],
+      "evidence": ["host_continuation", "host_cadence_retry", "host_contract_json", "host_contract_docs"],
+      "id": "host-raw-save",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-third-party-state-interop", "no-power-loss-durability", "no-windows-host-mode"],
+      "platforms": ["linux-x64", "macos-arm64"],
+      "requirements": ["HOST-01", "HOST-02"],
+      "statement": "The POSIX runner host can write and restore raw save data under the documented host contract.",
+      "surface": "runner-host-mode"
+    },
+    {
+      "corpus": [{"count": 4, "name": "host exit-code definitions"}],
+      "evidence": ["host_signal_term", "host_exit_table_codes", "installed_host_smoke"],
+      "id": "host-signals-exit",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-windows-host-mode", "no-runner-wall-clock"],
+      "platforms": ["linux-x64", "macos-arm64"],
+      "requirements": ["HOST-01", "HOST-02", "HOST-03"],
+      "statement": "The POSIX runner handles the documented termination signals and exit codes.",
+      "surface": "runner-host-mode"
+    },
+    {
+      "corpus": [{"count": 2, "name": "host save-format contract sections"}],
+      "evidence": ["save_format_files", "save_format_completeness", "save_format_freeze"],
+      "id": "host-format-table",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-third-party-state-interop", "no-windows-host-mode"],
+      "platforms": ["linux-x64", "macos-arm64"],
+      "requirements": ["HOST-01", "HOST-02"],
+      "statement": "The host save-format table is complete and held to its documented compatibility contract.",
+      "surface": "runner-host-mode"
+    },
+    {
+      "corpus": [{"count": 51, "name": "player slot test inventory"}],
+      "evidence": ["slot_message_table", "slot_reanchor_plan", "input_clock_after_load", "player_slot_keys", "player_slot_reanchor"],
+      "id": "player-slots",
+      "models": ["DMG-CPU-B", "CGB-CPU-E"],
+      "modes": ["dmg", "cgb-compat", "cgb-native"],
+      "non_claims": ["no-linux-windows-player", "no-playstead-live-integration", "no-power-loss-durability"],
+      "platforms": ["macos-arm64"],
+      "requirements": ["PLAY-01"],
+      "statement": "The macOS player provides the documented save slots; its SDL-free slot engine is also tested on Linux.",
+      "surface": "macos-player"
+    }
+  ],
+  "kind": "scoped-support-claims",
+  "non_claims": [
+    {"id": "no-cross-version-state", "statement": "State files load only in the exact GabbaBoy release that wrote them."},
+    {"id": "no-third-party-state-interop", "statement": "Third-party state import and export are not supported."},
+    {"id": "no-power-loss-durability", "statement": "The host does not promise power-loss durability."},
+    {"id": "no-windows-host-mode", "statement": "Runner host mode is POSIX-only; Windows refuses --save-dir."},
+    {"id": "no-linux-windows-player", "statement": "The player is not packaged for Linux or Windows."},
+    {"id": "no-cgb-game-level-evidence", "statement": "No CGB game-level evidence is claimed."},
+    {"id": "no-oracle-replay-from-forks", "statement": "Fork cases are not replayed from an external hardware oracle."},
+    {"id": "no-crc-authentication", "statement": "A CRC detects corruption and is not an authentication mechanism."},
+    {"id": "no-runner-wall-clock", "statement": "Runner wall-clock timing is not claimed as deterministic emulated time."},
+    {"id": "no-playstead-live-integration", "statement": "No live Playstead integration is claimed."}
+  ],
+  "schema_version": 1
+}
