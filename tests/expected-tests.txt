@@ -1658,3 +1658,6 @@ host_contract_docs
 host_contract_docs_control
 host_contract_docs_missing_control
 doc_no_interop_claims
+contract_rev_wiring
+contract_rev_wiring_stale_control
+contract_rev_wiring_missing_control

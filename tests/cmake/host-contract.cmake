@@ -29,21 +29,10 @@ endif()
 # ---- D-29: phrase contracts for the host-contract documents, each with a phrase-removed control ----------------
 # The phrase checks read the working-tree documents (cmake/VerifyDocContract.cmake). Phrases hold no semicolon
 # (it separates list elements), so a sentence that has one is pinned as its halves. The checker modes below read
-# the documents with `git show <rev>:<path>` at the configure-time HEAD, so commit before running them.
+# the documents with `git show <rev>:<path>` at HEAD as of the run, so commit before running them.
 
-execute_process(
-  COMMAND git rev-parse HEAD
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-  RESULT_VARIABLE GBB_HOST_CONTRACT_REV_RESULT
-  OUTPUT_VARIABLE GBB_HOST_CONTRACT_REV
-  ERROR_QUIET
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-string(LENGTH "${GBB_HOST_CONTRACT_REV}" GBB_HOST_CONTRACT_REV_LENGTH)
-if(NOT GBB_HOST_CONTRACT_REV_RESULT EQUAL 0 OR NOT GBB_HOST_CONTRACT_REV_LENGTH EQUAL 40 OR
-   NOT GBB_HOST_CONTRACT_REV MATCHES "^[0-9a-f]+$")
-  set(GBB_HOST_CONTRACT_REV "unknown")
-  message(STATUS "Host-contract document CTests remain registered with an unresolved revision and will fail closed")
-endif()
+# The revision is the save-format one (tests/cmake/save-formats.cmake, included first): HEAD at run time by default.
+set(GBB_HOST_CONTRACT_REV "${GBB_SAVE_FORMATS_REV}")
 
 set(GBB_HOST_CONTRACT_DOC_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyDocContract.cmake")
 set(GBB_HOST_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-host-contract.py")
@@ -236,3 +225,44 @@ add_test(NAME doc_no_interop_claims
     --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
 set_tests_properties(doc_no_interop_claims PROPERTIES TIMEOUT 60 LABELS planning
   PASS_REGULAR_EXPRESSION "no-interop-claims pass files=6 controls=1")
+
+# ---- WR-04: the checkers name HEAD, never a configure-time SHA ---------------------------------------------------
+# The registered commands are read back from the generated CTestTestfile.cmake. The control hands the same script a
+# file whose save_format_files line carries a 40-digit SHA (the pre-fix wiring) and a file with a test missing; each
+# must be rejected for its own reason, so the wiring check cannot pass by reading nothing.
+set(GBB_REV_WIRING_TESTS save_format_completeness save_format_freeze host_contract_json host_contract_controls
+  host_contract_docs host_contract_docs_control host_contract_docs_missing_control doc_no_interop_claims)
+if(NOT WIN32)
+  list(APPEND GBB_REV_WIRING_TESTS save_format_files save_format_controls)
+endif()
+set(GBB_REV_WIRING_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/CheckContractRevWiring.cmake")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_REV_WIRING_SCRIPT}")
+set(GBB_REV_WIRING_DIR "${PROJECT_BINARY_DIR}/contract-rev-wiring")
+file(MAKE_DIRECTORY "${GBB_REV_WIRING_DIR}")
+file(WRITE "${GBB_REV_WIRING_DIR}/stale-sha-CTestTestfile.cmake"
+  "add_test(\"save_format_files\" \"python3\" \"-I\" \"c.py\" \"--check\" \"--rev\" "
+  "\"8014d1a824ba92d47b31943270f0fa99b97ce329\" \"--repo\" \"r\")\n")
+file(WRITE "${GBB_REV_WIRING_DIR}/missing-CTestTestfile.cmake"
+  "add_test(\"other_test\" \"python3\" \"--rev\" \"HEAD\")\n")
+add_test(NAME contract_rev_wiring
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_TESTFILE=${CMAKE_CURRENT_BINARY_DIR}/CTestTestfile.cmake"
+    "-DGBB_TEST_NAMES=${GBB_REV_WIRING_TESTS}"
+    "-DGBB_EXPECT_REV=${GBB_SAVE_FORMATS_REV}"
+    -P "${GBB_REV_WIRING_SCRIPT}")
+set_tests_properties(contract_rev_wiring PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "contract-rev-wiring pass tests=[0-9]+ rev=")
+add_test(NAME contract_rev_wiring_stale_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_TESTFILE=${GBB_REV_WIRING_DIR}/stale-sha-CTestTestfile.cmake;-DGBB_TEST_NAMES=save_format_files;-DGBB_EXPECT_REV=HEAD;-P;${GBB_REV_WIRING_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=reads revision[ \n]+8014d1a824ba92d47b31943270f0fa99b97ce329"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(contract_rev_wiring_stale_control PROPERTIES TIMEOUT 60)
+add_test(NAME contract_rev_wiring_missing_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_TESTFILE=${GBB_REV_WIRING_DIR}/missing-CTestTestfile.cmake;-DGBB_TEST_NAMES=save_format_files;-DGBB_EXPECT_REV=HEAD;-P;${GBB_REV_WIRING_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=test save_format_files is not registered"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(contract_rev_wiring_missing_control PROPERTIES TIMEOUT 60)

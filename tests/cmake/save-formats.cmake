@@ -1,8 +1,8 @@
 # Phase 18: the published save-format table (HOST-03, D-16, D-19, D-20).
 #
 # docs/host-contract.json is the machine-readable host contract. The checkers read it and the C sources with
-# `git show <rev>:<path>` at the configure-time HEAD, so commit before running them: an uncommitted edit, or a
-# configure from before the commit, checks the previous revision. Generated ROMs and save directories live under
+# `git show <rev>:<path>` at HEAD as of the run, so commit before running them: an uncommitted edit checks the
+# previous commit. Generated ROMs and save directories live under
 # ${PROJECT_BINARY_DIR}/save-formats; nothing binary is committed. Every name registered here must also be listed
 # in tests/expected-tests.txt (append-only). The produced-file leg and the shim controls spawn POSIX processes, so
 # those names are POSIX-only and are removed from the Windows expectation in BOTH cmake/ExpectedTests.cmake and
@@ -10,16 +10,18 @@
 #
 # This fragment is included before tests/CMakeLists.txt resolves GBB_STATE_SOURCE_REV, so it resolves its own.
 
+# The commit the checkers read. `HEAD` is handed to git when each test runs, so a commit made after configure is the
+# one checked and a stale configure cannot report on an older tree (review WR-04). A boundary-commit run pins a full
+# SHA instead: -DGBB_SAVE_FORMATS_REV=<sha>. cmake/CheckContractRevWiring.cmake holds the registered tests to this.
+set(GBB_SAVE_FORMATS_REV "HEAD" CACHE STRING
+  "Revision the save-format and host-contract checkers read: HEAD (resolved at run time) or a full commit SHA")
 execute_process(
-  COMMAND git rev-parse HEAD
+  COMMAND git rev-parse --verify --quiet "${GBB_SAVE_FORMATS_REV}^{commit}"
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
   RESULT_VARIABLE GBB_SAVE_FORMATS_REV_RESULT
-  OUTPUT_VARIABLE GBB_SAVE_FORMATS_REV
-  ERROR_QUIET
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-string(LENGTH "${GBB_SAVE_FORMATS_REV}" GBB_SAVE_FORMATS_REV_LENGTH)
-if(NOT GBB_SAVE_FORMATS_REV_RESULT EQUAL 0 OR NOT GBB_SAVE_FORMATS_REV_LENGTH EQUAL 40 OR
-   NOT GBB_SAVE_FORMATS_REV MATCHES "^[0-9a-f]+$")
+  OUTPUT_QUIET
+  ERROR_QUIET)
+if(NOT GBB_SAVE_FORMATS_REV_RESULT EQUAL 0)
   set(GBB_SAVE_FORMATS_REV "unknown")
   message(STATUS "Save-format CTests remain registered with an unresolved revision and will fail closed")
 endif()
