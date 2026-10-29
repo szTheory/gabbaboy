@@ -104,7 +104,7 @@ if(NOT WIN32)
       refusal_dmg_in_cgb refusal_version_token refusal_text_file refusal_flipped_byte refusal_truncated
       refusal_oversize refusal_symlink undo_write_failure backup_write_failure undo_swap no_undo
       battery_guard unsafe_queued_input save_failure_keeps_old reanchor_later reanchor_earlier
-      select_message)
+      select_message stale_temp_sweep)
     add_test(NAME slot_${case} COMMAND test_slots ${case}
       WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/slots-work")
     set_tests_properties(slot_${case} PROPERTIES PASS_REGULAR_EXPRESSION "PASS ${case}")
@@ -170,6 +170,17 @@ if(NOT WIN32)
     [=[const gbb_error clock_error = GBB_STATE_CORRUPT;
     if (false && clock_error != GBB_OK) {]=]
     clock_failure "FAIL clock_failure")
+
+  # WR-02: the attach-time sweep of crash-orphaned writer temps does nothing, or matches every temp in the
+  # directory instead of this ROM's and profile's.
+  gbb_slots_mutant(sweep_noop
+    [=[        (void)unlinkat(store->dirfd, names[i], 0); /* a symlink is removed itself, never followed */]=]
+    [=[        (void)names[i];]=]
+    stale_temp_sweep "FAIL stale_temp_sweep")
+  gbb_slots_mutant(sweep_unscoped
+    [=[snprintf(lead, sizeof(lead), ".%s-", store->prefix);]=]
+    [=[snprintf(lead, sizeof(lead), ".");]=]
+    stale_temp_sweep "FAIL stale_temp_sweep")
 
   # D-24: the plan ignores the restored queue, so the press is queued at now, which precedes the last
   # restored event and is refused.

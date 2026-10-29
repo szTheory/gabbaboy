@@ -101,8 +101,9 @@ typedef struct {
     bool guard_valid;
 } player_slot_store;
 
-/* Prepares a store. Returns false (with a zeroed store) for a bad descriptor, digest or profile, a ROM
- * larger than PLAYER_SLOT_MAX_ROM_BYTES or an allocation failure; always false on Windows. */
+/* Prepares a store and removes this ROM's and profile's stale `.<prefix>-*.tmp-*` writer temps left by a crash.
+ * Returns false (with a zeroed store) for a bad descriptor, digest or profile, a ROM larger than
+ * PLAYER_SLOT_MAX_ROM_BYTES or an allocation failure; always false on Windows. */
 bool player_slot_store_init(player_slot_store *store, int pref_dirfd, const uint8_t rom_sha256[32],
                             gbb_profile profile, const uint8_t *rom, size_t rom_size);
 void player_slot_store_free(player_slot_store *store);

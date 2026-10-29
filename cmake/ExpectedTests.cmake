@@ -81,6 +81,9 @@ function(gabbaboy_verify_registered_tests)
       slot_battery_guard
       slot_unsafe_queued_input
       slot_save_failure_keeps_old
+      slot_stale_temp_sweep
+      slot_mutant_sweep_noop
+      slot_mutant_sweep_unscoped
       slot_mutant_undo_before_load
       slot_mutant_preload_before_validate
       slot_mutant_no_guard

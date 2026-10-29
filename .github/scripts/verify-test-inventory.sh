@@ -90,6 +90,9 @@ filter_expected_for_platform() {
         -e '/^slot_battery_guard$/d' \
         -e '/^slot_unsafe_queued_input$/d' \
         -e '/^slot_save_failure_keeps_old$/d' \
+        -e '/^slot_stale_temp_sweep$/d' \
+        -e '/^slot_mutant_sweep_noop$/d' \
+        -e '/^slot_mutant_sweep_unscoped$/d' \
         -e '/^slot_mutant_undo_before_load$/d' \
         -e '/^slot_mutant_preload_before_validate$/d' \
         -e '/^slot_mutant_no_guard$/d' \
@@ -212,6 +215,9 @@ _self_test_platform_filter_cases() {
     slot_battery_guard \
     slot_unsafe_queued_input \
     slot_save_failure_keeps_old \
+    slot_stale_temp_sweep \
+    slot_mutant_sweep_noop \
+    slot_mutant_sweep_unscoped \
     slot_mutant_undo_before_load \
     slot_mutant_preload_before_validate \
     slot_mutant_no_guard \
@@ -335,6 +341,9 @@ _self_test_platform_filter_cases() {
     slot_battery_guard \
     slot_unsafe_queued_input \
     slot_save_failure_keeps_old \
+    slot_stale_temp_sweep \
+    slot_mutant_sweep_noop \
+    slot_mutant_sweep_unscoped \
     slot_mutant_undo_before_load \
     slot_mutant_preload_before_validate \
     slot_mutant_no_guard \

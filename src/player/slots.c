@@ -17,6 +17,7 @@
 #include <string.h>
 
 #ifndef _WIN32
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <time.h>
@@ -65,6 +66,41 @@ static bool build_name(const player_slot_store *store, name_kind kind, unsigned 
     return length > 0 && (size_t)length < capacity;
 }
 
+/* A crash (SIGKILL, power loss) between host_save_io_replace's temp create and its rename leaves
+ * `.<prefix>-<slotN|undo|battery-preload>.<ext>.tmp-<pid>-<seq>`, a full state or battery image. host mode sweeps its
+ * own stem's temps; nothing swept these, so each crash would leak up to three files for good. The sweep is scoped to
+ * this store's `.<rom digest>-<profile>-` lead, so another ROM's files and the player's own `.gbb` temps stay, and it
+ * assumes one player per ROM and profile (a second player's in-flight temp would lose its rename and report a failed
+ * save). Names are collected first and unlinked after closedir, because a directory read that sees entries removed
+ * under it may skip the ones after them; the cap keeps the work bounded, and the next attach takes the rest. */
+#define SLOT_SWEEP_CAP 32u
+
+static void sweep_stale_temps(const player_slot_store *store) {
+    char lead[96];
+    const int lead_length = snprintf(lead, sizeof(lead), ".%s-", store->prefix);
+    if (lead_length <= 0 || (size_t)lead_length >= sizeof(lead)) return;
+    const int duplicate = fcntl(store->dirfd, F_DUPFD_CLOEXEC, 0);
+    if (duplicate < 0) return;
+    DIR *directory = fdopendir(duplicate);
+    if (directory == NULL) {
+        (void)close(duplicate);
+        return;
+    }
+    rewinddir(directory);
+    char names[SLOT_SWEEP_CAP][160];
+    size_t count = 0u;
+    struct dirent *entry;
+    while (count < SLOT_SWEEP_CAP && (entry = readdir(directory)) != NULL) {
+        if (strncmp(entry->d_name, lead, (size_t)lead_length) != 0 || strstr(entry->d_name, ".tmp-") == NULL ||
+            strlen(entry->d_name) >= sizeof(names[0]))
+            continue;
+        memcpy(names[count++], entry->d_name, strlen(entry->d_name) + 1u);
+    }
+    (void)closedir(directory);
+    for (size_t i = 0u; i < count; ++i)
+        (void)unlinkat(store->dirfd, names[i], 0); /* a symlink is removed itself, never followed */
+}
+
 bool player_slot_store_init(player_slot_store *store, int pref_dirfd, const uint8_t rom_sha256[32],
                             gbb_profile profile, const uint8_t *rom, size_t rom_size) {
     if (store == NULL) return false;
@@ -88,6 +124,7 @@ bool player_slot_store_init(player_slot_store *store, int pref_dirfd, const uint
     (void)snprintf(store->prefix, sizeof(store->prefix), "%s-%s", digest, token);
     store->dirfd = pref_dirfd;
     store->profile = profile;
+    sweep_stale_temps(store); /* once per attach, before any slot key can be accepted */
     return true;
 }
 

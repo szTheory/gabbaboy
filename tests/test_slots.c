@@ -760,6 +760,44 @@ static int case_backup_write_failure(void) {
     return 0;
 }
 
+static bool exists_nofollow(const fixture *fx, const char *name) {
+    struct stat info;
+    return fstatat(fx->dirfd, name, &info, AT_SYMLINK_NOFOLLOW) == 0;
+}
+
+/* WR-02: attaching a store removes the writer temps a crash left for this ROM and profile, and nothing else. */
+static int case_stale_temp_sweep(void) {
+    fixture fx;
+    REQUIRE(fx_setup(&fx, GBB_PROFILE_DMG_CPU_B, 'A'));
+    static const uint8_t body[] = "stale";
+    char swept[5][200];
+    char kept[6][200];
+    (void)snprintf(swept[0], sizeof(swept[0]), ".%s-dmg-slot3.gbbs.tmp-111-0", fx.hex);
+    (void)snprintf(swept[1], sizeof(swept[1]), ".%s-dmg-undo.gbbs.tmp-111-1", fx.hex);
+    (void)snprintf(swept[2], sizeof(swept[2]), ".%s-dmg-battery-preload.bin.tmp-111-0", fx.hex);
+    (void)snprintf(swept[3], sizeof(swept[3]), ".%s-dmg-slot9.gbbs.tmp-4242-7", fx.hex);
+    (void)snprintf(swept[4], sizeof(swept[4]), ".%s-dmg-slot5.gbbs.tmp-9-0", fx.hex); /* a symlink */
+    /* The same ROM under the other profile, another ROM, the player's own battery temp, the real slot, a
+     * dot-file without a temp marker, and the symlink's target. */
+    (void)snprintf(kept[0], sizeof(kept[0]), ".%s-cgb-slot1.gbbs.tmp-1-0", fx.hex);
+    (void)snprintf(kept[1], sizeof(kept[1]), ".%.60sff-dmg-slot3.gbbs.tmp-111-0", fx.hex);
+    (void)snprintf(kept[2], sizeof(kept[2]), ".%s.gbb.tmp-5-0", fx.hex);
+    (void)snprintf(kept[3], sizeof(kept[3]), "%s-dmg-slot2.gbbs", fx.hex);
+    (void)snprintf(kept[4], sizeof(kept[4]), ".%s-dmg-slot4.gbbs", fx.hex);
+    (void)snprintf(kept[5], sizeof(kept[5]), "symlink-target.bin");
+    for (size_t i = 0u; i < 4u; ++i) REQUIRE(put_file(&fx, swept[i], body, sizeof(body)));
+    REQUIRE(symlinkat(kept[5], fx.dirfd, swept[4]) == 0);
+    for (size_t i = 0u; i < 6u; ++i) REQUIRE(put_file(&fx, kept[i], body, sizeof(body)));
+
+    player_slot_store_free(&fx.store);
+    fx.store_ready = player_slot_store_init(&fx.store, fx.dirfd, fx.digest, fx.profile, fx.rom, fx.rom_size);
+    REQUIRE(fx.store_ready);
+    for (size_t i = 0u; i < 5u; ++i) REQUIRE(!exists_nofollow(&fx, swept[i]));
+    for (size_t i = 0u; i < 6u; ++i) REQUIRE(exists_nofollow(&fx, kept[i])); /* the link's target survives too */
+    fx_teardown(&fx);
+    return 0;
+}
+
 static int case_undo_swap(void) {
     pair_fixture pf;
     CHECK(pair_open(&pf));
@@ -1145,6 +1183,7 @@ static const slot_case g_cases[] = {
     {"backup_write_failure", case_backup_write_failure},
     {"rollback_failure", case_rollback_failure},
     {"clock_failure", case_clock_failure},
+    {"stale_temp_sweep", case_stale_temp_sweep},
     {"undo_swap", case_undo_swap},
     {"no_undo", case_no_undo},
     {"battery_guard", case_battery_guard},
