@@ -320,6 +320,9 @@ and at most 3,600 frames of clock-only drift. After a failed flush the image sta
 retries 16 frames later. Before the first frame the runner removes stale temporary files named
 `.{stem}.sav.tmp-` followed by anything, which only a crashed writer leaves.
 
+A first flush creates `{stem}.sav` owner-only (mode 0600). Replacing an existing save keeps its permission
+bits, so a group-shared or supervisor-readable save stays readable; the owner and group are not reproduced.
+
 Run one writer per save directory and ROM stem; a second runner on the same pair is unsupported and
 its live temporary file may be swept.
 

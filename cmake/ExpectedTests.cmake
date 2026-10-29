@@ -39,6 +39,8 @@ function(gabbaboy_verify_registered_tests)
       host_writer_eio_no_retry
       host_writer_eexist
       host_writer_target_not_regular
+      host_writer_preserve_mode
+      host_writer_mutant_no_preserve_mode
       host_sweep_exact_prefix
       host_rtc_final_compare
       host_savedir_missing

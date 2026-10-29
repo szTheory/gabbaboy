@@ -263,6 +263,13 @@ if(NOT WIN32)
   set_tests_properties(host_writer_eexist PROPERTIES PASS_REGULAR_EXPRESSION "PASS eexist")
   add_test(NAME host_writer_target_not_regular COMMAND test_host_save_io target_not_regular)
   set_tests_properties(host_writer_target_not_regular PROPERTIES PASS_REGULAR_EXPRESSION "PASS target_not_regular")
+  # WR-05: an existing save keeps its permission bits. Its own program, so the mutant below links without seams.
+  add_executable(test_host_save_mode "${PROJECT_SOURCE_DIR}/tests/test_host_save_mode.c")
+  target_link_libraries(test_host_save_mode PRIVATE gabbaboy_host)
+  target_compile_features(test_host_save_mode PRIVATE c_std_17)
+  set_target_properties(test_host_save_mode PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME host_writer_preserve_mode COMMAND test_host_save_mode preserve_mode)
+  set_tests_properties(host_writer_preserve_mode PROPERTIES PASS_REGULAR_EXPRESSION "PASS preserve_mode")
   add_test(NAME host_sweep_exact_prefix COMMAND test_host_save_io sweep_exact_prefix)
   set_tests_properties(host_sweep_exact_prefix PROPERTIES PASS_REGULAR_EXPRESSION "PASS sweep_exact_prefix")
 
@@ -335,6 +342,20 @@ if(NOT WIN32)
   gbb_host_mutant_runner(follow gabbaboy_host_mutant_follow)
   gbb_add_host_mutant_scenario(host_import_mutant_follow gabbaboy-runner-hostvariant-follow import-symlink
     "exit [01], expected 2")
+
+  # WR-05 negative: the mode is not carried over, so the replaced save comes out 0600.
+  gbb_host_mutant_library(no_preserve_mode host_save_io.c
+    "if (publish_mode != 0600) (void)fchmod(fd, publish_mode);"
+    "(void)publish_mode;")
+  add_executable(test_host_save_mode_mutant_no_preserve_mode "${PROJECT_SOURCE_DIR}/tests/test_host_save_mode.c")
+  target_link_libraries(test_host_save_mode_mutant_no_preserve_mode PRIVATE gabbaboy_host_mutant_no_preserve_mode)
+  target_compile_features(test_host_save_mode_mutant_no_preserve_mode PRIVATE c_std_17)
+  set_target_properties(test_host_save_mode_mutant_no_preserve_mode PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME host_writer_mutant_no_preserve_mode
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_host_save_mode_mutant_no_preserve_mode>;preserve_mode"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL preserve_mode"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 
   # ---- D-09/T-18-13: no fault seam in any shipped artifact ----
   # The shipped archive and the runner must define no host_save_io_test_ symbol; the same check on the

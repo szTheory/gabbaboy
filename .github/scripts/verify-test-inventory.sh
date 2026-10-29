@@ -48,6 +48,8 @@ filter_expected_for_platform() {
         -e '/^host_writer_eio_no_retry$/d' \
         -e '/^host_writer_eexist$/d' \
         -e '/^host_writer_target_not_regular$/d' \
+        -e '/^host_writer_preserve_mode$/d' \
+        -e '/^host_writer_mutant_no_preserve_mode$/d' \
         -e '/^host_sweep_exact_prefix$/d' \
         -e '/^host_rtc_final_compare$/d' \
         -e '/^host_savedir_missing$/d' \
@@ -176,6 +178,8 @@ _self_test_platform_filter_cases() {
     host_writer_eio_no_retry \
     host_writer_eexist \
     host_writer_target_not_regular \
+    host_writer_preserve_mode \
+    host_writer_mutant_no_preserve_mode \
     host_sweep_exact_prefix \
     host_rtc_final_compare \
     host_savedir_missing \
@@ -305,6 +309,8 @@ _self_test_platform_filter_cases() {
     host_writer_eio_no_retry \
     host_writer_eexist \
     host_writer_target_not_regular \
+    host_writer_preserve_mode \
+    host_writer_mutant_no_preserve_mode \
     host_sweep_exact_prefix \
     host_rtc_final_compare \
     host_savedir_missing \

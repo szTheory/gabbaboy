@@ -189,6 +189,16 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
         return HOST_IO_ETEMP;
     }
 
+    /* The temp is created owner-only, and the rename would make that the published mode. A save that was shared
+     * (0644, 0664) or read by a supervisor under another uid must not lose its access on the first flush, so the
+     * permission bits of an existing regular target are carried over to the temp. Best effort and bits only: a
+     * mode that cannot be applied (a filesystem without modes) leaves the owner-only default, and the owner and
+     * group of the target are not reproduced. */
+    mode_t publish_mode = 0600;
+    struct stat existing;
+    if (fstatat(dirfd, name, &existing, AT_SYMLINK_NOFOLLOW) == 0 && S_ISREG(existing.st_mode))
+        publish_mode = existing.st_mode & 0777;
+
     char temp[320];
     int fd = -1;
     const long pid = (long)getpid();
@@ -200,6 +210,7 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
         if (errno != EEXIST) return HOST_IO_ETEMP;
     }
     if (fd < 0) { errno = EEXIST; return HOST_IO_ETEMP; }
+    if (publish_mode != 0600) (void)fchmod(fd, publish_mode); /* fchmod ignores the umask, unlike the create */
 
     int code = HOST_IO_OK;
     int failure_errno = 0;
