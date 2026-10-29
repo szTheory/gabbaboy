@@ -56,7 +56,7 @@ metrics:
   duration: 53min
   completed: 2026-10-29
   status: complete
-requirements-completed: [REL-01]
+requirements-completed: []
 coverage:
   - id: D1
     description: Nightly and candidate release gates bind the selected rehearsal to the exact merged version PR head and merge time, and reject reused postdated attempts without fallback.

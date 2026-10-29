@@ -111,3 +111,7 @@ The full phase1 build and 1,681-test run at `01e3354a279a68158735b02cd42386e9cb8
 - At `cb1bb07440f8df5cf1c845eb8c638b86c673bdb4`, the scoped rerun with access for temporary Git worktrees passed 3/3: `v02_performance_controls`, `v02_delivery_controls`, and `release_review_approval`. JUnit: `build/phase19-wave1-sandbox-rerun.xml`.
 
 All failures from the Wave 1 run are covered by these repairs and focused reruns. Schema/UI gates were non-blocking; codebase drift skipped because no structure map exists. This closes Wave 1 integration only; REL-01 and phase verification remain pending.
+
+## Wave 2 Integration Evidence
+
+At `8c906de57abe9337d3c1784221b5659a1e46b256`, phase1 configure/build passed and the complete CTest suite passed 1,682/1,682 with four parallel workers. JUnit: `build/phase19-wave2.xml`; log: `build/phase19-wave2-ctest.log`. The suite ran with scoped access for its temporary Git worktrees, and retained every test and timeout. Schema and UI gates were non-blocking; codebase drift skipped because no structure map exists. REL-01 remains pending until publication and readback; 19-04 supplies rehearsal-binding coverage only.
