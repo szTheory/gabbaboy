@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Planning hygiene checks for GabbaBoy (Phase 16 plan 16-05, TUNE-05; D-24..D-27).
 
-Four checks, each a pure function over text or a directory that returns (summary, errors) with stable
+Five checks, each a pure function over text or a directory that returns (summary, errors) with stable
 error-code prefixes, so a control can pin the failure class instead of "some error":
 
   --check plan-cap (--roadmap PATH --phases-dir DIR | --rev COMMIT [--repo DIR])
@@ -27,8 +27,13 @@ error-code prefixes, so a control can pin the failure class instead of "some err
       in each file, and the two sentences verify-v02-adoption.py requires must survive (D-27). No live
       GabbaBoy/Playstead integration is ever claimed. Prints "playstead-docs pass files=3".
 
+  --check deferrals --rev COMMIT [--repo DIR]
+      Pins the Phase 19 RM-024 deferral and the six RM-032 v0.4 candidates in FUTURE-MILESTONES.md.
+      Reads that file from one full immutable commit id with git show. Prints "deferrals pass pins=8".
+
   --self-test   runs every rule against generated and committed fixtures and prints
-                "planning-hygiene self-test pass controls=N" once.
+                "planning-hygiene self-test pass controls=N" once; --rev/--repo select the
+                immutable FUTURE-MILESTONES.md used by the deferral live-positive control.
 
 STATE bound measurement (git history of .planning/STATE.md, bytes / newline count):
   end of Phase 14 (c771b1b)      60,812 / 536
@@ -94,6 +99,17 @@ def phase_details(roadmap: str) -> list[str] | None:
 PlanTree = dict[str, dict[str, Callable[[], str]]]
 # The one spelling of the phases directory this checker uses: a path inside a named commit, read with git, never the live tree.
 PHASES_AT_REV = ".planning/phases"
+DEFERRALS_AT_REV = ".planning/context/FUTURE-MILESTONES.md"
+DEFERRAL_PINS = (
+    "IN-03 (IN-A03), IN-04 (IN-B01) and IN-06 (IN-B03) deferred here by Phase 19 D-10",
+    "RM-032",
+    "GitHub immutable releases with `gh release verify`",
+    "An optional ruleset protecting `v*` tags",
+    "SLSA build provenance",
+    "Rename the `v02-*` evidence names to version-agnostic names (D-16)",
+    "`bump-minor-pre-major` in release-please-config.json (D-03)",
+    "Move the paired-timing baseline off v0.1.0",
+)
 
 
 def is_gap_plan(text: str) -> bool:
@@ -148,6 +164,19 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree]:
                 return shown.stdout.decode("utf-8", errors="replace")
             files[name] = reader
     return roadmap.stdout.decode("utf-8"), tree
+
+
+def read_deferrals(repo: Path, rev: str) -> str:
+    """Read FUTURE-MILESTONES.md from one full commit id; never consult the working tree."""
+    if not FULL_COMMIT.fullmatch(rev):
+        raise SystemExit("deferrals-rev: --rev must be a full 40-hex commit id, not a name")
+    found = git_run(repo, "cat-file", "-t", rev)
+    if found.returncode != 0 or found.stdout.strip() != b"commit":
+        raise SystemExit(f"deferrals-rev: {rev} is not a commit in {repo}")
+    content = git_run(repo, "show", f"{rev}:{DEFERRALS_AT_REV}")
+    if content.returncode != 0:
+        raise SystemExit(f"deferrals-rev: {DEFERRALS_AT_REV} cannot be read at {rev}")
+    return content.stdout.decode("utf-8", errors="strict")
 
 
 def check_plan_cap(roadmap: str, phases_dir: Path) -> tuple[str, list[str]]:
@@ -246,6 +275,13 @@ def check_state_size(data: bytes, max_bytes: int = STATE_MAX_BYTES, max_lines: i
     return f"state-size pass bytes={size} lines={lines}", errors
 
 
+def check_deferrals(text: str) -> tuple[str, list[str]]:
+    """Require all recorded Phase 19 deferrals/candidates after whitespace normalization."""
+    normalized = " ".join(text.split())
+    errors = [f"deferral-unrecorded: {phrase}" for phrase in DEFERRAL_PINS if phrase not in normalized]
+    return f"deferrals pass pins={len(DEFERRAL_PINS)}", errors
+
+
 def codes(errors: list[str]) -> set[str]:
     return {error.split(":", 1)[0] for error in errors}
 
@@ -288,7 +324,7 @@ def make_phases(root: Path, counts: dict[str, int], gaps: dict[str, int] | None 
     return phases
 
 
-def self_test() -> int:
+def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
     controls = 0
 
     def expect(label: str, errors: list[str], code: str | None) -> None:
@@ -442,6 +478,36 @@ def self_test() -> int:
 
         controls += self_test_playstead(base)
 
+        live_revision = rev
+        if live_revision is None:
+            head = git_run(repo, "rev-parse", "HEAD")
+            if head.returncode != 0:
+                raise SystemExit(f"deferrals-rev: cannot resolve HEAD in {repo}")
+            live_revision = head.stdout.decode("ascii").strip()
+        live_text = read_deferrals(repo, live_revision)
+        summary, errors = check_deferrals(live_text)
+        if errors or summary != "deferrals pass pins=8":
+            raise SystemExit(f"planning-hygiene self-test FAIL: live deferrals at {live_revision}: {errors}")
+        controls += 1
+
+        normalized = " ".join(live_text.split())
+        for pin in DEFERRAL_PINS:
+            mutant = normalized.replace(pin, "", 1)
+            if mutant == normalized:
+                raise SystemExit(f"planning-hygiene self-test FAIL: deferral pin mutant was not seeded: {pin}")
+            _, errors = check_deferrals(mutant)
+            expected = f"deferral-unrecorded: {pin}"
+            if errors != [expected]:
+                raise SystemExit(f"planning-hygiene self-test FAIL: omission of {pin!r} gave {errors}")
+            controls += 1
+
+        unrelated = normalized + " unrelated roadmap note for a positive twin"
+        positive_twin = unrelated.replace(" unrelated roadmap note for a positive twin", "", 1)
+        summary, errors = check_deferrals(positive_twin)
+        if errors or summary != "deferrals pass pins=8":
+            raise SystemExit(f"planning-hygiene self-test FAIL: unrelated phrase changed deferral result: {errors}")
+        controls += 1
+
     print(f"planning-hygiene self-test pass controls={controls}")
     return 0
 
@@ -539,12 +605,12 @@ def self_test_plan_cap_rev(base: Path) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--check", choices=("plan-cap", "lessons-ids", "state-size", "playstead-docs"))
+    parser.add_argument("--check", choices=("plan-cap", "lessons-ids", "state-size", "playstead-docs", "deferrals"))
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--roadmap")
     parser.add_argument("--phases-dir")
-    parser.add_argument("--rev", help="plan-cap: a full commit id whose ROADMAP and plan names are judged (instead of --roadmap/--phases-dir)")
-    parser.add_argument("--repo", default=".", help="plan-cap with --rev: the repository (default: the current directory)")
+    parser.add_argument("--rev", help="plan-cap or deferrals: a full immutable commit id to read")
+    parser.add_argument("--repo", default=".", help="repository for an immutable --rev read (default: current directory)")
     parser.add_argument("--lessons")
     parser.add_argument("--state")
     parser.add_argument("--root")
@@ -552,7 +618,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.self_test == bool(args.check):
         parser.error("give exactly one of --check NAME or --self-test")
     if args.self_test:
-        return self_test()
+        return self_test(args.rev, Path(args.repo))
     try:
         if args.check == "plan-cap":
             if args.rev:
@@ -572,6 +638,10 @@ def main(argv: list[str] | None = None) -> int:
             if not args.state:
                 parser.error("state-size needs --state")
             summary, errors = check_state_size(Path(args.state).read_bytes())
+        elif args.check == "deferrals":
+            if not args.rev:
+                parser.error("deferrals needs --rev COMMIT")
+            summary, errors = check_deferrals(read_deferrals(Path(args.repo), args.rev))
         else:
             if not args.root:
                 parser.error("playstead-docs needs --root")

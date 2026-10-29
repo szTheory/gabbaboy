@@ -81,7 +81,8 @@ gbb_add_hygiene_test(state_size 0 "state-size pass bytes=[0-9]+ lines=[0-9]+" 30
   "${GBB_PLANNING_HYGIENE_CHECKER}" --check state-size --state "${PROJECT_SOURCE_DIR}/.planning/STATE.md")
 set(GBB_HYGIENE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=70)
 gbb_add_hygiene_test(planning_hygiene_controls 0 "planning-hygiene self-test pass controls=[0-9]+" 30
-  "${GBB_PLANNING_HYGIENE_CHECKER}" --self-test)
+  "${GBB_PLANNING_HYGIENE_CHECKER}" --self-test
+  --rev "${GBB_HYGIENE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 set(GBB_HYGIENE_EXTRA_ARGS)
 
 # D-27: the corrected Playstead statements stay corrected. It reads PRECEDENT.md, so it carries the planning label.
