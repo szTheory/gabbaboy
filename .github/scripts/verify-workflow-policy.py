@@ -1337,7 +1337,9 @@ CI_STATUS_CALLS = (
 # The per-test TIMEOUT ratchet (D-18): the native-linux job passes the PR base or push parent as --base so a change
 # cannot judge its own allowlist against itself.
 CI_BUDGET_COMMANDS = (
-    'python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"',
+    'git show "$BUDGET_BASE:tests/scripts/verify-test-budget.py" > "$RUNNER_TEMP/verify-test-budget.py"',
+    'python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --base "$BUDGET_BASE" --repo "$GITHUB_WORKSPACE"',
+    'python3 -I tests/scripts/verify-test-budget.py --self-test',
 )
 # The budget base falls back to the merge base with origin/main when the push parent is all-zero or no longer a
 # reachable commit (rebased and force-pushed branch), and still fails closed on an unresolvable final base.
@@ -1535,7 +1537,7 @@ def check_rehearsal(root: Path) -> None:
 # Read-only workflows must not leave the checkout token in .git/config for later steps (IN-08). A job that truly
 # needs the persisted credential is listed here as (workflow file, job id) -> reason; none does today, because the
 # jobs authenticate gh through an explicit step-level token and fetch only public sources.
-READONLY_WORKFLOWS = ("ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml")
+READONLY_WORKFLOWS = ("ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "libbet-repro.yml")
 CREDENTIAL_EXEMPT: dict[tuple[str, str], str] = {}
 
 
@@ -3062,7 +3064,14 @@ def _mutations():
            "run: bash tests/scripts/run-perf-gate.sh --gate", "run: echo bash tests/scripts/run-perf-gate.sh --gate",
            "required-command-not-executed"),
         _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
-           'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
+           'python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --base "$BUDGET_BASE" --repo "$GITHUB_WORKSPACE"',
+           'python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --repo "$GITHUB_WORKSPACE"',
+           "required-command-not-executed"),
+        _m("ci budget ratchet runs the head copy instead of the base copy", "ci.yml", "  native-linux:\n",
+           'python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --base "$BUDGET_BASE" --repo "$GITHUB_WORKSPACE"',
+           'python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "required-command-not-executed"),
+        _m("ci budget checker self-test is removed", "ci.yml", "  native-linux:\n",
+           "python3 -I tests/scripts/verify-test-budget.py --self-test", "echo budget self-test removed",
            "required-command-not-executed"),
         _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "      - name: Resolve the per-test budget base commit\n",
            ' || ! git cat-file -e "${base}^{commit}"; then', "; then", "budget-base-fallback"),
@@ -3127,6 +3136,8 @@ def _mutations():
         _m("perf-attribution job gains contents: write", "perf-attribution.yml", "  attribution:\n", "    runs-on: ubuntu-24.04\n",
            "    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n", "producer-write-authority"),
         _m("perf-attribution checkout persists credentials", "perf-attribution.yml", "  attribution:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
+        _m("libbet-repro checkout persists credentials", "libbet-repro.yml", "  libbet-repro:\n", "persist-credentials: false",
            "persist-credentials: true", "checkout-credentials"),
         _m("perf-attribution dry run before cachegrind work removed", "perf-attribution.yml", "  attribution:\n",
            "run: bash tests/scripts/run-perf-gate.sh --attribution-dry-run", "run: true", "required-command-not-executed"),
