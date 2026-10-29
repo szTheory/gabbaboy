@@ -342,6 +342,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: trusted-judge
+          fetch-depth: 0
           persist-credentials: false
       - name: Check out the rehearsed commit as data only
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -357,7 +358,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head
+          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head --git-root trusted-judge
       - name: Confirm the rehearsal ref names the rehearsed tree's own version
         shell: bash
         run: |

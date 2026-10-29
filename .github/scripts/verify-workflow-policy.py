@@ -1074,7 +1074,7 @@ RELEASE_ARTIFACTS = {
     "candidate-fuzz": ("release-evidence-fuzz", ("build/ci-fuzz/v02-fuzz-receipt.json",)),
 }
 SUBJECT_REF = "${{ env.SOURCE_SHA }}"
-JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head"
+JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head --git-root trusted-judge"
 PRODUCER_SCRIPT = ".github/scripts/produce-release-evidence.sh"
 PRODUCER_SCRIPT_REQUIRED = (
     'same_commit "$head" "$source_sha"',
@@ -1517,6 +1517,8 @@ def check_rehearsal(root: Path) -> None:
         raise Reject("judge-trust", f"{_where(name, 'judge')} needs one trusted-judge checkout and one subject-data checkout")
     if checkouts["trusted-judge"].get("ref") != DEFAULT_BRANCH_REF:
         raise Reject("judge-trust", f"{_where(name, 'judge')} judge code must come from the default branch, not the rehearsed subject")
+    if checkouts["trusted-judge"].get("fetch-depth") not in (0, "0"):
+        raise Reject("judge-history-shallow", f"{_where(name, 'judge')} trusted-judge checkout must use fetch-depth: 0 for release-head object checks")
     if checkouts["subject"].get("ref", TRUSTED_SHA_REF) != TRUSTED_SHA_REF:
         raise Reject("judge-trust", f"{_where(name, 'judge')} subject data must be the rehearsed commit")
     _download(judge, name, "judge", REHEARSAL_FUZZ_ARTIFACT)
@@ -2325,7 +2327,10 @@ def check_ledger_git_objects(ledger, git_root: Path, main_ref: str, release_head
         for key, row in anchors:
             cited_sha = row["cited_sha"]
             try:
-                git("cat-file", "-e", f"{cited_sha}^{{commit}}", cwd=git_root)
+                readable = git("cat-file", "-e", f"{cited_sha}^{{commit}}", cwd=git_root)
+                if readable.returncode != 0:
+                    detail = readable.stderr.strip()[:200] if readable.stderr else f"exit {readable.returncode}"
+                    raise Reject("timeout-ledger-cited-object-missing", f"{key}: cited run head {cited_sha} is unreadable: {detail}")
                 cited_tree = git("rev-parse", "--verify", "--end-of-options", f"{cited_sha}^{{tree}}", cwd=git_root)
             except (OSError, subprocess.SubprocessError) as exc:
                 raise Reject("timeout-ledger-cited-object-missing", f"{key}: cited run head is unreadable: {exc}") from exc
@@ -2928,7 +2933,7 @@ def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str)
     return (label, workflow, [(after, old, new)], expected)
 
 
-JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head"
+JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head --git-root trusted-judge"
 _REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
 FUZZ_TAG_CHECK = '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {'
@@ -3169,6 +3174,10 @@ def _mutations():
         _m("continue-on-error on the judge step", "release-rehearsal.yml", "  judge:\n", JUDGE_STEP, JUDGE_STEP + "        continue-on-error: true\n", "ignored-gate"),
         _m("step disabled with if false", "release-rehearsal.yml", "  judge:\n", JUDGE_STEP, JUDGE_STEP + "        if: ${{ false }}\n", "disabled-gate"),
         _m("judge job disabled with if false", "release-rehearsal.yml", "  judge:\n", "    runs-on: ubuntu-24.04\n", "    if: ${{ false }}\n    runs-on: ubuntu-24.04\n", "disabled-gate"),
+        _m("trusted judge checkout loses full history", "release-rehearsal.yml", "  judge:\n",
+           "          path: trusted-judge\n          fetch-depth: 0\n", "          path: trusted-judge\n", "judge-history-shallow"),
+        _m("release-head judge call loses explicit git root", "release-rehearsal.yml", "  judge:\n",
+           JUDGE_CALL, JUDGE_CALL.removesuffix(" --git-root trusted-judge"), "required-command-not-executed"),
         ("call moved to the wrong job", "release-rehearsal.yml", [
             ("  judge:\n", JUDGE_CALL, "true"),
             ("  package:\n", "# does not exist yet, so build the equivalent from the local-only tag and run the same checker.\n",
@@ -3782,6 +3791,8 @@ def _ledger_boundary_controls() -> int:
     done += 1
     for label, code, call in (
         ("timeout one minute below ceil(2 x p50) fails", "timeout-ledger-ratio", lambda: judge({}, timeout=24)),
+        ("tree-equal row one minute below ceil(2 x p50) fails", "timeout-ledger-ratio",
+         lambda: judge({"tree_equal_sha": "b" * 40, "cited_tree": "c" * 40}, timeout=24)),
         ("p50 of exactly 30 behind required-native passes", None, lambda: judge({"p50_minutes": "30"}, timeout=60, gating=True)),
         ("p50 of 30.1 behind required-native fails", "timeout-ledger-whole-run", lambda: judge({"p50_minutes": "30.1"}, timeout=61, gating=True)),
         ("p50 of 30.1 outside required-native passes", None, lambda: judge({"p50_minutes": "30.1"}, timeout=61)),
@@ -3921,6 +3932,74 @@ def _ledger_disclosure_scratch_controls() -> int:
         check({}, key="ci.yml:stable")
         check({}, base=None)
     return 4
+
+
+def _ledger_release_object_scratch_controls(root: Path, work: Path) -> int:
+    """Prove release-head reads tree-equal commit objects but leaves merged-PR plain citations alone."""
+    with tempfile.TemporaryDirectory(prefix="gbb-ledger-release-objects.") as directory:
+        scratch = Path(directory)
+        fixture = scratch / "subject"
+        repo = scratch / "trusted-objects"
+        _copy_fixture(root, fixture)
+        cmake = fixture / "CMakeLists.txt"
+        cmake_text = cmake.read_text(encoding="utf-8")
+        bumped, replacements = re.subn(r"(project\(\s*\w+\s+VERSION\s+)\d+\.\d+\.\d+", r"\g<1>0.3.0", cmake_text, count=1)
+        if replacements != 1:
+            raise SystemExit("self-test release-object scratch: fixture VERSION could not be set to 0.3.0")
+        cmake.write_text(bumped, encoding="utf-8")
+        ledger_path = fixture / LEDGER_PATH
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"), object_pairs_hook=_ledger_pairs)
+        tree_rows = [(key, row) for key, row in ledger.items() if "tree_equal_sha" in row]
+        plain_rows = [(key, row) for key, row in ledger.items() if "tree_equal_sha" not in row]
+        if not tree_rows or not plain_rows:
+            raise SystemExit("self-test release-object scratch: live ledger needs tree-equal and plain rows")
+        repo.mkdir()
+        env = os.environ.copy()
+        env.update(GIT_AUTHOR_NAME="GabbaBoy Fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid",
+                   GIT_COMMITTER_NAME="GabbaBoy Fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid",
+                   GIT_CONFIG_GLOBAL=str(scratch / "gitconfig"), GIT_CONFIG_SYSTEM="/dev/null" if os.name != "nt" else "NUL")
+
+        def git(*args: str, allow_failure: bool = False) -> subprocess.CompletedProcess[str]:
+            result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, env=env,
+                                    check=False, timeout=30)
+            if result.returncode != 0 and not allow_failure:
+                raise SystemExit(f"self-test release-object scratch git failed: {' '.join(args)}: {result.stderr.strip()}")
+            return result
+
+        git("init", "-q", "--initial-branch=main")
+        (repo / "CMakeLists.txt").write_text(bumped, encoding="utf-8")
+        git("add", "CMakeLists.txt")
+        git("commit", "-q", "-m", "main anchor")
+        anchor = git("rev-parse", "HEAD").stdout.strip()
+        tree = git("rev-parse", "HEAD^{tree}").stdout.strip()
+        cited = git("commit-tree", tree, "-p", anchor, "-m", "same-tree citation").stdout.strip()
+        git("update-ref", "refs/heads/side", cited)
+        for _, row in tree_rows:
+            row.update(tree_equal_sha=anchor, cited_sha=cited, cited_tree=tree)
+        plain_rows[0][1]["cited_sha"] = "f" * 40
+        ledger_path.write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8")
+        script = Path(__file__).resolve()
+
+        def check() -> subprocess.CompletedProcess[str]:
+            return subprocess.run([sys.executable, "-I", str(script), "--check", "--release-head", "--root", str(fixture),
+                                   "--git-root", str(repo), "--main-ref", "main"], cwd=work, capture_output=True,
+                                  text=True, check=False, timeout=60)
+
+        positive = check()
+        if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
+            raise SystemExit(f"self-test release-object positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+        print("passed: release-head reads retained tree-equal citations and skips an unreadable plain citation")
+        git("update-ref", "-d", "refs/heads/side")
+        git("reflog", "expire", "--expire=now", "--all")
+        git("gc", "--prune=now")
+        if git("cat-file", "-e", f"{cited}^{{commit}}", allow_failure=True).returncode == 0:
+            raise SystemExit("self-test release-object scratch: cited commit survived pruning")
+        negative = check()
+        expected = f"REJECT timeout-ledger-cited-object-missing: {tree_rows[0][0]}:"
+        if negative.returncode != 1 or expected not in negative.stderr or "PASS:" in negative.stdout:
+            raise SystemExit(f"self-test release-object negative control failed: exit={negative.returncode} stderr={negative.stderr.strip()!r}")
+        print(f"rejected: pruned tree-equal cited object: {negative.stderr.strip()}")
+    return 2
 
 
 def verify_cited_stub_controls(root: Path, work: Path) -> int:
@@ -4073,6 +4152,7 @@ def self_test(root: Path) -> None:
         rejected += _ledger_boundary_controls()
         rejected += _ledger_git_object_controls()
         rejected += _ledger_disclosure_scratch_controls()
+        rejected += _ledger_release_object_scratch_controls(root, work)
         rejected += verify_cited_stub_controls(fixture, work)
         # WR-C01: the workflow set is closed. A new file (here a pull_request_target job with contents: write) is refused
         # before anything reads it, and so is a judged file that disappears.
@@ -4101,6 +4181,7 @@ def self_test(root: Path) -> None:
             'python3 -I "trusted-judge/.github/scripts/verify-workflow-policy.py" --check --root \'subject\' --release-head',
             "# the judge\n{I}\n{I}python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head  # trailing",
         ):
+            variant = variant.replace("--release-head", "--release-head --git-root trusted-judge")
             text = baselines["release-rehearsal.yml"]
             position = text.find(JUDGE_CALL, text.find("  judge:\n"))
             line_start = text.rfind("\n", 0, position) + 1
@@ -4172,7 +4253,7 @@ def main() -> int:
     parser.add_argument("--disclosure-base", default=None,
                         help="optional commit whose workflow job bodies are compared for required disclosures")
     parser.add_argument("--release-head", action="store_true",
-                        help="judge as the release head: a provisional timeout-ledger row is rejected")
+                        help="judge as the release head: provisional rows and unreadable tree-equal citation objects are rejected")
     parser.add_argument("--verify-cited", action="store_true",
                         help="online and advisory (never in CTest): confirm each ledger citation through gh")
     args = parser.parse_args()
