@@ -1626,3 +1626,7 @@ host_signal_decoy_in_place_write
 host_no_test_seams_shipped_run_control
 no_host_clock_signal_selftest
 no_host_clock_signal_call_selftest
+save_format_files
+save_format_print
+save_format_print_none
+host_grammar_print_extra
