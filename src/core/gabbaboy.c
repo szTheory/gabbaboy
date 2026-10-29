@@ -472,6 +472,7 @@ typedef struct {
 } hdma_state;
 
 _Static_assert(sizeof(gbb_info) == GBB_INFO_SIZE_V1, "gbb_info layout");
+_Static_assert(sizeof(gbb_input_clock) == GBB_INPUT_CLOCK_SIZE_V1, "gbb_input_clock layout");
 _Static_assert(sizeof(gbb_compat_palette) == GBB_COMPAT_PALETTE_SIZE_V1, "gbb_compat_palette layout");
 
 typedef struct gbb_test_dma_event gbb_test_dma_event;
@@ -5454,6 +5455,13 @@ gbb_error gbb_get_info(const gbb_instance *instance, gbb_info *out_info) {
     }
     info_store(out_info, &info);
     return GBB_OK;
+}
+
+/* MODEL: BOTH GATE-00 basis=host-api */
+gbb_error gbb_get_input_clock(const gbb_instance *instance, gbb_input_clock *out) {
+    (void)instance;
+    (void)out;
+    return GBB_INVALID_ARGUMENT; /* RED stub */
 }
 
 /* A timer cartridge is battery-backed even when it has no RAM ($0F): its image

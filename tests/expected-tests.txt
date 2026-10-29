@@ -1524,3 +1524,6 @@ host_api_surface
 host_api_surface_controls
 host_qualified_sources
 host_qualified_sources_control
+input_clock_handshake
+input_clock_queue
+input_clock_after_load
