@@ -433,20 +433,27 @@ Per AGENTS.md, PRs, merges after required checks and releases are authorized in 
 | A7 | The other converted rows (`judge` 9 s, `corpus` 12m11s, `aggregate` 23m40s from run `40257161612`; `attach-v02-evidence` and `candidate-fuzz` from run `40332345735`) have p50 values to compute the same way; only `performance` was worked in the example | Code Examples | A wrong p50 fails the online check or the ratio rule |
 | A8 | `release_lifecycle_controls` timing (51.24 s) measured on this Mac; hosted ubuntu-22.04 may differ | Pitfall 2 | Budget rows chosen from local numbers could be tight |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Every question below is resolved in the plans; each carries its resolution and the resolving plan task.
 
 1. **OQ-1 Branch retention vs "offline never resolves the cited run head" (D-04).**
    - Known: `tree_equal_sha` (on main) + `cited_tree` make the offline check independent of the rehearsal branch; the online `verify_cited` needs the run head tree, which GitHub keeps only while the commit is referenced.
    - Unclear: how to enforce "keep the branch" offline without a live ref read.
    - Recommendation: in `--check --release-head` mode only (rehearsal judge, pre-flight; always full-fetch), require `git cat-file -e <cited_sha>^{commit}` and `tree == cited_tree`, i.e. object readability, not a ref name; document that default `--check` does not do this. Control: scratch repo where the cited commit object is pruned.
+   - **RESOLVED (19-01 Task 3):** object readability plus `tree(cited_sha) == cited_tree`, in `--check --release-head` mode only and for tree-equal rows only (rows carrying `tree_equal_sha`, whose `cited_sha` is a `rehearsal/vX.Y.Z` head off main). Plain rows are never object-read: five live plain rows cite merged PR heads that no remote branch or tag contains, so the hosted heads-plus-tags judge could not read them. Controls: a scratch repo whose tree-equal citation is pruned is refused (`timeout-ledger-cited-object-missing`) while a plain row citing an absent commit passes; on the real ledger, a fresh heads-plus-tags remote clone passes and a main-only clone (no `rehearsal/v0.2.1`) is refused. The rehearsal judge checks out the trusted tree with `fetch-depth: 0` and passes `--git-root trusted-judge`.
 2. **OQ-2 Carrier for the perf-gate binding (D-22).**
    - Known: no existing receipt can be rewritten by the reader; release assets are `REQUIRED_ASSETS` (`verify-release-gates.sh:21`, 19 names) and eight more lists.
    - Recommendation: embed a verified `perf_gate` block (run id, attempt, SHA, base SHA, limits blob, Ir for both repeats, digests, realtime, tool identity) in `release-receipt.json` built in `lifecycle_validate_draft` from the verified artifact, with the raw receipt retained as a run artifact; this keeps the asset set unchanged. If the planner needs the raw receipt attached, treat it as the one allowed new asset and update all lists plus replay.
+   - **RESOLVED (19-05 Task 2):** embed the verified `perf_gate` block in the existing `release-receipt.json`; no new release asset, `REQUIRED_ASSETS` and every lifecycle asset list unchanged; the raw receipt stays a CI run artifact (`perf-gate-<run_id>-<run_attempt>`, 19-05 Task 1).
 3. **OQ-3 Regenerating the notes Ir figure (D-15).**
    - Known: figure source is `tests/baseline/perf-attribution-v1.json` (head `711f4fd`, +8.3%); `perf-attribution.yml` is a manual dispatch (about 39 revisions, 150-minute cap) that uploads a 14-day artifact; the gate shows about 9.5% at `4ace5e37`.
    - Recommendation: dispatch `perf-attribution.yml --ref main` before PR A and commit the new receipt in PR A (the check `perf_attribution` re-validates sets via `git rev-list --first-parent v0.2.0..<head> -- src`); disclose the head in the notes. If the owner prefers not to run it, the alternative is to point `perf_disclosure_percent` at the committed gate evidence, which is a design change to D-15.
+   - **RESOLVED (19-03 Task 3):** dispatch `perf-attribution.yml --ref main` before PR A (an added D-01 pre-PR-A dispatch, Drift 7) and commit the regenerated `tests/baseline/perf-attribution-v1.json` in PR A; the notes name the receipt head and a stale figure or head is refused.
 4. **OQ-4 Pre-tag gate location (discretion).** New workflow (`pull_request` on `release-please--branches--main--components--GabbaBoy`, trusted checkout of `base.sha`, PR head as data, per-step bounds, no job `timeout-minutes`) vs a `ci.yml` job (would need `changes` classification and a ledger row). Recommend the new workflow, copying `version-window-gate`.
+   - **RESOLVED (19-04 execution contract and Task 3):** a new `.github/workflows/version-pr-gate.yml` on `pull_request`, trusted checkout of `base.sha`, PR head as data, per-step timeouts and no job-level timeout (so no ledger row), pinned by `check_version_pr_gate` with mutants.
 5. **OQ-5 Is the pre-tag gate enforceable?** Required contexts are fixed in GitHub settings (3 names); making the gate required is an owner/settings change. Merge discipline is therefore a script precondition in 19-07, not a branch-protection fact; state this in `docs/release.md` instead of claiming enforcement.
+   - **RESOLVED (19-04 execution contract, 19-06 Task 2, 19-07 Tasks 2-3):** the gate is not a required check; `docs/release.md` says so (pinned by a required phrase in `v02_adoption_docs` with a seeded-omission control), and the 19-07 go/no-go precondition requires the gate run at W to be green and to have bound R2 before the merge.
 
 ## Environment Availability
 

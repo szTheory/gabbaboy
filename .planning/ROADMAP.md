@@ -217,7 +217,25 @@ Plans:
   2. A `v0.3.0` support ledger scopes the save-state and host-contract claims by model, corpus and platform and passes its ledger check, which rejects a seeded unscoped claim.
   3. Consumer, package, fuzz and perf-gate receipts are bound to the `v0.3.0` tag and the published asset readback reconciles; a receipt bound to any other revision is rejected.
 
-**Plans**: TBD
+**Plans**: 7 plans (gap slot 19-08 reserved; cap 8)
+
+Plans:
+**Wave 1**
+- [ ] 19-01-PLAN.md — Entry blockers: RM-027 tree-equal ledger citations, candidate-performance and report-red re-citations, release-head object readability, RM-031 player linkage, WR-C04/IN-08 CI pins (W1)
+- [ ] 19-02-PLAN.md — Review leftovers: WR-A05 shared infallible state conversion with a killed mutant, IN-01, IN-05, IN-02, RM-024 deferrals (W1)
+- [ ] 19-03-PLAN.md — Scoped v0.3.0 claims as managed input, render_v3_ledger, D-14 unscoped-claim controls, v0.3 release-notes rules, regenerated Ir figure (W1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 19-04-PLAN.md — Rehearsal binding (pr_head, not_after), pre-tag version-pr-gate, tree-only window rule, post-tag endpoint replay coverage (W2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 19-05-PLAN.md — Perf-gate receipt and trusted reader, host smoke on shipped archives, version-aware profile string, v0.3.0 readback checker (W3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 19-06-PLAN.md — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A squash merge (W4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 19-07-PLAN.md — Window H/W with R1/R2, #131 merge and publication, readback, PR B phase boundary (W5)
 
 ## Progress
 
@@ -225,7 +243,7 @@ Plans:
 |-----------|--------|-------|--------|---------|
 | v0.1 Limited DMG Preview | 7 | 64/64 | Complete | 2026-10-10 |
 | v0.2 Color & Cartridge Breadth | 10 | 170/170 | Complete | 2026-10-24 |
-| v0.3 Save States & Host Contract | 4 | 27/27 planned (cap 38) | In progress | — |
+| v0.3 Save States & Host Contract | 4 | 27/34 planned (cap 38) | In progress | — |
 
 **v0.3 execution order:** 16 → 17 → 18 → 19
 
@@ -234,4 +252,4 @@ Plans:
 | 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Complete | 2026-10-26 |
 | 17. Native Save State Core | 11/11 | 12 | Complete | 2026-10-28 |
 | 18. Player Save Slots and Host Contract | 9/9 | 10 | Complete | 2026-10-29 |
-| 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |
+| 19. Qualified v0.3.0 Release | 0/7 | 8 | Planned | - |

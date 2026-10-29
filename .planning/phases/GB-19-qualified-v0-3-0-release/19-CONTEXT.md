@@ -214,7 +214,7 @@ An independent adversarial review of the merged draft then found 2 blockers, 8 m
     - another run id;
     - a `pull_request` event, a fork or another workflow path;
     - an inactive record at W.
-- **D-19 is in "Pre-flight and docs (19-06)" below.**
+- (D-19 is in "Pre-flight and docs (19-06)" below.)
 - **D-20: The version-window record rule reads the tree only.**
   - An active record is legal only when its `release_version` equals the tree's own version, so a version bump with a stale active record is rejected. Add a negative control.
   - It never consults tags or live refs. The ci.yml run at the tag commit fetches tags, so a tag-reading rule would turn that run red and strand `candidate-fuzz`. Checkers read immutable commits (D-105).
