@@ -244,6 +244,14 @@ file(WRITE "${GBB_REV_WIRING_DIR}/stale-sha-CTestTestfile.cmake"
   "\"8014d1a824ba92d47b31943270f0fa99b97ce329\" \"--repo\" \"r\")\n")
 file(WRITE "${GBB_REV_WIRING_DIR}/missing-CTestTestfile.cmake"
   "add_test(\"other_test\" \"python3\" \"--rev\" \"HEAD\")\n")
+# CMake 3.x (the 3.25.3 floor and the hosted runners) writes the test name as a bracket argument, [=[name]=], and the
+# local CMake 4 quotes it, so without these files only CI saw the other form; a bare name is covered as well. bare-prefix registers only a longer name
+# that starts with save_format_files, which must still count as missing.
+file(WRITE "${GBB_REV_WIRING_DIR}/bare-CTestTestfile.cmake"
+  "add_test(save_format_files \"python3\" \"-I\" \"c.py\" \"--check\" \"--rev\" \"HEAD\" \"--repo\" \"r\")\n"
+  "add_test([=[save_format_controls]=] \"python3\" \"--rev\" \"HEAD\")\n")
+file(WRITE "${GBB_REV_WIRING_DIR}/bare-prefix-CTestTestfile.cmake"
+  "add_test(save_format_files_extra \"python3\" \"--rev\" \"HEAD\")\n")
 add_test(NAME contract_rev_wiring
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_TESTFILE=${CMAKE_CURRENT_BINARY_DIR}/CTestTestfile.cmake"
@@ -266,3 +274,18 @@ add_test(NAME contract_rev_wiring_missing_control
     "-DGBB_EXPECT_REGEX=test save_format_files is not registered"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(contract_rev_wiring_missing_control PROPERTIES TIMEOUT 60)
+add_test(NAME contract_rev_wiring_bare_form
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_TESTFILE=${GBB_REV_WIRING_DIR}/bare-CTestTestfile.cmake"
+    "-DGBB_TEST_NAMES=save_format_files;save_format_controls"
+    -DGBB_EXPECT_REV=HEAD
+    -P "${GBB_REV_WIRING_SCRIPT}")
+set_tests_properties(contract_rev_wiring_bare_form PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "contract-rev-wiring pass tests=2 rev=HEAD")
+add_test(NAME contract_rev_wiring_bare_prefix_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_TESTFILE=${GBB_REV_WIRING_DIR}/bare-prefix-CTestTestfile.cmake;-DGBB_TEST_NAMES=save_format_files;-DGBB_EXPECT_REV=HEAD;-P;${GBB_REV_WIRING_SCRIPT}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=test save_format_files is not registered"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(contract_rev_wiring_bare_prefix_control PROPERTIES TIMEOUT 60)

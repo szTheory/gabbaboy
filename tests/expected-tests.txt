@@ -1674,3 +1674,5 @@ host_import_mutant_raw_baseline
 slot_mutant_selection_any_entry
 host_exit_pacing_unavailable
 host_signal_decoy_pacing_ignored
+contract_rev_wiring_bare_form
+contract_rev_wiring_bare_prefix_control

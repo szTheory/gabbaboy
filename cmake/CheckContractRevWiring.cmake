@@ -21,9 +21,13 @@ file(READ "${GBB_TESTFILE}" text)
 
 set(checked 0)
 foreach(name IN LISTS GBB_TEST_NAMES)
-  # Each add_test is one line: add_test("name" "program" ... "--rev" "<rev>" ...). A control packs the command in
-  # one -DGBB_CMD argument, where the separators are `\;`, so a non-alphanumeric run separates --rev from its value.
-  string(REGEX MATCH "add_test\\(\"${name}\"[^\n]*" line "${text}")
+  # Each add_test is one line: add_test(<name> "program" ... "--rev" "<rev>" ...). CMake 3.x (the 3.25.3 floor and
+  # the hosted runners) writes the name as a bracket argument ([=[name]=]), CMake 4 quotes it, and a bare name is
+  # accepted too. The name must end at a quote, a bracket or a space, so host_contract_docs never matches the add_test
+  # line of host_contract_docs_control.
+  # A control packs the command in one -DGBB_CMD argument, where the separators are `\;`, so a non-alphanumeric run
+  # separates --rev from its value.
+  string(REGEX MATCH "add_test\\((\"|\\[=*\\[)?${name}(\"|\\]=*\\]|[ \t])[^\n]*" line "${text}")
   if("${line}" STREQUAL "")
     message(FATAL_ERROR "contract-rev-wiring: test ${name} is not registered in ${GBB_TESTFILE}")
   endif()
