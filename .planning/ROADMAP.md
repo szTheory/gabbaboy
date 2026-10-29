@@ -177,7 +177,7 @@ Plans:
   3. A real-signal POSIX test sends SIGTERM and observes the runner finish the current frame, flush the save and exit 0 well within 2 s; a check rejects signal code seeded into the core (handling stays a `sig_atomic_t` flag in the adapter), each row of the documented exit-code table (clean quit, refusal, failure, crash) is exercised, and Windows is declared exempt.
   4. A machine-readable table declares GabbaBoy's save-format id and byte size for each cartridge kind (MBC3+RTC is 32,789 B), and a CTest checks it against the files the runner produces, failing on a seeded size or id mismatch.
 
-**Plans**: 8/9 plans executed (gap slot 18-10 reserved; cap 10)
+**Plans**: 9/9 plans executed (gap slot 18-10 reserved; cap 10)
 
 Plans:
 **Wave 1**
@@ -203,7 +203,7 @@ Plans:
 - [x] 18-08-PLAN.md — `docs/host-contract.json`, `--print-save-format`, save-format completeness/produced-file/freeze checks (W7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 18-09-PLAN.md — Installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification (W8)
+- [x] 18-09-PLAN.md — Installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification (W8)
 **UI hint**: yes
 
 ### Phase 19: Qualified v0.3.0 Release
@@ -233,5 +233,5 @@ Plans:
 |-------|----------------|----------|--------|-----------|
 | 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
 | 17. Native Save State Core | 11/11 | 12 | Planned | 2026-10-28 |
-| 18. Player Save Slots and Host Contract | 8/9 | 10 | Not started | - |
+| 18. Player Save Slots and Host Contract | 9/9 | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |

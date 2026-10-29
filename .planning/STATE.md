@@ -32,8 +32,8 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 Phase: 18 (Player Save Slots and Host Contract) — EXECUTING
 Plan: 9 of 9
-Status: Ready to execute
-Last activity: 2026-10-28 — Phase 18 execution started
+Status: Phase complete — ready for verification
+Last activity: 2026-10-29 — Phase 18 plan 18-09 executed (installed host smoke, host-contract docs, phase-tail qualification)
 
 Prior phase evidence: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
 
@@ -71,6 +71,8 @@ Historical decisions, including the per-plan records of Phases 1-16, moved to [v
 - [Phase 18]: 18-08: save-format rows ascend by (type, ram_code) as numbers, so MBC5 lists RAM code 0x04 (128k) before 0x05 (64k); the freeze CTest accepts baseline=none or baseline=vX.Y.Z
 - [Phase 18]: 18-08: --print-save-format prints save_format=none bytes=0 for a no-battery cartridge (A5); none is a sentinel, not an id, and never appears in save_formats rows
 - [Phase 18]: 18-08: a re-sorted canonical JSON is still self-consistent, so canonical form also requires keys in the written order (REJECT non-canonical); the table claims no emulator interoperability (REJECT interop-claim)
+- [Phase 18]: 18-09: installed_host_smoke is a stdlib Python harness (NUL bytes cannot be held in CMake strings); the interop-claim scan is its own planning-labelled script
+- [Phase 18]: 18-09: five planner discretion choices recorded as D-115..D-119 in DECISIONS.md; Linux LeakSanitizer fix for deliberately failing mutants routed to 18-02 and 18-05 (detect_leaks=0)
 
 ### Pending Todos
 
@@ -105,15 +107,15 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T05:22:04.275Z
-**Stopped at:** Completed 18-08-PLAN.md
+**Last session:** 2026-10-29T06:17:42.774Z
+**Stopped at:** Completed 18-09-PLAN.md
 **Resume file:** None
 
 Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Plan 18-04 (host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep) is complete at `8335fba` with SUMMARY `ac01321`; full suite 1581/1581. Plan 18-05 (SDL-free slot engine) is complete at `4c9962b` with SUMMARY `f246619`; full suite 1610/1610. Plan 18-06 (player slot keys, status line, input rebase, help/limitations, macOS menu-shortcut scan) is complete at `67bb2bd` with SUMMARY `60acda6`; player suite 106/106 through `--build-package`, main suite 1610/1610 after reconfiguring the revision-pinned tests. Plan 18-07 (SIGTERM/SIGINT/SIGHUP handling, exit table, real-signal harness with decoys, core no-signal check) is complete at `64c6749b` with SUMMARY `1ff9698a`; full suite 1628/1628. Plan 18-08 (`docs/host-contract.json`, `--print-save-format`, save-format completeness/produced-file/freeze checks with 36 seeded controls) is complete at `c2239bef` with SUMMARY `5266f422`; full suite 1637/1637 at `befd624c`. Next plan within Phase 18: **18-09 — installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification** (wave 8, the last primary plan). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
-- Execute Phase 18 (Player Save Slots and Host Contract) with `/gsd-execute-phase 18`; reuse `18-CONTEXT.md`, research, patterns and the checked plans. RM-027 remains a Phase 19 entry blocker. Do not start Phase 19 automatically.
+- Phase 18 execution is complete (plans 18-01..18-09, gap slot 18-10 unused): full phase1 suite 1650/1650 at `3c148865`, 18-09 SUMMARY committed. Next stage: verification of **Phase 18 — Player Save Slots and Host Contract**. Command: `/gsd-verify-work 18`, run only when the owner chooses, after code review and the PR's exact-head CI (`linux-asan-ubsan`, `native-windows-x64`, `macos-player-package`) are recorded as the 18-09 post-CI addendum. This is not Phase 19. Do not start Phase 19 automatically; RM-027 remains a Phase 19 entry blocker.
 
 ## Performance Metrics
 
@@ -127,3 +129,4 @@ Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**.
 | Phase 18 P06 | 26 min | 3 tasks | 9 files |
 | Phase 18 P07 | 18 min | 3 tasks | 13 files |
 | Phase 18 P08 | 17min | 3 tasks | 13 files |
+| Phase 18 P09 | 50 min | 3 tasks | 18 files |

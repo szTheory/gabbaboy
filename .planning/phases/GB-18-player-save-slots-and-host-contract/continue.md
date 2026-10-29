@@ -15,3 +15,5 @@ Constraints:
 - Both automatic advance flags stay false.
 
 Execution progress: plans 18-01 to 18-08 are complete (SUMMARYs `71e0232`, `eccc214`, `7ae5004`, `ac01321`, `f246619`, `60acda6`, `1ff9698a`, `5266f422`). Next plan: **18-09 — installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification** (wave 8). Command: `/gsd-execute-phase 18`, run only when the owner chooses. HOST-01, HOST-02 and HOST-03 stay open in REQUIREMENTS.md until 18-09's closing traceability (shared-ID gate).
+
+Execution complete: plan 18-09 is done (code head `3c148865`; SUMMARY committed after it). Completed stage: **Phase 18 execution** (plans 18-01 to 18-09; gap slot 18-10 unused). Next stage: **Phase 18 verification**. Command: `/gsd-verify-work 18`, run only when the owner chooses, after code review and the PR's exact-head CI results are recorded as the 18-09 post-CI addendum (linux-asan-ubsan, native-windows-x64, macos-player-package). This is not Phase 19; do not start Phase 19 automatically.
