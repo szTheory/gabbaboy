@@ -1494,3 +1494,4 @@ state_purity_mutant_save_overwrites_tail
 state_purity_mutant_save_overwrites_tail_control
 planning_hygiene_controls
 playstead_docs
+host_continuation

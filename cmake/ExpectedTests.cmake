@@ -22,7 +22,8 @@ function(gabbaboy_verify_registered_tests)
       age_repro_selfcheck age_repro_selfcheck_tampered age_repro_compare_tampered
       core_linkage_links core_linkage_controls
       release_lifecycle_replay release_lifecycle_controls
-      perf_advisory_pipeline perf_advisory_controls)
+      perf_advisory_pipeline perf_advisory_controls
+      host_continuation)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)
