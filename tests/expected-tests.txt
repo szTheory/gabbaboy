@@ -1176,6 +1176,7 @@ release_nightly_controls
 state_boundary_controls
 v02_adoption_docs
 v02_adoption_docs_controls
+adoption_claim_boundaries_controls
 v02_consumer_controls_c
 v02_consumer_controls_cpp
 v02_performance_controls

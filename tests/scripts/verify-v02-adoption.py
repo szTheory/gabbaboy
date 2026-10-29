@@ -119,11 +119,15 @@ FALSE_SIGNING_CLAIM = re.compile(
     r"(?:is|are|was|were)\s+(?:both\s+)?(?:code[- ]?)?(?:signed|notarized)\b)",
     re.IGNORECASE,
 )
-FALSE_PUBLICATION_CLAIM = re.compile(
-    r"\bv?0\.2\.0\s+(?:is|has\s+been|was)\s+(?:now\s+)?"
-    r"(?:published|released|available|shipped|live)\b",
-    re.IGNORECASE,
-)
+def publication_claim_pattern(version: str) -> re.Pattern[str]:
+    return re.compile(
+        r"\bv?" + re.escape(version) + r"\s+(?:is|has\s+been|was)\s+(?:now\s+)?"
+        r"(?:published|released|available|shipped|live)\b",
+        re.IGNORECASE,
+    )
+
+
+FALSE_PUBLICATION_CLAIM = publication_claim_pattern(RELEASE_VERSION)
 FALSE_PLATFORM_CLAIM = re.compile(
     r"(?:\bsupports?\s+(?:all|every|any)\s+(?:architectures?|platforms?|operating\s+systems?)\b|"
     r"\bminimum\s+(?:supported\s+)?(?:OS|operating\s+system)\s+(?:version\s+)?is\b)",
@@ -139,7 +143,61 @@ FALSE_FUZZ_CLAIM = re.compile(
     r"(?:has\s+)?(?:passed|passes|is\s+green|succeeded)\b",
     re.IGNORECASE,
 )
+FALSE_CROSS_VERSION_STATE_CLAIM = re.compile(
+    r"\b(?:save\s+)?states?\b.{0,60}\b(?:load|loads|loaded|loadable)\b"
+    r".{0,60}\b(?:across|between|in|to)\s+(?:(?:any|another|different)\s+)?"
+    r"(?:gabbaBoy\s+)?(?:releases?|versions?|builds?)\b|"
+    r"\b(?:across|between|in|to)\s+(?:(?:any|another|different)\s+)?"
+    r"(?:gabbaBoy\s+)?(?:releases?|versions?|builds?)\b.{0,60}"
+    r"\b(?:save\s+)?states?\b.{0,60}\b(?:load|loads|loaded|loadable)\b",
+    re.IGNORECASE,
+)
+FALSE_DURABILITY_CLAIM = re.compile(
+    r"\b(?:power[- ]loss|crash|process\s+death)\b.{0,60}"
+    r"\b(?:durab\w*|surviv\w*|guarantee\w*|preserv\w*|saf\w*)\b|"
+    r"\b(?:durab\w*|surviv\w*|guarantee\w*|preserv\w*|saf\w*)\b.{0,60}"
+    r"\b(?:power[- ]loss|crash|process\s+death)\b",
+    re.IGNORECASE,
+)
+FALSE_WINDOWS_HOST_CLAIM = re.compile(
+    r"\b(?:windows|win32)\b.{0,60}\b(?:host\s+mode|--save-dir)\b.{0,30}"
+    r"\b(?:supported|available|enabled|works?|accepted|runs?)\b|"
+    r"\b(?:host\s+mode|--save-dir)\b.{0,30}"
+    r"\b(?:supported|available|enabled|works?|accepted|runs?)\b.{0,60}"
+    r"\b(?:windows|win32)\b",
+    re.IGNORECASE,
+)
+UNSCOPED_STATE_CLAIM = re.compile(
+    r"\b(?:state|save)\s+(?:api|support|loading|files?|format|states?)\b.{0,50}"
+    r"\b(?:portable|compatible|supported|available|loadable|works?)\b"
+    r"(?!\s+only\s+(?:(?:in|by)\s+)?(?:the\s+)?exact\s+(?:GabbaBoy\s+)?release)|"
+    r"\b(?:portable|compatible|supported|supports?|available|loadable|works?)\b"
+    r"(?![^\n]{0,50}\bonly\s+(?:(?:in|by)\s+)?(?:the\s+)?exact\s+(?:GabbaBoy\s+)?release)"
+    r".{0,50}\b(?:state\s+(?:api|support|loading|files?|format)|save\s+states?)\b|"
+    r"\b(?:supports?|has)\b.{0,40}\b(?:save\s+states?|state\s+(?:api|files?|format))\b"
+    r".{0,40}\b(?:all|every|any|cross[- ]platform)\b",
+    re.IGNORECASE,
+)
+CLAIM_BOUNDARY_RULES = (
+    (FALSE_CROSS_VERSION_STATE_CLAIM, "false-cross-version-state-claim"),
+    (FALSE_DURABILITY_CLAIM, "false-durability-claim"),
+    (FALSE_WINDOWS_HOST_CLAIM, "false-windows-host-claim"),
+    (UNSCOPED_STATE_CLAIM, "unscoped-state-claim"),
+)
+CLAIM_BOUNDARY_TWINS = (
+    "Save states load only in the exact GabbaBoy release that wrote them.",
+    "No power-loss guarantee is made for a saved state.",
+    "Host mode is POSIX-only; Windows refuses `--save-dir`.",
+    "State loading is supported only by the exact release that wrote the state.",
+)
 REBOUND_ATTRIBUTION = re.compile(r"\bRebound\b")
+
+STATE_VERSION_SENTENCE = "Save states load only in the exact GabbaBoy release that wrote them."
+HOST_POSIX_SENTENCE = "Host mode is POSIX-only; Windows refuses `--save-dir`."
+PERF_HEAD_LIMITATION = (
+    "The Ir attribution figure was measured at @HEAD@ on main before the release commit; "
+    "the release-binding Ir check is the perf-gate receipt verified at the tagged source."
+)
 
 HISTORICAL_PERFORMANCE_REQUIRED = (
     ("historical evidence", "historical-performance-disclosure-missing"),
@@ -400,6 +458,15 @@ def check_unqualified(relative: str, text: str) -> int:
     return len(checks) + 1
 
 
+def check_claim_boundaries(relative: str, text: str) -> int:
+    for pattern, reason in CLAIM_BOUNDARY_RULES:
+        require(not unnegated(pattern, text), f"{reason}:{relative}")
+    for (pattern, reason), twin in zip(CLAIM_BOUNDARY_RULES, CLAIM_BOUNDARY_TWINS):
+        require(not unnegated(pattern, twin),
+                f"scope-positive-control-rejected:{reason}:{relative}")
+    return len(CLAIM_BOUNDARY_RULES) * 2
+
+
 def check_phrases(relative: str, text: str,
                   required: tuple[tuple[str, str], ...]) -> int:
     for phrase, reason in required:
@@ -464,7 +531,7 @@ def check_readme(root: Path) -> int:
     for expected, reason in evidence:
         require(expected in text, f"{reason}:{README}")
         checks += 1
-    return checks
+    return checks + check_claim_boundaries(README, text)
 
 
 def header_symbols(root: Path) -> set[str]:
@@ -498,7 +565,10 @@ def check_symbols(root: Path) -> int:
 def check_surface(root: Path, relative: str) -> int:
     text = prose(read_document(root, relative))
     checks = check_phrases(relative, text, REQUIRED[relative])
-    return checks + check_unqualified(relative, text)
+    checks += check_unqualified(relative, text)
+    if relative == PREVIEW:
+        checks += check_claim_boundaries(relative, text)
+    return checks
 
 
 def check_marked(root: Path) -> int:
@@ -584,7 +654,18 @@ def perf_disclosure_percent(root: Path) -> str:
     return f"{float((max(ratios) - 1) * 100):.1f}"
 
 
-def check_release_notes(path: Path, root: Path = DEFAULT_ROOT) -> int:
+def perf_disclosure_head(root: Path) -> str:
+    try:
+        receipt = json.loads(read_bounded(root, PERF_ATTRIBUTION, 4 * MAX_DOCUMENT_BYTES))
+        head = receipt["selection"]["head"]
+    except (ContractError, KeyError, TypeError, ValueError) as error:
+        raise ContractError("perf-attribution-receipt-unreadable") from error
+    require(type(head) is str and re.fullmatch(r"[0-9a-f]{40}", head) is not None,
+            "perf-attribution-head-invalid")
+    return head
+
+
+def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None = None) -> int:
     try:
         resolved = path.resolve(strict=True)
         if resolved.stat().st_size > MAX_NOTES_BYTES:
@@ -602,6 +683,10 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT) -> int:
     checks += 1
     require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
     checks += 1
+    require(STATE_VERSION_SENTENCE in text, "release-notes-state-version-missing")
+    checks += 1
+    require(HOST_POSIX_SENTENCE in text, "release-notes-host-posix-missing")
+    checks += 1
     require(LEDGER_LINK.search(comment_free(raw)) is not None,
             "release-notes-ledger-link-missing")
     checks += 1
@@ -609,9 +694,34 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT) -> int:
             "release-notes-unsigned-limit-missing")
     checks += 1
     percent = perf_disclosure_percent(root)
+    head = perf_disclosure_head(root)
+    short_head = head[:12]
+    if rev is not None:
+        require(re.fullmatch(r"[0-9a-f]{40}", rev) is not None,
+                "release-notes-revision-invalid")
+        commit = subprocess.run(["git", "-C", str(DEFAULT_ROOT), "cat-file", "-e", f"{rev}^{{commit}}"],
+                                capture_output=True, check=False)
+        require(commit.returncode == 0, "release-notes-revision-invalid")
+    limitation_required = rev is None or head != rev
     require(re.search(r"(?<![\d.])\+" + re.escape(percent) + r"%", text) is not None and PERF_ATTRIBUTION in text,
             f"release-notes-perf-disclosure-missing:+{percent}%:{PERF_ATTRIBUTION}")
     checks += 1
+    require(f"measured at {short_head}" in text,
+            "release-notes-perf-head-mismatch")
+    checks += 1
+    limitation = PERF_HEAD_LIMITATION.replace("@HEAD@", short_head)
+    limitation_marker = "The Ir attribution figure was measured at "
+    if limitation_required:
+        require(limitation in text,
+                "release-notes-perf-head-limitation-missing")
+        checks += 1
+    elif limitation_marker in text:
+        require(limitation in text, "release-notes-perf-head-mismatch")
+        checks += 1
+    require(FALSE_PUBLICATION_CLAIM.search(text) is None,
+            "release-notes-false-publication-claim")
+    checks += 1
+    checks += check_claim_boundaries("release-notes", text)
     claims = claims_module()
     for pattern, reason in (
         (UNSUPPORTED_GAME_CLAIM, "unsupported-cgb-game-qualification"),
@@ -720,27 +830,44 @@ VALID_RELEASE_NOTES_TEMPLATE = """\
 
 GabbaBoy v@VERSION@ adds the selected CGB-CPU-E software model beside DMG-CPU-B.
 
+- @STATE_VERSION_SENTENCE@
+- @HOST_POSIX_SENTENCE@
 - No CGB game-level evidence exists. The CGB test-ROM corpus is software-model
   evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY.
 - The macOS player archive is unsigned and not notarized.
 - Support scope and known limits: [support ledger](https://example.invalid/@LEDGER@).
-- Instruction count: +@PERCENT@% versus v0.2.0 (receipt: tests/baseline/perf-attribution-v1.json).
+- Instruction count: +@PERCENT@% versus v0.2.0 (receipt: tests/baseline/perf-attribution-v1.json; measured at @HEAD@).
+- @PERF_HEAD_LIMITATION@
 """
 
 
-def run_self_test_release_notes() -> tuple[int, int]:
-    percent = perf_disclosure_percent(DEFAULT_ROOT)
+def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
+                                rev: str | None = None) -> tuple[int, int]:
+    percent = perf_disclosure_percent(root)
+    head = perf_disclosure_head(root)
     VALID_RELEASE_NOTES = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
-                           .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent))
+                           .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent)
+                           .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
+                           .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
+                           .replace("@HEAD@", head[:12])
+                           .replace("@PERF_HEAD_LIMITATION@",
+                                    PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-notes-") as temp:
         notes = Path(temp) / "release-notes.md"
         write_lf(notes, VALID_RELEASE_NOTES)
-        expect_pass(["--release-notes", str(notes)])
+        cli_args = ["--release-notes", str(notes), "--root", str(root)]
+        if rev is not None:
+            cli_args.extend(("--rev", rev))
+        expect_pass(cli_args)
         mutations = (
             ("wrong-version", (RELEASE_VERSION, "0.1.0"),
              "release-notes-version-missing"),
             ("missing-absence", (ABSENCE_SENTENCE, ""),
              "release-notes-absence-missing"),
+            ("missing-state-version", (STATE_VERSION_SENTENCE, ""),
+             "release-notes-state-version-missing"),
+            ("missing-host-posix", (HOST_POSIX_SENTENCE, ""),
+             "release-notes-host-posix-missing"),
             ("comment-only-absence",
              (ABSENCE_SENTENCE, f"<!-- {ABSENCE_SENTENCE} -->"),
              "release-notes-absence-missing"),
@@ -750,33 +877,141 @@ def run_self_test_release_notes() -> tuple[int, int]:
              "release-notes-ledger-link-missing"),
             ("missing-unsigned-limit", ("unsigned and not notarized", "ready"),
              "release-notes-unsigned-limit-missing"),
-            ("missing-perf-percentage", (f"+{percent}%", "+0.0%"),
+            ("stale-perf-percentage", (f"+{percent}%", "+8.3%"),
              "release-notes-perf-disclosure-missing"),
             ("missing-perf-receipt-path", (PERF_ATTRIBUTION, "the receipt"),
              "release-notes-perf-disclosure-missing"),
+            ("wrong-perf-head", (f"measured at {head[:12]}", "measured at 711f4fd"),
+             "release-notes-perf-head-mismatch"),
+            ("missing-perf-head-limitation",
+             (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]), ""),
+             "release-notes-perf-head-limitation-missing"),
+            ("wrong-perf-head-limitation",
+             (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]),
+              PERF_HEAD_LIMITATION.replace("@HEAD@", "711f4fd")),
+             "release-notes-perf-head-limitation-missing"),
             ("comment-only-perf-disclosure",
-             (f"- Instruction count: +{percent}% versus v0.2.0 (receipt: {PERF_ATTRIBUTION}).",
+             (f"- Instruction count: +{percent}% versus v0.2.0 (receipt: {PERF_ATTRIBUTION}; measured at {head[:12]}).",
               f"<!-- Instruction count: +{percent}% ({PERF_ATTRIBUTION}) -->"),
              "release-notes-perf-disclosure-missing"),
             ("contrary-game-claim", None,
              "release-notes-unsupported-cgb-game-qualification"),
             ("false-signing-claim", None,
              "release-notes-false-signing-or-notarization-claim"),
+            ("false-publication-claim", None,
+             "release-notes-false-publication-claim"),
+            ("cross-version-state-claim", None,
+             "false-cross-version-state-claim:release-notes"),
+            ("durability-claim", None,
+             "false-durability-claim:release-notes"),
+            ("windows-host-claim", None,
+             "false-windows-host-claim:release-notes"),
+            ("unscoped-state-claim", None,
+             "unscoped-state-claim:release-notes"),
         )
         for name, edit, reason in mutations:
             if name == "contrary-game-claim":
                 changed = VALID_RELEASE_NOTES + "\nCGB game passes acceptance.\n"
             elif name == "false-signing-claim":
                 changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
+            elif name == "false-publication-claim":
+                changed = VALID_RELEASE_NOTES + f"\n{RELEASE_VERSION} has been released.\n"
+            elif name == "cross-version-state-claim":
+                changed = VALID_RELEASE_NOTES + "\nSave states load across GabbaBoy versions.\n"
+            elif name == "durability-claim":
+                changed = VALID_RELEASE_NOTES + "\nSaves are power-loss safe.\n"
+            elif name == "windows-host-claim":
+                changed = VALID_RELEASE_NOTES + "\nHost mode runs on Windows.\n"
+            elif name == "unscoped-state-claim":
+                changed = VALID_RELEASE_NOTES + "\nGabbaBoy supports save states on every platform.\n"
             else:
                 changed = VALID_RELEASE_NOTES.replace(edit[0], edit[1])
             require(changed != VALID_RELEASE_NOTES,
                     f"self-test-mutation-no-op:{name}")
             write_lf(notes, changed)
-            expect_reject(["--release-notes", str(notes)], reason)
+            cli_args = ["--release-notes", str(notes), "--root", str(root)]
+            if rev is not None:
+                cli_args.extend(("--rev", rev))
+            expect_reject(cli_args, reason)
         write_lf(notes, VALID_RELEASE_NOTES)
-        expect_pass(["--release-notes", str(notes)])
+        cli_args = ["--release-notes", str(notes), "--root", str(root)]
+        if rev is not None:
+            cli_args.extend(("--rev", rev))
+        expect_pass(cli_args)
     return len(mutations), len(mutations)
+
+
+def immutable_blob(repo: Path, rev: str, relative: str) -> bytes:
+    result = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{relative}"],
+                            capture_output=True, check=False)
+    require(result.returncode == 0, f"revision-input-missing:{relative}")
+    require(len(result.stdout) <= MAX_DOCUMENT_BYTES * 4,
+            f"revision-input-too-large:{relative}")
+    return result.stdout
+
+
+def run_self_test_claim_boundaries(repo: Path, rev: str) -> tuple[int, int]:
+    require(re.fullmatch(r"[0-9a-f]{40}", rev) is not None,
+            "revision-invalid:full-commit-id-required")
+    resolved = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{rev}^{{commit}}"],
+                              capture_output=True, check=False)
+    require(resolved.returncode == 0, "revision-invalid:commit-not-found")
+    # Bind the version and ledger identity used for generated release notes to the same commit.
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-claims-rev-") as temp:
+        snapshot = Path(temp)
+        (snapshot / "docs/support").mkdir(parents=True)
+        for relative in ("CMakeLists.txt", ".release-please-manifest.json"):
+            target = snapshot / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(immutable_blob(repo, rev, relative))
+        listing = subprocess.run(
+            ["git", "-C", str(repo), "ls-tree", "--name-only", f"{rev}:docs/support"],
+            capture_output=True, check=False, text=True)
+        require(listing.returncode == 0, "revision-support-ledger-list-unavailable")
+        names = [line for line in listing.stdout.splitlines() if line]
+        require(names, "revision-support-ledger-list-empty")
+        for name in names:
+            (snapshot / "docs/support" / name).touch()
+        pinned_identity = tree_identity(snapshot)
+        require(pinned_identity == (RELEASE_VERSION, LEDGER),
+                "revision-tree-identity-mismatch")
+
+        receipt = immutable_blob(repo, rev, PERF_ATTRIBUTION)
+        receipt_path = snapshot / PERF_ATTRIBUTION
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_path.write_bytes(receipt)
+        positive = 0
+        for relative in (README, PREVIEW):
+            text = immutable_blob(repo, rev, relative).decode("utf-8", errors="strict")
+            positive += check_claim_boundaries(relative, prose(text))
+
+        controls = (
+            (README, "Save states load across GabbaBoy versions.",
+             "false-cross-version-state-claim"),
+            (PREVIEW, "Saves are power-loss safe.", "false-durability-claim"),
+            (README, "Host mode runs on Windows.",
+             "false-windows-host-claim"),
+            (PREVIEW, "GabbaBoy supports save states on every platform.", "unscoped-state-claim"),
+        )
+        rejected = 0
+        for relative, claim, reason in controls:
+            original = immutable_blob(repo, rev, relative).decode("utf-8", errors="strict")
+            try:
+                check_claim_boundaries(relative, prose(original + "\n" + claim))
+            except ContractError as error:
+                require(str(error) == f"{reason}:{relative}",
+                        f"claim-boundary-control-wrong-reason:{reason}:{error}")
+                rejected += 1
+            else:
+                raise ContractError(f"claim-boundary-control-accepted:{reason}:{relative}")
+        notes_controls, notes_rejected = run_self_test_release_notes(snapshot, rev)
+        require(notes_controls == notes_rejected,
+                "release-notes-control-count-mismatch")
+        positives = positive + notes_controls
+        all_controls = len(controls) + notes_controls
+        require(rejected + notes_rejected == all_controls,
+                "claim-boundary-control-count-mismatch")
+        return positives, all_controls
 
 
 def flexible(phrase: str) -> re.Pattern[str]:
@@ -863,6 +1098,18 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             ("comment-only-release-absence", RELEASE,
              comment_out(ABSENCE_STATEMENT),
              f"absence-statement-missing:{RELEASE}"),
+            ("cross-version-state-claim", README,
+             append("Save states load across GabbaBoy versions."),
+             f"false-cross-version-state-claim:{README}"),
+            ("durability-claim", PREVIEW,
+             append("Saves are power-loss safe."),
+             f"false-durability-claim:{PREVIEW}"),
+            ("windows-host-claim", PREVIEW,
+             append("Host mode runs on Windows."),
+             f"false-windows-host-claim:{PREVIEW}"),
+            ("unscoped-state-claim", README,
+             append("GabbaBoy supports save states on every platform."),
+             f"unscoped-state-claim:{README}"),
             ("undeclared-symbol", README,
              swap("`gbb_run_ex`", "`gbb_run_nonexistent`", "j"),
              f"undeclared-public-symbol:{README}:gbb_run_nonexistent"),
@@ -879,7 +1126,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              append("The macOS player is signed and notarized."),
              f"false-signing-or-notarization-claim:{RELEASE}"),
             ("false-publication-claim", RELEASE,
-             append("v0.2.0 has been published."),
+             append(f"v{RELEASE_VERSION} has been published."),
              f"false-publication-claim:{RELEASE}"),
             ("false-platform-guarantee", RELEASE,
              append("GabbaBoy supports all architectures."),
@@ -991,10 +1238,22 @@ def main() -> int:
     group.add_argument("--self-test", choices=("game", "docs"))
     group.add_argument("--release-notes", type=Path, metavar="PATH")
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--repo", type=Path, default=DEFAULT_ROOT)
+    parser.add_argument("--rev", help="full immutable commit id for claim-boundary evidence")
+    group.add_argument("--self-test-claim-boundaries", action="store_true")
     args = parser.parse_args()
     try:
+        if args.self_test_claim_boundaries:
+            require(args.rev is not None, "revision-required")
+            positives, controls = run_self_test_claim_boundaries(
+                args.repo.resolve(strict=True), args.rev)
+            require(positives > 0 and controls > 0,
+                    "claim-boundary-self-test-empty")
+            print(f"adoption-claim-boundaries pass positives={positives} "
+                  f"controls={controls} rev={args.rev}")
+            return 0
         if args.release_notes is not None:
-            checks = check_release_notes(args.release_notes, args.root.resolve(strict=True))
+            checks = check_release_notes(args.release_notes, args.root.resolve(strict=True), args.rev)
             print(json.dumps({
                 "mode": "release-notes",
                 "target": RELEASE_VERSION,

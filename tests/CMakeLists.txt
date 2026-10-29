@@ -4952,6 +4952,12 @@ gbb_add_ledger_contract(support_claims_controls
   [=[support-claims controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-claims --rev "${GBB_STATE_SOURCE_REV}")
 unset(GBB_LEDGER_MIN)
+add_test(NAME adoption_claim_boundaries_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-adoption.py"
+    --self-test-claim-boundaries --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(adoption_claim_boundaries_controls PROPERTIES TIMEOUT 120 LABELS v02
+  PASS_REGULAR_EXPRESSION
+    "adoption-claim-boundaries pass positives=[1-9][0-9]* controls=[1-9][0-9]* rev=[0-9a-f]+")
 set(GBB_STATE_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-contract.py")
 add_executable(test_state_api test_state_api.c)
 target_include_directories(test_state_api PRIVATE
