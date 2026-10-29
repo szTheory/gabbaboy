@@ -64,7 +64,7 @@ Milestone-wide rules:
 
 - [x] **Phase 16: Tune-up and v0.2 Debt Closure** - Archive v0.2 phase records behind a lint, wire the Phase 8 verifiers, add the perf gate and CI/planning hygiene checks, and ship v0.2.1 (completed 2026-10-26)
 - [x] **Phase 17: Native Save State Core** - Public `gbb_state_size`/`gbb_save_state`/`gbb_load_state` with exact continuation, transactional bounded loads, machine-checked completeness and portable canonical bytes (completed 2026-10-28)
-- [ ] **Phase 18: Player Save Slots and Host Contract** - Numbered state slots in the SDL player and a `--rom`/`--save-dir` runner with atomic raw `.sav`, SIGTERM save-and-exit, an exit-code table and declared save-format ids
+- [x] **Phase 18: Player Save Slots and Host Contract** - Numbered state slots in the SDL player and a `--rom`/`--save-dir` runner with atomic raw `.sav`, SIGTERM save-and-exit, an exit-code table and declared save-format ids (completed 2026-10-29)
 - [ ] **Phase 19: Qualified v0.3.0 Release** - Publish `v0.3.0` from its exact tag after a green exact-tag rehearsal, with a scoped support ledger and tag-bound receipts
 
 ## Phase Details
@@ -177,7 +177,7 @@ Plans:
   3. A real-signal POSIX test sends SIGTERM and observes the runner finish the current frame, flush the save and exit 0 well within 2 s; a check rejects signal code seeded into the core (handling stays a `sig_atomic_t` flag in the adapter), each row of the documented exit-code table (clean quit, refusal, failure, crash) is exercised, and Windows is declared exempt.
   4. A machine-readable table declares GabbaBoy's save-format id and byte size for each cartridge kind (MBC3+RTC is 32,789 B), and a CTest checks it against the files the runner produces, failing on a seeded size or id mismatch.
 
-**Plans**: 9/9 plans executed (gap slot 18-10 reserved; cap 10)
+**Plans**: 9/9 plans complete (gap slot 18-10 reserved; cap 10)
 
 Plans:
 **Wave 1**
@@ -225,13 +225,13 @@ Plans:
 |-----------|--------|-------|--------|---------|
 | v0.1 Limited DMG Preview | 7 | 64/64 | Complete | 2026-10-10 |
 | v0.2 Color & Cartridge Breadth | 10 | 170/170 | Complete | 2026-10-24 |
-| v0.3 Save States & Host Contract | 4 | 7/18 planned (cap 38) | In progress | — |
+| v0.3 Save States & Host Contract | 4 | 27/27 planned (cap 38) | In progress | — |
 
 **v0.3 execution order:** 16 → 17 → 18 → 19
 
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
-| 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
-| 17. Native Save State Core | 11/11 | 12 | Planned | 2026-10-28 |
-| 18. Player Save Slots and Host Contract | 9/9 | 10 | Not started | - |
+| 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Complete | 2026-10-26 |
+| 17. Native Save State Core | 11/11 | 12 | Complete | 2026-10-28 |
+| 18. Player Save Slots and Host Contract | 9/9 | 10 | Complete | 2026-10-29 |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |
