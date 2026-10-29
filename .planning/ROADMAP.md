@@ -177,14 +177,14 @@ Plans:
   3. A real-signal POSIX test sends SIGTERM and observes the runner finish the current frame, flush the save and exit 0 well within 2 s; a check rejects signal code seeded into the core (handling stays a `sig_atomic_t` flag in the adapter), each row of the documented exit-code table (clean quit, refusal, failure, crash) is exercised, and Windows is declared exempt.
   4. A machine-readable table declares GabbaBoy's save-format id and byte size for each cartridge kind (MBC3+RTC is 32,789 B), and a CTest checks it against the files the runner produces, failing on a seeded size or id mismatch.
 
-**Plans**: 1/9 plans executed (gap slot 18-10 reserved; cap 10)
+**Plans**: 2/9 plans executed (gap slot 18-10 reserved; cap 10)
 
 Plans:
 **Wave 1**
 - [x] 18-01-PLAN.md — Host tracer: `gabbaboy_host`, runner `--rom/--save-dir/--frames`, bounded 8 MiB ROM reader, exact-size import, frozen atomic writer, two-process continuation (W1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 18-02-PLAN.md — Host grammar, stem and Windows-gate negatives with a transform mutant; D-04 API-only and dirty-list checks (W2)
+- [x] 18-02-PLAN.md — Host grammar, stem and Windows-gate negatives with a transform mutant; D-04 API-only and dirty-list checks (W2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 18-03-PLAN.md — `gbb_get_input_clock` public getter, mutants, installed consumers, API docs (W3)
@@ -233,5 +233,5 @@ Plans:
 |-------|----------------|----------|--------|-----------|
 | 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
 | 17. Native Save State Core | 11/11 | 12 | Planned | 2026-10-28 |
-| 18. Player Save Slots and Host Contract | 1/9 | 10 | Not started | - |
+| 18. Player Save Slots and Host Contract | 2/9 | 10 | Not started | - |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |
