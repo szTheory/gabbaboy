@@ -81,7 +81,7 @@ preload at the real in-game save X, and a genuine in-game save W in session 3 is
 `slot_mutant_guard_not_persisted` and `slot_mutant_guard_not_seeded` must fail.
 **Reviewer should confirm:** that persisting the guard in a third pref-dir file per ROM and profile is acceptable.
 
-### WR-04: The save-format and contract checkers read the configure-time HEAD
+### WR-04: The save-format and contract checkers read the configure-time HEAD, so they can pass against a stale revision
 
 **Files modified:** `tests/cmake/save-formats.cmake`, `tests/cmake/host-contract.cmake`,
 `cmake/CheckContractRevWiring.cmake` (new), `tests/expected-tests.txt`
