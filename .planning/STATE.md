@@ -4,11 +4,11 @@ milestone: v0.3
 milestone_name: Save States & Host Contract
 current_phase: 18
 current_phase_name: Player Save Slots and Host Contract
-status: ready_to_plan
-Phase 17 complete and verified (8/8); hosted exact-head CI green at 2eb492f; next /gsd-discuss-phase 18
+status: ready_to_execute
+Phase 18 planned (9 plans, 8 waves); next /gsd-execute-phase 18
 last_updated: "2026-10-28T00:00:00.000Z"
 last_activity: 2026-10-28
-last_activity_desc: Phase 17 verified and marked complete; review-fix round 1 closed 5 critical findings; hosted CI green at 2eb492f
+last_activity_desc: Phase 18 planned — 9 plans in 8 waves, checker 3 iterations, requirements 4/4, decisions 31/31
 state_head: 570113052a356227545dded8b1ec05135bfae754
 progress:
   total_phases: 4
@@ -30,10 +30,10 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 ## Current Position
 
-Phase: 18 — Player Save Slots and Host Contract
-Plan: Not started (context gathered; 8 primary plans + 1 gap slot proposed, cap 10)
-Status: Ready to plan — next `/gsd-plan-phase 18`
-Last activity: 2026-10-28 — Phase 18 discussion complete ([18-CONTEXT.md](phases/GB-18-player-save-slots-and-host-contract/18-CONTEXT.md), D-114); PR130 squash-merged as `f4082a6` (Phase 17 boundary). Earlier: Phase 17 complete. 11/11 plans; goal verification passed 8/8 ([17-VERIFICATION.md](phases/GB-17-native-save-state-core/17-VERIFICATION.md)); Nyquist 0 gaps; security 29/29 closed; code review found 5 critical findings, all closed in review-fix round 1 of 2 with negative controls ([17-REVIEW-DISPOSITION.md](phases/GB-17-native-save-state-core/17-REVIEW-DISPOSITION.md)); full suite 1496/1496 at `e9e2d57`; PR130 hosted exact-head CI green at `2eb492f` (41 pass, 3 path-skipped). Release preconditions before v0.3.0: re-cite the provisional `nightly-asan.yml:report-red` row from a main dry run (WR-C03) and `release.yml:candidate-performance` from the next release run; RM-027 remains the Phase 19 entry blocker.
+Phase: 18 (Player Save Slots and Host Contract) — READY TO EXECUTE
+Plan: 0 of 9 executed (18-01..18-09 planned; gap slot 18-10 reserved, cap 10)
+Status: Ready to execute — next `/gsd-execute-phase 18`
+Last activity: 2026-10-28 — Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Earlier: Phase 18 discussion complete ([18-CONTEXT.md](phases/GB-18-player-save-slots-and-host-contract/18-CONTEXT.md), D-114); PR130 squash-merged as `f4082a6` (Phase 17 boundary). Earlier: Phase 17 complete. 11/11 plans; goal verification passed 8/8 ([17-VERIFICATION.md](phases/GB-17-native-save-state-core/17-VERIFICATION.md)); Nyquist 0 gaps; security 29/29 closed; code review found 5 critical findings, all closed in review-fix round 1 of 2 with negative controls ([17-REVIEW-DISPOSITION.md](phases/GB-17-native-save-state-core/17-REVIEW-DISPOSITION.md)); full suite 1496/1496 at `e9e2d57`; PR130 hosted exact-head CI green at `2eb492f` (41 pass, 3 path-skipped). Release preconditions before v0.3.0: re-cite the provisional `nightly-asan.yml:report-red` row from a main dry run (WR-C03) and `release.yml:candidate-performance` from the next release run; RM-027 remains the Phase 19 entry blocker.
 
 Prior phase evidence: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
 
@@ -86,11 +86,11 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 ## Session Continuity
 
 **Last session:** 2026-10-28T23:49:10.109Z
-**Stopped at:** Phase 18 context gathered
-**Resume file:** .planning/phases/GB-18-player-save-slots-and-host-contract/18-CONTEXT.md
+**Stopped at:** Phase 18 planned
+**Resume file:** .planning/phases/GB-18-player-save-slots-and-host-contract/continue.md
 
-Completed stage: **Phase 18 — Player Save Slots and Host Contract: discussion (context gathered)**. Decisions D-01..D-31 in [18-CONTEXT.md](phases/GB-18-player-save-slots-and-host-contract/18-CONTEXT.md), adopted as D-114. Phase 17 PR130 was squash-merged to main as `f4082a6`; its tree is identical to the verified head `605eb8f`, where exact-head CI passed 33/33 required checks with 11 path-skipped. Phase 18 branch: `gsd/phase-18-player-save-slots-and-host-contract`, from `f4082a6`. Next phase: **18 — Player Save Slots and Host Contract, planning**. Next command: `/gsd-plan-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
+Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
-- Execute Phase 17 (Native Save State Core) with `/gsd-execute-phase 17`; reuse `17-CONTEXT.md`, research, patterns and verified plans. RM-027 remains a Phase 19 entry blocker. Do not start Phase 18 automatically.
+- Execute Phase 18 (Player Save Slots and Host Contract) with `/gsd-execute-phase 18`; reuse `18-CONTEXT.md`, research, patterns and the checked plans. RM-027 remains a Phase 19 entry blocker. Do not start Phase 19 automatically.

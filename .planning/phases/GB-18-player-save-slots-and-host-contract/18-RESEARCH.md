@@ -775,17 +775,21 @@ t0 = time.monotonic(); p.send_signal(signal.SIGTERM); rc = p.wait(timeout=10); d
 | A6 | An SRAM-counter fixture is an acceptable "game-visible readback" for D-28/XFER-002 without a new flag | Pattern 10 | Low-Medium: if the owner insists on WRAM readback, the grammar (D-02) must change. |
 | A7 | C17 says a signal handler may store only to `volatile sig_atomic_t` (plus lock-free atomics); CERT SIG30-C/SIG31-C | Pattern 4 | Low (training knowledge; consistent with D-13). |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Stem divergence from Playstead for non-alphanumeric or > 8-char extensions (F11 vs D-07).**
    - Known: D-07 is locked and agrees for ordinary ROM extensions.
    - Unclear: whether the future Playstead pin should pass a normalized `--rom` name.
    - Recommendation: keep D-07; document the divergence in `host-contract.json`/docs and add a differential test over `.gb/.gbc/.GB/.GBC/.bin`.
+   - RESOLVED: D-07 kept as locked. The rule is implemented in 18-01 Task 1 (a dot at byte 0 never separates an extension, matching deletingPathExtension); the `.gb/.gbc/.GB/.GBC/.bin` differential table and the `game.v2-final` divergence row are `host_stem_accepts` in 18-02 Task 1; the divergence sentence is in the native guide's Host process contract section, 18-09 Task 2. A future Playstead pin passing a normalised name is RM-020's concern.
 2. **Should 18-02 (getter) precede 18-01 or follow it?**
    - Recommendation: 18-01 first, 18-02 immediately after (serial), since both touch the shared inventories; 18-02 is small. 18-04 depends on 18-02 and on 18-01's writer.
+   - RESOLVED (plan numbers after the 18-01 split): serial. 18-01 host tracer (wave 1), 18-02 grammar/stem/API checks (wave 2), 18-03 input-clock getter (wave 3, depends on 18-02 because all three append to `tests/expected-tests.txt`); the slot engine 18-05 depends on 18-03 (getter) and 18-04 (writer seams and host hardening).
 3. **Real-window proof that Cmd+S/L/Z reach the app (A2).**
    - Recommendation: accept the embedded-`handle_key` coverage; record the unproven SDL-menu assumption as a limitation line rather than inventing a manual UAT.
+   - RESOLVED differently from the recommendation: A2 is proven by an automated menu scan, not declared as a limitation. 18-06 Task 3 (numbered 18-05 before the 18-01 split) adds `player_slot_menu_shortcuts`, which walks the SDL-created macOS main menu through the Objective-C runtime and fails on any Command-only S, L or Z key equivalent, and `player_slot_menu_shortcuts_control`, which seeds a Command-S item and must fail. Both are mandatory; if the macOS player lane cannot create the Cocoa menu, the executor stops and reports to the owner. No manual UAT.
 4. **Stale-temp sweep and a second writer.** D-10 deliberately documents single-writer; nothing to resolve, but the docs must say that a second runner on the same (dir, stem) can have its live temp swept.
+   - RESOLVED: the sweep (exact prefix, after all refusal checks) is 18-04 Task 1 (`host_sweep_after_checks`) with the unit table in 18-04 Task 2 (`host_sweep_exact_prefix`); the single-writer sentence, including that a second runner's live temp may be swept, is pinned in the native guide by 18-09 Task 2 (`native_guide_host_contract`).
 
 ## Runtime State Inventory
 
