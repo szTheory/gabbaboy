@@ -200,3 +200,57 @@ add_test(NAME host_qualified_sources_control
     "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_ROOT_CMAKELISTS=${PROJECT_SOURCE_DIR}/CMakeLists.txt;-DGBB_SOURCES=${GBB_QUALIFIED_SOURCES}|src/host/unlisted_probe.c;-P;${GBB_QUALIFIED_SOURCES_SCRIPT}"
     -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=runner-source-unqualified: src/host/unlisted_probe.c"
     -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+
+# ---- D-11: the pure cadence (portable: no clock, no I/O, no core) --------------------------------------------
+add_executable(test_host_cadence "${PROJECT_SOURCE_DIR}/tests/test_host_cadence.c")
+target_link_libraries(test_host_cadence PRIVATE gabbaboy_host)
+target_compile_features(test_host_cadence PRIVATE c_std_17)
+set_target_properties(test_host_cadence PROPERTIES C_EXTENSIONS OFF)
+foreach(case quiet age rtc_compare generation_compare retry)
+  add_test(NAME host_cadence_${case} COMMAND test_host_cadence ${case})
+  set_tests_properties(host_cadence_${case} PROPERTIES PASS_REGULAR_EXPRESSION "PASS ${case}")
+endforeach()
+
+# gbb_host_cadence_mutant(name anchor replacement case): the cadence test linked against a host library whose
+# host_cadence.c has one edit. It must exit 1 with its own `FAIL <case>` line.
+function(gbb_host_cadence_mutant name anchor replacement case)
+  gbb_host_mutant_library(${name} host_cadence.c "${anchor}" "${replacement}")
+  add_executable(test_host_cadence_mutant_${name} "${PROJECT_SOURCE_DIR}/tests/test_host_cadence.c")
+  target_link_libraries(test_host_cadence_mutant_${name} PRIVATE gabbaboy_host_mutant_${name})
+  target_compile_features(test_host_cadence_mutant_${name} PRIVATE c_std_17)
+  set_target_properties(test_host_cadence_mutant_${name} PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME host_cadence_mutant_${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_host_cadence_mutant_${name}>;${case}"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL ${case}"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+endfunction()
+
+# `!=` replaced by `>`: a generation that moves backwards is no longer noticed.
+gbb_host_cadence_mutant(gt "generation != cadence->observed_generation"
+  "generation > cadence->observed_generation" generation_compare)
+# `>=` replaced by `>`: the quiet flush fires one frame late.
+gbb_host_cadence_mutant(quiet_off_by_one ">= GBB_HOST_QUIET_FRAMES" "> GBB_HOST_QUIET_FRAMES" quiet)
+
+# ---- D-09/D-10: writer fault seams and sweep below the runner (POSIX-only) -----------------------------------
+if(NOT WIN32)
+  add_executable(test_host_save_io "${PROJECT_SOURCE_DIR}/tests/test_host_save_io.c")
+  target_link_libraries(test_host_save_io PRIVATE gabbaboy_host_testing)
+  target_compile_definitions(test_host_save_io PRIVATE GBB_HOST_TESTING)
+  target_compile_features(test_host_save_io PRIVATE c_std_17)
+  set_target_properties(test_host_save_io PROPERTIES C_EXTENSIONS OFF)
+  foreach(stage temp write sync close target rename dirsync)
+    add_test(NAME host_writer_fault_${stage} COMMAND test_host_save_io fault_${stage})
+    set_tests_properties(host_writer_fault_${stage} PROPERTIES PASS_REGULAR_EXPRESSION "PASS fault_${stage}")
+  endforeach()
+  add_test(NAME host_writer_eio_no_retry COMMAND test_host_save_io eio_no_retry)
+  set_tests_properties(host_writer_eio_no_retry PROPERTIES PASS_REGULAR_EXPRESSION "PASS eio_no_retry")
+  add_test(NAME host_writer_eexist COMMAND test_host_save_io eexist)
+  set_tests_properties(host_writer_eexist PROPERTIES PASS_REGULAR_EXPRESSION "PASS eexist")
+  add_test(NAME host_writer_target_not_regular COMMAND test_host_save_io target_not_regular)
+  set_tests_properties(host_writer_target_not_regular PROPERTIES PASS_REGULAR_EXPRESSION "PASS target_not_regular")
+  add_test(NAME host_sweep_exact_prefix COMMAND test_host_save_io sweep_exact_prefix)
+  set_tests_properties(host_sweep_exact_prefix PROPERTIES PASS_REGULAR_EXPRESSION "PASS sweep_exact_prefix")
+
+  gbb_add_host_mode_test(host_rtc_final_compare rtc-final-compare)
+endif()

@@ -28,7 +28,19 @@ function(gabbaboy_verify_registered_tests)
       host_periodic_flush
       host_first_write
       host_idempotent_rerun
-      host_sweep_after_checks)
+      host_sweep_after_checks
+      host_writer_fault_temp
+      host_writer_fault_write
+      host_writer_fault_sync
+      host_writer_fault_close
+      host_writer_fault_target
+      host_writer_fault_rename
+      host_writer_fault_dirsync
+      host_writer_eio_no_retry
+      host_writer_eexist
+      host_writer_target_not_regular
+      host_sweep_exact_prefix
+      host_rtc_final_compare)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

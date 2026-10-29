@@ -86,6 +86,16 @@ int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t wa
     return closed == 0 ? HOST_IO_OK : HOST_IO_EREAD;
 }
 
+#ifdef GBB_HOST_TESTING
+/* Test builds only. RED stub: the injection arrives with the writer wiring. */
+void host_save_io_test_fail_next(int stage_code, int err) {
+    (void)stage_code;
+    (void)err;
+}
+
+unsigned host_save_io_test_sync_calls(void) { return 0u; }
+#endif
+
 static bool write_all(int fd, const uint8_t *bytes, size_t size) {
     size_t written = 0u;
     while (written < size) {

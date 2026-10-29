@@ -38,6 +38,18 @@ filter_expected_for_platform() {
         -e '/^host_first_write$/d' \
         -e '/^host_idempotent_rerun$/d' \
         -e '/^host_sweep_after_checks$/d' \
+        -e '/^host_writer_fault_temp$/d' \
+        -e '/^host_writer_fault_write$/d' \
+        -e '/^host_writer_fault_sync$/d' \
+        -e '/^host_writer_fault_close$/d' \
+        -e '/^host_writer_fault_target$/d' \
+        -e '/^host_writer_fault_rename$/d' \
+        -e '/^host_writer_fault_dirsync$/d' \
+        -e '/^host_writer_eio_no_retry$/d' \
+        -e '/^host_writer_eexist$/d' \
+        -e '/^host_writer_target_not_regular$/d' \
+        -e '/^host_sweep_exact_prefix$/d' \
+        -e '/^host_rtc_final_compare$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -77,6 +89,18 @@ _self_test_platform_filter_cases() {
     host_first_write \
     host_idempotent_rerun \
     host_sweep_after_checks \
+    host_writer_fault_temp \
+    host_writer_fault_write \
+    host_writer_fault_sync \
+    host_writer_fault_close \
+    host_writer_fault_target \
+    host_writer_fault_rename \
+    host_writer_fault_dirsync \
+    host_writer_eio_no_retry \
+    host_writer_eexist \
+    host_writer_target_not_regular \
+    host_sweep_exact_prefix \
+    host_rtc_final_compare \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -116,7 +140,19 @@ _self_test_platform_filter_cases() {
     host_periodic_flush \
     host_first_write \
     host_idempotent_rerun \
-    host_sweep_after_checks; do
+    host_sweep_after_checks \
+    host_writer_fault_temp \
+    host_writer_fault_write \
+    host_writer_fault_sync \
+    host_writer_fault_close \
+    host_writer_fault_target \
+    host_writer_fault_rename \
+    host_writer_fault_dirsync \
+    host_writer_eio_no_retry \
+    host_writer_eexist \
+    host_writer_target_not_regular \
+    host_sweep_exact_prefix \
+    host_rtc_final_compare; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1

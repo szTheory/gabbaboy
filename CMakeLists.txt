@@ -187,5 +187,17 @@ if(BUILD_TESTING)
   if(WIN32)
     target_link_libraries(measure_core PRIVATE Psapi)
   endif()
+  # Test-only copy of the host library with the writer fault seams compiled in (Phase 18, D-09). It is
+  # POSIX-only like every user of it, is never linked by gabbaboy-runner and is never installed.
+  # host_no_test_seams_shipped proves the shipped archive and runner define no seam symbol.
+  if(NOT WIN32)
+    get_target_property(GBB_HOST_TESTING_SOURCES gabbaboy_host SOURCES)
+    add_library(gabbaboy_host_testing STATIC ${GBB_HOST_TESTING_SOURCES})
+    target_compile_definitions(gabbaboy_host_testing PRIVATE GBB_HOST_TESTING)
+    target_include_directories(gabbaboy_host_testing PUBLIC
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/host" "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_compile_features(gabbaboy_host_testing PUBLIC c_std_17)
+    set_target_properties(gabbaboy_host_testing PROPERTIES C_EXTENSIONS OFF)
+  endif()
   add_subdirectory(tests)
 endif()

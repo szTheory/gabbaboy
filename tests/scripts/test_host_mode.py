@@ -374,11 +374,48 @@ def scenario_sweep(runner: str, work: Path) -> None:
     forbid_work_path(base, out, err)
 
 
+MBC3_TIMER_RAM_BATTERY = 0x10
+RAM_32K = 0x03
+
+
+def scenario_rtc_final_compare(runner: str, work: Path) -> None:
+    """D-12: the RTC ticks only while the runner runs. An MBC3+RTC cart that writes nothing still gets
+    its drifted clock persisted by the final export-and-compare, and a second run continues from the
+    persisted clock, never from the file's mtime or the wall clock."""
+    base = fresh_dir(work)
+    rom = base / "clock.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC3_TIMER_RAM_BATTERY, RAM_32K))
+    saves = fresh_dir(base / "saves")
+    sav = saves / "clock.sav"
+
+    code, out, err = run(runner, rom, saves, 120, base)
+    expect_clean_exit(code, err, 120)
+    require(flush_lines(err) == [("final", 120, "written")], f"first run flushes {flush_lines(err)}")
+    first = sav.read_bytes()
+    require(len(first) == 32789, f"first image is {len(first)} bytes, expected 32789")
+    forbid_work_path(base, out, err)
+
+    # Age the file by a day: a runner that caught the clock up from mtime would jump far ahead.
+    old = sav.stat().st_mtime - 86400
+    os.utime(sav, (old, old))
+    code, out, err = run(runner, rom, saves, 120, base)
+    expect_clean_exit(code, err, 120)
+    require(flush_lines(err) == [("final", 120, "written")],
+            f"second run must rewrite an RTC-only change: {flush_lines(err)}")
+    second = sav.read_bytes()
+    require(len(second) == 32789, f"second image is {len(second)} bytes")
+    require(second[:32768] == first[:32768], "SRAM bytes changed although the guest never wrote")
+    require(second[32768:] != first[32768:], "the 21-byte RTC block did not change between the runs")
+    require(listing(saves) == ["clock.sav"], f"unexpected directory entries {listing(saves)}")
+    forbid_work_path(base, out, err)
+
+
 SCENARIOS = {
     "periodic-flush": scenario_periodic_flush,
     "first-write": scenario_first_write,
     "idempotent-rerun": scenario_idempotent_rerun,
     "sweep": scenario_sweep,
+    "rtc-final-compare": scenario_rtc_final_compare,
     "continuation": scenario_continuation,
     "rom-max": scenario_rom_max,
     "rom-oversize": scenario_rom_oversize,
