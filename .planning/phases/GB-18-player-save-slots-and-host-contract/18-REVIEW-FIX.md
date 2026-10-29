@@ -28,7 +28,7 @@ wired into CTest, and every new test name is in `tests/expected-tests.txt`, `cma
 
 ### WR-01: Rollback and post-load clock results are ignored, so "nothing changed" can be false
 
-**Status:** fixed: requires human verification (error-handling logic)
+**Status:** fixed (owner accepted pausing input on RESTORE_FAILED)
 **Files modified:** `src/player/slots.c`, `src/player/slots.h`, `src/player/main.c`, `tests/test_slots.c`,
 `tests/test_slots_pure.c`, `tests/cmake/slots.cmake`, `tests/expected-tests.txt`, `cmake/ExpectedTests.cmake`,
 `.github/scripts/verify-test-inventory.sh`
@@ -65,7 +65,7 @@ target). `slot_mutant_sweep_noop` and `slot_mutant_sweep_unscoped` must fail.
 
 ### WR-03: The battery preload backup is clobbered by the first load of every new session
 
-**Status:** fixed: requires human verification (state-handling logic)
+**Status:** fixed (owner accepted the design)
 **Files modified:** `src/player/slots.c`, `src/player/slots.h`, `docs/cartridge-and-saves.md`, `tests/test_slots.c`,
 `tests/cmake/slots.cmake`, `tests/expected-tests.txt`, `cmake/ExpectedTests.cmake`,
 `.github/scripts/verify-test-inventory.sh`
@@ -79,7 +79,11 @@ is recorded in the code comment. The guide has one new sentence.
 **Tests:** `slot_battery_guard_sessions` spans three `player_slot_store_init` calls: session 2's first load leaves the
 preload at the real in-game save X, and a genuine in-game save W in session 3 is still backed up.
 `slot_mutant_guard_not_persisted` and `slot_mutant_guard_not_seeded` must fail.
-**Reviewer should confirm:** that persisting the guard in a third pref-dir file per ROM and profile is acceptable.
+**Owner decision (2026-10-29):** the third pref-dir file per ROM and profile is accepted. The residual path was
+closed in a follow-up (e94174e3): a failed guard write no longer passes silently. The load still applies, `guard_unsaved`
+is set and the status message warns that the in-game save backup may be replaced next session.
+`slot_guard_write_failure` (a directory at the guard's name makes the write fail) and its control
+`slot_mutant_guard_failure_silent` cover it.
 
 ### WR-04: The save-format and contract checkers read the configure-time HEAD, so they can pass against a stale revision
 
