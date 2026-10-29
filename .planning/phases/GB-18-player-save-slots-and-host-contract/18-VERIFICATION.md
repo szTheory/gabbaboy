@@ -1,9 +1,10 @@
 ---
 phase: GB-18-player-save-slots-and-host-contract
-verified: 2026-10-29T08:00:00Z
-status: human_needed
+verified: 2026-10-29T12:00:00Z
+status: passed
 score: 4/4 must-haves verified
 covered_files:
+  - ".github/scripts/verify-test-inventory.sh"
   - ".planning/phases/GB-18-player-save-slots-and-host-contract/18-01-PLAN.md"
   - ".planning/phases/GB-18-player-save-slots-and-host-contract/18-01-SUMMARY.md"
   - ".planning/phases/GB-18-player-save-slots-and-host-contract/18-02-PLAN.md"
@@ -24,9 +25,11 @@ covered_files:
   - ".planning/phases/GB-18-player-save-slots-and-host-contract/18-09-SUMMARY.md"
   - "CMakeLists.txt"
   - "README.md"
+  - "cmake/CheckContractRevWiring.cmake"
   - "cmake/CheckCoreNoHostClock.cmake"
   - "cmake/CheckHostApiSymbols.cmake"
   - "cmake/CheckRunnerSourcesQualified.cmake"
+  - "cmake/ExpectedTests.cmake"
   - "cmake/VerifyDocContract.cmake"
   - "docs/cartridge-and-saves.md"
   - "docs/host-contract.json"
@@ -53,6 +56,10 @@ covered_files:
   - "tests/cmake/input-clock.cmake"
   - "tests/cmake/save-formats.cmake"
   - "tests/cmake/slots.cmake"
+  - "tests/expected-tests.txt"
+  - "tests/player/CMakeLists.txt"
+  - "tests/player/expected-tests.txt"
+  - "tests/player/test_input.c"
   - "tests/player/test_menu_shortcuts.c"
   - "tests/player/test_slots.c"
   - "tests/scripts/host_fixture.py"
@@ -66,87 +73,87 @@ covered_files:
   - "tests/test_host_cadence.c"
   - "tests/test_host_run.c"
   - "tests/test_host_save_io.c"
+  - "tests/test_host_save_mode.c"
   - "tests/test_input_clock.c"
   - "tests/test_save_format_completeness.c"
   - "tests/test_slots.c"
   - "tests/test_slots_pure.c"
-covered_digest: "v4:sha256:23ca698d2c98e7e46b75aae735c5eb1a50eb70d855ac9bd1bc22e76ec3af96e5"
+covered_digest: "v4:sha256:b9ce65334b0bbd9168c25e91518c91cdacea8b20eb0a1444ed7f27d7299cf1c1"
 behavior_unverified: 0
 overrides_applied: 0
-coincidental_reliance_items:
-  - truth: "SC-3: a real SIGTERM exits 0 well within 2 s (non-sanitizer lanes)"
-    reason: fixture-only
-    harden: "The 2 s bound is a wall-clock ceiling measured on whatever machine runs the test (review IN-07); the structural evidence is the boundary-frame replay equality. Keep the replay as the load-bearing check and treat the ceiling as a smoke bound."
-human_verification:
-  - test: "Owner triage of the 15 open review dispositions in 18-REVIEW-DISPOSITION.md, in particular WR-03 (battery-preload backup overwritten by the first slot load of every later session) and WR-01 (ignored rollback and input-clock results in player_slot_load)"
-    expected: "Each finding is marked fixed, skipped or deferred with a reason. Project rule D-102..D-105 says an unresolved correctness finding forces a rescope or the single reserved gap slot 18-10, never a seed. WR-03 is a reachable data-loss path in a documented-but-undesirable edge; WR-01 is not reachable through the public core today."
-    why_human: "A disposition is an owner decision. No machine can decide whether a recoverability gap in the battery preload backup is acceptable for v0.3.0."
-  - test: "Confirm the PR CI lanes that cannot run locally are green on the exact head: Linux ASan, native Windows (MSVC build of every target plus the Windows exclusion lists), and the hosted macOS player package. Also read hosted per-test times against the 45 s (75% of 60 s) budget."
-    expected: "All required checks pass on the exact head revision, with no skipped or stale runs."
-    why_human: "These lanes only exist on hosted runners. The verifier ran the full local suite on macOS and cannot observe them. AGENTS.md forbids treating a local pass as proof a remote revision is green."
+re_verification:
+  previous_status: human_needed
+  previous_score: 4/4
+  gaps_closed:
+    - "Human item 1 (15 open review dispositions): all 15 are now fixed in 18-REVIEW-DISPOSITION.md (open: 0)"
+    - "Human item 2 (hosted exact-head CI): reclassified as machine-checkable evidence, recorded below as pending CI on PR #132"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 18: Player Save Slots and Host Contract Verification Report
 
 **Phase Goal:** Players can save and load numbered state slots in the SDL player without risking the running game, and a host process can drive the runner with a predictable save directory, atomic battery saves, a clean SIGTERM save-and-exit and documented exit codes and save formats.
 **Verified:** 2026-10-29
-**Status:** human_needed
-**Re-verification:** No, initial verification
-**Head verified:** 1f749b01fe8ed59c12f0f311657911b1678e60fa (source identical to d3b0f0dd; the two later commits only add the code review records)
+**Status:** passed
+**Re-verification:** Yes. The prior report (head 1f749b01) went stale when review-fix rounds 1 and 2 changed covered files. This report is re-derived at head 80246140 (code head 70a29b29; 80246140 only adds `COVERAGE.md`).
 
 ## Goal Achievement
 
-The goal is achieved in the codebase. Every roadmap success criterion is backed by code I read and by tests I re-ran, each with a negative control. The status is `human_needed` rather than `passed` for two reasons only. One is an owner decision on open review findings. The other is CI evidence that exists only on hosted runners. Nothing is FAILED.
+The goal is achieved in the codebase. Each roadmap success criterion is backed by code I read and by tests I re-ran at the current head, each with a negative control. No truth is FAILED, no human decision is outstanding, and no gap exists. One non-blocking item remains and it is machine-checkable: the hosted exact-head CI on PR #132 was still running when I checked (see "Hosted CI" below). Because it is pending evidence rather than a human decision, it does not change the status; the orchestrator re-checks it before closure.
 
 ### Observable Truths (ROADMAP success criteria)
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Player tests save and load numbered slots through the public API only; a refused, mismatched or wrong-ROM slot leaves the running game byte-identical and shows a clear message | VERIFIED | `src/player/slots.c` `player_slot_load` reads, then validates the bytes in a scratch instance built from the store's own ROM copy (step 1a, `gbb_create`/`gbb_load_rom`/`gbb_load_state`/`gbb_get_input_clock`), and only then snapshots, writes the preload, does the live load and writes the undo file. Every refusal path returns before any write. `tests/test_slots.c` `snap_take`/`snap_equal` compare full state bytes, battery bytes, battery generation and the digests of slot, undo, preload and `.gbb` files. Cases `refusal_dmg_in_cgb`, `wrong_rom_untouched`, `refusal_version_token`, `refusal_text_file`, `refusal_flipped_byte`, `refusal_truncated`, `refusal_oversize` and `refusal_symlink` exercise the refusal classes. The mutants `slot_mutant_undo_before_load` and `slot_mutant_preload_before_validate` fail them. `host_api_surface` (passed) proves `slots.c` uses only declared public `gbb_*` symbols. Player wiring in `src/player/main.c` `handle_slot_key` routes every outcome through `player_slot_format_message` and `set_slot_status` to the title, and a load re-anchors input via `player_input_rebase`. Re-ran `verify-phase3-player.sh --build-package` at HEAD: 106/106 including `player_slot_keys`, `_reanchor`, `_status_line`, `_help_text`, `_mutant_no_rebase`, `_mutant_command_guard`, `_menu_shortcuts` and its control. |
-| 2 | Runner `--rom --save-dir` writes raw `{saveDir}/{romBaseName}.sav` through an O_EXCL temp and rename with periodic flushing; separate negatives reject unsanitised basename, symlinked target and wrong import size with no partial mutation | VERIFIED | `src/host/host_save_io.c` `host_save_io_replace`: temp `openat(... O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW\|O_CLOEXEC, 0600)` in the save dir, write, one non-retried `fsync` (`F_FULLFSYNC` on Apple), checked `close`, `fstatat(AT_SYMLINK_NOFOLLOW)` that refuses a non-regular target, `renameat`, dir `fsync`; every pre-rename failure unlinks the temp. Reads use `O_NOFOLLOW` plus `S_ISREG` and never size an allocation from `st_size`. `host_cadence.c` and `host_run.c` implement the 16-quiet / 300-age / 3,600-frame cadence. Tests re-run and passing: `host_stem_refuse_*` (7 rows), `host_stem_mutant_transform`, `host_import_exact/zero/short/long/mgba_footer/oversize/bad_rtc/symlink/dangling_symlink/fifo/directory/device`, `host_import_mutant_follow`, `host_writer_fault_*` (7 stages), `host_writer_eio_no_retry`, `host_writer_eexist`, `host_writer_target_not_regular`, `host_periodic_flush`, `host_continuation` and its `ignore_import` mutant, `host_savedir_*`. |
-| 3 | A real-signal POSIX test sends SIGTERM and observes finish-frame, flush and exit 0 well within 2 s; a check rejects signal code in the core; every row of the exit-code table is exercised; Windows declared exempt | VERIFIED | `src/host/host_signal.c`: handler body is only `g_host_stop = sig` on a file-static `volatile sig_atomic_t`, `SA_RESTART\|SA_RESETHAND`, TERM/INT/HUP unblocked, SIGPIPE ignored, an inherited `SIG_IGN` is honoured for INT/HUP. `host_run.c` polls the flag at the frame boundary (lines 429-459), then runs the final flush and prints the exit line. `test_host_signals.py` sends real signals to a paced runner; `host_signal_term`, `_int`, `_inherited_ign`, `host_exit_frames_clean`, `_failure_readonly`, `_core_stop`, `_refusal`, `_crash_storm`, `host_signal_disposition`, `host_exit_table_codes` and `host_run_stop_before_first_frame` all passed in my run. The four decoys (`no_flush`, `partial_frame`, `exit0_after_failed_flush`, `in_place_write`) are rejected. `no_host_clock`, `no_host_clock_signal_selftest` and `no_host_clock_signal_call_selftest` pass: the core is checked at source and object layers for signal calls and the seeded controls fail. Windows exemption is declared in the plan, the contract docs and the exclusion lists. |
-| 4 | A machine-readable table declares the save-format id and byte size for each cartridge kind (MBC3+RTC 32,789 B) and a CTest checks it against runner-produced files, failing on a seeded size or id mismatch | VERIFIED | `docs/host-contract.json` parsed: 16 `save_formats` rows; `0x10/0x03` is `gabbaboy-mbc3-rtc-sram-32k-v1` at 32,789 B (32,768 + 21); exit codes 0 clean, 1 failure, 2 refusal, none/crash. `save_format_print`, `save_format_print_none`, `save_format_files` (produces files for every row on dmg and cgb), `save_format_completeness`, `save_format_freeze`, `host_contract_json`, `save_format_controls` (all seeded REJECT controls) and `host_contract_controls` passed. The table is installed under `share/gabbaboy/` (`CMakeLists.txt:172`) and compared byte-for-byte by `installed_host_smoke`. |
+| 1 | Player tests save and load numbered slots through the public API only; a refused, mismatched or wrong-ROM slot leaves the running game byte-identical and shows a clear message | VERIFIED | Re-read `src/player/slots.c` `player_slot_load` at the current head. Step 1 reads at most state size + 1 bytes with a no-follow bounded read. Step 1a validates the bytes in a scratch instance built from the store's own ROM copy (`gbb_create`, `gbb_load_rom`, `gbb_load_state`, `gbb_get_input_clock`) and returns `REFUSED` or `UNSAFE_INPUT` before any write. Only then does it snapshot, back up the battery (guarded), do the live load and write the undo file. A failed undo write rolls back, and a refused rollback or unreadable clock is reported as the new `RESTORE_FAILED`, never as "nothing changed" (WR-01). `tests/test_slots.c` compares whole-state bytes, battery bytes, battery generation and file digests (`snap_take`/`snap_equal`) across the refusal classes, and the mutants `slot_mutant_undo_before_load`, `slot_mutant_preload_before_validate`, `slot_mutant_rollback_ignored` and `slot_mutant_clock_ignored` fail them. The `slot_*` and `host_api_surface` tests pass in my run. In the player build, `ctest --test-dir build-player -R '^player_\|^test_budget'` passes 110/110 at the current build, including `player_slot_keys`, `_reanchor`, `_status_line`, `_help_text`, `_menu_shortcuts`, `player_input_rebase_guard` and their mutant and control rows. `src/player/main.c` `handle_slot_key` routes every outcome through `player_slot_format_message` to the title and re-anchors input through `apply_slot_load` and `player_input_rebase`. |
+| 2 | Runner `--rom --save-dir` writes raw `{saveDir}/{romBaseName}.sav` through an O_EXCL temp and rename with periodic flushing; separate negatives reject unsanitised basename, symlinked target and wrong import size with no partial mutation | VERIFIED | Re-read `src/host/host_save_io.c` `host_save_io_replace`: name cap check, then `openat(O_WRONLY\|O_CREAT\|O_EXCL\|O_NOFOLLOW\|O_CLOEXEC, 0600)` temp, `fchmod` to carry an existing target's permission bits (WR-05), one non-retried fsync, checked close, `fstatat(AT_SYMLINK_NOFOLLOW)` refusing a non-regular target, `renameat`, then a directory fsync. Every pre-rename failure unlinks the temp. `host_save_io_sweep` now collects names in bounded batches before unlinking (IN-01). The 204-byte replace cap is derived from the stem cap and two `_Static_assert`s prove the longest temp name fits NAME_MAX (IN-02); callers use names of about 88 bytes (slots) and at most 204 (host). Import reads use `O_NOFOLLOW` plus `S_ISREG` and never size an allocation from `st_size`. The 16-quiet, 300-age and 3,600-frame cadence is unchanged. Tests passing in my run: `host_stem_refuse_*`, `host_import_*` including `host_import_mbc2_noncanonical` and `host_import_mutant_raw_baseline`, `host_writer_fault_*`, `host_writer_name_cap` and its 240-byte mutant, `host_sweep_batches` and `host_writer_mutant_sweep_single_pass`, `host_writer_preserve_mode`, `host_periodic_flush`, `host_continuation`, `host_savedir_*`. |
+| 3 | A real-signal POSIX test sends SIGTERM and observes finish-frame, flush and exit 0 well within 2 s; a check rejects signal code in the core; every row of the exit-code table is exercised; Windows declared exempt | VERIFIED | `src/host/host_signal.c` keeps the handler body to one store into a `volatile sig_atomic_t`. `host_run.c` polls it at the frame boundary, then runs the final flush and prints the exit line. `test_host_signals.py` sends real signals to a paced runner. In my run `host_signal_term`, `_int`, `_inherited_ign`, `host_exit_frames_clean`, `_failure_readonly`, `_core_stop`, `_refusal`, `_crash_storm`, `host_exit_pacing_unavailable`, `host_signal_disposition` and `host_exit_table_codes` pass, and the decoys `no_flush`, `partial_frame`, `exit0_after_failed_flush`, `in_place_write` and `pacing_ignored` are all rejected. `no_host_clock` and its two signal selftests pass. Windows exemption is declared in the plan, the contract docs and the exclusion lists. **On the "well within 2 s" wording:** round 2 (IN-07) removed the 2.0 s wall-clock assertion from the repo test, because project policy forbids clocks as evidence. The repo now proves the stop structurally: exit 0 inside a 15 s watchdog, plus byte equality with a `--frames K` replay at the reported frame, which shows the stop landed on a whole frame. I measured the latency directly as a one-off spot check, not as repo evidence: five real SIGTERMs to a paced runner exited 0 in 9 to 38 ms each, with a 32,768-byte `.sav` written each time. The paced wait is at most one frame, so the bound is structural. The criterion holds. |
+| 4 | A machine-readable table declares the save-format id and byte size for each cartridge kind (MBC3+RTC 32,789 B) and a CTest checks it against runner-produced files, failing on a seeded size or id mismatch | VERIFIED | `docs/host-contract.json` has the 16 save-format rows, with `0x10/0x03` as `gabbaboy-mbc3-rtc-sram-32k-v1` at 32,789 B. Exit codes 0, 1 and 2 are present, with the code 1 meaning updated for the pacing stop (IN-06), and the crash row has no code. The `save_format_*` and `host_contract_*` tests pass, with all seeded REJECT controls, including the new "appended exit row" control (controls=11, IN-08). The pass patterns accept any positive count, so appending a row no longer breaks them. `contract_rev_wiring` and its stale and missing controls pass, so the checkers read `HEAD` at run time and cannot pass against a configure-time revision (WR-04). |
 
 **Score:** 4/4 roadmap truths verified; 0 behavior-unverified. The plan-level truths (D-01..D-31 across nine plans) were exercised through the same suites, each with a seeded mutant or control.
 
 ### Requirements Coverage
 
-Cross-referenced PLAN `requirements:` frontmatter against `.planning/REQUIREMENTS.md`. All four IDs are claimed by at least one plan; no orphans (REQUIREMENTS.md maps only PLAY-01, HOST-01, HOST-02 and HOST-03 to Phase 18).
+I read the `requirements:` frontmatter of all nine PLAN files and cross-referenced `.planning/REQUIREMENTS.md` (lines 72, 78, 85, 89 and the traceability table at lines 147-150). All four IDs are claimed, and none is orphaned: REQUIREMENTS.md maps only these four to Phase 18.
 
 | Requirement | Source Plans | Description | Status | Evidence |
 |-------------|--------------|-------------|--------|----------|
-| PLAY-01 | 18-03, 18-05, 18-06, 18-09 | SDL player saves and loads numbered state slots through the public API only | SATISFIED | Truth 1; `gbb_get_input_clock` (18-03) tests `input_clock_*` pass; the player suite is 106/106 |
-| HOST-01 | 18-01, 18-02, 18-04, 18-09 | `--rom/--save-dir` writes raw `{saveDir}/{romBaseName}.sav` | SATISFIED | Truth 2 |
-| HOST-02 | 18-07, 18-09 | SIGTERM finishes the frame, flushes, exits 0 well within 2 s | SATISFIED | Truth 3 |
-| HOST-03 | 18-08, 18-09 | Own save-format ids and sizes in a machine-readable table, CTest-checked against produced files | SATISFIED | Truth 4 |
+| PLAY-01 | 18-01, 18-07, 18-08, 18-09 | SDL player saves and loads numbered state slots through the public API only | SATISFIED | Truth 1; `input_clock_*` pass; player suite 110/110 |
+| HOST-01 | 18-02, 18-03, 18-04, 18-09 | `--rom/--save-dir` writes raw `{saveDir}/{romBaseName}.sav` | SATISFIED | Truth 2 |
+| HOST-02 | 18-05, 18-09 | SIGTERM finishes the frame, flushes, exits 0 well within 2 s | SATISFIED | Truth 3 |
+| HOST-03 | 18-06, 18-09 | Own save-format ids and sizes in a machine-readable table, CTest-checked against produced files | SATISFIED | Truth 4 |
+
+REQUIREMENTS.md shows all four checked and "Complete".
 
 ### Required Artifacts and Wiring
 
 | Artifact | Status | Details |
 |----------|--------|---------|
-| `src/host/{gbb_host.h,host_run.c,host_save_io.c,host_basename.c,host_cadence.c,host_signal.c,host_exit.h,host_save_format.c}` | VERIFIED | Substantive (2,000+ lines), linked into `gabbaboy-runner` via the `gabbaboy_host` library, public-API-only (`host_api_surface`) |
-| `src/player/slots.c`, `slots.h` | VERIFIED | Wired into `src/player/main.c` (`slots_attach`, `handle_slot_key`, `apply_slot_load`) and decoded before the bare R and S branches |
-| `src/player/input.c` `player_input_rebase` | VERIFIED | Called from `apply_slot_load`; mutant `player_slot_mutant_no_rebase` fails the suite |
-| `include/gabbaboy/gabbaboy.h` `gbb_get_input_clock` | VERIFIED | Only core/API change; state pins unchanged (`state_format_contract` passes); installed C and C++ consumers reference it |
-| `docs/host-contract.json` | VERIFIED | Canonical, installed, checked against the C table, the runner and the docs |
-| `docs/native-integration.md` "Host process contract" | VERIFIED | Present at line 277; `host_contract_docs` and its drift and missing controls pass |
+| `src/host/{gbb_host.h,host_run.c,host_save_io.c,host_basename.c,host_cadence.c,host_signal.c,host_exit.h,host_save_format.c}` | VERIFIED | Substantive, linked into `gabbaboy-runner` through the `gabbaboy_host` library, public-API-only (`host_api_surface` passes) |
+| `src/player/slots.c`, `slots.h` | VERIFIED | Wired into `src/player/main.c` (`slots_attach`, `handle_slot_key`, `apply_slot_load`) |
+| `src/player/input.c` `player_input_rebase` | VERIFIED | Now returns `bool`. `apply_slot_load` pauses the game on false; mutant `player_input_mutant_rebase_silent` fails the suite |
+| `include/gabbaboy/gabbaboy.h` `gbb_get_input_clock` | VERIFIED | Only core API change; `state_format_contract` and `state_portable` pass |
+| `docs/host-contract.json`, `docs/native-integration.md` "Host process contract", `docs/cartridge-and-saves.md` | VERIFIED | Present and cross-checked cell by cell by `host_contract_*`, `native_guide_host*`, `cartridge_guide_slots*` |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data | Source | Real data | Status |
 |----------|------|--------|-----------|--------|
 | Player slot message | `message` | `player_slot_format_message(&result)` from the real `player_slot_load` outcome | Yes | FLOWING |
-| `.sav` bytes | exported battery | `gbb_copy_battery` of the live instance, compared with `last_persisted` | Yes | FLOWING |
+| `.sav` bytes | exported battery | `gbb_copy_battery` of the live instance, compared with a baseline that is now the core's canonical image after import (IN-04) | Yes | FLOWING |
+| Battery guard | `<prefix>-battery-guard.bin` | `record_guard` writes the post-load battery through the atomic writer; `seed_guard_from_disk` reads it back on a session's first load | Yes | FLOWING |
 | `--print-save-format` id and size | `host_save_format.c` rows | Checked against the JSON by `save_format_print` and against produced files by `save_format_files` | Yes | FLOWING |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Host, slot, save-format, input-clock, no-host-clock, doc and summary-coverage suites | `ctest --preset phase1 -R "^(host_\|slot_\|save_format\|installed_host\|input_clock\|no_host_clock\|doc_no_interop\|native_guide_host\|cartridge_guide_slots\|readme_host\|summary_coverage\|state_format_contract\|state_portable)" -j6` | 162/162 passed in 10.9 s | PASS |
-| Full suite at final source head | `build/18-gate-ctest-d3b0f0dd.log` (orchestrator-run) | "100% tests passed out of 1650", 0 Failed lines | PASS (not re-run) |
-| macOS player suite at HEAD | `bash tests/scripts/verify-phase3-player.sh --build-package` | exit 0, 106/106, extracted-package smoke passed | PASS |
-| Phase 18 test time budget | slowest Phase 18 tests in the gate log | `save_format_controls` 9.66 s, `host_exit_crash_storm` 8.67 s, all others under 3 s (well under 45 s) | PASS |
+| Phase 18 host, slot, save-format, contract, input-clock, no-host-clock, doc, inventory, planning and budget suites | `ctest --test-dir build -R "^(host_\|slot_\|save_format\|installed_host\|input_clock\|no_host_clock\|doc_no_interop\|native_guide_host\|cartridge_guide_slots\|readme_host\|summary_coverage\|state_format_contract\|state_portable\|contract_\|test_budget\|planning_labels\|inventory)"` | 192/192 passed; slowest `host_signal_decoy_pacing_ignored` at 15.05 s (a watchdog, under the 45 s budget) | PASS |
+| Player build | `ctest --test-dir build-player -R '^player_\|^test_budget'` | 110/110 passed | PASS |
+| Full suite at the code head | `build/18-gate-ctest-70a29b29.log` (orchestrator-run, not re-run by me) | "100% tests passed out of 1676", 0 Failed lines. The only change from 70a29b29 to 80246140 is `COVERAGE.md` | PASS |
+| Real SIGTERM latency | one-off script driving `paced_spin` from `test_host_signals.py`, five runs | exit 0 each time, 9 to 38 ms, `.sav` 32,768 B | PASS |
+| Phase 18 test time budget | slowest Phase 18 tests in the gate log and my run | all under 45 s. Only non-Phase-18 tests exceed 45 s in the gate log (`workflow_policy_controls`, `v02_fuzz_controls`), and `test_budget` passes | PASS |
 
 ### Probe Execution
 
@@ -154,35 +161,46 @@ No `probe-*.sh` scripts are declared or present for this phase. Step 7c does not
 
 ### Anti-Patterns Found
 
-None. No `TBD`, `FIXME`, `XXX`, `TODO` or `HACK` markers in the Phase 18 source, scripts or tests. `git status` shows only the owner's uncommitted `.planning/config.json`, which I did not touch.
+None. No `TBD`, `FIXME`, `XXX`, `TODO` or `HACK` in `src/host`, `src/player`, the Phase 18 tests or the checkers. `git status` shows only the owner's uncommitted `.planning/config.json`, which I did not touch.
 
-### Code Review Assessment (18-REVIEW.md: 0 critical, 6 warnings, 9 info, all disposition `open`)
+### Round-2 Diff Review (`git diff 3b196457 70a29b29`, not re-reviewed by a code reviewer under D-102)
 
-I read the cited code for the two findings the orchestrator asked about.
+I read all 327 lines of the `src/` and `include/` diff and the test and doc changes that go with them. I found no correctness defect introduced.
 
-- **WR-01 (ignored rollback and clock results)** is confirmed at `src/player/slots.c:239` and `:250`. It does not undermine the must-have. The refusal path that SC-1 names (refused, mismatched or wrong-ROM slot) returns at step 1 or 1a, before any live change, so the byte-identical guarantee holds. The ignored calls are on later paths. `gbb_load_state` of a snapshot taken from the same instance moments earlier fails only on allocation failure, and `gbb_get_input_clock` cannot fail with a non-NULL instance and a `struct_size` of 24, both of which the code guarantees. This is real but latent hardening. The gap is that "nothing changed" is asserted without checking the rollback result.
-- **WR-03 (preload backup overwritten at the first load of each session)** is confirmed by reading `battery_differs_from_guard`: `guard_valid` is false at every `player_slot_store_init`, so the first load of any new session rewrites the preload file with the then-current battery. The behaviour matches the D-23 text ("or this is the session's first load"), and the help text promises only that loading "replaces the game's battery save". It does not touch the running game, so SC-1 and the goal clause "without risking the running game" hold. It does mean the one backup of the player's original in-game save can be destroyed by a later session. No test spans two store initialisations. This is a design-level recoverability gap in a safety feature, so it is the finding most worth an explicit owner decision.
-- **WR-02, WR-04, WR-05, WR-06 and the IN items** are robustness or test-infrastructure weaknesses. WR-04 is worth knowing about: the save-format and contract checkers resolve HEAD at configure time. The configure for the gate ran at d3b0f0dd and `docs/host-contract.json` has not changed since, so the evidence above is not stale. WR-05 (replacing a `.sav` resets its mode to 0600) is undocumented in `docs/native-integration.md` (no mention of 0600 or permissions) and affects a supervisor running under a different uid.
+- **IN-01 `host_save_io_sweep`:** names are collected into a 64 x 256 buffer, `closedir` runs, and only then are they unlinked. A pass that fills the buffer and removes something runs again; a pass that removes nothing ends the sweep. Each repeated pass removes at least one entry, so termination is guaranteed. The 16 KB stack buffer is acceptable. A name of 256 bytes or more is skipped, which is safe because NAME_MAX is 255 and the prefix is bounded.
+- **IN-02 name cap:** 1 + 204 + 5 + 20 + 1 + 2 = 233, under 255, and both static asserts are correct. The earlier 240-byte cap could overflow NAME_MAX, so this is a real fix. All callers are inside the cap.
+- **IN-03 `player_input_rebase`:** it now returns `bool`. With more than 56 restored events it keeps the mirror counted (clamped to 64, the capacity of `pending[]`), keeps all eight releases pending, pauses input and returns false. `player_input_retry_focus_releases` then refuses through `pending_has_room`, so nothing is queued past the core's queue. `apply_slot_load` pauses the game on false. The case is unreachable through the slot engine (D-24 refuses clocks over 56), so this is defence in depth, and it is tested by `player_input_rebase_guard`.
+- **IN-04 MBC2 baseline:** after `gbb_import_battery`, the baseline is the core's own exported image. The core normalises MBC2 RAM to `0xF0 | nibble`, so a `$0N`-style file is no longer rewritten when the guest does nothing. The scratch `state.exported` buffer is allocated before this point at `want + 1`, and a failed export falls back to the raw bytes. **Reasoning for leaving part (b) unchanged holds.** I read `gbb_import_battery`: it returns `NO_BATTERY` and `BATTERY_SIZE_MISMATCH` first, then `rtc_block_parse`'s error. The runner already checks battery presence and the exact size (`gbb_battery_size`, then `host_save_io_read_exact` of exactly `want`), so only the malformed clock block can reach the `save-rtc-block` refusal. Mapping other `gbb_error` values would add unreachable branches. The invariant is now commented there.
+- **IN-05 slot selection text:** a non-regular entry (symlink, directory, FIFO, found with `AT_SYMLINK_NOFOLLOW`) now reads "unreadable", which matches the loader's `READ_FAILED` for the same entries. **Reasoning for keeping the stat-failure row holds.** D-25 in `18-CONTEXT.md` line 312 explicitly adopts "`Slot N selected: saved` if stat fails", so changing it would override an adopted decision. The new "unreadable" state is documented in `docs/cartridge-and-saves.md`.
+- **IN-06 pacing:** `pacer_wait` returns false on an invalid pacer or a failed `clock_gettime`, and `run_host` breaks at that frame boundary. The final flush still runs, then it prints `exit status=failure reason=pacing` and exits 1. The exit-code table, JSON and guide were changed together and the checkers compare them cell by cell. The non-POSIX stub returns true, and host mode is POSIX-only. Fail-closed is the right call, because the old behaviour was a full-speed loop with the emulated clock far ahead of real time.
+- **IN-07, IN-08, IN-09:** test-script and comment changes. The IN-07 removal of the wall-clock assertion is judged under Truth 3.
 
-None of the fifteen findings makes a roadmap truth FAILED. The disposition file still reads `open` for all fifteen, so the triage that D-102..D-105 requires has not happened.
+Round 1 (WR-01..WR-06) I also re-read where it touches the goal: the persisted battery guard (`record_guard`, `seed_guard_from_disk`) correctly keeps the real in-game backup across sessions, and a failed guard write sets `guard_unsaved` and is surfaced in the status text; the stale-temp sweep is scoped to this store's lead plus `.tmp-`; mode preservation uses `fchmod` on the temp; no defect found.
 
-### Human Verification Required
+### Review Findings
 
-#### 1. Review-finding disposition (owner decision)
+All 15 findings (0 critical, 6 warnings, 9 info) are `fixed` in `18-REVIEW-DISPOSITION.md` (`open: 0`), each with a CTest-wired check and a negative control per `18-REVIEW-FIX.md`. D-102's two-round cap is used up and nothing is left unresolved, so no rescope is forced.
 
-**Test:** Mark each of the 15 findings in `18-REVIEW-DISPOSITION.md` as fixed, skipped or deferred. Decide specifically whether WR-03 and WR-01 are fixed in the reserved gap slot 18-10 or accepted for v0.3.0 and recorded as a limitation.
-**Expected:** No `open` row remains before Phase 19 starts. An accepted WR-03 is written into the player limitation text or the slot docs, since a hidden loss of the preload backup is a claim gap.
-**Why human:** A disposition is an owner decision. Whether a recoverability gap in the preload backup is acceptable is not machine-decidable.
+### Hosted CI (PR #132)
 
-#### 2. Hosted CI on the exact head
+Machine-checked with `gh pr checks 132` and `gh pr view 132`. The PR head and the remote branch are 70a29b29 (the local-only 80246140 adds `COVERAGE.md` and is not pushed).
 
-**Test:** Confirm the Linux ASan lane, the native Windows lane (MSVC compile of every target and the Windows exclusion lists) and the hosted macOS player-package lane are green on the exact PR head, and read hosted per-test times against the 45 s budget.
-**Expected:** Every required check passes on the exact head with no skipped or stale runs.
-**Why human:** Those lanes only exist on hosted runners. A local macOS pass is not proof for another platform or revision.
+- Run sets for 70a29b29 (`ci` 40864481966 and 40864488739, `preview-package-smoke` 40864488975): 22 checks SUCCESS, 11 IN_PROGRESS, 5 QUEUED, 3 SKIPPED, **0 failing**. Passing already include `linux-asan-ubsan`, `perf-gate`, `player-gate` and every `*-repro` lane.
+- Pending at the time of check: `native-linux-x64`, `native-macos-arm64`, `native-windows-x64`, `linux-asan-ubsan-tests`, `linux-asan-ubsan-acceptance`, `cmake-floor-3.25.3`, `macos-player-package`, `installed-package-smoke-*`.
+- Three checks show SKIPPED (`planning-checks` twice, `macos-player-package` once). Per AGENTS.md a skipped check is not proof, so the orchestrator should confirm those after the lanes settle.
+- The earlier red `ci` run on 6f8e8f6a is superseded by the test_budget and planning_labels fixes (135c6cc5, 70a29b29).
+
+**Pending CI evidence, not a human item.** The orchestrator re-checks `gh pr checks 132` at closure. If any lane fails on 70a29b29, that is a new gap to reopen. I saw none failing.
+
+### Notes (not gaps)
+
+- **Pre-existing player-build failures:** `core_linkage_links` and `core_linkage_controls` fail on the player build. They are present at the Phase 17 boundary f4082a6 with an unchanged checker, are tracked as RM-031 in `.planning/context/FUTURE-MILESTONES.md`, and CI runs only `^player_` on the player build. I did not run them and take the orchestrator's confirmation.
+- **SC-3 wall-clock:** the repo no longer asserts the 2 s bound by design (see Truth 3). The latency is bounded by one frame period plus a bounded write, and I observed 9 to 38 ms.
+- **Unpushed commit:** 80246140 (`COVERAGE.md`) is local only; the covered digest includes it as a phase document. Push it with the next push.
 
 ### Gaps Summary
 
-There are no gaps in the delivered behaviour. All four success criteria and all four requirement IDs are backed by implementation I read and tests I re-ran at the final source head. The negative controls, mutants and decoys are wired into CTest and reject their seeded defects. The phase cannot be called `passed` until the owner records dispositions for the open review findings (WR-03 first) and the hosted exact-head CI lanes are observed green. Neither is a missing deliverable.
+No gaps. All four success criteria and all four requirement IDs are backed by implementation I read and tests I re-ran at the current head, and the round-2 diff introduces no correctness defect. The remaining item is hosted CI on 70a29b29, which is machine-checkable, shows no failure so far, and is for the orchestrator to re-check.
 
 ---
 
