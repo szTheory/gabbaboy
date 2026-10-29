@@ -427,6 +427,37 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       ${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb)
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 120
       ENVIRONMENT "SDL_AUDIO_DRIVER=dummy;HOME=${slot_home};CFFIXED_USER_HOME=${slot_home}")
+  elseif(test_name MATCHES "^player_slot_mutant_(no_rebase|command_guard)$")
+    # Two defects the slot tests must catch, each a copy of main.c with one edit (the anchor must occur exactly
+    # once). no_rebase drops player_input_rebase from apply_slot_load: the reanchor case must fail. command_guard
+    # drops !command from the bare R branch: Command-R would reset, and the keys case must fail.
+    set(mutant_kind "${CMAKE_MATCH_1}")
+    set(mutant_main "${CMAKE_CURRENT_BINARY_DIR}/main_slot_${mutant_kind}.c")
+    if(mutant_kind STREQUAL "no_rebase")
+      gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/main.c" "${mutant_main}"
+        "player_input_rebase(&app->input, host_now, &result->clock);"
+        "/* mutant: the re-anchor call is removed */")
+      set(mutant_case reanchor)
+      set(mutant_regex "FAIL reanchor")
+      set(mutant_args "")
+    else()
+      gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/main.c" "${mutant_main}"
+        "!app->dialog_pending && !command && key->scancode == SDL_SCANCODE_R"
+        "!app->dialog_pending && key->scancode == SDL_SCANCODE_R")
+      set(mutant_case keys)
+      set(mutant_regex "FAIL keys")
+      set(mutant_args ";${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb")
+    endif()
+    set(mutant_target test_player_slots_variant_${mutant_kind})
+    gbb_player_slots_test_executable(${mutant_target} "${mutant_main}")
+    set(slot_home "${CMAKE_CURRENT_BINARY_DIR}/${test_name}-home")
+    file(MAKE_DIRECTORY "${slot_home}")
+    add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${mutant_target}>;${mutant_case}${mutant_args}"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${mutant_regex}"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 120
+      ENVIRONMENT "SDL_AUDIO_DRIVER=dummy;HOME=${slot_home};CFFIXED_USER_HOME=${slot_home}")
   elseif(test_name MATCHES "^player_script_smoke_surface(_selftest|_main_selftest)?$")
     # D-38: the scripted-smoke diagnostic stays free of environment, network, save writes
     # and persistence. The selftest runs the same check on a copy with an injected getenv

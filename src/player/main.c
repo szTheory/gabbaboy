@@ -774,18 +774,32 @@ static const char *machine_model_token(const player *app) {
     return player_model_token(info.mode);
 }
 
+/* The status shown in the title and the help dialog. While a battery-save failure is active it wins, and a
+ * slot message is appended to it (D-25) instead of being hidden behind it. U+00B7 is a UTF-8 byte escape. */
+static void format_status_text(const player *app, char *out, size_t capacity) {
+    if (app->save_status_active) {
+        if (app->slot_message[0] != '\0')
+            (void)snprintf(out, capacity, "%s \xc2\xb7 %s", app->save_status, app->slot_message);
+        else
+            (void)snprintf(out, capacity, "%s", app->save_status);
+    } else {
+        (void)snprintf(out, capacity, "%s", app->status[0] == '\0' ? "Ready" : app->status);
+    }
+}
+
 static void format_window_title(const player *app, char *title, size_t title_size) {
     const char *base = rom_basename(app->current_rom_path);
     char short_name[160];
     const size_t base_length = utf8_prefix(base, sizeof(short_name) - 1u);
     memcpy(short_name, base, base_length);
     short_name[base_length] = '\0';
+    char status_text[sizeof(app->save_status) + sizeof(app->slot_message) + 8u];
+    format_status_text(app, status_text, sizeof(status_text));
     (void)snprintf(title, title_size,
         "GabbaBoy | %s | %s | %s | Gain %u%% | %s | \xe2\x8c\x98O Open, \xe2\x8c\x98Q Quit, F1 Help | %s",
         short_name, machine_model_token(app), app->user_paused || app->input.paused ? "Paused" : "Running",
         (unsigned)(player_audio_gain(app->audio) * 100.0f),
-        app->save_status_active ? app->save_status :
-            (app->status[0] == '\0' ? "Ready" : app->status),
+        status_text,
         player_audio_available(app->audio) ? "Audio ready" : "Audio unavailable");
 }
 
@@ -798,6 +812,7 @@ static void update_window_title(player *app) {
 
 static void set_status(player *app, const char *status) {
     (void)snprintf(app->status, sizeof(app->status), "%s", status);
+    app->slot_message[0] = '\0';
     update_window_title(app);
 }
 
@@ -1422,8 +1437,29 @@ static void slots_attach(player *app, gbb_profile profile) {
     SDL_free(pref);
 }
 
+/* D-25: the message goes through set_status; the title additionally keeps it beside an active battery-save
+ * failure (`<save_status> \xc2\xb7 <message>`), which set_status's replacement of the status line would hide. */
 static void set_slot_status(player *app, const char *message) {
     set_status(app, message);
+    (void)snprintf(app->slot_message, sizeof(app->slot_message), "%s", message);
+    update_window_title(app);
+}
+
+/* D-23/D-24 after a successful load or undo: input is re-anchored at the restored clock and every button is
+ * released, the host audio backlog is dropped, the next frame is redrawn and the .gbb save cadence restarts. No
+ * RTC catch-up runs, and pause is kept: nothing here changes user_paused. */
+static void apply_slot_load(player *app, const player_slot_result *result) {
+    const uint64_t host_now = SDL_GetTicksNS();
+    player_input_rebase(&app->input, host_now, &result->clock);
+    /* A release the queue cannot take yet stays pending; the main loop retries it every frame. */
+    (void)player_input_retry_focus_releases(&app->input, app->machine, host_now);
+    (void)player_audio_clear(app->audio);
+    app->needs_redraw = true;
+    app->displayed_generation = 0;
+    uint64_t generation = 0u;
+    if (app->save_identity.battery_backed)
+        (void)gbb_battery_generation(app->machine, &generation);
+    player_save_cadence_reset(&app->save_cadence, generation);
 }
 
 /* Performs the slot action the decoder chose. Slot keys work while paused, and nothing here changes
@@ -1448,6 +1484,8 @@ static void handle_slot_key(player *app, player_slot_key_action action, unsigned
         result = player_slot_load(&app->slots, app->machine, PLAYER_SLOT_SOURCE_SLOT, app->selected_slot);
     else
         result = player_slot_load(&app->slots, app->machine, PLAYER_SLOT_SOURCE_UNDO, 0u);
+    if (result.outcome == PLAYER_SLOT_LOADED || result.outcome == PLAYER_SLOT_UNDONE)
+        apply_slot_load(app, &result);
     player_slot_format_message(&result, message, sizeof(message));
     set_slot_status(app, message);
     char log_line[160];
@@ -1710,8 +1748,10 @@ static void update_battery_save(player *app) {
     const bool was_dirty = app->save_cadence.dirty;
     const bool due = player_save_cadence_observe(&app->save_cadence,
         generation, app->save_identity.saved_generation, SDL_GetTicksNS());
+    /* A slot message (a load replaces the battery, so it always differs from the last .gbb save) stays visible
+     * until the autosave or another event replaces it. */
     if (generation != app->save_identity.saved_generation && !was_dirty &&
-        !app->save_status_active)
+        !app->save_status_active && app->slot_message[0] == '\0')
         set_status(app, "Battery RAM changed; progress is in memory until saved");
     if (due && !app->save_retry_required &&
         app->pending_transition == PLAYER_TRANSITION_NONE)

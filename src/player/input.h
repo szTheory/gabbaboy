@@ -41,6 +41,15 @@ bool player_input_half_dots_to_nanoseconds(uint64_t half_dots,
 void player_input_reset(player_input_state *state, uint64_t host_now_ns);
 void player_input_reconcile(player_input_state *state,
                             uint64_t guest_cursor_half_dots);
+/* D-24: re-anchors input after a state load restored the guest clock. The cursor and anchor are set to the
+ * restored time directly (reconcile refuses to move the cursor backwards), the pending mirror is seeded from the
+ * restored queue, every key and gamepad button is let go, and all eight buttons are marked for release, which the
+ * caller queues with player_input_retry_focus_releases at the same host time (releases land at
+ * max(now, last queued)). The gamepad source table and the paused flag are kept. The slot engine guarantees at
+ * most 56 restored events, so the eight releases fit the core's 64-event queue; if a larger clock ever arrived
+ * the state is reset instead of queuing past the capacity. */
+void player_input_rebase(player_input_state *state, uint64_t host_now_ns,
+                         const gbb_input_clock *clock);
 bool player_input_guest_target(const player_input_state *state,
                                uint64_t host_now_ns,
                                uint64_t *out_guest_half_dots);

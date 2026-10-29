@@ -70,6 +70,30 @@ void player_input_reconcile(player_input_state *state,
     state->pending_count = remaining;
 }
 
+void player_input_rebase(player_input_state *state, uint64_t host_now_ns,
+                         const gbb_input_clock *clock) {
+    if (state == NULL || clock == NULL) return;
+    const bool paused = state->paused;
+    player_input_gamepad_source gamepads[PLAYER_INPUT_GAMEPAD_CAPACITY];
+    memcpy(gamepads, state->gamepads, sizeof(gamepads));
+    player_input_reset(state, host_now_ns);
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        state->gamepads[i] = gamepads[i];
+        state->gamepads[i].held_buttons = 0u;
+    }
+    state->paused = paused;
+    state->guest_anchor_half_dots = clock->now_half_dots;
+    state->guest_cursor_half_dots = clock->now_half_dots;
+    if (clock->queued_count > PLAYER_INPUT_QUEUE_CAPACITY - PLAYER_INPUT_BUTTON_COUNT) return;
+    /* Only the last restored time is known; every mirrored entry carries it, which gives the admission floor
+     * and the capacity count (they are consumed together once the cursor passes it). */
+    for (uint32_t i = 0; i < clock->queued_count; ++i)
+        state->pending[i].at_half_dots = clock->last_queued_half_dots;
+    state->pending_count = clock->queued_count;
+    state->held_buttons = 0xFFu;
+    state->release_pending_buttons = 0xFFu;
+}
+
 static bool map_host_time(const player_input_state *state,
                           uint64_t host_now_ns, uint64_t *out_guest_half_dots) {
     if (state == NULL || out_guest_half_dots == NULL) return false;

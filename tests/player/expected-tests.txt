@@ -99,3 +99,5 @@ player_claims_agree_mutated
 player_slot_keys
 player_slot_reanchor
 player_slot_status_line
+player_slot_mutant_no_rebase
+player_slot_mutant_command_guard

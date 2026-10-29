@@ -562,6 +562,7 @@ static bool case_status_line_body(fixture *fx) {
     REQUIRE(strstr(title, " | Battery save failed | ") != NULL && strstr(title, "\xc2\xb7") == NULL);
 
     /* A load clears the audio backlog, redraws and restarts the .gbb cadence, and keeps the pause. */
+    REQUIRE(run_frames(app, 1u));
     app->audio = player_audio_test_create(true);
     REQUIRE(app->audio != NULL);
     static const gbb_audio_frame queued[] = {{1, -1}, {2, -2}, {3, -3}, {4, -4}};
@@ -570,7 +571,6 @@ static bool case_status_line_body(fixture *fx) {
     app->displayed_generation = 77u;
     app->save_cadence = (player_save_cadence){99u, 5u, 6u, true};
     const bool user_paused_before = app->user_paused;
-    REQUIRE(run_frames(app, 1u));
     const int saved_load = begin_capture(capture);
     REQUIRE(saved_load >= 0);
     const bool loaded = key_down(app, SDL_SCANCODE_L, SDLK_L, SDL_KMOD_LGUI);
