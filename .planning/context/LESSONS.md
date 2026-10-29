@@ -961,3 +961,12 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** At `e9e2d57` the full suite passed 1496/1496. The three purity mutant sources differ, and each is killed only by its own regex. A tree copy with `GBB_IR_EXCEPTION_DECISION` injected into `ci.yml` is refused with `ir-exception-env`. Next check: the Phase 18 review finds no control that a mutant cannot fail.
 - **Source:** Phase 17 `17-REVIEW.md`, `17-REVIEW-DISPOSITION.md`.
 - **Status:** Adopted.
+
+### GB-GSD-030 / 2026-10-29 / "Pre-existing" must be shown at the phase boundary, not at an earlier in-phase commit
+
+- **Cause and evidence:** After Phase 18 review-fix round 1, three `build-player` failures (`core_linkage_links`, `core_linkage_controls`, `test_budget`) were labelled pre-existing because they also failed at `72a88d97`. That commit is inside Phase 18. `test_budget` was a Phase 18 defect: six `player_slot_*` tests declared `TIMEOUT 120` with no allowlist row while the slowest ran in about 6 s. Only the linkage failures held up against the Phase 17 boundary `f4082a6` (same targets, unchanged checker). CI runs only `^player_` on the player-enabled build, so no hosted lane would have caught either defect.
+- **Remedy:** `135c6cc5` restored the 60 s base timeout. The linkage debt went to RM-031 with its targets named.
+- **Applies when:** Any failure is waved off as pre-existing, and any build configuration whose full CTest tree no CI lane runs. Re-run the failing test at the previous phase's boundary commit (or prove that the inputs are unchanged since then) before writing "pre-existing". Run the configuration's planning-label checks (`test_budget`, `core_linkage_*`) at phase close even when CI does not.
+- **Verification:** `ctest --test-dir build-player -R '^(test_budget|player_slot)'` passed 10/10 at `135c6cc5`. Before the fix, `test_budget` failed with six `REJECT over-budget` lines.
+- **Source:** Phase 18 verify-work, 2026-10-29.
+- **Status:** Adopted.
