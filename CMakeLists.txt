@@ -78,6 +78,17 @@ target_include_directories(gabbaboy_host PUBLIC
 target_compile_features(gabbaboy_host PUBLIC c_std_17)
 set_target_properties(gabbaboy_host PROPERTIES C_EXTENSIONS OFF)
 
+# Player slot engine (Phase 18, D-21..D-25): SDL-free and public-API-only, so it is built on every platform
+# and tested without a window. It sits in the root file, outside tests/, so the directory-wide src/core include
+# of tests/CMakeLists.txt cannot mask a forbidden include. It links no host library and no core: the
+# executable chooses gabbaboy_host (player) or gabbaboy_host_testing (tests) and supplies the core once.
+add_library(gabbaboy_player_slots STATIC src/player/slots.c)
+target_include_directories(gabbaboy_player_slots PUBLIC
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/player" "${CMAKE_CURRENT_SOURCE_DIR}/src/host"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_player_slots PUBLIC c_std_17)
+set_target_properties(gabbaboy_player_slots PROPERTIES C_EXTENSIONS OFF)
+
 add_executable(gabbaboy-runner src/runner/main.c)
 target_link_libraries(gabbaboy-runner PRIVATE gabbaboy_runner_support gabbaboy_host)
 target_compile_features(gabbaboy-runner PRIVATE c_std_17)
@@ -124,7 +135,8 @@ if(GABBABOY_BUILD_PLAYER)
     src/player/session.c)
   target_include_directories(gabbaboy-player-adapter PUBLIC
     "${PROJECT_SOURCE_DIR}/src/player")
-  target_link_libraries(gabbaboy-player-adapter PUBLIC GabbaBoy::core gabbaboy_accept SDL3::SDL3)
+  target_link_libraries(gabbaboy-player-adapter PUBLIC gabbaboy_player_slots gabbaboy_host
+    GabbaBoy::core gabbaboy_accept SDL3::SDL3)
   target_compile_features(gabbaboy-player-adapter PUBLIC c_std_17)
   set_target_properties(gabbaboy-player-adapter PROPERTIES C_EXTENSIONS OFF)
 

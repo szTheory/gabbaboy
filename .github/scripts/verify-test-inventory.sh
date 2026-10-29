@@ -73,6 +73,8 @@ filter_expected_for_platform() {
         -e '/^host_continuation_mutant_ignore_import$/d' \
         -e '/^host_no_test_seams_shipped$/d' \
         -e '/^host_no_test_seams_shipped_control$/d' \
+        -e '/^slot_roundtrip$/d' \
+        -e '/^slot_empty$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -147,6 +149,8 @@ _self_test_platform_filter_cases() {
     host_continuation_mutant_ignore_import \
     host_no_test_seams_shipped \
     host_no_test_seams_shipped_control \
+    slot_roundtrip \
+    slot_empty \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -221,7 +225,9 @@ _self_test_platform_filter_cases() {
     host_import_mutant_follow \
     host_continuation_mutant_ignore_import \
     host_no_test_seams_shipped \
-    host_no_test_seams_shipped_control; do
+    host_no_test_seams_shipped_control \
+    slot_roundtrip \
+    slot_empty; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1

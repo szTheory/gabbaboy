@@ -63,7 +63,9 @@ function(gabbaboy_verify_registered_tests)
       host_import_mutant_follow
       host_continuation_mutant_ignore_import
       host_no_test_seams_shipped
-      host_no_test_seams_shipped_control)
+      host_no_test_seams_shipped_control
+      slot_roundtrip
+      slot_empty)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)
