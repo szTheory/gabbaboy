@@ -1569,6 +1569,16 @@ add_test(NAME v03_dispositions_controls
     -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_dispositions_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+# D-23 (19-05): the v0.3 readback is checked against tag objects and its embedded pre-publish artifact;
+# this isolated fixture checker reads no planning files and is also the executable contract for 19-07.
+add_test(NAME v03_readback_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test-readback"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=v03-readback controls pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=44
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(v03_readback_controls PROPERTIES TIMEOUT 60)
 # The v0.2 checker asserts owner_accepted=0 for the archived 15.1-17 record only. Pointed at the new record it must reject on its plan
 # id, which proves that expectation is scoped and is never asserted on the v0.3 record (verify-closeout-dispositions.py is unedited).
 add_test(NAME closeout_dispositions_scope_v03

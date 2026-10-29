@@ -1190,6 +1190,7 @@ historical_limitations_controls
 closeout_dispositions_controls
 v03_dispositions
 v03_dispositions_controls
+v03_readback_controls
 closeout_dispositions_scope_v03
 acceptance_dense_script_delivered
 acceptance_dense_input_controls
