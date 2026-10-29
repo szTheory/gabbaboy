@@ -6,13 +6,13 @@ shapes derived from it so that the production attach, manifest, final-gate and p
 real object schemas (run, job, artifact, check run, pull request, release and release asset) and not against shapes
 invented to satisfy a verifier. It proves deterministic logic. It does not prove live GitHub permissions.
 
-- captured.json sha256: 0617b56fcb585e23f1ced1d3ba256c432f8fbb76bd0d609e2e2088c7ae62bbc1
-- bytes: 153744 (bound: 262144)
+- captured.json sha256: f07daba99707dacadfc0a5823c83c3e5779dbbac452807c54cac8edef50351ec
+- bytes: 168019 (bound: 262144)
 - format: UTF-8 JSON, sorted keys, two-space indent, LF line endings (`.gitattributes` pins `eol=lf` so the digest is stable on Windows)
 
 ## Endpoints
 
-Each was read once with `gh api` (HTTP GET, no mutation, no authentication material stored). Identity captured:
+Each was read once with `gh api` (HTTP GET, no mutation, no authentication material stored). `POST_TAG_ENDPOINTS` in `verify-release-lifecycle.py` inventories each post-tag `gh api`, `gh run`, `gh release` and `gh pr` form as a replay route with required capture paths or a named workflow-policy pin. Identity captured:
 release `v0.2.1` (id 423802899, already published at capture time), source commit
 `b93137f00d07b11dc74e40330e0ddf6029c0677d`, merged pull request #75 with head `c6dc575b6a84cf51a56688948fce9241ba323400`,
 and release-please workflow run 40259198302.
@@ -29,6 +29,7 @@ and release-please workflow run 40259198302.
 | pull_request | `repos/szTheory/gabbaboy/pulls/75` |
 | pull_requests | `repos/szTheory/gabbaboy/commits/b93137f00d07b11dc74e40330e0ddf6029c0677d/pulls` |
 | attempt_jobs | `repos/szTheory/gabbaboy/actions/runs/40257161612/attempts/1/jobs?per_page=100` |
+| ci_run | `repos/szTheory/gabbaboy/actions/runs/40259198255` (v0.2.1 source CI push run) |
 | commit | `repos/szTheory/gabbaboy/commits/v0.2.1` |
 
 Release asset downloads are not stored: the bytes are replaced by fixture bytes, and only the asset row shape

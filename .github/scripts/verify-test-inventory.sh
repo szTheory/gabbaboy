@@ -25,6 +25,7 @@ filter_expected_for_platform() {
         -e '/^core_linkage_controls$/d' \
         -e '/^release_lifecycle_replay$/d' \
         -e '/^release_lifecycle_controls$/d' \
+        -e '/^release_lifecycle_post_tag_controls$/d' \
         -e '/^perf_advisory_pipeline$/d' \
         -e '/^perf_advisory_controls$/d' \
         -e '/^host_continuation$/d' \
@@ -166,6 +167,7 @@ _self_test_platform_filter_cases() {
     core_linkage_controls \
     release_lifecycle_replay \
     release_lifecycle_controls \
+    release_lifecycle_post_tag_controls \
     perf_advisory_pipeline \
     perf_advisory_controls \
     host_continuation \
@@ -308,6 +310,7 @@ _self_test_platform_filter_cases() {
     core_linkage_controls \
     release_lifecycle_replay \
     release_lifecycle_controls \
+    release_lifecycle_post_tag_controls \
     perf_advisory_pipeline \
     perf_advisory_controls \
     host_continuation \

@@ -1169,6 +1169,7 @@ release_window_contract
 release_window_controls
 release_lifecycle_replay
 release_lifecycle_controls
+release_lifecycle_post_tag_controls
 release_review_approval
 release_review_controls
 release_nightly_gate

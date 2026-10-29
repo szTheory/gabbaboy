@@ -25,6 +25,7 @@ release or asset.
 from __future__ import annotations
 
 import argparse
+import ast
 import concurrent.futures
 import copy
 import hashlib
@@ -80,7 +81,7 @@ FIRST_ASSET_ID = 900100001
 RUN_ID = 50000000001
 MAX_CAPTURE_BYTES = 256 * 1024
 RESPONSE_KEYS = ("release", "release_assets", "workflow_runs", "workflow_run", "jobs", "artifacts", "check_runs",
-                 "pull_request", "pull_requests", "attempt_jobs", "commit")
+                 "pull_request", "pull_requests", "attempt_jobs", "ci_run", "commit")
 PARALLEL = max(2, min(8, os.cpu_count() or 2))
 
 
@@ -158,8 +159,83 @@ REQUIRED_PATHS = {
                      "head.sha", "head.repo.full_name"),
     "pull_requests": ("0.number", "0.merged_at", "0.merge_commit_sha", "0.base.ref", "0.head.sha"),
     "attempt_jobs": ("jobs.0.completed_at", "jobs.0.run_id", "jobs.0.run_attempt", "total_count"),
+    "ci_run": ("id", "run_attempt", "head_sha", "path", "event", "status", "conclusion"),
     "commit": ("sha",),
 }
+
+# D-21 inventory. Forms use `{}` for a shell-expanded path segment, so different variable spellings for the same
+# endpoint share one entry. `route` identifies the immutable replay transport branch; pinned forms name a rule in the
+# trusted workflow policy checker. `ci_run` is captured ahead of its first consumer in 19-05.
+POST_TAG_ENDPOINTS = (
+    {"form": "gh api repos/{}/actions/runs/{}/attempts/{}/jobs?per_page=100",
+     "sources": (LIFECYCLE, WORKFLOW), "consumer": "nightly-gate and candidate rehearsal binder",
+     "coverage": "replayed:attempt_jobs", "route": "actions/runs/([0-9]+)/attempts/([0-9]+)/jobs"},
+    {"form": "gh api repos/{}/actions/runs/{}/artifacts?per_page=100",
+     "sources": (WORKFLOW,), "consumer": "rehearsal performance artifact selection",
+     "coverage": "pinned:check_release"},
+    {"form": "gh api repos/{}/actions/runs/{}",
+     "sources": (SOURCES,), "consumer": "19-05 exact-source CI performance receipt verifier input",
+     "coverage": "replayed:ci_run", "route": "actions/runs/[0-9]+"},
+    {"form": "gh api repos/{}/actions/workflows/ci.yml/runs?head_sha={}&event=push&branch=main&per_page=100",
+     "sources": (WORKFLOW,), "consumer": "candidate fuzz receipt source-run lookup",
+     "coverage": "pinned:check_release"},
+    {"form": "gh api repos/{}/actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/{}&status=success&per_page=100",
+     "sources": (LIFECYCLE, WORKFLOW), "consumer": "newest exact-tag rehearsal selection",
+     "coverage": "replayed:workflow_runs", "route": "actions/workflows/release-rehearsal.yml/runs"},
+    {"form": "gh api repos/{}/actions/workflows/{}/runs?per_page=100",
+     "sources": (".github/scripts/verify-release-gates.sh",), "consumer": "recovery run identity check",
+     "coverage": "pinned:check_release_gate_wiring"},
+    {"form": "gh api repos/{}/branches/main/protection",
+     "sources": (".github/scripts/verify-release-gates.sh",), "consumer": "version PR required-check policy",
+     "coverage": "pinned:check_release_gate_wiring"},
+    {"form": "gh api repos/{}/commits/{}",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "tag-to-source identity check", "coverage": "replayed:commit", "route": "commits/[^/]+"},
+    {"form": "gh api repos/{}/commits/{}/check-runs?per_page=100",
+     "sources": (".github/scripts/verify-release-gates.sh",), "consumer": "exact-head required-check evidence",
+     "coverage": "replayed:check_runs", "route": "commits/[0-9a-f]{40}/check-runs"},
+    {"form": "gh api repos/{}/commits/{}/pulls",
+     "sources": (LIFECYCLE, WORKFLOW), "consumer": "merged version PR identity and merge time",
+     "coverage": "replayed:pull_requests", "route": "commits/[0-9a-f]{40}/pulls"},
+    {"form": "gh api repos/{}/contents/CMakeLists.txt?ref={}",
+     "sources": (WORKFLOW,), "consumer": "tagged source version extraction", "coverage": "pinned:check_release"},
+    {"form": "gh api repos/{}/pulls/{}",
+     "sources": (".github/scripts/verify-release-gates.sh",), "consumer": "merged source PR proof",
+     "coverage": "replayed:pull_request", "route": "pulls/\\d+"},
+    {"form": "gh api repos/{}/releases/{}",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "draft and published release state", "coverage": "replayed:release", "route": "releases/\\d+"},
+    {"form": "gh api repos/{}/releases/{}/assets?per_page=100",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "release asset inventory and digest readback", "coverage": "replayed:release_assets",
+     "route": "releases/\\d+/assets"},
+    {"form": "gh api repos/{}/releases?per_page=100",
+     "sources": (LIFECYCLE, WORKFLOW), "consumer": "release lookup by tag", "coverage": "replayed:release",
+     "route": "tail == \"releases\""},
+    {"form": "gh pr checks",
+     "sources": (WORKFLOW,), "consumer": "merged version PR required-check gate", "coverage": "pinned:check_release"},
+    {"form": "gh release download",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "readback of already-uploaded release bytes", "coverage": "replayed:release_assets",
+     "route": '["release", "download"]'},
+    {"form": "gh release edit",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh"), "consumer": "single intercepted publish decision", "coverage": "replayed:release",
+     "route": '["release", "edit"]'},
+    {"form": "gh release upload",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "in-memory upload and retry lifecycle", "coverage": "replayed:release",
+     "route": '["release", "upload"]'},
+    {"form": "gh run download",
+     "sources": (WORKFLOW,), "consumer": "candidate and rehearsal artifact download", "coverage": "pinned:check_release"},
+    {"form": "gh run list",
+     "sources": (LIFECYCLE, "tests/scripts/verify-release-gates.py"), "consumer": "newest nightly-asan run selection", "coverage": "replayed:workflow_runs",
+     "route": "run command is allowed only as the two nightly gate reads"},
+    {"form": "gh run view",
+     "sources": (LIFECYCLE, "tests/scripts/verify-release-gates.py"), "consumer": "nightly-asan replay job result", "coverage": "replayed:workflow_runs",
+     "route": "run command is allowed only as the two nightly gate reads"},
+)
+SELF = "tests/scripts/verify-release-lifecycle.py"
+POLICY = ".github/scripts/verify-workflow-policy.py"
 FORBIDDEN_MEMBERS = {"check_runs": ("check_runs.0.repository",)}
 EMAIL = re.compile(r"[A-Za-z0-9._%+\[\]-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 REDACTED_EMAIL = "redacted@example.invalid"
@@ -257,7 +333,7 @@ def assemble_capture(raw: dict[str, object]) -> dict:
         "release": release, "release_assets": assets[:2], "workflow_runs": raw["workflow_runs"],
         "workflow_run": raw["workflow_run"], "jobs": raw["jobs"], "artifacts": raw["artifacts"],
         "check_runs": checks, "pull_request": raw["pull_request"], "pull_requests": raw["pull_requests"],
-        "attempt_jobs": raw["attempt_jobs"], "commit": raw["commit"],
+        "attempt_jobs": raw["attempt_jobs"], "ci_run": raw["ci_run"], "commit": raw["commit"],
     }
     responses = {name: sanitize(value, "", log) for name, value in responses.items()}
     return {"schema_version": 1, "kind": "github-api-capture", "api_version": "2022-11-28", "repository": REPO,
@@ -422,6 +498,10 @@ def api(args):
         if ref not in st["commits"]:
             fail("HTTP 404: Not Found (" + route + ")")
         body = st["commits"][ref]
+    elif re.fullmatch(r"actions/runs/[0-9]+", tail) and not query:
+        if int(tail.split("/")[2]) != st["ci_run"]["id"]:
+            fail("HTTP 404: Not Found (" + route + ")")
+        kind, body = "ci_run", st["ci_run"]
     elif re.fullmatch(r"commits/[0-9a-f]{40}/pulls", tail) and not query:
         if tail.split("/")[1] != st["source_sha"]:
             fail("HTTP 404: Not Found (" + route + ")")
@@ -727,7 +807,8 @@ class Template:
         }
         responses = {name: retarget(value, mapping) for name, value in responses.items()}
         shapes = {
-            "commit": key_shape(responses["commit"]), "release": key_shape(responses["release"]),
+            "commit": key_shape(responses["commit"]), "ci_run": key_shape(responses["ci_run"]),
+            "release": key_shape(responses["release"]),
             "release_assets": key_shape(responses["release_assets"]), "workflow_runs": key_shape(responses["workflow_runs"]),
             "pull_request": key_shape(responses["pull_request"]), "pull_requests": key_shape(responses["pull_requests"]),
             "attempt_jobs": key_shape(responses["attempt_jobs"]), "check_runs": key_shape(responses["check_runs"]),
@@ -780,6 +861,7 @@ class Template:
             "runs": [old], "run_template": run_template, "pull_request": pull, "check_runs": checks,
             "check_runs_head": self.pr_head, "commits": {self.tag: commit, self.source: commit},
             "source_sha": self.source, "pull_requests": pull_requests, "attempt_jobs": attempt_jobs,
+            "ci_run": responses["ci_run"],
             "rehearsal_run_id": rehearsal["id"], "rehearsal_attempt": rehearsal["run_attempt"],
             "decisions": [], "shapes": shapes, "rehearsal_runs": [rehearsal],
             "nightly_runs": [nightly], "nightly_view": {str(NIGHTLY_RUN_ID): nightly_view},
@@ -1330,6 +1412,177 @@ def c_wiring(ctx: Context) -> str:
     return "the wiring check rejects an uncalled mode, a tagged-checkout call, a cross-job call and an absent script"
 
 
+def _normalize_endpoint_path(path: str) -> str:
+    return re.sub(r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*|\$[0-9]+", "{}", path)
+
+
+def _gh_forms(source: str) -> set[str]:
+    forms = set()
+    api_call = re.compile(r"\bgh\s+api\s+(?:\"([^\"]+)\"|'([^']+)'|(\S+))")
+    for match in api_call.finditer(source):
+        endpoint = next(value for value in match.groups() if value is not None)
+        forms.add("gh api " + _normalize_endpoint_path(endpoint))
+    for match in re.finditer(r"\bgh\s+(run|release|pr)\s+(list|view|download|checks|upload|edit)\b", source):
+        forms.add(f"gh {match.group(1)} {match.group(2)}")
+    return forms
+
+
+def _workflow_run_blocks(source: str) -> list[str]:
+    """Return commands from every YAML `run:` scalar, keeping embedded shell as source data."""
+    lines = source.splitlines()
+    blocks = []
+    index = 0
+    while index < len(lines):
+        match = re.match(r"^(?P<indent>\s*)run:\s*(?P<value>.*)$", lines[index])
+        if not match:
+            index += 1
+            continue
+        indent = len(match.group("indent"))
+        value = match.group("value").strip()
+        if value.startswith(("|", ">")):
+            content = []
+            index += 1
+            while index < len(lines):
+                line = lines[index]
+                if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                    break
+                content.append(line)
+                index += 1
+            blocks.append("\n".join(content))
+            continue
+        blocks.append(value)
+        index += 1
+    return blocks
+
+
+def _inventory_from_source(source: str) -> tuple[dict, ...]:
+    names = {"LIFECYCLE": LIFECYCLE, "WORKFLOW": WORKFLOW, "SOURCES": SOURCES}
+
+    def literal(item):
+        if isinstance(item, ast.Constant):
+            return item.value
+        if isinstance(item, ast.Name) and item.id in names:
+            return names[item.id]
+        if isinstance(item, ast.Tuple):
+            return tuple(literal(child) for child in item.elts)
+        if isinstance(item, ast.List):
+            return [literal(child) for child in item.elts]
+        if isinstance(item, ast.Dict):
+            return {literal(key): literal(value) for key, value in zip(item.keys, item.values)}
+        raise ValueError(f"unsupported inventory expression {type(item).__name__}")
+
+    try:
+        tree = ast.parse(source)
+        node = next(item for item in tree.body if isinstance(item, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == "POST_TAG_ENDPOINTS" for target in item.targets))
+        value = literal(node.value)
+    except (SyntaxError, StopIteration, ValueError) as error:
+        raise Reject("endpoint-uncovered", f"POST_TAG_ENDPOINTS is not an immutable literal inventory: {error}") from error
+    if not isinstance(value, tuple) or not all(isinstance(item, dict) for item in value):
+        raise Reject("endpoint-uncovered", "POST_TAG_ENDPOINTS must be a tuple of endpoint records")
+    return value
+
+
+def check_endpoint_inventory(files: dict[str, bytes], required_paths: dict = REQUIRED_PATHS,
+                             response_keys: tuple = RESPONSE_KEYS) -> int:
+    """Audit command forms from immutable lifecycle/judge/workflow files against the committed inventory."""
+    inventory = _inventory_from_source(files[SELF].decode("utf-8"))
+    policy = files[POLICY].decode("utf-8")
+    self_source = files[SELF].decode("utf-8")
+    by_form = {}
+    for entry in inventory:
+        if not all(key in entry for key in ("form", "sources", "consumer", "coverage")):
+            raise Reject("endpoint-uncovered", "an endpoint entry lacks form, sources, consumer or coverage")
+        if entry["form"] in by_form:
+            raise Reject("endpoint-uncovered", f"POST_TAG_ENDPOINTS repeats {entry['form']}")
+        by_form[entry["form"]] = entry
+
+    observed: dict[str, set[str]] = {}
+    for relative in JUDGE_FILES:
+        observed[relative] = _gh_forms(files[relative].decode("utf-8"))
+    for block in _workflow_run_blocks(files[WORKFLOW].decode("utf-8")):
+        observed.setdefault(WORKFLOW, set()).update(_gh_forms(block))
+
+    for relative, forms in observed.items():
+        for form in forms:
+            entry = by_form.get(form)
+            if entry is None:
+                raise Reject("endpoint-uncovered", f"{relative} uses unlisted form {form}")
+            if relative not in entry["sources"]:
+                raise Reject("endpoint-uncovered", f"{form} omits source file {relative}")
+
+    for entry in inventory:
+        form, coverage = entry["form"], entry["coverage"]
+        if coverage.startswith("replayed:"):
+            key = coverage.split(":", 1)[1]
+            paths = required_paths.get(key)
+            if key not in response_keys or not paths:
+                raise Reject("endpoint-uncovered", f"{form} replay key {key!r} has no REQUIRED_PATHS contract")
+            route = entry.get("route")
+            route_marker = route.replace("\\", "\\\\") if isinstance(route, str) else ""
+            if not route_marker or route_marker not in self_source:
+                raise Reject("endpoint-uncovered", f"{form} replay key {key!r} has no immutable transport route")
+        elif coverage.startswith("pinned:"):
+            rule = coverage.split(":", 1)[1]
+            if not re.search(rf"(?m)^def {re.escape(rule)}\s*\(", policy):
+                raise Reject("endpoint-uncovered", f"{form} names missing workflow policy rule {rule}")
+        else:
+            raise Reject("endpoint-uncovered", f"{form} has unknown coverage {coverage!r}")
+    return len(inventory)
+
+
+def c_endpoint_inventory(ctx: Context) -> str:
+    count = check_endpoint_inventory(ctx.files)
+    cases = []
+
+    route_scenario = Scenario(ctx.t, "ci-run-capture-route")
+    stub = route_scenario.stub / "gh_stub.py"
+    env = {"PATH": os.environ.get("PATH", ""), "GB_STUB_DIR": str(route_scenario.stub), "GB_STUB_REPO": REPO}
+    route = subprocess.run([sys.executable, "-I", str(stub), "api",
+                            f"repos/{REPO}/actions/runs/40259198255"], capture_output=True, text=True, env=env, timeout=60)
+    if route.returncode != 0:
+        raise Reject("endpoint-route", f"the ci_run capture route refused its published run: {route.stderr.strip()[:200]}")
+    try:
+        ci_run = json.loads(route.stdout)
+    except json.JSONDecodeError as error:
+        raise Reject("endpoint-route", "the ci_run capture route did not return JSON") from error
+    if (ci_run.get("id") != 40259198255 or ci_run.get("path") != ".github/workflows/ci.yml"
+            or ci_run.get("event") != "push" or ci_run.get("head_sha") != ctx.t.source):
+        raise Reject("endpoint-route", "the ci_run route did not serve the exact-source v0.2.1 CI push run")
+    refused = subprocess.run([sys.executable, "-I", str(stub), "api",
+                              f"repos/{REPO}/actions/runs/40259198254"], capture_output=True, text=True, env=env, timeout=60)
+    if refused.returncode != 1 or "HTTP 404" not in refused.stderr:
+        raise Reject("endpoint-route", "the ci_run route accepted a run id outside its captured fixture")
+
+    mutated = dict(ctx.files)
+    lifecycle = ctx.script.replace("# BEGIN publish-draft\n", '# BEGIN publish-draft\ngh api "repos/$GH_REPO/unlisted/lifecycle" >/dev/null\n', 1)
+    mutated[LIFECYCLE] = lifecycle.encode("utf-8")
+    cases.append(("an unrouted lifecycle API endpoint", mutated, REQUIRED_PATHS))
+
+    mutated = dict(ctx.files)
+    workflow = ctx.wf
+    run_header = re.search(r"(?m)^(?P<indent>\s*)run:\s*\|\s*$", workflow)
+    if run_header is None:
+        raise Reject("control-setup", "release.yml has no block-style run step to seed")
+    insertion = run_header.group(0) + "\n" + run_header.group("indent") + '  gh api "repos/$GH_REPO/unlisted/workflow"'
+    mutated[WORKFLOW] = (workflow[:run_header.start()] + insertion + workflow[run_header.end():]).encode("utf-8")
+    cases.append(("an unlisted API endpoint in a release.yml run block", mutated, REQUIRED_PATHS))
+
+    missing_paths = dict(REQUIRED_PATHS)
+    missing_paths.pop("attempt_jobs")
+    cases.append(("a replay entry without REQUIRED_PATHS", ctx.files, missing_paths))
+
+    for label, files, paths in cases:
+        try:
+            check_endpoint_inventory(files, paths)
+        except Reject as error:
+            if error.code != "endpoint-uncovered":
+                raise Reject("control-wrong-reason", f"{label}: {error}") from error
+        else:
+            raise Reject("control-accepted", f"{label}: endpoint inventory accepted it")
+    return f"endpoint inventory covers {count} forms and rejects an unlisted lifecycle endpoint, a run-block endpoint, and missing REQUIRED_PATHS"
+
+
 # ----------------------------------------------------------------------------------------- Task 2: captured shapes
 
 def sources_with_digest(sources: str, text: bytes) -> str:
@@ -1371,6 +1624,7 @@ def c_capture_contract(ctx: Context) -> str:
     mutated("a pull request without its merge commit", "capture-schema", lambda v: v["responses"]["pull_request"].pop("merge_commit_sha"))
     mutated("a commit pull listing without merged_at", "capture-schema", lambda v: v["responses"]["pull_requests"][0].pop("merged_at"))
     mutated("an attempt job without completed_at", "capture-schema", lambda v: v["responses"]["attempt_jobs"]["jobs"][0].pop("completed_at"))
+    mutated("a CI run without its path", "capture-schema", lambda v: v["responses"]["ci_run"].pop("path"))
     mutated("a release asset without its digest", "capture-schema", lambda v: v["responses"]["release_assets"][0].pop("digest"))
     mutated("an undeclared response", "capture-schema", lambda v: v["responses"].update(extra={}))
     mutated("a missing response", "capture-schema", lambda v: v["responses"].pop("artifacts"))
@@ -1884,6 +2138,17 @@ def c_nightly_gate(ctx: Context) -> list:
 TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_advisory_consumers, c_non_advisory,
                   c_unexpected_endpoint_in_script, c_live_publication, c_nightly_gate)
 
+# Keep the established control CTest's 95-control floor stable while running every release-plan control through its own
+# bounded CTest. Task 4's endpoint mutants and the ci_run capture contract are included with the Task 1-3 trust controls.
+POST_TAG_CONTROLS = (TASK1_CONTROLS, task2_controls, task3_controls, (c_endpoint_inventory,))
+
+
+def _post_tag_control_functions(ctx: Context) -> tuple:
+    controls = []
+    for group in POST_TAG_CONTROLS:
+        controls.extend(group(ctx) if callable(group) else group)
+    return tuple(controls)
+
 
 def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tuple[int, int]:
     wf = files[WORKFLOW].decode("utf-8")
@@ -1917,6 +2182,22 @@ def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tu
     return positives, len(results)
 
 
+def post_tag_controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tuple[int, int, int]:
+    wf = files[WORKFLOW].decode("utf-8")
+    script = files[LIFECYCLE].decode("utf-8")
+    template = Template(base, rev, files, capture)
+    ctx = Context(template, wf, script, files)
+    build_stages(ctx)
+    positives = positive_baselines(ctx)
+    results: list[str] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+        futures = [pool.submit(fn, ctx) for fn in _post_tag_control_functions(ctx)]
+        for future in futures:
+            outcome = future.result()
+            results.extend(outcome if isinstance(outcome, list) else [outcome])
+    return positives, len(results), check_endpoint_inventory(files)
+
+
 def lab_integrity(workspace: Path, files: dict[str, bytes]) -> None:
     for relative in JUDGE_FILES:
         if relative.endswith("download-release-artifact.py"):
@@ -1928,7 +2209,7 @@ def lab_integrity(workspace: Path, files: dict[str, bytes]) -> None:
 # ------------------------------------------------------------------------------------------------------- the CLI
 
 def load_inputs(rev: str) -> tuple[dict[str, bytes], dict]:
-    files = {path: git_show(rev, path) for path in (*JUDGE_FILES, WORKFLOW, DELIVERY, CAPTURE, SOURCES)}
+    files = {path: git_show(rev, path) for path in (*JUDGE_FILES, WORKFLOW, DELIVERY, CAPTURE, SOURCES, SELF, POLICY)}
     capture = check_capture(files[CAPTURE], files[SOURCES].decode("utf-8"))
     return files, capture
 
@@ -1938,6 +2219,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--rev")
     parser.add_argument("--replay", action="store_true")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--self-test-post-tag", action="store_true")
     parser.add_argument("--check-capture", action="store_true")
     parser.add_argument("--sanitize-capture", nargs=2, metavar=("RAW_DIR", "OUTPUT"))
     args = parser.parse_args(argv)
@@ -1948,6 +2230,7 @@ def main(argv: list[str]) -> int:
                      "workflow_run": "run.json", "jobs": "jobs.json", "artifacts": "artifacts.json",
                      "check_runs": "checks.json", "pull_request": "pull.json", "commit": "commit.json",
                      "pull_requests": "pull_requests.json", "attempt_jobs": "attempt_jobs.json",
+                     "ci_run": "ci_run.json",
                      "identity": "identity.json"}
             raw = {key: json.loads((raw_dir / name).read_text(encoding="utf-8")) for key, name in names.items()}
             output.write_text(capture_text(assemble_capture(raw)), encoding="utf-8", newline="\n")
@@ -1962,8 +2245,8 @@ def main(argv: list[str]) -> int:
             capture = check_capture(files[CAPTURE], files[SOURCES].decode("utf-8"))
             print(f"release-lifecycle capture pass responses={len(capture['responses'])} bytes={len(files[CAPTURE])}")
             return 0
-        if not (args.replay or args.self_test):
-            parser.error("choose --replay, --self-test, --check-capture or --sanitize-capture")
+        if not (args.replay or args.self_test or args.self_test_post_tag):
+            parser.error("choose --replay, --self-test, --self-test-post-tag, --check-capture or --sanitize-capture")
         try:
             script = git_show(rev, LIFECYCLE)
         except Reject:
@@ -1976,6 +2259,10 @@ def main(argv: list[str]) -> int:
                 facts = replay(rev, files, capture, base)
                 print("release-lifecycle replay pass modes={modes} publish_decisions={publish_decisions} live_mutations={live_mutations} "
                       "uploads={uploads} calls={calls}".format(**facts))
+                return 0
+            if args.self_test_post_tag:
+                positives, count, endpoint_count = post_tag_controls(rev, files, capture, base)
+                print(f"release-lifecycle post-tag controls pass positives={positives} controls={count} endpoints={endpoint_count}")
                 return 0
             positives, count = controls(rev, files, capture, base)
             print(f"release-lifecycle controls pass positives={positives} controls={count}")

@@ -5538,7 +5538,8 @@ if(NOT WIN32)
   # Each case: name | checker mode | output regex | key whose value must reach a minimum | minimum.
   foreach(gbb_lifecycle_case IN ITEMS
       "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0|uploads|7"
-      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95")
+      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95"
+      "release_lifecycle_post_tag_controls|--self-test-post-tag|release-lifecycle post-tag controls pass positives=[1-9][0-9]* controls=[1-9][0-9]* endpoints=[1-9][0-9]*|controls|1")
     string(REPLACE "|" ";" gbb_lifecycle_fields "${gbb_lifecycle_case}")
     list(GET gbb_lifecycle_fields 0 gbb_lifecycle_name)
     list(GET gbb_lifecycle_fields 1 gbb_lifecycle_mode)
