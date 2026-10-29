@@ -36,6 +36,7 @@ key-files:
     - tests/scripts/verify-support-ledger.py
     - tests/scripts/verify-version-window.py
     - tests/scripts/verify-v02-adoption.py
+    - tests/scripts/verify-perf-gate.py
     - tests/scripts/verify-no-interop-claims.py
     - tests/cmake/host-contract.cmake
     - tests/CMakeLists.txt
@@ -95,6 +96,14 @@ coverage:
     verification:
       - kind: other
         ref: "bash .github/scripts/verify-test-inventory.sh --self-test; platform exclusions, platform-independent retention, missing-test rejection, and cleanup-trap control passed."
+        status: pass
+  - id: D7
+    description: The realtime floor remains bound to its immutable performance-policy receipt while the regenerated release-notes receipt remains independently verifiable.
+    requirement: REL-01
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "At immutable source 3d6e0a6debb7c3a2b31b8acb7b268cacfd96dd5a, perf_gate_controls passed 34 controls and all ten targeted performance CTests passed; the changed notes receipt is rejected as the policy receipt while the immutable base receipt preserves the 4.02 floor."
         status: pass
 metrics:
   duration: 20min
@@ -182,6 +191,12 @@ No new project decisions. The plan follows D-11 through D-15 and the OQ-3 hosted
 
 The first post-commit CTest run was configured with the default symbolic `HEAD`, which the new interop checker correctly rejected. Reconfigured with `GBB_SAVE_FORMATS_REV=42cbba5cae31a9995e590d62f5fa42a7e8cab41c`; the focused CTest run then passed 9/9.
 
+## Wave 1 Integration Follow-up
+
+- **Commit:** `3d6e0a6debb7c3a2b31b8acb7b268cacfd96dd5a` binds the realtime-floor check to the receipt at immutable `LIMITS_BASE_REV` (`947d6a9d177af6c04a5f9ea6abcc2c470ab9be57`), with a pinned receipt SHA-256 and head. The regenerated notes receipt remains independently checked and cannot raise the D-24 performance threshold. The limits file and its 4.02 floor were unchanged.
+- **CTest:** At that source, 15 of 16 focused tests passed: all ten targeted performance CTests, `test_budget` and its controls, `release_review_controls`, `contract_rev_wiring`, and `adoption_claim_boundaries_controls`. `verify-test-inventory.sh --self-test` passed.
+- **Environment-limited:** `release_review_approval` did not reach its approval assertion because this sandbox denied `git worktree add` from writing `.git/worktrees`. The scoped escalated retry remains with the phase orchestrator. Results were saved separately in `build/phase19-wave1-perf-fix-3d6e0a6d.xml`; the original Wave 1 log and JUnit were left untouched.
+
 ## User Setup Required
 
 None.
@@ -194,6 +209,7 @@ Plan 19-04 can proceed in Phase 19. REL-01 remains pending until exact-tag publi
 
 - The summary exists, its coverage contract passes, and all seven task commits are ancestors of `42cbba5cae31a9995e590d62f5fa42a7e8cab41c`.
 - The measured plan commit count is 7 from `bd67a6d2c9eeff663505205d92c1ab21870b981b` through `42cbba5cae31a9995e590d62f5fa42a7e8cab41c`.
+- The later integration repair is recorded separately in the Wave 1 follow-up; it does not change the measured task-commit count above.
 - The stub scan found only deliberate empty-input negative controls and an existing workflow initialization; no deliverable stubs were introduced.
 - The threat-surface scan found no new service endpoint, authentication path, or runtime trust-boundary access.
 - Owner edits to `.planning/config.json` and `.planning/state.json` remain unstaged and untouched.
