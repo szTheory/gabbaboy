@@ -1630,3 +1630,6 @@ save_format_files
 save_format_print
 save_format_print_none
 host_grammar_print_extra
+save_format_completeness
+save_format_freeze
+host_contract_json

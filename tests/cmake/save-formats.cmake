@@ -63,3 +63,37 @@ if(NOT WIN32)
     TIMEOUT 60
     PASS_REGULAR_EXPRESSION "save-formats pass rows=16 ids=12 profiles=2 files=32")
 endif()
+
+# ---- D-20: completeness in both directions, in process (portable) ---------------------------------------
+# test_save_format_completeness enumerates type x RAM code x ROM code through gbb_probe_rom and gbb_battery_size;
+# the checker spawns it and holds docs/host-contract.json to its output.
+add_executable(test_save_format_completeness "${PROJECT_SOURCE_DIR}/tests/test_save_format_completeness.c")
+target_link_libraries(test_save_format_completeness PRIVATE GabbaBoy::core)
+target_compile_features(test_save_format_completeness PRIVATE c_std_17)
+set_target_properties(test_save_format_completeness PROPERTIES C_EXTENSIONS OFF)
+add_test(NAME save_format_completeness
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_SAVE_FORMATS_CHECKER}"
+    --check-completeness --rev "${GBB_SAVE_FORMATS_REV}" --repo "${PROJECT_SOURCE_DIR}"
+    --enumerator $<TARGET_FILE:test_save_format_completeness>)
+set_tests_properties(save_format_completeness PROPERTIES
+  TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "save-formats completeness pass rows=16")
+
+# ---- D-19: ids are a published host contract, so the table is append-only against the latest release tag ----
+# Needs tags fetched (CI native jobs use fetch-depth 0). No strict tag at all fails; a tag without the file passes
+# with baseline=none; once a release carries the file, every row of it must survive unchanged.
+add_test(NAME save_format_freeze
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_SAVE_FORMATS_CHECKER}"
+    --freeze --rev "${GBB_SAVE_FORMATS_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(save_format_freeze PROPERTIES
+  TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "save-formats freeze pass baseline=(none|v[0-9]+\\.[0-9]+\\.[0-9]+)")
+
+# ---- D-16: canonical JSON, the exit-code X-macro and the cadence constants (portable) --------------------
+set(GBB_HOST_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-host-contract.py")
+add_test(NAME host_contract_json
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_CONTRACT_CHECKER}"
+    --check --rev "${GBB_SAVE_FORMATS_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(host_contract_json PROPERTIES
+  TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "host-contract pass exit_codes=4 cadence=6")
