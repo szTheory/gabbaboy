@@ -1,13 +1,13 @@
 # Phase 19 continuation
 
-Completed stage: **Phase 19 execution, plan 19-03 — Scoped Claims and Release Evidence**. Summary: [19-03-SUMMARY.md](19-03-SUMMARY.md), committed as `9c008c6a`. The v0.3 claims renderer and drift controls, release-note rules, hosted Ir receipt, and expanded interop checks are complete. Focused CTest passed 9/9 and the CTest inventory self-test passed.
+Completed stage: **Phase 19 execution, plan 19-04 — Rehearsal Binding**. Summary: [19-04-SUMMARY.md](19-04-SUMMARY.md). The nightly and candidate rehearsals are bound to the exact merged version-PR head and merge time; the trusted version gate checks out its base revision; and all 22 post-tag CLI endpoint forms have replay or named policy coverage. Seven task commits end at `24a69f5c`.
 
-Next stage: **Phase 19 execution, plan 19-04 — Rehearsal Binding** (Wave 2). Exact command: `/gsd-execute-phase 19`.
+Next stage: **Phase 19 execution, plan 19-05 — Perf-gate receipt and trusted reader, host smoke on shipped archives, and v0.3.0 readback checker**. The phase remains **19 — Qualified v0.3.0 Release**. Exact command: `/gsd-execute-phase 19`.
 
 Constraints and open items:
 
-- Phase 19 remains active; proceed directly to plan 19-04 under the authorized full-phase execution. REL-01 stays pending until the exact `v0.3.0` publication and readback are complete.
-- Do not implement the six RM-032 v0.4 candidates in the v0.3.0 release path.
-- Deviation 19-02-D1 is a D-09 amendment candidate. 19-06 repeats it in the PR A body for owner acknowledgment; do not add it to DECISIONS.md before acknowledgment.
-- The two `player_slot_menu_shortcuts` CTests remain host-display limited as recorded in 19-01; do not claim them as passing or add human UAT.
-- Both automatic advance flags remain false. Continue within Phase 19 through plan 19-04; stop at the phase boundary.
+- Continue with plan 19-05 only; Phase 19 is not complete. REL-01 remains pending until exact-tag publication and readback.
+- Preserve the frozen performance limits, immutable base receipt binding, and refreshed release-notes receipt.
+- D-09 owner acknowledgment remains pending for PR A review; do not record it as adopted before acknowledgment.
+- The two `player_slot_menu_shortcuts` CTests remain display-limited on this host; do not claim them as passing or add human UAT.
+- Both automatic advance flags remain false.
