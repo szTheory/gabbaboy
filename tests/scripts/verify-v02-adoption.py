@@ -958,7 +958,7 @@ def run_self_test_claim_boundaries(repo: Path, rev: str) -> tuple[int, int]:
     require(resolved.returncode == 0, "revision-invalid:commit-not-found")
     # Bind the version and ledger identity used for generated release notes to the same commit.
     with tempfile.TemporaryDirectory(prefix="gabbaboy-claims-rev-") as temp:
-        snapshot = Path(temp)
+        snapshot = Path(temp).resolve(strict=True)
         (snapshot / "docs/support").mkdir(parents=True)
         for relative in ("CMakeLists.txt", ".release-please-manifest.json"):
             target = snapshot / relative
