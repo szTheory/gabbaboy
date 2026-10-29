@@ -38,6 +38,9 @@ ROM_FIELDS = ("path", "sha256", "digest", "consumed_half_dots")
 TOP_KEYS = ("schema", "ir_ratio_limit", "ir_floor", "determinism_limit", "realtime_floor")
 POLICY_FILE = "tests/baseline/perf-gate-v1.txt"
 LIMITS_BASE_REV = "947d6a9d177af6c04a5f9ea6abcc2c470ab9be57"
+POLICY_RECEIPT_SHA256 = "6f0da7c7e3850c3ea15536accd081d9676b4da6398913187e37da33f4d501067"
+POLICY_RECEIPT_HEAD = "711f4fd7e66a8ae67f2013edc39c98cfa21ea5fe"
+POLICY_RECEIPT_PATH = "tests/baseline/perf-attribution-v1.json"
 EXCEPTION_SCHEMA = "perf-gate-deterministic-exception-v1"
 
 
@@ -729,16 +732,28 @@ def check_receipt_shape(receipt, limits, repo):
     return len(derived["measured"]), len(derived["merge_set"]), smallest
 
 
-def attribution_floor_check(limits_path, limits):
-    """When the receipt sits beside the limits file, realtime_floor may not be below max(2.0, 0.6 x multiple)."""
-    receipt_path = os.path.join(os.path.dirname(os.path.abspath(limits_path)), "perf-attribution-v1.json")
-    if not os.path.exists(receipt_path):
-        return
+def policy_receipt_multiple(receipt_bytes):
+    """Read the receipt bound to the immutable limits base, not the current notes attribution receipt."""
+    if hashlib.sha256(receipt_bytes).hexdigest() != POLICY_RECEIPT_SHA256:
+        reject("attribution-policy-binding", "receipt bytes do not match the immutable performance-policy receipt")
     try:
-        receipt = json.loads(read_text(receipt_path, "attribution-format"))
+        receipt = json.loads(receipt_bytes)
+        if receipt["selection"]["head"] != POLICY_RECEIPT_HEAD:
+            reject("attribution-policy-binding", "receipt head differs from the immutable performance-policy receipt")
         multiple = fractions.Fraction(receipt["realtime"]["multiple"])
+    except Rejected:
+        raise
     except (ValueError, KeyError, TypeError, ZeroDivisionError) as error:
-        reject("attribution-format", "cannot read the receipt realtime multiple: %r" % error)
+        reject("attribution-policy-binding", "cannot read the immutable performance-policy receipt: %r" % error)
+    if multiple <= 0:
+        reject("attribution-policy-binding", "immutable performance-policy receipt multiple must be positive")
+    return multiple
+
+
+def attribution_floor_check(limits_path, limits, repo=REPO_ROOT):
+    """Keep the realtime floor bound to the receipt at the immutable limits base revision."""
+    receipt_text = git(repo, "show", "%s:%s" % (LIMITS_BASE_REV, POLICY_RECEIPT_PATH))
+    multiple = policy_receipt_multiple(receipt_text.encode("utf-8"))
     required = required_realtime_floor(multiple)
     if limits["realtime_floor"] < required:
         reject("realtime-floor-below-receipt", "realtime_floor %s is below max(2.0, 0.6 x receipt multiple) = %s" %
@@ -1030,16 +1045,31 @@ def attribution_self_test(limits_path, failures):
         expect("harness with two anchors is refused", 1, ["--adapt-harness", two, "--out", two + ".out"],
                "REJECT harness-adapt-anchor:")
 
-        # A committed receipt raises the floor: realtime_floor below max(2.0, 0.6 x multiple) is refused.
+        # The immutable limits base owns the 4.02 policy floor. The newer release-notes receipt is
+        # independently verified, but cannot silently raise that gate's immutable threshold.
         beside = os.path.join(scratch, "beside")
         os.makedirs(beside)
+        note_receipt_path = os.path.join(REPO_ROOT, POLICY_RECEIPT_PATH)
+        with open(note_receipt_path, "rb") as handle:
+            note_receipt_bytes = handle.read()
         with open(os.path.join(beside, "perf-attribution-v1.json"), "w", encoding="utf-8") as handle:
-            json.dump(original, handle)
-        required = required_realtime_floor(fractions.Fraction(original["realtime"]["multiple"]))
+            handle.write(note_receipt_bytes.decode("utf-8"))
+        policy_receipt_text = git(REPO_ROOT, "show", "%s:%s" % (LIMITS_BASE_REV, POLICY_RECEIPT_PATH))
+        policy_receipt_bytes = policy_receipt_text.encode("utf-8")
+        policy_multiple = policy_receipt_multiple(policy_receipt_bytes)
+        try:
+            policy_receipt_multiple(note_receipt_bytes)
+            wrong_binding = None
+        except Rejected as error:
+            wrong_binding = error.code
+        if wrong_binding != "attribution-policy-binding":
+            failures.append("new notes receipt must be rejected as a performance-policy receipt; got %r" % wrong_binding)
+        controls += 1
+        required = required_realtime_floor(policy_multiple)
         text = read_text(limits_path, "limits-schema")
         for name, floor, expected_error in (
-                ("realtime_floor below the receipt rule is refused", "2.0", "realtime-floor-below-receipt"),
-                ("realtime_floor at the receipt rule passes", "%d.%02d" % divmod(int(required * 100), 100), None)):
+                ("realtime_floor below the immutable policy receipt rule is refused", "2.0", "realtime-floor-below-receipt"),
+                ("new notes receipt does not raise the immutable policy floor", "%d.%02d" % divmod(int(required * 100), 100), None)):
             limits_copy = os.path.join(beside, "perf-gate-v1.txt")
             with open(limits_copy, "w", encoding="utf-8") as handle:
                 handle.write(re.sub(r"(?m)^realtime_floor=.*$", "realtime_floor=" + floor, text))
