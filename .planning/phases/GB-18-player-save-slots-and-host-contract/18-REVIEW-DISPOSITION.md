@@ -17,7 +17,7 @@ findings:
     title: "The battery preload backup is clobbered by the first load of every new session"
   - id: WR-04
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The save-format and contract checkers read the configure-time HEAD, so they can pass against a stale revision"
   - id: WR-05
     severity: warning
@@ -63,9 +63,9 @@ findings:
     severity: info
     disposition: open
     title: "Stale and duplicated comment, and directory fsync asymmetry on macOS"
-open: 10
+open: 9
 total: 15
-recorded: 2026-10-29T10:11:40.661Z
+recorded: 2026-10-29T10:11:50.339Z
 ---
 
 # Phase 18: Code Review Disposition
@@ -75,7 +75,7 @@ recorded: 2026-10-29T10:11:40.661Z
 | WR-01 | warning | fixed | 18-REVIEW-FIX.md |
 | WR-02 | warning | fixed | 18-REVIEW-FIX.md |
 | WR-03 | warning | fixed | 18-REVIEW-FIX.md |
-| WR-04 | warning | open | - |
+| WR-04 | warning | fixed | 18-REVIEW-FIX.md |
 | WR-05 | warning | fixed | 18-REVIEW-FIX.md |
 | WR-06 | warning | fixed | 18-REVIEW-FIX.md |
 | IN-01 | info | open | - |
