@@ -2219,9 +2219,8 @@ LEDGER_WHOLE_RUN_MINUTES = Fraction(30)
 LEDGER_NORMAL_FIELDS = frozenset({"timeout_minutes", "cited_run_id", "cited_sha", "p50_minutes", "samples", "provisional"})
 LEDGER_NORMAL_OPTIONAL = frozenset({"tree_equal_sha", "cited_tree", "cited_job_name", "disclosure"})
 LEDGER_BOUND_FIELDS = frozenset({"timeout_minutes", "release_bound", "provisional", "sizing_basis"})
-# D-20 'release-bound ledger row (Phase 16)': release-only and rehearsal-only job bodies that have no green run since they were written. Each
-# is exempt from the samples, cited run, cited sha and ceil(2 x p50) rules, only while the project VERSION is at most
-# LEDGER_BOUND_LAST_VERSION; 16-06 and 16-07 re-cite them from the rehearsal rerun and the v0.2.1 release run. A generic skip is never allowed.
+# D-20 'release-bound ledger row (Phase 16)': no release_bound row remains after RM-027. Keep the narrow legacy whitelist and
+# expiry rule so any row reintroduced at VERSION > 0.2.1 is refused; a generic skip is never allowed.
 LEDGER_RELEASE_BOUND_KEYS = ("release.yml:attach-v02-evidence", "release.yml:candidate-fuzz", "release-rehearsal.yml:judge",
                              # D-111: the rehearsal producers that cannot pass until the version-bound ledger and the owner-recorded
                              # performance review exist; a provisional row would make the rehearsal judge's own --release-head check circular.
@@ -2470,7 +2469,10 @@ def verify_cited(root: Path) -> int:
         try:
             run = gh("repos/{owner}/{repo}/actions/runs/%d" % row["cited_run_id"])
             jobs = gh("repos/{owner}/{repo}/actions/runs/%d/jobs?per_page=100" % row["cited_run_id"], "--paginate")
-            found = [j for page in ([jobs] if isinstance(jobs, dict) else jobs) for j in page.get("jobs", []) if j["name"] == display[key]]
+            cited_job_name = row.get("cited_job_name")
+            expected_job = (f"release-candidate / {cited_job_name}" if key.startswith("release.yml:") else cited_job_name) \
+                if cited_job_name is not None else display[key]
+            found = [j for page in ([jobs] if isinstance(jobs, dict) else jobs) for j in page.get("jobs", []) if j["name"] == expected_job]
             problems = []
             if run["head_sha"] != row["cited_sha"]:
                 problems.append(f"run head {run['head_sha'][:8]} is not the cited sha")
@@ -2482,7 +2484,13 @@ def verify_cited(root: Path) -> int:
                 seconds = (datetime.strptime(started[1], "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(started[0], "%Y-%m-%dT%H:%M:%SZ")).total_seconds()
                 if Fraction(math.ceil(Fraction(seconds) / 60 * 100), 100) != Fraction(row["p50_minutes"]):
                     problems.append(f"cited job lasted {seconds / 60:.2f} min, not p50 {row['p50_minutes']}")
-            if run["event"] == "pull_request":
+            if "tree_equal_sha" in row:
+                commit = gh("repos/{owner}/{repo}/git/commits/%s" % run["head_sha"])
+                api_tree = commit.get("tree", {}).get("sha")
+                if api_tree != row["cited_tree"]:
+                    problems.append(f"run head tree {api_tree!r} does not match cited_tree {row['cited_tree']}")
+                provisional = False
+            elif run["event"] == "pull_request":
                 pulls = gh("repos/{owner}/{repo}/commits/%s/pulls" % row["cited_sha"])
                 provisional = not any(item.get("merged_at") for item in pulls)
             else:
@@ -2758,6 +2766,18 @@ case "$1 ${2:-}" in
   "issue list") printf '%s' "$STUB_ISSUES" | jq -r "$expr" ;;
   "label create"|"issue create"|"issue comment") printf 'SENT gh %s\n' "$*" >> "$STUB_LOG" ;;
   *) printf 'unexpected gh call: %s\n' "$*" >&2; exit 97 ;;
+esac
+"""
+_VERIFY_CITED_STUB = r"""#!/usr/bin/env bash
+set -eu
+case "${1:-} ${2:-}" in
+  "api repos/{owner}/{repo}/actions/runs/40257161612")
+    printf '{"head_sha":"%s","event":"workflow_dispatch"}\n' "$STUB_HEAD_SHA" ;;
+  "api repos/{owner}/{repo}/actions/runs/40257161612/jobs?per_page=100")
+    printf '{"jobs":[{"name":"%s","conclusion":"success","started_at":"2026-10-26T02:02:59Z","completed_at":"2026-10-26T02:03:07Z"}]}\n' "$STUB_JOB_NAME" ;;
+  "api repos/{owner}/{repo}/git/commits/c6dc575b6a84cf51a56688948fce9241ba323400")
+    printf '{"tree":{"sha":"%s"}}\n' "$STUB_TREE" ;;
+  *) printf 'unexpected gh route: %s\n' "$*" >&2; exit 97 ;;
 esac
 """
 _REPORT_TITLE = "nightly-red: asan-full-replay"
@@ -3703,6 +3723,16 @@ def _ledger_mutations():
     def ledger(edit):
         return lambda fixture: _ledger_edit(fixture, edit)
 
+    def bound_at(key: str, edit=None):
+        def apply(fixture: Path) -> None:
+            def set_bound(data: dict) -> None:
+                row = {**bound, "timeout_minutes": data[key]["timeout_minutes"]}
+                if edit is not None:
+                    edit(row)
+                data[key] = row
+            _ledger_edit(fixture, set_bound)
+        return apply
+
     def both(first, second):
         def apply(fixture: Path) -> None:
             first(fixture)
@@ -3724,15 +3754,15 @@ def _ledger_mutations():
             ledger(lambda d: d["ci.yml:native-windows"].update(timeout_minutes=70, p50_minutes="30.1"))), (), "timeout-ledger-whole-run"),
         ("ledger: release_bound row under a different key", ledger(lambda d: d.update({"ci.yml:native-linux": {**bound, "timeout_minutes": 31}})), (), "timeout-ledger-release-bound"),
         ("ledger: release_bound row under a third key", ledger(lambda d: d["fixture-repro.yml:fixture-repro"].clear() or d["fixture-repro.yml:fixture-repro"].update({**bound, "timeout_minutes": 15})), (), "timeout-ledger-release-bound"),
-        ("ledger: release_bound row once VERSION is above 0.2.1", lambda fixture: (fixture / "CMakeLists.txt").write_text(
-            re.sub(r"VERSION \d+\.\d+\.\d+", "VERSION 0.3.0", (fixture / "CMakeLists.txt").read_text(encoding="utf-8"), count=1), encoding="utf-8"), (), "timeout-ledger-release-bound"),
+        ("ledger: release_bound row once VERSION is above 0.2.1", both(bound_at("release-rehearsal.yml:judge"), lambda fixture: (fixture / "CMakeLists.txt").write_text(
+            re.sub(r"VERSION \d+\.\d+\.\d+", "VERSION 0.3.0", (fixture / "CMakeLists.txt").read_text(encoding="utf-8"), count=1), encoding="utf-8")), (), "timeout-ledger-release-bound"),
         ("ledger: normal row with samples removed", ledger(lambda d: d["ci.yml:native-linux"].pop("samples")), (), "timeout-ledger-schema"),
         ("ledger: cited_tree without tree_equal_sha", ledger(lambda d: d["ci.yml:native-linux"].update(cited_tree="b" * 40)), (), "timeout-ledger-schema"),
         ("ledger: tree_equal_sha without cited_tree", ledger(lambda d: d["ci.yml:native-linux"].update(tree_equal_sha="b" * 40)), (), "timeout-ledger-schema"),
         ("ledger: unknown optional field", ledger(lambda d: d["ci.yml:native-linux"].update(sizing_note="not allowed")), (), "timeout-ledger-schema"),
-        ("ledger: release_bound row that also cites a run", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(cited_run_id=1)), (), "timeout-ledger-schema"),
-        ("ledger: release_bound row that is provisional", ledger(lambda d: d["release.yml:candidate-fuzz"].update(provisional=True)), (), "timeout-ledger-schema"),
-        ("ledger: release_bound row without a sizing basis", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(sizing_basis=" ")), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row that also cites a run", bound_at("release-rehearsal.yml:judge", lambda row: row.update(cited_run_id=1)), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row that is provisional", bound_at("release.yml:candidate-fuzz", lambda row: row.update(provisional=True)), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row without a sizing basis", bound_at("release.yml:attach-v02-evidence", lambda row: row.update(sizing_basis=" ")), (), "timeout-ledger-schema"),
         ("ledger: empty ledger", lambda fixture: (fixture / LEDGER_PATH).write_text("{}\n", encoding="utf-8"), (), "timeout-ledger-schema"),
     ]
 
@@ -3843,6 +3873,106 @@ def _ledger_git_object_controls() -> int:
     return done
 
 
+def _ledger_disclosure_scratch_controls() -> int:
+    """Exercise changed, unchanged and disabled disclosure checks against a real scratch Git repository."""
+    with tempfile.TemporaryDirectory(prefix="gbb-ledger-disclosure.") as directory:
+        repo = Path(directory)
+        workflow = repo / ".github/workflows/ci.yml"
+        workflow.parent.mkdir(parents=True)
+        base_text = ("name: fixture\n"
+                     "jobs:\n"
+                     "  build:\n"
+                     "    runs-on: ubuntu-latest\n"
+                     "    steps:\n"
+                     "      - run: echo before\n"
+                     "  stable:\n"
+                     "    runs-on: ubuntu-latest\n"
+                     "    steps:\n"
+                     "      - run: echo stable\n")
+        workflow.write_text(base_text, encoding="utf-8")
+        env = os.environ.copy()
+        env.update(GIT_AUTHOR_NAME="GabbaBoy Fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid",
+                   GIT_COMMITTER_NAME="GabbaBoy Fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")
+
+        def git(*args: str) -> subprocess.CompletedProcess[str]:
+            result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, env=env, check=False, timeout=30)
+            if result.returncode != 0:
+                raise SystemExit(f"self-test disclosure scratch git failed: {' '.join(args)}: {result.stderr.strip()}")
+            return result
+
+        git("init", "-q", "--initial-branch=main")
+        git("add", ".github/workflows/ci.yml")
+        git("commit", "-q", "-m", "fixture base")
+        changed_text = base_text.replace("echo before", "echo after", 1)
+        workflow.write_text(changed_text, encoding="utf-8")
+
+        def check(row: dict, key: str = "ci.yml:build", base: str | None = "main") -> None:
+            check_ledger_git_objects({key: row}, repo, "HEAD", False,
+                                     disclosure_base=base, workflow_root=repo)
+
+        try:
+            check({})
+        except Reject as exc:
+            if exc.code != "timeout-ledger-body-undisclosed":
+                raise SystemExit(f"self-test disclosure scratch: wrong refusal {exc.code}")
+        else:
+            raise SystemExit("self-test disclosure scratch: changed job body without disclosure was accepted")
+        check({"disclosure": "changed this job's body after the cited run"})
+        check({}, key="ci.yml:stable")
+        check({}, base=None)
+    return 4
+
+
+def verify_cited_stub_controls(root: Path, work: Path) -> int:
+    """Verify online tree-equal and predecessor-name checks through a refusing gh stand-in."""
+    if os.name == "nt":
+        print("skipped: online citation gh stub (POSIX shell stand-in)")
+        return 0
+    ledger_path = root / LEDGER_PATH
+    original = ledger_path.read_text(encoding="utf-8")
+    data = json.loads(original, object_pairs_hook=_ledger_pairs)
+    row = dict(data["release-rehearsal.yml:performance"])
+    ledger_path.write_text(json.dumps({"release-rehearsal.yml:performance": row}, indent=1) + "\n", encoding="utf-8")
+    stub_dir = work / "verify-cited-bin"
+    stub_dir.mkdir(exist_ok=True)
+    stub = stub_dir / "gh"
+    stub.write_bytes(_VERIFY_CITED_STUB.encode("utf-8"))
+    stub.chmod(0o755)
+    env = {key: value for key, value in os.environ.items() if key in ("PATH", "TMPDIR", "HOME", "LANG")}
+    env.update(PATH=f"{stub_dir}{os.pathsep}{env.get('PATH', '')}",
+               STUB_HEAD_SHA="c6dc575b6a84cf51a56688948fce9241ba323400",
+               STUB_JOB_NAME="rehearse-paired-performance-qualification",
+               STUB_TREE="b02c14bbdc9be80b7aa6b6145cb8b89331388cca")
+
+    def run() -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--verify-cited", "--root", str(root)],
+                              cwd=work, capture_output=True, text=True, check=False, env=env, timeout=60)
+
+    controls = 0
+    try:
+        positive = run()
+        if positive.returncode != 0 or "verify-cited rows=1 failures=0" not in positive.stdout:
+            raise SystemExit(f"self-test verify-cited positive control failed: {positive.stdout!r} {positive.stderr!r}")
+        controls += 1
+        row["cited_job_name"] = "missing predecessor job"
+        ledger_path.write_text(json.dumps({"release-rehearsal.yml:performance": row}, indent=1) + "\n", encoding="utf-8")
+        missing_job = run()
+        if missing_job.returncode != 1 or "FAIL release-rehearsal.yml:performance: job missing or not successful" not in missing_job.stdout:
+            raise SystemExit(f"self-test verify-cited missing-job control failed: {missing_job.stdout!r} {missing_job.stderr!r}")
+        controls += 1
+        row["cited_job_name"] = "rehearse-paired-performance-qualification"
+        ledger_path.write_text(json.dumps({"release-rehearsal.yml:performance": row}, indent=1) + "\n", encoding="utf-8")
+        env["STUB_TREE"] = "e" * 40
+        wrong_tree = run()
+        if wrong_tree.returncode != 1 or "does not match cited_tree" not in wrong_tree.stdout:
+            raise SystemExit(f"self-test verify-cited wrong-tree control failed: {wrong_tree.stdout!r} {wrong_tree.stderr!r}")
+        controls += 1
+    finally:
+        ledger_path.write_text(original, encoding="utf-8")
+    print("passed: online citation stub verifies tree-equal heads and refuses missing jobs and mismatched API trees")
+    return controls
+
+
 _LIFECYCLE_JOB_ANCHORS = {f"  {job}:\n": next(mode for mode, owner in LIFECYCLE_MODES.items() if owner == job) for job in set(LIFECYCLE_MODES.values())}
 _JOB_HEADER = re.compile(r"\n  [a-z0-9-]+:\n")
 
@@ -3942,6 +4072,8 @@ def self_test(root: Path) -> None:
                 (fixture / ".github/workflows" / item).write_text(baselines[item], encoding="utf-8")
         rejected += _ledger_boundary_controls()
         rejected += _ledger_git_object_controls()
+        rejected += _ledger_disclosure_scratch_controls()
+        rejected += verify_cited_stub_controls(fixture, work)
         # WR-C01: the workflow set is closed. A new file (here a pull_request_target job with contents: write) is refused
         # before anything reads it, and so is a judged file that disappears.
         intruder = fixture / ".github/workflows/evil.yml"
