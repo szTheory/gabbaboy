@@ -253,4 +253,88 @@ if(NOT WIN32)
   set_tests_properties(host_sweep_exact_prefix PROPERTIES PASS_REGULAR_EXPRESSION "PASS sweep_exact_prefix")
 
   gbb_add_host_mode_test(host_rtc_final_compare rtc-final-compare)
+
+  # ---- D-06/D-08/D-30: hostile save-dir, import and --rom shapes through the real runner (POSIX-only: each
+  # passes --save-dir, which Windows refuses before any filesystem access, and uses mkfifo/symlink) ----
+  gbb_add_host_mode_test(host_savedir_missing savedir-missing)
+  gbb_add_host_mode_test(host_savedir_not_directory savedir-not-directory)
+  gbb_add_host_mode_test(host_savedir_symlink_path savedir-symlink-path)
+  gbb_add_host_mode_test(host_import_exact import-exact)
+  gbb_add_host_mode_test(host_import_zero import-zero)
+  gbb_add_host_mode_test(host_import_short import-short)
+  gbb_add_host_mode_test(host_import_long import-long)
+  gbb_add_host_mode_test(host_import_mgba_footer import-mgba-footer)
+  gbb_add_host_mode_test(host_import_oversize import-oversize)
+  gbb_add_host_mode_test(host_import_bad_rtc import-bad-rtc)
+  gbb_add_host_mode_test(host_import_symlink import-symlink)
+  gbb_add_host_mode_test(host_import_dangling_symlink import-dangling-symlink)
+  gbb_add_host_mode_test(host_import_fifo import-fifo)
+  gbb_add_host_mode_test(host_import_directory import-directory)
+  gbb_add_host_mode_test(host_import_stray_nobattery import-stray-nobattery)
+  gbb_add_host_mode_test(host_rom_fifo rom-fifo)
+  gbb_add_host_mode_test(host_rom_directory rom-directory)
+  add_test(NAME host_import_device COMMAND test_host_save_io import_device)
+  set_tests_properties(host_import_device PROPERTIES PASS_REGULAR_EXPRESSION "PASS import_device")
+
+  # ---- mutant runners (build-tree executables only; nothing mutated is installed) ----
+  # gbb_host_mutant_runner(name mutant_library): gabbaboy-runner's main.c linked against a mutant host
+  # library instead of gabbaboy_host. The core arrives once, through gabbaboy_runner_support.
+  function(gbb_host_mutant_runner name mutant_library)
+    add_executable(gabbaboy-runner-mutant-${name} "${PROJECT_SOURCE_DIR}/src/runner/main.c")
+    target_link_libraries(gabbaboy-runner-mutant-${name} PRIVATE gabbaboy_runner_support ${mutant_library})
+    target_compile_features(gabbaboy-runner-mutant-${name} PRIVATE c_std_17)
+    set_target_properties(gabbaboy-runner-mutant-${name} PROPERTIES C_EXTENSIONS OFF)
+  endfunction()
+
+  # gbb_add_host_mutant_scenario(test runner_target scenario reason): the harness scenario against a mutant
+  # runner must exit 1 with its own `FAIL <scenario>: <reason>` line. The reason is part of the pattern, so a
+  # harness crash such as a missing runner file ("FAIL <scenario>: FileNotFoundError") cannot satisfy it.
+  function(gbb_add_host_mutant_scenario test runner_target scenario reason)
+    add_test(NAME ${test}
+      COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_HOST_MODE_HARNESS};--runner;$<TARGET_FILE:${runner_target}>;--work;${PROJECT_BINARY_DIR}/host-mode/${test};--scenario;${scenario}"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL ${scenario}: ${reason}"
+        -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  endfunction()
+
+  # XFER-002 negative: the single import call short-circuits to GBB_OK (0 && x is 0), so the runner never
+  # imports and the second process restarts the counter at 01.
+  gbb_host_mutant_library(ignore_import host_run.c "gbb_import_battery(" "0 && gbb_import_battery(")
+  gbb_host_mutant_runner(ignore_import gabbaboy_host_mutant_ignore_import)
+  gbb_add_host_mutant_scenario(host_continuation_mutant_ignore_import
+    gabbaboy-runner-mutant-ignore_import continuation
+    "second run counter is 0x01, expected 0x02")
+
+  # D-06: open_dir first creates the directory, so a missing save dir silently exists.
+  gbb_host_mutant_library(mkdir host_save_io.c
+    "const int fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);"
+    "(void)mkdirat(AT_FDCWD, path, 0700);
+    const int fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);")
+  gbb_host_mutant_runner(mkdir gabbaboy_host_mutant_mkdir)
+  gbb_add_host_mutant_scenario(host_savedir_mutant_mkdir gabbaboy-runner-mutant-mkdir savedir-missing
+    "exit 0, expected 2")
+
+  # D-08: the import open follows symlinks, so a link to a valid-size file is accepted.
+  gbb_host_mutant_library(follow host_save_io.c "O_RDONLY | O_NOFOLLOW | O_NONBLOCK" "O_RDONLY | O_NONBLOCK")
+  gbb_host_mutant_runner(follow gabbaboy_host_mutant_follow)
+  gbb_add_host_mutant_scenario(host_import_mutant_follow gabbaboy-runner-mutant-follow import-symlink
+    "exit [01], expected 2")
+
+  # ---- D-09/T-18-13: no fault seam in any shipped artifact ----
+  # The shipped archive and the runner must define no host_save_io_test_ symbol; the same check on the
+  # test-seam archive must reject it, so the check cannot pass vacuously.
+  add_test(NAME host_no_test_seams_shipped
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host>;$<TARGET_FILE:gabbaboy-runner>"
+      "-DGBB_FORBID_DEFINED=host_save_io_test_"
+      "-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h"
+      "-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host"
+      "-DGBB_NM=${CMAKE_NM}"
+      -P "${GBB_HOST_API_SCRIPT}")
+  set_tests_properties(host_no_test_seams_shipped PROPERTIES PASS_REGULAR_EXPRESSION "host-api pass")
+  add_test(NAME host_no_test_seams_shipped_control
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host_testing>;-DGBB_FORBID_DEFINED=host_save_io_test_;-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host;-DGBB_NM=${CMAKE_NM};-P;${GBB_HOST_API_SCRIPT}"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=host-test-seam-shipped: _?host_save_io_test_fail_next"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 endif()

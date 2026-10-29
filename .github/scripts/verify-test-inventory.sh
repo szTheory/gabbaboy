@@ -50,6 +50,29 @@ filter_expected_for_platform() {
         -e '/^host_writer_target_not_regular$/d' \
         -e '/^host_sweep_exact_prefix$/d' \
         -e '/^host_rtc_final_compare$/d' \
+        -e '/^host_savedir_missing$/d' \
+        -e '/^host_savedir_not_directory$/d' \
+        -e '/^host_savedir_symlink_path$/d' \
+        -e '/^host_import_exact$/d' \
+        -e '/^host_import_zero$/d' \
+        -e '/^host_import_short$/d' \
+        -e '/^host_import_long$/d' \
+        -e '/^host_import_mgba_footer$/d' \
+        -e '/^host_import_oversize$/d' \
+        -e '/^host_import_bad_rtc$/d' \
+        -e '/^host_import_symlink$/d' \
+        -e '/^host_import_dangling_symlink$/d' \
+        -e '/^host_import_fifo$/d' \
+        -e '/^host_import_directory$/d' \
+        -e '/^host_import_stray_nobattery$/d' \
+        -e '/^host_import_device$/d' \
+        -e '/^host_rom_fifo$/d' \
+        -e '/^host_rom_directory$/d' \
+        -e '/^host_savedir_mutant_mkdir$/d' \
+        -e '/^host_import_mutant_follow$/d' \
+        -e '/^host_continuation_mutant_ignore_import$/d' \
+        -e '/^host_no_test_seams_shipped$/d' \
+        -e '/^host_no_test_seams_shipped_control$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -101,6 +124,29 @@ _self_test_platform_filter_cases() {
     host_writer_target_not_regular \
     host_sweep_exact_prefix \
     host_rtc_final_compare \
+    host_savedir_missing \
+    host_savedir_not_directory \
+    host_savedir_symlink_path \
+    host_import_exact \
+    host_import_zero \
+    host_import_short \
+    host_import_long \
+    host_import_mgba_footer \
+    host_import_oversize \
+    host_import_bad_rtc \
+    host_import_symlink \
+    host_import_dangling_symlink \
+    host_import_fifo \
+    host_import_directory \
+    host_import_stray_nobattery \
+    host_import_device \
+    host_rom_fifo \
+    host_rom_directory \
+    host_savedir_mutant_mkdir \
+    host_import_mutant_follow \
+    host_continuation_mutant_ignore_import \
+    host_no_test_seams_shipped \
+    host_no_test_seams_shipped_control \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -152,7 +198,30 @@ _self_test_platform_filter_cases() {
     host_writer_eexist \
     host_writer_target_not_regular \
     host_sweep_exact_prefix \
-    host_rtc_final_compare; do
+    host_rtc_final_compare \
+    host_savedir_missing \
+    host_savedir_not_directory \
+    host_savedir_symlink_path \
+    host_import_exact \
+    host_import_zero \
+    host_import_short \
+    host_import_long \
+    host_import_mgba_footer \
+    host_import_oversize \
+    host_import_bad_rtc \
+    host_import_symlink \
+    host_import_dangling_symlink \
+    host_import_fifo \
+    host_import_directory \
+    host_import_stray_nobattery \
+    host_import_device \
+    host_rom_fifo \
+    host_rom_directory \
+    host_savedir_mutant_mkdir \
+    host_import_mutant_follow \
+    host_continuation_mutant_ignore_import \
+    host_no_test_seams_shipped \
+    host_no_test_seams_shipped_control; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1

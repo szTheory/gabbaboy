@@ -40,7 +40,30 @@ function(gabbaboy_verify_registered_tests)
       host_writer_eexist
       host_writer_target_not_regular
       host_sweep_exact_prefix
-      host_rtc_final_compare)
+      host_rtc_final_compare
+      host_savedir_missing
+      host_savedir_not_directory
+      host_savedir_symlink_path
+      host_import_exact
+      host_import_zero
+      host_import_short
+      host_import_long
+      host_import_mgba_footer
+      host_import_oversize
+      host_import_bad_rtc
+      host_import_symlink
+      host_import_dangling_symlink
+      host_import_fifo
+      host_import_directory
+      host_import_stray_nobattery
+      host_import_device
+      host_rom_fifo
+      host_rom_directory
+      host_savedir_mutant_mkdir
+      host_import_mutant_follow
+      host_continuation_mutant_ignore_import
+      host_no_test_seams_shipped
+      host_no_test_seams_shipped_control)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

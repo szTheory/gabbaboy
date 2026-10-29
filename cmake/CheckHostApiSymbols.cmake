@@ -17,11 +17,13 @@
 #                      add src/player/slots.c;src/player/slots.h without editing this script
 #   GBB_SYMBOLS_FILE   optional pre-made nm -u listing used instead of reading GBB_ARCHIVES (injection)
 #   GBB_NM             optional preferred nm-compatible tool (CMAKE_NM)
+#   GBB_FORBID_DEFINED optional regex: no archive in GBB_ARCHIVES may DEFINE a symbol whose name matches
+#                      (read with plain nm, not nm -u). Used to prove test seams are absent from shipped code.
 #
 # Controls mode (GBB_CONTROL_SEAM_ARCHIVE and GBB_CONTROL_INCLUDE_DIR set): runs this script twice more as
 # child processes and requires each seeded defect to be rejected for its own reason only.
 #
-# Failure tokens: host-api-undeclared: <name>, host-api-include: <file>, host-api-tool-missing,
+# Failure tokens: host-test-seam-shipped: <name>, host-api-undeclared: <name>, host-api-include: <file>, host-api-tool-missing,
 # host-api-symbols-empty, host-api-archive-missing: <path>, host-api-header-missing: <path>.
 # Success lines: "host-api pass archives=<n> symbols=<m>" (m counts distinct undefined gbb_* symbols),
 # "host-api controls pass controls=2".
@@ -132,8 +134,9 @@ function(gbb_parse_nm listing out)
   set(${out} "${names}" PARENT_SCOPE)
 endfunction()
 
-# Undefined symbol names of one archive, via nm / llvm-nm. A missing tool fails; it is never a silent pass.
-function(gbb_read_undefined_symbols archive out)
+# Runs nm / llvm-nm on one archive or executable with the given flags and returns its listing. A missing
+# tool fails; it is never a silent pass.
+function(gbb_run_nm archive out_listing)
   if(NOT EXISTS "${archive}")
     message(FATAL_ERROR "host-api-archive-missing: ${archive}")
   endif()
@@ -149,15 +152,36 @@ function(gbb_read_undefined_symbols archive out)
   endforeach()
   list(REMOVE_DUPLICATES nm_candidates)
   foreach(nm_tool IN LISTS nm_candidates)
-    execute_process(COMMAND "${nm_tool}" -u "${archive}"
+    execute_process(COMMAND "${nm_tool}" ${ARGN} "${archive}"
       RESULT_VARIABLE rc OUTPUT_VARIABLE listing ERROR_VARIABLE err)
     if(rc EQUAL 0)
-      gbb_parse_nm("${listing}" names)
-      set(${out} "${names}" PARENT_SCOPE)
+      set(${out_listing} "${listing}" PARENT_SCOPE)
       return()
     endif()
   endforeach()
   message(FATAL_ERROR "host-api-tool-missing")
+endfunction()
+
+# Undefined symbol names of one archive, via nm / llvm-nm.
+function(gbb_read_undefined_symbols archive out)
+  gbb_run_nm("${archive}" listing -u)
+  gbb_parse_nm("${listing}" names)
+  set(${out} "${names}" PARENT_SCOPE)
+endfunction()
+
+# Defined symbol names of one archive or executable: plain nm output, keeping only lines that carry an
+# address and a type letter (an undefined symbol prints blanks where the address would be).
+function(gbb_read_defined_symbols archive out)
+  gbb_run_nm("${archive}" listing)
+  string(REPLACE "\r" "" listing "${listing}")
+  string(REPLACE "\n" ";" lines "${listing}")
+  set(names "")
+  foreach(line IN LISTS lines)
+    if(line MATCHES "^[0-9a-fA-F]+[ \t]+[A-Za-z][ \t]+([^ \t]+)[ \t]*$")
+      list(APPEND names "${CMAKE_MATCH_1}")
+    endif()
+  endforeach()
+  set(${out} "${names}" PARENT_SCOPE)
 endfunction()
 
 # ---- declared names ------------------------------------------------------------------------
@@ -215,6 +239,32 @@ endforeach()
 # Any real archive imports libc symbols, so an empty listing means the tool or the parser read nothing.
 if(gbb_total_symbols EQUAL 0)
   message(FATAL_ERROR "host-api-symbols-empty")
+endif()
+
+# ---- shipped-seam layer (optional) ----------------------------------------------------------
+# A shipped archive or executable must define no test seam. Each defined symbol whose name matches the
+# GBB_FORBID_DEFINED regex is reported as host-test-seam-shipped: <name>.
+if(DEFINED GBB_FORBID_DEFINED AND NOT "${GBB_FORBID_DEFINED}" STREQUAL "")
+  if(NOT DEFINED GBB_ARCHIVES OR "${GBB_ARCHIVES}" STREQUAL "")
+    message(FATAL_ERROR "GBB_FORBID_DEFINED needs GBB_ARCHIVES")
+  endif()
+  set(gbb_defined_total 0)
+  foreach(archive IN LISTS GBB_ARCHIVES)
+    gbb_read_defined_symbols("${archive}" defined_names)
+    list(REMOVE_DUPLICATES defined_names)
+    list(LENGTH defined_names defined_count)
+    # A real archive defines many symbols; zero means the tool or the parser read nothing.
+    if(defined_count EQUAL 0)
+      message(FATAL_ERROR "host-api-defined-symbols-empty: ${archive}")
+    endif()
+    math(EXPR gbb_defined_total "${gbb_defined_total} + ${defined_count}")
+    foreach(symbol IN LISTS defined_names)
+      if(symbol MATCHES "${GBB_FORBID_DEFINED}")
+        message(STATUS "host-test-seam-shipped: ${symbol}")
+        set(gbb_failed TRUE)
+      endif()
+    endforeach()
+  endforeach()
 endif()
 
 # ---- source layer --------------------------------------------------------------------------

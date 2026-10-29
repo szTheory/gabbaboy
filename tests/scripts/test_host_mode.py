@@ -14,7 +14,9 @@ import importlib.util
 import os
 import re
 import shutil
+import stat
 import sys
+import tempfile
 from pathlib import Path
 
 if not __debug__:
@@ -410,12 +412,258 @@ def scenario_rtc_final_compare(runner: str, work: Path) -> None:
     forbid_work_path(base, out, err)
 
 
+# ---- Hostile save directory, import and --rom shapes (D-06, D-08, D-30) --------------------------------------
+BOUND = 10.0  # a FIFO or special file must be refused well inside this; a blocked open is killed here
+IMPORT_TOKENS = ("save-size", "save-rtc-block", "save-symlink", "save-not-regular")
+CLOCK_WANT = 32768 + 21  # MBC3+TIMER+RAM+BATTERY with 32 KiB of RAM: SRAM plus the RTC block
+
+
+def run_bounded(runner: str, rom: Path, save_dir: Path, frames: int, cwd: Path) -> tuple[int, str, str]:
+    try:
+        return host_fixture.run_runner(
+            runner, ["--rom", str(rom), "--save-dir", str(save_dir), "--frames", str(frames)],
+            str(cwd), BOUND)
+    except TimeoutError as error:
+        raise Failure(f"blocked: the runner did not return within {BOUND} s ({error})") from error
+
+
+def entry_state(path: Path) -> tuple[int, int, int, int, object]:
+    """lstat identity (type, inode, mtime, size) plus bytes or link target. A FIFO or directory is
+    never opened, so inspecting one cannot block."""
+    info = os.lstat(path)
+    content: object = None
+    if stat.S_ISREG(info.st_mode):
+        content = path.read_bytes()
+    elif stat.S_ISLNK(info.st_mode):
+        content = os.readlink(path)
+    return (stat.S_IFMT(info.st_mode), info.st_ino, info.st_mtime_ns, info.st_size, content)
+
+
+def clock_rom(base: Path) -> Path:
+    rom = base / "clock.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC3_TIMER_RAM_BATTERY, RAM_32K))
+    return rom
+
+
+def valid_clock_image(runner: str, base: Path, rom: Path) -> bytes:
+    """A real exact-size image taken from a prior run, so the RTC block is one the core wrote."""
+    seed = fresh_dir(base / "seed")
+    code, out, err = run_bounded(runner, rom, seed, 4, base)
+    expect_clean_exit(code, err, 4)
+    image = (seed / "clock.sav").read_bytes()
+    require(len(image) == CLOCK_WANT, f"seed image is {len(image)} bytes, expected {CLOCK_WANT}")
+    return image
+
+
+def import_refusal(runner: str, work: Path, token: str, prepare) -> None:
+    """Shared body of the D-08 refusals: the hostile entry is refused with its own token before the
+    first frame, and its lstat identity, content and the directory listing are unchanged."""
+    base = fresh_dir(work)
+    rom = clock_rom(base)
+    image = valid_clock_image(runner, base, rom)
+    saves = fresh_dir(base / "saves")
+    sav = saves / "clock.sav"
+    prepare(base, saves, sav, image)
+    before_entry, before_listing = entry_state(sav), listing(saves)
+    side = [entry_state(p) for p in sorted(base.glob("outside*"))]
+    code, out, err = run_bounded(runner, rom, saves, 1, base)
+    expect_refusal(code, out, err, token,
+                   *(f"reason={other}" for other in IMPORT_TOKENS if other != token))
+    require("sweep removed" not in err, "a refused start must not sweep")
+    require(entry_state(sav) == before_entry, f"{token}: the .sav entry changed")
+    require(listing(saves) == before_listing, f"{token}: the directory listing changed")
+    require([entry_state(p) for p in sorted(base.glob("outside*"))] == side,
+            f"{token}: a file outside the save directory changed")
+    forbid_work_path(base, out, err)
+
+
+def size_scenario(token: str, size: int):
+    def scenario(runner: str, work: Path) -> None:
+        def prepare(base: Path, saves: Path, sav: Path, image: bytes) -> None:
+            if size > 1024 * 1024:
+                with open(sav, "wb") as handle:
+                    handle.truncate(size)  # sparse: the runner must refuse on size alone
+            else:
+                sav.write_bytes((image * 2)[:size])
+        import_refusal(runner, work, token, prepare)
+    return scenario
+
+
+def prepare_bad_rtc(base: Path, saves: Path, sav: Path, image: bytes) -> None:
+    broken = bytearray(image)
+    require(bytes(broken[32768:32772]) == b"GBRT", "the seed image has no GBRT block to corrupt")
+    broken[32768] ^= 0xFF  # the exact size is right; only the RTC magic is wrong
+    sav.write_bytes(bytes(broken))
+
+
+def prepare_symlink(base: Path, saves: Path, sav: Path, image: bytes) -> None:
+    (base / "outside.bin").write_bytes(image)  # a valid-size file a following reader would accept
+    os.symlink(str(base / "outside.bin"), str(sav))
+
+
+def prepare_dangling(base: Path, saves: Path, sav: Path, image: bytes) -> None:
+    os.symlink(str(base / "outside-absent.bin"), str(sav))
+
+
+def scenario_import_exact(runner: str, work: Path) -> None:
+    """The positive control for the size rows: an exact-size image from a prior run is imported."""
+    base = fresh_dir(work)
+    rom = clock_rom(base)
+    image = valid_clock_image(runner, base, rom)
+    saves = fresh_dir(base / "saves")
+    (saves / "clock.sav").write_bytes(image)
+    code, out, err = run_bounded(runner, rom, saves, 4, base)
+    expect_clean_exit(code, err, 4)
+    require("sweep removed=0" in err, "the sweep line is missing")
+    result = (saves / "clock.sav").read_bytes()
+    require(len(result) == CLOCK_WANT, f"result is {len(result)} bytes")
+    require(result[:32768] == image[:32768], "SRAM bytes changed although the guest never wrote")
+    require(listing(saves) == ["clock.sav"], f"unexpected directory entries {listing(saves)}")
+    forbid_work_path(base, out, err)
+
+
+def prepare_fifo(base: Path, saves: Path, sav: Path, image: bytes) -> None:
+    os.mkfifo(sav)
+
+
+def prepare_directory(base: Path, saves: Path, sav: Path, image: bytes) -> None:
+    sav.mkdir()
+
+
+def scenario_import_stray_nobattery(runner: str, work: Path) -> None:
+    """D-08: a no-battery cart never opens, reads, writes or counts a stray `{stem}.sav`, whatever its
+    shape. A FIFO would block an opener, and an importing runner would refuse the 100-byte file."""
+    base = fresh_dir(work)
+    rom = base / "stray.gb"
+    rom.write_bytes(host_fixture.build_rom("write5a", 0x1A, RAM_8K))  # MBC5+RAM, no battery
+    outside = base / "outside.bin"
+    outside.write_bytes(b"outside bytes")
+    for shape in ("regular", "fifo", "symlink"):
+        saves = fresh_dir(base / f"saves-{shape}")
+        sav = saves / "stray.sav"
+        if shape == "regular":
+            sav.write_bytes(bytes(range(100)))
+        elif shape == "fifo":
+            os.mkfifo(sav)
+        else:
+            os.symlink(str(outside), str(sav))
+        before, before_listing, before_outside = entry_state(sav), listing(saves), entry_state(outside)
+        code, out, err = run_bounded(runner, rom, saves, 20, base)
+        label = f"{shape} stray"
+        require(code == 0, f"{label}: exit {code}, expected 0: {err.strip()!r}")
+        require("gbb-host: ready" in err, f"{label}: missing 'gbb-host: ready'")
+        require("gbb-host: exit status=clean reason=frames stopped_at_frame=20 flush=none" in err,
+                f"{label}: missing the clean exit line with flush=none: {err.strip()!r}")
+        for token in IMPORT_TOKENS:
+            require(f"reason={token}" not in err, f"{label}: the stray was imported ({token})")
+        require(entry_state(sav) == before, f"{label}: the stray entry changed")
+        require(entry_state(outside) == before_outside, f"{label}: the symlink target changed")
+        require(listing(saves) == before_listing, f"{label}: the directory listing changed")
+        forbid_work_path(base, out, err)
+
+
+def scenario_savedir_missing(runner: str, work: Path) -> None:
+    """D-06: the save directory is never created."""
+    base = fresh_dir(work)
+    rom = base / "idle.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC1_RAM_BATTERY, RAM_8K))
+    missing = base / "absent"
+    before = listing(base)
+    code, out, err = run_bounded(runner, rom, missing, 1, base)
+    expect_refusal(code, out, err, "save-dir-missing", "reason=save-dir-not-directory")
+    require(not os.path.lexists(missing), "the runner created the missing save directory")
+    require(listing(base) == before, "a refused run changed the work directory")
+    forbid_work_path(base, out, err)
+
+
+def scenario_savedir_not_directory(runner: str, work: Path) -> None:
+    """D-06: a regular file passed as the save directory is its own refusal and is left alone."""
+    base = fresh_dir(work)
+    rom = base / "idle.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC1_RAM_BATTERY, RAM_8K))
+    not_dir = base / "notadir"
+    not_dir.write_bytes(b"not a directory")
+    before, before_listing = entry_state(not_dir), listing(base)
+    code, out, err = run_bounded(runner, rom, not_dir, 1, base)
+    expect_refusal(code, out, err, "save-dir-not-directory", "reason=save-dir-missing")
+    require(entry_state(not_dir) == before, "the file passed as --save-dir changed")
+    require(listing(base) == before_listing, "a refused run changed the work directory")
+    forbid_work_path(base, out, err)
+
+
+def scenario_savedir_symlink_path(runner: str, work: Path) -> None:
+    """D-06: a symlink anywhere in the save-dir path is allowed and resolved once. macOS `/tmp` is
+    one; an explicit symlink covers every other POSIX host."""
+    base = fresh_dir(work)
+    rom = base / "idle.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC1_RAM_BATTERY, RAM_8K))
+
+    real = fresh_dir(base / "real")
+    link = base / "link"
+    os.symlink(str(real), str(link))
+    code, out, err = run_bounded(runner, rom, link, 2, base)
+    expect_clean_exit(code, err, 2)
+    require((real / "idle.sav").is_file(), "the .sav was not written inside the real directory")
+    require(os.path.islink(link), "the save-dir symlink was replaced")
+    forbid_work_path(base, out, err)
+
+    tmp = Path(tempfile.mkdtemp(prefix="gbb-host-", dir="/tmp"))
+    try:
+        code, out, err = run_bounded(runner, rom, tmp, 2, base)
+        expect_clean_exit(code, err, 2)
+        require((Path(os.path.realpath(tmp)) / "idle.sav").is_file(), "no .sav under the /tmp save dir")
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def rom_special_scenario(kind: str):
+    def scenario(runner: str, work: Path) -> None:
+        """D-30: a FIFO or directory passed as --rom is refused as rom-not-regular, never blocks, and is
+        never mistaken for an unreadable or oversize file."""
+        base = fresh_dir(work)
+        holder = fresh_dir(base / f"rom-{kind}")
+        rom = holder / "game.gb"  # no trailing slash, so the stem `game` is valid
+        if kind == "fifo":
+            os.mkfifo(rom)
+        else:
+            rom.mkdir()
+        saves = fresh_dir(base / "saves")
+        before = entry_state(rom)
+        code, out, err = run_bounded(runner, rom, saves, 1, base)
+        expect_refusal(code, out, err, "rom-not-regular", "reason=rom-unreadable", "reason=rom-size")
+        require(entry_state(rom) == before, f"the {kind} ROM entry changed")
+        require(stat.S_IFMT(os.lstat(rom).st_mode) == (stat.S_IFIFO if kind == "fifo" else stat.S_IFDIR),
+                f"the {kind} ROM entry changed type")
+        require(listing(saves) == [], f"refused run changed the save directory: {listing(saves)}")
+        forbid_work_path(base, out, err)
+    return scenario
+
+
 SCENARIOS = {
     "periodic-flush": scenario_periodic_flush,
     "first-write": scenario_first_write,
     "idempotent-rerun": scenario_idempotent_rerun,
     "sweep": scenario_sweep,
     "rtc-final-compare": scenario_rtc_final_compare,
+    "savedir-missing": scenario_savedir_missing,
+    "savedir-not-directory": scenario_savedir_not_directory,
+    "savedir-symlink-path": scenario_savedir_symlink_path,
+    "import-exact": scenario_import_exact,
+    "import-zero": size_scenario("save-size", 0),
+    "import-short": size_scenario("save-size", CLOCK_WANT - 1),
+    "import-long": size_scenario("save-size", CLOCK_WANT + 1),
+    "import-mgba-footer": size_scenario("save-size", 32768 + 48),
+    "import-oversize": size_scenario("save-size", 8 * 1024 * 1024 + 1),
+    "import-bad-rtc": lambda runner, work: import_refusal(runner, work, "save-rtc-block", prepare_bad_rtc),
+    "import-symlink": lambda runner, work: import_refusal(runner, work, "save-symlink", prepare_symlink),
+    "import-dangling-symlink": lambda runner, work: import_refusal(runner, work, "save-symlink",
+                                                                    prepare_dangling),
+    "import-fifo": lambda runner, work: import_refusal(runner, work, "save-not-regular", prepare_fifo),
+    "import-directory": lambda runner, work: import_refusal(runner, work, "save-not-regular",
+                                                             prepare_directory),
+    "import-stray-nobattery": scenario_import_stray_nobattery,
+    "rom-fifo": rom_special_scenario("fifo"),
+    "rom-directory": rom_special_scenario("directory"),
     "continuation": scenario_continuation,
     "rom-max": scenario_rom_max,
     "rom-oversize": scenario_rom_oversize,
