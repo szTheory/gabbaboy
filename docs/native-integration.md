@@ -274,6 +274,117 @@ guest's CRAM. The palette is instance configuration that survives `gbb_reset`
 and `gbb_load_rom`. A set never recolours a completed frame: it applies to
 
 
+## Host process contract
+
+`gabbaboy-runner` has a second invocation form for a process supervisor. Host mode is a headless
+conformance adapter, not a play surface: it loads a ROM, imports an exact-size raw battery file,
+runs fixed frames and publishes the battery image. It uses only the public C API and the same core
+as every other mode.
+
+```sh
+gabbaboy-runner --rom ROM --save-dir DIR [--profile dmg|cgb] [--frames N]
+gabbaboy-runner --print-save-format --rom ROM [--profile dmg|cgb]
+```
+
+`--rom` and `--save-dir` select host mode; `--profile` defaults to `dmg`. Without `--frames` the
+runner is paced to real time and runs until it is stopped. With `--frames N` (a decimal count from 1
+to 4,294,967,295) it runs exactly `N` frames as fast as it can and exits. One frame is 70,224 dots.
+Each value flag takes its value as the next argument: `--flag=value`, positional arguments, unknown
+flags, repeated flags, missing or empty values and acceptance-mode flags are refused with
+`invalid-arguments: reason=<token>` and exit code 2. `--print-save-format` takes only `--rom` and
+`--profile`.
+
+### Save file and stem
+
+The battery image is the raw file `{DIR}/{stem}.sav`: exactly the bytes of the core's battery API,
+with no envelope. The stem is the last component of the ROM path with one final extension removed,
+where an extension is a dot followed by 1 to 8 ASCII letters or digits; a dot in the first byte never
+starts an extension. The stem is validated and never rewritten. These stems are refused with exit code
+2 before any filesystem access: an empty stem, a stem that starts with a dot, one holding a control
+character, DEL or a backslash, one that is not strict UTF-8, and one longer than 200 bytes. Playstead's
+`deletingPathExtension` agrees with this rule for `.gb`, `.gbc`, `.GB`, `.GBC` and `.bin`, and differs
+for other extensions, so a supervisor should name its ROM files with one of those. A missing `.sav`
+is a fresh image. A `.sav` of any other size, a symlink, a special file, or a file that changes while
+it is read is refused and left untouched. GabbaBoy makes no save interoperability claim with any other
+emulator; the image is its own format, named by the table below.
+
+### Durability and cadence
+
+Each flush writes a temporary file in the save directory, syncs it, renames it over `{stem}.sav` and
+syncs the directory. The result is an old-or-new image after process death or a crash; no power-loss guarantee
+is made, and the tests do not establish one. The runner checks the battery generation at every frame
+boundary. A change is flushed after 16 quiet frames, or once the first unflushed change is 300 frames old.
+The runner also exports and compares the whole image every 3,600 frames, which catches clock-only drift on
+timer cartridges. An abrupt stop therefore loses at most 300 frames plus one write of cartridge RAM changes,
+and at most 3,600 frames of clock-only drift. After a failed flush the image stays dirty and the runner
+retries 16 frames later. Before the first frame the runner removes stale temporary files named
+`.{stem}.sav.tmp-` followed by anything, which only a crashed writer leaves.
+
+Run one writer per save directory and ROM stem; a second runner on the same pair is unsupported and
+its live temporary file may be swept.
+
+The runner records no wall-clock time; the game clock advances only while the runner runs. It never
+calls `gbb_rtc_catch_up`: an imported timer image resumes at its saved clock, and real time that
+passes while no runner is running is not added to it. `gbb_get_input_clock` reports an
+instance's input-admission clock (queued events, emulated time and the last queued time); it is the
+public query a host uses to queue input after `gbb_load_state` restored a different time.
+
+### Exit codes and signals
+
+Host mode emits exactly these exit codes. The table is checked cell by cell against
+`docs/host-contract.json` (backticks are formatting only).
+
+| Code | Name | Meaning |
+|---|---|---|
+| `0` | `clean` | Signal or `--frames` end; the flush succeeded or there was nothing to write |
+| `1` | `failure` | I/O or flush failure, allocation failure, or a core stop mid-run |
+| `2` | `refusal` | Refused before any save mutation |
+| none (death by signal) | `crash` | Death by signal (shells show 128+N); the `.sav` is the last completed flush |
+
+Acceptance mode (ROM, manifest-case and manifest-suite invocations) keeps its own exit codes, which
+host mode never emits and does not change. The runner stops on `SIGTERM` always, and on `SIGINT` and
+`SIGHUP` unless they were ignored at start. It checks for a stop at frame boundaries, finishes no
+partial frame, flushes the image, prints `gbb-host: exit` and returns 0 when the flush succeeded; a
+second signal takes the default action. A refusal prints `gbb-host: refused reason=<token>` and never
+prints `gbb-host: ready`. Diagnostics name stems and reason tokens, never a caller path.
+
+### Windows
+
+HOST-01/02 are POSIX-only in v0.3. Windows never generates SIGTERM and TerminateProcess cannot be handled; no console control handler is installed.
+On Windows `--save-dir` mode is refused with
+`gbb-host: refused reason=windows-unsupported` and exit code 2 before any filesystem access.
+`--print-save-format` runs on every platform because it writes nothing.
+
+### Save-format ids
+
+`--print-save-format --rom ROM` prints one line, `save_format=<id> bytes=<n>`, and exits 0 without
+creating any file. The id and byte count come from this table, which is published as
+`share/gabbaboy/host-contract.json` in an installed package and as `docs/host-contract.json` in the
+source tree. An id always means the same bytes; a new layout gets a new id, and rows are only ever appended. The Bytes column is the whole `.sav`: cartridge RAM, followed by the 21-byte clock block for
+timer cartridges. The MBC1 32 KiB row covers header ROM codes `0x00` through `0x04`.
+
+| Type | RAM code | Id | Bytes |
+|---|---|---|---|
+| `0x03` | `0x02` | `gabbaboy-mbc1-sram-8k-v1` | 8,192 |
+| `0x03` | `0x03` | `gabbaboy-mbc1-sram-32k-v1` | 32,768 |
+| `0x06` | `0x00` | `gabbaboy-mbc2-nibble-512-v1` | 512 |
+| `0x0F` | `0x00` | `gabbaboy-mbc3-rtc-only-v1` | 21 |
+| `0x10` | `0x02` | `gabbaboy-mbc3-rtc-sram-8k-v1` | 8,213 |
+| `0x10` | `0x03` | `gabbaboy-mbc3-rtc-sram-32k-v1` | 32,789 |
+| `0x13` | `0x02` | `gabbaboy-mbc3-sram-8k-v1` | 8,192 |
+| `0x13` | `0x03` | `gabbaboy-mbc3-sram-32k-v1` | 32,768 |
+| `0x1B` | `0x02` | `gabbaboy-mbc5-sram-8k-v1` | 8,192 |
+| `0x1B` | `0x03` | `gabbaboy-mbc5-sram-32k-v1` | 32,768 |
+| `0x1B` | `0x04` | `gabbaboy-mbc5-sram-128k-v1` | 131,072 |
+| `0x1B` | `0x05` | `gabbaboy-mbc5-sram-64k-v1` | 65,536 |
+| `0x1E` | `0x02` | `gabbaboy-mbc5-sram-8k-v1` | 8,192 |
+| `0x1E` | `0x03` | `gabbaboy-mbc5-sram-32k-v1` | 32,768 |
+| `0x1E` | `0x04` | `gabbaboy-mbc5-sram-128k-v1` | 131,072 |
+| `0x1E` | `0x05` | `gabbaboy-mbc5-sram-64k-v1` | 65,536 |
+
+save_format=none marks a cartridge without a battery; it is not a save-format id. A cartridge
+of that kind creates no `.sav` file.
+
 ## Support and upgrade
 
 The tracked [v0.1.0 support ledger](support/v0.1.0.md) describes the exact

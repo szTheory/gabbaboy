@@ -103,6 +103,27 @@ hardware behavior; its current protocol uses WRAM at 0xC000. It runs from the
 cartridge entry point with a 200,000 half-dot maximum and bounded caller-owned
 trace storage.
 
+## Host mode (headless)
+
+Host mode is a headless conformance adapter, not a play surface. It lets a
+process supervisor run a ROM for a number of frames, or until it is stopped,
+against a raw battery file:
+
+```sh
+./build/gabbaboy-runner --rom game.gb --save-dir saves [--profile dmg|cgb] [--frames N]
+./build/gabbaboy-runner --print-save-format --rom game.gb [--profile dmg|cgb]
+```
+
+The first form imports and publishes `saves/game.sav` (the exact battery bytes,
+atomically replaced, POSIX only) and records no wall-clock time. The second
+prints the cartridge's GabbaBoy save-format id and byte count and writes
+nothing. Flags, stem rule, flush cadence, exit codes, signals, the Windows
+refusal and the single-writer rule are in the
+[host process contract](docs/native-integration.md#host-process-contract); the
+machine-readable table is `docs/host-contract.json`, installed as
+`share/gabbaboy/host-contract.json`. The player's own numbered state slots are
+described in the [save contract](docs/cartridge-and-saves.md#host-raw-saves-and-player-state-slots).
+
 ## Embedding contract
 
 Consumers create and destroy an opaque `gbb_instance`; successful ROM loads
