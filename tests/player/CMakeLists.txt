@@ -425,7 +425,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
     file(MAKE_DIRECTORY "${slot_home}")
     add_test(NAME ${test_name} COMMAND test_player_slots ${CMAKE_MATCH_1}
       ${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb)
-    set_tests_properties(${test_name} PROPERTIES TIMEOUT 120
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 60
       ENVIRONMENT "SDL_AUDIO_DRIVER=dummy;HOME=${slot_home};CFFIXED_USER_HOME=${slot_home}")
   elseif(test_name MATCHES "^player_slot_mutant_(no_rebase|command_guard)$")
     # Two defects the slot tests must catch, each a copy of main.c with one edit (the anchor must occur exactly
@@ -456,7 +456,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       "-DGBB_CMD=$<TARGET_FILE:${mutant_target}>;${mutant_case}${mutant_args}"
       -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${mutant_regex}"
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
-    set_tests_properties(${test_name} PROPERTIES TIMEOUT 120
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 60
       ENVIRONMENT "SDL_AUDIO_DRIVER=dummy;HOME=${slot_home};CFFIXED_USER_HOME=${slot_home}")
   elseif(test_name MATCHES "^player_slot_menu_shortcuts(_control)?$")
     # Research assumption A2 as a check: SDL's macOS main menu must bind none of Command-S/L/Z, or Cocoa would
