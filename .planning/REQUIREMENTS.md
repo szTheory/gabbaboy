@@ -69,24 +69,24 @@ Each requirement names the automated check that proves it (D-105). Every check c
 
 ### Player
 
-- [ ] **PLAY-01**: The SDL player saves and loads numbered state slots through the public API only.
+- [x] **PLAY-01**: The SDL player saves and loads numbered state slots through the public API only.
   - A refused or mismatched slot leaves the running game untouched and shows a clear message.
   - This is covered by automated player tests, including a wrong-ROM slot control.
 
 ### Host contract (INT-01a)
 
-- [ ] **HOST-01**: A runner mode `--rom <path> --save-dir <dir>` writes battery saves as a raw `{saveDir}/{romBaseName}.sav`.
+- [x] **HOST-01**: A runner mode `--rom <path> --save-dir <dir>` writes battery saves as a raw `{saveDir}/{romBaseName}.sav`.
   - The save is atomic: an O_EXCL temp file in the save dir, then a rename.
   - Saves flush periodically.
   - The ROM basename is sanitised, with no separators or `..`.
   - Symlinked targets are refused.
   - Import is bounded to the size the cartridge header implies, with no partial mutation on refusal.
   - Each rule has a negative test.
-- [ ] **HOST-02**: On SIGTERM the runner finishes the current frame, flushes the save, and exits 0 well within 2 s.
+- [x] **HOST-02**: On SIGTERM the runner finishes the current frame, flushes the save, and exits 0 well within 2 s.
   - The handling is a `sig_atomic_t` flag in the adapter only; the core has no signal code.
   - One documented exit-code table covers clean quit, refusal, failure and crash.
   - Real-signal tests run on POSIX; Windows is declared exempt.
-- [ ] **HOST-03**: GabbaBoy declares its own save-format ids and byte sizes for each cartridge kind (MBC3+RTC is 32,789 B), documented in a machine-readable table. A CTest checks the table against the produced files.
+- [x] **HOST-03**: GabbaBoy declares its own save-format ids and byte sizes for each cartridge kind (MBC3+RTC is 32,789 B), documented in a machine-readable table. A CTest checks the table against the produced files.
 
 ### Release
 
@@ -144,10 +144,10 @@ These are deferred and tracked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTON
 | STATE-04 | Phase 17 | Complete |
 | STATE-05 | Phase 17 | Complete |
 | STATE-06 | Phase 17 | Complete |
-| PLAY-01 | Phase 18 | Pending |
-| HOST-01 | Phase 18 | Pending |
-| HOST-02 | Phase 18 | Pending |
-| HOST-03 | Phase 18 | Pending |
+| PLAY-01 | Phase 18 | Complete |
+| HOST-01 | Phase 18 | Complete |
+| HOST-02 | Phase 18 | Complete |
+| HOST-03 | Phase 18 | Complete |
 | REL-01 | Phase 19 | Pending |
 
 **Coverage:**

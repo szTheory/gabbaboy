@@ -56,9 +56,9 @@ on a RAM-bearing type are `GBB_UNSUPPORTED_RAM_SIZE`, ROM code `$08` and above i
 `GBB_UNSUPPORTED_ROM_SIZE`, and a length above 4 MiB is `GBB_ROM_TOO_LARGE`.
 
 The ROM length ceiling is type-aware. Images of MBC5 types `$19`–`$1E` may be up
-to 8 MiB (`GBB_MAX_ROM_SIZE`); MBC3 images are bounded by the 4 MiB ceiling
+to 8 MiB; MBC3 images are bounded by the 4 MiB ceiling
 above; every other type, including a type byte the loader does not recognize,
-keeps the earlier 2 MiB ceiling (`GBB_LEGACY_MAX_ROM_SIZE`) and the same
+keeps the earlier 2 MiB ceiling and the same
 `GBB_ROM_TOO_LARGE` result as before this change. A length above 8 MiB is always `GBB_ROM_TOO_LARGE`, and size codes
 above a type's maximum return `GBB_UNSUPPORTED_ROM_SIZE`. After validation the
 core allocates at most 8 MiB of ROM plus 128 KiB of cartridge RAM. The header's
@@ -419,6 +419,44 @@ The player's `--clock-unix <seconds>` option exists only for the
 clock into fresh-process tests. Any other use is refused with a usage error.
 The player's own on-screen status line has no pixel-level UI test; the status
 text is checked through the continuation tests.
+
+## Host raw saves and player state slots
+
+Two surfaces keep saves outside the player's `.gbb` envelope, and they are different things.
+
+**Host raw saves.** `gabbaboy-runner --save-dir DIR` (see the [host process
+contract](native-integration.md#host-process-contract)) reads and writes
+`{saveDir}/{stem}.sav`: the exact battery bytes of the core's battery API with no
+envelope and no checksum. The size is fixed by the cartridge, and a timer
+cartridge's file ends in the 21-byte clock block. The player's `.gbb` files
+under its per-user directory are a separate format with a header, an identity
+and a checksum, and the player never reads or writes a host `.sav`.
+
+**Player state slots.** The macOS player keeps nine numbered machine-state
+slots per game and model. Keys `1` to `9` select a slot (selecting changes nothing and
+shows whether the slot is empty, saved or unreadable), `⌘S` saves the selected slot, `⌘L` loads it and `⌘Z`
+undoes the last load; a held key does not repeat the action. A slot holds the
+core's native machine state (see [Native machine states](#native-machine-states)),
+so it is tied to the exact ROM bytes, the profile and the GabbaBoy release that
+saved it. A release-bound slot from any other release, a slot from a different
+game or model, and a damaged slot are refused with a message and change
+nothing. Slot files live beside the player's saves in the per-user directory,
+named from the ROM digest, the model and the slot digit alone.
+
+Loading a slot also replaces the game's battery save: the state includes the
+machine's cartridge RAM and clock, and the player's autosave then writes that
+RAM as the battery save like any other change. Before the first load, and
+whenever the battery has changed since the previous load, the player writes the
+in-game battery to a battery-preload backup file, so loading slot A and then slot
+B still keeps the save you had before A. The player remembers the battery each
+load left behind in a small guard file beside the slots, so the next session's
+first load does not mistake it for an in-game save and overwrite that backup. If
+the guard file cannot be written the load still applies, and its status message
+warns that the backup may be replaced next session. Each load also writes the state it
+replaced to an undo file; `⌘Z` swaps the live state with it, so pressing it twice
+returns to where you started. If either backup cannot be
+written the load is not applied and the live game is unchanged. Loading a slot
+restores the saved clock exactly and never catches it up to the host clock.
 
 ## Save timing, replacement, and failure behavior
 

@@ -34,6 +34,31 @@ function(gbb_player_mutant_binary target main_source colour_source)
   set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
 endfunction()
 
+# The player-slot test executable: tests/player/test_slots.c embeds a copy of src/player/main.c (the real one, or a
+# mutated copy named by `main_source`) the way test_reset_transition.c does. The mutant executables are named
+# *variant*, not *mutant*, because verify-core-linkage.py requires every *mutant* target that links the
+# acceptance helpers to carry a mutant core and only the player source is mutated here.
+function(gbb_player_slots_test_executable target main_source)
+  add_executable(${target}
+    test_slots.c
+    "${PROJECT_SOURCE_DIR}/src/player/audio.c"
+    "${PROJECT_SOURCE_DIR}/src/player/colour.c"
+    "${PROJECT_SOURCE_DIR}/src/player/input.c"
+    "${PROJECT_SOURCE_DIR}/src/player/presentation.c"
+    "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
+  target_link_libraries(${target} PRIVATE
+    gabbaboy-player-session-test gabbaboy_accept gabbaboy_player_slots gabbaboy_host)
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE
+    GBB_PLAYER_AUDIO_TESTING GBB_PLAYER_SESSION_TESTING
+    GABBABOY_PLAYER_DEMO_ROM="${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb"
+    GABBABOY_PLAYER_INVALID_ROM="${PROJECT_SOURCE_DIR}/fixtures/visible-demo/LICENSE.txt")
+  if(NOT "${main_source}" STREQUAL "")
+    target_compile_definitions(${target} PRIVATE GBB_PLAYER_MAIN_C="${main_source}")
+  endif()
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+endfunction()
+
 # D-30: the pinned SHA-256 of the 160x144 RGBA buffer the player uploads for colour-attr.gb after
 # 30 frames. The close-out plan re-runs the player suite at the merged head, so a later core
 # change cannot leave this pin stale unnoticed.
@@ -259,7 +284,29 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
     else()
       add_test(NAME ${test_name} COMMAND test_player_audio ${test_name})
     endif()
-  elseif(test_name MATCHES "^player_input_(time|events|focus|sources|reconnect|focus_audio)$")
+  elseif(test_name STREQUAL "player_input_mutant_rebase_silent")
+    # IN-03 control: input.c with the old silent handling of a restored queue too full for the releases (empty
+    # mirror, nothing pending, not paused, success). The rebase_guard case must fail. The executable is built
+    # from test_input.c and the mutated input.c only, so no second copy of input.c is linked; it is named
+    # *variant* because only the player source is mutated, not the core.
+    set(mutant_input "${CMAKE_CURRENT_BINARY_DIR}/input_rebase_silent.c")
+    gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/input.c" "${mutant_input}"
+      "        state->paused = true;
+        return false;"
+      "        state->pending_count = 0u;
+        state->held_buttons = 0u;
+        state->release_pending_buttons = 0u;
+        return true;")
+    add_executable(test_player_input_variant_rebase_silent test_input.c "${mutant_input}")
+    target_include_directories(test_player_input_variant_rebase_silent PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
+    target_link_libraries(test_player_input_variant_rebase_silent PRIVATE GabbaBoy::core SDL3::SDL3)
+    target_compile_features(test_player_input_variant_rebase_silent PRIVATE c_std_17)
+    set_target_properties(test_player_input_variant_rebase_silent PROPERTIES C_EXTENSIONS OFF)
+    add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_player_input_variant_rebase_silent>;player_input_rebase_guard;${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=not ok 1 - player_input_rebase_guard"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  elseif(test_name MATCHES "^player_input_(time|events|focus|sources|reconnect|focus_audio|rebase_guard)$")
     if(NOT TARGET test_player_input)
       add_executable(test_player_input test_input.c)
       target_link_libraries(test_player_input PRIVATE gabbaboy-player-adapter)
@@ -377,7 +424,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       "${PROJECT_SOURCE_DIR}/src/player/presentation.c"
       "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
     target_link_libraries(test_player_reset_transition PRIVATE
-      gabbaboy-player-session-test gabbaboy_accept)
+      gabbaboy-player-session-test gabbaboy_accept gabbaboy_player_slots gabbaboy_host)
     target_compile_features(test_player_reset_transition PRIVATE c_std_17)
     target_compile_definitions(test_player_reset_transition PRIVATE
       GBB_PLAYER_AUDIO_TESTING GBB_PLAYER_SESSION_TESTING
@@ -389,6 +436,71 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       COMMAND test_player_reset_transition)
     set_tests_properties(player_reset_transition PROPERTIES
       ENVIRONMENT "SDL_AUDIO_DRIVER=dummy")
+  elseif(test_name MATCHES "^player_slot_(keys|reanchor|status_line|help_text)$")
+    # Phase 18 plan 06: the slot keys, status line, input re-anchor and help text through the real SDL event
+    # queue. Each test gets its own HOME so the slot files of parallel tests never meet (the ROM digest, and so
+    # the file names, are the same). The shared executable embeds src/player/main.c.
+    if(NOT TARGET test_player_slots)
+      gbb_player_slots_test_executable(test_player_slots "")
+    endif()
+    set(slot_home "${CMAKE_CURRENT_BINARY_DIR}/${test_name}-home")
+    file(MAKE_DIRECTORY "${slot_home}")
+    add_test(NAME ${test_name} COMMAND test_player_slots ${CMAKE_MATCH_1}
+      ${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb)
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 60
+      ENVIRONMENT "SDL_AUDIO_DRIVER=dummy;HOME=${slot_home};CFFIXED_USER_HOME=${slot_home}")
+  elseif(test_name MATCHES "^player_slot_mutant_(no_rebase|command_guard)$")
+    # Two defects the slot tests must catch, each a copy of main.c with one edit (the anchor must occur exactly
+    # once). no_rebase drops player_input_rebase from apply_slot_load: the reanchor case must fail. command_guard
+    # drops !command from the bare R branch: Command-R would reset, and the keys case must fail.
+    set(mutant_kind "${CMAKE_MATCH_1}")
+    set(mutant_main "${CMAKE_CURRENT_BINARY_DIR}/main_slot_${mutant_kind}.c")
+    if(mutant_kind STREQUAL "no_rebase")
+      gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/main.c" "${mutant_main}"
+        "if (!player_input_rebase(&app->input, host_now, &result->clock)) app->user_paused = true;"
+        "/* mutant: the re-anchor call is removed */")
+      set(mutant_case reanchor)
+      set(mutant_regex "FAIL reanchor")
+      set(mutant_args "")
+    else()
+      gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/main.c" "${mutant_main}"
+        "!app->dialog_pending && !command && key->scancode == SDL_SCANCODE_R"
+        "!app->dialog_pending && key->scancode == SDL_SCANCODE_R")
+      set(mutant_case keys)
+      set(mutant_regex "FAIL keys")
+      set(mutant_args ";${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb")
+    endif()
+    set(mutant_target test_player_slots_variant_${mutant_kind})
+    gbb_player_slots_test_executable(${mutant_target} "${mutant_main}")
+    set(slot_home "${CMAKE_CURRENT_BINARY_DIR}/${test_name}-home")
+    file(MAKE_DIRECTORY "${slot_home}")
+    add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:${mutant_target}>;${mutant_case}${mutant_args}"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${mutant_regex}"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 60
+      ENVIRONMENT "SDL_AUDIO_DRIVER=dummy;HOME=${slot_home};CFFIXED_USER_HOME=${slot_home}")
+  elseif(test_name MATCHES "^player_slot_menu_shortcuts(_control)?$")
+    # Research assumption A2 as a check: SDL's macOS main menu must bind none of Command-S/L/Z, or Cocoa would
+    # consume the slot chords before the player saw them. The control seeds a Command-S item and must be caught.
+    if(NOT TARGET test_player_menu_shortcuts)
+      add_executable(test_player_menu_shortcuts test_menu_shortcuts.c)
+      target_link_libraries(test_player_menu_shortcuts PRIVATE SDL3::SDL3
+        "-framework Foundation" "-framework AppKit" objc)
+      target_compile_features(test_player_menu_shortcuts PRIVATE c_std_17)
+      set_target_properties(test_player_menu_shortcuts PROPERTIES C_EXTENSIONS OFF)
+    endif()
+    if(test_name STREQUAL "player_slot_menu_shortcuts")
+      add_test(NAME ${test_name} COMMAND test_player_menu_shortcuts)
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 60
+        PASS_REGULAR_EXPRESSION "menu-shortcuts pass items=[1-9]")
+    else()
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=$<TARGET_FILE:test_player_menu_shortcuts>;--seed-conflict"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=menu-shortcut-conflict s"
+        -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 60)
+    endif()
   elseif(test_name MATCHES "^player_script_smoke_surface(_selftest|_main_selftest)?$")
     # D-38: the scripted-smoke diagnostic stays free of environment, network, save writes
     # and persistence. The selftest runs the same check on a copy with an injected getenv

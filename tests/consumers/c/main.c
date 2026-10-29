@@ -317,6 +317,19 @@ static int cgb_api_smoke(void) {
     if (gbb_get_info(machine, &info) != GBB_OK || info.mode != GBB_MODE_CGB ||
         info.profile != 2u || info.struct_size != GBB_INFO_SIZE_V1 ||
         info.cgb_support != GBB_CGB_SUPPORT_ONLY) goto done;
+    /* The input clock: a fresh machine has nothing queued, so the cursor equals now; a struct_size
+     * below the V1 size is refused. */
+    {
+        gbb_input_clock in_clock;
+        memset(&in_clock, 0xA7, sizeof(in_clock));
+        in_clock.struct_size = sizeof(gbb_input_clock);
+        if (gbb_get_input_clock(machine, &in_clock) != GBB_OK ||
+            in_clock.struct_size != GBB_INPUT_CLOCK_SIZE_V1 || in_clock.queued_count != 0u ||
+            in_clock.last_queued_half_dots != in_clock.now_half_dots) goto done;
+        memset(&in_clock, 0xA7, sizeof(in_clock));
+        in_clock.struct_size = 23u;
+        if (gbb_get_input_clock(machine, &in_clock) != GBB_INVALID_ARGUMENT) goto done;
+    }
     /* A zero struct_size is rejected and leaves every other byte alone. */
     {
         gbb_info zero;

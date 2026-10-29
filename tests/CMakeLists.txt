@@ -1674,7 +1674,8 @@ foreach(case zero exact short null canary)
 endforeach()
 
 add_executable(test_runner test_runner.c)
-target_link_libraries(test_runner PRIVATE gabbaboy_runner_support)
+# test_runner embeds src/runner/main.c, which dispatches host mode, so it links the host library too.
+target_link_libraries(test_runner PRIVATE gabbaboy_runner_support gabbaboy_host)
 target_compile_features(test_runner PRIVATE c_std_17)
 set_target_properties(test_runner PROPERTIES C_EXTENSIONS OFF)
 add_test(NAME runner_help

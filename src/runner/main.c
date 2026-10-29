@@ -1,6 +1,7 @@
 #include "gabbaboy/gabbaboy.h"
 #include "gbb_accept.h"
 #include "acceptance.h"
+#include "gbb_host.h"
 #include "../core/gabbaboy_test.h"
 
 #include <errno.h>
@@ -439,8 +440,9 @@ static void print_usage(FILE *stream, const char *program) {
       "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) [--model <id> | --profile dmg|cgb] [--revision <r>] [--failure-dir <dir>] [--receipt]\n"
       "  %s --acceptance <cases.txt> --case <id> --observe [--input-script <file>] [--frame-digest-at <half-dots>] [--pcm-digest] [--dump-checkpoints <dir>]\n"
       "  %s --acceptance <cases.txt> --case <id> --raw-verdict [--receipt]\n"
-      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) --mutate drop:<BUTTON> [--receipt]\n",
-      program, program, program, program, program, program, program);
+      "  %s --acceptance <cases.txt> (--case <id> | --suite --expect-excluded <n>) --mutate drop:<BUTTON> [--receipt]\n"
+      "  %s --rom <rom.gb> --save-dir <dir> [--profile dmg|cgb] [--frames <n>]\n",
+      program, program, program, program, program, program, program, program);
 }
 
 /* Strict decimal parse for --frame-digest-at: digits only, at most the 600 s script bound. */
@@ -452,6 +454,7 @@ static int parse_half_dots(const char *text,uint64_t *out) {
 }
 
 int main(int argc,char **argv) {
+    if(gbb_host_is_host_invocation(argc,argv))return gbb_host_main(argc,argv);
     if(argc==2&&strncmp(argv[1],"--",2)!=0)return run_original_tracer(argv[1]);
     const char *manifest=NULL,*selected=NULL,*acceptance=NULL;int receipt=0,suite=0;
     gbb_acceptance_options options;memset(&options,0,sizeof(options));

@@ -64,7 +64,7 @@ Milestone-wide rules:
 
 - [x] **Phase 16: Tune-up and v0.2 Debt Closure** - Archive v0.2 phase records behind a lint, wire the Phase 8 verifiers, add the perf gate and CI/planning hygiene checks, and ship v0.2.1 (completed 2026-10-26)
 - [x] **Phase 17: Native Save State Core** - Public `gbb_state_size`/`gbb_save_state`/`gbb_load_state` with exact continuation, transactional bounded loads, machine-checked completeness and portable canonical bytes (completed 2026-10-28)
-- [ ] **Phase 18: Player Save Slots and Host Contract** - Numbered state slots in the SDL player and a `--rom`/`--save-dir` runner with atomic raw `.sav`, SIGTERM save-and-exit, an exit-code table and declared save-format ids
+- [x] **Phase 18: Player Save Slots and Host Contract** - Numbered state slots in the SDL player and a `--rom`/`--save-dir` runner with atomic raw `.sav`, SIGTERM save-and-exit, an exit-code table and declared save-format ids (completed 2026-10-29)
 - [ ] **Phase 19: Qualified v0.3.0 Release** - Publish `v0.3.0` from its exact tag after a green exact-tag rehearsal, with a scoped support ledger and tag-bound receipts
 
 ## Phase Details
@@ -177,7 +177,33 @@ Plans:
   3. A real-signal POSIX test sends SIGTERM and observes the runner finish the current frame, flush the save and exit 0 well within 2 s; a check rejects signal code seeded into the core (handling stays a `sig_atomic_t` flag in the adapter), each row of the documented exit-code table (clean quit, refusal, failure, crash) is exercised, and Windows is declared exempt.
   4. A machine-readable table declares GabbaBoy's save-format id and byte size for each cartridge kind (MBC3+RTC is 32,789 B), and a CTest checks it against the files the runner produces, failing on a seeded size or id mismatch.
 
-**Plans**: TBD
+**Plans**: 9/9 plans complete (gap slot 18-10 reserved; cap 10)
+
+Plans:
+**Wave 1**
+- [x] 18-01-PLAN.md — Host tracer: `gabbaboy_host`, runner `--rom/--save-dir/--frames`, bounded 8 MiB ROM reader, exact-size import, frozen atomic writer, two-process continuation (W1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 18-02-PLAN.md — Host grammar, stem and Windows-gate negatives with a transform mutant; D-04 API-only and dirty-list checks (W2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [x] 18-03-PLAN.md — `gbb_get_input_clock` public getter, mutants, installed consumers, API docs (W3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [x] 18-04-PLAN.md — Host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep (W4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [x] 18-05-PLAN.md — SDL-free slot engine: scratch-validated all-or-nothing load, undo, battery guard, messages, key decoder, re-anchor (W5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [x] 18-06-PLAN.md — Player slot keys, status line, input rebase, help/limitations, macOS menu-shortcut check (W6)
+- [x] 18-07-PLAN.md — SIGTERM/SIGINT/SIGHUP handling, exit table, real-signal harness with decoys, core no-signal check (W6)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [x] 18-08-PLAN.md — `docs/host-contract.json`, `--print-save-format`, save-format completeness/produced-file/freeze checks (W7)
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [x] 18-09-PLAN.md — Installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification (W8)
 **UI hint**: yes
 
 ### Phase 19: Qualified v0.3.0 Release
@@ -199,13 +225,13 @@ Plans:
 |-----------|--------|-------|--------|---------|
 | v0.1 Limited DMG Preview | 7 | 64/64 | Complete | 2026-10-10 |
 | v0.2 Color & Cartridge Breadth | 10 | 170/170 | Complete | 2026-10-24 |
-| v0.3 Save States & Host Contract | 4 | 7/18 planned (cap 38) | In progress | — |
+| v0.3 Save States & Host Contract | 4 | 27/27 planned (cap 38) | In progress | — |
 
 **v0.3 execution order:** 16 → 17 → 18 → 19
 
 | Phase | Plans Complete | Plan cap | Status | Completed |
 |-------|----------------|----------|--------|-----------|
-| 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Planned | 2026-10-26 |
-| 17. Native Save State Core | 11/11 | 12 | Planned | 2026-10-28 |
-| 18. Player Save Slots and Host Contract | 0/TBD | 10 | Not started | - |
+| 16. Tune-up and v0.2 Debt Closure | 7/7 | 8 | Complete | 2026-10-26 |
+| 17. Native Save State Core | 11/11 | 12 | Complete | 2026-10-28 |
+| 18. Player Save Slots and Host Contract | 9/9 | 10 | Complete | 2026-10-29 |
 | 19. Qualified v0.3.0 Release | 0/TBD | 8 | Not started | - |

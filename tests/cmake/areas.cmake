@@ -8,3 +8,8 @@
 include("${PROJECT_SOURCE_DIR}/tests/cmake/perf.cmake")
 include("${PROJECT_SOURCE_DIR}/tests/cmake/ci-lanes.cmake")
 include("${PROJECT_SOURCE_DIR}/tests/cmake/hygiene.cmake")
+include("${PROJECT_SOURCE_DIR}/tests/cmake/host.cmake")
+include("${PROJECT_SOURCE_DIR}/tests/cmake/input-clock.cmake")
+include("${PROJECT_SOURCE_DIR}/tests/cmake/slots.cmake")
+include("${PROJECT_SOURCE_DIR}/tests/cmake/save-formats.cmake")
+include("${PROJECT_SOURCE_DIR}/tests/cmake/host-contract.cmake")

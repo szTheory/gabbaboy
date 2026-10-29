@@ -621,7 +621,8 @@ add_executable(gabbaboy-runner-joyp-mutant
   ${PROJECT_SOURCE_DIR}/src/accept/digest.c)
 target_include_directories(gabbaboy-runner-joyp-mutant PRIVATE
   ${PROJECT_SOURCE_DIR}/src/runner ${PROJECT_SOURCE_DIR}/src/accept)
-target_link_libraries(gabbaboy-runner-joyp-mutant PRIVATE gabbaboy_core_joyp_mutant)
+# gabbaboy_host names no core, so this runner still links exactly one (the mutant) core.
+target_link_libraries(gabbaboy-runner-joyp-mutant PRIVATE gabbaboy_core_joyp_mutant gabbaboy_host)
 target_compile_features(gabbaboy-runner-joyp-mutant PRIVATE c_std_17)
 set_target_properties(gabbaboy-runner-joyp-mutant PROPERTIES C_EXTENSIONS OFF)
 target_compile_definitions(gabbaboy-runner-joyp-mutant PRIVATE

@@ -395,6 +395,23 @@ gbb_error gbb_probe_rom(gbb_profile profile, const uint8_t *rom, size_t rom_size
  * GBB_INVALID_ARGUMENT. Outputs are left unchanged on any error. */
 gbb_error gbb_get_info(const gbb_instance *instance, gbb_info *out_info);
 
+typedef struct {
+    uint32_t struct_size;           /* IN: the caller sets sizeof(gbb_input_clock); OUT: the bytes written */
+    uint32_t queued_count;          /* OUT: input events waiting in the queue */
+    uint64_t now_half_dots;         /* OUT: the instance's emulated time */
+    uint64_t last_queued_half_dots; /* OUT: time of the last queued event; now_half_dots when none is queued */
+} gbb_input_clock;
+#define GBB_INPUT_CLOCK_SIZE_V1 24u /* the core static-asserts this equals sizeof(gbb_input_clock) */
+/* Reports the instance's input-admission clock without changing it, so a host
+ * can queue events after gbb_load_state restored a different time and queue.
+ * gbb_queue_events accepts an event only at or after both now_half_dots and
+ * last_queued_half_dots; the latter equals now_half_dots when nothing is
+ * queued. A NULL instance, NULL out or struct_size < GBB_INPUT_CLOCK_SIZE_V1
+ * returns GBB_INVALID_ARGUMENT and leaves every output byte unchanged. The core
+ * writes field by field and then sets struct_size to the bytes written; a
+ * larger caller struct keeps its extra bytes. */
+gbb_error gbb_get_input_clock(const gbb_instance *instance, gbb_input_clock *out);
+
 /* Copies the latest completed 160x144 colour frame of the CGB-CPU-E profile, in
  * CGB mode and in DMG compatibility mode. pitch_bytes and capacity_bytes are
  * both in BYTES. Each pixel is a native-endian uint16_t R | G << 5 | B << 10

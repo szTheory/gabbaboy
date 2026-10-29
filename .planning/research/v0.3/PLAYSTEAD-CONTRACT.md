@@ -104,7 +104,7 @@ Scope:
    - (a) the adapter converts GabbaBoy's 21-byte block to and from mGBA's 48-byte suffix for import compatibility only, with honest "clock not portable" scope; or
    - (b) the adapter declares its own GabbaBoy-specific `save_format`/medium ids and size (32,789 B).
 
-   Recommend (b) as the default, because Playstead's gate keys on format string equality and refuses cross-emulator clock claims. Record (a) as a later, evidence-gated interop item. Non-RTC SRAM is byte-identical to mGBA and can be documented as such.
+   Recommend (b) as the default, because Playstead's gate keys on format string equality and refuses cross-emulator clock claims. Record (a) as a later, evidence-gated interop item. GabbaBoy makes no save interoperability claim with any other emulator. MBC2 differs, for example: GabbaBoy stores 512 B where mGBA stores 256 B.
 3. **A GabbaBoy-authored candidate pin JSON** in Playstead's schema: system, version, artifact digest, argument template, save_contract with GabbaBoy media/format ids, exit_detection, and the cartridge tuple matrix from GabbaBoy's support ledger. Validate it with a schema/contract test that has negative controls (wrong glob, size, format id, exit code).
 4. **Continuation-protocol conformance.** An adapter script implementing `qualify` / `initial-run` / `continue` over the headless runner with a public original GB fixture: network-free, fresh directory, distinct process, repeated agreeing frame-digest oracle after Continue. Exit codes are 0, 77 and 1.
 5. **Acceptance evidence**, all automated: CTest lanes for flush/SIGTERM/SIGKILL timing, byte-exact .sav round-trip into a fresh process with a game-visible readback (not just a hash), pin-schema conformance, and continuation 0/77/1 controls.

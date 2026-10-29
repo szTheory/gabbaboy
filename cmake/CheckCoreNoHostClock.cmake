@@ -2,7 +2,9 @@
 #
 # The deterministic MBC3 RTC advances only from emulated time, so src/core and the public header
 # must not include a host time header or call a host clock, timer, sleep or environment function,
-# and the compiled core library must not import one. Two independent layers:
+# and the compiled core library must not import one. Host signals are the same kind of ambient
+# input (D-18): signal, sigaction, raise, kill, sigprocmask, pthread_sigmask, alarm and setitimer
+# are denied at both layers, so process control stays in the host adapter. Two independent layers:
 #
 #   source layer  every #include is one of <stddef.h> <stdint.h> <stdlib.h> <string.h> or
 #                 "gabbaboy/gabbaboy.h", "gabbaboy_test.h" (the internal test-seam header), or
@@ -37,7 +39,8 @@ set(gbb_allowed_includes "<stddef.h>" "<stdint.h>" "<stdlib.h>" "<string.h>"
 set(gbb_denied_calls
   time clock clock_gettime gettimeofday timespec_get localtime gmtime mktime difftime
   nanosleep usleep sleep getenv QueryPerformanceCounter QueryPerformanceFrequency
-  GetLocalTime mach_absolute_time __rdtsc)
+  GetLocalTime mach_absolute_time __rdtsc
+  signal sigaction raise kill sigprocmask pthread_sigmask alarm setitimer)
 list(JOIN gbb_denied_calls "|" gbb_denied_call_alternatives)
 set(gbb_call_regex
   "(^|[^A-Za-z0-9_])(${gbb_denied_call_alternatives}|GetSystemTime[A-Za-z]*|GetTickCount[0-9]*)[ \t]*\\(")
@@ -47,7 +50,8 @@ set(gbb_denied_symbols
   time _time32 _time64 clock clock_gettime gettimeofday timespec_get localtime localtime_r
   localtime_s gmtime gmtime_r mktime difftime nanosleep usleep sleep getenv
   QueryPerformanceCounter GetSystemTimeAsFileTime GetTickCount GetTickCount64 GetLocalTime
-  mach_absolute_time __rdtsc)
+  mach_absolute_time __rdtsc
+  signal sigaction raise kill sigprocmask pthread_sigmask alarm setitimer)
 
 # Remove /* */ and // comments and string/char literals. Includes are read after the comments are
 # removed but before literals are, because "gabbaboy/gabbaboy.h" is itself a string literal.

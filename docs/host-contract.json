@@ -1,0 +1,193 @@
+{
+  "exit_codes": [
+    {
+      "code": 0,
+      "name": "clean",
+      "meaning": "Signal or --frames end; the flush succeeded or there was nothing to write"
+    },
+    {
+      "code": 1,
+      "name": "failure",
+      "meaning": "I/O or flush failure, allocation failure, a failed pacing clock, or a core stop mid-run"
+    },
+    {
+      "code": 2,
+      "name": "refusal",
+      "meaning": "Refused before any save mutation"
+    },
+    {
+      "code": null,
+      "name": "crash",
+      "meaning": "Death by signal (shells show 128+N); the .sav is the last completed flush"
+    }
+  ],
+  "cadence": {
+    "frame_half_dots": 140448,
+    "quiet_frames": 16,
+    "max_dirty_frames": 300,
+    "rtc_compare_frames": 3600,
+    "sram_loss_window_frames": 300,
+    "rtc_loss_window_frames": 3600
+  },
+  "rtc_wall_clock": "not-recorded",
+  "save_formats": {
+    "rows": [
+      {
+        "type": "0x03",
+        "ram_code": "0x02",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc1-sram-8k-v1",
+        "bytes": 8192,
+        "ram_bytes": 8192,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x03",
+        "ram_code": "0x03",
+        "rom_code_max": "0x04",
+        "id": "gabbaboy-mbc1-sram-32k-v1",
+        "bytes": 32768,
+        "ram_bytes": 32768,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x06",
+        "ram_code": "0x00",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc2-nibble-512-v1",
+        "bytes": 512,
+        "ram_bytes": 512,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x0F",
+        "ram_code": "0x00",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc3-rtc-only-v1",
+        "bytes": 21,
+        "ram_bytes": 0,
+        "rtc_bytes": 21
+      },
+      {
+        "type": "0x10",
+        "ram_code": "0x02",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc3-rtc-sram-8k-v1",
+        "bytes": 8213,
+        "ram_bytes": 8192,
+        "rtc_bytes": 21
+      },
+      {
+        "type": "0x10",
+        "ram_code": "0x03",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc3-rtc-sram-32k-v1",
+        "bytes": 32789,
+        "ram_bytes": 32768,
+        "rtc_bytes": 21
+      },
+      {
+        "type": "0x13",
+        "ram_code": "0x02",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc3-sram-8k-v1",
+        "bytes": 8192,
+        "ram_bytes": 8192,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x13",
+        "ram_code": "0x03",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc3-sram-32k-v1",
+        "bytes": 32768,
+        "ram_bytes": 32768,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x1B",
+        "ram_code": "0x02",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc5-sram-8k-v1",
+        "bytes": 8192,
+        "ram_bytes": 8192,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x1B",
+        "ram_code": "0x03",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc5-sram-32k-v1",
+        "bytes": 32768,
+        "ram_bytes": 32768,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x1B",
+        "ram_code": "0x04",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc5-sram-128k-v1",
+        "bytes": 131072,
+        "ram_bytes": 131072,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x1B",
+        "ram_code": "0x05",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc5-sram-64k-v1",
+        "bytes": 65536,
+        "ram_bytes": 65536,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x1E",
+        "ram_code": "0x02",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc5-sram-8k-v1",
+        "bytes": 8192,
+        "ram_bytes": 8192,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x1E",
+        "ram_code": "0x03",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc5-sram-32k-v1",
+        "bytes": 32768,
+        "ram_bytes": 32768,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x1E",
+        "ram_code": "0x04",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc5-sram-128k-v1",
+        "bytes": 131072,
+        "ram_bytes": 131072,
+        "rtc_bytes": 0
+      },
+      {
+        "type": "0x1E",
+        "ram_code": "0x05",
+        "rom_code_max": null,
+        "id": "gabbaboy-mbc5-sram-64k-v1",
+        "bytes": 65536,
+        "ram_bytes": 65536,
+        "rtc_bytes": 0
+      }
+    ],
+    "no_battery_types": [
+      "0x00",
+      "0x01",
+      "0x02",
+      "0x05",
+      "0x11",
+      "0x12",
+      "0x19",
+      "0x1A",
+      "0x1C",
+      "0x1D"
+    ]
+  }
+}

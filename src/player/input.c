@@ -70,6 +70,40 @@ void player_input_reconcile(player_input_state *state,
     state->pending_count = remaining;
 }
 
+bool player_input_rebase(player_input_state *state, uint64_t host_now_ns,
+                         const gbb_input_clock *clock) {
+    if (state == NULL || clock == NULL) return false;
+    const bool paused = state->paused;
+    player_input_gamepad_source gamepads[PLAYER_INPUT_GAMEPAD_CAPACITY];
+    memcpy(gamepads, state->gamepads, sizeof(gamepads));
+    player_input_reset(state, host_now_ns);
+    for (unsigned i = 0; i < PLAYER_INPUT_GAMEPAD_CAPACITY; ++i) {
+        state->gamepads[i] = gamepads[i];
+        state->gamepads[i].held_buttons = 0u;
+    }
+    state->paused = paused;
+    state->guest_anchor_half_dots = clock->now_half_dots;
+    state->guest_cursor_half_dots = clock->now_half_dots;
+    /* Only the last restored time is known; every mirrored entry carries it, which gives the admission floor
+     * and the capacity count (they are consumed together once the cursor passes it). The core's queue holds at
+     * most 64 events, so the mirror never needs more. */
+    const size_t restored = clock->queued_count < PLAYER_INPUT_QUEUE_CAPACITY
+        ? (size_t)clock->queued_count : (size_t)PLAYER_INPUT_QUEUE_CAPACITY;
+    for (size_t i = 0; i < restored; ++i)
+        state->pending[i].at_half_dots = clock->last_queued_half_dots;
+    state->pending_count = restored;
+    state->held_buttons = 0xFFu;
+    state->release_pending_buttons = 0xFFu;
+    /* More than 56 restored events leave no room for the eight releases. The mirror still counts them, so the
+     * releases stay pending (retried until the queue drains) and no key or button event reaches a full queue;
+     * input is paused and the caller is told, instead of an empty mirror silently admitting input. */
+    if (clock->queued_count > PLAYER_INPUT_QUEUE_CAPACITY - PLAYER_INPUT_BUTTON_COUNT) {
+        state->paused = true;
+        return false;
+    }
+    return true;
+}
+
 static bool map_host_time(const player_input_state *state,
                           uint64_t host_now_ns, uint64_t *out_guest_half_dots) {
     if (state == NULL || out_guest_half_dots == NULL) return false;

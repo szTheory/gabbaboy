@@ -316,6 +316,63 @@ static int player_input_focus_audio(const char *demo_path) {
     return 0;
 }
 
+static uint32_t core_queued(gbb_instance *machine) {
+    gbb_input_clock clock;
+    memset(&clock, 0, sizeof(clock));
+    clock.struct_size = GBB_INPUT_CLOCK_SIZE_V1;
+    if (gbb_get_input_clock(machine, &clock) != GBB_OK) return UINT32_MAX;
+    return clock.queued_count;
+}
+
+/* IN-03: a restored queue that leaves no room for the eight releases is refused loudly. The mirror keeps
+ * counting the restored events, the releases stay pending, input is paused and the call returns false, so no
+ * key reaches the full queue and the caller can keep the game paused. A clock the slot engine accepts (at most
+ * 56 events) re-anchors as before. */
+static int player_input_rebase_guard(const char *demo_path) {
+    gbb_instance *machine = load_demo(demo_path);
+    REQUIRE(machine != NULL);
+    gbb_input_clock clock;
+    memset(&clock, 0, sizeof(clock));
+    clock.struct_size = GBB_INPUT_CLOCK_SIZE_V1;
+    clock.now_half_dots = 5000u;
+    clock.last_queued_half_dots = 6000u;
+    player_input_state state;
+
+    clock.queued_count = PLAYER_INPUT_NORMAL_CAPACITY;
+    player_input_reset(&state, 1000u);
+    REQUIRE(player_input_rebase(&state, 2000u, &clock));
+    REQUIRE(!state.paused && state.pending_count == PLAYER_INPUT_NORMAL_CAPACITY);
+    REQUIRE(state.held_buttons == 0xFFu && state.release_pending_buttons == 0xFFu);
+    REQUIRE(state.guest_cursor_half_dots == 5000u && state.guest_anchor_half_dots == 5000u);
+
+    clock.queued_count = PLAYER_INPUT_NORMAL_CAPACITY + 4u;
+    player_input_reset(&state, 1000u);
+    REQUIRE(!player_input_rebase(&state, 2000u, &clock));
+    REQUIRE(state.paused);
+    REQUIRE(state.pending_count == PLAYER_INPUT_NORMAL_CAPACITY + 4u);
+    REQUIRE(state.pending[state.pending_count - 1u].at_half_dots == 6000u);
+    REQUIRE(state.held_buttons == 0xFFu && state.release_pending_buttons == 0xFFu);
+    REQUIRE(state.guest_cursor_half_dots == 5000u && state.guest_anchor_half_dots == 5000u);
+    /* A key press queues nothing, the releases do not fit, and input cannot resume while they are pending. */
+    const uint32_t queued_before = core_queued(machine);
+    REQUIRE(queued_before != UINT32_MAX);
+    REQUIRE(player_input_key(&state, machine, 3000u, SDL_SCANCODE_Z, true, false) == GBB_OK);
+    REQUIRE(core_queued(machine) == queued_before);
+    REQUIRE(state.keyboard_buttons == 0u && state.pending_count == PLAYER_INPUT_NORMAL_CAPACITY + 4u);
+    REQUIRE(player_input_retry_focus_releases(&state, machine, 3000u) == GBB_EVENT_QUEUE_FULL);
+    REQUIRE(state.release_pending_buttons == 0xFFu);
+    REQUIRE(!player_input_resume(&state, 4000u) && state.paused);
+
+    /* A count past the core's capacity is clamped to it; a NULL clock is refused. */
+    clock.queued_count = 200u;
+    player_input_reset(&state, 1000u);
+    REQUIRE(!player_input_rebase(&state, 2000u, &clock));
+    REQUIRE(state.paused && state.pending_count == PLAYER_INPUT_QUEUE_CAPACITY);
+    REQUIRE(!player_input_rebase(&state, 2000u, NULL));
+    gbb_destroy(machine);
+    return 0;
+}
+
 int main(int argc, char **argv) {
     if (argc != 3) return 2;
     active_case = argv[1];
@@ -335,6 +392,8 @@ int main(int argc, char **argv) {
         result = player_input_reconnect(argv[2]);
     else if (strcmp(active_case, "player_input_focus_audio") == 0)
         result = player_input_focus_audio(argv[2]);
+    else if (strcmp(active_case, "player_input_rebase_guard") == 0)
+        result = player_input_rebase_guard(argv[2]);
     printf("%s 1 - %s\n", result == 0 ? "ok" : "not ok", active_case);
     return result;
 }

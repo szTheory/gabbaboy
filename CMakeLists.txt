@@ -66,8 +66,33 @@ target_link_libraries(gabbaboy_runner_support PUBLIC gabbaboy_accept)
 target_compile_features(gabbaboy_runner_support PUBLIC c_std_17)
 set_target_properties(gabbaboy_runner_support PROPERTIES C_EXTENSIONS OFF)
 
+# Host-process contract (Phase 18, D-01): SDL-free, public-API-only, names no core. The executable
+# that links it supplies GabbaBoy::core exactly once, as with gabbaboy_accept_bare above.
+add_library(gabbaboy_host STATIC
+  src/host/host_cadence.c
+  src/host/host_run.c
+  src/host/host_save_format.c
+  src/host/host_save_io.c
+  src/host/host_signal.c
+  src/host/host_basename.c)
+target_include_directories(gabbaboy_host PUBLIC
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/host" "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_host PUBLIC c_std_17)
+set_target_properties(gabbaboy_host PROPERTIES C_EXTENSIONS OFF)
+
+# Player slot engine (Phase 18, D-21..D-25): SDL-free and public-API-only, so it is built on every platform
+# and tested without a window. It sits in the root file, outside tests/, so the directory-wide src/core include
+# of tests/CMakeLists.txt cannot mask a forbidden include. It links no host library and no core: the
+# executable chooses gabbaboy_host (player) or gabbaboy_host_testing (tests) and supplies the core once.
+add_library(gabbaboy_player_slots STATIC src/player/slots.c)
+target_include_directories(gabbaboy_player_slots PUBLIC
+  "${CMAKE_CURRENT_SOURCE_DIR}/src/player" "${CMAKE_CURRENT_SOURCE_DIR}/src/host"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(gabbaboy_player_slots PUBLIC c_std_17)
+set_target_properties(gabbaboy_player_slots PROPERTIES C_EXTENSIONS OFF)
+
 add_executable(gabbaboy-runner src/runner/main.c)
-target_link_libraries(gabbaboy-runner PRIVATE gabbaboy_runner_support)
+target_link_libraries(gabbaboy-runner PRIVATE gabbaboy_runner_support gabbaboy_host)
 target_compile_features(gabbaboy-runner PRIVATE c_std_17)
 set_target_properties(gabbaboy-runner PROPERTIES C_EXTENSIONS OFF)
 
@@ -85,6 +110,7 @@ else()
   execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/core/gabbaboy_test.h src/runner/main.c
     src/runner/acceptance.h src/runner/cases.c src/runner/acceptance.c
     src/accept/gbb_accept.h src/accept/sha256.c src/accept/input_script.c src/accept/stepper.c src/accept/predicate.c src/accept/digest.c
+    src/host/gbb_host.h src/host/host_exit.h src/host/host_cadence.c src/host/host_run.c src/host/host_save_format.c src/host/host_save_io.c src/host/host_signal.c src/host/host_basename.c
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RESULT_VARIABLE GABBABOY_SOURCE_DIRTY ERROR_QUIET)
   if(GABBABOY_SOURCE_DIRTY EQUAL 0)
     set(GABBABOY_BUILD_QUALIFIED 1)
@@ -111,7 +137,8 @@ if(GABBABOY_BUILD_PLAYER)
     src/player/session.c)
   target_include_directories(gabbaboy-player-adapter PUBLIC
     "${PROJECT_SOURCE_DIR}/src/player")
-  target_link_libraries(gabbaboy-player-adapter PUBLIC GabbaBoy::core gabbaboy_accept SDL3::SDL3)
+  target_link_libraries(gabbaboy-player-adapter PUBLIC gabbaboy_player_slots gabbaboy_host
+    GabbaBoy::core gabbaboy_accept SDL3::SDL3)
   target_compile_features(gabbaboy-player-adapter PUBLIC c_std_17)
   set_target_properties(gabbaboy-player-adapter PROPERTIES C_EXTENSIONS OFF)
 
@@ -141,6 +168,8 @@ install(TARGETS gabbaboy_core
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY include/gabbaboy DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(TARGETS gabbaboy-runner RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+# D-16: the machine-readable host contract (exit codes, cadence, save-format ids and sizes) ships with the runner.
+install(FILES docs/host-contract.json DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy")
 install(FILES
   fixtures/tracer/tracer.gb
   fixtures/tracer/manifest.json
@@ -173,6 +202,18 @@ if(BUILD_TESTING)
   set_target_properties(measure_core PROPERTIES C_EXTENSIONS OFF)
   if(WIN32)
     target_link_libraries(measure_core PRIVATE Psapi)
+  endif()
+  # Test-only copy of the host library with the writer fault seams compiled in (Phase 18, D-09). It is
+  # POSIX-only like every user of it, is never linked by gabbaboy-runner and is never installed.
+  # host_no_test_seams_shipped proves the shipped archive and runner define no seam symbol.
+  if(NOT WIN32)
+    get_target_property(GBB_HOST_TESTING_SOURCES gabbaboy_host SOURCES)
+    add_library(gabbaboy_host_testing STATIC ${GBB_HOST_TESTING_SOURCES})
+    target_compile_definitions(gabbaboy_host_testing PRIVATE GBB_HOST_TESTING)
+    target_include_directories(gabbaboy_host_testing PUBLIC
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/host" "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_compile_features(gabbaboy_host_testing PUBLIC c_std_17)
+    set_target_properties(gabbaboy_host_testing PROPERTIES C_EXTENSIONS OFF)
   endif()
   add_subdirectory(tests)
 endif()
