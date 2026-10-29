@@ -88,7 +88,8 @@ def fork_mutant_source(source: str) -> str:
     if start < 0 or end < 0:
         raise ForkError("cannot find the immutable state_apply source-copy boundaries")
     function = source[start:end]
-    assignment_start = function.find("            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {")
+    assignment_start = function.find(
+        "            uint8_t *address = field->storage == STATE_STORAGE_CARTRIDGE_RAM")
     offset_anchor = "            offset += field->wire_width;"
     assignment_end = function.find(offset_anchor, assignment_start)
     if assignment_start < 0 or assignment_end < 0:
