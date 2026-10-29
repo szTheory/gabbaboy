@@ -2228,6 +2228,10 @@ def check_release(root: Path) -> None:
     _check_performance_reuse(name, jobs["candidate-performance"])
     _check_release_performance_consumer(jobs["candidate-performance"])
     _check_candidate_rehearsal_binding(name, jobs["candidate"])
+    window_copy_at = require_call(name, "candidate", jobs["candidate"], VERSION_WINDOW_SOURCE_COPY)
+    window_check_at = require_call(name, "candidate", jobs["candidate"], VERSION_WINDOW_SOURCE_CALL)
+    if window_copy_at >= window_check_at:
+        raise Reject("judge-trust", "release candidate must copy the trusted version-window checker before requiring the active record")
     _check_attach_reuse(name, jobs["attach-v02-evidence"])
     _check_fuzz_source_binding(name, tree)
     _check_fuzz_wait_budget(name, tree)
@@ -2613,6 +2617,31 @@ WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo
                '--base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
 WINDOW_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
 WINDOW_STEP_TIMEOUT_MAX = 10
+VERSION_PR_WORKFLOW = "version-pr-gate.yml"
+VERSION_PR_JOB = "pre-tag-gate"
+VERSION_PR_IF = ("${{ github.event.pull_request.head.ref == 'release-please--branches--main--components--GabbaBoy' "
+                 "&& github.event.pull_request.head.repo.full_name == github.repository }}")
+VERSION_PR_WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
+                          '--base "$BASE_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
+VERSION_PR_BODY_WRITE = "printf '%s' \"$PR_BODY\" > \"$RUNNER_TEMP/version-pr-body.md\""
+VERSION_PR_RUNS_API = ('gh api "repos/$GH_REPO/actions/workflows/release-rehearsal.yml/runs?'
+                       'branch=rehearsal/$RELEASE_TAG&per_page=100"')
+VERSION_PR_BIND_CALL = ('python3 -I .github/scripts/verify-release-source-proof.py --bind-rehearsal-run '
+                        '"$RUNNER_TEMP/rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$PR_HEAD" '
+                        '--repo "$GH_REPO" --selected-run "$RUNNER_TEMP/rehearsal-run.json" --pr-head "$PR_HEAD"')
+VERSION_WINDOW_SOURCE_COPY = ('git show "${GITHUB_SHA}:tests/scripts/verify-version-window.py" > '
+                              '"$RUNNER_TEMP/verify-version-window.py"')
+VERSION_WINDOW_SOURCE_CALL = ('python3 -I "$RUNNER_TEMP/verify-version-window.py" --check-tracked '
+                              '--rev "$SOURCE_SHA" --require-active --repo .')
+VERSION_PR_STEP_NAMES = {
+    "trusted": "Check out the trusted PR base",
+    "head": "Check out the version PR head as data",
+    "body": "Write the event's reviewed PR body",
+    "window": "Judge the version window on the exact PR base",
+    "state": "Select rehearsal only for an active window",
+    "fetch": "Fetch rehearsal runs for the active version window",
+    "bind": "Bind the rehearsal to the reviewed version PR head",
+}
 # release-please already ignores its own workflow and script paths when attributing commits; anything wider would hide
 # a source, release-note or generator-input change from the version PR the window freezes.
 WINDOW_EXCLUDED_PATHS_ALLOWED = (".github/workflows", ".github/scripts")
@@ -2678,6 +2707,101 @@ def check_version_window(root: Path) -> None:
     _check_bounded_downloads(name, tree)
     require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
     _check_window_config(root)
+
+
+def check_version_pr_gate(root: Path) -> None:
+    name = VERSION_PR_WORKFLOW
+    tree = read_workflow(root / ".github/workflows" / VERSION_PR_WORKFLOW)
+    triggers = tree.get("on")
+    expected_types = ["opened", "synchronize", "reopened", "edited"]
+    pull_request = triggers.get("pull_request") if isinstance(triggers, dict) else None
+    if (set(triggers or {}) != {"pull_request"} or not isinstance(pull_request, dict)
+            or pull_request.get("types") != expected_types or pull_request.get("branches") != ["main"]):
+        raise Reject("version-pr-gate-trigger", f"{name} must run only on opened, synchronized, reopened or edited PRs to main")
+    if tree.get("permissions") != {"contents": "read"}:
+        raise Reject("version-pr-gate-permissions", f"{name} needs top-level contents: read only")
+    jobs = tree.get("jobs", {})
+    if set(jobs) != {VERSION_PR_JOB}:
+        raise Reject("version-pr-gate-trust", f"{name} must contain exactly the pre-tag gate job")
+    job = jobs[VERSION_PR_JOB]
+    if _permissions(job, tree["permissions"]) != {"actions": "read", "contents": "read"}:
+        raise Reject("version-pr-gate-permissions", f"{_where(name, VERSION_PR_JOB)} needs exactly actions: read and contents: read")
+    if (job.get("name") != "version-pr-pre-tag-gate" or str(job.get("if", "")).strip() != VERSION_PR_IF
+            or job.get("runs-on") != "ubuntu-22.04" or "needs" in job):
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} must run only for the same-repository release-please version PR")
+    if "timeout-minutes" in job:
+        raise Reject("version-pr-gate-timeout", f"{_where(name, VERSION_PR_JOB)} must have per-step timeouts and no job-level timeout")
+    steps = job.get("steps", [])
+    expected_names = [VERSION_PR_STEP_NAMES[key] for key in ("trusted", "head", "body", "window", "state", "fetch", "bind")]
+    if len(steps) != len(expected_names) or [step.get("name") for step in steps] != expected_names:
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} must keep the trusted, data, window and R2 steps in order")
+    for step in steps:
+        minutes = str(step.get("timeout-minutes", ""))
+        if not minutes.isdigit() or not 1 <= int(minutes) <= WINDOW_STEP_TIMEOUT_MAX:
+            raise Reject("version-pr-gate-timeout", f"{_where(name, VERSION_PR_JOB)} step {step.get('name', '?')!r} needs a timeout from 1 to {WINDOW_STEP_TIMEOUT_MAX} minutes")
+    _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
+    _check_bounded_downloads(name, tree)
+    _check_checkout_credentials(name, tree, (VERSION_PR_JOB,))
+    _check_token_scope(name, VERSION_PR_JOB, job)
+    _check_token_subject_execution(name, VERSION_PR_JOB, job)
+
+    if job.get("env") != {
+        "GH_REPO": "${{ github.repository }}",
+        "PR_HEAD": "${{ github.event.pull_request.head.sha }}",
+    }:
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} must use the exact PR base and head identities")
+    checkouts = _checkouts(job)
+    by_path = {step.get("with", {}).get("path"): step.get("with", {}) for step in checkouts}
+    if len(checkouts) != 2 or set(by_path) != {"trusted", "version-pr"}:
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} needs one trusted base checkout and one version-pr data checkout")
+    if (by_path["trusted"].get("ref") != "${{ github.event.pull_request.base.sha }}"
+            or by_path["version-pr"].get("ref") != "${{ github.event.pull_request.head.sha }}"
+            or any(str(by_path[path].get("fetch-depth", "")) != "0" for path in ("trusted", "version-pr"))):
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} must trust the immutable PR base and read the full PR-head history as data")
+
+    body = steps[2]
+    if body.get("env", {}).get("PR_BODY") != "${{ github.event.pull_request.body }}":
+        raise Reject("version-pr-gate-trust", "the PR body must pass through an environment variable before writing to a file")
+    require_call(name, VERSION_PR_JOB, {"steps": [body]}, VERSION_PR_BODY_WRITE)
+
+    window = steps[3]
+    window_text = window.get("run", "")
+    if "python3 -I version-pr/" in window_text:
+        raise Reject("version-pr-gate-trust", "the version PR head is data and cannot provide the window checker")
+    if "BASE_SHA=$(git -C trusted rev-parse HEAD)" not in window_text:
+        raise Reject("version-pr-gate-trust", "the window base must be the immutable trusted PR-base checkout")
+    require_call(name, VERSION_PR_JOB, {"steps": [window]}, VERSION_PR_WINDOW_CALL)
+    state = steps[4]
+    if state.get("id") != "window":
+        raise Reject("version-pr-gate-trust", "the window state step must expose whether a valid active record exists")
+    window_text = state.get("run", "")
+    for pin in ('"version-window inactive pass "*', '"version-window active pass "*', 'active=false', 'active=true'):
+        if pin not in window_text:
+            raise Reject("version-pr-gate-trust", "the window step must pass an inactive record and gate rehearsal only for an active record")
+
+    fetch = steps[5]
+    active_if = "${{ steps.window.outputs.active == 'true' }}"
+    if fetch.get("id") != "rehearsal" or fetch.get("if") != active_if \
+            or fetch.get("env", {}).get("GH_TOKEN") != "${{ github.token }}":
+        raise Reject("version-pr-gate-trust", "the rehearsal API read must run only after an active window using actions: read")
+    fetch_text = fetch.get("run", "")
+    for pin in ('version-pr/tests/data/version-window.json', 'RELEASE_TAG="v$version"',
+                'printf \'tag=%s\\n\' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"'):
+        if pin not in fetch_text:
+            raise Reject("version-pr-gate-trust", "the active version must select and name the rehearsal branch")
+    fetch_job = {"steps": [{key: value for key, value in fetch.items() if key != "if"}]}
+    require_call(name, VERSION_PR_JOB, fetch_job, VERSION_PR_RUNS_API)
+    _check_token_step_commands(name, VERSION_PR_JOB, fetch_job)
+
+    bind = steps[6]
+    if (bind.get("if") != active_if or bind.get("working-directory") != "trusted"
+            or bind.get("env", {}).get("RELEASE_TAG") != "${{ steps.rehearsal.outputs.tag }}"):
+        raise Reject("version-pr-gate-trust", "the rehearsal judge must use trusted base code and run only for an active window")
+    bind_job = {"steps": [{key: value for key, value in bind.items() if key != "if"}]}
+    require_call(name, VERSION_PR_JOB, bind_job, VERSION_PR_BIND_CALL)
 
 
 
@@ -2810,6 +2934,7 @@ def check_all(root: Path, release_head: bool = False, git_root: Path | None = No
     check_release(root)
     check_release_gate_wiring(root)
     check_version_window(root)
+    check_version_pr_gate(root)
     check_timeout_ledger(root, release_head, git_root, main_ref, disclosure_base)
     check_workflow_closed_world(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
@@ -2965,7 +3090,7 @@ def report_red_replay_controls(root: Path) -> int:
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml", "libbet-repro.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "version-pr-gate.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml", "libbet-repro.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -3593,6 +3718,8 @@ def _mutations():
            "api_commit=$SOURCE_SHA", "release-presence"),
         _m("W6-04c candidate drops the merged-PR lookup", rel, "  candidate:\n", 'prs=$(gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls")',
            "prs='[]'", "release-presence"),
+        _m("candidate skips the exact-source active version-window check", rel, "  candidate:\n",
+           VERSION_WINDOW_SOURCE_CALL, "true", "required-command-not-executed"),
         _m("W6-04d candidate stops requiring release_created", rel, "  candidate:\n", " && needs.release.outputs.release_created == 'true'",
            "", "release-presence"),
         _m("W6-04e candidate loses its retry input", rel, "  candidate:\n", "      RETRY: ${{ inputs.retry }}\n", "", "release-presence"),
@@ -3807,6 +3934,33 @@ def _window_mutations():
            "window-config"),
         _m("W17-20 changelog path moved", "config", "", '"changelog-path": "CHANGELOG.md"', '"changelog-path": "docs/CHANGELOG.md"',
            "window-config"),
+    ]
+
+
+def _version_pr_gate_mutations():
+    """The new pre-tag gate must be same-repository, read-only, trusted and fatal on both window and R2 defects."""
+    workflow = VERSION_PR_WORKFLOW
+    job = f"  {VERSION_PR_JOB}:\n"
+    judge = f"name: {VERSION_PR_STEP_NAMES['window']}\n"
+    return [
+        _m("version PR gate uses pull_request_target", workflow, "on:\n", "  pull_request:\n",
+           "  pull_request_target:\n", "version-pr-gate-trigger"),
+        _m("version PR gate changes its trusted base to the PR head", workflow, "name: Check out the trusted PR base\n",
+           "ref: ${{ github.event.pull_request.base.sha }}", "ref: ${{ github.event.pull_request.head.sha }}",
+           "version-pr-gate-trust"),
+        _m("version PR gate gains actions write permission", workflow, job, "      actions: read\n",
+           "      actions: write\n", "version-pr-gate-permissions"),
+        _m("version PR gate gains contents write permission", workflow, job, "      contents: read\n",
+           "      contents: write\n", "version-pr-gate-permissions"),
+        _m("version PR window judge loses its step timeout", workflow, judge,
+           "        timeout-minutes: 5\n", "", "version-pr-gate-timeout"),
+        _m("version PR window checker runs from the PR head", workflow, judge,
+           "python3 -I trusted/tests/scripts/verify-version-window.py",
+           "python3 -I version-pr/tests/scripts/verify-version-window.py", "version-pr-gate-trust"),
+        _m("version PR gate ignores a failing window judge", workflow, judge,
+           "        timeout-minutes: 5\n", "        timeout-minutes: 5\n        continue-on-error: true\n", "ignored-gate"),
+        _m("version PR gate drops the R2 bind call", workflow, f"name: {VERSION_PR_STEP_NAMES['bind']}\n",
+           VERSION_PR_BIND_CALL, "echo 'rehearsal omitted'", "required-command-not-executed"),
     ]
 
 
@@ -4248,7 +4402,7 @@ def self_test(root: Path) -> None:
                 return fixture / LIFECYCLE_SCRIPT
             return fixture / (PRODUCER_SCRIPT if workflow == "script" else f".github/workflows/{workflow}")
 
-        for label, workflow, edits, expected in (*_mutations(), *_window_mutations()):
+        for label, workflow, edits, expected in (*_mutations(), *_window_mutations(), *_version_pr_gate_mutations()):
             workflow, edits = _route_lifecycle(workflow, edits, baselines["release.yml"], baselines["lifecycle"])
             text = baselines[workflow]
             for after, old, replacement in edits:

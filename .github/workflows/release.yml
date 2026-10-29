@@ -133,6 +133,12 @@ jobs:
           set -euo pipefail
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           chmod +x "$RUNNER_TEMP/verify-release-gates.sh"
+      - name: Require an active version window at the exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "${GITHUB_SHA}:tests/scripts/verify-version-window.py" > "$RUNNER_TEMP/verify-version-window.py"
+          python3 -I "$RUNNER_TEMP/verify-version-window.py" --check-tracked --rev "$SOURCE_SHA" --require-active --repo .
       - name: Require final release notes to satisfy the v0.2 adoption contract
         env:
           RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}

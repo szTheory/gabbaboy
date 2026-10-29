@@ -377,14 +377,22 @@ def read_body(path: Path | None) -> bytes | None:
         reject("window-body-unreadable", str(error))
 
 
-def check_tracked(repo: Path) -> str:
+def check_tracked(repo: Path, rev: str | None = None, require_active: bool = False) -> str:
     """Contract: the tracked record is well-formed and the production constants resolve in the tree."""
-    head = git(repo, "rev-parse", "--verify", "HEAD^{commit}").stdout.decode("ascii").strip()
-    head = resolve_commit(repo, head, "HEAD")
+    if rev is None:
+        head = git(repo, "rev-parse", "--verify", "HEAD^{commit}").stdout.decode("ascii").strip()
+        head = resolve_commit(repo, head, "HEAD")
+    else:
+        head = resolve_commit(repo, rev, "--rev")
     raw = git_blob(repo, head, RECORD_PATH, MAX_RECORD_BYTES + 1)
     if raw is None:
         reject("window-record-missing", f"{RECORD_PATH} is not tracked")
-    state = validate_record_shape(parse_record(raw))
+    record = parse_record(raw)
+    state = validate_record_shape(record)
+    if state == "inactive" and require_active:
+        reject("window-record-inactive", f"{RECORD_PATH} is inactive at revision {head[:12]}")
+    if state == "active" and tree_version(repo, head) != record["release_version"]:
+        reject("window-version-mismatch", f"the active record's version {record['release_version']} differs from the tree at {head[:12]}")
     for path in (*REQUIRED_MANAGED_INPUTS, *REQUIRED_GENERATED_FILES):
         if git_blob(repo, head, path) is None:
             reject("window-input-missing", f"the window requires {path}, which is not in the tree")
@@ -650,6 +658,17 @@ def self_test() -> tuple[int, int]:
         # The tracked-record contract resolves the production constants in a tree.
         fx.reset(base)
         accepted("tracked-contract", lambda: check_tracked(repo))
+        fx.reset(frozen)
+        accepted("tracked-active-contract", lambda: check_tracked(repo, frozen))
+        fx.write("CMakeLists.txt", "project(GabbaBoy VERSION 0.2.3 LANGUAGES C) # x-release-please-version\n")
+        fx.write(".release-please-manifest.json", '{\n  ".": "0.2.3"\n}\n')
+        bumped_with_old_record = fx.commit("bump tree with an old active record", "CMakeLists.txt",
+                                           ".release-please-manifest.json")
+        rejected("tracked-active-record-version-mismatch",
+                 lambda: check_tracked(repo, bumped_with_old_record), "window-version-mismatch")
+        fx.reset(base)
+        rejected("tracked-inactive-requires-active", lambda: check_tracked(repo, base, require_active=True),
+                 "window-record-inactive")
         fx.reset(base)
         fx.run("rm", "-q", "release-please-config.json")
         fx.run("commit", "-q", "-m", "drop a managed input")
@@ -663,6 +682,19 @@ def self_test() -> tuple[int, int]:
 
         body_file = Path(temporary) / "body.md"
         body_file.write_bytes(body)
+        fx.reset(frozen)
+        tracked_active = cli("--check-tracked", "--rev", frozen)
+        if tracked_active.returncode != 0 or f"version-window contract pass state=active rev={frozen[:12]}" not in tracked_active.stdout:
+            raise AssertionError("CLI rejected the active tracked record at its immutable revision: "
+                                 + tracked_active.stdout + tracked_active.stderr)
+        positives += 1
+        fx.reset(base)
+        tracked_inactive = cli("--check-tracked", "--rev", base, "--require-active")
+        if tracked_inactive.returncode != 1 or "window-record-inactive" not in tracked_inactive.stderr:
+            raise AssertionError("CLI accepted --require-active on an inactive tracked record: "
+                                 + tracked_inactive.stdout + tracked_inactive.stderr)
+        controls += 1
+        fx.reset(frozen)
         ok = cli("--rev", frozen, "--base", base, "--check", RECORD_PATH, "--body", str(body_file))
         if ok.returncode != 0 or "active pass" not in ok.stdout:
             raise AssertionError("CLI rejected the valid window: " + ok.stdout + ok.stderr)
@@ -686,6 +718,7 @@ def main() -> int:
     parser.add_argument("--ci-run-id", type=int)
     parser.add_argument("--rehearsal-run-id", type=int)
     parser.add_argument("--check-tracked", action="store_true")
+    parser.add_argument("--require-active", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--repo", type=Path, default=ROOT, help="repository to read (default: this checkout)")
     args = parser.parse_args()
@@ -695,8 +728,10 @@ def main() -> int:
             print(f"version-window controls pass positives={positives} controls={controls}")
             return 0
         if args.check_tracked:
-            print(check_tracked(args.repo))
+            print(check_tracked(args.repo, args.rev, args.require_active))
             return 0
+        if args.require_active:
+            parser.error("--require-active requires --check-tracked")
         if args.digest:
             if not (args.rev and args.base):
                 parser.error("--digest requires --rev and --base")

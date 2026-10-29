@@ -1,0 +1,89 @@
+name: version-pr-gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pre-tag-gate:
+    name: version-pr-pre-tag-gate
+    if: ${{ github.event.pull_request.head.ref == 'release-please--branches--main--components--GabbaBoy' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_REPO: ${{ github.repository }}
+      PR_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Check out the trusted PR base
+        timeout-minutes: 5
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the version PR head as data
+        timeout-minutes: 5
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: version-pr
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Write the event's reviewed PR body
+        timeout-minutes: 5
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/version-pr-body.md"
+      - name: Judge the version window on the exact PR base
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA=$(git -C trusted rev-parse HEAD)
+          python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" --base "$BASE_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md" > "$RUNNER_TEMP/version-window-verdict.txt"
+          cat "$RUNNER_TEMP/version-window-verdict.txt"
+      - name: Select rehearsal only for an active window
+        id: window
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          verdict=$(cat "$RUNNER_TEMP/version-window-verdict.txt")
+          case "$verdict" in
+            "version-window inactive pass "*) echo "active=false" >> "$GITHUB_OUTPUT" ;;
+            "version-window active pass "*) echo "active=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Unexpected version-window verdict." >&2; exit 1 ;;
+          esac
+      - name: Fetch rehearsal runs for the active version window
+        id: rehearsal
+        if: ${{ steps.window.outputs.active == 'true' }}
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(jq -er '.release_version | select(type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' version-pr/tests/data/version-window.json)
+          RELEASE_TAG="v$version"
+          printf 'tag=%s\n' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          gh api "repos/$GH_REPO/actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&per_page=100" > "$RUNNER_TEMP/rehearsal-runs.json"
+      - name: Bind the rehearsal to the reviewed version PR head
+        if: ${{ steps.window.outputs.active == 'true' }}
+        timeout-minutes: 5
+        env:
+          RELEASE_TAG: ${{ steps.rehearsal.outputs.tag }}
+        working-directory: trusted
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I .github/scripts/verify-release-source-proof.py --bind-rehearsal-run "$RUNNER_TEMP/rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$PR_HEAD" --repo "$GH_REPO" --selected-run "$RUNNER_TEMP/rehearsal-run.json" --pr-head "$PR_HEAD"
