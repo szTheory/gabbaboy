@@ -287,8 +287,10 @@ gabbaboy-runner --print-save-format --rom ROM [--profile dmg|cgb]
 ```
 
 `--rom` and `--save-dir` select host mode; `--profile` defaults to `dmg`. Without `--frames` the
-runner is paced to real time and runs until it is stopped. With `--frames N` (a decimal count from 1
-to 4,294,967,295) it runs exactly `N` frames as fast as it can and exits. One frame is 70,224 dots.
+runner is paced to real time and runs until it is stopped; if its monotonic clock fails it prints
+`gbb-host: pacing unavailable`, flushes and exits with code 1 instead of running unpaced. With
+`--frames N` (a decimal count from 1 to 4,294,967,295) it runs exactly `N` frames as fast as it can
+and exits. One frame is 70,224 dots.
 Each value flag takes its value as the next argument: `--flag=value`, positional arguments, unknown
 flags, repeated flags, missing or empty values and acceptance-mode flags are refused with
 `invalid-arguments: reason=<token>` and exit code 2. `--print-save-format` takes only `--rom` and
@@ -340,7 +342,7 @@ Host mode emits exactly these exit codes. The table is checked cell by cell agai
 | Code | Name | Meaning |
 |---|---|---|
 | `0` | `clean` | Signal or `--frames` end; the flush succeeded or there was nothing to write |
-| `1` | `failure` | I/O or flush failure, allocation failure, or a core stop mid-run |
+| `1` | `failure` | I/O or flush failure, allocation failure, a failed pacing clock, or a core stop mid-run |
 | `2` | `refusal` | Refused before any save mutation |
 | none (death by signal) | `crash` | Death by signal (shells show 128+N); the `.sav` is the last completed flush |
 

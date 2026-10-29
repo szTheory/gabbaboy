@@ -13,7 +13,7 @@
 
 #define GBB_HOST_EXIT_TABLE(X) \
     X(0, CLEAN, "clean", "Signal or --frames end; the flush succeeded or there was nothing to write") \
-    X(1, FAILURE, "failure", "I/O or flush failure, allocation failure, or a core stop mid-run") \
+    X(1, FAILURE, "failure", "I/O or flush failure, allocation failure, a failed pacing clock, or a core stop mid-run") \
     X(2, REFUSAL, "refusal", "Refused before any save mutation")
 
 enum {

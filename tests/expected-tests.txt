@@ -1672,3 +1672,5 @@ host_writer_mutant_name_cap_240
 host_import_mbc2_noncanonical
 host_import_mutant_raw_baseline
 slot_mutant_selection_any_entry
+host_exit_pacing_unavailable
+host_signal_decoy_pacing_ignored

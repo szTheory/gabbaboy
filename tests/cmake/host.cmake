@@ -528,6 +528,29 @@ if(NOT WIN32)
   gbb_host_mutant_runner(in_place_write gabbaboy_host_mutant_in_place_write)
   gbb_add_host_signal_decoy(host_signal_decoy_in_place_write gabbaboy-runner-hostvariant-in_place_write
     crash-storm "round [0-9]+: a completed flush kept inode")
+
+  # IN-06: a failed pacing clock stops a paced run at that frame boundary with one diagnostic, a final flush and
+  # exit 1. The shipped clock cannot be made to fail, so the fault variant's clock fails from the third pacing
+  # wait on and the scenario must pass against it. The decoy keeps that fault but ignores the wait's result (the
+  # old handling), so the run goes on unpaced and the scenario's watchdog must fail it.
+  set(GBB_PACING_FAULT_ANCHOR
+    "if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) { pacer->valid = false; return false; }")
+  set(GBB_PACING_FAULT "static unsigned fault_waits = 0u;
+    if (++fault_waits > 2u || clock_gettime(CLOCK_MONOTONIC, &now) != 0) { pacer->valid = false; return false; }")
+  gbb_host_mutant_library(pacing_fault host_run.c "${GBB_PACING_FAULT_ANCHOR}" "${GBB_PACING_FAULT}")
+  gbb_host_mutant_runner(pacing_fault gabbaboy_host_mutant_pacing_fault)
+  add_test(NAME host_exit_pacing_unavailable
+    COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_SIGNALS_HARNESS}"
+      --runner $<TARGET_FILE:gabbaboy-runner-hostvariant-pacing_fault>
+      --work "${PROJECT_BINARY_DIR}/host-signals/host_exit_pacing_unavailable"
+      --scenario pacing-unavailable ${GBB_HOST_SIGNALS_SANITIZED})
+  set_tests_properties(host_exit_pacing_unavailable PROPERTIES
+    PASS_REGULAR_EXPRESSION "host-signals scenario=pacing-unavailable pass")
+  gbb_host_mutant_library(pacing_ignored host_run.c "${GBB_PACING_FAULT_ANCHOR}" "${GBB_PACING_FAULT}"
+    "if (paced && !pacer_wait(&pacer)) {" "if (paced && !pacer_wait(&pacer) && false) {")
+  gbb_host_mutant_runner(pacing_ignored gabbaboy_host_mutant_pacing_ignored)
+  gbb_add_host_signal_decoy(host_signal_decoy_pacing_ignored gabbaboy-runner-hostvariant-pacing_ignored
+    pacing-unavailable "the runner kept running after its pacing clock failed")
 endif()
 
 # ---- D-18: the core carries no signal code (portable: the script reads symbols with nm, llvm-nm or dumpbin) ----

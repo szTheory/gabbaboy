@@ -8,7 +8,7 @@
     {
       "code": 1,
       "name": "failure",
-      "meaning": "I/O or flush failure, allocation failure, or a core stop mid-run"
+      "meaning": "I/O or flush failure, allocation failure, a failed pacing clock, or a core stop mid-run"
     },
     {
       "code": 2,

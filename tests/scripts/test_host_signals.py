@@ -353,6 +353,43 @@ def scenario_core_stop(runner: str, work: Path, sanitized: bool) -> None:
     require(len(image) == 8192 and image[0] == 0x5A, "the guest's write before the stop was not flushed")
 
 
+def scenario_pacing_unavailable(runner: str, work: Path, sanitized: bool) -> None:
+    """IN-06, against a runner built with a failing monotonic clock (a build-tree fault variant: the shipped
+    clock cannot be made to fail). A paced run must stop by itself at the frame boundary where pacing failed,
+    print `gbb-host: pacing unavailable` once, still flush, and exit 1 with reason=pacing, instead of running
+    on unpaced. A fresh `--frames K` batch run (never paced) reproduces the .sav, so the stop was a whole frame.
+    The wait is a watchdog: a runner that keeps going fails with its own reason."""
+    base = fresh_dir(work)
+    child, rom, saves = paced_spin(runner, base, "saves")
+    try:
+        try:
+            code = child.process.wait(timeout=EXIT_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise Failure("the runner kept running after its pacing clock failed") from None
+        child.thread.join(timeout=5.0)
+    finally:
+        child.close()
+    err = child.text()
+    require(code == 1, f"exit {code}, expected 1: {err.strip()[-400:]!r}")
+    require(err.count("gbb-host: pacing unavailable\n") == 1,
+            f"expected exactly one 'gbb-host: pacing unavailable' line: {err.strip()[-400:]!r}")
+    found = exit_line(err)
+    require(found["status"] == "failure" and found["reason"] == "pacing",
+            f"exit line is not status=failure reason=pacing: {found.group(0)!r}")
+    require(err.index("gbb-host: pacing unavailable") < found.start(), "the diagnostic must precede the exit line")
+    require(found["flush"] == "written", f"flush={found['flush']}: the frames that ran were not flushed")
+    frame = int(found["frame"])
+    require(frame >= 1, "stopped_at_frame=0: pacing is only checked after a frame")
+    sav = saves / "spin.sav"
+    require(sav.is_file(), "no .sav: the final flush did not run")
+    stopped = sav.read_bytes()
+    replay_dir = fresh_dir(base / "replay")
+    code, err = run_batch(runner, rom, replay_dir, frame, base)
+    require(code == 0, f"replay --frames {frame} exit {code}: {err.strip()!r}")
+    require((replay_dir / "spin.sav").read_bytes() == stopped,
+            f"replay --frames {frame} differs: the pacing stop did not land on a frame boundary")
+
+
 def scenario_refusal(runner: str, work: Path, sanitized: bool) -> None:
     """A refusal is exit 2 before any save mutation and before `ready`."""
     base = fresh_dir(work)
@@ -438,6 +475,7 @@ SCENARIOS = {
     "frames-clean": scenario_frames_clean,
     "failure-readonly": scenario_failure_readonly,
     "core-stop": scenario_core_stop,
+    "pacing-unavailable": scenario_pacing_unavailable,
     "refusal": scenario_refusal,
     "crash-storm": scenario_crash_storm,
 }

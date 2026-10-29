@@ -263,27 +263,30 @@ static long long ns_between(const struct timespec *from, const struct timespec *
 
 /* Advance the deadline by one frame and sleep toward it. A host that fell more than eight frames behind
  * resynchronises to now instead of running a burst of catch-up frames. A signal wakes the sleep and is
- * handled by the caller's flag poll; the interrupted sleep is not resumed. */
-static void pacer_wait(host_pacer *pacer) {
-    if (!pacer->valid) return;
+ * handled by the caller's flag poll; the interrupted sleep is not resumed. Returns false when the monotonic
+ * clock failed (at start or now): there is no deadline to pace to, and returning at once would turn a paced
+ * run into a full-speed loop with the emulated clock running far ahead of real time, so the caller stops. */
+static bool pacer_wait(host_pacer *pacer) {
+    if (!pacer->valid) return false;
     const long long frame_ns = (long long)GBB_HOST_FRAME_NS;
     long long total = (long long)pacer->deadline.tv_nsec + frame_ns;
     pacer->deadline.tv_sec += (time_t)(total / 1000000000LL);
     pacer->deadline.tv_nsec = (long)(total % 1000000000LL);
     struct timespec now;
-    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) { pacer->valid = false; return; }
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) { pacer->valid = false; return false; }
     if (ns_between(&pacer->deadline, &now) > HOST_PACE_RESYNC_FRAMES * frame_ns) {
         pacer->deadline = now;
-        return;
+        return true;
     }
     (void)host_pace_wait(&pacer->deadline);
+    return true;
 }
 #else
 typedef struct {
     int unused;
 } host_pacer;
 static void pacer_start(host_pacer *pacer) { (void)pacer; }
-static void pacer_wait(host_pacer *pacer) { (void)pacer; }
+static bool pacer_wait(host_pacer *pacer) { (void)pacer; return true; }
 #endif
 
 #ifdef GBB_HOST_TESTING
@@ -432,6 +435,7 @@ static int run_host(const host_args *args, const char *stem) {
     pacer_start(&pacer);
     uint64_t frame = 0u;
     bool core_stop = false;
+    bool pacing_failed = false;
     int stop_reason = 0;
     /* A signal that arrived during start-up stops the run before the first frame (D-14). */
     int stop_signal = host_signal_stop_requested();
@@ -462,8 +466,13 @@ static int run_host(const host_args *args, const char *stem) {
             }
         }
         /* The whole frame, its cadence flush and the pacing wait are done: this is the frame boundary
-         * where a stop is honoured, so no partial frame is ever exported. */
-        if (paced) pacer_wait(&pacer);
+         * where a stop is honoured, so no partial frame is ever exported. A failed pacing clock stops the
+         * run here too (IN-06): fail closed with one diagnostic rather than run on unpaced. */
+        if (paced && !pacer_wait(&pacer)) {
+            (void)fprintf(stderr, "gbb-host: pacing unavailable\n");
+            pacing_failed = true;
+            break;
+        }
         stop_signal = host_signal_stop_requested(); /* frame boundary (D-14) */
     }
 
@@ -488,6 +497,11 @@ static int run_host(const host_args *args, const char *stem) {
         (void)fprintf(stderr,
                       "gbb-host: exit status=failure reason=core-stop stop=%d stopped_at_frame=%llu flush=%s\n",
                       stop_reason, (unsigned long long)frame, flush);
+        exit_code = GBB_HOST_EXIT_FAILURE;
+    } else if (pacing_failed) {
+        /* The final flush above still ran, so the frames that did run are kept. */
+        (void)fprintf(stderr, "gbb-host: exit status=failure reason=pacing stopped_at_frame=%llu flush=%s\n",
+                      (unsigned long long)frame, flush);
         exit_code = GBB_HOST_EXIT_FAILURE;
     } else if (exit_code != GBB_HOST_EXIT_CLEAN) {
         (void)fprintf(stderr, "gbb-host: exit status=%s reason=flush stopped_at_frame=%llu flush=%s\n",

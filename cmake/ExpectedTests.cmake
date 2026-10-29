@@ -125,6 +125,8 @@ function(gabbaboy_verify_registered_tests)
       host_signal_decoy_partial_frame
       host_signal_decoy_exit0_after_failed_flush
       host_signal_decoy_in_place_write
+      host_exit_pacing_unavailable
+      host_signal_decoy_pacing_ignored
       host_no_test_seams_shipped_run_control
       save_format_files
       save_format_controls

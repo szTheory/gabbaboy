@@ -134,6 +134,8 @@ filter_expected_for_platform() {
         -e '/^host_signal_decoy_partial_frame$/d' \
         -e '/^host_signal_decoy_exit0_after_failed_flush$/d' \
         -e '/^host_signal_decoy_in_place_write$/d' \
+        -e '/^host_exit_pacing_unavailable$/d' \
+        -e '/^host_signal_decoy_pacing_ignored$/d' \
         -e '/^host_no_test_seams_shipped_run_control$/d' \
         -e '/^save_format_files$/d' \
         -e '/^save_format_controls$/d' \
@@ -273,6 +275,8 @@ _self_test_platform_filter_cases() {
     host_signal_decoy_partial_frame \
     host_signal_decoy_exit0_after_failed_flush \
     host_signal_decoy_in_place_write \
+    host_exit_pacing_unavailable \
+    host_signal_decoy_pacing_ignored \
     host_no_test_seams_shipped_run_control \
     save_format_files \
     save_format_controls \
@@ -413,6 +417,8 @@ _self_test_platform_filter_cases() {
     host_signal_decoy_partial_frame \
     host_signal_decoy_exit0_after_failed_flush \
     host_signal_decoy_in_place_write \
+    host_exit_pacing_unavailable \
+    host_signal_decoy_pacing_ignored \
     host_no_test_seams_shipped_run_control \
     save_format_files \
     save_format_controls \
