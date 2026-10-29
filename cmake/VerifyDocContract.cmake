@@ -14,6 +14,10 @@
 #                     (required; every element nonempty)
 #   GBB_SCOPE_START   optional literal that opens the paragraph the phrases must sit in; the
 #                     paragraph ends at the next blank line
+#   GBB_SCOPE_SECTION optional (with GBB_SCOPE_START): when true, the scope is the whole section
+#                     instead, from the literal to the next level-2 heading (a line starting with
+#                     "## ") or the end of the guide, so a phrase may sit in any paragraph, list or
+#                     table of that section
 #
 # HTML comments in the guide are ignored. Comments in the declaring files are ignored (C block
 # and line comments in .h/.c files, # comments elsewhere), so a name that survives only in a
@@ -108,10 +112,17 @@ if(DEFINED GBB_SCOPE_START AND NOT "${GBB_SCOPE_START}" STREQUAL "")
   endif()
   string(SUBSTRING "${raw_doc}" ${scope_at} -1 scope)
   string(REGEX REPLACE "\r\n" "\n" scope "${scope}")
-  string(REGEX MATCH "\n[ \t]*\n" blank_line "${scope}")
-  if(NOT blank_line STREQUAL "")
-    string(FIND "${scope}" "${blank_line}" scope_end)
-    string(SUBSTRING "${scope}" 0 ${scope_end} scope)
+  if(GBB_SCOPE_SECTION)
+    string(FIND "${scope}" "\n## " scope_end)
+    if(NOT scope_end EQUAL -1)
+      string(SUBSTRING "${scope}" 0 ${scope_end} scope)
+    endif()
+  else()
+    string(REGEX MATCH "\n[ \t]*\n" blank_line "${scope}")
+    if(NOT blank_line STREQUAL "")
+      string(FIND "${scope}" "${blank_line}" scope_end)
+      string(SUBSTRING "${scope}" 0 ${scope_end} scope)
+    endif()
   endif()
   gbb_collapse_space("${scope}" scope)
 endif()

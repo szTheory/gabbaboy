@@ -25,3 +25,212 @@ if(GBB_TEST_INSTALL_PREFIX AND EXISTS "${GBB_TEST_INSTALL_PREFIX}" AND NOT WIN32
     TIMEOUT 60
     PASS_REGULAR_EXPRESSION "installed-host pass continuation=01,02 preload=42 controls=1")
 endif()
+
+# ---- D-29: phrase contracts for the host-contract documents, each with a phrase-removed control ----------------
+# The phrase checks read the working-tree documents (cmake/VerifyDocContract.cmake). Phrases hold no semicolon
+# (it separates list elements), so a sentence that has one is pinned as its halves. The checker modes below read
+# the documents with `git show <rev>:<path>` at the configure-time HEAD, so commit before running them.
+
+execute_process(
+  COMMAND git rev-parse HEAD
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  RESULT_VARIABLE GBB_HOST_CONTRACT_REV_RESULT
+  OUTPUT_VARIABLE GBB_HOST_CONTRACT_REV
+  ERROR_QUIET
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(LENGTH "${GBB_HOST_CONTRACT_REV}" GBB_HOST_CONTRACT_REV_LENGTH)
+if(NOT GBB_HOST_CONTRACT_REV_RESULT EQUAL 0 OR NOT GBB_HOST_CONTRACT_REV_LENGTH EQUAL 40 OR
+   NOT GBB_HOST_CONTRACT_REV MATCHES "^[0-9a-f]+$")
+  set(GBB_HOST_CONTRACT_REV "unknown")
+  message(STATUS "Host-contract document CTests remain registered with an unresolved revision and will fail closed")
+endif()
+
+set(GBB_HOST_CONTRACT_DOC_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyDocContract.cmake")
+set(GBB_HOST_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-host-contract.py")
+set(GBB_HOST_CONTRACT_DECLARATIONS
+  "${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;${PROJECT_SOURCE_DIR}/examples/relocated-c/CMakeLists.txt")
+set(GBB_HOST_CONTRACT_VARIANTS "${GBB_HOST_CONTRACT_WORK}/doc-variants")
+file(MAKE_DIRECTORY "${GBB_HOST_CONTRACT_VARIANTS}")
+
+# A build-tree copy of a tracked document with one literal replaced. A missing anchor is a configure error, so a
+# control can never pass vacuously because the text it removes is gone. Editing the source re-runs configure.
+function(gbb_host_contract_variant out_path name source_relative old new)
+  set(source "${PROJECT_SOURCE_DIR}/${source_relative}")
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${source}")
+  file(READ "${source}" contents)
+  string(FIND "${contents}" "${old}" at)
+  if(at EQUAL -1)
+    message(FATAL_ERROR "Control anchor '${old}' is missing from ${source_relative}")
+  endif()
+  string(REPLACE "${old}" "${new}" contents "${contents}")
+  file(WRITE "${GBB_HOST_CONTRACT_VARIANTS}/${name}" "${contents}")
+  set(${out_path} "${GBB_HOST_CONTRACT_VARIANTS}/${name}" PARENT_SCOPE)
+endfunction()
+
+# gbb_host_contract_doc_test(name doc phrases scope expected_phrase_count): a positive contract and its control.
+set(GBB_NATIVE_GUIDE_HOST_PHRASES
+  "Run one writer per save directory and ROM stem"
+  "a second runner on the same pair is unsupported and its live temporary file may be swept."
+  "old-or-new image after process death or a crash"
+  "no power-loss guarantee"
+  "HOST-01/02 are POSIX-only in v0.3. Windows never generates SIGTERM and TerminateProcess cannot be handled"
+  "no console control handler is installed."
+  "The runner records no wall-clock time"
+  "the game clock advances only while the runner runs."
+  "save_format=none marks a cartridge without a battery"
+  "it is not a save-format id."
+  "`--print-save-format`"
+  "32,789"
+  "`.gb`, `.gbc`, `.GB`, `.GBC` and `.bin`"
+  "deletingPathExtension"
+  "16 quiet frames"
+  "300 frames plus one write"
+  "3,600 frames"
+  "`gbb_get_input_clock`"
+  "a second signal takes the default action"
+  "`SIGTERM` always"
+  "`SIGINT` and `SIGHUP` unless they were ignored at start")
+list(LENGTH GBB_NATIVE_GUIDE_HOST_PHRASES GBB_NATIVE_GUIDE_HOST_PHRASE_COUNT)
+add_test(NAME native_guide_host_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/native-integration.md
+    "-DGBB_DECLARATIONS=${GBB_HOST_CONTRACT_DECLARATIONS}"
+    "-DGBB_REQUIRED=${GBB_NATIVE_GUIDE_HOST_PHRASES}"
+    "-DGBB_SCOPE_START=## Host process contract"
+    -DGBB_SCOPE_SECTION=TRUE
+    -P ${GBB_HOST_CONTRACT_DOC_SCRIPT})
+set_tests_properties(native_guide_host_contract PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_NATIVE_GUIDE_HOST_PHRASE_COUNT}[^0-9]")
+
+set(GBB_CARTRIDGE_GUIDE_SLOTS_PHRASES
+  "Loading a slot also replaces the game's battery save"
+  "battery-preload backup file"
+  "release-bound slot from any other release"
+  "nine numbered machine-state slots"
+  "exact battery bytes"
+  "never reads or writes a host"
+  "swaps the live state with it")
+list(LENGTH GBB_CARTRIDGE_GUIDE_SLOTS_PHRASES GBB_CARTRIDGE_GUIDE_SLOTS_PHRASE_COUNT)
+add_test(NAME cartridge_guide_slots_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/cartridge-and-saves.md
+    "-DGBB_DECLARATIONS=${GBB_HOST_CONTRACT_DECLARATIONS}"
+    "-DGBB_REQUIRED=${GBB_CARTRIDGE_GUIDE_SLOTS_PHRASES}"
+    "-DGBB_SCOPE_START=## Host raw saves and player state slots"
+    -DGBB_SCOPE_SECTION=TRUE
+    -P ${GBB_HOST_CONTRACT_DOC_SCRIPT})
+set_tests_properties(cartridge_guide_slots_contract PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_CARTRIDGE_GUIDE_SLOTS_PHRASE_COUNT}[^0-9]")
+
+set(GBB_README_HOST_PHRASES
+  "Host mode is a headless conformance adapter, not a play surface."
+  "--print-save-format"
+  "--save-dir"
+  "records no wall-clock time"
+  "`share/gabbaboy/host-contract.json`")
+list(LENGTH GBB_README_HOST_PHRASES GBB_README_HOST_PHRASE_COUNT)
+add_test(NAME readme_host_mode_contract
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${PROJECT_SOURCE_DIR}/README.md
+    "-DGBB_DECLARATIONS=${GBB_HOST_CONTRACT_DECLARATIONS}"
+    "-DGBB_REQUIRED=${GBB_README_HOST_PHRASES}"
+    "-DGBB_SCOPE_START=## Host mode (headless)"
+    -DGBB_SCOPE_SECTION=TRUE
+    -P ${GBB_HOST_CONTRACT_DOC_SCRIPT})
+set_tests_properties(readme_host_mode_contract PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_README_HOST_PHRASE_COUNT}[^0-9]")
+
+# The ledger carries one entry per requirement group, each with its destination and the CTest names that decide it.
+set(GBB_UNRELEASED_HOST_PHRASES
+  "destination v0.3.0"
+  "HOST-01..03"
+  "PLAY-01"
+  "`host_continuation`"
+  "`host_cadence_retry`"
+  "`host_signal_term`"
+  "`host_exit_table_codes`"
+  "`save_format_files`"
+  "`save_format_completeness`"
+  "`save_format_freeze`"
+  "`host_contract_json`"
+  "`host_contract_docs`"
+  "`installed_host_smoke`"
+  "`slot_message_table`"
+  "`slot_reanchor_plan`"
+  "`input_clock_after_load`")
+list(LENGTH GBB_UNRELEASED_HOST_PHRASES GBB_UNRELEASED_HOST_PHRASE_COUNT)
+add_test(NAME unreleased_host_entries
+  COMMAND ${CMAKE_COMMAND}
+    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/support/unreleased.md
+    "-DGBB_DECLARATIONS=${GBB_HOST_CONTRACT_DECLARATIONS}"
+    "-DGBB_REQUIRED=${GBB_UNRELEASED_HOST_PHRASES}"
+    -P ${GBB_HOST_CONTRACT_DOC_SCRIPT})
+set_tests_properties(unreleased_host_entries PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_UNRELEASED_HOST_PHRASE_COUNT}[^0-9]")
+
+# gbb_host_contract_missing_control(name source_relative phrase scope_start): a copy without one pinned phrase must
+# fail with exactly `doc-contract-missing: <phrase>`.
+function(gbb_host_contract_missing_control name source_relative phrase scope_start)
+  gbb_host_contract_variant(variant "${name}.md" "${source_relative}" "${phrase}" "")
+  set(command "${CMAKE_COMMAND};-DGBB_DOC=${variant};-DGBB_DECLARATIONS=${GBB_HOST_CONTRACT_DECLARATIONS};-DGBB_REQUIRED=${phrase}")
+  if(NOT "${scope_start}" STREQUAL "")
+    string(APPEND command ";-DGBB_SCOPE_START=${scope_start};-DGBB_SCOPE_SECTION=TRUE")
+  endif()
+  string(APPEND command ";-P;${GBB_HOST_CONTRACT_DOC_SCRIPT}")
+  # CMake wraps a long error message at a word boundary, so any run of non-alphanumerics (a space, or a newline and
+  # its indent) between two words of the phrase matches.
+  string(REPLACE " " "[^A-Za-z0-9]+" phrase_regex "${phrase}")
+  add_test(NAME ${name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${command}"
+      -DGBB_EXPECT_CODE=1
+      "-DGBB_EXPECT_REGEX=doc-contract-missing:[^A-Za-z0-9]+${phrase_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+endfunction()
+
+gbb_host_contract_missing_control(doc_contract_host_missing_selftest
+  docs/native-integration.md "no power-loss guarantee" "## Host process contract")
+gbb_host_contract_missing_control(doc_contract_readme_host_missing_selftest
+  README.md "Host mode is a headless conformance adapter, not a play surface." "## Host mode (headless)")
+gbb_host_contract_missing_control(doc_contract_cartridge_slots_missing_selftest
+  docs/cartridge-and-saves.md "Loading a slot also replaces the game's battery save"
+  "## Host raw saves and player state slots")
+gbb_host_contract_missing_control(doc_contract_unreleased_host_missing_selftest
+  docs/support/unreleased.md "destination v0.3.0" "")
+
+# ---- D-29: the published tables against docs/host-contract.json ------------------------------------------------
+add_test(NAME host_contract_docs
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_CONTRACT_CHECKER}"
+    --docs --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(host_contract_docs PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "host-contract docs pass exit_rows=4 format_rows=16")
+
+# A copy whose 32,789 cell says 32,816 must be rejected as drift; a copy whose save-format table lost its header
+# row must be rejected as missing. Each is its own failure code, so neither can mask the other.
+gbb_host_contract_variant(GBB_HOST_CONTRACT_DRIFT_GUIDE "native-guide-drift.md"
+  docs/native-integration.md "| 32,789 |" "| 32,816 |")
+add_test(NAME host_contract_docs_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_HOST_CONTRACT_CHECKER};--docs;--rev;${GBB_HOST_CONTRACT_REV};--repo;${PROJECT_SOURCE_DIR};--docs-file;${GBB_HOST_CONTRACT_DRIFT_GUIDE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=REJECT doc-table-drift"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(host_contract_docs_control PROPERTIES TIMEOUT 60)
+
+gbb_host_contract_variant(GBB_HOST_CONTRACT_HEADERLESS_GUIDE "native-guide-headerless.md"
+  docs/native-integration.md "| Type | RAM code | Id | Bytes |" "| Kind | RAM code | Id | Bytes |")
+add_test(NAME host_contract_docs_missing_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_HOST_CONTRACT_CHECKER};--docs;--rev;${GBB_HOST_CONTRACT_REV};--repo;${PROJECT_SOURCE_DIR};--docs-file;${GBB_HOST_CONTRACT_HEADERLESS_GUIDE}"
+    -DGBB_EXPECT_CODE=1
+    "-DGBB_EXPECT_REGEX=REJECT doc-table-missing"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(host_contract_docs_missing_control PROPERTIES TIMEOUT 60)
+
+# ---- D-19: no emulator-interoperability claim in the published text, with a seeded control ---------------------
+add_test(NAME doc_no_interop_claims
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_CONTRACT_CHECKER}"
+    --no-interop --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(doc_no_interop_claims PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "no-interop-claims pass files=6 controls=1")
