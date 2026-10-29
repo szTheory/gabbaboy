@@ -62,6 +62,8 @@ typedef struct {
     unsigned slot;            /* the requested slot (0 for the undo source) */
     player_slot_source source;
     gbb_input_clock clock;    /* the live input clock after LOADED/UNDONE; zero otherwise */
+    bool guard_unsaved;       /* LOADED/UNDONE, but the battery guard file could not be written: the next
+                               * session may treat this battery as an in-game save and replace the preload */
 } player_slot_result;
 
 /* Where the player re-anchors its input after a load (D-24). */

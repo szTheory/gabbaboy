@@ -104,7 +104,7 @@ if(NOT WIN32)
       refusal_dmg_in_cgb refusal_version_token refusal_text_file refusal_flipped_byte refusal_truncated
       refusal_oversize refusal_symlink undo_write_failure backup_write_failure undo_swap no_undo
       battery_guard unsafe_queued_input save_failure_keeps_old reanchor_later reanchor_earlier
-      select_message stale_temp_sweep battery_guard_sessions)
+      select_message stale_temp_sweep battery_guard_sessions guard_write_failure)
     add_test(NAME slot_${case} COMMAND test_slots ${case}
       WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/slots-work")
     set_tests_properties(slot_${case} PROPERTIES PASS_REGULAR_EXPRESSION "PASS ${case}")
@@ -143,8 +143,8 @@ if(NOT WIN32)
     battery_guard "FAIL battery_guard")
   # WR-03: the guard is not persisted, or not read back, so a new session overwrites the real in-game backup.
   gbb_slots_mutant(guard_not_persisted
-    [=[(void)host_save_io_replace(store->dirfd, guard_name, copy, size);]=]
-    [=[(void)guard_name;]=]
+    [=[host_save_io_replace(store->dirfd, guard_name, copy, size) == HOST_IO_OK;]=]
+    [=[(guard_name[0] != '\0' || true);]=]
     battery_guard_sessions "FAIL battery_guard_sessions")
   gbb_slots_mutant(guard_not_seeded
     [=[    if (store->guard_valid) return;
@@ -152,6 +152,11 @@ if(NOT WIN32)
     [=[    if (true) return;
     uint8_t *copy = malloc(size + 1u);]=]
     battery_guard_sessions "FAIL battery_guard_sessions")
+  # WR-03 follow-up: a failed guard write is ignored again, so the load reports no warning.
+  gbb_slots_mutant(guard_failure_silent
+    [=[result.guard_unsaved = !record_guard(store, instance);]=]
+    [=[(void)record_guard(store, instance);]=]
+    guard_write_failure "FAIL guard_write_failure")
   # D-23 step 5: a failed undo write no longer rolls the machine back.
   gbb_slots_mutant(no_rollback
     [=[const gbb_error rollback = gbb_load_state(instance, snapshot, state_size);]=]

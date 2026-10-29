@@ -181,9 +181,10 @@ static void seed_guard_from_disk(player_slot_store *store, const char *guard_nam
     store->guard_valid = true;
 }
 
-/* Records the battery right after a load, in memory and beside the slots. An allocation or write failure only
- * makes the next load write one more preload file. */
-static void record_guard(player_slot_store *store, const gbb_instance *instance) {
+/* Records the battery right after a load, in memory and beside the slots. Returns false when the guard file
+ * was not written: this session still guards from memory, but the next session's first load would see this
+ * battery as an unbacked in-game save and replace the preload with it, so the caller reports that. */
+static bool record_guard(player_slot_store *store, const gbb_instance *instance) {
     free(store->guard);
     store->guard = NULL;
     store->guard_size = 0u;
@@ -191,19 +192,19 @@ static void record_guard(player_slot_store *store, const gbb_instance *instance)
     size_t size = 0u;
     if (gbb_battery_size(instance, &size) != GBB_OK || size == 0u) {
         store->guard_valid = true; /* nothing to guard on a cartridge without a battery */
-        return;
+        return true;
     }
     uint8_t *copy = malloc(size);
     if (copy == NULL || gbb_copy_battery(instance, copy, size) != GBB_OK) {
         free(copy);
-        return;
+        return false;
     }
     store->guard = copy;
     store->guard_size = size;
     store->guard_valid = true;
     char guard_name[160];
-    if (build_name(store, NAME_GUARD, 0u, guard_name, sizeof(guard_name)))
-        (void)host_save_io_replace(store->dirfd, guard_name, copy, size);
+    return build_name(store, NAME_GUARD, 0u, guard_name, sizeof(guard_name)) &&
+           host_save_io_replace(store->dirfd, guard_name, copy, size) == HOST_IO_OK;
 }
 
 /* D-23, all-or-nothing. Each step returns before any later step on failure, and a refusal is found in the
@@ -309,7 +310,7 @@ player_slot_result player_slot_load(player_slot_store *store, gbb_instance *inst
 
     /* Step 6: remember the battery of the loaded state and report the input clock to re-anchor to. An
      * unreadable clock would re-anchor the player at time 0 on a machine far past it, so it is not LOADED. */
-    record_guard(store, instance);
+    result.guard_unsaved = !record_guard(store, instance);
     result.clock.struct_size = GBB_INPUT_CLOCK_SIZE_V1;
     const gbb_error clock_error = gbb_get_input_clock(instance, &result.clock);
     if (clock_error != GBB_OK) {
@@ -432,6 +433,8 @@ void player_slot_format_message(const player_slot_result *result, char *out, siz
     char subject[24];
     if (result->source == PLAYER_SLOT_SOURCE_UNDO) (void)snprintf(subject, sizeof(subject), "The undo backup");
     else (void)snprintf(subject, sizeof(subject), "Slot %u", result->slot);
+    /* WR-03: without the guard file the next session may overwrite the in-game save backup; say so. */
+    const char *guard_warning = result->guard_unsaved ? "; warning: the in-game save backup may be replaced next session" : "";
     switch (result->outcome) {
     case PLAYER_SLOT_SAVED:
         (void)snprintf(out, capacity, "Saved slot %u", result->slot);
@@ -440,10 +443,10 @@ void player_slot_format_message(const player_slot_result *result, char *out, siz
         (void)snprintf(out, capacity, "Slot %u not saved: the file could not be written", result->slot);
         break;
     case PLAYER_SLOT_LOADED:
-        (void)snprintf(out, capacity, "Loaded slot %u (\xe2\x8c\x98" "Z undoes)", result->slot);
+        (void)snprintf(out, capacity, "Loaded slot %u (\xe2\x8c\x98" "Z undoes)%s", result->slot, guard_warning);
         break;
     case PLAYER_SLOT_UNDONE:
-        (void)snprintf(out, capacity, "Undid the last load (\xe2\x8c\x98" "Z switches back)");
+        (void)snprintf(out, capacity, "Undid the last load (\xe2\x8c\x98" "Z switches back)%s", guard_warning);
         break;
     case PLAYER_SLOT_EMPTY:
         (void)snprintf(out, capacity, "%s is empty; nothing changed", subject);

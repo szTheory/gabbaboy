@@ -934,6 +934,32 @@ static int case_battery_guard_sessions(void) {
     return 0;
 }
 
+/* WR-03 follow-up: a guard file that cannot be written still loads, but says the backup is unprotected. A
+ * directory at the guard's name makes the rename fail on every POSIX host without a fault seam. */
+static int case_guard_write_failure(void) {
+    pair_fixture pf;
+    CHECK(pair_open(&pf));
+    char guard[160];
+    (void)snprintf(guard, sizeof(guard), "%s-%s-battery-guard.bin", pf.fx.hex, pf.fx.profile_name);
+    REQUIRE(mkdirat(pf.fx.dirfd, guard, 0700) == 0);
+    const player_slot_result result = player_slot_load(&pf.fx.store, pf.live, PLAYER_SLOT_SOURCE_SLOT, 1u);
+    REQUIRE(result.outcome == PLAYER_SLOT_LOADED);
+    REQUIRE(result.guard_unsaved);
+    REQUIRE(live_state_is(pf.live, pf.s1, pf.s1_len));
+    char message[160];
+    player_slot_format_message(&result, message, sizeof(message));
+    REQUIRE(strstr(message, "backup may be replaced") != NULL);
+    /* With the guard written, the same load carries no warning. */
+    REQUIRE(unlinkat(pf.fx.dirfd, guard, AT_REMOVEDIR) == 0);
+    const player_slot_result again = player_slot_load(&pf.fx.store, pf.live, PLAYER_SLOT_SOURCE_SLOT, 2u);
+    REQUIRE(again.outcome == PLAYER_SLOT_LOADED);
+    REQUIRE(!again.guard_unsaved);
+    player_slot_format_message(&again, message, sizeof(message));
+    REQUIRE(strstr(message, "warning") == NULL);
+    pair_close(&pf);
+    return 0;
+}
+
 static int case_unsafe_queued_input(void) {
     fixture fx;
     REQUIRE(fx_setup(&fx, GBB_PROFILE_DMG_CPU_B, 'A'));
@@ -1229,6 +1255,7 @@ static const slot_case g_cases[] = {
     {"no_undo", case_no_undo},
     {"battery_guard", case_battery_guard},
     {"battery_guard_sessions", case_battery_guard_sessions},
+    {"guard_write_failure", case_guard_write_failure},
     {"unsafe_queued_input", case_unsafe_queued_input},
     {"save_failure_keeps_old", case_save_failure_keeps_old},
     {"reanchor_later", case_reanchor_later},
