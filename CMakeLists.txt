@@ -71,6 +71,7 @@ set_target_properties(gabbaboy_runner_support PROPERTIES C_EXTENSIONS OFF)
 add_library(gabbaboy_host STATIC
   src/host/host_cadence.c
   src/host/host_run.c
+  src/host/host_save_format.c
   src/host/host_save_io.c
   src/host/host_signal.c
   src/host/host_basename.c)
@@ -109,7 +110,7 @@ else()
   execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/core/gabbaboy_test.h src/runner/main.c
     src/runner/acceptance.h src/runner/cases.c src/runner/acceptance.c
     src/accept/gbb_accept.h src/accept/sha256.c src/accept/input_script.c src/accept/stepper.c src/accept/predicate.c src/accept/digest.c
-    src/host/gbb_host.h src/host/host_exit.h src/host/host_cadence.c src/host/host_run.c src/host/host_save_io.c src/host/host_signal.c src/host/host_basename.c
+    src/host/gbb_host.h src/host/host_exit.h src/host/host_cadence.c src/host/host_run.c src/host/host_save_format.c src/host/host_save_io.c src/host/host_signal.c src/host/host_basename.c
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RESULT_VARIABLE GABBABOY_SOURCE_DIRTY ERROR_QUIET)
   if(GABBABOY_SOURCE_DIRTY EQUAL 0)
     set(GABBABOY_BUILD_QUALIFIED 1)

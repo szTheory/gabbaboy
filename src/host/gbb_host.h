@@ -158,7 +158,28 @@ int host_pace_wait(struct timespec *deadline);
 void host_run_test_set_after_ready_hook(void (*hook)(void));
 #endif
 
-/* True when any argument selects host mode: `--rom`, `--save-dir`, or either with `=`.
+/* ---- Save-format ids (HOST-03, D-19): the table behind `--print-save-format` -------------------------- */
+
+/* `rom_code_max` is the largest header ROM code ($148) the row covers; HOST_SAVE_FORMAT_ANY_ROM leaves it
+ * unconstrained. Only MBC1 with 32 KiB of RAM is constrained (the core admits it up to ROM code $04). */
+#define HOST_SAVE_FORMAT_ANY_ROM 0xFFu
+
+typedef struct {
+    uint8_t type;         /* header cartridge type ($147) */
+    uint8_t ram_code;     /* header RAM code ($149) */
+    uint8_t rom_code_max; /* header ROM code ($148) at most this, or HOST_SAVE_FORMAT_ANY_ROM */
+    const char *id;       /* ^gabbaboy-[a-z0-9-]{1,48}-v[1-9][0-9]*$ ; the same id always means the same bytes */
+    uint32_t bytes;       /* the whole raw .sav: ram_bytes + rtc_bytes */
+    uint32_t ram_bytes;
+    uint32_t rtc_bytes;   /* 0 or GBB_RTC_BLOCK_SIZE */
+} host_save_format_row;
+
+/* The row for a battery cartridge, or NULL. A cartridge without a battery has no row: `--print-save-format`
+ * prints the sentinel `none` for it, which is not an id. */
+const host_save_format_row *host_save_format_lookup(uint8_t type, uint8_t ram_code, uint8_t rom_code);
+size_t host_save_format_count(void);
+
+/* True when any argument selects host mode: `--rom`, `--save-dir`, `--print-save-format`, or either value flag with `=`.
  * `--help` alone stays in acceptance mode. */
 bool gbb_host_is_host_invocation(int argc, char **argv);
 /* Runs host mode. Returns a GBB_HOST_EXIT_* code from host_exit.h: 0 clean, 1 failure (a core stop, an I/O or

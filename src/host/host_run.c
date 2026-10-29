@@ -1,6 +1,7 @@
 /* Host-mode entry for gabbaboy-runner (Phase 18, D-02..D-04, D-08, D-11).
  *
  * gabbaboy-runner --rom P --save-dir D [--profile dmg|cgb] [--frames N]
+ * gabbaboy-runner --print-save-format --rom P [--profile dmg|cgb]
  *
  * Headless conformance adapter: load a ROM through a bounded reader, import an exact-size raw
  * `{D}/{stem}.sav`, run fixed frames and publish the battery image with host_save_io_replace.
@@ -35,6 +36,7 @@ typedef struct {
     bool has_frames;
     uint32_t frames;
     bool seen_rom, seen_save_dir, seen_profile, seen_frames;
+    bool print_format; /* --print-save-format: print the save-format id and exit; touches no save */
 } host_args;
 
 /* Acceptance-mode flags are named so that mixing them into host mode is a stable, specific refusal
@@ -49,6 +51,7 @@ bool gbb_host_is_host_invocation(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         const char *a = argv[i];
         if (strcmp(a, "--rom") == 0 || strcmp(a, "--save-dir") == 0 ||
+            strcmp(a, "--print-save-format") == 0 ||
             strncmp(a, "--rom=", 6u) == 0 || strncmp(a, "--save-dir=", 11u) == 0)
             return true;
     }
@@ -83,6 +86,11 @@ static const char *parse_args(int argc, char **argv, host_args *args) {
         const char *arg = argv[i];
         if (strncmp(arg, "--", 2u) != 0) return "positional";
         if (strchr(arg, '=') != NULL) return "equals-form";
+        if (strcmp(arg, "--print-save-format") == 0) { /* the one flag without a value */
+            if (args->print_format) return "duplicate-flag";
+            args->print_format = true;
+            continue;
+        }
         bool *seen = NULL;
         if (strcmp(arg, "--rom") == 0) seen = &args->seen_rom;
         else if (strcmp(arg, "--save-dir") == 0) seen = &args->seen_save_dir;
@@ -106,6 +114,10 @@ static const char *parse_args(int argc, char **argv, host_args *args) {
             if (!parse_frames(value, &args->frames)) return "bad-frames";
             args->has_frames = true;
         }
+    }
+    if (args->print_format) { /* D-02: needs --rom, allows --profile, nothing else */
+        if (args->seen_save_dir || args->seen_frames) return "print-save-format-extra";
+        return args->seen_rom ? NULL : "missing-rom";
     }
     if (!args->seen_rom) return "missing-rom";
     if (!args->seen_save_dir) return "missing-save-dir";
@@ -185,6 +197,47 @@ static bool host_is_unsupported_platform(void) {
 #else
     return false;
 #endif
+}
+
+/* ---- --print-save-format (D-02, D-19) ------------------------------------------------------------------ */
+
+/* Prints `save_format=<id> bytes=<n>` for the ROM and exits without touching any save, directory or the
+ * working directory: the only file opened is the ROM, through the same bounded reader and the same core
+ * validation as a run. A cartridge without a battery prints the sentinel `save_format=none bytes=0`
+ * (assumption A5): `none` is not an id and never appears in the table. Works on every platform. */
+static int print_save_format(const host_args *args) {
+    uint8_t *rom = NULL;
+    size_t rom_len = 0u;
+    const char *reason = read_rom(args->rom, &rom, &rom_len);
+    if (reason != NULL) return refuse(reason);
+    gbb_instance *machine = NULL;
+    gbb_info info;
+    memset(&info, 0, sizeof(info));
+    info.struct_size = (uint32_t)sizeof(info);
+    if (gbb_create(args->profile, &machine) != GBB_OK || gbb_load_rom(machine, rom, rom_len) != GBB_OK ||
+        gbb_get_info(machine, &info) != GBB_OK) {
+        gbb_destroy(machine);
+        free(rom);
+        return refuse("rom-unsupported");
+    }
+    int exit_code = GBB_HOST_EXIT_CLEAN;
+    if ((info.flags & GBB_INFO_HAS_BATTERY) == 0u) {
+        (void)printf("save_format=none bytes=0\n");
+    } else {
+        size_t want = 0u;
+        /* A successful load guarantees the header bytes exist; the table is keyed by those same bytes. */
+        const host_save_format_row *row = host_save_format_lookup(rom[0x147], rom[0x149], rom[0x148]);
+        if (gbb_battery_size(machine, &want) != GBB_OK || row == NULL || (size_t)row->bytes != want) {
+            (void)fprintf(stderr, "gbb-host: no save-format row\n");
+            exit_code = GBB_HOST_EXIT_FAILURE;
+        } else {
+            (void)printf("save_format=%s bytes=%u\n", row->id, (unsigned)row->bytes);
+        }
+    }
+    if (fflush(stdout) != 0 && exit_code == GBB_HOST_EXIT_CLEAN) exit_code = GBB_HOST_EXIT_FAILURE;
+    gbb_destroy(machine);
+    free(rom);
+    return exit_code;
 }
 
 /* ---- Pacing (D-03) ------------------------------------------------------------------------- */
@@ -447,6 +500,7 @@ int gbb_host_main(int argc, char **argv) {
         (void)fprintf(stderr, "invalid-arguments: reason=%s\n", reason);
         return GBB_HOST_EXIT_REFUSAL;
     }
+    if (args.print_format) return print_save_format(&args); /* before the Windows gate: it works everywhere */
     if (host_is_unsupported_platform()) return refuse("windows-unsupported"); /* D-05 */
 
     char stem[GBB_HOST_STEM_MAX_BYTES + 1u];
