@@ -14,4 +14,4 @@ Constraints:
 - RM-027, WR-C03 and the `candidate-performance` re-citation stay Phase 19 entry blockers.
 - Both automatic advance flags stay false.
 
-Execution progress: plans 18-01, 18-02 and 18-03 are complete (SUMMARYs `71e0232`, `eccc214`, `7ae5004`). Next plan: **18-04 — Host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep** (wave 4). Command: `/gsd-execute-phase 18`, run only when the owner chooses.
+Execution progress: plans 18-01 to 18-04 are complete (SUMMARYs `71e0232`, `eccc214`, `7ae5004`, `ac01321`). Next plan: **18-05 — SDL-free slot engine: scratch-validated all-or-nothing load, undo, battery guard, messages, key decoder, re-anchor** (wave 5). Command: `/gsd-execute-phase 18`, run only when the owner chooses.

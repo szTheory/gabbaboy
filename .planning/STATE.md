@@ -31,7 +31,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 ## Current Position
 
 Phase: 18 (Player Save Slots and Host Contract) — EXECUTING
-Plan: 4 of 9
+Plan: 5 of 9
 Status: Ready to execute
 Last activity: 2026-10-28 — Phase 18 execution started
 
@@ -55,6 +55,9 @@ Historical decisions, including the per-plan records of Phases 1-16, moved to [v
 - [Phase 18]: 18-01: gabbaboy_host links into every target compiling src/runner/main.c (test_runner, joyp mutant runner); it names no core
 - [Phase 18]: 18-02: empty-value grammar case runs in the python harness because CMake drops empty list elements; API-surface controls live in the checker's controls mode
 - [Phase 18]: 18-03: gbb_get_input_clock reports last_queued_half_dots as the instance time when the queue is empty, so max(now, last) is always the earliest admissible event time
+- [Phase 18]: D-11 discretion (18-04): a failed flush is retried 16 frames later (retry_after_frame = frame + 16); flushed advances only after writer success
+- [Phase 18]: 18-04: host-only mutant runners are named gabbaboy-runner-hostvariant-* because verify-core-linkage.py requires every *mutant* executable to link a mutant core
+- [Phase 18]: 18-04: mutant-runner CTests pin the failure reason (not only FAIL scenario) so a harness crash cannot satisfy them
 
 ### Pending Todos
 
@@ -89,11 +92,11 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T03:23:00.160Z
-**Stopped at:** Completed 18-03-PLAN.md
+**Last session:** 2026-10-29T03:44:47.199Z
+**Stopped at:** Completed 18-04-PLAN.md
 **Resume file:** None
 
-Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Next plan within Phase 18: **18-04 — host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep** (wave 4). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
+Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Plan 18-04 (host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep) is complete at `8335fba` with SUMMARY `ac01321`; full suite 1581/1581. Next plan within Phase 18: **18-05 — SDL-free slot engine: scratch-validated all-or-nothing load, undo, battery guard, messages, key decoder, re-anchor** (wave 5). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
@@ -106,3 +109,4 @@ Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**.
 | Phase 18 P01 | 15min | 2 tasks | 15 files |
 | Phase 18 P02 | 9 min | 2 tasks | 10 files |
 | Phase 18 P03 | 9 min | 2 tasks | 9 files |
+| Phase 18 P04 | 20min | 3 tasks | 13 files |
