@@ -13,12 +13,6 @@ rtc_wall_clock and save_formats. This checker covers the first three; verify-sav
                 docs/native-integration.md equal docs/host-contract.json cell by cell (backticks are formatting
                 only, thousands separators in Bytes are ignored); --docs-file PATH reads a build-tree copy of the
                 guide instead of the committed one, which is how the drift control feeds a seeded copy
-  --no-interop  no line of the user docs, the contract JSON or the Playstead research note matches
-                `(byte-identical|compatible|interoperab)[^.\\n]*mGBA`; a seeded copy of the note that holds its
-                original claim must be rejected inside the same run
-
-The JSON and both C files are read with `git show REV:<path>` (never the working tree), so a check sees the
-point-in-time facts of one commit. Every failure is `REJECT <code>: <message>` on stderr, exit 1.
 """
 from __future__ import annotations
 
@@ -59,11 +53,6 @@ GUIDE_SECTION = "## Host process contract"
 EXIT_TABLE_HEADER = ("Code", "Name", "Meaning")
 FORMAT_TABLE_HEADER = ("Type", "RAM code", "Id", "Bytes")
 CRASH_CODE_CELL = "none (death by signal)"
-NOTE = ".planning/research/v0.3/PLAYSTEAD-CONTRACT.md"
-INTEROP_FILES = ("README.md", GUIDE, "docs/cartridge-and-saves.md", "docs/support/unreleased.md", CONTRACT, NOTE)
-INTEROP_PATTERN = re.compile(r"(byte-identical|compatible|interoperab)[^.\n]*mGBA", re.IGNORECASE)
-# The sentence PLAYSTEAD-CONTRACT.md carried before the D-19 correction: the seeded control re-appends it.
-INTEROP_ORIGINAL = "Non-RTC SRAM is byte-identical to mGBA and can be documented as such."
 
 
 class Reject(Exception):
@@ -236,27 +225,6 @@ def check_docs(guide: str, document: dict) -> tuple[int, int]:
             reject("doc-table-drift", f"save-format table row {index} is {cells}, host-contract.json says {wanted}")
     return len(exit_rows), len(format_rows)
 
-
-# ---- --no-interop: no emulator-interoperability claim anywhere in the published text ------------------------
-
-def interop_lines(label: str, text: str) -> None:
-    for number, line in enumerate(text.splitlines(), start=1):  # one line at a time: a match never spans lines
-        if INTEROP_PATTERN.search(line):
-            reject("interop-claim", f"{label} line {number} makes an emulator interoperability claim")
-
-
-def check_no_interop(repo: pathlib.Path, rev: str) -> int:
-    texts = {path: read_at(repo, rev, path).decode("utf-8", errors="strict") for path in INTEROP_FILES}
-    for path in INTEROP_FILES:
-        interop_lines(path, texts[path])
-    seeded = texts[NOTE].rstrip("\n") + "\n" + INTEROP_ORIGINAL + "\n"
-    try:
-        interop_lines("the seeded copy", seeded)
-    except Reject:
-        return len(INTEROP_FILES)
-    reject("control-accepted", "the seeded copy holding the original Playstead sentence was accepted; the scan has lost its teeth")
-
-
 # ---- self-test ----------------------------------------------------------------------------------------------
 
 def git(repo: pathlib.Path, *args: str) -> str:
@@ -357,7 +325,6 @@ def main() -> int:
     mode.add_argument("--check", action="store_true", help="canonical JSON, exit table and cadence")
     mode.add_argument("--self-test", action="store_true", help="seeded drift controls")
     mode.add_argument("--docs", action="store_true", help="the guide's tables against the JSON")
-    mode.add_argument("--no-interop", action="store_true", help="no emulator-interoperability claim in the published text")
     parser.add_argument("--docs-file", type=pathlib.Path, help="read the native guide from this file instead of --rev")
     parser.add_argument("--rev", help="the commit to read the contract and C sources from")
     parser.add_argument("--repo", type=pathlib.Path, default=ROOT, help="the repository root")
@@ -375,10 +342,6 @@ def main() -> int:
                 guide = read_at(args.repo, args.rev, GUIDE).decode("utf-8", errors="strict")
             tables_exit, tables_format = check_docs(guide, document)
             print(f"host-contract docs pass exit_rows={tables_exit} format_rows={tables_format}")
-            return 0
-        if args.no_interop:
-            files = check_no_interop(args.repo, args.rev)
-            print(f"no-interop-claims pass files={files} controls=1")
             return 0
         exit_rows, cadence_keys = check(args.repo, args.rev)
         print(f"host-contract pass exit_codes={exit_rows} cadence={cadence_keys}")

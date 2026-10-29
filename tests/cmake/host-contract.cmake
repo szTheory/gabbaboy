@@ -229,8 +229,10 @@ add_test(NAME host_contract_docs_missing_control
 set_tests_properties(host_contract_docs_missing_control PROPERTIES TIMEOUT 60)
 
 # ---- D-19: no emulator-interoperability claim in the published text, with a seeded control ---------------------
+# The scan reads .planning/research/v0.3/PLAYSTEAD-CONTRACT.md, so the test carries the `planning` label: a
+# planning-only change must still run it (tests/scripts/verify-planning-labels.py). It names no build path.
 add_test(NAME doc_no_interop_claims
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_CONTRACT_CHECKER}"
-    --no-interop --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
-set_tests_properties(doc_no_interop_claims PROPERTIES TIMEOUT 60
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-no-interop-claims.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(doc_no_interop_claims PROPERTIES TIMEOUT 60 LABELS planning
   PASS_REGULAR_EXPRESSION "no-interop-claims pass files=6 controls=1")
