@@ -399,6 +399,8 @@ not mutate the destination. The API checks in this order:
 | Save buffer is shorter than the required size | `GBB_BUFFER_TOO_SMALL` |
 | State bytes overlap the destination instance | `GBB_INVALID_ARGUMENT` |
 
+`gbb_state_size` and `gbb_save_state` return `GBB_STATE_INVALID_CONTENT` for a live machine that breaks a state invariant; states produced by this emulator are not expected to.
+
 The first seven state errors use the frozen public values 21 through 27 in the
 order shown by the API enum. `out_size` and save output remain untouched on an
 error. Input/output state buffers must be stable for the call and must not
