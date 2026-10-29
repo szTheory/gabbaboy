@@ -386,11 +386,54 @@ def rehearsal_reuse_self_test(base_run: "dict[str, Any] | None" = None,
     def run_defect(label: str, reason: str, **changes: Any) -> None:
         refuse(label, reason, lambda: select([dict(run, **changes)], trees))
 
-    late_jobs = json.loads(json.dumps(attempt_jobs))
-    late_jobs["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
-    refuse("an attempt completed after the version PR merged", "rehearsal-postdates-tag",
+    late_first_attempt = json.loads(json.dumps(attempt_jobs))
+    for job in late_first_attempt["jobs"]:
+        job["run_attempt"] = 1
+    late_first_attempt["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
+    first_attempt = dict(run, run_attempt=1)
+    refuse("a postdated first run attempt", "rehearsal-postdates-tag",
+           lambda: bind_rehearsal_run({"workflow_runs": [first_attempt]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, first_attempt["head_sha"], merged_at,
+                                      late_first_attempt))
+
+    late_second_attempt = json.loads(json.dumps(attempt_jobs))
+    late_second_attempt["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
+    refuse("attempt 2 completing after the version PR merged", "rehearsal-postdates-tag",
            lambda: bind_rehearsal_run({"workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
-                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at, late_jobs))
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at,
+                                      late_second_attempt))
+
+    equal_tree_pr_head = "d" * 40
+    pr_head_trees = {**trees, equal_tree_pr_head: trees[run["head_sha"]]}
+    refuse("a tree-equal commit that is not the version PR head", "rehearsal-not-version-pr-head",
+           lambda: bind_rehearsal_run({"workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, pr_head_trees.get, equal_tree_pr_head, merged_at,
+                                      attempt_jobs))
+    refuse("a missing merged_at binding", "incomplete not_after binding",
+           lambda: bind_rehearsal_run({"workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], None, attempt_jobs))
+    other_run_jobs = json.loads(json.dumps(attempt_jobs))
+    other_run_jobs["jobs"][0]["run_id"] += 1
+    refuse("attempt jobs from another run id", "do not match the selected run and attempt",
+           lambda: bind_rehearsal_run({"workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at,
+                                      other_run_jobs))
+    pull_request_run = dict(run, event="pull_request")
+    refuse("a pull_request rehearsal", "was triggered by",
+           lambda: bind_rehearsal_run({"workflow_runs": [pull_request_run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at, attempt_jobs))
+    fork_run = dict(run, head_repository={"full_name": "fork/gabbaboy"})
+    refuse("a fork rehearsal", "another repository or a fork",
+           lambda: bind_rehearsal_run({"workflow_runs": [fork_run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at, attempt_jobs))
+    other_workflow_run = dict(run, path=".github/workflows/release.yml")
+    refuse("a run from another workflow", "not a run of the rehearsal workflow",
+           lambda: bind_rehearsal_run({"workflow_runs": [other_workflow_run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at, attempt_jobs))
+    r1_green_stale = dict(run, id=9000, run_attempt=1, head_sha="d" * 40)
+    r2_red = dict(run, id=9001, run_attempt=2, conclusion="failure", head_sha="e" * 40)
+    refuse("R2 is red while older R1 is green on a different tree", "not completed successfully",
+           lambda: select([r1_green_stale, r2_red], {**trees, "d" * 40: "2" * 40, "e" * 40: "1" * 40}))
 
     run_defect("another workflow", "not a run of the rehearsal workflow", path=".github/workflows/release-please.yml")
     run_defect("a workflow path that only starts like the rehearsal", "not a run of the rehearsal workflow",

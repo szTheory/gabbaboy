@@ -1485,6 +1485,51 @@ def _check_performance_reuse(workflow: str, job: dict) -> None:
         raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must reuse a rehearsal receipt only through --verify-reuse with the tag's tree")
 
 
+REHEARSAL_FETCH_STEP_NAME = "Fetch the rehearsal run and its attempt jobs for binding"
+REHEARSAL_BIND_STEP_NAME = "Bind the exact-tag rehearsal to the version PR head"
+REHEARSAL_BIND_COMMAND = ('python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --bind-rehearsal-run '
+                          '"$RUNNER_TEMP/rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" '
+                          '--repo "$GH_REPO" --selected-run "$RUNNER_TEMP/rehearsal-run.json" '
+                          '--pr-head "$PR_HEAD_SHA" --merged-at "$PR_MERGED_AT" '
+                          '--attempt-jobs "$RUNNER_TEMP/rehearsal-attempt-jobs.json"')
+
+
+def _check_candidate_rehearsal_binding(workflow: str, job: dict) -> None:
+    steps = job.get("steps", [])
+    proofs = [step for step in steps if step.get("name") == "Verify merged PR exact-head required evidence"]
+    fetches = [step for step in steps if step.get("name") == REHEARSAL_FETCH_STEP_NAME]
+    bindings = [step for step in steps if step.get("name") == REHEARSAL_BIND_STEP_NAME]
+    if (len(proofs) != 1 or len(fetches) != 1 or len(bindings) != 1
+            or steps.index(fetches[0]) != steps.index(proofs[0]) + 1
+            or steps.index(bindings[0]) != steps.index(fetches[0]) + 1):
+        raise Reject("rehearsal-binding-order", "release candidate must bind rehearsal immediately after the merged PR proof")
+    proof_text = proofs[0].get("run", "")
+    if ("merged_at=$(jq -r '.merged_at' <<<\"$pr\")" not in proof_text
+            or "merged_at=%s\\n" not in proof_text):
+        raise Reject("rehearsal-binding-unbound", "release candidate must output the server-recorded merged_at of its exact PR")
+    fetch = fetches[0]
+    fetch_text = fetch.get("run", "")
+    fetch_pins = (
+        "actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success&per_page=100",
+        'actions/runs/$run_id/attempts/$attempt/jobs?per_page=100',
+        'max_by(.id)',
+    )
+    if fetch.get("env", {}).get("GH_TOKEN") != "${{ github.token }}" or any(pin not in fetch_text for pin in fetch_pins):
+        raise Reject("rehearsal-binding-unbound", "release candidate must fetch the newest rehearsal and its selected attempt jobs")
+    bind = bindings[0]
+    if bind.get("env", {}).get("PR_HEAD_SHA") != "${{ steps.proof.outputs.head_sha }}" \
+            or bind.get("env", {}).get("PR_MERGED_AT") != "${{ steps.proof.outputs.merged_at }}" \
+            or bind.get("env", {}).get("GH_TOKEN"):
+        raise Reject("rehearsal-binding-unbound", "release candidate must bind the proof step's PR head and merged_at outputs")
+    text = bind.get("run", "")
+    pins = (
+        'git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"',
+    )
+    if any(pin not in text for pin in pins) or "set -euo pipefail" not in text or "|| true" in text:
+        raise Reject("rehearsal-binding-unbound", "release candidate must fetch and judge the newest rehearsal and its attempt jobs without a fallback")
+    require_call(workflow, "candidate", {"steps": [bind]}, REHEARSAL_BIND_COMMAND)
+
+
 def check_rehearsal(root: Path) -> None:
     name = "release-rehearsal"
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
@@ -1514,6 +1559,20 @@ def check_rehearsal(root: Path) -> None:
     if "if" in judge:
         raise Reject("workflow-dependency", f"{_where(name, 'judge')} must run unconditionally after every producer")
     _check_unprivileged(name, tree, "judge")
+    judge_steps = judge.get("steps", [])
+    tag_guard = judge_steps[0] if judge_steps else {}
+    tag_guard_run = tag_guard.get("run", "")
+    required_tag_guard = (
+        'TAG="${GITHUB_REF_NAME#rehearsal/}"',
+        'if [[ "$TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then',
+        'git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG"',
+        'Tag $TAG already exists; a rehearsal after the tag cannot bind a release.',
+        'if [[ -n "$tag_ref" ]]; then',
+        "exit 1",
+    )
+    if tag_guard.get("name") != "Refuse rehearsal after its release tag exists" \
+            or any(pin not in tag_guard_run for pin in required_tag_guard) or not _runs_under_errexit(tag_guard):
+        raise Reject("rehearsal-tag-exists", "the rehearsal judge must first refuse a release-shaped branch whose tag already exists")
     checkouts = {step.get("with", {}).get("path"): step.get("with", {}) for step in _checkouts(judge)}
     if set(checkouts) != {"trusted-judge", "subject"}:
         raise Reject("judge-trust", f"{_where(name, 'judge')} needs one trusted-judge checkout and one subject-data checkout")
@@ -2168,6 +2227,7 @@ def check_release(root: Path) -> None:
             require_call(name, job_id, jobs[job_id], command, conditional=command == PERFORMANCE_MEASURE and job_id == "candidate-performance")
     _check_performance_reuse(name, jobs["candidate-performance"])
     _check_release_performance_consumer(jobs["candidate-performance"])
+    _check_candidate_rehearsal_binding(name, jobs["candidate"])
     _check_attach_reuse(name, jobs["attach-v02-evidence"])
     _check_fuzz_source_binding(name, tree)
     _check_fuzz_wait_budget(name, tree)
@@ -2938,6 +2998,20 @@ def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str)
 JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head --git-root trusted-judge"
 _REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
+REHEARSAL_TAG_EXISTS_STEP = (
+    '      - name: Refuse rehearsal after its release tag exists\n'
+    '        shell: bash\n'
+    '        run: |\n'
+    '          set -euo pipefail\n'
+    '          TAG="${GITHUB_REF_NAME#rehearsal/}"\n'
+    '          if [[ "$TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then\n'
+    '            tag_ref=$(git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG")\n'
+    '            if [[ -n "$tag_ref" ]]; then\n'
+    '              echo "Tag $TAG already exists; a rehearsal after the tag cannot bind a release." >&2\n'
+    '              exit 1\n'
+    '            fi\n'
+    '          fi\n'
+)
 FUZZ_TAG_CHECK = '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {'
 
 
@@ -3154,6 +3228,18 @@ def _mutations():
          "    env:\n      GH_TOKEN: ${{ github.token }}\n", "producer-token"),
         _m("release performance checkout persists credentials", rel, "  candidate-performance:\n",
          "persist-credentials: false", "persist-credentials: true", "checkout-credentials"),
+        _m("release candidate rehearsal binding call removed", rel, "  candidate:\n",
+           REHEARSAL_BIND_COMMAND, "true", "required-command-not-executed"),
+        _m("release candidate rehearsal binding loses --pr-head", rel, "  candidate:\n",
+           REHEARSAL_BIND_COMMAND, REHEARSAL_BIND_COMMAND.replace(' --pr-head "$PR_HEAD_SHA"', ""),
+           "required-command-not-executed"),
+        _m("release candidate rehearsal binding loses --merged-at", rel, "  candidate:\n",
+           REHEARSAL_BIND_COMMAND, REHEARSAL_BIND_COMMAND.replace(' --merged-at "$PR_MERGED_AT"', ""),
+           "required-command-not-executed"),
+        _m("release candidate rehearsal binding loses --attempt-jobs", rel, "  candidate:\n",
+           REHEARSAL_BIND_COMMAND,
+           REHEARSAL_BIND_COMMAND.replace(' --attempt-jobs "$RUNNER_TEMP/rehearsal-attempt-jobs.json"', ""),
+           "required-command-not-executed"),
         _m("release fuzz reader checks out the tagged subject", rel, "  candidate-fuzz:\n", "ref: ${{ github.sha }}",
          "ref: ${{ env.SOURCE_SHA }}", "judge-trust"),
         _m("release attacher checks out the tagged subject", rel, "  attach-v02-evidence:\n", "    steps:\n",
@@ -3183,6 +3269,8 @@ def _mutations():
         _m("errexit disabled before the call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "set +e\n{I}" + JUDGE_CALL, "required-command-not-executed"),
         _m("exit before the call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "exit 0\n{I}" + JUDGE_CALL, "required-command-not-executed"),
         _m("continue-on-error on the judge step", "release-rehearsal.yml", "  judge:\n", JUDGE_STEP, JUDGE_STEP + "        continue-on-error: true\n", "ignored-gate"),
+        _m("rehearsal judge tag-existence refusal removed", reh, "  judge:\n", REHEARSAL_TAG_EXISTS_STEP, "",
+           "rehearsal-tag-exists"),
         _m("step disabled with if false", "release-rehearsal.yml", "  judge:\n", JUDGE_STEP, JUDGE_STEP + "        if: ${{ false }}\n", "disabled-gate"),
         _m("judge job disabled with if false", "release-rehearsal.yml", "  judge:\n", "    runs-on: ubuntu-24.04\n", "    if: ${{ false }}\n    runs-on: ubuntu-24.04\n", "disabled-gate"),
         _m("trusted judge checkout loses full history", "release-rehearsal.yml", "  judge:\n",
@@ -4098,6 +4186,42 @@ def _route_lifecycle(workflow: str, edits, workflow_text: str, script_text: str)
     return ("lifecycle", routed) if routed else (workflow, edits)
 
 
+def rehearsal_tag_guard_controls(root: Path) -> int:
+    tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
+    step = tree["jobs"]["judge"]["steps"][0]
+    shell = step["run"]
+    harness = '''
+git() {
+  printf '%s\\n' "$*" >> "$TAG_GIT_LOG"
+  if [[ "$TAG_EXISTS" == true ]]; then
+    printf '0123456789abcdef0123456789abcdef01234567\\trefs/tags/v0.3.0\\n'
+  fi
+}
+'''
+    with tempfile.TemporaryDirectory(prefix="gbb-release-tag-guard.") as directory:
+        log = Path(directory) / "git.log"
+
+        def run(ref_name: str, tag_exists: bool) -> subprocess.CompletedProcess[str]:
+            log.write_text("", encoding="utf-8")
+            env = {**os.environ, "GITHUB_REF_NAME": ref_name, "GITHUB_REPOSITORY": "szTheory/gabbaboy",
+                   "TAG_EXISTS": "true" if tag_exists else "false", "TAG_GIT_LOG": str(log)}
+            return subprocess.run(["bash", "-c", harness + shell], capture_output=True, text=True,
+                                  check=False, env=env, timeout=10)
+
+        absent = run("rehearsal/v0.3.0", False)
+        if absent.returncode != 0 or len(log.read_text(encoding="utf-8").splitlines()) != 1:
+            raise SystemExit("self-test release tag guard failed to allow an untagged release rehearsal")
+        present = run("rehearsal/v0.3.0", True)
+        if (present.returncode == 0 or "Tag v0.3.0 already exists; a rehearsal after the tag cannot bind a release." not in present.stderr
+                or len(log.read_text(encoding="utf-8").splitlines()) != 1):
+            raise SystemExit("self-test release tag guard did not refuse an existing release tag")
+        other = run("rehearsal/phase-15.1-demo", True)
+        if other.returncode != 0 or log.read_text(encoding="utf-8").strip():
+            raise SystemExit("self-test release tag guard did not skip a non-release rehearsal branch")
+    print("PASS: rehearsal tag guard allows an untagged release rehearsal and refuses an existing tag; non-release branch skips")
+    return 1
+
+
 def self_test(root: Path) -> None:
     rejected = 0
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
@@ -4108,6 +4232,7 @@ def self_test(root: Path) -> None:
         positive = _run_cli(fixture, work)
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+        rejected += rehearsal_tag_guard_controls(fixture)
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
         baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
         baselines["config"] = (fixture / WINDOW_CONFIG).read_text(encoding="utf-8")

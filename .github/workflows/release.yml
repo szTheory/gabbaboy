@@ -160,7 +160,30 @@ jobs:
             [[ $(jq --arg name "$context" 'any(.[]; .name == $name and .bucket == "pass")' <<<"$required") == true ]] || { echo "Required exact-head context missing: $context" >&2; exit 1; }
           done
           [[ $(jq 'any(.[]; (.name | endswith("fixture-repro")) and .bucket == "pass")' <<<"$required") == true ]] || { echo "Required exact-head fixture-repro context missing." >&2; exit 1; }
-          printf 'head_sha=%s\nmerge_commit_sha=%s\npr_number=%s\n' "$pr_head" "$pr_merge" "$pr_number" >> "$GITHUB_OUTPUT"
+          merged_at=$(jq -r '.merged_at' <<<"$pr")
+          [[ -n "$merged_at" && "$merged_at" != null ]] || { echo "Merged PR evidence has no merge time." >&2; exit 1; }
+          printf 'head_sha=%s\nmerge_commit_sha=%s\npr_number=%s\nmerged_at=%s\n' "$pr_head" "$pr_merge" "$pr_number" "$merged_at" >> "$GITHUB_OUTPUT"
+      - name: Fetch the rehearsal run and its attempt jobs for binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success&per_page=100" > "$RUNNER_TEMP/rehearsal-runs.json"
+          selected_rehearsal=$(jq -ec '[.workflow_runs[]] | if length == 0 then error("no successful rehearsal run exists") else max_by(.id) end' "$RUNNER_TEMP/rehearsal-runs.json")
+          run_id=$(jq -r '.id' <<<"$selected_rehearsal")
+          attempt=$(jq -r '.run_attempt' <<<"$selected_rehearsal")
+          [[ "$run_id" =~ ^[0-9]+$ && "$attempt" =~ ^[0-9]+$ ]] || { echo "No successful rehearsal run of this tag exists." >&2; exit 1; }
+          gh api "repos/$GH_REPO/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100" > "$RUNNER_TEMP/rehearsal-attempt-jobs.json"
+      - name: Bind the exact-tag rehearsal to the version PR head
+        env:
+          PR_HEAD_SHA: ${{ steps.proof.outputs.head_sha }}
+          PR_MERGED_AT: ${{ steps.proof.outputs.merged_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"
+          python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --bind-rehearsal-run "$RUNNER_TEMP/rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo "$GH_REPO" --selected-run "$RUNNER_TEMP/rehearsal-run.json" --pr-head "$PR_HEAD_SHA" --merged-at "$PR_MERGED_AT" --attempt-jobs "$RUNNER_TEMP/rehearsal-attempt-jobs.json"
       - name: Record or revalidate source identity receipt
         env:
           GH_TOKEN: ${{ github.token }}
