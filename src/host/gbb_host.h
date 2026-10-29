@@ -79,6 +79,13 @@ int host_save_io_open_dir(const char *path, int *out_dirfd);
  * non-zero code is a refusal. The file is opened without following symlinks and without blocking,
  * must be a regular file of exactly `want` bytes, and must be unchanged after the read. */
 int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t want);
+/* Reads dirfd/name into buf, at most `cap` bytes, for files whose size the caller does not know (the
+ * player's slot files). The file is opened without following symlinks and without blocking and must be
+ * a regular file; no allocation is ever sized from st_size, so an oversized file costs at most `cap`
+ * bytes of reading. A file longer than `cap` reads exactly `cap` bytes, which a caller that passed
+ * state size + 1 sees as one byte too many. `*out_len` is set only on HOST_IO_OK. HOST_IO_EMISSING means
+ * the file is absent; HOST_IO_ESYMLINK, HOST_IO_ENOTREG, HOST_IO_EUNSTABLE and HOST_IO_EREAD refuse. */
+int host_save_io_read_bounded(int dirfd, const char *name, uint8_t *buf, size_t cap, size_t *out_len);
 /* Atomically publishes bytes as dirfd/name (D-09). Old-or-new against process death; prints nothing
  * and preserves errno. The temp name is `.<name>.tmp-<pid>-<seq>`. Frozen signature. */
 int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size_t len);

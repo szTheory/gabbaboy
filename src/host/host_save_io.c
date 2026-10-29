@@ -52,8 +52,9 @@ int host_save_io_open_dir(const char *path, int *out_dirfd) {
     return HOST_IO_OK;
 }
 
-int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t want) {
-    if (name == NULL || buf == NULL) return HOST_IO_EREAD;
+/* The one place a regular file is opened for reading: no symlink is followed and nothing blocks, so a
+ * FIFO or device cannot stall the caller. On HOST_IO_OK the descriptor is open and `*before` is its fstat. */
+static int open_regular_nofollow(int dirfd, const char *name, int *out_fd, struct stat *before) {
     const int fd = openat(dirfd, name,
                           O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
     if (fd < 0) {
@@ -61,9 +62,18 @@ int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t wa
         if (errno == ELOOP || errno == EMLINK) return HOST_IO_ESYMLINK;
         return HOST_IO_EREAD;
     }
+    if (fstat(fd, before) != 0) { (void)close(fd); return HOST_IO_EREAD; }
+    if (!S_ISREG(before->st_mode)) { (void)close(fd); return HOST_IO_ENOTREG; }
+    *out_fd = fd;
+    return HOST_IO_OK;
+}
+
+int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t want) {
+    if (name == NULL || buf == NULL) return HOST_IO_EREAD;
+    int fd = -1;
     struct stat before;
-    if (fstat(fd, &before) != 0) { (void)close(fd); return HOST_IO_EREAD; }
-    if (!S_ISREG(before.st_mode)) { (void)close(fd); return HOST_IO_ENOTREG; }
+    const int opened = open_regular_nofollow(dirfd, name, &fd, &before);
+    if (opened != HOST_IO_OK) return opened;
     /* The size is compared, never used to size an allocation: the caller owns `want + 1` bytes. */
     if (before.st_size < 0 || (uintmax_t)before.st_size != (uintmax_t)want) {
         (void)close(fd);
@@ -84,6 +94,31 @@ int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t wa
     const int closed = close(fd);
     if (!stable) return HOST_IO_EUNSTABLE;
     return closed == 0 ? HOST_IO_OK : HOST_IO_EREAD;
+}
+
+int host_save_io_read_bounded(int dirfd, const char *name, uint8_t *buf, size_t cap, size_t *out_len) {
+    if (name == NULL || buf == NULL || out_len == NULL || cap == 0u) return HOST_IO_EREAD;
+    int fd = -1;
+    struct stat before;
+    const int opened = open_regular_nofollow(dirfd, name, &fd, &before);
+    if (opened != HOST_IO_OK) return opened;
+    /* st_size is never used to size anything: the caller's buffer is the bound. */
+    size_t total = 0u;
+    while (total < cap) {
+        const ssize_t count = read(fd, buf + total, cap - total);
+        if (count > 0) { total += (size_t)count; continue; }
+        if (count < 0 && errno == EINTR) continue;
+        if (count < 0) { (void)close(fd); return HOST_IO_EREAD; }
+        break;
+    }
+    struct stat after;
+    const bool stable = fstat(fd, &after) == 0 && after.st_dev == before.st_dev &&
+                        after.st_ino == before.st_ino && after.st_size == before.st_size;
+    const int closed = close(fd);
+    if (!stable) return HOST_IO_EUNSTABLE;
+    if (closed != 0) return HOST_IO_EREAD;
+    *out_len = total;
+    return HOST_IO_OK;
 }
 
 #ifdef GBB_HOST_TESTING
@@ -246,6 +281,15 @@ int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t wa
     (void)buf;
     (void)want;
     return HOST_IO_EMISSING;
+}
+
+int host_save_io_read_bounded(int dirfd, const char *name, uint8_t *buf, size_t cap, size_t *out_len) {
+    (void)dirfd;
+    (void)name;
+    (void)buf;
+    (void)cap;
+    (void)out_len; /* left untouched: nothing was read */
+    return HOST_IO_EREAD;
 }
 
 int host_save_io_sweep(int dirfd, const char *stem) {
