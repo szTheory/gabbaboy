@@ -116,6 +116,7 @@ filter_expected_for_platform() {
         -e '/^host_no_test_seams_shipped_run_control$/d' \
         -e '/^save_format_files$/d' \
         -e '/^save_format_controls$/d' \
+        -e '/^installed_host_smoke$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -233,6 +234,7 @@ _self_test_platform_filter_cases() {
     host_no_test_seams_shipped_run_control \
     save_format_files \
     save_format_controls \
+    installed_host_smoke \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -350,7 +352,8 @@ _self_test_platform_filter_cases() {
     host_signal_decoy_in_place_write \
     host_no_test_seams_shipped_run_control \
     save_format_files \
-    save_format_controls; do
+    save_format_controls \
+    installed_host_smoke; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1

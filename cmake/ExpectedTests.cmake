@@ -11,7 +11,7 @@ function(gabbaboy_verify_registered_tests)
   if(NOT GBB_TEST_INSTALL_PREFIX OR NOT EXISTS "${GBB_TEST_INSTALL_PREFIX}")
     list(REMOVE_ITEM expected_tests
       installed_runner_smoke installed_consumer_c installed_consumer_cpp
-      installed_consumer_phase2_c installed_consumer_phase2_cpp)
+      installed_consumer_phase2_c installed_consumer_phase2_cpp installed_host_smoke)
   endif()
   if(WIN32)
     # The A/B benchmark harness is a bash script (Plan 10-17).
@@ -106,7 +106,8 @@ function(gabbaboy_verify_registered_tests)
       host_signal_decoy_in_place_write
       host_no_test_seams_shipped_run_control
       save_format_files
-      save_format_controls)
+      save_format_controls
+      installed_host_smoke)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)
