@@ -5,15 +5,15 @@ titles: json
 findings:
   - id: WR-01
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Rollback and post-load clock results are ignored, so \"nothing changed\" can be false"
   - id: WR-02
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "Slot, undo and preload temp files are never swept after a crash"
   - id: WR-03
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The battery preload backup is clobbered by the first load of every new session"
   - id: WR-04
     severity: warning
@@ -21,11 +21,11 @@ findings:
     title: "The save-format and contract checkers read the configure-time HEAD, so they can pass against a stale revision"
   - id: WR-05
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The writer replaces an existing `.sav` with mode 0600, silently dropping its permissions"
   - id: WR-06
     severity: warning
-    disposition: open
+    disposition: fixed
     title: "The no-interop-claims scan is easy to evade and can be satisfied vacuously for a rewritten claim"
   - id: IN-01
     severity: info
@@ -63,21 +63,21 @@ findings:
     severity: info
     disposition: open
     title: "Stale and duplicated comment, and directory fsync asymmetry on macOS"
-open: 15
+open: 10
 total: 15
-recorded: 2026-10-29T06:29:14.266Z
+recorded: 2026-10-29T10:11:40.661Z
 ---
 
 # Phase 18: Code Review Disposition
 
 | Finding | Severity | Disposition | Source |
 |---------|----------|-------------|--------|
-| WR-01 | warning | open | - |
-| WR-02 | warning | open | - |
-| WR-03 | warning | open | - |
+| WR-01 | warning | fixed | 18-REVIEW-FIX.md |
+| WR-02 | warning | fixed | 18-REVIEW-FIX.md |
+| WR-03 | warning | fixed | 18-REVIEW-FIX.md |
 | WR-04 | warning | open | - |
-| WR-05 | warning | open | - |
-| WR-06 | warning | open | - |
+| WR-05 | warning | fixed | 18-REVIEW-FIX.md |
+| WR-06 | warning | fixed | 18-REVIEW-FIX.md |
 | IN-01 | info | open | - |
 | IN-02 | info | open | - |
 | IN-03 | info | open | - |
