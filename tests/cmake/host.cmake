@@ -188,7 +188,7 @@ endif()
 set(GBB_QUALIFIED_SOURCES_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/CheckRunnerSourcesQualified.cmake")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_QUALIFIED_SOURCES_SCRIPT}")
 set(GBB_QUALIFIED_SOURCES
-  "$<JOIN:$<TARGET_PROPERTY:gabbaboy-runner,SOURCES>,|>|$<JOIN:$<TARGET_PROPERTY:gabbaboy_runner_support,SOURCES>,|>|$<JOIN:$<TARGET_PROPERTY:gabbaboy_host,SOURCES>,|>|src/host/gbb_host.h")
+  "$<JOIN:$<TARGET_PROPERTY:gabbaboy-runner,SOURCES>,|>|$<JOIN:$<TARGET_PROPERTY:gabbaboy_runner_support,SOURCES>,|>|$<JOIN:$<TARGET_PROPERTY:gabbaboy_host,SOURCES>,|>|src/host/gbb_host.h|src/host/host_exit.h")
 add_test(NAME host_qualified_sources
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_ROOT_CMAKELISTS=${PROJECT_SOURCE_DIR}/CMakeLists.txt"

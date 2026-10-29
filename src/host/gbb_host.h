@@ -19,6 +19,9 @@
 
 /* One host frame is one fixed gbb_run step (D-03): 70,224 dots at two half-dots each. */
 #define GBB_HOST_FRAME_HALF_DOTS UINT64_C(140448)
+/* The same frame in nanoseconds for paced mode: 140,448 half-dots at 8,388,608 half-dots per second is
+ * 16,742,706.05 ns, truncated. Batch mode (--frames) is unpaced. */
+#define GBB_HOST_FRAME_NS UINT64_C(16742706)
 /* The core's own ROM limit is private (MBC5 types reach 8 MiB), so the host owns this cap. */
 #define GBB_HOST_MAX_ROM_BYTES (8u * 1024u * 1024u)
 /* 128 KiB of cartridge RAM plus the 21-byte RTC block: the largest raw image the core exports. */
@@ -132,10 +135,34 @@ void host_save_io_test_fail_next(int stage_code, int err);
 unsigned host_save_io_test_sync_calls(void);
 #endif
 
+/* ---- Signals and pacing (HOST-02, D-03, D-13): the signal flag is the adapter's one global ---------- */
+
+/* Names a pointer type only, so this header needs no <time.h> and compiles on MSVC. */
+struct timespec;
+
+/* Installs the host-mode handlers (D-13): SIGTERM always, SIGINT and SIGHUP unless they were inherited as
+ * SIG_IGN, each with SA_RESTART and SA_RESETHAND and an empty mask; SIGPIPE is ignored; TERM, INT and HUP are
+ * unblocked. The handler only stores the signal number. Clears any earlier stop. Returns 0, or -1 on failure.
+ * Only host mode calls this; the core and the player never do. */
+int host_signal_install(void);
+/* The signal number that asked the runner to stop, or 0. Polled at frame boundaries. */
+int host_signal_stop_requested(void);
+/* "SIGTERM", "SIGINT", "SIGHUP", or "SIGNAL" for any other number. */
+const char *host_signal_name(int sig);
+/* One relative nanosleep toward a CLOCK_MONOTONIC deadline. Returns 0 when the deadline was reached or had
+ * already passed, 1 when a signal woke the sleep early (never retried), -1 on a clock or sleep error. */
+int host_pace_wait(struct timespec *deadline);
+
+#ifdef GBB_HOST_TESTING
+/* Test builds only (gabbaboy_host_testing): `hook` runs once right after `gbb-host: ready` is printed. */
+void host_run_test_set_after_ready_hook(void (*hook)(void));
+#endif
+
 /* True when any argument selects host mode: `--rom`, `--save-dir`, or either with `=`.
  * `--help` alone stays in acceptance mode. */
 bool gbb_host_is_host_invocation(int argc, char **argv);
-/* Runs host mode. Returns 0 on a clean exit, 1 on a core stop or writer failure, 2 on any refusal. */
+/* Runs host mode. Returns a GBB_HOST_EXIT_* code from host_exit.h: 0 clean, 1 failure (a core stop, an I/O or
+ * flush failure), 2 refusal. */
 int gbb_host_main(int argc, char **argv);
 
 #endif

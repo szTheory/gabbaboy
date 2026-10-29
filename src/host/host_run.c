@@ -11,6 +11,7 @@
 #define _DARWIN_C_SOURCE
 #endif
 #include "gbb_host.h"
+#include "host_exit.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -21,6 +22,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 #endif
 
@@ -174,7 +176,7 @@ static const char *read_rom(const char *path, uint8_t **out, size_t *out_len) {
 
 static int refuse(const char *reason) {
     (void)fprintf(stderr, "gbb-host: refused reason=%s\n", reason);
-    return 2;
+    return GBB_HOST_EXIT_REFUSAL;
 }
 
 static bool host_is_unsupported_platform(void) {
@@ -184,6 +186,58 @@ static bool host_is_unsupported_platform(void) {
     return false;
 #endif
 }
+
+/* ---- Pacing (D-03) ------------------------------------------------------------------------- */
+
+/* Paced mode (no --frames) holds a CLOCK_MONOTONIC deadline and advances it by one frame each time. The
+ * clock and sleep live only inside #ifndef _WIN32: on Windows the D-05 gate returns before any run. */
+#ifndef _WIN32
+#define HOST_PACE_RESYNC_FRAMES 8
+
+typedef struct {
+    struct timespec deadline;
+    bool valid;
+} host_pacer;
+
+static void pacer_start(host_pacer *pacer) {
+    pacer->valid = clock_gettime(CLOCK_MONOTONIC, &pacer->deadline) == 0;
+}
+
+static long long ns_between(const struct timespec *from, const struct timespec *to) {
+    return ((long long)to->tv_sec - (long long)from->tv_sec) * 1000000000LL +
+           ((long long)to->tv_nsec - (long long)from->tv_nsec);
+}
+
+/* Advance the deadline by one frame and sleep toward it. A host that fell more than eight frames behind
+ * resynchronises to now instead of running a burst of catch-up frames. A signal wakes the sleep and is
+ * handled by the caller's flag poll; the interrupted sleep is not resumed. */
+static void pacer_wait(host_pacer *pacer) {
+    if (!pacer->valid) return;
+    const long long frame_ns = (long long)GBB_HOST_FRAME_NS;
+    long long total = (long long)pacer->deadline.tv_nsec + frame_ns;
+    pacer->deadline.tv_sec += (time_t)(total / 1000000000LL);
+    pacer->deadline.tv_nsec = (long)(total % 1000000000LL);
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) { pacer->valid = false; return; }
+    if (ns_between(&pacer->deadline, &now) > HOST_PACE_RESYNC_FRAMES * frame_ns) {
+        pacer->deadline = now;
+        return;
+    }
+    (void)host_pace_wait(&pacer->deadline);
+}
+#else
+typedef struct {
+    int unused;
+} host_pacer;
+static void pacer_start(host_pacer *pacer) { (void)pacer; }
+static void pacer_wait(host_pacer *pacer) { (void)pacer; }
+#endif
+
+#ifdef GBB_HOST_TESTING
+/* Test builds only: runs once right after `gbb-host: ready`, so a test can raise a signal at that point. */
+static void (*g_after_ready_hook)(void);
+void host_run_test_set_after_ready_hook(void (*hook)(void)) { g_after_ready_hook = hook; }
+#endif
 
 /* ---- The run ------------------------------------------------------------------------------- */
 
@@ -239,6 +293,10 @@ static int run_host(const host_args *args, const char *stem) {
     host_run_state state = {-1, NULL, NULL, NULL, NULL};
     char sav_name[GBB_HOST_STEM_MAX_BYTES + 8u];
     (void)snprintf(sav_name, sizeof(sav_name), "%s.sav", stem);
+
+    /* D-14: handlers exist before the ROM and save are loaded, so a signal that arrives during start-up is
+     * kept and honoured at the first boundary instead of killing the process by default action. */
+    if (host_signal_install() != 0) return refuse("signal-install");
 
     int status = host_save_io_open_dir(args->save_dir, &state.dirfd);
     if (status != HOST_IO_OK)
@@ -302,13 +360,21 @@ static int run_host(const host_args *args, const char *stem) {
 
     (void)fprintf(stderr, "gbb-host: ready\n");
     (void)fflush(stderr);
+#ifdef GBB_HOST_TESTING
+    if (g_after_ready_hook != NULL) g_after_ready_hook();
+#endif
 
-    /* Without --frames the loop runs until the process is killed; pacing and signals arrive later. */
+    /* Batch mode (--frames N) is unpaced; without --frames the runner is paced and runs until stopped. */
+    const bool paced = !args->has_frames;
     const uint64_t limit = args->has_frames ? (uint64_t)args->frames : UINT64_MAX;
+    host_pacer pacer;
+    pacer_start(&pacer);
     uint64_t frame = 0u;
     bool core_stop = false;
     int stop_reason = 0;
-    while (frame < limit) {
+    /* A signal that arrived during start-up stops the run before the first frame (D-14). */
+    int stop_signal = host_signal_stop_requested();
+    while (stop_signal == 0 && frame < limit) {
         const gbb_run_result result = gbb_run(state.machine, GBB_HOST_FRAME_HALF_DOTS, NULL, 0u);
         /* An idle HALT and STOP are normal frames of a quiet guest, not failures. */
         if (result.reason != GBB_STOP_BUDGET && result.reason != GBB_STOP_HALTED_IDLE &&
@@ -318,46 +384,60 @@ static int run_host(const host_args *args, const char *stem) {
             break;
         }
         ++frame;
-        if (!battery || gbb_battery_generation(state.machine, &generation) != GBB_OK) continue;
-        const host_cadence_action action = host_cadence_step(&cadence, frame, generation);
-        if (action == HOST_CADENCE_NONE) continue;
-        const char *reason = action == HOST_CADENCE_FLUSH ? "generation" : "rtc-drift";
-        bool wrote = false;
-        const char *stage = flush_battery(&state, sav_name, want, &has_last, &wrote);
-        if (stage == NULL) {
-            print_flush(reason, frame, wrote ? "written" : "unchanged", NULL);
-            host_cadence_flushed(&cadence, generation, frame);
-        } else {
-            /* A periodic failure never stops the run; only the final flush decides the exit status. */
-            print_flush(reason, frame, "failed", stage);
-            host_cadence_flush_failed(&cadence, frame);
+        if (battery && gbb_battery_generation(state.machine, &generation) == GBB_OK) {
+            const host_cadence_action action = host_cadence_step(&cadence, frame, generation);
+            if (action != HOST_CADENCE_NONE) {
+                const char *reason = action == HOST_CADENCE_FLUSH ? "generation" : "rtc-drift";
+                bool wrote = false;
+                const char *stage = flush_battery(&state, sav_name, want, &has_last, &wrote);
+                if (stage == NULL) {
+                    print_flush(reason, frame, wrote ? "written" : "unchanged", NULL);
+                    host_cadence_flushed(&cadence, generation, frame);
+                } else {
+                    /* A periodic failure never stops the run; only the final flush decides the exit status. */
+                    print_flush(reason, frame, "failed", stage);
+                    host_cadence_flush_failed(&cadence, frame);
+                }
+            }
         }
+        /* The whole frame, its cadence flush and the pacing wait are done: this is the frame boundary
+         * where a stop is honoured, so no partial frame is ever exported. */
+        if (paced) pacer_wait(&pacer);
+        stop_signal = host_signal_stop_requested(); /* frame boundary (D-14) */
     }
 
-    /* Final flush (D-11): write iff the exported image differs from what the .sav last held. */
+    /* Final flush (D-11): write iff the exported image differs from what the .sav last held. A stop before
+     * the first frame writes nothing at all (D-14); a core stop still attempts the flush. */
     const char *flush = "none";
-    if (battery) {
+    int exit_code = GBB_HOST_EXIT_CLEAN;
+    if (battery && !(stop_signal != 0 && frame == 0u)) {
         bool wrote = false;
-        const char *stage = flush_battery(&state, sav_name, want, &has_last, &wrote);
+        const char *stage = flush_battery(&state, sav_name, want, &has_last, &wrote); /* final flush (D-11) */
         if (stage != NULL) {
             print_flush("final", frame, "failed", stage);
-            release(&state);
-            return 1;
+            flush = "failed";
+            exit_code = GBB_HOST_EXIT_FAILURE; /* a failed final flush is never a clean exit (T-18-24) */
+        } else {
+            flush = wrote ? "written" : "unchanged";
+            print_flush("final", frame, flush, NULL);
         }
-        flush = wrote ? "written" : "unchanged";
-        print_flush("final", frame, flush, NULL);
     }
 
     if (core_stop) {
-        (void)fprintf(stderr, "gbb-host: exit status=core-stop reason=%d stopped_at_frame=%llu flush=%s\n",
+        (void)fprintf(stderr,
+                      "gbb-host: exit status=failure reason=core-stop stop=%d stopped_at_frame=%llu flush=%s\n",
                       stop_reason, (unsigned long long)frame, flush);
-        release(&state);
-        return 1;
+        exit_code = GBB_HOST_EXIT_FAILURE;
+    } else if (exit_code != GBB_HOST_EXIT_CLEAN) {
+        (void)fprintf(stderr, "gbb-host: exit status=%s reason=flush stopped_at_frame=%llu flush=%s\n",
+                      host_exit_name(exit_code), (unsigned long long)frame, flush);
+    } else {
+        (void)fprintf(stderr, "gbb-host: exit status=%s reason=%s stopped_at_frame=%llu flush=%s\n",
+                      host_exit_name(exit_code), stop_signal != 0 ? host_signal_name(stop_signal) : "frames",
+                      (unsigned long long)frame, flush);
     }
-    (void)fprintf(stderr, "gbb-host: exit status=clean reason=frames stopped_at_frame=%llu flush=%s\n",
-                  (unsigned long long)frame, flush);
     release(&state);
-    return 0;
+    return exit_code;
 }
 
 int gbb_host_main(int argc, char **argv) {
@@ -365,7 +445,7 @@ int gbb_host_main(int argc, char **argv) {
     const char *reason = parse_args(argc, argv, &args);
     if (reason != NULL) {
         (void)fprintf(stderr, "invalid-arguments: reason=%s\n", reason);
-        return 2;
+        return GBB_HOST_EXIT_REFUSAL;
     }
     if (host_is_unsupported_platform()) return refuse("windows-unsupported"); /* D-05 */
 
