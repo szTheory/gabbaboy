@@ -1698,7 +1698,7 @@ def c_perf_receipt_ci_run(ctx: Context) -> str:
 
 def c_perf_receipt_tamper(ctx: Context) -> str:
     s = ctx.scenario("perf-receipt-tamper", "finalized")
-    ws = s.subject_workspace("publish")
+    ws = publish_from(ctx, s, "publish")
     path = ws / "build/evidence-fuzz/perf-gate/perf-gate-receipt.json"
     receipt = json.loads(path.read_text(encoding="utf-8"))
     receipt["run_id"] += 1
