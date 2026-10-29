@@ -503,7 +503,9 @@ void player_slot_format_log(const player_slot_result *result, char *out, size_t 
 
 #ifndef _WIN32
 /* D-25 selection text: "empty" for a missing file, the local modification time for a used slot, and a bare
- * "saved" when the file exists but cannot be examined. */
+ * "saved" when the entry cannot be examined at all. An entry that is not a regular file (a symlink, a directory,
+ * a FIFO) is "unreadable": player_slot_load refuses it with READ_FAILED, so calling it saved would promise a
+ * load that cannot happen. */
 void player_slot_format_selection(const player_slot_store *store, unsigned slot, char *out, size_t capacity) {
     if (out == NULL || capacity == 0u) return;
     out[0] = '\0';
@@ -513,6 +515,10 @@ void player_slot_format_selection(const player_slot_store *store, unsigned slot,
     if (fstatat(store->dirfd, name, &info, AT_SYMLINK_NOFOLLOW) != 0) {
         if (errno == ENOENT) (void)snprintf(out, capacity, "Slot %u selected: empty", slot);
         else (void)snprintf(out, capacity, "Slot %u selected: saved", slot);
+        return;
+    }
+    if (!S_ISREG(info.st_mode)) {
+        (void)snprintf(out, capacity, "Slot %u selected: unreadable", slot);
         return;
     }
     struct tm local;

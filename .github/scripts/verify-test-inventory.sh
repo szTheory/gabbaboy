@@ -118,6 +118,7 @@ filter_expected_for_platform() {
         -e '/^slot_reanchor_earlier$/d' \
         -e '/^slot_select_message$/d' \
         -e '/^slot_mutant_plan_ignores_last$/d' \
+        -e '/^slot_mutant_selection_any_entry$/d' \
         -e '/^host_signal_term$/d' \
         -e '/^host_signal_int$/d' \
         -e '/^host_signal_inherited_ign$/d' \
@@ -256,6 +257,7 @@ _self_test_platform_filter_cases() {
     slot_reanchor_earlier \
     slot_select_message \
     slot_mutant_plan_ignores_last \
+    slot_mutant_selection_any_entry \
     host_signal_term \
     host_signal_int \
     host_signal_inherited_ign \
@@ -395,6 +397,7 @@ _self_test_platform_filter_cases() {
     slot_reanchor_earlier \
     slot_select_message \
     slot_mutant_plan_ignores_last \
+    slot_mutant_selection_any_entry \
     host_signal_term \
     host_signal_int \
     host_signal_inherited_ign \

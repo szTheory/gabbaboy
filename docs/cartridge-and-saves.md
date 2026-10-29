@@ -434,7 +434,7 @@ and a checksum, and the player never reads or writes a host `.sav`.
 
 **Player state slots.** The macOS player keeps nine numbered machine-state
 slots per game and model. Keys `1` to `9` select a slot (selecting changes nothing and
-shows whether the slot is empty or saved), `⌘S` saves the selected slot, `⌘L` loads it and `⌘Z`
+shows whether the slot is empty, saved or unreadable), `⌘S` saves the selected slot, `⌘L` loads it and `⌘Z`
 undoes the last load; a held key does not repeat the action. A slot holds the
 core's native machine state (see [Native machine states](#native-machine-states)),
 so it is tied to the exact ROM bytes, the profile and the GabbaBoy release that

@@ -198,6 +198,15 @@ if(NOT WIN32)
     [=[snprintf(lead, sizeof(lead), ".");]=]
     stale_temp_sweep "FAIL stale_temp_sweep")
 
+  # IN-05: the selection text calls any existing entry "saved" again, so a symlink in a slot position shows as a
+  # saved slot that the load then refuses.
+  gbb_slots_mutant(selection_any_entry
+    [=[    if (!S_ISREG(info.st_mode)) {
+        (void)snprintf(out, capacity, "Slot %u selected: unreadable", slot);]=]
+    [=[    if (false) {
+        (void)snprintf(out, capacity, "Slot %u selected: unreadable", slot);]=]
+    select_message "FAIL select_message")
+
   # D-24: the plan ignores the restored queue, so the press is queued at now, which precedes the last
   # restored event and is refused.
   gbb_slots_mutant(plan_ignores_last

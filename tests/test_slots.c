@@ -1214,6 +1214,19 @@ static int case_select_message(void) {
     REQUIRE(strcmp(message, "Slot 4 selected: saved") == 0);
     player_slot_store_free(&broken);
 
+    /* IN-05: a symlink or a directory in a slot position is not a saved slot. The load refuses both as
+     * READ_FAILED, and the selection text agrees instead of showing "saved". */
+    slot_file(&fx, 6u, name);
+    REQUIRE(symlinkat("elsewhere.gbbs", fx.dirfd, name) == 0);
+    player_slot_format_selection(&fx.store, 6u, message, sizeof(message));
+    REQUIRE(strcmp(message, "Slot 6 selected: unreadable") == 0);
+    REQUIRE(player_slot_load(&fx.store, machine, PLAYER_SLOT_SOURCE_SLOT, 6u).outcome == PLAYER_SLOT_READ_FAILED);
+    slot_file(&fx, 7u, name);
+    REQUIRE(mkdirat(fx.dirfd, name, 0700) == 0);
+    player_slot_format_selection(&fx.store, 7u, message, sizeof(message));
+    REQUIRE(strcmp(message, "Slot 7 selected: unreadable") == 0);
+    REQUIRE(player_slot_load(&fx.store, machine, PLAYER_SLOT_SOURCE_SLOT, 7u).outcome == PLAYER_SLOT_READ_FAILED);
+
     /* Slots outside 1..9 and tiny buffers never overrun. */
     memset(message, 'x', sizeof(message));
     player_slot_format_selection(&fx.store, 0u, message, sizeof(message));

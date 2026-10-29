@@ -109,6 +109,7 @@ function(gabbaboy_verify_registered_tests)
       slot_reanchor_earlier
       slot_select_message
       slot_mutant_plan_ignores_last
+      slot_mutant_selection_any_entry
       host_signal_term
       host_signal_int
       host_signal_inherited_ign
