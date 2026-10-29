@@ -224,7 +224,7 @@ add_test(NAME doc_no_interop_claims
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-no-interop-claims.py"
     --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
 set_tests_properties(doc_no_interop_claims PROPERTIES TIMEOUT 60 LABELS planning
-  PASS_REGULAR_EXPRESSION "no-interop-claims pass files=6 controls=1")
+  PASS_REGULAR_EXPRESSION "no-interop-claims pass files=6 controls=6")
 
 # ---- WR-04: the checkers name HEAD, never a configure-time SHA ---------------------------------------------------
 # The registered commands are read back from the generated CTestTestfile.cmake. The control hands the same script a
