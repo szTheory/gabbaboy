@@ -14,4 +14,4 @@ Constraints:
 - RM-027, WR-C03 and the `candidate-performance` re-citation stay Phase 19 entry blockers.
 - Both automatic advance flags stay false.
 
-Execution progress: plans 18-01 to 18-05 are complete (SUMMARYs `71e0232`, `eccc214`, `7ae5004`, `ac01321`, `f246619`). Next plan: **18-06 — Player slot keys, status line, input rebase, help/limitations, macOS menu-shortcut check** (wave 6). Command: `/gsd-execute-phase 18`, run only when the owner chooses.
+Execution progress: plans 18-01 to 18-06 are complete (SUMMARYs `71e0232`, `eccc214`, `7ae5004`, `ac01321`, `f246619`, `60acda6`). Next plan: **18-07 — SIGTERM/SIGINT/SIGHUP handling, exit table, real-signal harness with decoys, core no-signal check** (wave 6, independent of 18-06). Command: `/gsd-execute-phase 18`, run only when the owner chooses.

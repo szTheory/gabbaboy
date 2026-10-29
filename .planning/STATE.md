@@ -31,7 +31,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 ## Current Position
 
 Phase: 18 (Player Save Slots and Host Contract) — EXECUTING
-Plan: 6 of 9
+Plan: 7 of 9
 Status: Ready to execute
 Last activity: 2026-10-28 — Phase 18 execution started
 
@@ -61,6 +61,10 @@ Historical decisions, including the per-plan records of Phases 1-16, moved to [v
 - [Phase 18]: 18-05: a slot load validates in a scratch instance built from the store's own ROM copy before any write, so the battery preload precedes the live gbb_load_state (D-23 order) and a refusal touches no file (W-5)
 - [Phase 18]: 18-05: a restored queue above 56 events or 140,448 x 64 half-dots ahead is UNSAFE_INPUT so the player's eight post-load releases fit the 64-event queue (discretion, W-6); the undo-source backup failure reads 'Undo not applied: undo backup failed; nothing changed'
 - [Phase 18]: 18-05: host_save_io_read_bounded shares one open_regular_nofollow with the exact reader (the 18-04 follow mutant anchors on a single open); slot mutant executables are named *variant* for verify-core-linkage.py
+- [Phase 18]: 18-06: the slot message lives in its own player field and is combined with save_status when the title is formatted, because the title shows save_status instead of status while a battery-save failure is active
+- [Phase 18]: 18-06: player_input_rebase marks all eight buttons for release and apply_slot_load queues them through player_input_retry_focus_releases at the same host time, so the main loop retries a release the queue cannot take yet
+- [Phase 18]: 18-06: A2 is resolved by an automated Cocoa menu scan that forces the cocoa video driver (the package lane exports SDL_VIDEO_DRIVER=dummy), with a seeded Command-S control
+- [Phase 18]: 18-06: the Battery RAM changed hint is skipped while a slot message is shown, so a load's message is not wiped on the next frame
 
 ### Pending Todos
 
@@ -95,11 +99,11 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T04:12:51.645Z
-**Stopped at:** Completed 18-05-PLAN.md
+**Last session:** 2026-10-29T04:39:20.507Z
+**Stopped at:** Completed 18-06-PLAN.md
 **Resume file:** None
 
-Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Plan 18-04 (host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep) is complete at `8335fba` with SUMMARY `ac01321`; full suite 1581/1581. Next plan within Phase 18: **18-05 — SDL-free slot engine: scratch-validated all-or-nothing load, undo, battery guard, messages, key decoder, re-anchor** (wave 5). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
+Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Plan 18-04 (host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep) is complete at `8335fba` with SUMMARY `ac01321`; full suite 1581/1581. Plan 18-05 (SDL-free slot engine) is complete at `4c9962b` with SUMMARY `f246619`; full suite 1610/1610. Plan 18-06 (player slot keys, status line, input rebase, help/limitations, macOS menu-shortcut scan) is complete at `67bb2bd` with SUMMARY `60acda6`; player suite 106/106 through `--build-package`, main suite 1610/1610 after reconfiguring the revision-pinned tests. Next plan within Phase 18: **18-07 — SIGTERM/SIGINT/SIGHUP handling, exit table, real-signal harness with decoys, core no-signal check** (wave 6). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
@@ -114,3 +118,4 @@ Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**.
 | Phase 18 P03 | 9 min | 2 tasks | 9 files |
 | Phase 18 P04 | 20min | 3 tasks | 13 files |
 | Phase 18 P05 | 21 min | 3 tasks | 13 files |
+| Phase 18 P06 | 26 min | 3 tasks | 9 files |
