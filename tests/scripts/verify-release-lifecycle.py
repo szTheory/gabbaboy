@@ -1734,7 +1734,8 @@ def c_pre_publish_inventory(ctx: Context) -> str:
     if not inventory.is_file():
         raise Reject("inventory-control", "the real final gate omitted its persisted asset inventory")
     mutant_text = mutate_script(ctx.script,
-        'assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")\n',
+        'assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")\n'
+        'python3 - "$assets" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" <<\'PY\'\n',
         ': # omitted pre-publish inventory writer\n')
     mutant = ctx.scenario("inventory-write-omitted", "finalized")
     mutant_workspace = mutant.subject_workspace("publish", mutant_text)
