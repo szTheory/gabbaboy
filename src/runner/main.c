@@ -1,6 +1,7 @@
 #include "gabbaboy/gabbaboy.h"
 #include "gbb_accept.h"
 #include "acceptance.h"
+#include "gbb_host.h"
 #include "../core/gabbaboy_test.h"
 
 #include <errno.h>
@@ -452,6 +453,7 @@ static int parse_half_dots(const char *text,uint64_t *out) {
 }
 
 int main(int argc,char **argv) {
+    if(gbb_host_is_host_invocation(argc,argv))return gbb_host_main(argc,argv);
     if(argc==2&&strncmp(argv[1],"--",2)!=0)return run_original_tracer(argv[1]);
     const char *manifest=NULL,*selected=NULL,*acceptance=NULL;int receipt=0,suite=0;
     gbb_acceptance_options options;memset(&options,0,sizeof(options));
