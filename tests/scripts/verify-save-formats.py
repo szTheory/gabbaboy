@@ -15,6 +15,8 @@ so a check sees the point-in-time facts of one commit. The compiled runner is a 
                        gbb_probe_rom / gbb_battery_size (the test_save_format_completeness enumerator, run with
                        --enumerator or read from --completeness FILE) has exactly one row with equal bytes and RTC
                        presence, every row is admitted, and the admitted no-battery types equal no_battery_types
+  --self-test          drives this CLI over private fixture repositories and generated runner shims, one seeded drift per
+                       control, each of which must fail with its own REJECT code
   --freeze             the table is append-only against the latest strict-semver v* tag: every baseline row must
                        survive unchanged; a tag whose tree lacks the file is baseline=none (pass); no strict tag fails
 
@@ -485,6 +487,256 @@ def command_check(args, produce: bool) -> int:
     return 0
 
 
+# ---- self-test: one seeded drift per control (D-20) -------------------------------------------------------------
+
+# A runner shim emulates `--print-save-format` and `--frames` from the contract rows with at most one seeded defect.
+# It is a generated Python script started as [sys.executable, "-I", shim] through --runner-cmd.
+SHIM = r'''
+import json, pathlib, sys
+ROWS = json.loads(%(rows)r)
+DEFECT = %(defect)r
+args = sys.argv[1:]
+def opt(name):
+    return args[args.index(name) + 1] if name in args else None
+rom = pathlib.Path(opt("--rom")).read_bytes()
+cart_type, rom_code, ram_code = rom[0x147], rom[0x148], rom[0x149]
+profile = opt("--profile") or "dmg"
+row = None
+for candidate in ROWS:
+    limit = candidate["rom_code_max"]
+    if (int(candidate["type"], 16) == cart_type and int(candidate["ram_code"], 16) == ram_code
+            and (limit is None or rom_code <= int(limit, 16))):
+        row = candidate
+        break
+if "--print-save-format" in args:
+    if row is None:
+        print("save_format=none bytes=0")
+    else:
+        identity = row["id"] + ("x" if DEFECT == "cgb-id" and profile == "cgb" else "")
+        print("save_format=%%s bytes=%%d" %% (identity, row["bytes"]))
+    sys.exit(0)
+save_dir = pathlib.Path(opt("--save-dir"))
+if row is None:
+    if DEFECT == "no-battery-file":
+        (save_dir / "rom.sav").write_bytes(bytes(8192))
+    sys.exit(0)
+image = bytearray(row["bytes"])
+if row["ram_bytes"] > 0:
+    if cart_type in (5, 6):
+        image[:row["ram_bytes"]] = bytes([0xF0]) * row["ram_bytes"]
+        image[0] = 0xFA
+    else:
+        image[0] = 0x5A
+if row["rtc_bytes"] > 0:
+    image[row["ram_bytes"]:row["ram_bytes"] + 5] = b"GBRT" + bytes([1])
+if DEFECT == "short":
+    del image[-1]
+(save_dir / "rom.sav").write_bytes(bytes(image))
+'''
+
+
+def fabricate_enumeration(rows: list[Row], no_battery: list[int]) -> str:
+    """What the in-process enumerator would print for exactly this table: the admitted battery combinations the
+    rows describe, plus the no-battery types. A seeded edit of the JSON then disagrees with this output."""
+    lines = []
+    for row in rows:
+        for rom_code in range(0, (0 if row.rom_code_max is None else row.rom_code_max) + 1):
+            lines.append(f"admitted type=0x{row.type:02X} ram=0x{row.ram_code:02X} rom=0x{rom_code:02X} battery=1 "
+                         f"bytes={row.bytes} rtc={int(row.rtc_bytes > 0)}")
+    for cart_type in no_battery:
+        lines.append(f"admitted type=0x{cart_type:02X} ram=0x00 rom=0x00 battery=0 bytes=0 rtc=0")
+    lines.sort()
+    lines.append(f"admitted-done count={len(lines)}")
+    return "\n".join(lines) + "\n"
+
+
+def git(repo: pathlib.Path, *args: str) -> str:
+    done = subprocess.run(["git", "-C", str(repo), "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                           "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", *args],
+                          capture_output=True, text=True, check=True)
+    return done.stdout.strip()
+
+
+def self_test(repo: pathlib.Path, rev: str | None) -> int:
+    """Drives this very CLI with `python -I`. With --rev the seed contract is read from that commit."""
+    seed_text = (Source(repo, rev).read(CONTRACT) if rev is not None else (ROOT / CONTRACT).read_bytes()).decode("ascii")
+    seed = json.loads(seed_text)
+    seed_rows, seed_types = parse_rows(parse_canonical(seed_text.encode("ascii"), CONTRACT))
+    enumeration = fabricate_enumeration(seed_rows, seed_types)
+    controls = 0
+    import tempfile
+    script = pathlib.Path(__file__).resolve()
+
+    def dump(value) -> str:
+        return json.dumps(value, indent=2, ensure_ascii=True) + "\n"
+
+    def edited(edit) -> str:
+        copy = json.loads(seed_text)
+        edit(copy)
+        return dump(copy)
+
+    def row_of(document: dict, cart_type: str, ram_code: str) -> dict:
+        return next(entry for entry in document["save_formats"]["rows"]
+                    if entry["type"] == cart_type and entry["ram_code"] == ram_code)
+
+    with tempfile.TemporaryDirectory(prefix="gbb-save-formats-") as temp:
+        parent = pathlib.Path(temp)
+        counter = 0
+
+        def make_repo(contract: str | None) -> pathlib.Path:
+            nonlocal counter
+            counter += 1
+            fixture = parent / f"repo{counter}"
+            fixture.mkdir()
+            git(fixture, "init", "-q")
+            (fixture / "README").write_bytes(b"fixture\n")
+            if contract is not None:
+                (fixture / "docs").mkdir()
+                (fixture / CONTRACT).write_bytes(contract.encode("ascii"))
+            git(fixture, "add", "-A")
+            git(fixture, "commit", "-q", "-m", "fixture")
+            return fixture
+
+        def commit_contract(fixture: pathlib.Path, contract: str) -> None:
+            (fixture / "docs").mkdir(exist_ok=True)
+            (fixture / CONTRACT).write_bytes(contract.encode("ascii"))
+            git(fixture, "add", "-A")
+            git(fixture, "commit", "-q", "-m", "contract")
+
+        def cli(fixture: pathlib.Path, *extra: str) -> subprocess.CompletedProcess:
+            return subprocess.run([sys.executable, "-I", str(script), "--repo", str(fixture),
+                                   "--rev", git(fixture, "rev-parse", "HEAD"), *extra],
+                                  capture_output=True, text=True, timeout=180, check=False)
+
+        def expect_pass(label: str, result: subprocess.CompletedProcess, line: str) -> None:
+            nonlocal controls
+            if result.returncode != 0 or line not in result.stdout:
+                raise SystemExit(f"self-test {label}: expected {line!r}, got {result.stdout.strip()} {result.stderr.strip()[:240]}")
+            controls += 1
+
+        def expect_reject(label: str, result: subprocess.CompletedProcess, code: str) -> None:
+            nonlocal controls
+            if result.returncode == 0 or "save-formats" in result.stdout and " pass" in result.stdout:
+                raise SystemExit(f"self-test accepted {label}")
+            if f"REJECT {code}:" not in result.stderr:
+                raise SystemExit(f"self-test {label}: expected REJECT {code}, got: {result.stderr.strip()[:240]}")
+            controls += 1
+
+        enumerator_file = parent / "enumerator.txt"
+        enumerator_file.write_bytes(enumeration.encode("ascii"))
+
+        def completeness(contract: str, output: pathlib.Path = enumerator_file) -> subprocess.CompletedProcess:
+            return cli(make_repo(contract), "--check-completeness", "--completeness", str(output))
+
+        # completeness and the structural rules
+        expect_pass("the real contract against its own enumeration", completeness(seed_text),
+                    f"save-formats completeness pass rows={len(seed_rows)}")
+
+        def mgba_size(document: dict) -> None:  # 32,768 B of RAM and a 48 B footer: internally consistent, wrong
+            entry = row_of(document, "0x10", "0x03")
+            entry.update({"bytes": 32816, "rtc_bytes": 48})
+        expect_reject("$10/$03 at 32,816 bytes", completeness(edited(mgba_size)), "size-mismatch")
+
+        def delete_row(document: dict) -> None:
+            document["save_formats"]["rows"].remove(row_of(document, "0x1E", "0x05"))
+        expect_reject("a deleted row", completeness(edited(delete_row)), "row-missing")
+
+        def add_mbc30(document: dict) -> None:  # $10/$05 is the MBC30 marker, which the core does not admit
+            rows = document["save_formats"]["rows"]
+            entry = dict(row_of(document, "0x10", "0x03"))
+            entry.update({"ram_code": "0x05", "id": "gabbaboy-mbc30-rtc-sram-64k-v1", "bytes": 65557, "ram_bytes": 65536})
+            rows.insert(rows.index(row_of(document, "0x10", "0x03")) + 1, entry)
+        expect_reject("an admitted-check failure ($10/$05 row)", completeness(edited(add_mbc30)), "row-not-admitted")
+
+        def versioned(document: dict) -> None:
+            row_of(document, "0x03", "0x02")["id"] = "gabbaboy-mbc1-sram-8k-v0.3.0"
+        expect_reject("a release-versioned id", completeness(edited(versioned)), "id-grammar")
+
+        def uppercase(document: dict) -> None:
+            row_of(document, "0x03", "0x02")["id"] = "GabbaBoy-mbc1-sram-8k-v1"
+        expect_reject("an uppercase id", completeness(edited(uppercase)), "id-grammar")
+
+        def bad_sum(document: dict) -> None:
+            row_of(document, "0x03", "0x02")["bytes"] = 8193
+        expect_reject("bytes != ram + rtc", completeness(edited(bad_sum)), "sum-mismatch")
+
+        def two_sizes(document: dict) -> None:
+            row_of(document, "0x13", "0x03")["id"] = row_of(document, "0x13", "0x02")["id"]
+        expect_reject("one id with two sizes", completeness(edited(two_sizes)), "id-size-conflict")
+
+        def swapped(document: dict) -> None:
+            rows = document["save_formats"]["rows"]
+            rows[0], rows[1] = rows[1], rows[0]
+        expect_reject("rows out of order", completeness(edited(swapped)), "row-order")
+
+        expect_reject("tab-indented JSON", completeness(json.dumps(seed, indent="\t") + "\n"), "non-canonical")
+        expect_reject("sorted keys", completeness(json.dumps(seed, indent=2, sort_keys=True) + "\n"), "non-canonical")
+        expect_reject("an empty rows list", completeness(edited(lambda d: d["save_formats"].update(rows=[]))), "row-missing")
+
+        broken = parent / "enumerator-broken.txt"
+        broken.write_bytes(enumeration.replace("admitted-done count=", "admitted-done count=9").encode("ascii"))
+        expect_reject("an enumerator count that does not match", completeness(seed_text, broken), "enumerator-output")
+
+        # produced files, through a runner shim with exactly one seeded defect
+        def shim_run(defect: str | None) -> subprocess.CompletedProcess:
+            fixture = make_repo(seed_text)
+            shim = parent / f"shim-{defect or 'good'}.py"
+            shim.write_bytes((SHIM % {"rows": json.dumps(seed["save_formats"]["rows"]), "defect": defect}).encode("ascii"))
+            return cli(fixture, "--check", "--runner-cmd", json.dumps([sys.executable, "-I", str(shim)]),
+                       "--work", str(parent / f"work-{defect or 'good'}"))
+
+        expect_pass("the shim without a defect", shim_run(None),
+                    f"save-formats pass rows={len(seed_rows)} ids={len({row.id for row in seed_rows})} profiles=2 files={2 * len(seed_rows)}")
+        expect_reject("a .sav one byte short", shim_run("short"), "file-size")
+        expect_reject("a different id under cgb", shim_run("cgb-id"), "profile-id-mismatch")
+        expect_reject("a .sav for a no-battery cartridge", shim_run("no-battery-file"), "no-battery-file")
+
+        # the freeze against the latest strict release tag
+        def tagged_repo(tags: dict[str, str | None], current: str) -> pathlib.Path:
+            fixture = make_repo(None)
+            for tag, contract in tags.items():
+                if contract is not None:
+                    commit_contract(fixture, contract)
+                git(fixture, "tag", tag)
+                if contract is not None:
+                    git(fixture, "rm", "-q", "-r", "docs")
+                    git(fixture, "commit", "-q", "-m", "drop")
+            commit_contract(fixture, current)
+            return fixture
+
+        def renamed(document: dict) -> None:
+            row_of(document, "0x03", "0x02")["id"] = "gabbaboy-mbc1-sram-8k-v2"
+
+        def gone(document: dict) -> None:
+            document["save_formats"]["rows"].pop()
+
+        def appended(document: dict) -> None:
+            document["save_formats"]["rows"].append(
+                {"type": "0x1E", "ram_code": "0x06", "rom_code_max": None, "id": "gabbaboy-mbc5-sram-256k-v1",
+                 "bytes": 262144, "ram_bytes": 262144, "rtc_bytes": 0})
+
+        expect_reject("a repository with no tag", cli(make_repo(seed_text), "--freeze"), "no-tags")
+        stray = make_repo(seed_text)
+        git(stray, "tag", "v0.1")
+        expect_reject("only a stray non-strict tag", cli(stray, "--freeze"), "no-tags")
+        expect_pass("a tag whose tree lacks the file", cli(tagged_repo({"v9.9.9": None}, seed_text), "--freeze"),
+                    "save-formats freeze pass baseline=none")
+        expect_pass("an unchanged table", cli(tagged_repo({"v9.9.9": seed_text}, seed_text), "--freeze"),
+                    "save-formats freeze pass baseline=v9.9.9")
+        expect_pass("an appended row", cli(tagged_repo({"v9.9.9": seed_text}, edited(appended)), "--freeze"),
+                    "save-formats freeze pass baseline=v9.9.9")
+        expect_reject("a changed id against the release", cli(tagged_repo({"v9.9.9": seed_text}, edited(renamed)), "--freeze"),
+                      "freeze-mismatch")
+        expect_reject("a removed row against the release", cli(tagged_repo({"v9.9.9": seed_text}, edited(gone)), "--freeze"),
+                      "freeze-mismatch")
+        # v9.10.0 sorts after v9.9.9 numerically (not as text) and its tree lacks the file, so the older tag's
+        # baseline must not be consulted even though the current table no longer matches it.
+        expect_pass("numeric tag order", cli(tagged_repo({"v9.9.9": seed_text, "v9.10.0": None}, edited(renamed)), "--freeze"),
+                    "save-formats freeze pass baseline=none")
+    print(f"save-formats self-test pass controls={controls}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     mode = parser.add_mutually_exclusive_group(required=True)
@@ -492,6 +744,7 @@ def main() -> int:
     mode.add_argument("--check-print", action="store_true", help="the print leg only (every platform)")
     mode.add_argument("--check-completeness", action="store_true", help="the contract against the core's admitted set")
     mode.add_argument("--freeze", action="store_true", help="append-only against the latest strict v* tag")
+    mode.add_argument("--self-test", action="store_true", help="seeded drift controls (optionally --rev/--repo for the seed)")
     parser.add_argument("--rev", help="the commit to read docs/host-contract.json from")
     parser.add_argument("--repo", type=pathlib.Path, default=ROOT, help="the repository root")
     parser.add_argument("--runner", help="path of gabbaboy-runner")
@@ -501,6 +754,8 @@ def main() -> int:
     parser.add_argument("--work", type=pathlib.Path, help="a build-tree directory for the generated ROMs and saves")
     args = parser.parse_args()
     try:
+        if args.self_test:
+            return self_test(args.repo, args.rev)
         if args.check_completeness:
             return command_completeness(args)
         if args.freeze:

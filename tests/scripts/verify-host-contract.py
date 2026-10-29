@@ -8,6 +8,7 @@ rtc_wall_clock and save_formats. This checker covers the first three; verify-sav
                 never re-sorted); the exit_codes rows with a number equal the GBB_HOST_EXIT_TABLE rows of
                 src/host/host_exit.h (code, name, meaning) and one more row has code null and the name `crash`;
                 the cadence values equal the constants in src/host/gbb_host.h
+  --self-test   drives this CLI over private fixture repositories, one seeded drift per control
 
 The JSON and both C files are read with `git show REV:<path>` (never the working tree), so a check sees the
 point-in-time facts of one commit. Every failure is `REJECT <code>: <message>` on stderr, exit 1.
@@ -20,11 +21,13 @@ import pathlib
 import re
 import subprocess
 import sys
+import tempfile
 
 if not __debug__:
     raise SystemExit("verify-host-contract refuses to run under python -O (its checks must stay on)")
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+SCRIPT = pathlib.Path(__file__).resolve()
 CONTRACT = "docs/host-contract.json"
 EXIT_HEADER = "src/host/host_exit.h"
 HOST_HEADER = "src/host/gbb_host.h"
@@ -157,14 +160,111 @@ def check(repo: pathlib.Path, rev: str) -> tuple[int, int]:
     return len(rows), len(cadence)
 
 
+# ---- self-test ----------------------------------------------------------------------------------------------
+
+def git(repo: pathlib.Path, *args: str) -> str:
+    done = subprocess.run(["git", "-C", str(repo), "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                           "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", *args],
+                          capture_output=True, text=True, check=True)
+    return done.stdout.strip()
+
+
+def make_repo(parent: pathlib.Path, name: str, files: dict[str, str]) -> pathlib.Path:
+    repo = parent / name
+    repo.mkdir()
+    git(repo, "init", "-q")
+    for path, text in files.items():
+        target = repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(text.encode("utf-8"))  # bytes: no newline translation on any platform
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "fixture")
+    return repo
+
+
+def run_cli(repo: pathlib.Path) -> subprocess.CompletedProcess:
+    rev = git(repo, "rev-parse", "HEAD")
+    return subprocess.run([sys.executable, "-I", str(SCRIPT), "--check", "--rev", rev, "--repo", str(repo)],
+                          capture_output=True, text=True, timeout=120, check=False)
+
+
+def self_test(repo: pathlib.Path, rev: str | None) -> int:
+    """With --rev the seed files are read from that commit (a boundary check never reads the live tree)."""
+    paths = (CONTRACT, EXIT_HEADER, HOST_HEADER)
+    if rev is not None:
+        seed = {path: read_at(repo, rev, path).decode("utf-8", errors="strict") for path in paths}
+    else:
+        seed = {path: (ROOT / path).read_text(encoding="utf-8") for path in paths}
+    document = json.loads(seed[CONTRACT])
+    controls = 0
+
+    def dump(value) -> str:
+        return json.dumps(value, indent=2, ensure_ascii=True) + "\n"
+
+    def mutated(path: str, old: str, new: str) -> dict[str, str]:
+        if seed[path].count(old) != 1:
+            raise SystemExit(f"self-test seed anchor {old!r} does not occur exactly once in {path}")
+        return {**seed, path: seed[path].replace(old, new)}
+
+    def with_document(edit) -> dict[str, str]:
+        copy = json.loads(seed[CONTRACT])
+        edit(copy)
+        return {**seed, CONTRACT: dump(copy)}
+
+    with tempfile.TemporaryDirectory(prefix="gbb-host-contract-") as temp:
+        parent = pathlib.Path(temp)
+        count = 0
+
+        def repo_for(files: dict[str, str]) -> pathlib.Path:
+            nonlocal count
+            count += 1
+            return make_repo(parent, f"r{count}", files)
+
+        def expect_pass(label: str, files: dict[str, str]) -> None:
+            nonlocal controls
+            result = run_cli(repo_for(files))
+            if result.returncode != 0 or "host-contract pass exit_codes=4 cadence=6" not in result.stdout:
+                raise SystemExit(f"self-test {label}: expected a pass, got {result.stdout.strip()} {result.stderr.strip()[:240]}")
+            controls += 1
+
+        def expect_reject(label: str, files: dict[str, str], code: str) -> None:
+            nonlocal controls
+            result = run_cli(repo_for(files))
+            if result.returncode == 0 or "host-contract pass" in result.stdout:
+                raise SystemExit(f"self-test accepted {label}")
+            if f"REJECT {code}:" not in result.stderr:
+                raise SystemExit(f"self-test {label}: expected REJECT {code}, got: {result.stderr.strip()[:240]}")
+            controls += 1
+
+        expect_pass("the real contract", seed)
+        expect_reject("tab-indented JSON", {**seed, CONTRACT: json.dumps(document, indent="\t") + "\n"}, "non-canonical")
+        expect_reject("sorted keys", {**seed, CONTRACT: json.dumps(document, indent=2, sort_keys=True) + "\n"}, "non-canonical")
+        expect_reject("a missing cadence section", with_document(lambda d: d.pop("cadence")), "section-missing")
+        expect_reject("rtc_wall_clock recorded", with_document(lambda d: d.update(rtc_wall_clock="recorded")), "section-missing")
+        expect_reject("a changed host_exit.h meaning",
+                      mutated(EXIT_HEADER, "Refused before any save mutation", "Refused sometimes"), "exit-table-drift")
+        expect_reject("a missing crash row", with_document(lambda d: d["exit_codes"].pop()), "exit-table-drift")
+        expect_reject("a renumbered exit row", with_document(lambda d: d["exit_codes"][1].update(code=3)), "exit-table-drift")
+        expect_reject("quiet frames 17 in gbb_host.h",
+                      mutated(HOST_HEADER, "#define GBB_HOST_QUIET_FRAMES UINT64_C(16)",
+                              "#define GBB_HOST_QUIET_FRAMES UINT64_C(17)"), "cadence-drift")
+        expect_reject("a changed loss window",
+                      with_document(lambda d: d["cadence"].update(sram_loss_window_frames=301)), "cadence-drift")
+    print(f"host-contract self-test pass controls={controls}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="canonical JSON, exit table and cadence")
+    mode.add_argument("--self-test", action="store_true", help="seeded drift controls")
     parser.add_argument("--rev", help="the commit to read the contract and C sources from")
     parser.add_argument("--repo", type=pathlib.Path, default=ROOT, help="the repository root")
     args = parser.parse_args()
     try:
+        if args.self_test:
+            return self_test(args.repo, args.rev)
         if args.rev is None:
             reject("usage", "--rev is required")
         exit_rows, cadence_keys = check(args.repo, args.rev)
