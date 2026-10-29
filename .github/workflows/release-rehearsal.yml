@@ -222,12 +222,16 @@ jobs:
           set -euo pipefail
           bash tests/scripts/verify-release-candidate.sh --extract \
             build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/test_installed_host.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --work "$RUNNER_TEMP/host-smoke" --source-contract docs/host-contract.json \
+            --receipt build/host-smoke-receipt.json
           # The hardened verifier needs a candidate manifest binding the archive to the source and build; the
           # rehearsal built both itself, so it writes one (the release gate gets its own from the build receipt).
           python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
             --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
             --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --platform linux-x64 --host-smoke-receipt build/host-smoke-receipt.json \
             --output build/v02-consumer-receipt.json
       - name: Inspect a git-generated source archive of the rehearsed tree
         shell: bash

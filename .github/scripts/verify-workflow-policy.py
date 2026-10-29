@@ -1097,9 +1097,10 @@ RELEASE_ROLES = {
 _VERIFIER_PAIR = ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-consumers.py")
 TRUSTED_OVERLAYS = {
     "candidate": ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-source-archive.py",
-                  "tests/scripts/verify-v02-consumers.py", "cmake/VerifyReleaseReceipt.cmake"),
+                  "tests/scripts/verify-v02-consumers.py", "tests/scripts/test_installed_host.py",
+                  "cmake/VerifyReleaseReceipt.cmake"),
     # verify-release-candidate.sh --extract reaches verify-v02-consumers.py, so both are overlaid before either runs.
-    "candidate-macos": _VERIFIER_PAIR,
+    "candidate-macos": (*_VERIFIER_PAIR, "tests/scripts/test_installed_host.py"),
     "candidate-windows": _VERIFIER_PAIR,
 }
 # Residual jobs that run tagged-tree code: no job-wide token, the token only on gh steps.
@@ -1176,7 +1177,7 @@ REHEARSAL_REQUIRED = {
         _REHEARSAL_TAG,
         'bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"',
         'python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt',
-        'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --output build/v02-consumer-receipt.json',
+        'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --platform linux-x64 --host-smoke-receipt build/host-smoke-receipt.json --output build/v02-consumer-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .',
     ),
@@ -1579,6 +1580,26 @@ def _check_candidate_rehearsal_binding(workflow: str, job: dict) -> None:
     require_call(workflow, "candidate", {"steps": [bind]}, REHEARSAL_BIND_COMMAND)
 
 
+def _check_host_smoke_wiring(workflow: str, job_id: str, job: dict, platform_id: str,
+                             *, smoke_required: bool) -> None:
+    smoke_at = None
+    if smoke_required:
+        smoke_at = require_call(
+            workflow, job_id, job, "python3 -I tests/scripts/test_installed_host.py",
+            contains=("--prefix", "$RUNNER_TEMP/v02-extracted", "--work", "$RUNNER_TEMP/host-smoke",
+                      "--source-contract", "docs/host-contract.json", "--receipt", "build/host-smoke-receipt.json"))
+    host_option = "--host-smoke-not-applicable" if platform_id == "windows-x64" else "--host-smoke-receipt"
+    consumer_contains = ("--prefix", "$RUNNER_TEMP/v02-extracted", "--candidate-manifest", "--platform", platform_id,
+                        host_option, "--output")
+    if platform_id != "windows-x64":
+        consumer_contains += ("build/host-smoke-receipt.json",)
+    consumer_at = require_call(
+        workflow, job_id, job, "python3 -I tests/scripts/verify-v02-consumers.py",
+        contains=consumer_contains)
+    if smoke_at is not None and smoke_at >= consumer_at:
+        raise Reject("consumer-host-smoke", f"{_where(workflow, job_id)} must run installed-host smoke before writing its consumer receipt")
+
+
 def check_rehearsal(root: Path) -> None:
     name = "release-rehearsal"
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
@@ -1591,6 +1612,8 @@ def check_rehearsal(root: Path) -> None:
     _check_run_expressions(name, tree)
     _check_no_duplicate_setup(name, tree)
     _check_checkout_credentials(name, tree, tree["jobs"])
+    _check_host_smoke_wiring(name, "package", _require_job(name, tree, "package"), "linux-x64",
+                             smoke_required=True)
     dispatch = tree.get("on", {}).get("workflow_dispatch", {})
     inputs = dispatch.get("inputs", {}) if isinstance(dispatch, dict) else {}
     if isinstance(inputs, dict) and {"performance_decision", "measurement_run_id"} & set(inputs):
@@ -2293,6 +2316,10 @@ def check_release(root: Path) -> None:
     _check_performance_reuse(name, jobs["candidate-performance"])
     _check_release_performance_consumer(jobs["candidate-performance"])
     _check_candidate_rehearsal_binding(name, jobs["candidate"])
+    _check_host_smoke_wiring(name, "candidate", jobs["candidate"], "linux-x64", smoke_required=True)
+    _check_host_smoke_wiring(name, "candidate-macos", jobs["candidate-macos"], "macos-arm64", smoke_required=True)
+    _check_host_smoke_wiring(name, "candidate-windows", jobs["candidate-windows"], "windows-x64",
+                             smoke_required=False)
     window_copy_at = require_call(name, "candidate", jobs["candidate"], VERSION_WINDOW_SOURCE_COPY)
     window_check_at = require_call(name, "candidate", jobs["candidate"], VERSION_WINDOW_SOURCE_CALL)
     if window_copy_at >= window_check_at:
@@ -3241,6 +3268,17 @@ def _mutations():
     reh = "release-rehearsal.yml"
     rel = "release.yml"
     return [
+        _m("rehearsal package omits installed-host smoke", reh, "  package:\n",
+           "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("release candidate omits installed-host smoke", rel, "  candidate:\n",
+           "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("release macOS candidate omits installed-host smoke", rel, "  candidate-macos:\n",
+           "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("release Windows candidate omits host-mode exclusion", rel, "  candidate-windows:\n",
+           "--host-smoke-not-applicable", "--host-smoke-receipt", "required-command-not-executed"),
+        _m("release candidate stops binding the host-smoke receipt", rel, "  candidate:\n",
+           "--host-smoke-receipt build/host-smoke-receipt.json", "--host-smoke-receipt build/other.json",
+           "required-command-not-executed"),
         _m("release candidate perf gate receipt verifier is removed", rel, "  candidate-fuzz:\n",
            "python3 -I tests/scripts/verify-perf-gate.py --verify-receipt",
            "# python3 -I tests/scripts/verify-perf-gate.py --verify-receipt", "required-command-not-executed"),

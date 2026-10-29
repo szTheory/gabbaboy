@@ -174,10 +174,18 @@ def main() -> int:
     parser.add_argument("--prefix", required=True)
     parser.add_argument("--work", required=True)
     parser.add_argument("--source-contract", required=True)
+    parser.add_argument("--receipt", type=Path,
+                        help="write the path-free host smoke result with exclusive create")
     args = parser.parse_args()
     try:
         smoke(Path(os.path.abspath(args.prefix)), Path(os.path.abspath(args.work)),
               Path(os.path.abspath(args.source_contract)))
+        if args.receipt is not None:
+            payload = json.dumps({"result": "passed", "continuation": "01,02", "preload": "42"},
+                                 sort_keys=True) + "\n"
+            descriptor = os.open(args.receipt, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(payload.encode("utf-8"))
     except Failure as failure:
         print(f"FAIL installed-host: {failure}")
         return 1

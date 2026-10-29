@@ -740,7 +740,8 @@ class OutputReservation:
 
 def run_driver(*, project_root: Path, output_path: Path, prefix_value: Path | None,
                archive_value: Path | None, candidate_manifest_value: Path | None,
-               fresh_install: bool) -> dict[str, object]:
+               fresh_install: bool, platform_id: str | None = None,
+               host_smoke: dict[str, str] | None = None) -> dict[str, object]:
     run_id = uuid.uuid4().hex
     reservation = OutputReservation(output_path)
     with reservation as output:
@@ -783,8 +784,27 @@ def run_driver(*, project_root: Path, output_path: Path, prefix_value: Path | No
                 prefix_origin=prefix_origin, run_id=run_id,
                 temp_root=temp_root / "consumer-builds",
             )
+            if platform_id is not None:
+                receipt["platform"] = platform_id
+                receipt["host_smoke"] = host_smoke
         reservation.publish(receipt)
     return receipt
+
+
+def read_host_smoke(path: Path, platform_id: str) -> dict[str, str]:
+    need(path.is_file() and not path.is_symlink(), "host-smoke-receipt-missing")
+    try:
+        content = path.read_bytes()
+        need(0 < len(content) <= 4096, "host-smoke-receipt-size-invalid")
+        value = json.loads(content.decode("utf-8"))
+    except (OSError, UnicodeError, ValueError) as error:
+        raise ContractError("host-smoke-receipt-invalid") from error
+    if platform_id == "windows-x64":
+        need(value == {"result": "not-applicable"}, "host-smoke-result-invalid")
+    else:
+        need(value == {"result": "passed", "continuation": "01,02", "preload": "42"},
+             "host-smoke-result-invalid")
+    return value
 
 
 def parse_receipt(result: subprocess.CompletedProcess[str], path: Path) -> dict[str, object]:
@@ -1343,6 +1363,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--archive", type=Path, help="candidate product archive to qualify")
     parser.add_argument("--candidate-manifest", type=Path,
                         help="versioned source/archive manifest supplied by the candidate validator")
+    parser.add_argument("--platform", choices=("linux-x64", "macos-arm64", "windows-x64"),
+                        help="release platform for the optional host-smoke receipt")
+    host_smoke_mode = parser.add_mutually_exclusive_group()
+    host_smoke_mode.add_argument("--host-smoke-receipt", type=Path,
+                                 help="embed a successful installed-host smoke receipt")
+    host_smoke_mode.add_argument("--host-smoke-not-applicable", action="store_true",
+                                 help="record the Windows host-mode exclusion")
     parser.add_argument("--extract", nargs=2, metavar=("ARCHIVE", "DESTINATION"),
                         help="safely extract a product archive into a new destination")
     parser.add_argument("--output", type=Path, help="write the success receipt atomically")
@@ -1354,7 +1381,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     if args.consumer and not args.self_test:
         parser.error("--consumer is only for --self-test")
     if args.write_candidate_manifest:
-        if args.run or args.self_test or args.prefix or args.extract or args.output or args.candidate_manifest:
+        if (args.run or args.self_test or args.prefix or args.extract or args.output or args.candidate_manifest
+                or args.platform or args.host_smoke_receipt or args.host_smoke_not_applicable):
             parser.error("--write-candidate-manifest accepts only --archive, --source-sha and --build-receipt")
         if not (args.archive and args.source_sha and args.build_receipt):
             parser.error("--write-candidate-manifest requires --archive, --source-sha and --build-receipt")
@@ -1362,15 +1390,25 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     if args.source_sha or args.build_receipt:
         parser.error("--source-sha and --build-receipt are only for --write-candidate-manifest")
     if args.extract:
-        if args.run or args.self_test or args.prefix or args.archive or args.candidate_manifest or args.output:
+        if (args.run or args.self_test or args.prefix or args.archive or args.candidate_manifest or args.output
+                or args.platform or args.host_smoke_receipt or args.host_smoke_not_applicable):
             parser.error("--extract does not accept consumer qualification options")
         return args
     if args.self_test:
-        if args.run or args.prefix or args.archive or args.candidate_manifest or args.output:
+        if (args.run or args.prefix or args.archive or args.candidate_manifest or args.output
+                or args.platform or args.host_smoke_receipt or args.host_smoke_not_applicable):
             parser.error("--self-test does not accept qualification options")
         return args
     if args.run and (args.prefix or args.archive or args.candidate_manifest):
         parser.error("--run creates its own local candidate manifest")
+    if args.platform is None and (args.host_smoke_receipt or args.host_smoke_not_applicable):
+        parser.error("host-smoke options require --platform")
+    if args.platform is not None and not (args.host_smoke_receipt or args.host_smoke_not_applicable):
+        parser.error("--platform requires a host-smoke receipt mode")
+    if args.host_smoke_receipt and args.platform == "windows-x64":
+        parser.error("windows-x64 uses --host-smoke-not-applicable")
+    if args.host_smoke_not_applicable and args.platform != "windows-x64":
+        parser.error("--host-smoke-not-applicable requires --platform windows-x64")
     if not args.run and not args.prefix and not args.archive:
         parser.error("--run, --prefix, --archive, or --self-test is required")
     if args.output is None:
@@ -1391,6 +1429,11 @@ def main(argv: list[str]) -> int:
                                                 args.write_candidate_manifest.expanduser())
             print(json.dumps(manifest, sort_keys=True))
             return 0
+        host_smoke_receipt = None
+        if args.host_smoke_receipt:
+            host_smoke_receipt = read_host_smoke(args.host_smoke_receipt.expanduser(), args.platform)
+        elif args.host_smoke_not_applicable:
+            host_smoke_receipt = {"result": "not-applicable"}
         receipt = run_driver(
             project_root=ROOT,
             output_path=args.output,
@@ -1398,6 +1441,8 @@ def main(argv: list[str]) -> int:
             archive_value=args.archive,
             candidate_manifest_value=args.candidate_manifest,
             fresh_install=args.run,
+            platform_id=args.platform,
+            host_smoke=host_smoke_receipt,
         )
         print(json.dumps(receipt, sort_keys=True))
         return 0

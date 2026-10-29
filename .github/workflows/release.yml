@@ -252,6 +252,7 @@ jobs:
           git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
           git show "${GITHUB_SHA}:tests/scripts/verify-v02-source-archive.py" > tests/scripts/verify-v02-source-archive.py
           git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
+          git show "${GITHUB_SHA}:tests/scripts/test_installed_host.py" > tests/scripts/test_installed_host.py
           git show "${GITHUB_SHA}:cmake/VerifyReleaseReceipt.cmake" > cmake/VerifyReleaseReceipt.cmake
       - name: Fetch a previously qualified candidate before retry
         env:
@@ -448,6 +449,9 @@ jobs:
           # The v0.2 verifier rejects a prefix inside the checkout, so extract the downloaded bytes elsewhere.
           bash tests/scripts/verify-release-candidate.sh --extract \
             build/downloaded/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/test_installed_host.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --work "$RUNNER_TEMP/host-smoke" --source-contract docs/host-contract.json \
+            --receipt build/host-smoke-receipt.json
           # The consumer verifier needs a candidate manifest; bind the downloaded bytes to the source and the
           # attached build receipt the same way the final gate does.
           python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
@@ -455,6 +459,7 @@ jobs:
             --build-receipt build/downloaded/build-receipt.json
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
             --archive build/downloaded/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --platform linux-x64 --host-smoke-receipt build/host-smoke-receipt.json \
             --output build/v02-consumer-receipt.json
       - name: Attach the consumer receipt to the draft
         env:
@@ -719,6 +724,7 @@ jobs:
           # verify-release-candidate.sh --extract reaches verify-v02-consumers.py, so both are replaced before either runs.
           git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
           git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
+          git show "${GITHUB_SHA}:tests/scripts/test_installed_host.py" > tests/scripts/test_installed_host.py
       - name: Select a complete existing macOS candidate or a clean build
         env:
           GH_TOKEN: ${{ github.token }}
@@ -819,7 +825,7 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz --pattern gabbaboy-preview-macos-arm64-build-receipt.json --dir build/downloaded-player
           cp build/downloaded-player/gabbaboy-preview-macos-arm64-build-receipt.json build/downloaded-player/build-receipt.json
           mkdir -p build/downloaded-core build/consumer-work
-          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --dir build/downloaded-core
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --pattern gabbaboy-build-receipt-macos-arm64.json --dir build/downloaded-core
       - name: Smoke the downloaded player archive and relocated C/C++ consumers
         shell: bash
         run: |
@@ -837,6 +843,18 @@ jobs:
             cmake --build "build/consumer-work/$language" --parallel 2
             "build/consumer-work/$language/consumer-$language" "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
           done
+          bash tests/scripts/verify-release-candidate.sh --extract \
+            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --archive build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz --source-sha "$SOURCE_SHA" \
+            --build-receipt build/downloaded-core/gabbaboy-build-receipt-macos-arm64.json
+          python3 -I tests/scripts/test_installed_host.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --work "$RUNNER_TEMP/host-smoke" --source-contract docs/host-contract.json \
+            --receipt build/host-smoke-receipt.json
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --archive build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz \
+            --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --platform macos-arm64 \
+            --host-smoke-receipt build/host-smoke-receipt.json --output build/v02-consumer-receipt-macos-arm64.json
 
   candidate-windows:
     name: downloaded-windows-x64-core-candidate
@@ -978,7 +996,7 @@ jobs:
           current=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
           [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
           mkdir -p build/downloaded build/consumer-work
-          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --dir build/downloaded
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --pattern gabbaboy-build-receipt-windows-x64.json --dir build/downloaded
       - name: Overlay the trusted release-candidate verifiers from the workflow commit
         shell: bash
         run: |
@@ -1002,6 +1020,15 @@ jobs:
             cmake --build "build/consumer-work/$language" --config Release --parallel 2
             "build/consumer-work/$language/Release/consumer-$language.exe" "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
           done
+          bash tests/scripts/verify-release-candidate.sh --extract \
+            build/downloaded/gabbaboy-core-windows-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --archive build/downloaded/gabbaboy-core-windows-x64.tar.gz --source-sha "$SOURCE_SHA" \
+            --build-receipt build/downloaded/gabbaboy-build-receipt-windows-x64.json
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --archive build/downloaded/gabbaboy-core-windows-x64.tar.gz \
+            --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --platform windows-x64 \
+            --host-smoke-not-applicable --output build/v02-consumer-receipt-windows-x64.json
           # This adds exact downloaded-byte verification while reusing the existing native consumer sources and toolchain.
 
   # Trust split for source-executing evidence (P15-01). candidate-corpus and candidate-performance run
