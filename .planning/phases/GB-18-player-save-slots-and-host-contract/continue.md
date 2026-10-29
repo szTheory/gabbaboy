@@ -14,4 +14,4 @@ Constraints:
 - RM-027, WR-C03 and the `candidate-performance` re-citation stay Phase 19 entry blockers.
 - Both automatic advance flags stay false.
 
-Execution progress: plans 18-01 and 18-02 are complete (SUMMARYs `71e0232`, `eccc214`). Next plan: **18-03 — `gbb_get_input_clock` public getter, mutants, installed consumers, API docs** (wave 3). Command: `/gsd-execute-phase 18`, run only when the owner chooses.
+Execution progress: plans 18-01, 18-02 and 18-03 are complete (SUMMARYs `71e0232`, `eccc214`, `7ae5004`). Next plan: **18-04 — Host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep** (wave 4). Command: `/gsd-execute-phase 18`, run only when the owner chooses.
