@@ -72,6 +72,17 @@ not authenticate data or detect same-size corruption. See the
 - `gbb_queue_events` copies up to 64 absolute, nondecreasing half-dot events.
   Timestamps cannot be earlier than current emulated time. This is guest time,
   not host wall-clock scheduling.
+- `gbb_get_input_clock` reads, without changing anything, the clock that
+  admits input events. Use it to re-anchor input after `gbb_load_state`, which
+  restores the saved emulated time and up to 64 queued events. Set
+  `struct_size` to `sizeof(gbb_input_clock)` before the call; a value below
+  `GBB_INPUT_CLOCK_SIZE_V1`, a NULL instance or a NULL output returns
+  `GBB_INVALID_ARGUMENT` and leaves the struct unchanged, and a larger struct
+  keeps its extra bytes. The call fills `queued_count`, `now_half_dots` and
+  `last_queued_half_dots`, which equals `now_half_dots` when nothing is queued.
+  After a load, queue new events at or after the larger of `now_half_dots` and
+  `last_queued_half_dots`; an earlier time returns `GBB_INVALID_EVENT` from
+  `gbb_queue_events`.
 - `gbb_run` and `gbb_run_audio` accept a half-dot budget and stop at whole
   instruction boundaries. Check both `reason` and `consumed_half_dots`;
   output-full, no-progress, stopped, and unsupported/invalid states need caller
