@@ -60,6 +60,10 @@ function(gbb_slots_mutant name anchor replacement case regex)
       "-DGBB_WORKDIR=${variant_workdir}"
       -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=${regex}"
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  # A mutant trips a REQUIRE, which returns early without freeing the fixture. Under phase1-asan on Linux,
+  # LeakSanitizer would then exit through _exit with its own report, dropping the buffered `FAIL <case>` line,
+  # so leak detection is off for this deliberately failing run only (as for the earlier mutant tests).
+  set_tests_properties(slot_mutant_${name} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endfunction()
 
 # registers is removed from the Windows expectation in BOTH cmake/ExpectedTests.cmake and
