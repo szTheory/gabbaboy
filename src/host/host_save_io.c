@@ -254,7 +254,11 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
         errno = failure_errno;
         return code;
     }
-    /* The rename happened. A directory-sync failure is reported but the temp is already the target. */
+    /* The rename happened. A directory-sync failure is reported but the temp is already the target.
+     * The directory gets a plain fsync, not sync_file: on Apple platforms the data was pushed with
+     * F_FULLFSYNC, so the rename itself has a weaker durability guarantee than the bytes it publishes.
+     * That is deliberate and best effort. The contract is old-or-new after process death or a crash;
+     * power loss is out of contract (see "Durability and cadence" in docs/native-integration.md). */
     if (injected(HOST_IO_EDIRSYNC)) return HOST_IO_EDIRSYNC;
     if (fsync(dirfd) != 0 && errno != EINVAL && errno != ENOTSUP && errno != EOPNOTSUPP)
         return HOST_IO_EDIRSYNC;

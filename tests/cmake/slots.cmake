@@ -85,11 +85,6 @@ function(gbb_slots_mutant name anchor replacement case regex)
   endif()
 endfunction()
 
-# registers is removed from the Windows expectation in BOTH cmake/ExpectedTests.cmake and
-# .github/scripts/verify-test-inventory.sh. test_slots_pure is portable and runs on Windows.
-# Generated ROMs, states and pref directories live under ${PROJECT_BINARY_DIR}/slots-work; nothing binary is
-# committed, because state bytes embed the release token.
-
 if(NOT WIN32)
   file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/slots-work")
   add_executable(test_slots "${PROJECT_SOURCE_DIR}/tests/test_slots.c")
