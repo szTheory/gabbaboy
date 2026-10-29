@@ -6,7 +6,7 @@
  * SDL_GetPrefPath("GabbaBoy","GabbaBoy"), so CTest runs this with HOME and CFFIXED_USER_HOME pointing at a
  * fresh build-tree directory; every case refuses to run when the pref path is not inside it.
  *
- * Usage: test_player_slots <case> [rom]   case: keys */
+ * Usage: test_player_slots <case> [rom]   case: keys | reanchor | status_line */
 #define main gabbaboy_player_embedded_main
 #ifndef GBB_PLAYER_MAIN_C
 #define GBB_PLAYER_MAIN_C "../../src/player/main.c"
@@ -15,6 +15,7 @@
 #undef main
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -194,6 +195,63 @@ static char *battery_file(const fixture *fx) {
     return player_session_test_battery_file_path(&fx->app.save_identity);
 }
 
+/* The state the player must hold right after loading `slot`: the slot itself plus the eight button releases the
+ * player queues at max(now, last queued). Built in a scratch instance from the store's own ROM copy, so it is
+ * independent of the player's input code. */
+static uint8_t *expected_after_load(const fixture *fx, const uint8_t *slot, size_t slot_len, size_t *out_len) {
+    gbb_info info;
+    memset(&info, 0, sizeof(info));
+    info.struct_size = GBB_INFO_SIZE_V1;
+    gbb_instance *scratch = NULL;
+    if (gbb_get_info(fx->app.machine, &info) != GBB_OK || gbb_create(info.profile, &scratch) != GBB_OK)
+        return NULL;
+    uint8_t *bytes = NULL;
+    gbb_input_clock clock;
+    memset(&clock, 0, sizeof(clock));
+    clock.struct_size = GBB_INPUT_CLOCK_SIZE_V1;
+    if (gbb_load_rom(scratch, fx->app.slots.rom, fx->app.slots.rom_size) == GBB_OK &&
+        gbb_load_state(scratch, slot, slot_len) == GBB_OK && gbb_get_input_clock(scratch, &clock) == GBB_OK) {
+        const player_slot_reanchor plan = player_slot_plan_reanchor(&clock);
+        gbb_input_event releases[PLAYER_INPUT_BUTTON_COUNT];
+        for (unsigned button = 0; button < PLAYER_INPUT_BUTTON_COUNT; ++button)
+            releases[button] = (gbb_input_event){plan.release_at, GBB_INPUT_BUTTON_RELEASE, (uint8_t)button};
+        if (gbb_queue_events(scratch, releases, PLAYER_INPUT_BUTTON_COUNT) == GBB_OK)
+            bytes = machine_state(scratch, out_len);
+    }
+    gbb_destroy(scratch);
+    return bytes;
+}
+
+/* Redirects stderr into a file so a case can read the lines the player printed. */
+static int begin_capture(const char *path) {
+    (void)fflush(stderr);
+    const int saved = dup(2);
+    const int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    if (saved < 0 || fd < 0 || dup2(fd, 2) < 0) {
+        if (fd >= 0) (void)close(fd);
+        if (saved >= 0) (void)close(saved);
+        return -1;
+    }
+    (void)close(fd);
+    return saved;
+}
+
+static void end_capture(int saved) {
+    (void)fflush(stderr);
+    (void)dup2(saved, 2);
+    (void)close(saved);
+}
+
+static bool file_contains(const char *path, const char *needle) {
+    size_t length = 0u;
+    uint8_t *bytes = read_all(path, &length);
+    if (bytes == NULL) return false;
+    bytes[length] = '\0';
+    const bool found = strstr((const char *)bytes, needle) != NULL;
+    free(bytes);
+    return found;
+}
+
 /* ---- Case: keys ------------------------------------------------------------------------------------ */
 
 static bool case_keys_body(fixture *fx) {
@@ -234,14 +292,17 @@ static bool case_keys_body(fixture *fx) {
     REQUIRE(slot_bytes != NULL && live != NULL && slot_len == live_len && memcmp(slot_bytes, live, live_len) == 0);
     free(live);
 
-    /* Command-L restores exactly the slot. */
+    /* Command-L restores exactly the slot, plus the eight releases the player queues after a load. */
     REQUIRE(run_frames(app, 5u));
     uint64_t later = 0u;
     REQUIRE(machine_now(app->machine, &later) && later > saved_at);
     REQUIRE(key_down(app, SDL_SCANCODE_L, SDLK_L, SDL_KMOD_LGUI));
     REQUIRE(strcmp(app->status, "Loaded slot 3 (" COMMAND_GLYPH "Z undoes)") == 0);
     live = machine_state(app->machine, &live_len);
-    REQUIRE(live != NULL && live_len == slot_len && memcmp(slot_bytes, live, live_len) == 0);
+    size_t expected_len = 0u;
+    uint8_t *expected = expected_after_load(fx, slot_bytes, slot_len, &expected_len);
+    REQUIRE(live != NULL && expected != NULL && live_len == expected_len && memcmp(expected, live, live_len) == 0);
+    free(expected);
     free(live);
     free(slot_bytes);
     uint64_t restored = 0u;
@@ -312,6 +373,235 @@ static bool case_keys(const char *rom_path) {
     return ok;
 }
 
+/* ---- Case: reanchor ------------------------------------------------------------------------------- */
+
+static void fix_checksum(uint8_t *rom) {
+    uint8_t checksum = 0u;
+    for (size_t i = 0x134u; i <= 0x14Cu; ++i) checksum = (uint8_t)(checksum - rom[i] - 1u);
+    rom[0x14Du] = checksum;
+}
+
+/* The joypad mirror: an MBC1+RAM+battery ($03/$02) cartridge whose program enables RAM and then loops
+ *   ld a,$10 / ldh ($00),a / ldh a,($00) / ld ($A000),a / jr loop
+ * so SRAM byte 0 mirrors the action-button nibble of P1 (bit 0 = A, 0 = pressed). gbb_copy_battery then shows
+ * what the guest saw, which makes "the key reaches the guest" an observation, not an inference. Same program as
+ * the 18-05 engine test, written out here because the two files are separate suites. */
+static bool write_joypad_rom(char *out_path, size_t capacity) {
+    static const uint8_t program[] = {
+        0x3E, 0x0A,             /* ld a,$0A      */
+        0xEA, 0x00, 0x00,       /* ld ($0000),a  : enable cartridge RAM */
+        0x3E, 0x10,             /* loop: ld a,$10  : select the action buttons (bit 5 low) */
+        0xE0, 0x00,             /* ldh ($00),a   */
+        0xF0, 0x00,             /* ldh a,($00)   */
+        0xEA, 0x00, 0xA0,       /* ld ($A000),a  */
+        0x18, 0xF5,             /* jr loop       */
+    };
+    uint8_t rom[32768];
+    memset(rom, 0, sizeof(rom));
+    rom[0x100u] = 0xC3u;        /* jp $0150 */
+    rom[0x101u] = 0x50u;
+    rom[0x102u] = 0x01u;
+    rom[0x134u] = 'J';
+    rom[0x147u] = 0x03u;
+    rom[0x148u] = 0x00u;
+    rom[0x149u] = 0x02u;
+    memcpy(rom + 0x150u, program, sizeof(program));
+    fix_checksum(rom);
+    char path[] = "/tmp/gabbaboy-slots-joypad-XXXXXX";
+    const int fd = mkstemp(path);
+    if (fd < 0 || strlen(path) + 1u > capacity) return false;
+    const ssize_t written = write(fd, rom, sizeof(rom));
+    if (close(fd) != 0 || written != (ssize_t)sizeof(rom)) {
+        (void)unlink(path);
+        return false;
+    }
+    memcpy(out_path, path, strlen(path) + 1u);
+    return true;
+}
+
+/* 1 when the guest sees A released (bit 0 of the mirrored P1 nibble set), 0 when pressed, -1 on error. */
+static int guest_sees_a_released(const player *app) {
+    uint8_t battery[8192];
+    if (gbb_copy_battery(app->machine, battery, sizeof(battery)) != GBB_OK) return -1;
+    return (battery[0] & 0x01u) != 0u ? 1 : 0;
+}
+
+/* The SDL timestamp of a key pressed 8 half-dots after the player's cursor, the way the smoke mode times its
+ * keys: it maps back to cursor + 8, so a correct anchor schedules it inside the next frame. */
+static Uint64 key_timestamp(const player *app) {
+    uint64_t elapsed_ns = 0u;
+    if (app->input.guest_cursor_half_dots < app->input.guest_anchor_half_dots ||
+        !player_input_half_dots_to_nanoseconds(
+            app->input.guest_cursor_half_dots - app->input.guest_anchor_half_dots + 8u, &elapsed_ns))
+        return 0u;
+    return app->input.host_anchor_ns + elapsed_ns;
+}
+
+static bool z_event(player *app, Uint32 type) {
+    return push_key_mod(app, type, SDL_SCANCODE_Z, SDLK_Z, SDL_KMOD_NONE, false, key_timestamp(app)) &&
+           pump_events(app);
+}
+
+/* The shared body of the earlier-time and later-time loads. The player has just loaded a slot whose time is
+ * `want_now`: its input must be re-anchored there, no key may be left held, a fresh Z press must be accepted and
+ * must reach the guest within one frame of its scheduled time, and the same load without the press (the control,
+ * observed first) must keep A released. */
+static bool check_reanchored_input(fixture *fx, uint64_t want_now, const char *label) {
+    player *app = &fx->app;
+    gbb_input_clock clock;
+    memset(&clock, 0, sizeof(clock));
+    clock.struct_size = GBB_INPUT_CLOCK_SIZE_V1;
+    REQUIRE(gbb_get_input_clock(app->machine, &clock) == GBB_OK);
+    if (clock.now_half_dots != want_now) FAIL("%s: loaded time %llu, wanted %llu", label,
+                                              (unsigned long long)clock.now_half_dots,
+                                              (unsigned long long)want_now);
+    /* Cursor and anchor sit at the restored time, nothing is held, and the eight releases are queued. */
+    REQUIRE(app->input.guest_cursor_half_dots == want_now && app->input.guest_anchor_half_dots == want_now);
+    REQUIRE(app->input.keyboard_buttons == 0u && app->input.held_buttons == 0u &&
+            app->input.release_pending_buttons == 0u);
+    REQUIRE(app->input.pending_count == PLAYER_INPUT_BUTTON_COUNT && clock.queued_count == PLAYER_INPUT_BUTTON_COUNT);
+
+    /* The control: one frame with no key, A stays released. */
+    REQUIRE(run_frames(app, 1u));
+    REQUIRE(guest_sees_a_released(app) == 1);
+
+    const bool paused_before = app->user_paused;
+    REQUIRE(z_event(app, SDL_EVENT_KEY_DOWN));
+    REQUIRE(strstr(app->status, "Input paused after queue error") == NULL);
+    REQUIRE(app->user_paused == paused_before);
+    memset(&clock, 0, sizeof(clock));
+    clock.struct_size = GBB_INPUT_CLOCK_SIZE_V1;
+    REQUIRE(gbb_get_input_clock(app->machine, &clock) == GBB_OK);
+    REQUIRE(clock.queued_count == 1u);
+    if (clock.last_queued_half_dots - clock.now_half_dots > PLAYER_FRAME_HALF_DOTS)
+        FAIL("%s: the press is scheduled %llu half-dots ahead, more than one frame", label,
+             (unsigned long long)(clock.last_queued_half_dots - clock.now_half_dots));
+
+    /* Run until a frame after the press's time; the guest must see A pressed by then. */
+    const uint64_t press_at = clock.last_queued_half_dots;
+    for (unsigned frames = 0u; frames < 4u && clock.now_half_dots < press_at + PLAYER_FRAME_HALF_DOTS; ++frames) {
+        REQUIRE(run_frames(app, 1u));
+        REQUIRE(gbb_get_input_clock(app->machine, &clock) == GBB_OK);
+    }
+    REQUIRE(clock.now_half_dots >= press_at + PLAYER_FRAME_HALF_DOTS);
+    if (guest_sees_a_released(app) != 0) FAIL("%s: the guest never saw the A press", label);
+    return true;
+}
+
+static bool case_reanchor_body(fixture *fx) {
+    player *app = &fx->app;
+    REQUIRE(run_frames(app, 3u));
+    REQUIRE(press_digit(app, 2u, SDL_KMOD_NONE));
+    uint64_t t1 = 0u;
+    REQUIRE(machine_now(app->machine, &t1));
+    REQUIRE(key_down(app, SDL_SCANCODE_S, SDLK_S, SDL_KMOD_LGUI));
+    REQUIRE(strcmp(app->status, "Saved slot 2") == 0);
+
+    REQUIRE(run_frames(app, 600u));
+    REQUIRE(press_digit(app, 4u, SDL_KMOD_NONE));
+    uint64_t t2 = 0u;
+    REQUIRE(machine_now(app->machine, &t2) && t2 > t1);
+    REQUIRE(key_down(app, SDL_SCANCODE_S, SDLK_S, SDL_KMOD_LGUI));
+    REQUIRE(strcmp(app->status, "Saved slot 4") == 0);
+
+    /* Earlier-time load: the player's cursor is far ahead of the restored machine. */
+    REQUIRE(press_digit(app, 2u, SDL_KMOD_NONE));
+    REQUIRE(key_down(app, SDL_SCANCODE_L, SDLK_L, SDL_KMOD_LGUI));
+    REQUIRE(strncmp(app->status, "Loaded slot 2", 13u) == 0);
+    REQUIRE(check_reanchored_input(fx, t1, "earlier-time"));
+
+    /* Z is still held when a later-time state loads: the load must let go of it. */
+    REQUIRE(press_digit(app, 4u, SDL_KMOD_NONE));
+    REQUIRE(app->input.keyboard_buttons != 0u);
+    REQUIRE(key_down(app, SDL_SCANCODE_L, SDLK_L, SDL_KMOD_LGUI));
+    REQUIRE(strncmp(app->status, "Loaded slot 4", 13u) == 0);
+    REQUIRE(check_reanchored_input(fx, t2, "later-time"));
+    return true;
+}
+
+static bool case_reanchor(void) {
+    char rom_path[128];
+    if (!write_joypad_rom(rom_path, sizeof(rom_path))) FAIL("could not write the joypad-mirror ROM");
+    fixture fx;
+    const bool ok = fx_setup(&fx, rom_path) && case_reanchor_body(&fx);
+    fx_teardown(&fx);
+    (void)unlink(rom_path);
+    return ok;
+}
+
+/* ---- Case: status_line ----------------------------------------------------------------------------- */
+
+static bool case_status_line_body(fixture *fx) {
+    player *app = &fx->app;
+    char title[PLAYER_TITLE_SIZE];
+    char capture[256];
+    (void)snprintf(capture, sizeof(capture), "%s/stderr.txt", fx->battery_root);
+    REQUIRE(run_frames(app, 2u));
+
+    /* Without a battery-save failure the slot message is the whole status. */
+    REQUIRE(press_digit(app, 2u, SDL_KMOD_NONE));
+    REQUIRE(key_down(app, SDL_SCANCODE_S, SDLK_S, SDL_KMOD_LGUI));
+    format_window_title(app, title, sizeof(title));
+    REQUIRE(strstr(title, " | Saved slot 2 | ") != NULL);
+
+    /* With one, the title status is `<save_status> · <slot message>` and the log line carries the gbb_error. */
+    app->save_status_active = true;
+    (void)snprintf(app->save_status, sizeof(app->save_status), "Battery save failed");
+    const int saved = begin_capture(capture);
+    REQUIRE(saved >= 0);
+    const bool pressed = key_down(app, SDL_SCANCODE_S, SDLK_S, SDL_KMOD_LGUI);
+    end_capture(saved);
+    REQUIRE(pressed);
+    format_window_title(app, title, sizeof(title));
+    REQUIRE(strstr(title, " | Battery save failed \xc2\xb7 Saved slot 2 | ") != NULL);
+    REQUIRE(file_contains(capture, "gabbaboy-player: slot op=save slot=2 outcome=saved gbb_error=0\n"));
+
+    /* Any later status replaces the slot message. */
+    set_status(app, "Running");
+    format_window_title(app, title, sizeof(title));
+    REQUIRE(strstr(title, " | Battery save failed | ") != NULL && strstr(title, "\xc2\xb7") == NULL);
+
+    /* A load clears the audio backlog, redraws and restarts the .gbb cadence, and keeps the pause. */
+    app->audio = player_audio_test_create(true);
+    REQUIRE(app->audio != NULL);
+    static const gbb_audio_frame queued[] = {{1, -1}, {2, -2}, {3, -3}, {4, -4}};
+    REQUIRE(player_audio_submit(app->audio, queued, 4u) && player_audio_test_queued(app->audio) == 4u);
+    app->needs_redraw = false;
+    app->displayed_generation = 77u;
+    app->save_cadence = (player_save_cadence){99u, 5u, 6u, true};
+    const bool user_paused_before = app->user_paused;
+    REQUIRE(run_frames(app, 1u));
+    const int saved_load = begin_capture(capture);
+    REQUIRE(saved_load >= 0);
+    const bool loaded = key_down(app, SDL_SCANCODE_L, SDLK_L, SDL_KMOD_LGUI);
+    end_capture(saved_load);
+    REQUIRE(loaded);
+    REQUIRE(file_contains(capture, "gabbaboy-player: slot op=load slot=2 outcome=loaded gbb_error=0\n"));
+    REQUIRE(player_audio_test_queued(app->audio) == 0u &&
+            player_audio_flushed_bytes(app->audio) == sizeof(queued));
+    REQUIRE(app->needs_redraw && app->displayed_generation == 0u);
+    uint64_t generation = 0u;
+    REQUIRE(gbb_battery_generation(app->machine, &generation) == GBB_OK);
+    REQUIRE(!app->save_cadence.dirty && app->save_cadence.observed_generation == generation);
+    REQUIRE(app->user_paused == user_paused_before);
+
+    /* The loaded battery differs from the last .gbb save; the "Battery RAM changed" hint must not wipe the
+     * message the player has just been shown. */
+    REQUIRE(generation != app->save_identity.saved_generation);
+    update_battery_save(app);
+    format_window_title(app, title, sizeof(title));
+    REQUIRE(strstr(title, "Battery save failed \xc2\xb7 Loaded slot 2 (" COMMAND_GLYPH "Z undoes)") != NULL);
+    (void)unlink(capture);
+    return true;
+}
+
+static bool case_status_line(const char *rom_path) {
+    fixture fx;
+    const bool ok = fx_setup(&fx, rom_path) && case_status_line_body(&fx);
+    fx_teardown(&fx);
+    return ok;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         fputs("usage: test_player_slots <case> [rom]\n", stderr);
@@ -321,6 +611,8 @@ int main(int argc, char **argv) {
     const char *rom = argc >= 3 ? argv[2] : NULL;
     bool ok = false;
     if (strcmp(g_case, "keys") == 0 && rom != NULL) ok = case_keys(rom);
+    else if (strcmp(g_case, "reanchor") == 0) ok = case_reanchor();
+    else if (strcmp(g_case, "status_line") == 0 && rom != NULL) ok = case_status_line(rom);
     else {
         fprintf(stderr, "unknown case or missing rom: %s\n", g_case);
         return 2;

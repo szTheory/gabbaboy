@@ -97,3 +97,5 @@ player_session_model_missing_file
 player_claims_agree
 player_claims_agree_mutated
 player_slot_keys
+player_slot_reanchor
+player_slot_status_line
