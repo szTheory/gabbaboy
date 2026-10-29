@@ -65,7 +65,22 @@ function(gabbaboy_verify_registered_tests)
       host_no_test_seams_shipped
       host_no_test_seams_shipped_control
       slot_roundtrip
-      slot_empty)
+      slot_empty
+      slot_wrong_rom_untouched
+      slot_refusal_dmg_in_cgb
+      slot_refusal_version_token
+      slot_refusal_text_file
+      slot_refusal_flipped_byte
+      slot_refusal_truncated
+      slot_refusal_oversize
+      slot_refusal_symlink
+      slot_undo_write_failure
+      slot_backup_write_failure
+      slot_undo_swap
+      slot_no_undo
+      slot_battery_guard
+      slot_unsafe_queued_input
+      slot_save_failure_keeps_old)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

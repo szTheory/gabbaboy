@@ -75,6 +75,21 @@ filter_expected_for_platform() {
         -e '/^host_no_test_seams_shipped_control$/d' \
         -e '/^slot_roundtrip$/d' \
         -e '/^slot_empty$/d' \
+        -e '/^slot_wrong_rom_untouched$/d' \
+        -e '/^slot_refusal_dmg_in_cgb$/d' \
+        -e '/^slot_refusal_version_token$/d' \
+        -e '/^slot_refusal_text_file$/d' \
+        -e '/^slot_refusal_flipped_byte$/d' \
+        -e '/^slot_refusal_truncated$/d' \
+        -e '/^slot_refusal_oversize$/d' \
+        -e '/^slot_refusal_symlink$/d' \
+        -e '/^slot_undo_write_failure$/d' \
+        -e '/^slot_backup_write_failure$/d' \
+        -e '/^slot_undo_swap$/d' \
+        -e '/^slot_no_undo$/d' \
+        -e '/^slot_battery_guard$/d' \
+        -e '/^slot_unsafe_queued_input$/d' \
+        -e '/^slot_save_failure_keeps_old$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -151,6 +166,21 @@ _self_test_platform_filter_cases() {
     host_no_test_seams_shipped_control \
     slot_roundtrip \
     slot_empty \
+    slot_wrong_rom_untouched \
+    slot_refusal_dmg_in_cgb \
+    slot_refusal_version_token \
+    slot_refusal_text_file \
+    slot_refusal_flipped_byte \
+    slot_refusal_truncated \
+    slot_refusal_oversize \
+    slot_refusal_symlink \
+    slot_undo_write_failure \
+    slot_backup_write_failure \
+    slot_undo_swap \
+    slot_no_undo \
+    slot_battery_guard \
+    slot_unsafe_queued_input \
+    slot_save_failure_keeps_old \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -227,7 +257,22 @@ _self_test_platform_filter_cases() {
     host_no_test_seams_shipped \
     host_no_test_seams_shipped_control \
     slot_roundtrip \
-    slot_empty; do
+    slot_empty \
+    slot_wrong_rom_untouched \
+    slot_refusal_dmg_in_cgb \
+    slot_refusal_version_token \
+    slot_refusal_text_file \
+    slot_refusal_flipped_byte \
+    slot_refusal_truncated \
+    slot_refusal_oversize \
+    slot_refusal_symlink \
+    slot_undo_write_failure \
+    slot_backup_write_failure \
+    slot_undo_swap \
+    slot_no_undo \
+    slot_battery_guard \
+    slot_unsafe_queued_input \
+    slot_save_failure_keeps_old; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1

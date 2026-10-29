@@ -18,7 +18,10 @@ if(NOT WIN32)
   target_compile_features(test_slots PRIVATE c_std_17)
   set_target_properties(test_slots PROPERTIES C_EXTENSIONS OFF)
 
-  foreach(case roundtrip empty)
+  foreach(case roundtrip empty wrong_rom_untouched
+      refusal_dmg_in_cgb refusal_version_token refusal_text_file refusal_flipped_byte refusal_truncated
+      refusal_oversize refusal_symlink undo_write_failure backup_write_failure undo_swap no_undo
+      battery_guard unsafe_queued_input save_failure_keeps_old)
     add_test(NAME slot_${case} COMMAND test_slots ${case}
       WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/slots-work")
     set_tests_properties(slot_${case} PROPERTIES PASS_REGULAR_EXPRESSION "PASS ${case}")
