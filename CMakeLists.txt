@@ -168,6 +168,8 @@ install(TARGETS gabbaboy_core
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(DIRECTORY include/gabbaboy DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(TARGETS gabbaboy-runner RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+# D-16: the machine-readable host contract (exit codes, cadence, save-format ids and sizes) ships with the runner.
+install(FILES docs/host-contract.json DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy")
 install(FILES
   fixtures/tracer/tracer.gb
   fixtures/tracer/manifest.json
