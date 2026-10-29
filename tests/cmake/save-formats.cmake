@@ -29,6 +29,11 @@ endif()
 set(GBB_SAVE_FORMATS_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-save-formats.py")
 set(GBB_SAVE_FORMATS_WORK "${PROJECT_BINARY_DIR}/save-formats")
 
+# The pass patterns match any positive row, id, file and exit-code count rather than today's numbers (IN-08): the
+# save-format table and the exit table are append-only (D-19), so a legitimate appended row must not fail unrelated
+# tests. Each checker derives its counts from the JSON it parsed and rejects an empty or drifted table on its own;
+# the fixed cadence key set (6) and the two profiles stay pinned.
+
 # ---- D-02: --print-save-format on the committed fixtures (portable: nothing is created) ------------------
 add_test(NAME save_format_print
   COMMAND ${CMAKE_COMMAND}
@@ -63,7 +68,7 @@ if(NOT WIN32)
       --runner $<TARGET_FILE:gabbaboy-runner> --work "${GBB_SAVE_FORMATS_WORK}")
   set_tests_properties(save_format_files PROPERTIES
     TIMEOUT 60
-    PASS_REGULAR_EXPRESSION "save-formats pass rows=16 ids=12 profiles=2 files=32")
+    PASS_REGULAR_EXPRESSION "save-formats pass rows=[1-9][0-9]* ids=[1-9][0-9]* profiles=2 files=[1-9][0-9]*")
 endif()
 
 # ---- D-20: completeness in both directions, in process (portable) ---------------------------------------
@@ -79,7 +84,7 @@ add_test(NAME save_format_completeness
     --enumerator $<TARGET_FILE:test_save_format_completeness>)
 set_tests_properties(save_format_completeness PROPERTIES
   TIMEOUT 60
-  PASS_REGULAR_EXPRESSION "save-formats completeness pass rows=16")
+  PASS_REGULAR_EXPRESSION "save-formats completeness pass rows=[1-9][0-9]*")
 
 # ---- D-19: ids are a published host contract, so the table is append-only against the latest release tag ----
 # Needs tags fetched (CI native jobs use fetch-depth 0). No strict tag at all fails; a tag without the file passes
@@ -98,7 +103,7 @@ add_test(NAME host_contract_json
     --check --rev "${GBB_SAVE_FORMATS_REV}" --repo "${PROJECT_SOURCE_DIR}")
 set_tests_properties(host_contract_json PROPERTIES
   TIMEOUT 60
-  PASS_REGULAR_EXPRESSION "host-contract pass exit_codes=4 cadence=6")
+  PASS_REGULAR_EXPRESSION "host-contract pass exit_codes=[1-9][0-9]* cadence=6")
 
 # ---- D-20: seeded controls, one REJECT code per way the published table can drift ------------------------
 # Each control drives the checker's own CLI over a private git repository (and, for the produced-file legs, over a

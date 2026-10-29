@@ -286,11 +286,22 @@ def self_test(repo: pathlib.Path, rev: str | None) -> int:
             return make_repo(parent, f"r{count}", files)
 
         def expect_pass(label: str, files: dict[str, str]) -> None:
+            """The pass line must carry the counts of the seeded document, never a pinned number (IN-08)."""
             nonlocal controls
             result = run_cli(repo_for(files))
-            if result.returncode != 0 or "host-contract pass exit_codes=4 cadence=6" not in result.stdout:
-                raise SystemExit(f"self-test {label}: expected a pass, got {result.stdout.strip()} {result.stderr.strip()[:240]}")
+            seeded = json.loads(files[CONTRACT])
+            wanted = f"host-contract pass exit_codes={len(seeded['exit_codes'])} cadence={len(seeded['cadence'])}"
+            if result.returncode != 0 or result.stdout.strip() != wanted:
+                raise SystemExit(f"self-test {label}: expected {wanted!r}, got {result.stdout.strip()} {result.stderr.strip()[:240]}")
             controls += 1
+
+        def appended_exit_row() -> dict[str, str]:
+            """An additive exit row (code 5, which no mode of the executable uses) in the header and the JSON."""
+            last = 'X(2, REFUSAL, "refusal", "Refused before any save mutation")'
+            files = mutated(EXIT_HEADER, last, last + ' \\\n    X(5, PROBE, "probe", "An appended row")')
+            copy = json.loads(seed[CONTRACT])
+            copy["exit_codes"].insert(len(copy["exit_codes"]) - 1, {"code": 5, "name": "probe", "meaning": "An appended row"})
+            return {**files, CONTRACT: dump(copy)}
 
         def expect_reject(label: str, files: dict[str, str], code: str) -> None:
             nonlocal controls
@@ -302,6 +313,8 @@ def self_test(repo: pathlib.Path, rev: str | None) -> int:
             controls += 1
 
         expect_pass("the real contract", seed)
+        # The exit table is additive: an appended row passes, and the count follows the table (IN-08).
+        expect_pass("an appended exit row", appended_exit_row())
         expect_reject("tab-indented JSON", {**seed, CONTRACT: json.dumps(document, indent="\t") + "\n"}, "non-canonical")
         expect_reject("sorted keys", {**seed, CONTRACT: json.dumps(document, indent=2, sort_keys=True) + "\n"}, "non-canonical")
         expect_reject("a missing cadence section", with_document(lambda d: d.pop("cadence")), "section-missing")
