@@ -89,7 +89,22 @@ function(gabbaboy_verify_registered_tests)
       slot_reanchor_earlier
       slot_select_message
       slot_mutant_plan_ignores_last
-      host_signal_term)
+      host_signal_term
+      host_signal_int
+      host_signal_inherited_ign
+      host_exit_frames_clean
+      host_exit_failure_readonly
+      host_exit_core_stop
+      host_exit_refusal
+      host_exit_crash_storm
+      host_signal_disposition
+      host_exit_table_codes
+      host_run_stop_before_first_frame
+      host_signal_decoy_no_flush
+      host_signal_decoy_partial_frame
+      host_signal_decoy_exit0_after_failed_flush
+      host_signal_decoy_in_place_write
+      host_no_test_seams_shipped_run_control)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

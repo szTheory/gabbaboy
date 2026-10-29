@@ -45,20 +45,33 @@ foreach(case accepts refuse_empty refuse_leading_dot refuse_control refuse_del r
   set_tests_properties(host_stem_${case} PROPERTIES PASS_REGULAR_EXPRESSION "PASS ${case}")
 endforeach()
 
-# gbb_host_mutant_library(name source anchor replacement): a copy of gabbaboy_host in which one
-# `src/host/<source>` has its single `anchor` replaced. The mutated file is written under
+# gbb_host_mutant_library(name source anchor replacement [anchor replacement]...): a copy of gabbaboy_host in
+# which one `src/host/<source>` has each `anchor` replaced. The mutated file is written under
 # host-mutants/<name>/ and every other host source is compiled unmodified, so a mutant test can only
-# fail because of the one edit. The anchor must occur exactly once, as for gbb_state_refusal_mutant.
-function(gbb_host_mutant_library name source anchor replacement)
+# fail because of the edits. Each anchor must occur exactly once, as for gbb_state_refusal_mutant. Extra
+# anchor/replacement pairs (18-07) serve a mutant that needs two coordinated edits in the same file.
+function(gbb_host_mutant_library name source)
+  # The anchors are read through ARGV<n> because C replacements contain `;`, which a CMake list would split.
+  math(EXPR pair_remainder "${ARGC} % 2")
+  if(ARGC LESS 4 OR NOT pair_remainder EQUAL 0)
+    message(FATAL_ERROR "Host mutant ${name}: anchors and replacements must come in pairs")
+  endif()
   set(original "${PROJECT_SOURCE_DIR}/src/host/${source}")
   file(READ "${original}" text)
-  string(FIND "${text}" "${anchor}" first)
-  string(FIND "${text}" "${anchor}" last REVERSE)
-  if(first EQUAL -1 OR NOT first EQUAL last)
-    message(FATAL_ERROR
-      "Host mutant ${name}: anchor must occur exactly once in ${source} (first=${first}, last=${last})")
-  endif()
-  string(REPLACE "${anchor}" "${replacement}" text "${text}")
+  set(index 2)
+  while(index LESS ARGC)
+    math(EXPR next "${index} + 1")
+    set(current_anchor "${ARGV${index}}")
+    set(current_replacement "${ARGV${next}}")
+    string(FIND "${text}" "${current_anchor}" first)
+    string(FIND "${text}" "${current_anchor}" last REVERSE)
+    if(first EQUAL -1 OR NOT first EQUAL last)
+      message(FATAL_ERROR
+        "Host mutant ${name}: anchor must occur exactly once in ${source} (first=${first}, last=${last})")
+    endif()
+    string(REPLACE "${current_anchor}" "${current_replacement}" text "${text}")
+    math(EXPR index "${index} + 2")
+  endwhile()
   set(directory "${PROJECT_BINARY_DIR}/host-mutants/${name}")
   file(WRITE "${directory}/${source}" "${text}")
 
@@ -329,7 +342,7 @@ if(NOT WIN32)
   add_test(NAME host_no_test_seams_shipped
     COMMAND ${CMAKE_COMMAND}
       "-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host>;$<TARGET_FILE:gabbaboy-runner>"
-      "-DGBB_FORBID_DEFINED=host_save_io_test_"
+      "-DGBB_FORBID_DEFINED=host_save_io_test_|host_run_test_"
       "-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h"
       "-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host"
       "-DGBB_NM=${CMAKE_NM}"
@@ -337,8 +350,16 @@ if(NOT WIN32)
   set_tests_properties(host_no_test_seams_shipped PROPERTIES PASS_REGULAR_EXPRESSION "host-api pass")
   add_test(NAME host_no_test_seams_shipped_control
     COMMAND ${CMAKE_COMMAND}
-      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host_testing>;-DGBB_FORBID_DEFINED=host_save_io_test_;-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host;-DGBB_NM=${CMAKE_NM};-P;${GBB_HOST_API_SCRIPT}"
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host_testing>;-DGBB_FORBID_DEFINED=host_save_io_test_|host_run_test_;-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host;-DGBB_NM=${CMAKE_NM};-P;${GBB_HOST_API_SCRIPT}"
       -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=host-test-seam-shipped: _?host_save_io_test_fail_next"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+
+  # The widened pattern needs its own control: the test twin defines the after-ready hook, and the check
+  # must name that hook, not only the writer seam the first control pins.
+  add_test(NAME host_no_test_seams_shipped_run_control
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host_testing>;-DGBB_FORBID_DEFINED=host_run_test_;-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host;-DGBB_NM=${CMAKE_NM};-P;${GBB_HOST_API_SCRIPT}"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=host-test-seam-shipped: _?host_run_test_set_after_ready_hook"
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 
   # ---- HOST-02 / D-17: real signals sent to real runner processes (POSIX-only: Windows has no SIGTERM and
@@ -366,4 +387,85 @@ if(NOT WIN32)
   endfunction()
 
   gbb_add_host_signal_test(host_signal_term term PROCESSORS2)
+  gbb_add_host_signal_test(host_signal_int int PROCESSORS2)
+  gbb_add_host_signal_test(host_signal_inherited_ign inherited-ign PROCESSORS2)
+  gbb_add_host_signal_test(host_exit_frames_clean frames-clean)
+  gbb_add_host_signal_test(host_exit_failure_readonly failure-readonly)
+  gbb_add_host_signal_test(host_exit_core_stop core-stop)
+  gbb_add_host_signal_test(host_exit_refusal refusal)
+  gbb_add_host_signal_test(host_exit_crash_storm crash-storm PROCESSORS2)
+
+  # ---- D-13/D-15 below the process: dispositions, the exit table and the stop before the first frame ----
+  # test_host_run needs sigaction, sigprocmask, dup2 and mkdtemp, so (B-3) it exists only on POSIX. It links
+  # the test twin of the host library because the after-ready hook is compiled only there.
+  add_executable(test_host_run "${PROJECT_SOURCE_DIR}/tests/test_host_run.c")
+  target_link_libraries(test_host_run PRIVATE gabbaboy_host_testing GabbaBoy::core)
+  target_compile_definitions(test_host_run PRIVATE GBB_HOST_TESTING)
+  target_compile_features(test_host_run PRIVATE c_std_17)
+  set_target_properties(test_host_run PROPERTIES C_EXTENSIONS OFF)
+  add_test(NAME host_signal_disposition COMMAND test_host_run disposition)
+  set_tests_properties(host_signal_disposition PROPERTIES PASS_REGULAR_EXPRESSION "PASS disposition")
+  add_test(NAME host_exit_table_codes COMMAND test_host_run exit_table)
+  set_tests_properties(host_exit_table_codes PROPERTIES PASS_REGULAR_EXPRESSION "PASS exit_table")
+  add_test(NAME host_run_stop_before_first_frame COMMAND test_host_run stop_before_first_frame)
+  set_tests_properties(host_run_stop_before_first_frame PROPERTIES
+    PASS_REGULAR_EXPRESSION "PASS stop_before_first_frame")
+
+  # ---- D-17 decoys: runners that betray the contract must fail the harness for their own reason ----
+  # Build-tree executables only (named hostvariant, not mutant: only the host library is mutated, so each
+  # links the normal core). Each anchor must occur exactly once; nothing here is installed.
+  # gbb_add_host_signal_decoy(test runner_target scenario reason): exit 1 with `FAIL <scenario>: <reason>`.
+  # The reason is part of the pattern so a harness crash cannot satisfy it.
+  function(gbb_add_host_signal_decoy test runner_target scenario reason)
+    add_test(NAME ${test}
+      COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_HOST_SIGNALS_HARNESS};--runner;$<TARGET_FILE:${runner_target}>;--work;${PROJECT_BINARY_DIR}/host-signals/${test};--scenario;${scenario}"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL ${scenario}: ${reason}"
+        -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+    set_tests_properties(${test} PROPERTIES PROCESSORS 2)
+  endfunction()
+
+  # No flush on SIGTERM: the final-flush call is skipped, so the save never appears.
+  gbb_host_mutant_library(no_flush host_run.c
+    "flush_battery(&state, sav_name, want, &has_last, &wrote); /* final flush (D-11) */"
+    "NULL; /* decoy: no final flush */")
+  gbb_host_mutant_runner(no_flush gabbaboy_host_mutant_no_flush)
+  gbb_add_host_signal_decoy(host_signal_decoy_no_flush gabbaboy-runner-hostvariant-no_flush term
+    "SIGTERM left no [.]sav")
+
+  # A flush with a partial frame: the frame is split in two halves, the boundary poll is removed and the
+  # flag is polled between the halves, so a stop lands mid-frame and the export is not a whole frame.
+  gbb_host_mutant_library(partial_frame host_run.c
+    "stop_signal = host_signal_stop_requested(); /* frame boundary (D-14) */"
+    "/* decoy: no boundary poll */"
+    "const gbb_run_result result = gbb_run(state.machine, GBB_HOST_FRAME_HALF_DOTS, NULL, 0u);"
+    "gbb_run_result result = gbb_run(state.machine, GBB_HOST_FRAME_HALF_DOTS / 2u, NULL, 0u);
+        if (host_signal_stop_requested() != 0) { stop_signal = host_signal_stop_requested(); break; }
+        result = gbb_run(state.machine, GBB_HOST_FRAME_HALF_DOTS / 2u, NULL, 0u);")
+  gbb_host_mutant_runner(partial_frame gabbaboy_host_mutant_partial_frame)
+  gbb_add_host_signal_decoy(host_signal_decoy_partial_frame gabbaboy-runner-hostvariant-partial_frame term
+    "replay --frames [0-9]+ differs")
+
+  # Exit 0 after a failed final flush: the failed flush no longer decides the exit status.
+  gbb_host_mutant_library(exit0_after_failed_flush host_run.c
+    "exit_code = GBB_HOST_EXIT_FAILURE; /* a failed final flush is never a clean exit (T-18-24) */"
+    "exit_code = GBB_HOST_EXIT_CLEAN; /* decoy: exit 0 after a failed final flush */")
+  gbb_host_mutant_runner(exit0_after_failed_flush gabbaboy_host_mutant_exit0_after_failed_flush)
+  gbb_add_host_signal_decoy(host_signal_decoy_exit0_after_failed_flush
+    gabbaboy-runner-hostvariant-exit0_after_failed_flush failure-readonly "exit 0, expected 1")
+
+  # An in-place writer: the target is opened with O_TRUNC and written directly, no temp and no rename.
+  gbb_host_mutant_library(in_place_write host_save_io.c
+    "char temp[320];"
+    "{
+        const int in_place = openat(dirfd, name, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0600);
+        if (in_place < 0) return HOST_IO_ETEMP;
+        const bool in_place_ok = write_all(in_place, bytes, len);
+        (void)close(in_place);
+        return in_place_ok ? HOST_IO_OK : HOST_IO_EWRITE;
+    }
+    char temp[320];")
+  gbb_host_mutant_runner(in_place_write gabbaboy_host_mutant_in_place_write)
+  gbb_add_host_signal_decoy(host_signal_decoy_in_place_write gabbaboy-runner-hostvariant-in_place_write
+    crash-storm "round [0-9]+: a completed flush kept inode")
 endif()

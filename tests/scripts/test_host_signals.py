@@ -16,7 +16,9 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import random
 import re
+import resource
 import shutil
 import signal
 import subprocess
@@ -40,7 +42,10 @@ EXIT_TIMEOUT = 15.0    # after one signal the runner must be gone long before th
 BATCH_TIMEOUT = 40.0
 CEILING_SECONDS = 2.0  # D-17: Playstead sends SIGKILL about 2 s after SIGTERM
 MBC1_RAM_BATTERY = 0x03
+MBC3_TIMER_RAM_BATTERY = 0x10
+RAM_8K = 0x02
 RAM_32K = 0x03
+RTC_SAV_BYTES = 32768 + 21
 
 
 class Failure(Exception):
@@ -55,16 +60,16 @@ def require(condition: bool, why: str) -> None:
 def fresh_dir(path: Path) -> Path:
     if path.exists():
         # A previous failed row may have left a 0500 directory behind.
+        try:
+            os.chmod(path, 0o700)
+        except OSError:
+            pass
         for root, dirs, _files in os.walk(path):
             for name in dirs:
                 try:
                     os.chmod(os.path.join(root, name), 0o700)
                 except OSError:
                     pass
-        try:
-            os.chmod(path, 0o700)
-        except OSError:
-            pass
         shutil.rmtree(path)
     path.mkdir(parents=True)
     return path
@@ -240,8 +245,201 @@ def scenario_term(runner: str, work: Path, sanitized: bool) -> None:
             f"replay --frames {frame} differs from the signalled run: the stop did not land on a frame boundary")
 
 
+def stop_and_collect(child: Child, number: int, pause: float = 0.5) -> tuple[int, str]:
+    """Sends exactly one signal after `pause`, waits for the exit and returns (exit code, stderr)."""
+    try:
+        time.sleep(pause)
+        child.send(number)
+        code = child.wait_exit()
+    finally:
+        child.close()
+    return code, child.text()
+
+
+def scenario_int(runner: str, work: Path, sanitized: bool) -> None:
+    """One SIGINT is a clean stop like SIGTERM, with its own reason, and the save is flushed."""
+    base = fresh_dir(work)
+    child, rom, saves = paced_spin(runner, base, "saves")
+    code, err = stop_and_collect(child, signal.SIGINT)
+    require(code == 0, f"exit {code}, expected 0: {err.strip()!r}")
+    found = exit_line(err)
+    require(found["status"] == "clean" and found["reason"] == "SIGINT",
+            f"exit line is not status=clean reason=SIGINT: {found.group(0)!r}")
+    require(int(found["frame"]) >= 1, "stopped_at_frame=0")
+    require((saves / "spin.sav").is_file(), "SIGINT left no .sav: the final flush did not run")
+    require(len((saves / "spin.sav").read_bytes()) == 32768, "the flushed image has the wrong size")
+
+
+def scenario_inherited_ign(runner: str, work: Path, sanitized: bool) -> None:
+    """D-13: SIGINT inherited as SIG_IGN (nohup, background jobs) stays ignored; SIGTERM still stops."""
+    base = fresh_dir(work)
+    child, rom, saves = paced_spin(runner, base, "saves", ignore_int=True)
+    try:
+        time.sleep(0.2)
+        child.send(signal.SIGINT)
+        time.sleep(0.5)
+        require(child.alive(), "the runner exited on SIGINT although it was inherited as SIG_IGN")
+        child.send(signal.SIGTERM)
+        code = child.wait_exit()
+    finally:
+        child.close()
+    err = child.text()
+    require(code == 0, f"exit {code}, expected 0 after SIGTERM: {err.strip()!r}")
+    found = exit_line(err)
+    require(found["reason"] == "SIGTERM", f"exit line reason is {found['reason']}, expected SIGTERM")
+    require((saves / "spin.sav").is_file(), "no .sav after the SIGTERM stop")
+
+
+def scenario_frames_clean(runner: str, work: Path, sanitized: bool) -> None:
+    """A fixed-length batch run ends clean with its own reason."""
+    base = fresh_dir(work)
+    rom = base / "spin.gb"
+    rom.write_bytes(host_fixture.build_rom("spin-increment", MBC1_RAM_BATTERY, RAM_32K))
+    saves = fresh_dir(base / "saves")
+    code, err = run_batch(runner, rom, saves, 30, base)
+    require(code == 0, f"exit {code}, expected 0: {err.strip()!r}")
+    found = exit_line(err)
+    require(found["status"] == "clean" and found["reason"] == "frames" and found["frame"] == "30",
+            f"exit line is not status=clean reason=frames stopped_at_frame=30: {found.group(0)!r}")
+
+
+def scenario_failure_readonly(runner: str, work: Path, sanitized: bool) -> None:
+    """A failed final flush exits 1 and keeps the old .sav byte-identical with no temp left behind.
+
+    The image changes every frame (the spin counter and the RTC sub-second count), so under the D-11
+    last-persisted rule the final flush must attempt a write and cannot be skipped as `unchanged`."""
+    require(os.geteuid() != 0, "this row cannot run as root: root ignores a 0500 directory; run as a non-root user")
+    base = fresh_dir(work)
+    rom = base / "spin.gb"
+    rom.write_bytes(host_fixture.build_rom("spin-increment", MBC3_TIMER_RAM_BATTERY, RAM_32K))
+    saves = fresh_dir(base / "saves")
+    code, err = run_batch(runner, rom, saves, 30, base)
+    require(code == 0, f"seeding run exit {code}: {err.strip()!r}")
+    sav = saves / "spin.sav"
+    old = sav.read_bytes()
+    require(len(old) == RTC_SAV_BYTES, f"seed image is {len(old)} bytes, expected {RTC_SAV_BYTES}")
+    child = Child(runner, ["--rom", str(rom), "--save-dir", str(saves)], base)
+    try:
+        child.wait_ready()
+        os.chmod(saves, 0o500)  # after ready: the directory fd is open, but no entry can be created
+        code, err = stop_and_collect(child, signal.SIGTERM, pause=0.3)
+        require(code == 1, f"exit {code}, expected 1: {err.strip()!r}")
+        require(re.search(r"gbb-host: flush reason=final frame=\d+ result=failed stage=temp", err) is not None,
+                f"no 'flush reason=final ... result=failed stage=temp' line: {err.strip()!r}")
+        found = exit_line(err)
+        require(found["status"] == "failure" and found["reason"] == "flush",
+                f"exit line is not status=failure reason=flush: {found.group(0)!r}")
+        require(sav.read_bytes() == old, "the old .sav changed although the final flush failed")
+        stray = [name for name in listing(saves) if name.startswith(".spin.sav.tmp-")]
+        require(not stray, f"temp entries left behind: {stray}")
+    finally:
+        os.chmod(saves, 0o700)
+        child.close()
+
+
+def scenario_core_stop(runner: str, work: Path, sanitized: bool) -> None:
+    """A core stop mid-run still attempts the final flush, then exits 1."""
+    base = fresh_dir(work)
+    rom = base / "bad.gb"
+    rom.write_bytes(host_fixture.build_rom("illegal-opcode", MBC1_RAM_BATTERY, RAM_8K))
+    saves = fresh_dir(base / "saves")
+    code, err = run_batch(runner, rom, saves, 10, base)
+    require(code == 1, f"exit {code}, expected 1: {err.strip()!r}")
+    found = exit_line(err)
+    require(found["status"] == "failure" and found["reason"] == "core-stop",
+            f"exit line is not status=failure reason=core-stop: {found.group(0)!r}")
+    require(found["flush"] == "written", f"flush={found['flush']}: the final flush was not attempted")
+    image = (saves / "bad.sav").read_bytes()
+    require(len(image) == 8192 and image[0] == 0x5A, "the guest's write before the stop was not flushed")
+
+
+def scenario_refusal(runner: str, work: Path, sanitized: bool) -> None:
+    """A refusal is exit 2 before any save mutation and before `ready`."""
+    base = fresh_dir(work)
+    rom = base / "short.gb"
+    rom.write_bytes(host_fixture.build_rom("write5a", MBC1_RAM_BATTERY, RAM_8K))
+    saves = fresh_dir(base / "saves")
+    (saves / "short.sav").write_bytes(bytes(8191))
+    code, err = run_batch(runner, rom, saves, 5, base)
+    require(code == 2, f"exit {code}, expected 2: {err.strip()!r}")
+    require("gbb-host: refused reason=save-size" in err, f"no 'refused reason=save-size': {err.strip()!r}")
+    require("gbb-host: ready" not in err, "a refused run printed 'gbb-host: ready'")
+    require((saves / "short.sav").read_bytes() == bytes(8191), "a refusal changed the .sav")
+
+
+def valid_rtc_block(block: bytes) -> str | None:
+    """None when the 21-byte block is a structurally valid GBRT version 1 block, else the reason."""
+    if len(block) != 21:
+        return f"block is {len(block)} bytes"
+    if block[0:4] != b"GBRT":
+        return "bad magic"
+    if block[4] != 1:
+        return f"version {block[4]}"
+    if int.from_bytes(block[5:9], "little") >= 1 << 23:
+        return "sub-second count out of range"
+    for base in (9, 14):
+        seconds, minutes, hours, _day_low, day_high = block[base:base + 5]
+        if seconds > 0x3F or minutes > 0x3F or hours > 0x1F or (day_high & 0x3E) != 0:
+            return f"clock field out of range at {base}"
+    if block[20] != 0:
+        return "reserved byte not zero"
+    return None
+
+
+def scenario_crash_storm(runner: str, work: Path, sanitized: bool) -> None:
+    """SIGKILL at pseudo-random moments against an RTC cart: the .sav is always the last completed
+    flush (exact size, valid GBRT block), every completed flush replaces the inode (so a torn in-place
+    writer is caught), and a final normal start sweeps the temps a kill may have left."""
+    base = fresh_dir(work)
+    rom = base / "spin.gb"
+    rom.write_bytes(host_fixture.build_rom("spin-increment", MBC3_TIMER_RAM_BATTERY, RAM_32K))
+    saves = fresh_dir(base / "saves")
+    sav = saves / "spin.sav"
+    # Children inherit this limit, so a SIGKILLed runner can never write a core file. Setting it on the
+    # harness instead of in preexec_fn keeps the fork path free of Python code while threads exist.
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    rng = random.Random(1807)
+    inodes: set[int] = set()
+    previous_inode: int | None = None
+    for round_number in range(6):
+        child = Child(runner, ["--rom", str(rom), "--save-dir", str(saves), "--frames", "100000"], base)
+        try:
+            child.wait_ready()
+            found = child.wait_for(r"gbb-host: flush reason=\w[\w-]* frame=\d+ result=written", BATCH_TIMEOUT)
+            require(found is not None, f"round {round_number}: no completed flush: {child.text().strip()!r}")
+            first = sav.stat()  # right after the first completed flush, long before the next one
+            if previous_inode is not None:
+                require(first.st_ino != previous_inode,
+                        f"round {round_number}: a completed flush kept inode {first.st_ino}: the writer is not atomic")
+            inodes.add(first.st_ino)
+            time.sleep(rng.uniform(0.0, 0.3))
+            child.send(signal.SIGKILL)
+            code = child.wait_exit()
+        finally:
+            child.close()
+        require(code == -signal.SIGKILL, f"round {round_number}: exit {code}, expected death by SIGKILL")
+        require(sav.is_file(), f"round {round_number}: no .sav after a completed flush and a kill")
+        image = sav.read_bytes()
+        require(len(image) == RTC_SAV_BYTES,
+                f"round {round_number}: .sav is {len(image)} bytes, expected {RTC_SAV_BYTES}")
+        bad = valid_rtc_block(image[32768:])
+        require(bad is None, f"round {round_number}: the GBRT block is invalid ({bad})")
+        previous_inode = sav.stat().st_ino
+    require(len(inodes) >= 2, f"only {len(inodes)} inode seen over the storm: flushes replace nothing")
+    code, err = run_batch(runner, rom, saves, 5, base)
+    require(code == 0, f"the final normal start exit {code}: {err.strip()!r}")
+    require(listing(saves) == ["spin.sav"], f"temps survived the sweep: {listing(saves)}")
+
+
 SCENARIOS = {
     "term": scenario_term,
+    "int": scenario_int,
+    "inherited-ign": scenario_inherited_ign,
+    "frames-clean": scenario_frames_clean,
+    "failure-readonly": scenario_failure_readonly,
+    "core-stop": scenario_core_stop,
+    "refusal": scenario_refusal,
+    "crash-storm": scenario_crash_storm,
 }
 
 

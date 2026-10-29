@@ -99,6 +99,21 @@ filter_expected_for_platform() {
         -e '/^slot_select_message$/d' \
         -e '/^slot_mutant_plan_ignores_last$/d' \
         -e '/^host_signal_term$/d' \
+        -e '/^host_signal_int$/d' \
+        -e '/^host_signal_inherited_ign$/d' \
+        -e '/^host_exit_frames_clean$/d' \
+        -e '/^host_exit_failure_readonly$/d' \
+        -e '/^host_exit_core_stop$/d' \
+        -e '/^host_exit_refusal$/d' \
+        -e '/^host_exit_crash_storm$/d' \
+        -e '/^host_signal_disposition$/d' \
+        -e '/^host_exit_table_codes$/d' \
+        -e '/^host_run_stop_before_first_frame$/d' \
+        -e '/^host_signal_decoy_no_flush$/d' \
+        -e '/^host_signal_decoy_partial_frame$/d' \
+        -e '/^host_signal_decoy_exit0_after_failed_flush$/d' \
+        -e '/^host_signal_decoy_in_place_write$/d' \
+        -e '/^host_no_test_seams_shipped_run_control$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -199,6 +214,21 @@ _self_test_platform_filter_cases() {
     slot_select_message \
     slot_mutant_plan_ignores_last \
     host_signal_term \
+    host_signal_int \
+    host_signal_inherited_ign \
+    host_exit_frames_clean \
+    host_exit_failure_readonly \
+    host_exit_core_stop \
+    host_exit_refusal \
+    host_exit_crash_storm \
+    host_signal_disposition \
+    host_exit_table_codes \
+    host_run_stop_before_first_frame \
+    host_signal_decoy_no_flush \
+    host_signal_decoy_partial_frame \
+    host_signal_decoy_exit0_after_failed_flush \
+    host_signal_decoy_in_place_write \
+    host_no_test_seams_shipped_run_control \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -299,7 +329,22 @@ _self_test_platform_filter_cases() {
     slot_reanchor_earlier \
     slot_select_message \
     slot_mutant_plan_ignores_last \
-    host_signal_term; do
+    host_signal_term \
+    host_signal_int \
+    host_signal_inherited_ign \
+    host_exit_frames_clean \
+    host_exit_failure_readonly \
+    host_exit_core_stop \
+    host_exit_refusal \
+    host_exit_crash_storm \
+    host_signal_disposition \
+    host_exit_table_codes \
+    host_run_stop_before_first_frame \
+    host_signal_decoy_no_flush \
+    host_signal_decoy_partial_frame \
+    host_signal_decoy_exit0_after_failed_flush \
+    host_signal_decoy_in_place_write \
+    host_no_test_seams_shipped_run_control; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1
