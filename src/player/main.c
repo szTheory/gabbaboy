@@ -577,6 +577,7 @@ static bool create_machine(player *app, const char *demo_rom_path) {
         gbb_battery_generation(app->machine, &generation) != GBB_OK)
         generation = app->save_identity.saved_generation;
     player_save_cadence_reset(&app->save_cadence, generation);
+    slots_attach(app, profile);
     return true;
 }
 
@@ -1063,6 +1064,7 @@ static bool replace_session_rom(player *app, const char *path) {
     player_save_cadence_reset(&app->save_cadence, generation);
     app->save_retry_required = false;
     app->save_status_active = false;
+    slots_attach(app, candidate_profile);
     if (!audio_cleared)
         set_status(app, "ROM loaded; audio backlog cleanup failed");
     else if (!battery_loaded)
@@ -1364,6 +1366,95 @@ static void request_quit(player *app) {
     else begin_transition(app, PLAYER_TRANSITION_QUIT, NULL);
 }
 
+/* ---- State slots (Phase 18, D-21..D-25) ------------------------------------------------------------ */
+
+#define PLAYER_ROM_READ_LIMIT (8u * 1024u * 1024u)
+
+static void slots_detach(player *app) {
+    if (app->slots_ready) {
+        const int dirfd = app->slots.dirfd;
+        player_slot_store_free(&app->slots);
+        if (dirfd >= 0) (void)close(dirfd);
+    }
+    memset(&app->slots, 0, sizeof(app->slots));
+    app->slots.dirfd = -1;
+    app->slots_ready = false;
+}
+
+/* Prepares the slot store for the ROM that was just loaded: the pref directory descriptor, the ROM digest the
+ * session already computed, the profile actually created and a bounded no-follow re-read of the ROM bytes (the
+ * store keeps its own copy for scratch validation). A ROM that changed on disk since it was loaded no longer
+ * matches the digest, and then slots stay off rather than binding states to the wrong game. */
+static void slots_attach(player *app, gbb_profile profile) {
+    slots_detach(app);
+    app->selected_slot = 1u;
+    const char *why = NULL;
+    char *pref = SDL_GetPrefPath("GabbaBoy", "GabbaBoy");
+    uint8_t *rom = malloc((size_t)PLAYER_ROM_READ_LIMIT + 1u);
+    size_t rom_size = 0u;
+    int dirfd = -1;
+    player_save_identity identity;
+    if (pref == NULL || rom == NULL || app->current_rom_path == NULL) {
+        why = "no preference directory or no memory";
+    } else if (host_save_io_read_bounded(AT_FDCWD, app->current_rom_path, rom,
+                                         (size_t)PLAYER_ROM_READ_LIMIT + 1u, &rom_size) != HOST_IO_OK ||
+               rom_size > PLAYER_ROM_READ_LIMIT) {
+        why = "the ROM could not be read again";
+    } else if (!player_session_identify_rom(rom, rom_size, &identity) ||
+               memcmp(identity.rom_sha256, app->save_identity.rom_sha256, sizeof(identity.rom_sha256)) != 0) {
+        why = "the ROM changed since it was loaded";
+    } else if (host_save_io_open_dir(pref, &dirfd) != HOST_IO_OK) {
+        why = "the preference directory could not be opened";
+    } else if (!player_slot_store_init(&app->slots, dirfd, app->save_identity.rom_sha256, profile, rom,
+                                       rom_size)) {
+        (void)close(dirfd);
+        dirfd = -1;
+        why = "the slot store could not be prepared";
+    } else {
+        app->slots_ready = true;
+    }
+    if (!app->slots_ready) {
+        memset(&app->slots, 0, sizeof(app->slots));
+        app->slots.dirfd = -1;
+        fprintf(stderr, "gabbaboy-player: slots unavailable: %s\n", why);
+    }
+    free(rom);
+    SDL_free(pref);
+}
+
+static void set_slot_status(player *app, const char *message) {
+    set_status(app, message);
+}
+
+/* Performs the slot action the decoder chose. Slot keys work while paused, and nothing here changes
+ * user_paused: pause is kept across a load. */
+static void handle_slot_key(player *app, player_slot_key_action action, unsigned digit) {
+    char message[160];
+    if (!app->slots_ready) {
+        set_slot_status(app, "State slots are unavailable for this ROM");
+        return;
+    }
+    if (app->selected_slot < 1u || app->selected_slot > PLAYER_SLOT_COUNT) app->selected_slot = 1u;
+    if (action == PLAYER_SLOT_KEY_SELECT) {
+        app->selected_slot = digit;
+        player_slot_format_selection(&app->slots, digit, message, sizeof(message));
+        set_slot_status(app, message);
+        return;
+    }
+    player_slot_result result;
+    if (action == PLAYER_SLOT_KEY_SAVE)
+        result = player_slot_save(&app->slots, app->machine, app->selected_slot);
+    else if (action == PLAYER_SLOT_KEY_LOAD)
+        result = player_slot_load(&app->slots, app->machine, PLAYER_SLOT_SOURCE_SLOT, app->selected_slot);
+    else
+        result = player_slot_load(&app->slots, app->machine, PLAYER_SLOT_SOURCE_UNDO, 0u);
+    player_slot_format_message(&result, message, sizeof(message));
+    set_slot_status(app, message);
+    char log_line[160];
+    player_slot_format_log(&result, log_line, sizeof(log_line));
+    fprintf(stderr, "%s\n", log_line);
+}
+
 static void handle_key(player *app, const SDL_KeyboardEvent *key, bool pressed) {
     if (app->pending_transition != PLAYER_TRANSITION_NONE) {
         if (pressed && !key->repeat) {
@@ -1393,6 +1484,25 @@ static void handle_key(player *app, const SDL_KeyboardEvent *key, bool pressed) 
     }
     if (pressed && !key->repeat) {
         const bool command = (key->mod & SDL_KMOD_GUI) != 0;
+        /* D-21: slot keys are decoded before the bare R and S branches. The decoder ignores repeats, and
+         * the transition and save-failure prompts already returned above; a pending dialog blocks them. */
+        player_slot_key_input slot_input;
+        memset(&slot_input, 0, sizeof(slot_input));
+        if (key->scancode >= SDL_SCANCODE_1 && key->scancode <= SDL_SCANCODE_9)
+            slot_input.digit = (unsigned)(key->scancode - SDL_SCANCODE_1) + 1u;
+        if (key->key == SDLK_S || key->key == SDLK_L || key->key == SDLK_Z || key->key == SDLK_R)
+            slot_input.letter = (char)SDL_toupper((int)key->key);
+        slot_input.gui = command;
+        slot_input.ctrl = (key->mod & SDL_KMOD_CTRL) != 0;
+        slot_input.alt = (key->mod & SDL_KMOD_ALT) != 0;
+        slot_input.repeat = key->repeat;
+        slot_input.blocked = app->dialog_pending;
+        unsigned slot_digit = 0u;
+        const player_slot_key_action slot_action = player_slot_key_decode(&slot_input, &slot_digit);
+        if (slot_action != PLAYER_SLOT_KEY_NONE) {
+            handle_slot_key(app, slot_action, slot_digit);
+            return;
+        }
         if (command && key->key == SDLK_Q) {
             request_quit(app);
             return;
@@ -1421,11 +1531,11 @@ static void handle_key(player *app, const SDL_KeyboardEvent *key, bool pressed) 
             }
             return;
         }
-        if (!app->dialog_pending && key->scancode == SDL_SCANCODE_R) {
+        if (!app->dialog_pending && !command && key->scancode == SDL_SCANCODE_R) {
             begin_transition(app, PLAYER_TRANSITION_RESET, NULL);
             return;
         }
-        if (!app->dialog_pending && key->scancode == SDL_SCANCODE_S) {
+        if (!app->dialog_pending && !command && key->scancode == SDL_SCANCODE_S) {
             if (!app->save_identity.battery_backed)
                 set_status(app, "This ROM has no battery-backed RAM");
             else
@@ -2468,6 +2578,7 @@ static void destroy_player(player *app) {
     if (app->window != NULL) SDL_DestroyWindow(app->window);
     if (app->surface != NULL) SDL_DestroySurface(app->surface);
     if (app->machine != NULL) gbb_destroy(app->machine);
+    slots_detach(app);
     player_session_unlock_battery(&app->save_lock_fd);
     player_audio_destroy(app->audio);
     free(app->current_rom_path);
