@@ -181,21 +181,129 @@ evaluate_tree() {
     args+=(--exception-receipt "$WORK/exception-receipt.json")
   fi
   if [[ "$with_realtime" == yes ]]; then
-    for attempt in 1 2; do
-      timing_set "$WORK/head-measure" "$WORK/realtime.txt"
-      if python3 -I "$CHECKER" "${args[@]}" --realtime "$WORK/realtime.txt" >"$WORK/verdict" 2>"$WORK/verdict.err"; then
-        status=0
-        break
-      fi
-      # Only a realtime miss earns the one retry; an Ir verdict is deterministic.
-      grep -q 'REJECT realtime-below-floor' "$WORK/verdict.err" || break
-    done
+    realtime_gate "$WORK/head-measure" && status=0 || status=$?
     cat "$WORK/verdict" "$WORK/verdict.err" || true
     return "$status"
   fi
   python3 -I "$CHECKER" "${args[@]}" >"$WORK/verdict" 2>"$WORK/verdict.err" && status=0 || status=$?
   cat "$WORK/verdict" "$WORK/verdict.err" || true
   return "$status"
+}
+
+# realtime_gate BIN: one retry only for a realtime-below-floor verdict. Each attempt emits a
+# unique receipt so a later run cannot overwrite the evidence for an earlier attempt.
+realtime_gate() {
+  local bin=$1 attempt gate_result=1
+  LAST_ATTEMPT=0
+  for attempt in 1 2; do
+    LAST_ATTEMPT=$attempt
+    rm -f "$WORK/perf-gate-receipt.$attempt.json"
+    timing_set "$bin" "$WORK/realtime.$attempt.txt"
+    if python3 -I "$CHECKER" "${args[@]}" --realtime "$WORK/realtime.$attempt.txt" \
+        --emit-receipt "$WORK/perf-gate-receipt.$attempt.json" >"$WORK/verdict" 2>"$WORK/verdict.err"; then
+      gate_result=0
+      break
+    else
+      gate_result=$?
+    fi
+    # Only a realtime miss earns the one retry; an Ir verdict is deterministic.
+    grep -q 'REJECT realtime-below-floor' "$WORK/verdict.err" || break
+  done
+  rm -f "$WORK/perf-gate-receipt.json"
+  if [[ "$LAST_ATTEMPT" -gt 0 && -s "$WORK/perf-gate-receipt.$LAST_ATTEMPT.json" ]]; then
+    cp "$WORK/perf-gate-receipt.$LAST_ATTEMPT.json" "$WORK/perf-gate-receipt.json"
+  fi
+  return "$gate_result"
+}
+
+# keep_receipt [CHECKOUT_ROOT]: retain the deciding attempt. mkdir -p matters on a hosted
+# perf-gate job, where no earlier step is required to create build/.
+keep_receipt() {
+  local checkout_root=${1:-$ROOT}
+  mkdir -p "$checkout_root/build"
+  rm -f "$checkout_root/build/perf-gate-receipt.json"
+  if [[ -s "$WORK/perf-gate-receipt.json" ]]; then
+    cp "$WORK/perf-gate-receipt.json" "$checkout_root/build/perf-gate-receipt.json"
+  fi
+}
+
+self_test_retry() {
+  local scratch_checkout="$WORK/scratch-checkout" source_sha gate_result
+  local retry_case retry_timing_calls
+  source_sha=$(git -C "$ROOT" rev-parse HEAD)
+  mkdir -p "$scratch_checkout"
+  rm -rf "$scratch_checkout/build"
+
+  local args=(--evaluate --limits "$LIMITS" --base "$ROOT/tests/data/perf-gate/base"
+    --head "$ROOT/tests/data/perf-gate/head-pass" --base-rev "$LIMITS_BASE_REV"
+    --source-head-rev "$source_sha")
+
+  # The test replaces only the timing producer. The production retry and retention functions
+  # below are called directly with the repository's immutable canned timing fixtures.
+  timing_set() {
+    local _bin=$1 output=$2 timing_source
+    retry_timing_calls=$((retry_timing_calls + 1))
+    case "$retry_case:$retry_timing_calls" in
+      retry-pass:1|retry-both-low:1|retry-both-low:2) timing_source="$ROOT/tests/data/perf-gate/realtime-below-floor.txt" ;;
+      retry-pass:2|retry-ir:1) timing_source="$ROOT/tests/data/perf-gate/realtime-pass.txt" ;;
+      *) fail self-test-retry "unexpected timing attempt $retry_case:$retry_timing_calls" ;;
+    esac
+    cp "$timing_source" "$output"
+  }
+
+  retry_case=retry-pass
+  retry_timing_calls=0
+  if realtime_gate "$WORK/head-measure"; then gate_result=0; else gate_result=$?; fi
+  [[ "$gate_result" == 0 && "$retry_timing_calls" == 2 && "$LAST_ATTEMPT" == 2 ]] ||
+    fail self-test-retry "one realtime miss followed by a pass must finish on attempt 2"
+  [[ -s "$WORK/perf-gate-receipt.1.json" && -s "$WORK/perf-gate-receipt.2.json" ]] ||
+    fail self-test-retry "each retry attempt must emit its own receipt"
+  cmp -s "$WORK/perf-gate-receipt.2.json" "$WORK/perf-gate-receipt.json" ||
+    fail self-test-retry "kept receipt must be the deciding attempt's receipt"
+  python3 -I - "$WORK/perf-gate-receipt.1.json" "$WORK/perf-gate-receipt.2.json" <<'PY'
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    first = json.load(handle)["realtime_min"]
+with open(sys.argv[2], encoding="utf-8") as handle:
+    second = json.load(handle)["realtime_min"]
+if first == second:
+    raise SystemExit("attempt fixtures must have different realtime_min values")
+PY
+  echo "perf-gate retry control passed: attempt 1 receipt differs from deciding attempt 2"
+
+  rm -f "$WORK/perf-gate-receipt.1.json" "$WORK/perf-gate-receipt.2.json" "$WORK/perf-gate-receipt.json"
+  retry_case=retry-both-low
+  retry_timing_calls=0
+  if realtime_gate "$WORK/head-measure"; then gate_result=0; else gate_result=$?; fi
+  [[ "$gate_result" == 1 && "$retry_timing_calls" == 2 && "$LAST_ATTEMPT" == 2 ]] ||
+    fail self-test-retry "two realtime misses must stop after attempt 2 with failure"
+  grep -q 'REJECT realtime-below-floor' "$WORK/verdict.err" ||
+    fail self-test-retry "the second realtime miss must retain its named verdict"
+  cmp -s "$WORK/perf-gate-receipt.2.json" "$WORK/perf-gate-receipt.json" ||
+    fail self-test-retry "two-miss run must keep attempt 2's receipt"
+  echo "perf-gate retry control passed: two realtime misses keep attempt 2"
+
+  rm -f "$WORK/perf-gate-receipt.1.json" "$WORK/perf-gate-receipt.2.json" "$WORK/perf-gate-receipt.json"
+  args=(--evaluate --limits "$LIMITS" --base "$ROOT/tests/data/perf-gate/base"
+    --head "$ROOT/tests/data/perf-gate/head-over" --base-rev "$LIMITS_BASE_REV"
+    --source-head-rev "$source_sha")
+  retry_case=retry-ir
+  retry_timing_calls=0
+  if realtime_gate "$WORK/head-measure"; then gate_result=0; else gate_result=$?; fi
+  [[ "$gate_result" == 1 && "$retry_timing_calls" == 1 && "$LAST_ATTEMPT" == 1 ]] ||
+    fail self-test-retry "an Ir breach must not be retried"
+  grep -q 'REJECT ir-budget-exceeded' "$WORK/verdict.err" ||
+    fail self-test-retry "an Ir breach must retain its named verdict"
+  [[ -s "$WORK/perf-gate-receipt.json" ]] || fail self-test-retry "an Ir breach must leave a receipt"
+  echo "perf-gate retry control passed: Ir breach is not retried and retains receipt"
+
+  [[ ! -e "$scratch_checkout/build" ]] || fail self-test-retry "scratch checkout unexpectedly started with build/"
+  keep_receipt "$scratch_checkout"
+  [[ -s "$scratch_checkout/build/perf-gate-receipt.json" ]] ||
+    fail self-test-retry "keep_receipt must create build/ and retain the deciding receipt"
+  echo "perf-gate retry control passed: scratch checkout receives production destination receipt"
+  echo "perf-gate retry controls pass controls=4"
 }
 
 digests_equal() {
@@ -233,7 +341,10 @@ mode_gate() {
   require_valgrind
   versions
   check_rom_pins
-  evaluate_tree "$ROOT" yes
+  local gate_result=0
+  evaluate_tree "$ROOT" yes || gate_result=$?
+  keep_receipt "$ROOT"
+  return "$gate_result"
 }
 
 mode_seeded() {
@@ -342,9 +453,10 @@ mode_attribution() {
 
 case "${1:-}" in
   --gate) mode_gate ;;
+  --self-test-retry) self_test_retry ;;
   --seeded-regression) mode_seeded ;;
   --noop-twin) mode_noop ;;
   --attribution) mode_attribution ;;
   --attribution-dry-run) shift; mode_dry_run "$@" ;;
-  *) echo "usage: run-perf-gate.sh --gate | --seeded-regression | --noop-twin | --attribution | --attribution-dry-run [--rev REV]" >&2; exit 2 ;;
+  *) echo "usage: run-perf-gate.sh --gate | --self-test-retry | --seeded-regression | --noop-twin | --attribution | --attribution-dry-run [--rev REV]" >&2; exit 2 ;;
 esac

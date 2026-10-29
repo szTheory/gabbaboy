@@ -1071,7 +1071,9 @@ TOKEN_SCOPE_EXEMPT = {
 RELEASE_ARTIFACTS = {
     "candidate-corpus": ("release-evidence-corpus", ("build/cgb-corpus-receipt.json", "build/support-ledger.json")),
     "candidate-performance": ("release-evidence-performance", ("build/v02-performance-receipt.json",)),
-    "candidate-fuzz": ("release-evidence-fuzz", ("build/ci-fuzz/v02-fuzz-receipt.json",)),
+    "candidate-fuzz": ("release-evidence-fuzz", ("build/ci-fuzz/v02-fuzz-receipt.json",
+                                                   "build/ci-fuzz/perf-gate/perf-gate-receipt.json",
+                                                   "build/ci-fuzz/perf-gate-run.json")),
 }
 SUBJECT_REF = "${{ env.SOURCE_SHA }}"
 JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head --git-root trusted-judge"
@@ -1178,6 +1180,9 @@ RELEASE_REQUIRED = {
         '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]]',
         'gh run download "$run_id" --repo "$GH_REPO" --name "v02-fuzz-$run_id-$attempt" --dir build/ci-fuzz',
         'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json --poll-seconds "$HOSTED_POLL_SECONDS"',
+        'gh api "repos/$GH_REPO/actions/runs/$run_id" > build/ci-fuzz/perf-gate-run.json',
+        'gh run download "$run_id" --repo "$GH_REPO" --name "perf-gate-$run_id-$attempt" --dir build/ci-fuzz/perf-gate',
+        'python3 -I tests/scripts/verify-perf-gate.py --verify-receipt build/ci-fuzz/perf-gate/perf-gate-receipt.json --source-sha "$SOURCE_SHA" --run-json build/ci-fuzz/perf-gate-run.json --run-id "$run_id" --attempt "$attempt" --repo .',
     ),
     "candidate-platform-manifest": (
         _MANIFEST_ARCHIVE_DOWNLOAD,
@@ -1730,6 +1735,18 @@ def check_ci(root: Path) -> None:
         raise Reject("runner-image", "ci.perf-gate must run on the pinned ubuntu-24.04 image")
     for command in PERF_GATE_COMMANDS:
         require_call(name, "perf-gate", perf_job, command)
+    require_call(name, "perf-gate", perf_job, "python3 -I tests/scripts/verify-perf-gate.py --self-test-receipt")
+    _upload(perf_job, name, "perf-gate", "perf-gate-${{ github.run_id }}-${{ github.run_attempt }}",
+            ("build/perf-gate-receipt.json",), retain_on_failure=True)
+    gate_at = require_call(name, "perf-gate", perf_job, PERF_GATE_COMMANDS[0])
+    seeded_at = require_call(name, "perf-gate", perf_job, "bash tests/scripts/run-perf-gate.sh --seeded-regression")
+    receipt_uploads = [step for step in _artifact_steps(perf_job, "upload")
+                       if step.get("with", {}).get("name") == "perf-gate-${{ github.run_id }}-${{ github.run_attempt }}"]
+    if len(receipt_uploads) != 1 or receipt_uploads[0].get("if") != "always()":
+        raise Reject("artifact-flow", "ci.perf-gate must retain its same-run receipt on pass or failure")
+    upload_at = perf_job["steps"].index(receipt_uploads[0])
+    if not gate_at[0] < upload_at < seeded_at[0]:
+        raise Reject("artifact-flow", "ci.perf-gate must retain its receipt after the deciding gate and before seeded controls")
     for shard, commands in CI_SANITIZER_SHARDS.items():
         shard_job = _require_job(name, tree, shard)
         for command in commands:
@@ -3174,6 +3191,17 @@ def _mutations():
     reh = "release-rehearsal.yml"
     rel = "release.yml"
     return [
+        _m("release candidate perf gate receipt verifier is removed", rel, "  candidate-fuzz:\n",
+           "python3 -I tests/scripts/verify-perf-gate.py --verify-receipt",
+           "# python3 -I tests/scripts/verify-perf-gate.py --verify-receipt", "required-command-not-executed"),
+        _m("CI perf gate receipt upload is not retained on failure", "ci.yml", "  perf-gate:\n",
+           "        if: always()\n", "        if: success()\n", "artifact-flow"),
+        _m("CI perf gate receipt upload is removed", "ci.yml", "  perf-gate:\n",
+           "uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+           "uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", "artifact-flow"),
+        ("CI perf gate receipt upload is delayed until after the seeded control", "ci.yml", [
+            ("  perf-gate:\n", "      - name: Retain the perf-gate receipt on pass or failure\n        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n        if: always()\n        with:\n          name: perf-gate-${{ github.run_id }}-${{ github.run_attempt }}\n          path: build/perf-gate-receipt.json\n          if-no-files-found: error\n          retention-days: 7\n", ""),
+            ("  perf-gate:\n", "      - name: Prove the gate rejects a seeded regression\n        shell: bash\n        run: bash tests/scripts/run-perf-gate.sh --seeded-regression\n", "      - name: Prove the gate rejects a seeded regression\n        shell: bash\n        run: bash tests/scripts/run-perf-gate.sh --seeded-regression\n      - name: Retain the perf-gate receipt on pass or failure\n        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n        if: always()\n        with:\n          name: perf-gate-${{ github.run_id }}-${{ github.run_attempt }}\n          path: build/perf-gate-receipt.json\n          if-no-files-found: error\n          retention-days: 7\n")], "artifact-flow"),
         _m("release attacher takes attached evidence on every run", rel, "  attach-v02-evidence:\n",
            ATTACH_REUSE_GUARD, "if true; then", "attach-reuse-unguarded"),
         _m("release attacher retry flag is a constant", rel, "  attach-v02-evidence:\n",

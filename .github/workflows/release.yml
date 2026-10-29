@@ -1151,11 +1151,21 @@ jobs:
           python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" \
             --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json \
             --poll-seconds "$HOSTED_POLL_SECONDS"
+          gh api "repos/$GH_REPO/actions/runs/$run_id" > build/ci-fuzz/perf-gate-run.json
+          mkdir -p build/ci-fuzz/perf-gate
+          gh run download "$run_id" --repo "$GH_REPO" --name "perf-gate-$run_id-$attempt" --dir build/ci-fuzz/perf-gate
+          test -s build/ci-fuzz/perf-gate/perf-gate-receipt.json
+          python3 -I tests/scripts/verify-perf-gate.py --verify-receipt \
+            build/ci-fuzz/perf-gate/perf-gate-receipt.json --source-sha "$SOURCE_SHA" \
+            --run-json build/ci-fuzz/perf-gate-run.json --run-id "$run_id" --attempt "$attempt" --repo .
       - name: Retain the verified campaign receipt for the separate attacher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-evidence-fuzz
-          path: trusted/build/ci-fuzz/v02-fuzz-receipt.json
+          path: |
+            trusted/build/ci-fuzz/v02-fuzz-receipt.json
+            trusted/build/ci-fuzz/perf-gate/perf-gate-receipt.json
+            trusted/build/ci-fuzz/perf-gate-run.json
           if-no-files-found: error
           retention-days: 7
 
