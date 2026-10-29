@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Real-signal scenarios for gabbaboy-runner host mode (Phase 18, HOST-02, D-17).
 
-    python3 -I test_host_signals.py --runner PATH --work DIR --scenario NAME [--sanitized]
+    python3 -I test_host_signals.py --runner PATH --work DIR --scenario NAME
 
 Each scenario starts a real runner process, waits for `gbb-host: ready` under a watchdog, sends exactly
 one real signal per row, and prints `host-signals scenario=<name> pass` or `FAIL <name>: <why>` (exit 1).
 POSIX only: Windows never generates SIGTERM and has no host mode (D-05). Assertions are explicit checks,
 never `assert`, and python -O is refused.
 
-Time is evidence in exactly one place: the documented 2.0 s kill()-to-wait() contract ceiling of the
-`term` row, and only without --sanitized. Every other wait is a watchdog that fails with a reason.
+Time is never evidence (AGENTS.md: no clocks as evidence). Every wait is a watchdog that fails with a reason;
+the `term` row proves its stop with a `--frames K` replay of the same bytes, not with a kill-to-wait time.
 """
 from __future__ import annotations
 
@@ -40,7 +40,6 @@ _spec.loader.exec_module(host_fixture)
 READY_TIMEOUT = 20.0   # a loaded hosted runner may need seconds to load; far below the 60 s CTest bound
 EXIT_TIMEOUT = 15.0    # after one signal the runner must be gone long before this
 BATCH_TIMEOUT = 40.0
-CEILING_SECONDS = 2.0  # D-17: Playstead sends SIGKILL about 2 s after SIGTERM
 MBC1_RAM_BATTERY = 0x03
 MBC3_TIMER_RAM_BATTERY = 0x10
 RAM_8K = 0x02
@@ -99,8 +98,6 @@ class Child:
         self.lines: list[str] = []
         self.eof = False
         self.cond = threading.Condition()
-        self.sent_at: float | None = None
-        self.reaped_at: float | None = None
         self.thread = threading.Thread(target=self._read, daemon=True)
         self.thread.start()
 
@@ -145,7 +142,6 @@ class Child:
             raise Failure(f"no 'gbb-host: ready' within {READY_TIMEOUT} s: {self.text().strip()!r}")
 
     def send(self, number: int) -> None:
-        self.sent_at = time.monotonic()
         os.kill(self.process.pid, number)  # the child pid directly, never a process group
 
     def alive(self) -> bool:
@@ -157,7 +153,6 @@ class Child:
         except subprocess.TimeoutExpired:
             self.kill()
             raise Failure(f"runner still running {timeout} s after the signal: {self.text().strip()!r}")
-        self.reaped_at = time.monotonic()
         self.thread.join(timeout=5.0)
         return code
 
@@ -208,7 +203,7 @@ def paced_spin(runner: str, base: Path, name: str, cart_type: int = MBC1_RAM_BAT
     return child, rom, saves
 
 
-def scenario_term(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_term(runner: str, work: Path) -> None:
     """One SIGTERM ends a paced run at a frame boundary: exit 0, flushed, and a fresh `--frames K`
     batch run reproduces the same .sav byte for byte, so the stop landed on a whole frame."""
     base = fresh_dir(work)
@@ -232,10 +227,6 @@ def scenario_term(runner: str, work: Path, sanitized: bool) -> None:
     signalled = sav.read_bytes()
     require(len(signalled) == 32768, f"signalled image is {len(signalled)} bytes, expected 32768")
     require(listing(saves) == ["spin.sav"], f"unexpected directory entries {listing(saves)}")
-    if not sanitized:
-        elapsed = child.reaped_at - child.sent_at
-        require(elapsed < CEILING_SECONDS,
-                f"kill-to-wait took {elapsed:.3f} s, over the {CEILING_SECONDS} s ceiling")
 
     replay_dir = fresh_dir(base / "replay")
     code, err = run_batch(runner, rom, replay_dir, frame, base)
@@ -256,7 +247,7 @@ def stop_and_collect(child: Child, number: int, pause: float = 0.5) -> tuple[int
     return code, child.text()
 
 
-def scenario_int(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_int(runner: str, work: Path) -> None:
     """One SIGINT is a clean stop like SIGTERM, with its own reason, and the save is flushed."""
     base = fresh_dir(work)
     child, rom, saves = paced_spin(runner, base, "saves")
@@ -270,7 +261,7 @@ def scenario_int(runner: str, work: Path, sanitized: bool) -> None:
     require(len((saves / "spin.sav").read_bytes()) == 32768, "the flushed image has the wrong size")
 
 
-def scenario_inherited_ign(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_inherited_ign(runner: str, work: Path) -> None:
     """D-13: SIGINT inherited as SIG_IGN (nohup, background jobs) stays ignored; SIGTERM still stops."""
     base = fresh_dir(work)
     child, rom, saves = paced_spin(runner, base, "saves", ignore_int=True)
@@ -290,7 +281,7 @@ def scenario_inherited_ign(runner: str, work: Path, sanitized: bool) -> None:
     require((saves / "spin.sav").is_file(), "no .sav after the SIGTERM stop")
 
 
-def scenario_frames_clean(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_frames_clean(runner: str, work: Path) -> None:
     """A fixed-length batch run ends clean with its own reason."""
     base = fresh_dir(work)
     rom = base / "spin.gb"
@@ -303,7 +294,7 @@ def scenario_frames_clean(runner: str, work: Path, sanitized: bool) -> None:
             f"exit line is not status=clean reason=frames stopped_at_frame=30: {found.group(0)!r}")
 
 
-def scenario_failure_readonly(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_failure_readonly(runner: str, work: Path) -> None:
     """A failed final flush exits 1 and keeps the old .sav byte-identical with no temp left behind.
 
     The image changes every frame (the spin counter and the RTC sub-second count), so under the D-11
@@ -337,7 +328,7 @@ def scenario_failure_readonly(runner: str, work: Path, sanitized: bool) -> None:
         child.close()
 
 
-def scenario_core_stop(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_core_stop(runner: str, work: Path) -> None:
     """A core stop mid-run still attempts the final flush, then exits 1."""
     base = fresh_dir(work)
     rom = base / "bad.gb"
@@ -353,7 +344,7 @@ def scenario_core_stop(runner: str, work: Path, sanitized: bool) -> None:
     require(len(image) == 8192 and image[0] == 0x5A, "the guest's write before the stop was not flushed")
 
 
-def scenario_pacing_unavailable(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_pacing_unavailable(runner: str, work: Path) -> None:
     """IN-06, against a runner built with a failing monotonic clock (a build-tree fault variant: the shipped
     clock cannot be made to fail). A paced run must stop by itself at the frame boundary where pacing failed,
     print `gbb-host: pacing unavailable` once, still flush, and exit 1 with reason=pacing, instead of running
@@ -390,7 +381,7 @@ def scenario_pacing_unavailable(runner: str, work: Path, sanitized: bool) -> Non
             f"replay --frames {frame} differs: the pacing stop did not land on a frame boundary")
 
 
-def scenario_refusal(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_refusal(runner: str, work: Path) -> None:
     """A refusal is exit 2 before any save mutation and before `ready`."""
     base = fresh_dir(work)
     rom = base / "short.gb"
@@ -423,7 +414,7 @@ def valid_rtc_block(block: bytes) -> str | None:
     return None
 
 
-def scenario_crash_storm(runner: str, work: Path, sanitized: bool) -> None:
+def scenario_crash_storm(runner: str, work: Path) -> None:
     """SIGKILL at pseudo-random moments against an RTC cart: the .sav is always the last completed
     flush (exact size, valid GBRT block), every completed flush replaces the inode (so a torn in-place
     writer is caught), and a final normal start sweeps the temps a kill may have left."""
@@ -486,12 +477,11 @@ def main() -> int:
     parser.add_argument("--runner", required=True)
     parser.add_argument("--work", required=True)
     parser.add_argument("--scenario", required=True, choices=sorted(SCENARIOS))
-    parser.add_argument("--sanitized", action="store_true")
     options = parser.parse_args()
     work = Path(options.work)
     work.parent.mkdir(parents=True, exist_ok=True)
     try:
-        SCENARIOS[options.scenario](options.runner, work, options.sanitized)
+        SCENARIOS[options.scenario](options.runner, work)
     except Failure as failure:
         print(f"FAIL {options.scenario}: {failure}")
         return 1

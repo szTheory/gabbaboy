@@ -424,13 +424,9 @@ if(NOT WIN32)
 
   # ---- HOST-02 / D-17: real signals sent to real runner processes (POSIX-only: Windows has no SIGTERM and
   # host mode is refused there, D-05). Each row sends exactly one signal and keeps the base 60 s TIMEOUT;
-  # PROCESSORS 2 keeps hosted ctest (4-wide) from starving the 2.0 s ceiling. The sanitizer lanes pass
-  # --sanitized, which drops the wall-clock ceiling and keeps the replay and exit assertions.
+  # PROCESSORS 2 keeps hosted ctest (4-wide) from starving the rows' watchdogs. No row uses elapsed time as
+  # evidence (IN-07): the term row's proof is the --frames replay of the signalled .sav.
   set(GBB_HOST_SIGNALS_HARNESS "${PROJECT_SOURCE_DIR}/tests/scripts/test_host_signals.py")
-  set(GBB_HOST_SIGNALS_SANITIZED "")
-  if(GABBABOY_ENABLE_SANITIZERS)
-    set(GBB_HOST_SIGNALS_SANITIZED --sanitized)
-  endif()
 
   # gbb_add_host_signal_test(name scenario [PROCESSORS2]): one python3 -I scenario against the real runner.
   function(gbb_add_host_signal_test name scenario)
@@ -438,7 +434,7 @@ if(NOT WIN32)
       COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_SIGNALS_HARNESS}"
         --runner $<TARGET_FILE:gabbaboy-runner>
         --work "${PROJECT_BINARY_DIR}/host-signals/${name}"
-        --scenario ${scenario} ${GBB_HOST_SIGNALS_SANITIZED})
+        --scenario ${scenario})
     set_tests_properties(${name} PROPERTIES
       PASS_REGULAR_EXPRESSION "host-signals scenario=${scenario} pass")
     if(ARGN)
@@ -543,7 +539,7 @@ if(NOT WIN32)
     COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_SIGNALS_HARNESS}"
       --runner $<TARGET_FILE:gabbaboy-runner-hostvariant-pacing_fault>
       --work "${PROJECT_BINARY_DIR}/host-signals/host_exit_pacing_unavailable"
-      --scenario pacing-unavailable ${GBB_HOST_SIGNALS_SANITIZED})
+      --scenario pacing-unavailable)
   set_tests_properties(host_exit_pacing_unavailable PROPERTIES
     PASS_REGULAR_EXPRESSION "host-signals scenario=pacing-unavailable pass")
   gbb_host_mutant_library(pacing_ignored host_run.c "${GBB_PACING_FAULT_ANCHOR}" "${GBB_PACING_FAULT}"
