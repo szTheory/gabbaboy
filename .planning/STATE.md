@@ -31,8 +31,8 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 ## Current Position
 
 Phase: 18 (Player Save Slots and Host Contract) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 18
+Plan: 2 of 9
+Status: Ready to execute
 Last activity: 2026-10-28 — Phase 18 execution started
 
 Prior phase evidence: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
@@ -51,6 +51,8 @@ Runtime configuration (2026-10-28): owner moved OpenGSD work from Codex to Claud
 ### Decisions
 
 Historical decisions, including the per-plan records of Phases 1-16, moved to [v0.2-STATE-ARCHIVE.md](milestones/v0.2-STATE-ARCHIVE.md). Adopted choices live in [DECISIONS.md](context/DECISIONS.md); new decisions are appended below by the runtime.
+- [Phase 18]: 18-01: grammar defects are reported in argv order; a value beginning with -- is missing-value; = in any -- argument is equals-form
+- [Phase 18]: 18-01: gabbaboy_host links into every target compiling src/runner/main.c (test_runner, joyp mutant runner); it names no core
 
 ### Pending Todos
 
@@ -85,12 +87,18 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-28T23:49:10.109Z
-**Stopped at:** Phase 18 planned
-**Resume file:** .planning/phases/GB-18-player-save-slots-and-host-contract/continue.md
+**Last session:** 2026-10-29T02:58:32.906Z
+**Stopped at:** Completed 18-01-PLAN.md
+**Resume file:** None
 
-Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
+Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`; next plan within Phase 18: **18-02 — Host grammar, stem and Windows-gate negatives** (wave 2). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
 - Execute Phase 18 (Player Save Slots and Host Contract) with `/gsd-execute-phase 18`; reuse `18-CONTEXT.md`, research, patterns and the checked plans. RM-027 remains a Phase 19 entry blocker. Do not start Phase 19 automatically.
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 18 P01 | 15min | 2 tasks | 15 files |
