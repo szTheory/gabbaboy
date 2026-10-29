@@ -11,6 +11,13 @@ so a check sees the point-in-time facts of one commit. The compiled runner is a 
                        a no-battery cartridge prints `save_format=none bytes=0` and creates no file
   --check-print        the print leg only (no file is produced), which is what every platform can run
 
+  --check-completeness every admitted battery (type, RAM code, ROM code) combination reported by the core's
+                       gbb_probe_rom / gbb_battery_size (the test_save_format_completeness enumerator, run with
+                       --enumerator or read from --completeness FILE) has exactly one row with equal bytes and RTC
+                       presence, every row is admitted, and the admitted no-battery types equal no_battery_types
+  --freeze             the table is append-only against the latest strict-semver v* tag: every baseline row must
+                       survive unchanged; a tag whose tree lacks the file is baseline=none (pass); no strict tag fails
+
 A row's bytes, ram_bytes and rtc_bytes, its id grammar, its order and the "same id means same bytes" rule are
 checked structurally before any runner is started. Every failure is `REJECT <code>: <message>` on stderr, exit 1.
 """
@@ -33,6 +40,10 @@ if not __debug__:
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONTRACT = "docs/host-contract.json"
 MAX_BYTES = 8 * 1024 * 1024
+TAG = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+$")
+ADMITTED_LINE = re.compile(
+    r"^admitted type=0x([0-9A-F]{2}) ram=0x([0-9A-F]{2}) rom=0x([0-9A-F]{2}) battery=([01]) bytes=([0-9]+) rtc=([01])$")
+DONE_LINE = re.compile(r"^admitted-done count=([0-9]+)$")
 ID_GRAMMAR = re.compile(r"^gabbaboy-[a-z0-9-]{1,48}-v[1-9][0-9]*$")
 HEX_BYTE = re.compile(r"^0x[0-9A-F]{2}$")
 PRINT_LINE = re.compile(r"^save_format=([^\s]+) bytes=([0-9]+)\n$")
@@ -141,8 +152,12 @@ def parse_rows(document: dict) -> tuple[list[Row], list[int]]:
     rows: list[Row] = []
     for position, entry in enumerate(section["rows"]):
         where = f"save_formats.rows[{position}]"
-        if not isinstance(entry, dict) or tuple(entry.keys()) != ROW_FIELDS:
-            reject("row-malformed", f"{where} must have exactly the fields {', '.join(ROW_FIELDS)} in that order")
+        if not isinstance(entry, dict):
+            reject("row-malformed", f"{where} is not an object")
+        if tuple(entry.keys()) != ROW_FIELDS:
+            if sorted(entry.keys()) == sorted(ROW_FIELDS):  # a re-sorted copy of the hand-written file
+                reject("non-canonical", f"{where} keys are {list(entry.keys())}; the written order is {list(ROW_FIELDS)}")
+            reject("row-malformed", f"{where} must have exactly the fields {', '.join(ROW_FIELDS)}")
         limit = entry["rom_code_max"]
         rows.append(Row(
             hex_byte(entry["type"], f"{where}.type"), hex_byte(entry["ram_code"], f"{where}.ram_code"),
@@ -325,6 +340,132 @@ def check_rows(command: list[str], rows: list[Row], fixture, work: pathlib.Path,
     return files
 
 
+# ---- completeness against the core (D-20) -------------------------------------------------------------------
+
+class Combo(NamedTuple):
+    type: int
+    ram_code: int
+    rom_code: int
+    battery: bool
+    bytes: int
+    rtc: bool
+
+
+def parse_enumeration(text: str) -> list[Combo]:
+    combos: list[Combo] = []
+    done: int | None = None
+    for line in text.splitlines():
+        match = ADMITTED_LINE.match(line)
+        if match is not None and done is None:
+            combos.append(Combo(int(match.group(1), 16), int(match.group(2), 16), int(match.group(3), 16),
+                                match.group(4) == "1", int(match.group(5)), match.group(6) == "1"))
+            continue
+        finish = DONE_LINE.match(line)
+        if finish is not None and done is None:
+            done = int(finish.group(1))
+            continue
+        reject("enumerator-output", f"unexpected enumerator line {line[:120]!r}")
+    if done is None or done != len(combos):
+        reject("enumerator-output", f"admitted-done count={done} does not match the {len(combos)} admitted lines")
+    return combos
+
+
+def check_completeness(rows: list[Row], no_battery: list[int], combos: list[Combo]) -> int:
+    """Both directions: every admitted battery combination maps to exactly one row, every row is admitted."""
+    if not rows:
+        reject("row-missing", "save_formats.rows is empty, so no admitted battery cartridge has a row")
+    used = [False] * len(rows)
+    boundary = [False] * len(rows)
+    for combo in combos:
+        if not combo.battery:
+            continue
+        matches = [index for index, row in enumerate(rows)
+                   if row.type == combo.type and row.ram_code == combo.ram_code and row.admits(combo.rom_code)]
+        where = f"${combo.type:02X}/${combo.ram_code:02X} ROM code ${combo.rom_code:02X}"
+        if not matches:
+            reject("row-missing", f"the core admits {where} ({combo.bytes} bytes) but the contract has no row for it")
+        if len(matches) > 1:
+            reject("row-overlap", f"{where} matches {len(matches)} rows")
+        index = matches[0]
+        row = rows[index]
+        if combo.bytes != row.bytes or combo.rtc != (row.rtc_bytes > 0):
+            reject("size-mismatch", f"{where} {row.id}: the core makes {combo.bytes} bytes (rtc={int(combo.rtc)}), "
+                                    f"the contract says {row.bytes} (rtc_bytes={row.rtc_bytes})")
+        used[index] = True
+        boundary[index] |= row.rom_code_max is not None and combo.rom_code == row.rom_code_max
+    for index, row in enumerate(rows):
+        if not used[index]:
+            reject("row-not-admitted", f"{row.label()} {row.id}: the core admits no battery cartridge with this type and RAM code")
+        if row.rom_code_max is not None and not boundary[index]:
+            reject("row-not-admitted", f"{row.label()} {row.id}: the core does not admit ROM code ${row.rom_code_max:02X}")
+    admitted_plain = sorted({combo.type for combo in combos if not combo.battery})
+    for cart_type in admitted_plain:
+        if cart_type not in no_battery:
+            reject("row-missing", f"${cart_type:02X} is admitted without a battery but is not in no_battery_types")
+    for cart_type in no_battery:
+        if cart_type not in admitted_plain:
+            reject("row-not-admitted", f"no_battery_types lists ${cart_type:02X} but the core admits no such cartridge without a battery")
+    battery_types = {row.type for row in rows}
+    if battery_types & set(no_battery):
+        reject("row-not-admitted", f"types {sorted(battery_types & set(no_battery))} are both battery rows and no_battery_types")
+    return len(admitted_plain)
+
+
+def command_completeness(args) -> int:
+    if args.rev is None or (args.enumerator is None and args.completeness is None):
+        reject("usage", "--rev and --enumerator (or --completeness FILE) are required")
+    rows, no_battery = load_rows(Source(args.repo, args.rev))
+    if args.completeness is not None:
+        text = args.completeness.read_text(encoding="utf-8", errors="strict")
+    else:
+        done = subprocess.run([args.enumerator], capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              timeout=RUN_TIMEOUT, check=False)
+        if done.returncode != 0:
+            reject("enumerator-output", f"the enumerator exited {done.returncode}: {done.stdout.strip()[:200]}")
+        text = done.stdout
+    combos = parse_enumeration(text)
+    plain = check_completeness(rows, no_battery, combos)
+    battery = sum(1 for combo in combos if combo.battery)
+    print(f"save-formats completeness pass rows={len(rows)} battery_combinations={battery} no_battery_types={plain}")
+    return 0
+
+
+# ---- the freeze against the latest release tag (D-19, one-way) -------------------------------------------------
+
+def strict_tags(repo: pathlib.Path) -> list[str]:
+    done = subprocess.run(["git", "-C", str(repo), "tag", "--list", "v*"], capture_output=True, text=True, check=False)
+    tags = [tag for tag in done.stdout.split() if TAG.fullmatch(tag)]
+    return sorted(tags, key=lambda tag: tuple(int(part) for part in tag[1:].split(".")))
+
+
+def command_freeze(args) -> int:
+    if args.rev is None:
+        reject("usage", "--rev is required")
+    current_rows, current_types = load_rows(Source(args.repo, args.rev))
+    tags = strict_tags(args.repo)
+    if not tags:
+        reject("no-tags", "no strict-semver v* tag exists, so there is no release to freeze against (fetch tags)")
+    tag = tags[-1]
+    exists = subprocess.run(["git", "-C", str(args.repo), "cat-file", "-e", f"{tag}:{CONTRACT}"],
+                            capture_output=True, check=False).returncode == 0
+    if not exists:
+        print("save-formats freeze pass baseline=none")
+        return 0
+    baseline_rows, baseline_types = parse_rows(parse_canonical(Source(args.repo, tag).read(CONTRACT), f"{tag}:{CONTRACT}"))
+    current = {(row.type, row.ram_code, row.rom_code_max): row for row in current_rows}
+    for old in baseline_rows:
+        now = current.get((old.type, old.ram_code, old.rom_code_max))
+        if now is None:
+            reject("freeze-mismatch", f"{tag} published {old.label()} {old.id} and the row is gone")
+        if now != old:
+            reject("freeze-mismatch", f"{tag} published {old}, now {now}")
+    for cart_type in baseline_types:
+        if cart_type not in current_types:
+            reject("freeze-mismatch", f"{tag} listed ${cart_type:02X} in no_battery_types and it is gone")
+    print(f"save-formats freeze pass baseline={tag}")
+    return 0
+
+
 def command_check(args, produce: bool) -> int:
     if args.rev is None or args.work is None or (args.runner is None and args.runner_cmd is None):
         reject("usage", "--rev, --work and --runner (or --runner-cmd) are required")
@@ -349,13 +490,21 @@ def main() -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--check", action="store_true", help="print and produced-file legs on both profiles")
     mode.add_argument("--check-print", action="store_true", help="the print leg only (every platform)")
+    mode.add_argument("--check-completeness", action="store_true", help="the contract against the core's admitted set")
+    mode.add_argument("--freeze", action="store_true", help="append-only against the latest strict v* tag")
     parser.add_argument("--rev", help="the commit to read docs/host-contract.json from")
     parser.add_argument("--repo", type=pathlib.Path, default=ROOT, help="the repository root")
     parser.add_argument("--runner", help="path of gabbaboy-runner")
     parser.add_argument("--runner-cmd", help="the runner as a JSON list (a shim interpreter and script)")
+    parser.add_argument("--enumerator", help="path of test_save_format_completeness (run to list admitted cartridges)")
+    parser.add_argument("--completeness", type=pathlib.Path, help="a file holding captured enumerator output")
     parser.add_argument("--work", type=pathlib.Path, help="a build-tree directory for the generated ROMs and saves")
     args = parser.parse_args()
     try:
+        if args.check_completeness:
+            return command_completeness(args)
+        if args.freeze:
+            return command_freeze(args)
         return command_check(args, produce=args.check)
     except Reject as error:
         print(f"REJECT {error.code}: {error.message}", file=sys.stderr)
