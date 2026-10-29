@@ -458,6 +458,27 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
     set_tests_properties(${test_name} PROPERTIES TIMEOUT 120
       ENVIRONMENT "SDL_AUDIO_DRIVER=dummy;HOME=${slot_home};CFFIXED_USER_HOME=${slot_home}")
+  elseif(test_name MATCHES "^player_slot_menu_shortcuts(_control)?$")
+    # Research assumption A2 as a check: SDL's macOS main menu must bind none of Command-S/L/Z, or Cocoa would
+    # consume the slot chords before the player saw them. The control seeds a Command-S item and must be caught.
+    if(NOT TARGET test_player_menu_shortcuts)
+      add_executable(test_player_menu_shortcuts test_menu_shortcuts.c)
+      target_link_libraries(test_player_menu_shortcuts PRIVATE SDL3::SDL3
+        "-framework Foundation" "-framework AppKit" objc)
+      target_compile_features(test_player_menu_shortcuts PRIVATE c_std_17)
+      set_target_properties(test_player_menu_shortcuts PROPERTIES C_EXTENSIONS OFF)
+    endif()
+    if(test_name STREQUAL "player_slot_menu_shortcuts")
+      add_test(NAME ${test_name} COMMAND test_player_menu_shortcuts)
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 60
+        PASS_REGULAR_EXPRESSION "menu-shortcuts pass items=[1-9]")
+    else()
+      add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=$<TARGET_FILE:test_player_menu_shortcuts>;--seed-conflict"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=menu-shortcut-conflict s"
+        -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+      set_tests_properties(${test_name} PROPERTIES TIMEOUT 60)
+    endif()
   elseif(test_name MATCHES "^player_script_smoke_surface(_selftest|_main_selftest)?$")
     # D-38: the scripted-smoke diagnostic stays free of environment, network, save writes
     # and persistence. The selftest runs the same check on a copy with an injected getenv
