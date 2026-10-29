@@ -1633,3 +1633,5 @@ host_grammar_print_extra
 save_format_completeness
 save_format_freeze
 host_contract_json
+save_format_controls
+host_contract_controls

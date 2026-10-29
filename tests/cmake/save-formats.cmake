@@ -97,3 +97,27 @@ add_test(NAME host_contract_json
 set_tests_properties(host_contract_json PROPERTIES
   TIMEOUT 60
   PASS_REGULAR_EXPRESSION "host-contract pass exit_codes=4 cadence=6")
+
+# ---- D-20: seeded controls, one REJECT code per way the published table can drift ------------------------
+# Each control drives the checker's own CLI over a private git repository (and, for the produced-file legs, over a
+# generated runner shim with exactly one seeded defect) and must fail for its own named reason. The shim controls
+# spawn POSIX processes, so save_format_controls is POSIX-only; host_contract_controls is portable.
+if(NOT WIN32)
+  add_test(NAME save_format_controls
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_SAVE_FORMATS_CHECKER};--self-test;--rev;${GBB_SAVE_FORMATS_REV};--repo;${PROJECT_SOURCE_DIR}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=save-formats self-test pass controls=[0-9]+"
+      -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=15
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  set_tests_properties(save_format_controls PROPERTIES TIMEOUT 60)
+endif()
+
+add_test(NAME host_contract_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_HOST_CONTRACT_CHECKER};--self-test;--rev;${GBB_SAVE_FORMATS_REV};--repo;${PROJECT_SOURCE_DIR}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=host-contract self-test pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=5
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+set_tests_properties(host_contract_controls PROPERTIES TIMEOUT 60)

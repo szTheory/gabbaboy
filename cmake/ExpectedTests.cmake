@@ -105,7 +105,8 @@ function(gabbaboy_verify_registered_tests)
       host_signal_decoy_exit0_after_failed_flush
       host_signal_decoy_in_place_write
       host_no_test_seams_shipped_run_control
-      save_format_files)
+      save_format_files
+      save_format_controls)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)
