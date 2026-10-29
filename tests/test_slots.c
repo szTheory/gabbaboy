@@ -28,6 +28,8 @@
 #define FRAME PLAYER_SLOT_FRAME_HALF_DOTS
 
 static const char *g_case = "?";
+/* The last fixture directory, removed by main even when a REQUIRE returned early (a failing case or a mutant). */
+static char g_fixture_dir[64];
 
 #define REQUIRE(x) do { if (!(x)) { \
     printf("FAIL %s: %s:%d %s\n", g_case, __FILE__, __LINE__, #x); return 1; \
@@ -164,6 +166,7 @@ static bool fx_setup_rom(fixture *fx, gbb_profile profile, uint8_t *rom, size_t 
     hex_to_digest(fx->hex, fx->digest);
     (void)snprintf(fx->dir, sizeof(fx->dir), "slots-XXXXXX");
     if (mkdtemp(fx->dir) == NULL) return false;
+    (void)snprintf(g_fixture_dir, sizeof(g_fixture_dir), "%s", fx->dir);
     fx->dirfd = open(fx->dir, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (fx->dirfd < 0) return false;
     fx->store_ready = player_slot_store_init(&fx->store, fx->dirfd, fx->digest, profile, fx->rom, fx->rom_size);
@@ -1126,6 +1129,8 @@ int main(int argc, char **argv) {
         g_case = g_cases[i].name;
         const int result = g_cases[i].run();
         if (result == 0) printf("PASS %s\n", g_case);
+        /* GBB_SLOTS_KEEP=1 keeps the directory of a failing case for inspection. */
+        if (g_fixture_dir[0] != '\0' && (result == 0 || getenv("GBB_SLOTS_KEEP") == NULL)) remove_tree(g_fixture_dir);
         return result;
     }
     fprintf(stderr, "unknown case: %s\n", argv[1]);
