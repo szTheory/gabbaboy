@@ -45,10 +45,12 @@ void player_input_reconcile(player_input_state *state,
  * restored time directly (reconcile refuses to move the cursor backwards), the pending mirror is seeded from the
  * restored queue, every key and gamepad button is let go, and all eight buttons are marked for release, which the
  * caller queues with player_input_retry_focus_releases at the same host time (releases land at
- * max(now, last queued)). The gamepad source table and the paused flag are kept. The slot engine guarantees at
- * most 56 restored events, so the eight releases fit the core's 64-event queue; if a larger clock ever arrived
- * the state is reset instead of queuing past the capacity. */
-void player_input_rebase(player_input_state *state, uint64_t host_now_ns,
+ * max(now, last queued)). The gamepad source table and the paused flag are kept. Returns true on success. The
+ * slot engine guarantees at most 56 restored events, so the eight releases fit the core's 64-event queue. A
+ * larger clock returns false: the mirror still counts the restored events (at most 64), the releases stay
+ * pending and input is paused, so nothing is queued past the capacity; the caller should keep the game paused.
+ * A NULL state or clock returns false and changes nothing. */
+bool player_input_rebase(player_input_state *state, uint64_t host_now_ns,
                          const gbb_input_clock *clock);
 bool player_input_guest_target(const player_input_state *state,
                                uint64_t host_now_ns,

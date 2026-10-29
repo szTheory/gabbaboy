@@ -284,7 +284,29 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
     else()
       add_test(NAME ${test_name} COMMAND test_player_audio ${test_name})
     endif()
-  elseif(test_name MATCHES "^player_input_(time|events|focus|sources|reconnect|focus_audio)$")
+  elseif(test_name STREQUAL "player_input_mutant_rebase_silent")
+    # IN-03 control: input.c with the old silent handling of a restored queue too full for the releases (empty
+    # mirror, nothing pending, not paused, success). The rebase_guard case must fail. The executable is built
+    # from test_input.c and the mutated input.c only, so no second copy of input.c is linked; it is named
+    # *variant* because only the player source is mutated, not the core.
+    set(mutant_input "${CMAKE_CURRENT_BINARY_DIR}/input_rebase_silent.c")
+    gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/input.c" "${mutant_input}"
+      "        state->paused = true;
+        return false;"
+      "        state->pending_count = 0u;
+        state->held_buttons = 0u;
+        state->release_pending_buttons = 0u;
+        return true;")
+    add_executable(test_player_input_variant_rebase_silent test_input.c "${mutant_input}")
+    target_include_directories(test_player_input_variant_rebase_silent PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
+    target_link_libraries(test_player_input_variant_rebase_silent PRIVATE GabbaBoy::core SDL3::SDL3)
+    target_compile_features(test_player_input_variant_rebase_silent PRIVATE c_std_17)
+    set_target_properties(test_player_input_variant_rebase_silent PROPERTIES C_EXTENSIONS OFF)
+    add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_player_input_variant_rebase_silent>;player_input_rebase_guard;${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb"
+      -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=not ok 1 - player_input_rebase_guard"
+      -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  elseif(test_name MATCHES "^player_input_(time|events|focus|sources|reconnect|focus_audio|rebase_guard)$")
     if(NOT TARGET test_player_input)
       add_executable(test_player_input test_input.c)
       target_link_libraries(test_player_input PRIVATE gabbaboy-player-adapter)
@@ -435,7 +457,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
     set(mutant_main "${CMAKE_CURRENT_BINARY_DIR}/main_slot_${mutant_kind}.c")
     if(mutant_kind STREQUAL "no_rebase")
       gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/main.c" "${mutant_main}"
-        "player_input_rebase(&app->input, host_now, &result->clock);"
+        "if (!player_input_rebase(&app->input, host_now, &result->clock)) app->user_paused = true;"
         "/* mutant: the re-anchor call is removed */")
       set(mutant_case reanchor)
       set(mutant_regex "FAIL reanchor")

@@ -1460,7 +1460,9 @@ static void set_slot_status(player *app, const char *message) {
  * RTC catch-up runs, and pause is kept: nothing here changes user_paused. */
 static void apply_slot_load(player *app, const player_slot_result *result) {
     const uint64_t host_now = SDL_GetTicksNS();
-    player_input_rebase(&app->input, host_now, &result->clock);
+    /* The slot engine refuses a restored queue too full for the releases (D-24), so a false return is not
+     * expected; if it happens, input is already paused and the game stays paused rather than run on. */
+    if (!player_input_rebase(&app->input, host_now, &result->clock)) app->user_paused = true;
     /* A release the queue cannot take yet stays pending; the main loop retries it every frame. */
     (void)player_input_retry_focus_releases(&app->input, app->machine, host_now);
     (void)player_audio_clear(app->audio);

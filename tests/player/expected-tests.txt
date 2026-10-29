@@ -104,3 +104,5 @@ player_slot_mutant_command_guard
 player_slot_help_text
 player_slot_menu_shortcuts
 player_slot_menu_shortcuts_control
+player_input_rebase_guard
+player_input_mutant_rebase_silent
