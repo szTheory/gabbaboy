@@ -6,8 +6,8 @@ shapes derived from it so that the production attach, manifest, final-gate and p
 real object schemas (run, job, artifact, check run, pull request, release and release asset) and not against shapes
 invented to satisfy a verifier. It proves deterministic logic. It does not prove live GitHub permissions.
 
-- captured.json sha256: 8f0f8f8b231f5b34df29b256cd9f64e417927325ed68d2f81d901524032ddcf5
-- bytes: 108510 (bound: 262144)
+- captured.json sha256: 0617b56fcb585e23f1ced1d3ba256c432f8fbb76bd0d609e2e2088c7ae62bbc1
+- bytes: 153744 (bound: 262144)
 - format: UTF-8 JSON, sorted keys, two-space indent, LF line endings (`.gitattributes` pins `eol=lf` so the digest is stable on Windows)
 
 ## Endpoints
@@ -27,6 +27,8 @@ and release-please workflow run 40259198302.
 | artifacts | `repos/szTheory/gabbaboy/actions/runs/40259198302/artifacts?per_page=100` |
 | check_runs | `repos/szTheory/gabbaboy/commits/c6dc575b6a84cf51a56688948fce9241ba323400/check-runs?per_page=100` |
 | pull_request | `repos/szTheory/gabbaboy/pulls/75` |
+| pull_requests | `repos/szTheory/gabbaboy/commits/b93137f00d07b11dc74e40330e0ddf6029c0677d/pulls` |
+| attempt_jobs | `repos/szTheory/gabbaboy/actions/runs/40257161612/attempts/1/jobs?per_page=100` |
 | commit | `repos/szTheory/gabbaboy/commits/v0.2.1` |
 
 Release asset downloads are not stored: the bytes are replaced by fixture bytes, and only the asset row shape
@@ -34,7 +36,7 @@ Release asset downloads are not stored: the bytes are replaced by fixture bytes,
 
 ## API version
 
-`X-GitHub-Api-Version: 2022-11-28` (the default REST version for `gh api` at capture time, 2026-10-28), recorded as
+`X-GitHub-Api-Version: 2022-11-28` (the default REST version for `gh api` at capture time, 2026-10-29), recorded as
 `api_version` in the file and checked by `--check-capture`.
 
 ## Sanitization
@@ -47,7 +49,7 @@ has a negative control in `--self-test`). The raw responses are not stored.
   fixed placeholder with the same members
 - release and pull-request `body` text, commit `patch`, `signature` and `payload`, and runner names and ids are
   replaced by a fixed marker or zero; messages and titles are cut at 200 characters
-- arrays are cut to the bounds recorded in `sanitizer.truncated` of the file (assets 2, workflow runs 2, jobs 2,
+- arrays are cut to the bounds recorded in `sanitizer.truncated` of the file (assets 2, workflow runs 2, jobs 8,
   artifacts 2, commit files 1, job steps 2, check runs: the three required contexts plus one other); `total_count`
   fields keep their real values
 - no member is added, renamed or removed otherwise: in particular a check run keeps `url`, `html_url`, `check_suite`,
@@ -60,7 +62,7 @@ production verifiers pin and derive from the check-run `url` and `html_url` pref
 
 ## Provenance
 
-Captured 2026-10-28 by the repository's Phase 17 release-lifecycle work from the repository's own public history,
-using the maintainer's authenticated `gh` session for rate limits only. The data describes a published, immutable
-release and its merged pull request; the replay uses it as a shape template and retargets the identity (tag, ids and
-SHAs) to a fixture release, so no value in the captured file is trusted as evidence about a live release.
+Captured 2026-10-29 by the repository's Phase 19 release-lifecycle work from the repository's own public history with
+read-only GitHub API GETs. The data describes the published, immutable v0.2.1 release, its merged pull request and
+release rehearsal attempt. The replay uses these objects as shape templates and retargets their identities (tag, ids
+and SHAs) to fixture releases and runs; no captured value is trusted as evidence about a live release.

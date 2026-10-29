@@ -316,7 +316,16 @@ set -euo pipefail
 # another head supersedes it, and a source with another tree refuses. The judge is the trusted workflow revision. A
 # refusal stops the job before the one publication transition.
 gh api "repos/$GH_REPO/actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success&per_page=100" > "$RUNNER_TEMP/nightly-rehearsal-runs.json"
-python3 -I trusted/.github/scripts/verify-release-source-proof.py --select-performance-run "$RUNNER_TEMP/nightly-rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo "$GH_REPO" --selected-run "$RUNNER_TEMP/nightly-rehearsal-run.json" > /dev/null
+gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls" > "$RUNNER_TEMP/nightly-source-pulls.json"
+source_pr=$(jq -ec --arg sha "$SOURCE_SHA" '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)] | if length == 1 then .[0] else error("source commit does not map to exactly one merged main PR") end' "$RUNNER_TEMP/nightly-source-pulls.json")
+pr_head=$(jq -r '.head.sha' <<<"$source_pr")
+merged_at=$(jq -r '.merged_at' <<<"$source_pr")
+selected_rehearsal=$(jq -ec '[.workflow_runs[]] | max_by(.id)' "$RUNNER_TEMP/nightly-rehearsal-runs.json")
+run_id=$(jq -r '.id' <<<"$selected_rehearsal")
+attempt=$(jq -r '.run_attempt' <<<"$selected_rehearsal")
+[[ "$run_id" =~ ^[0-9]+$ && "$attempt" =~ ^[0-9]+$ ]] || { echo "No successful rehearsal run of this tag exists." >&2; exit 1; }
+gh api "repos/$GH_REPO/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100" > "$RUNNER_TEMP/nightly-rehearsal-jobs.json"
+python3 -I trusted/.github/scripts/verify-release-source-proof.py --bind-rehearsal-run "$RUNNER_TEMP/nightly-rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo "$GH_REPO" --selected-run "$RUNNER_TEMP/nightly-rehearsal-run.json" --pr-head "$pr_head" --merged-at "$merged_at" --attempt-jobs "$RUNNER_TEMP/nightly-rehearsal-jobs.json"
 head=$(jq -r .head_sha "$RUNNER_TEMP/nightly-rehearsal-run.json")
 gh run list --repo "$GH_REPO" --workflow nightly-asan.yml --branch "rehearsal/$RELEASE_TAG" --limit 50 --json databaseId,attempt,headSha,headBranch,event,status,conclusion,createdAt,workflowName > "$RUNNER_TEMP/nightly-runs.json"
 run_id=$(jq -r --arg head "$head" '(([.[] | select(.headSha == $head)] | sort_by([.createdAt, .databaseId]) | last) // (sort_by([.createdAt, .databaseId]) | last) // {}) | .databaseId // empty' "$RUNNER_TEMP/nightly-runs.json")

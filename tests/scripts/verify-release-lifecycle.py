@@ -80,7 +80,7 @@ FIRST_ASSET_ID = 900100001
 RUN_ID = 50000000001
 MAX_CAPTURE_BYTES = 256 * 1024
 RESPONSE_KEYS = ("release", "release_assets", "workflow_runs", "workflow_run", "jobs", "artifacts", "check_runs",
-                 "pull_request", "commit")
+                 "pull_request", "pull_requests", "attempt_jobs", "commit")
 PARALLEL = max(2, min(8, os.cpu_count() or 2))
 
 
@@ -156,6 +156,8 @@ REQUIRED_PATHS = {
                    "check_runs.0.check_suite.id", "check_runs.0.app.id", "check_runs.0.app.slug"),
     "pull_request": ("number", "state", "merged_at", "merge_commit_sha", "base.ref", "base.repo.full_name",
                      "head.sha", "head.repo.full_name"),
+    "pull_requests": ("0.number", "0.merged_at", "0.merge_commit_sha", "0.base.ref", "0.head.sha"),
+    "attempt_jobs": ("jobs.0.completed_at", "jobs.0.run_id", "jobs.0.run_attempt", "total_count"),
     "commit": ("sha",),
 }
 FORBIDDEN_MEMBERS = {"check_runs": ("check_runs.0.repository",)}
@@ -164,7 +166,7 @@ REDACTED_EMAIL = "redacted@example.invalid"
 FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY")
 KEEP_LOGINS = {"szTheory", "github"}
 USER_KEYS = {"login", "node_id", "avatar_url"}
-TRUNCATE_ARRAYS = {"assets": 2, "workflow_runs": 2, "jobs": 2, "artifacts": 2, "files": 1, "steps": 2}
+TRUNCATE_ARRAYS = {"assets": 2, "workflow_runs": 2, "jobs": 8, "artifacts": 2, "files": 1, "steps": 2}
 OMITTED = "[omitted by the capture sanitizer]"
 SOURCES_DIGEST = re.compile(r"(?m)^- captured\.json sha256: ([0-9a-f]{64})$")
 
@@ -254,7 +256,8 @@ def assemble_capture(raw: dict[str, object]) -> dict:
     responses = {
         "release": release, "release_assets": assets[:2], "workflow_runs": raw["workflow_runs"],
         "workflow_run": raw["workflow_run"], "jobs": raw["jobs"], "artifacts": raw["artifacts"],
-        "check_runs": checks, "pull_request": raw["pull_request"], "commit": raw["commit"],
+        "check_runs": checks, "pull_request": raw["pull_request"], "pull_requests": raw["pull_requests"],
+        "attempt_jobs": raw["attempt_jobs"], "commit": raw["commit"],
     }
     responses = {name: sanitize(value, "", log) for name, value in responses.items()}
     return {"schema_version": 1, "kind": "github-api-capture", "api_version": "2022-11-28", "repository": REPO,
@@ -419,6 +422,15 @@ def api(args):
         if ref not in st["commits"]:
             fail("HTTP 404: Not Found (" + route + ")")
         body = st["commits"][ref]
+    elif re.fullmatch(r"commits/[0-9a-f]{40}/pulls", tail) and not query:
+        if tail.split("/")[1] != st["source_sha"]:
+            fail("HTTP 404: Not Found (" + route + ")")
+        kind, body = "pull_requests", st["pull_requests"]
+    elif re.fullmatch(r"actions/runs/[0-9]+/attempts/[0-9]+/jobs", tail) and query == "per_page=100":
+        match = re.fullmatch(r"actions/runs/([0-9]+)/attempts/([0-9]+)/jobs", tail)
+        if int(match.group(1)) != st["rehearsal_run_id"] or int(match.group(2)) != st["rehearsal_attempt"]:
+            fail("HTTP 404: Not Found (" + route + ")")
+        kind, body = "attempt_jobs", st["attempt_jobs"]
     elif tail == "releases" and query == "per_page=100":
         kind, body = "release", [release_object(st)]
     elif re.fullmatch(r"releases/\d+", tail) and not query:
@@ -711,13 +723,14 @@ class Template:
         mapping = {
             str(identity["release_id"]): str(RELEASE_ID), identity["tag"]: self.tag,
             identity["source_sha"]: self.source, identity["pr_head_sha"]: self.pr_head,
-            str(identity["run_id"]): str(RUN_ID - 1000),
+            str(identity["run_id"]): str(RUN_ID - 1000), "40257161612": str(RUN_ID - 500),
         }
         responses = {name: retarget(value, mapping) for name, value in responses.items()}
         shapes = {
             "commit": key_shape(responses["commit"]), "release": key_shape(responses["release"]),
             "release_assets": key_shape(responses["release_assets"]), "workflow_runs": key_shape(responses["workflow_runs"]),
-            "pull_request": key_shape(responses["pull_request"]), "check_runs": key_shape(responses["check_runs"]),
+            "pull_request": key_shape(responses["pull_request"]), "pull_requests": key_shape(responses["pull_requests"]),
+            "attempt_jobs": key_shape(responses["attempt_jobs"]), "check_runs": key_shape(responses["check_runs"]),
         }
         release = responses["release"]
         template = copy.deepcopy(release["assets"][0])
@@ -745,6 +758,17 @@ class Template:
                          path=".github/workflows/release-rehearsal.yml")
         rehearsal["repository"]["full_name"] = REPO
         rehearsal["head_repository"]["full_name"] = REPO
+        pull_requests = responses["pull_requests"]
+        if not isinstance(pull_requests, list) or not pull_requests:
+            raise Reject("capture-incomplete", "the captured merge commit has no pull request")
+        matching_prs = [pr for pr in pull_requests if pr.get("merge_commit_sha") == self.source and pr.get("base", {}).get("ref") == "main"]
+        if len(matching_prs) != 1:
+            raise Reject("capture-incomplete", "the captured merge commit does not map to exactly one merged main PR")
+        matching_prs[0]["head"]["sha"] = self.rehearsal_head
+        attempt_jobs = responses["attempt_jobs"]
+        for job in attempt_jobs["jobs"]:
+            job["run_id"] = RUN_ID - 500
+            job["run_attempt"] = rehearsal["run_attempt"]
         nightly = {"databaseId": NIGHTLY_RUN_ID, "attempt": 1, "headSha": self.rehearsal_head,
                    "headBranch": "rehearsal/" + self.tag, "event": "workflow_dispatch", "status": "completed",
                    "conclusion": "success", "createdAt": "2026-10-26T12:00:00Z", "workflowName": "nightly-asan"}
@@ -755,6 +779,8 @@ class Template:
             "release": release, "assets": [], "asset_template": template, "next_asset_id": FIRST_ASSET_ID,
             "runs": [old], "run_template": run_template, "pull_request": pull, "check_runs": checks,
             "check_runs_head": self.pr_head, "commits": {self.tag: commit, self.source: commit},
+            "source_sha": self.source, "pull_requests": pull_requests, "attempt_jobs": attempt_jobs,
+            "rehearsal_run_id": rehearsal["id"], "rehearsal_attempt": rehearsal["run_attempt"],
             "decisions": [], "shapes": shapes, "rehearsal_runs": [rehearsal],
             "nightly_runs": [nightly], "nightly_view": {str(NIGHTLY_RUN_ID): nightly_view},
         }
@@ -1343,6 +1369,8 @@ def c_capture_contract(ctx: Context) -> str:
     mutated("a check run without its check_suite", "capture-schema", lambda v: first_run(v).pop("check_suite"))
     mutated("a check run without its html_url", "capture-schema", lambda v: first_run(v).pop("html_url"))
     mutated("a pull request without its merge commit", "capture-schema", lambda v: v["responses"]["pull_request"].pop("merge_commit_sha"))
+    mutated("a commit pull listing without merged_at", "capture-schema", lambda v: v["responses"]["pull_requests"][0].pop("merged_at"))
+    mutated("an attempt job without completed_at", "capture-schema", lambda v: v["responses"]["attempt_jobs"]["jobs"][0].pop("completed_at"))
     mutated("a release asset without its digest", "capture-schema", lambda v: v["responses"]["release_assets"][0].pop("digest"))
     mutated("an undeclared response", "capture-schema", lambda v: v["responses"].update(extra={}))
     mutated("a missing response", "capture-schema", lambda v: v["responses"].pop("artifacts"))
@@ -1814,12 +1842,18 @@ def _nightly_other_run(state: dict, head: str, **changes) -> None:
     state["nightly_view"][str(run["databaseId"])] = dict(state["nightly_view"][str(NIGHTLY_RUN_ID)], **run)
 
 
+def _late_rehearsal_attempt(state: dict) -> None:
+    state["attempt_jobs"]["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
+
+
 def c_nightly_gate(ctx: Context) -> list:
     positive = Scenario(ctx.t, "nightly-positive")
     ws = positive.subject_workspace("publish")
     ok = positive.run_mode(ws, "nightly-gate", RELEASE_ID=str(RELEASE_ID))
     if ok.rc != 0 or f"nightly-gate pass run_id={NIGHTLY_RUN_ID}" not in ok.out or positive.mutations_logged():
         raise Reject("replay-failed", f"nightly gate positive control: exit {ok.rc}: {ok.text.strip()[-300:]}")
+    if f"rehearsal-bound run_id={RUN_ID - 500} head_sha={ctx.t.rehearsal_head}" not in ok.out:
+        raise Reject("replay-failed", "the nightly gate did not report the rehearsal run it bound")
     receipt = json.loads(ok.out[ok.out.index("{"):])
     if receipt["head_sha"] != ctx.t.rehearsal_head or receipt["source_sha"] != ctx.t.source or receipt["run_id"] != NIGHTLY_RUN_ID:
         raise Reject("replay-failed", "the nightly receipt is not bound to the rehearsed head, the tagged source and the run")
@@ -1838,6 +1872,8 @@ def c_nightly_gate(ctx: Context) -> list:
         ("a nightly run of another workflow", "nightly-no-run-at-head", lambda st, t: _nightly(st, workflowName="ci")),
         ("a rehearsed head with another tree", "differs from the tagged tree",
          lambda st, t: st["rehearsal_runs"][0].update(head_sha=t.other_head)),
+        ("an attempt completed after the version PR merged", "rehearsal-postdates-tag",
+         lambda st, t: _late_rehearsal_attempt(st)),
         ("no successful rehearsal run", "no successful rehearsal run", lambda st, t: st.update(rehearsal_runs=[])),
         ("no nightly run at all", "No nightly-asan run exists", lambda st, t: st.update(nightly_runs=[])),
     )
@@ -1911,6 +1947,7 @@ def main(argv: list[str]) -> int:
             names = {"release": "release.json", "release_assets": "assets.json", "workflow_runs": "runs.json",
                      "workflow_run": "run.json", "jobs": "jobs.json", "artifacts": "artifacts.json",
                      "check_runs": "checks.json", "pull_request": "pull.json", "commit": "commit.json",
+                     "pull_requests": "pull_requests.json", "attempt_jobs": "attempt_jobs.json",
                      "identity": "identity.json"}
             raw = {key: json.loads((raw_dir / name).read_text(encoding="utf-8")) for key, name in names.items()}
             output.write_text(capture_text(assemble_capture(raw)), encoding="utf-8", newline="\n")
