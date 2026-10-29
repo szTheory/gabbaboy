@@ -87,7 +87,8 @@ function(gabbaboy_verify_registered_tests)
       slot_mutant_no_rollback
       slot_reanchor_later
       slot_reanchor_earlier
-      slot_select_message)
+      slot_select_message
+      slot_mutant_plan_ignores_last)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

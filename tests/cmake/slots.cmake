@@ -124,6 +124,12 @@ if(NOT WIN32)
     [=[(void)0;]=]
     undo_write_failure "FAIL undo_write_failure")
 
+  # D-24: the plan ignores the restored queue, so the press is queued at now, which precedes the last
+  # restored event and is refused.
+  gbb_slots_mutant(plan_ignores_last
+    [=[plan.release_at = clock->last_queued_half_dots > clock->now_half_dots ? clock->last_queued_half_dots : clock->now_half_dots;]=]
+    [=[plan.release_at = clock->now_half_dots;]=]
+    reanchor_earlier "FAIL reanchor_earlier")
 endif()
 
 # ---- Portable: the message table, key decoder and re-anchor plan (also built and run on Windows) -------------
@@ -136,3 +142,8 @@ foreach(case message_table key_decoder reanchor_plan)
   set_tests_properties(slot_${case} PROPERTIES PASS_REGULAR_EXPRESSION "PASS ${case}")
 endforeach()
 
+# D-26 item 10: GBB_STATE_UNSUPPORTED_VERSION is mapped to the damaged text; the table must notice.
+gbb_slots_mutant(message_map
+  [=[return "is from another GabbaBoy version";]=]
+  [=[return "is damaged";]=]
+  message_table "FAIL message_table" PURE)

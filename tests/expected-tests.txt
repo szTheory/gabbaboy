@@ -1606,3 +1606,5 @@ slot_select_message
 slot_message_table
 slot_key_decoder
 slot_reanchor_plan
+slot_mutant_plan_ignores_last
+slot_mutant_message_map

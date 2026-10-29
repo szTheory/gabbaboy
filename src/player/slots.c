@@ -19,6 +19,7 @@
 #ifndef _WIN32
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 #endif
 
@@ -295,32 +296,158 @@ player_slot_result player_slot_load(player_slot_store *store, gbb_instance *inst
 
 #endif
 
-/* RED stubs for the pure tables and the selection text: filled in by the next commit. */
+/* ---- Pure tables: compiled and tested on every platform ------------------------------------------- */
+
+/* D-24: where the player re-anchors its input after a load. The cursor is now; the releases go at the later of
+ * now and the last restored event, because gbb_queue_events admits an event only at or after both. */
 player_slot_reanchor player_slot_plan_reanchor(const gbb_input_clock *clock) {
-    (void)clock;
     player_slot_reanchor plan;
     memset(&plan, 0, sizeof(plan));
+    if (clock == NULL) {
+        plan.unsafe = true;
+        return plan;
+    }
+    plan.cursor = clock->now_half_dots;
+    plan.pending_count = clock->queued_count;
+    plan.release_at = clock->last_queued_half_dots > clock->now_half_dots ? clock->last_queued_half_dots : clock->now_half_dots;
+    plan.unsafe = slot_clock_unsafe(clock);
     return plan;
 }
 
+static bool letter_is(char letter, char upper) {
+    return letter == upper || letter == (char)(upper + ('a' - 'A'));
+}
+
+/* D-21: digits 1..9 select unless GUI, Ctrl or Alt is held (Shift is not tracked: Right Shift is the Select
+ * button); GUI+S saves, GUI+L loads and GUI+Z undoes. A key repeat or a pending transition, dialog or
+ * save-failure prompt ignores everything, and bare S, L, Z, R and GUI+R do nothing here. */
 player_slot_key_action player_slot_key_decode(const player_slot_key_input *input, unsigned *out_slot) {
-    (void)input;
-    (void)out_slot;
+    if (out_slot != NULL) *out_slot = 0u;
+    if (input == NULL || input->repeat || input->blocked) return PLAYER_SLOT_KEY_NONE;
+    if (input->letter == 0) {
+        if (input->digit < 1u || input->digit > PLAYER_SLOT_COUNT) return PLAYER_SLOT_KEY_NONE;
+        if (input->gui || input->ctrl || input->alt) return PLAYER_SLOT_KEY_NONE;
+        if (out_slot != NULL) *out_slot = input->digit;
+        return PLAYER_SLOT_KEY_SELECT;
+    }
+    if (input->digit != 0u || !input->gui || input->ctrl || input->alt) return PLAYER_SLOT_KEY_NONE;
+    if (letter_is(input->letter, 'S')) return PLAYER_SLOT_KEY_SAVE;
+    if (letter_is(input->letter, 'L')) return PLAYER_SLOT_KEY_LOAD;
+    if (letter_is(input->letter, 'Z')) return PLAYER_SLOT_KEY_UNDO;
     return PLAYER_SLOT_KEY_NONE;
 }
 
-void player_slot_format_message(const player_slot_result *result, char *out, size_t capacity) {
-    (void)result;
-    if (out != NULL && capacity > 0u) out[0] = '\0';
+/* D-25: the phrase after the subject for a refused load, by gbb_error. */
+static const char *refusal_phrase(int error) {
+    switch (error) {
+    case GBB_STATE_IDENTITY_MISMATCH: return "is from a different game or model";
+    case GBB_STATE_UNSUPPORTED_VERSION: return "is from another GabbaBoy version";
+    case GBB_STATE_BAD_FORMAT: return "is not a GabbaBoy state";
+    case GBB_STATE_SIZE_MISMATCH:
+    case GBB_STATE_CORRUPT:
+    case GBB_STATE_INVALID_CONTENT: return "is damaged";
+    default: return "could not be loaded";
+    }
 }
 
+/* D-25: the exact status text. U+2318 is written as the UTF-8 byte escape \xe2\x8c\x98 so the compiler's
+ * source charset cannot change it, and the literal is closed after the escape because \x takes every hex
+ * digit that follows. */
+void player_slot_format_message(const player_slot_result *result, char *out, size_t capacity) {
+    if (out == NULL || capacity == 0u) return;
+    out[0] = '\0';
+    if (result == NULL) return;
+    char subject[24];
+    if (result->source == PLAYER_SLOT_SOURCE_UNDO) (void)snprintf(subject, sizeof(subject), "The undo backup");
+    else (void)snprintf(subject, sizeof(subject), "Slot %u", result->slot);
+    switch (result->outcome) {
+    case PLAYER_SLOT_SAVED:
+        (void)snprintf(out, capacity, "Saved slot %u", result->slot);
+        break;
+    case PLAYER_SLOT_SAVE_FAILED:
+        (void)snprintf(out, capacity, "Slot %u not saved: the file could not be written", result->slot);
+        break;
+    case PLAYER_SLOT_LOADED:
+        (void)snprintf(out, capacity, "Loaded slot %u (\xe2\x8c\x98" "Z undoes)", result->slot);
+        break;
+    case PLAYER_SLOT_UNDONE:
+        (void)snprintf(out, capacity, "Undid the last load (\xe2\x8c\x98" "Z switches back)");
+        break;
+    case PLAYER_SLOT_EMPTY:
+        (void)snprintf(out, capacity, "%s is empty; nothing changed", subject);
+        break;
+    case PLAYER_SLOT_NO_UNDO:
+        (void)snprintf(out, capacity, "Nothing to undo");
+        break;
+    case PLAYER_SLOT_READ_FAILED:
+        (void)snprintf(out, capacity, "%s could not be read; nothing changed", subject);
+        break;
+    case PLAYER_SLOT_REFUSED:
+        (void)snprintf(out, capacity, "%s %s; nothing changed", subject, refusal_phrase(result->error));
+        break;
+    case PLAYER_SLOT_BACKUP_FAILED:
+        if (result->source == PLAYER_SLOT_SOURCE_UNDO)
+            (void)snprintf(out, capacity, "Undo not applied: undo backup failed; nothing changed");
+        else
+            (void)snprintf(out, capacity, "Slot %u not loaded: undo backup failed; nothing changed", result->slot);
+        break;
+    case PLAYER_SLOT_UNSAFE_INPUT:
+        (void)snprintf(out, capacity, "%s contains unsafe queued input; nothing changed", subject);
+        break;
+    }
+}
+
+/* The stderr line of D-25: one per operation, with the gbb_error number. */
+void player_slot_format_log(const player_slot_result *result, char *out, size_t capacity) {
+    if (out == NULL || capacity == 0u) return;
+    out[0] = '\0';
+    if (result == NULL) return;
+    const char *token = "unknown";
+    switch (result->outcome) {
+    case PLAYER_SLOT_SAVED: token = "saved"; break;
+    case PLAYER_SLOT_SAVE_FAILED: token = "save-failed"; break;
+    case PLAYER_SLOT_LOADED: token = "loaded"; break;
+    case PLAYER_SLOT_UNDONE: token = "undone"; break;
+    case PLAYER_SLOT_EMPTY: token = "empty"; break;
+    case PLAYER_SLOT_NO_UNDO: token = "no-undo"; break;
+    case PLAYER_SLOT_READ_FAILED: token = "read-failed"; break;
+    case PLAYER_SLOT_REFUSED: token = "refused"; break;
+    case PLAYER_SLOT_BACKUP_FAILED: token = "backup-failed"; break;
+    case PLAYER_SLOT_UNSAFE_INPUT: token = "unsafe-input"; break;
+    }
+    const char *operation = "load";
+    if (result->outcome == PLAYER_SLOT_SAVED || result->outcome == PLAYER_SLOT_SAVE_FAILED) operation = "save";
+    else if (result->source == PLAYER_SLOT_SOURCE_UNDO) operation = "undo";
+    (void)snprintf(out, capacity, "gabbaboy-player: slot op=%s slot=%u outcome=%s gbb_error=%d", operation,
+                   result->slot, token, result->error);
+}
+
+#ifndef _WIN32
+/* D-25 selection text: "empty" for a missing file, the local modification time for a used slot, and a bare
+ * "saved" when the file exists but cannot be examined. */
+void player_slot_format_selection(const player_slot_store *store, unsigned slot, char *out, size_t capacity) {
+    if (out == NULL || capacity == 0u) return;
+    out[0] = '\0';
+    char name[160];
+    if (store == NULL || store->rom == NULL || !build_name(store, NAME_SLOT, slot, name, sizeof(name))) return;
+    struct stat info;
+    if (fstatat(store->dirfd, name, &info, AT_SYMLINK_NOFOLLOW) != 0) {
+        if (errno == ENOENT) (void)snprintf(out, capacity, "Slot %u selected: empty", slot);
+        else (void)snprintf(out, capacity, "Slot %u selected: saved", slot);
+        return;
+    }
+    struct tm local;
+    char stamp[32];
+    const time_t modified = info.st_mtime;
+    if (localtime_r(&modified, &local) == NULL || strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M", &local) == 0)
+        (void)snprintf(out, capacity, "Slot %u selected: saved", slot);
+    else
+        (void)snprintf(out, capacity, "Slot %u selected: saved %s", slot, stamp);
+}
+#else
 void player_slot_format_selection(const player_slot_store *store, unsigned slot, char *out, size_t capacity) {
     (void)store;
     (void)slot;
     if (out != NULL && capacity > 0u) out[0] = '\0';
 }
-
-void player_slot_format_log(const player_slot_result *result, char *out, size_t capacity) {
-    (void)result;
-    if (out != NULL && capacity > 0u) out[0] = '\0';
-}
+#endif
