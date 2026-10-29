@@ -320,7 +320,7 @@ gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls" > "$RUNNER_TEMP/nightly-source
 source_pr=$(jq -ec --arg sha "$SOURCE_SHA" '[.[] | select(.merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha)] | if length == 1 then .[0] else error("source commit does not map to exactly one merged main PR") end' "$RUNNER_TEMP/nightly-source-pulls.json")
 pr_head=$(jq -r '.head.sha' <<<"$source_pr")
 merged_at=$(jq -r '.merged_at' <<<"$source_pr")
-selected_rehearsal=$(jq -ec '[.workflow_runs[]] | max_by(.id)' "$RUNNER_TEMP/nightly-rehearsal-runs.json")
+selected_rehearsal=$(jq -ec '[.workflow_runs[]] | if length == 0 then error("no successful rehearsal run exists") else max_by(.id) end' "$RUNNER_TEMP/nightly-rehearsal-runs.json")
 run_id=$(jq -r '.id' <<<"$selected_rehearsal")
 attempt=$(jq -r '.run_attempt' <<<"$selected_rehearsal")
 [[ "$run_id" =~ ^[0-9]+$ && "$attempt" =~ ^[0-9]+$ ]] || { echo "No successful rehearsal run of this tag exists." >&2; exit 1; }
