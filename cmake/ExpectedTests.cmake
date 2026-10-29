@@ -24,7 +24,7 @@ function(gabbaboy_verify_registered_tests)
       release_lifecycle_replay release_lifecycle_controls
       perf_advisory_pipeline perf_advisory_controls
       host_continuation host_rom_max_size host_rom_oversize host_rom_unreadable
-      host_cli_stem_refusal)
+      host_cli_stem_refusal host_api_surface host_api_surface_controls)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

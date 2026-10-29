@@ -1520,3 +1520,7 @@ host_grammar_missing_save_dir
 host_grammar_bad_profile
 host_grammar_bad_frames
 host_windows_refusal
+host_api_surface
+host_api_surface_controls
+host_qualified_sources
+host_qualified_sources_control

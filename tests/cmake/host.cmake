@@ -134,3 +134,65 @@ gbb_add_host_mode_test(host_grammar_empty_value grammar-empty-value)
 
 # The Windows gate (D-05) is registered on every platform: it must fire on Windows and must not on POSIX.
 gbb_add_host_mode_test(host_windows_refusal platform-gate)
+
+# ---- D-04: the host library uses only the public API (POSIX-only: Windows host code is the refusal stub) ----
+# The object layer reads the undefined gbb_* symbols of the archive with nm and requires each to be declared
+# in the public header; the source layer rejects test-seam and acceptance includes. The controls run the same
+# script against a seeded seam-calling archive and a seeded include and require each rejection for its own
+# reason. Later plans pass more archives and individual files (GBB_SOURCE_FILES) through the same script.
+set(GBB_HOST_API_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/CheckHostApiSymbols.cmake")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_HOST_API_SCRIPT}")
+if(NOT WIN32)
+  set(GBB_HOST_API_CONTROL_DIR "${PROJECT_BINARY_DIR}/host-api-controls")
+  file(MAKE_DIRECTORY "${GBB_HOST_API_CONTROL_DIR}/include-probe")
+  file(WRITE "${GBB_HOST_API_CONTROL_DIR}/seam.c"
+    "/* Seeded control: calls a core test seam that the public header does not declare. */\n"
+    "int gbb_test_force_state_seam_probe(void);\n"
+    "int host_api_seam_call(void) { return gbb_test_force_state_seam_probe(); }\n")
+  file(WRITE "${GBB_HOST_API_CONTROL_DIR}/include-probe/bad.c"
+    "/* Seeded control: includes the core test seam header. */\n"
+    "#include \"gabbaboy_test.h\"\n"
+    "int host_api_include_probe(void) { return 0; }\n")
+  add_library(host_api_seam_mutant STATIC "${GBB_HOST_API_CONTROL_DIR}/seam.c")
+  set_target_properties(host_api_seam_mutant PROPERTIES C_EXTENSIONS OFF)
+
+  add_test(NAME host_api_surface
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host>"
+      "-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h"
+      "-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host"
+      "-DGBB_NM=${CMAKE_NM}"
+      -P "${GBB_HOST_API_SCRIPT}")
+  set_tests_properties(host_api_surface PROPERTIES
+    PASS_REGULAR_EXPRESSION "host-api pass archives=1 symbols=[1-9][0-9]*")
+
+  add_test(NAME host_api_surface_controls
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CONTROL_SEAM_ARCHIVE=$<TARGET_FILE:host_api_seam_mutant>"
+      "-DGBB_CONTROL_INCLUDE_DIR=${GBB_HOST_API_CONTROL_DIR}/include-probe"
+      "-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host>"
+      "-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h"
+      "-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host"
+      "-DGBB_NM=${CMAKE_NM}"
+      -P "${GBB_HOST_API_SCRIPT}")
+  set_tests_properties(host_api_surface_controls PROPERTIES
+    PASS_REGULAR_EXPRESSION "host-api controls pass controls=2")
+endif()
+
+# ---- D-04: every runner and host source is in the GBB_BUILD_QUALIFIED dirty list (portable) ----------------
+set(GBB_QUALIFIED_SOURCES_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/CheckRunnerSourcesQualified.cmake")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_QUALIFIED_SOURCES_SCRIPT}")
+set(GBB_QUALIFIED_SOURCES
+  "$<JOIN:$<TARGET_PROPERTY:gabbaboy-runner,SOURCES>,|>|$<JOIN:$<TARGET_PROPERTY:gabbaboy_runner_support,SOURCES>,|>|$<JOIN:$<TARGET_PROPERTY:gabbaboy_host,SOURCES>,|>|src/host/gbb_host.h")
+add_test(NAME host_qualified_sources
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_ROOT_CMAKELISTS=${PROJECT_SOURCE_DIR}/CMakeLists.txt"
+    "-DGBB_SOURCES=${GBB_QUALIFIED_SOURCES}"
+    -P "${GBB_QUALIFIED_SOURCES_SCRIPT}")
+set_tests_properties(host_qualified_sources PROPERTIES
+  PASS_REGULAR_EXPRESSION "qualified-sources pass sources=[1-9][0-9]*")
+add_test(NAME host_qualified_sources_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_ROOT_CMAKELISTS=${PROJECT_SOURCE_DIR}/CMakeLists.txt;-DGBB_SOURCES=${GBB_QUALIFIED_SOURCES}|src/host/unlisted_probe.c;-P;${GBB_QUALIFIED_SOURCES_SCRIPT}"
+    -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=runner-source-unqualified: src/host/unlisted_probe.c"
+    -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
