@@ -80,7 +80,11 @@ function(gabbaboy_verify_registered_tests)
       slot_no_undo
       slot_battery_guard
       slot_unsafe_queued_input
-      slot_save_failure_keeps_old)
+      slot_save_failure_keeps_old
+      slot_mutant_undo_before_load
+      slot_mutant_preload_before_validate
+      slot_mutant_no_guard
+      slot_mutant_no_rollback)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

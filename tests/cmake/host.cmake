@@ -162,13 +162,14 @@ if(NOT WIN32)
 
   add_test(NAME host_api_surface
     COMMAND ${CMAKE_COMMAND}
-      "-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host>"
+      "-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host>;$<TARGET_FILE:gabbaboy_player_slots>"
       "-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h"
       "-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host"
+      "-DGBB_SOURCE_FILES=${PROJECT_SOURCE_DIR}/src/player/slots.c;${PROJECT_SOURCE_DIR}/src/player/slots.h"
       "-DGBB_NM=${CMAKE_NM}"
       -P "${GBB_HOST_API_SCRIPT}")
   set_tests_properties(host_api_surface PROPERTIES
-    PASS_REGULAR_EXPRESSION "host-api pass archives=1 symbols=[1-9][0-9]*")
+    PASS_REGULAR_EXPRESSION "host-api pass archives=2 symbols=[1-9][0-9]*")
 
   add_test(NAME host_api_surface_controls
     COMMAND ${CMAKE_COMMAND}

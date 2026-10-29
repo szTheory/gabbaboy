@@ -90,6 +90,10 @@ filter_expected_for_platform() {
         -e '/^slot_battery_guard$/d' \
         -e '/^slot_unsafe_queued_input$/d' \
         -e '/^slot_save_failure_keeps_old$/d' \
+        -e '/^slot_mutant_undo_before_load$/d' \
+        -e '/^slot_mutant_preload_before_validate$/d' \
+        -e '/^slot_mutant_no_guard$/d' \
+        -e '/^slot_mutant_no_rollback$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -181,6 +185,10 @@ _self_test_platform_filter_cases() {
     slot_battery_guard \
     slot_unsafe_queued_input \
     slot_save_failure_keeps_old \
+    slot_mutant_undo_before_load \
+    slot_mutant_preload_before_validate \
+    slot_mutant_no_guard \
+    slot_mutant_no_rollback \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -272,7 +280,11 @@ _self_test_platform_filter_cases() {
     slot_no_undo \
     slot_battery_guard \
     slot_unsafe_queued_input \
-    slot_save_failure_keeps_old; do
+    slot_save_failure_keeps_old \
+    slot_mutant_undo_before_load \
+    slot_mutant_preload_before_validate \
+    slot_mutant_no_guard \
+    slot_mutant_no_rollback; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1
