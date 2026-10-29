@@ -84,7 +84,10 @@ function(gabbaboy_verify_registered_tests)
       slot_mutant_undo_before_load
       slot_mutant_preload_before_validate
       slot_mutant_no_guard
-      slot_mutant_no_rollback)
+      slot_mutant_no_rollback
+      slot_reanchor_later
+      slot_reanchor_earlier
+      slot_select_message)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

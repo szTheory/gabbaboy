@@ -294,3 +294,33 @@ player_slot_result player_slot_load(player_slot_store *store, gbb_instance *inst
 }
 
 #endif
+
+/* RED stubs for the pure tables and the selection text: filled in by the next commit. */
+player_slot_reanchor player_slot_plan_reanchor(const gbb_input_clock *clock) {
+    (void)clock;
+    player_slot_reanchor plan;
+    memset(&plan, 0, sizeof(plan));
+    return plan;
+}
+
+player_slot_key_action player_slot_key_decode(const player_slot_key_input *input, unsigned *out_slot) {
+    (void)input;
+    (void)out_slot;
+    return PLAYER_SLOT_KEY_NONE;
+}
+
+void player_slot_format_message(const player_slot_result *result, char *out, size_t capacity) {
+    (void)result;
+    if (out != NULL && capacity > 0u) out[0] = '\0';
+}
+
+void player_slot_format_selection(const player_slot_store *store, unsigned slot, char *out, size_t capacity) {
+    (void)store;
+    (void)slot;
+    if (out != NULL && capacity > 0u) out[0] = '\0';
+}
+
+void player_slot_format_log(const player_slot_result *result, char *out, size_t capacity) {
+    (void)result;
+    if (out != NULL && capacity > 0u) out[0] = '\0';
+}

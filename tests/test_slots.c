@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define FRAME PLAYER_SLOT_FRAME_HALF_DOTS
@@ -56,6 +57,27 @@ static uint8_t *make_rom(uint8_t variant, size_t *out_size) {
     rom[0x147u] = 0x03u;
     rom[0x148u] = 0x00u;
     rom[0x149u] = 0x02u;
+    fix_checksum(rom);
+    return rom;
+}
+
+/* The joypad mirror: the same MBC1+RAM+battery cartridge, but the program enables RAM and then loops
+ *   ld a,$10 / ldh ($00),a / ldh a,($00) / ld ($A000),a / jr loop
+ * so SRAM byte 0 mirrors the action-button nibble of P1 (bit 0 = A, 0 = pressed). gbb_copy_battery then
+ * shows what the guest saw, which is what makes "the press reaches the guest" an observation. */
+static uint8_t *make_joypad_rom(size_t *out_size) {
+    uint8_t *rom = make_rom('J', out_size);
+    if (rom == NULL) return NULL;
+    static const uint8_t program[] = {
+        0x3E, 0x0A,             /* ld a,$0A      */
+        0xEA, 0x00, 0x00,       /* ld ($0000),a  : enable cartridge RAM */
+        0x3E, 0x10,             /* loop: ld a,$10  : select the action buttons (bit 5 low) */
+        0xE0, 0x00,             /* ldh ($00),a   */
+        0xF0, 0x00,             /* ldh a,($00)   */
+        0xEA, 0x00, 0xA0,       /* ld ($A000),a  */
+        0x18, 0xF5,             /* jr loop       */
+    };
+    memcpy(rom + 0x150u, program, sizeof(program));
     fix_checksum(rom);
     return rom;
 }
@@ -129,12 +151,14 @@ static void remove_tree(const char *path) {
     (void)rmdir(path);
 }
 
-static bool fx_setup(fixture *fx, gbb_profile profile, uint8_t rom_variant) {
+/* Takes ownership of `rom` (heap, from make_rom or make_joypad_rom), even on failure. */
+static bool fx_setup_rom(fixture *fx, gbb_profile profile, uint8_t *rom, size_t rom_size) {
     memset(fx, 0, sizeof(*fx));
     fx->dirfd = -1;
     fx->profile = profile;
     fx->profile_name = profile == GBB_PROFILE_CGB_CPU_E ? "cgb" : "dmg";
-    fx->rom = make_rom(rom_variant, &fx->rom_size);
+    fx->rom = rom;
+    fx->rom_size = rom_size;
     if (fx->rom == NULL) return false;
     gbb_accept_sha256_hex(fx->rom, fx->rom_size, fx->hex);
     hex_to_digest(fx->hex, fx->digest);
@@ -144,6 +168,12 @@ static bool fx_setup(fixture *fx, gbb_profile profile, uint8_t rom_variant) {
     if (fx->dirfd < 0) return false;
     fx->store_ready = player_slot_store_init(&fx->store, fx->dirfd, fx->digest, profile, fx->rom, fx->rom_size);
     return fx->store_ready;
+}
+
+static bool fx_setup(fixture *fx, gbb_profile profile, uint8_t rom_variant) {
+    size_t rom_size = 0u;
+    uint8_t *rom = make_rom(rom_variant, &rom_size);
+    return fx_setup_rom(fx, profile, rom, rom_size);
 }
 
 static void fx_teardown(fixture *fx) {
@@ -855,6 +885,209 @@ static int case_save_failure_keeps_old(void) {
     return 0;
 }
 
+/* ---- D-24: post-load input admission, observed in the guest ------------------------------------- */
+
+static bool clock_of(const gbb_instance *machine, gbb_input_clock *out) {
+    memset(out, 0, sizeof(*out));
+    out->struct_size = GBB_INPUT_CLOCK_SIZE_V1;
+    return gbb_get_input_clock(machine, out) == GBB_OK;
+}
+
+static gbb_input_event button_event(uint64_t at, gbb_input_event_kind kind, gbb_button button) {
+    gbb_input_event event;
+    memset(&event, 0, sizeof(event));
+    event.at_half_dots = at;
+    event.kind = kind;
+    event.value = (uint8_t)button;
+    return event;
+}
+
+/* Runs until the instance's own clock reaches `target`, in small steps so the overshoot is a few half-dots. */
+static bool run_until(gbb_instance *machine, uint64_t target) {
+    gbb_input_clock clock;
+    for (unsigned guard = 0u; guard < 100000u; ++guard) {
+        if (!clock_of(machine, &clock)) return false;
+        if (clock.now_half_dots >= target) return true;
+        uint64_t budget = target - clock.now_half_dots;
+        if (budget > 2048u) budget = 2048u;
+        if (budget < 64u) budget = 64u;
+        if (gbb_run(machine, budget, NULL, 0u).reason != GBB_STOP_BUDGET) return false;
+    }
+    return false;
+}
+
+/* SRAM byte 0, bit 0: the A bit of the P1 value the guest last stored (1 = released, 0 = pressed). */
+static int guest_sees_a_released(const gbb_instance *machine) {
+    size_t size = 0u;
+    if (gbb_battery_size(machine, &size) != GBB_OK || size == 0u) return -1;
+    uint8_t *bytes = malloc(size);
+    if (bytes == NULL || gbb_copy_battery(machine, bytes, size) != GBB_OK) {
+        free(bytes);
+        return -1;
+    }
+    const int released = (bytes[0] & 0x01u) != 0u;
+    free(bytes);
+    return released;
+}
+
+/* The shared body of reanchor_later and reanchor_earlier. `result` is the load that just restored `live`.
+ * The stale cursor must be refused, the plan's release time accepted, and the press must reach the guest
+ * within one frame of its time. The same loaded state run without the press is the control, so the bit
+ * that clears is the press and not the program. */
+static int check_reanchor(const fixture *fx, gbb_instance *live, const player_slot_result *result,
+                          uint64_t stale_cursor, uint32_t want_pending) {
+    REQUIRE(result->outcome == PLAYER_SLOT_LOADED);
+    gbb_input_clock clock;
+    REQUIRE(clock_of(live, &clock));
+    REQUIRE(clock.now_half_dots == result->clock.now_half_dots);
+    REQUIRE(clock.queued_count == want_pending);
+    const player_slot_reanchor plan = player_slot_plan_reanchor(&result->clock);
+    REQUIRE(!plan.unsafe);
+    REQUIRE(plan.cursor == clock.now_half_dots);
+    REQUIRE(plan.pending_count == want_pending);
+    REQUIRE(plan.release_at >= clock.now_half_dots);
+    REQUIRE(plan.release_at - clock.now_half_dots <= FRAME);
+    REQUIRE((plan.release_at > clock.now_half_dots) == (want_pending > 0u));
+
+    /* An event at the player's old cursor, or at now when events were restored, is refused and appends nothing. */
+    const gbb_input_event stale = button_event(stale_cursor, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A);
+    REQUIRE(gbb_queue_events(live, &stale, 1u) == GBB_INVALID_EVENT);
+    REQUIRE(clock_of(live, &clock) && clock.queued_count == want_pending);
+
+    /* The control starts from the loaded state, before any press is queued. */
+    size_t loaded_len = 0u;
+    uint8_t *loaded = state_bytes(live, &loaded_len);
+    REQUIRE(loaded != NULL);
+    gbb_instance *control = new_machine(fx->profile, fx->rom, fx->rom_size);
+    REQUIRE(control != NULL);
+    REQUIRE(gbb_load_state(control, loaded, loaded_len) == GBB_OK);
+    free(loaded);
+    REQUIRE(guest_sees_a_released(live) == 1); /* before the press the guest sees A released */
+
+    /* The press at release_at is admitted. One frame after its time the guest sees A pressed; the control,
+     * which never gets the press, still sees A released. */
+    const gbb_input_event press = button_event(plan.release_at, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_A);
+    REQUIRE(gbb_queue_events(live, &press, 1u) == GBB_OK);
+    const uint64_t observe_at = plan.release_at + FRAME;
+    REQUIRE(run_until(control, observe_at));
+    REQUIRE(guest_sees_a_released(control) == 1);
+    REQUIRE(run_until(live, observe_at));
+    REQUIRE(guest_sees_a_released(live) == 0);
+    gbb_destroy(control);
+    return 0;
+}
+
+static int case_reanchor_later(void) {
+    size_t rom_size = 0u;
+    uint8_t *rom = make_joypad_rom(&rom_size);
+    fixture fx;
+    REQUIRE(fx_setup_rom(&fx, GBB_PROFILE_DMG_CPU_B, rom, rom_size));
+    gbb_instance *live = new_machine(fx.profile, fx.rom, fx.rom_size);
+    gbb_instance *source = new_machine(fx.profile, fx.rom, fx.rom_size);
+    REQUIRE(live != NULL && source != NULL);
+    REQUIRE(run_frames(live, 3u) && run_frames(source, 8u));
+    REQUIRE(player_slot_save(&fx.store, source, 1u).outcome == PLAYER_SLOT_SAVED);
+
+    /* The live machine was at T1; the state is from the later time T2. */
+    gbb_input_clock before;
+    gbb_input_clock source_clock;
+    REQUIRE(clock_of(live, &before) && clock_of(source, &source_clock));
+    REQUIRE(before.now_half_dots < source_clock.now_half_dots);
+    const player_slot_result result = player_slot_load(&fx.store, live, PLAYER_SLOT_SOURCE_SLOT, 1u);
+    REQUIRE(result.clock.now_half_dots == source_clock.now_half_dots);
+    CHECK(check_reanchor(&fx, live, &result, before.now_half_dots, 0u));
+
+    gbb_destroy(source);
+    gbb_destroy(live);
+    fx_teardown(&fx);
+    return 0;
+}
+
+static int case_reanchor_earlier(void) {
+    size_t rom_size = 0u;
+    uint8_t *rom = make_joypad_rom(&rom_size);
+    fixture fx;
+    REQUIRE(fx_setup_rom(&fx, GBB_PROFILE_DMG_CPU_B, rom, rom_size));
+    gbb_instance *live = new_machine(fx.profile, fx.rom, fx.rom_size);
+    gbb_instance *source = new_machine(fx.profile, fx.rom, fx.rom_size);
+    REQUIRE(live != NULL && source != NULL);
+    REQUIRE(run_frames(live, 9u) && run_frames(source, 4u));
+
+    /* The state is from the earlier time T0 and restores two queued events: a B press and release within
+     * the first 2,000 half-dots after its time. */
+    gbb_input_clock source_clock;
+    REQUIRE(clock_of(source, &source_clock));
+    const gbb_input_event restored[2] = {
+        button_event(source_clock.now_half_dots + 500u, GBB_INPUT_BUTTON_PRESS, GBB_BUTTON_B),
+        button_event(source_clock.now_half_dots + 1500u, GBB_INPUT_BUTTON_RELEASE, GBB_BUTTON_B),
+    };
+    REQUIRE(gbb_queue_events(source, restored, 2u) == GBB_OK);
+    REQUIRE(player_slot_save(&fx.store, source, 1u).outcome == PLAYER_SLOT_SAVED);
+
+    gbb_input_clock before;
+    REQUIRE(clock_of(live, &before) && before.now_half_dots > source_clock.now_half_dots);
+    const player_slot_result result = player_slot_load(&fx.store, live, PLAYER_SLOT_SOURCE_SLOT, 1u);
+    REQUIRE(result.outcome == PLAYER_SLOT_LOADED);
+    REQUIRE(result.clock.now_half_dots == source_clock.now_half_dots);
+    REQUIRE(result.clock.queued_count == 2u);
+    REQUIRE(result.clock.last_queued_half_dots == source_clock.now_half_dots + 1500u);
+    REQUIRE(player_slot_plan_reanchor(&result.clock).release_at == source_clock.now_half_dots + 1500u);
+    /* An event at now precedes the last restored event, so only the plan's release time is accepted. */
+    CHECK(check_reanchor(&fx, live, &result, result.clock.now_half_dots, 2u));
+
+    gbb_destroy(source);
+    gbb_destroy(live);
+    fx_teardown(&fx);
+    return 0;
+}
+
+static int case_select_message(void) {
+    fixture fx;
+    REQUIRE(fx_setup(&fx, GBB_PROFILE_DMG_CPU_B, 'A'));
+    REQUIRE(setenv("TZ", "UTC", 1) == 0);
+    tzset();
+    gbb_instance *machine = make_live(&fx, 5u, 0x11u);
+    REQUIRE(machine != NULL);
+    char message[160];
+
+    player_slot_format_selection(&fx.store, 4u, message, sizeof(message));
+    REQUIRE(strcmp(message, "Slot 4 selected: empty") == 0);
+
+    /* A used slot shows its modification time in local time (UTC here): 2026-01-02 03:04. */
+    REQUIRE(player_slot_save(&fx.store, machine, 4u).outcome == PLAYER_SLOT_SAVED);
+    char name[160];
+    slot_file(&fx, 4u, name);
+    const struct timespec times[2] = {{(time_t)1767323040, 0}, {(time_t)1767323040, 0}};
+    REQUIRE(utimensat(fx.dirfd, name, times, AT_SYMLINK_NOFOLLOW) == 0);
+    player_slot_format_selection(&fx.store, 4u, message, sizeof(message));
+    REQUIRE(strcmp(message, "Slot 4 selected: saved 2026-01-02 03:04") == 0);
+
+    /* A stat failure other than a missing file reports a bare "saved": the store's descriptor is closed. */
+    const int closed = dup(fx.dirfd);
+    REQUIRE(closed >= 0);
+    player_slot_store broken;
+    REQUIRE(player_slot_store_init(&broken, closed, fx.digest, fx.profile, fx.rom, fx.rom_size));
+    REQUIRE(close(closed) == 0);
+    player_slot_format_selection(&broken, 4u, message, sizeof(message));
+    REQUIRE(strcmp(message, "Slot 4 selected: saved") == 0);
+    player_slot_store_free(&broken);
+
+    /* Slots outside 1..9 and tiny buffers never overrun. */
+    memset(message, 'x', sizeof(message));
+    player_slot_format_selection(&fx.store, 0u, message, sizeof(message));
+    REQUIRE(message[0] == '\0');
+    player_slot_format_selection(&fx.store, 10u, message, sizeof(message));
+    REQUIRE(message[0] == '\0');
+    char tiny[8];
+    memset(tiny, 'x', sizeof(tiny));
+    player_slot_format_selection(&fx.store, 4u, tiny, 6u);
+    REQUIRE(strcmp(tiny, "Slot ") == 0 && tiny[6] == 'x' && tiny[7] == 'x');
+
+    gbb_destroy(machine);
+    fx_teardown(&fx);
+    return 0;
+}
+
 typedef struct {
     const char *name;
     int (*run)(void);
@@ -878,6 +1111,9 @@ static const slot_case g_cases[] = {
     {"battery_guard", case_battery_guard},
     {"unsafe_queued_input", case_unsafe_queued_input},
     {"save_failure_keeps_old", case_save_failure_keeps_old},
+    {"reanchor_later", case_reanchor_later},
+    {"reanchor_earlier", case_reanchor_earlier},
+    {"select_message", case_select_message},
 };
 
 int main(int argc, char **argv) {

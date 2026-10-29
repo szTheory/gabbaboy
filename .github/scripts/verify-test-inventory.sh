@@ -94,6 +94,9 @@ filter_expected_for_platform() {
         -e '/^slot_mutant_preload_before_validate$/d' \
         -e '/^slot_mutant_no_guard$/d' \
         -e '/^slot_mutant_no_rollback$/d' \
+        -e '/^slot_reanchor_later$/d' \
+        -e '/^slot_reanchor_earlier$/d' \
+        -e '/^slot_select_message$/d' \
         "$expected_path"
       rm -f "$expected_path.bak"
       ;;
@@ -189,6 +192,9 @@ _self_test_platform_filter_cases() {
     slot_mutant_preload_before_validate \
     slot_mutant_no_guard \
     slot_mutant_no_rollback \
+    slot_reanchor_later \
+    slot_reanchor_earlier \
+    slot_select_message \
     age_stall_window \
     cgb_speed_fixture_digest > "$inventory_selftest_dir/expected"
   cp "$inventory_selftest_dir/expected" "$inventory_selftest_dir/windows-expected"
@@ -284,7 +290,10 @@ _self_test_platform_filter_cases() {
     slot_mutant_undo_before_load \
     slot_mutant_preload_before_validate \
     slot_mutant_no_guard \
-    slot_mutant_no_rollback; do
+    slot_mutant_no_rollback \
+    slot_reanchor_later \
+    slot_reanchor_earlier \
+    slot_select_message; do
     if grep -Fqx "$test_name" "$inventory_selftest_dir/windows-expected"; then
       echo "Windows inventory filter retained bash-only test: $test_name" >&2
       return 1
