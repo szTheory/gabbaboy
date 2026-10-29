@@ -53,6 +53,8 @@ SOURCE_FILES = (
     "tests/scripts/run-bounded-fuzz.sh",
     "tests/scripts/verify-v02-fuzz.py",
     "src/core/gabbaboy.c",
+    "src/core/gabbaboy_test.h",
+    "include/gabbaboy/gabbaboy.h",
     WORKFLOW,
     "fixtures/tracer/tracer.gb",
     "fixtures/rtc3test/rtc3test.gb",
@@ -2073,6 +2075,36 @@ class ReceiptContractTests(unittest.TestCase):
                     source_manifest(commit, repo=repo)
                 self.assertIn("stale source input differs from source SHA", str(caught.exception))
 
+    def test_public_header_is_bound_to_the_receipt_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            header = repo / "include/gabbaboy/gabbaboy.h"
+            header.parent.mkdir(parents=True)
+            header.write_bytes(b"/* public API */\n")
+
+            def git(*args: str) -> str:
+                return subprocess.run(["git", *args], cwd=repo, check=True, text=True,
+                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.strip()
+
+            git("init", "-q")
+            git("config", "user.name", "fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            git("add", "include/gabbaboy/gabbaboy.h")
+            git("commit", "-q", "-m", "fixture")
+            commit = git("rev-parse", "HEAD")
+            with mock.patch.dict(globals(), {"SOURCE_FILES": ("include/gabbaboy/gabbaboy.h",)}):
+                self.assertEqual(
+                    list(source_manifest(commit, compare_worktree=False, repo=repo)),
+                    ["include/gabbaboy/gabbaboy.h"],
+                )
+                header.write_bytes(b"/* public APi */\n")
+                with self.assertRaises(ReceiptError) as caught:
+                    source_manifest(commit, repo=repo)
+                self.assertIn(
+                    "stale source input differs from source SHA: include/gabbaboy/gabbaboy.h",
+                    str(caught.exception),
+                )
+
     def source_bound_receipt(self, head: str) -> bytes:
         return self.hosted_fixture_receipt(head, 17001, 1, 27001)
 
@@ -2195,8 +2227,8 @@ def self_test(receipt: Path | None) -> int:
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     # Tests are assertions; this inventory line makes a zero-control run visible in logs.
     state = "pass" if result.wasSuccessful() else "fail"
-    print(f"self-test={state} positive_controls=7 negative_controls={22 + 14 + 5 + 3 + 3 + 3} "
-          f"rejected_mutations={10 + 14 + 3 + 3 if result.wasSuccessful() else 0} "
+    print(f"self-test={state} positive_controls=7 negative_controls={22 + 14 + 5 + 3 + 3 + 4} "
+          f"rejected_mutations={10 + 14 + 3 + 4 if result.wasSuccessful() else 0} "
           f"skipped={len(result.skipped)} live_hosted_receipt=not-supplied")
     return 0 if result.wasSuccessful() else 1
 

@@ -984,6 +984,7 @@ def verify_state_documentation(state_format: str, cartridge_saves: str) -> None:
         "maximum admitted descriptor body is 320184 bytes",
         "maximum emitted state is 320248 bytes",
         "`GBB_STATE_INVALID_CONTENT`",
+        "`gbb_state_size` and `gbb_save_state` return `GBB_STATE_INVALID_CONTENT` for a live machine that breaks a state invariant; states produced by this emulator are not expected to.",
         "externally serialized",
         "does not allocate memory or hash the ROM per call",
     )
@@ -1008,8 +1009,24 @@ def verify_state_documentation_negative_control(state_format: str, cartridge_sav
     try:
         verify_state_documentation(mutant, cartridge_saves)
     except ContractError:
+        pass
+    else:
+        raise ContractError("state documentation magic negative control survived")
+
+    in_02_claim = (
+        "`gbb_state_size` and `gbb_save_state` return `GBB_STATE_INVALID_CONTENT` for a live machine "
+        "that breaks a state invariant; states produced by this emulator are not expected to."
+    )
+    mutant = state_format.replace(in_02_claim, "", 1)
+    if mutant == state_format:
+        raise ContractError("state documentation IN-02 mutant was not seeded")
+    try:
+        verify_state_documentation(mutant, cartridge_saves)
+    except ContractError as error:
+        if in_02_claim not in str(error):
+            raise ContractError("state documentation IN-02 negative control rejected the wrong claim") from error
         return
-    raise ContractError("state documentation magic negative control survived")
+    raise ContractError("state documentation IN-02 negative control survived")
 
 
 def version_component_self_test(cmake: str, module: Path, root: Path, rev: str) -> None:
