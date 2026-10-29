@@ -257,24 +257,47 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
 
 /* D-10. The directory is read through a duplicate descriptor so closedir cannot close the caller's
  * dirfd, and rewound first so a shared file offset cannot hide entries. unlinkat without
- * AT_REMOVEDIR removes a symlink itself and never follows it to its target. */
+ * AT_REMOVEDIR removes a symlink itself and never follows it to its target.
+ *
+ * Names are collected first and unlinked only after closedir. POSIX leaves unspecified whether a directory
+ * read returns or skips entries removed under it, and some network and FUSE filesystems skip the entries that
+ * follow an unlink, so unlinking while reading could leave a stale temp behind. Each pass holds at most
+ * HOST_SWEEP_BATCH names in a fixed buffer. A pass that filled the buffer and removed something is followed
+ * by a fresh pass; a pass that removed nothing ends the sweep, so an entry that cannot be unlinked (a
+ * directory with a temp's name) can never make it loop. */
+#define HOST_SWEEP_BATCH 64u
+#define HOST_SWEEP_NAME_BYTES 256u /* NAME_MAX + 1 on the supported platforms; a longer name is skipped */
+
 int host_save_io_sweep(int dirfd, const char *stem) {
     if (stem == NULL || stem[0] == '\0') return HOST_IO_EREAD;
     char prefix[GBB_HOST_STEM_MAX_BYTES + 16u];
     const int length = snprintf(prefix, sizeof(prefix), ".%s.sav.tmp-", stem);
     if (length <= 0 || (size_t)length >= sizeof(prefix)) return HOST_IO_EREAD;
-    const int duplicate = fcntl(dirfd, F_DUPFD_CLOEXEC, 0);
-    if (duplicate < 0) return HOST_IO_EREAD;
-    DIR *directory = fdopendir(duplicate);
-    if (directory == NULL) { (void)close(duplicate); return HOST_IO_EREAD; }
-    rewinddir(directory);
+    char names[HOST_SWEEP_BATCH][HOST_SWEEP_NAME_BYTES];
     int removed = 0;
-    struct dirent *entry;
-    while ((entry = readdir(directory)) != NULL) {
-        if (strncmp(entry->d_name, prefix, (size_t)length) != 0) continue;
-        if (unlinkat(dirfd, entry->d_name, 0) == 0) ++removed;
+    for (;;) {
+        const int duplicate = fcntl(dirfd, F_DUPFD_CLOEXEC, 0);
+        if (duplicate < 0) return HOST_IO_EREAD;
+        DIR *directory = fdopendir(duplicate);
+        if (directory == NULL) { (void)close(duplicate); return HOST_IO_EREAD; }
+        rewinddir(directory);
+        size_t count = 0u;
+        bool full = false;
+        struct dirent *entry;
+        while ((entry = readdir(directory)) != NULL) {
+            if (strncmp(entry->d_name, prefix, (size_t)length) != 0) continue;
+            const size_t name_length = strlen(entry->d_name);
+            if (name_length >= HOST_SWEEP_NAME_BYTES) continue;
+            if (count == HOST_SWEEP_BATCH) { full = true; break; }
+            memcpy(names[count++], entry->d_name, name_length + 1u);
+        }
+        (void)closedir(directory);
+        int pass_removed = 0;
+        for (size_t i = 0u; i < count; ++i)
+            if (unlinkat(dirfd, names[i], 0) == 0) ++pass_removed;
+        removed += pass_removed;
+        if (!full || pass_removed == 0) break;
     }
-    (void)closedir(directory);
     return removed;
 }
 

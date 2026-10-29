@@ -51,6 +51,8 @@ filter_expected_for_platform() {
         -e '/^host_writer_preserve_mode$/d' \
         -e '/^host_writer_mutant_no_preserve_mode$/d' \
         -e '/^host_sweep_exact_prefix$/d' \
+        -e '/^host_sweep_batches$/d' \
+        -e '/^host_writer_mutant_sweep_single_pass$/d' \
         -e '/^host_rtc_final_compare$/d' \
         -e '/^host_savedir_missing$/d' \
         -e '/^host_savedir_not_directory$/d' \
@@ -183,6 +185,8 @@ _self_test_platform_filter_cases() {
     host_writer_preserve_mode \
     host_writer_mutant_no_preserve_mode \
     host_sweep_exact_prefix \
+    host_sweep_batches \
+    host_writer_mutant_sweep_single_pass \
     host_rtc_final_compare \
     host_savedir_missing \
     host_savedir_not_directory \
@@ -316,6 +320,8 @@ _self_test_platform_filter_cases() {
     host_writer_preserve_mode \
     host_writer_mutant_no_preserve_mode \
     host_sweep_exact_prefix \
+    host_sweep_batches \
+    host_writer_mutant_sweep_single_pass \
     host_rtc_final_compare \
     host_savedir_missing \
     host_savedir_not_directory \

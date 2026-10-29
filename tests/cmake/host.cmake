@@ -357,6 +357,28 @@ if(NOT WIN32)
       -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL preserve_mode"
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
 
+  # gbb_host_save_mode_mutant(name source case anchor replacement): test_host_save_mode linked against a host
+  # library with one edit; the named case must exit 1 with its own `FAIL <case>` line.
+  function(gbb_host_save_mode_mutant name source case anchor replacement)
+    gbb_host_mutant_library(${name} ${source} "${anchor}" "${replacement}")
+    add_executable(test_host_save_mode_mutant_${name} "${PROJECT_SOURCE_DIR}/tests/test_host_save_mode.c")
+    target_link_libraries(test_host_save_mode_mutant_${name} PRIVATE gabbaboy_host_mutant_${name})
+    target_compile_features(test_host_save_mode_mutant_${name} PRIVATE c_std_17)
+    set_target_properties(test_host_save_mode_mutant_${name} PROPERTIES C_EXTENSIONS OFF)
+    add_test(NAME host_writer_mutant_${name}
+      COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=$<TARGET_FILE:test_host_save_mode_mutant_${name}>;${case}"
+        -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL ${case}"
+        -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  endfunction()
+
+  # IN-01: the sweep collects names before it unlinks them, one bounded batch per pass, until a pass is short
+  # or removes nothing. The control stops after the first pass, so more than one batch of temps survives.
+  add_test(NAME host_sweep_batches COMMAND test_host_save_mode sweep_batches)
+  set_tests_properties(host_sweep_batches PROPERTIES PASS_REGULAR_EXPRESSION "PASS sweep_batches")
+  gbb_host_save_mode_mutant(sweep_single_pass host_save_io.c sweep_batches
+    "if (!full || pass_removed == 0) break;" "break;")
+
   # ---- D-09/T-18-13: no fault seam in any shipped artifact ----
   # The shipped archive and the runner must define no host_save_io_test_ symbol; the same check on the
   # test-seam archive must reject it, so the check cannot pass vacuously.

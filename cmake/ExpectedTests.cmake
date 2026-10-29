@@ -42,6 +42,8 @@ function(gabbaboy_verify_registered_tests)
       host_writer_preserve_mode
       host_writer_mutant_no_preserve_mode
       host_sweep_exact_prefix
+      host_sweep_batches
+      host_writer_mutant_sweep_single_pass
       host_rtc_final_compare
       host_savedir_missing
       host_savedir_not_directory

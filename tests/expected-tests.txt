@@ -1665,3 +1665,5 @@ doc_no_interop_claims
 contract_rev_wiring
 contract_rev_wiring_stale_control
 contract_rev_wiring_missing_control
+host_sweep_batches
+host_writer_mutant_sweep_single_pass
