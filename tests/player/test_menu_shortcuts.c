@@ -80,8 +80,17 @@ int main(int argc, char **argv) {
         fputs("usage: test_menu_shortcuts [--seed-conflict]\n", stderr);
         return 2;
     }
+    /* The package lane exports SDL_VIDEO_DRIVER=dummy for the player smoke runs, and the dummy driver has no
+     * Cocoa menu. This check is about the real macOS driver, so it overrides the environment. */
+    (void)SDL_SetHintWithPriority(SDL_HINT_VIDEO_DRIVER, "cocoa", SDL_HINT_OVERRIDE);
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         fprintf(stderr, "menu-shortcuts blocked: SDL_Init(SDL_INIT_VIDEO) failed: %s\n", SDL_GetError());
+        return 3;
+    }
+    const char *driver = SDL_GetCurrentVideoDriver();
+    if (driver == NULL || strcmp(driver, "cocoa") != 0) {
+        fprintf(stderr, "menu-shortcuts blocked: the video driver is %s, not cocoa\n", driver != NULL ? driver : "(none)");
+        SDL_Quit();
         return 3;
     }
     SDL_Window *window = SDL_CreateWindow("menu-shortcuts", 160, 144, SDL_WINDOW_HIDDEN);
