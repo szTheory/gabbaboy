@@ -88,7 +88,8 @@ function(gabbaboy_verify_registered_tests)
       slot_reanchor_later
       slot_reanchor_earlier
       slot_select_message
-      slot_mutant_plan_ignores_last)
+      slot_mutant_plan_ignores_last
+      host_signal_term)
   endif()
   list(SORT expected_tests)
   if(NOT registered_tests STREQUAL expected_tests)

@@ -1608,3 +1608,4 @@ slot_key_decoder
 slot_reanchor_plan
 slot_mutant_plan_ignores_last
 slot_mutant_message_map
+host_signal_term

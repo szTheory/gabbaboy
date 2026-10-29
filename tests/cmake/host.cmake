@@ -340,4 +340,30 @@ if(NOT WIN32)
       "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_ARCHIVES=$<TARGET_FILE:gabbaboy_host_testing>;-DGBB_FORBID_DEFINED=host_save_io_test_;-DGBB_HEADER=${PROJECT_SOURCE_DIR}/include/gabbaboy/gabbaboy.h;-DGBB_SOURCE_DIRS=${PROJECT_SOURCE_DIR}/src/host;-DGBB_NM=${CMAKE_NM};-P;${GBB_HOST_API_SCRIPT}"
       -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=host-test-seam-shipped: _?host_save_io_test_fail_next"
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+
+  # ---- HOST-02 / D-17: real signals sent to real runner processes (POSIX-only: Windows has no SIGTERM and
+  # host mode is refused there, D-05). Each row sends exactly one signal and keeps the base 60 s TIMEOUT;
+  # PROCESSORS 2 keeps hosted ctest (4-wide) from starving the 2.0 s ceiling. The sanitizer lanes pass
+  # --sanitized, which drops the wall-clock ceiling and keeps the replay and exit assertions.
+  set(GBB_HOST_SIGNALS_HARNESS "${PROJECT_SOURCE_DIR}/tests/scripts/test_host_signals.py")
+  set(GBB_HOST_SIGNALS_SANITIZED "")
+  if(GABBABOY_ENABLE_SANITIZERS)
+    set(GBB_HOST_SIGNALS_SANITIZED --sanitized)
+  endif()
+
+  # gbb_add_host_signal_test(name scenario [PROCESSORS2]): one python3 -I scenario against the real runner.
+  function(gbb_add_host_signal_test name scenario)
+    add_test(NAME ${name}
+      COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_SIGNALS_HARNESS}"
+        --runner $<TARGET_FILE:gabbaboy-runner>
+        --work "${PROJECT_BINARY_DIR}/host-signals/${name}"
+        --scenario ${scenario} ${GBB_HOST_SIGNALS_SANITIZED})
+    set_tests_properties(${name} PROPERTIES
+      PASS_REGULAR_EXPRESSION "host-signals scenario=${scenario} pass")
+    if(ARGN)
+      set_tests_properties(${name} PROPERTIES PROCESSORS 2)
+    endif()
+  endfunction()
+
+  gbb_add_host_signal_test(host_signal_term term PROCESSORS2)
 endif()
