@@ -188,7 +188,12 @@ def parse_rows(document: dict) -> tuple[list[Row], list[int]]:
 
 
 def load_rows(source: Source) -> tuple[list[Row], list[int]]:
-    return parse_rows(parse_canonical(source.read(CONTRACT), CONTRACT))
+    raw = source.read(CONTRACT)
+    # T-18-28: the table names GabbaBoy's own ids and sizes; it never claims byte interoperability with another
+    # emulator (an mGBA save carries a 48-byte footer and a different MBC2 size), so the word has no place in it.
+    if b"mgba" in raw.lower():
+        reject("interop-claim", f"{CONTRACT} mentions mGBA; the save-format table claims no interoperability with another emulator")
+    return parse_rows(parse_canonical(raw, CONTRACT))
 
 
 def load_fixture(repo_root: pathlib.Path):
@@ -671,6 +676,9 @@ def self_test(repo: pathlib.Path, rev: str | None) -> int:
 
         expect_reject("tab-indented JSON", completeness(json.dumps(seed, indent="\t") + "\n"), "non-canonical")
         expect_reject("sorted keys", completeness(json.dumps(seed, indent=2, sort_keys=True) + "\n"), "non-canonical")
+        expect_reject("an interoperability claim",
+                      completeness(edited(lambda d: d["exit_codes"][0].update(meaning="Clean exit; saves are mGBA compatible"))),
+                      "interop-claim")
         expect_reject("an empty rows list", completeness(edited(lambda d: d["save_formats"].update(rows=[]))), "row-missing")
 
         broken = parent / "enumerator-broken.txt"
