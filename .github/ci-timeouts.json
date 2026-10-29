@@ -267,9 +267,15 @@
  },
  "release-rehearsal.yml:performance": {
   "timeout_minutes": 45,
-  "release_bound": true,
+  "cited_run_id": 40257161612,
+  "cited_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+  "p50_minutes": "0.14",
+  "samples": 1,
   "provisional": false,
-  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-paired-performance-qualification stays pending-investigation (median 118.35 percent, review trigger fired) until an owner-recorded, receipt-bound review decision is applied through the dispatch inputs; the last green sample (run 39382974145, 0.50 min) is on a non-ancestor rehearsal branch. The 45-minute cap is the reviewed limit for one paired measurement; the v0.2.1 rehearsal re-cites this row (D-111)."
+  "tree_equal_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+  "cited_tree": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca",
+  "cited_job_name": "rehearse-paired-performance-qualification",
+  "disclosure": "Predecessor-name citation: the job was renamed to rehearse-advisory-paired-performance-observation; the old sample was a reuse path."
  },
  "release.yml:attach-v02-evidence": {
   "timeout_minutes": 15,

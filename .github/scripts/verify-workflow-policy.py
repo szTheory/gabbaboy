@@ -2217,6 +2217,7 @@ def check_release(root: Path) -> None:
 LEDGER_PATH = ".github/ci-timeouts.json"
 LEDGER_WHOLE_RUN_MINUTES = Fraction(30)
 LEDGER_NORMAL_FIELDS = frozenset({"timeout_minutes", "cited_run_id", "cited_sha", "p50_minutes", "samples", "provisional"})
+LEDGER_NORMAL_OPTIONAL = frozenset({"tree_equal_sha", "cited_tree", "cited_job_name", "disclosure"})
 LEDGER_BOUND_FIELDS = frozenset({"timeout_minutes", "release_bound", "provisional", "sizing_basis"})
 # D-20 'release-bound ledger row (Phase 16)': release-only and rehearsal-only job bodies that have no green run since they were written. Each
 # is exempt from the samples, cited run, cited sha and ceil(2 x p50) rules, only while the project VERSION is at most
@@ -2224,10 +2225,12 @@ LEDGER_BOUND_FIELDS = frozenset({"timeout_minutes", "release_bound", "provisiona
 LEDGER_RELEASE_BOUND_KEYS = ("release.yml:attach-v02-evidence", "release.yml:candidate-fuzz", "release-rehearsal.yml:judge",
                              # D-111: the rehearsal producers that cannot pass until the version-bound ledger and the owner-recorded
                              # performance review exist; a provisional row would make the rehearsal judge's own --release-head check circular.
-                             "release-rehearsal.yml:corpus", "release-rehearsal.yml:performance", "release-rehearsal.yml:aggregate")
+                             "release-rehearsal.yml:corpus", "release-rehearsal.yml:aggregate")
 LEDGER_BOUND_LAST_VERSION = (0, 2, 1)
 _P50 = re.compile(r"^[0-9]+(?:\.[0-9]+)?$")
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
+_LEDGER_JOB_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,99}$")
+_LEDGER_DISCLOSURE = re.compile(r"^[\x20-\x7e]{1,400}$")
 
 
 def _ledger_pairs(pairs):
@@ -2252,6 +2255,116 @@ def _project_version(root: Path) -> tuple[int, int, int]:
     if not match:
         raise Reject("timeout-ledger-release-bound", "CMakeLists.txt has no project VERSION to check the release-bound expiry against")
     return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def _run_git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    """Run one bounded git query against the explicitly selected object database."""
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False, timeout=30)
+
+
+def _workflow_job_block(text: str | None, job_id: str) -> str | None:
+    """Return one top-level workflow job block, or None when the workflow/job is absent."""
+    if text is None:
+        return None
+    lines = text.splitlines()
+    start = next((index for index, line in enumerate(lines) if line == f"  {job_id}:"), None)
+    if start is None:
+        return None
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line.strip() and len(line) - len(line.lstrip()) <= 2:
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
+def check_ledger_git_objects(ledger, git_root: Path, main_ref: str, release_head: bool,
+                             git=_run_git, disclosure_base: str | None = None,
+                             workflow_root: Path | None = None) -> None:
+    """Prove tree-equal citations against a fixed git object database; optional disclosure checks compare job blocks."""
+    anchors = [(key, row) for key, row in ledger.items() if isinstance(row, dict) and "tree_equal_sha" in row]
+    if not anchors and not (release_head and any(isinstance(row, dict) and "tree_equal_sha" in row for row in ledger.values())) \
+            and disclosure_base is None:
+        return
+
+    def run(*args: str, code: str = "timeout-ledger-git-unavailable", key: str | None = None):
+        try:
+            result = git(*args, cwd=git_root)
+        except (OSError, subprocess.SubprocessError) as exc:
+            subject = f"{key}: " if key else ""
+            raise Reject(code, f"{subject}git {' '.join(args)} failed: {exc}") from exc
+        if result.returncode != 0:
+            subject = f"{key}: " if key else ""
+            detail = result.stderr.strip()[:200] if result.stderr else f"exit {result.returncode}"
+            raise Reject(code, f"{subject}git {' '.join(args)} failed: {detail}")
+        return result
+
+    resolved_main = None
+    if anchors:
+        resolved_main = run("rev-parse", "--verify", "--end-of-options", f"{main_ref}^{{commit}}").stdout.strip()
+        if not _SHA40.fullmatch(resolved_main):
+            raise Reject("timeout-ledger-git-unavailable", f"git did not resolve {main_ref!r} to a commit id")
+        for key, row in anchors:
+            anchor = row["tree_equal_sha"]
+            tree = run("rev-parse", "--verify", "--end-of-options", f"{anchor}^{{tree}}", key=key).stdout.strip()
+            if not _SHA40.fullmatch(tree):
+                raise Reject("timeout-ledger-git-unavailable", f"{key}: git did not resolve the tree-equal anchor to a tree id")
+            if tree != row["cited_tree"]:
+                raise Reject("timeout-ledger-tree-mismatch", f"{key}: cited_tree {row['cited_tree']} differs from anchor tree {tree}")
+            try:
+                ancestor = git("merge-base", "--is-ancestor", anchor, resolved_main, cwd=git_root)
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise Reject("timeout-ledger-git-unavailable", f"{key}: git merge-base failed: {exc}") from exc
+            if ancestor.returncode == 1:
+                raise Reject("timeout-ledger-anchor-not-on-main", f"{key}: tree-equal anchor is not an ancestor of {main_ref}")
+            if ancestor.returncode != 0:
+                detail = ancestor.stderr.strip()[:200] if ancestor.stderr else f"exit {ancestor.returncode}"
+                raise Reject("timeout-ledger-git-unavailable", f"{key}: git merge-base --is-ancestor failed: {detail}")
+
+    if release_head:
+        for key, row in anchors:
+            cited_sha = row["cited_sha"]
+            try:
+                git("cat-file", "-e", f"{cited_sha}^{{commit}}", cwd=git_root)
+                cited_tree = git("rev-parse", "--verify", "--end-of-options", f"{cited_sha}^{{tree}}", cwd=git_root)
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise Reject("timeout-ledger-cited-object-missing", f"{key}: cited run head is unreadable: {exc}") from exc
+            if cited_tree.returncode != 0 or not _SHA40.fullmatch(cited_tree.stdout.strip()) \
+                    or cited_tree.stdout.strip() != row["cited_tree"]:
+                detail = cited_tree.stderr.strip()[:200] if cited_tree.stderr else "cited tree is unreadable or differs"
+                raise Reject("timeout-ledger-cited-object-missing", f"{key}: cited run head {cited_sha} is unreadable or has the wrong tree: {detail}")
+
+    if disclosure_base is not None:
+        if workflow_root is None:
+            workflow_root = git_root
+        base_commit = run("rev-parse", "--verify", "--end-of-options", f"{disclosure_base}^{{commit}}").stdout.strip()
+        if not _SHA40.fullmatch(base_commit):
+            raise Reject("timeout-ledger-git-unavailable", f"git did not resolve disclosure base {disclosure_base!r} to a commit id")
+
+        def workflow_at_commit(path: str) -> str | None:
+            listed = run("ls-tree", "-z", "--name-only", base_commit, "--", path)
+            if not listed.stdout:
+                return None
+            shown = run("show", f"{base_commit}:{path}")
+            return shown.stdout
+
+        for key, row in ledger.items():
+            workflow, separator, job_id = key.partition(":")
+            if not separator:
+                continue
+            relative = f".github/workflows/{workflow}"
+            base_text = workflow_at_commit(relative)
+            try:
+                current_text = (workflow_root / relative).read_text(encoding="utf-8")
+            except FileNotFoundError:
+                current_text = None
+            except OSError as exc:
+                raise Reject("timeout-ledger-git-unavailable", f"{key}: cannot read current workflow: {exc.strerror}") from exc
+            if _workflow_job_block(base_text, job_id) != _workflow_job_block(current_text, job_id):
+                disclosure = row.get("disclosure") if isinstance(row, dict) else None
+                if not isinstance(disclosure, str) or "changed this job's body after the cited run" not in disclosure:
+                    raise Reject("timeout-ledger-body-undisclosed", f"{key}: changed this job's body after the cited run; add the required disclosure")
 
 
 def judge_timeout_ledger(ledger, yaml_timeouts: dict[str, int], gating: set[str], version: tuple[int, int, int],
@@ -2282,12 +2395,18 @@ def judge_timeout_ledger(ledger, yaml_timeouts: dict[str, int], gating: set[str]
             if row["timeout_minutes"] != yaml_timeouts[key]:
                 raise Reject("timeout-ledger-stale", f"{key}: ledger timeout {row['timeout_minutes']} differs from the workflow's {yaml_timeouts[key]}")
             continue
-        if set(row) != LEDGER_NORMAL_FIELDS:
-            raise Reject("timeout-ledger-schema", f"{key}: a row holds exactly {sorted(LEDGER_NORMAL_FIELDS)}")
+        if not LEDGER_NORMAL_FIELDS.issubset(row) or set(row) - (LEDGER_NORMAL_FIELDS | LEDGER_NORMAL_OPTIONAL):
+            raise Reject("timeout-ledger-schema", f"{key}: a row holds required {sorted(LEDGER_NORMAL_FIELDS)} and only optional {sorted(LEDGER_NORMAL_OPTIONAL)}")
+        if ("tree_equal_sha" in row) != ("cited_tree" in row):
+            raise Reject("timeout-ledger-schema", f"{key}: tree_equal_sha and cited_tree must appear together")
         if not _is_int(row["timeout_minutes"]) or not _is_int(row["cited_run_id"]) or row["cited_run_id"] <= 0 \
                 or not _is_int(row["samples"]) or row["samples"] < 1 or not isinstance(row["provisional"], bool) \
                 or not isinstance(row["cited_sha"], str) or not _SHA40.match(row["cited_sha"]) \
-                or not isinstance(row["p50_minutes"], str) or not _P50.match(row["p50_minutes"]):
+                or not isinstance(row["p50_minutes"], str) or not _P50.match(row["p50_minutes"]) \
+                or ("tree_equal_sha" in row and (not isinstance(row["tree_equal_sha"], str) or not _SHA40.fullmatch(row["tree_equal_sha"]))) \
+                or ("cited_tree" in row and (not isinstance(row["cited_tree"], str) or not _SHA40.fullmatch(row["cited_tree"]))) \
+                or ("cited_job_name" in row and (not isinstance(row["cited_job_name"], str) or not _LEDGER_JOB_NAME.fullmatch(row["cited_job_name"]))) \
+                or ("disclosure" in row and (not isinstance(row["disclosure"], str) or not _LEDGER_DISCLOSURE.fullmatch(row["disclosure"]))):
             raise Reject("timeout-ledger-schema", f"{key}: malformed field (timeout and samples integers, cited_sha 40 hex, p50 a decimal string)")
         if row["timeout_minutes"] != yaml_timeouts[key]:
             raise Reject("timeout-ledger-stale", f"{key}: ledger timeout {row['timeout_minutes']} differs from the workflow's {yaml_timeouts[key]}")
@@ -2302,7 +2421,8 @@ def judge_timeout_ledger(ledger, yaml_timeouts: dict[str, int], gating: set[str]
         raise Reject("timeout-ledger-whole-run", f"the longest p50 behind required-native is {float(longest):g} min, over {LEDGER_WHOLE_RUN_MINUTES}")
 
 
-def check_timeout_ledger(root: Path, release_head: bool = False) -> None:
+def check_timeout_ledger(root: Path, release_head: bool = False, git_root: Path | None = None,
+                         main_ref: str = "HEAD", disclosure_base: str | None = None) -> None:
     try:
         text = (root / LEDGER_PATH).read_text(encoding="utf-8")
         ledger = json.loads(text, object_pairs_hook=_ledger_pairs)
@@ -2323,6 +2443,8 @@ def check_timeout_ledger(root: Path, release_head: bool = False) -> None:
                 yaml_timeouts[f"{path.name}:{job_id}"] = int(raw)
     gating = {f"ci.yml:{need}" for need in _needs(trees["ci.yml"]["jobs"]["required-native"])} if "ci.yml" in trees else set()
     judge_timeout_ledger(ledger, yaml_timeouts, gating, _project_version(root), release_head)
+    check_ledger_git_objects(ledger, git_root or root, main_ref, release_head,
+                             disclosure_base=disclosure_base, workflow_root=root)
 
 
 
@@ -2598,7 +2720,8 @@ def check_workflow_closed_world(root: Path) -> None:
                                      f"${{{{ {expression.strip()} }}}} into a run body; pass it through step-level env")
 
 
-def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
+def check_all(root: Path, release_head: bool = False, git_root: Path | None = None, main_ref: str = "HEAD",
+              disclosure_base: str | None = None) -> dict[str, int]:
     check_workflow_set(root)
     check_producer_script(root)
     check_ir_exception_env(root)
@@ -2612,7 +2735,7 @@ def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_release(root)
     check_release_gate_wiring(root)
     check_version_window(root)
-    check_timeout_ledger(root, release_head)
+    check_timeout_ledger(root, release_head, git_root, main_ref, disclosure_base)
     check_workflow_closed_world(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
@@ -2775,7 +2898,8 @@ def _copy_fixture(root: Path, target: Path) -> None:
 
 def _run_cli(fixture: Path, cwd: Path, *extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--root", str(fixture), *extra],
+        [sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--root", str(fixture),
+         "--git-root", str(Path(__file__).resolve().parents[2]), *extra],
         capture_output=True, text=True, check=False, cwd=cwd, timeout=60,
     )
 
@@ -3603,6 +3727,9 @@ def _ledger_mutations():
         ("ledger: release_bound row once VERSION is above 0.2.1", lambda fixture: (fixture / "CMakeLists.txt").write_text(
             re.sub(r"VERSION \d+\.\d+\.\d+", "VERSION 0.3.0", (fixture / "CMakeLists.txt").read_text(encoding="utf-8"), count=1), encoding="utf-8"), (), "timeout-ledger-release-bound"),
         ("ledger: normal row with samples removed", ledger(lambda d: d["ci.yml:native-linux"].pop("samples")), (), "timeout-ledger-schema"),
+        ("ledger: cited_tree without tree_equal_sha", ledger(lambda d: d["ci.yml:native-linux"].update(cited_tree="b" * 40)), (), "timeout-ledger-schema"),
+        ("ledger: tree_equal_sha without cited_tree", ledger(lambda d: d["ci.yml:native-linux"].update(tree_equal_sha="b" * 40)), (), "timeout-ledger-schema"),
+        ("ledger: unknown optional field", ledger(lambda d: d["ci.yml:native-linux"].update(sizing_note="not allowed")), (), "timeout-ledger-schema"),
         ("ledger: release_bound row that also cites a run", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(cited_run_id=1)), (), "timeout-ledger-schema"),
         ("ledger: release_bound row that is provisional", ledger(lambda d: d["release.yml:candidate-fuzz"].update(provisional=True)), (), "timeout-ledger-schema"),
         ("ledger: release_bound row without a sizing basis", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(sizing_basis=" ")), (), "timeout-ledger-schema"),
@@ -3620,6 +3747,8 @@ def _ledger_boundary_controls() -> int:
         judge_timeout_ledger({"w.yml:j": merged}, {"w.yml:j": timeout}, {"w.yml:j"} if gating else set(), version, head)
 
     judge({})                                   # exactly ceil(2 x 12.4) = 25 passes
+    done += 1
+    judge({"tree_equal_sha": "b" * 40, "cited_tree": "c" * 40})
     done += 1
     for label, code, call in (
         ("timeout one minute below ceil(2 x p50) fails", "timeout-ledger-ratio", lambda: judge({}, timeout=24)),
@@ -3642,6 +3771,75 @@ def _ledger_boundary_controls() -> int:
             if code is not None:
                 raise SystemExit(f"self-test boundary {label!r}: accepted")
         done += 1
+    return done
+
+
+def _ledger_git_object_controls() -> int:
+    """Use injected Git results to pin each offline tree-equality refusal and default-ref behavior."""
+    anchor = "a" * 40
+    tree = "b" * 40
+    commit = "c" * 40
+    row = {"timeout_minutes": 45, "cited_run_id": 1, "cited_sha": "d" * 40,
+           "p50_minutes": "0.14", "samples": 1, "provisional": False,
+           "tree_equal_sha": anchor, "cited_tree": tree}
+
+    def fake_git(anchor_tree: str = tree, ancestor_code: int = 0, unreadable_anchor: bool = False,
+                 reject_origin: bool = False, calls: list | None = None):
+        if calls is None:
+            calls = []
+
+        def invoke(*args: str, cwd: Path):
+            calls.append(args)
+            if reject_origin and any("origin/" in arg for arg in args):
+                return subprocess.CompletedProcess(["git", *args], 1, "", "origin refs are forbidden in this control")
+            if args[0] == "rev-parse":
+                target = args[-1]
+                if target == "HEAD^{commit}":
+                    return subprocess.CompletedProcess(["git", *args], 0, commit, "")
+                if target == "origin/main^{commit}":
+                    return subprocess.CompletedProcess(["git", *args], 1, "", "unknown ref")
+                if target == f"{anchor}^{{tree}}":
+                    if unreadable_anchor:
+                        return subprocess.CompletedProcess(["git", *args], 128, "", "missing object")
+                    return subprocess.CompletedProcess(["git", *args], 0, anchor_tree, "")
+            if args[0] == "merge-base":
+                return subprocess.CompletedProcess(["git", *args], ancestor_code, "", "")
+            raise SystemExit(f"unhandled fake git request: {args!r}")
+
+        return invoke, calls
+
+    done = 0
+    valid, calls = fake_git(reject_origin=True)
+    check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=valid)
+    if any("origin/" in arg for call in calls for arg in call):
+        raise SystemExit("self-test tree-equality default ref read origin/*")
+    done += 1
+
+    def expect(label: str, expected: str, invoke) -> None:
+        try:
+            invoke()
+        except Reject as exc:
+            if exc.code != expected:
+                raise SystemExit(f"self-test git-object control {label!r}: wrong code {exc.code}")
+        else:
+            raise SystemExit(f"self-test git-object control {label!r}: accepted")
+
+    mismatch, _ = fake_git(anchor_tree="e" * 40)
+    expect("tree mismatch", "timeout-ledger-tree-mismatch",
+           lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=mismatch))
+    done += 1
+    off_main, _ = fake_git(ancestor_code=1)
+    expect("anchor not on main", "timeout-ledger-anchor-not-on-main",
+           lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=off_main))
+    done += 1
+    missing, _ = fake_git(unreadable_anchor=True)
+    expect("unreadable anchor", "timeout-ledger-git-unavailable",
+           lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=missing))
+    done += 1
+    no_live_ref, _ = fake_git(reject_origin=True)
+    expect("explicit origin ref is honored", "timeout-ledger-git-unavailable",
+           lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "origin/main", False, git=no_live_ref))
+    done += 1
     return done
 
 
@@ -3743,6 +3941,7 @@ def self_test(root: Path) -> None:
             for item in WORKFLOWS:
                 (fixture / ".github/workflows" / item).write_text(baselines[item], encoding="utf-8")
         rejected += _ledger_boundary_controls()
+        rejected += _ledger_git_object_controls()
         # WR-C01: the workflow set is closed. A new file (here a pull_request_target job with contents: write) is refused
         # before anything reads it, and so is a judged file that disappears.
         intruder = fixture / ".github/workflows/evil.yml"
@@ -3834,6 +4033,12 @@ def main() -> int:
     modes.add_argument("--self-test", action="store_true", help="run positive and intended-defect controls through the CLI")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="tree whose .github/workflows files are judged as data")
+    parser.add_argument("--git-root", type=Path, default=None,
+                        help="git object database for citation checks (default: --root)")
+    parser.add_argument("--main-ref", default="HEAD",
+                        help="revision under test for tree-equal anchor ancestry (default: HEAD in --git-root)")
+    parser.add_argument("--disclosure-base", default=None,
+                        help="optional commit whose workflow job bodies are compared for required disclosures")
     parser.add_argument("--release-head", action="store_true",
                         help="judge as the release head: a provisional timeout-ledger row is rejected")
     parser.add_argument("--verify-cited", action="store_true",
@@ -3846,7 +4051,8 @@ def main() -> int:
             return 0
         if args.verify_cited:
             return verify_cited(root)
-        facts = check_all(root, args.release_head)
+        facts = check_all(root, args.release_head, args.git_root.resolve() if args.git_root else root,
+                          args.main_ref, args.disclosure_base)
         print(f"PASS: workflow privilege and trust wiring residual_write_jobs={facts['residual']}")
         return 0
     except Reject as exc:
