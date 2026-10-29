@@ -6,12 +6,12 @@
     {
       "number": "16",
       "name": "Tune-up and v0.2 Debt Closure",
-      "status": "complete"
+      "status": "in_progress"
     },
     {
       "number": "17",
       "name": "Native Save State Core",
-      "status": "complete"
+      "status": "in_progress"
     },
     {
       "number": "18",
@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 18",
-    "label": "Discuss Phase 18 (Player Save Slots and Host Contract)",
-    "reason": "Phase 17 complete and verified (8/8; hosted exact-head CI green at 2eb492f); Phase 18 has no context or plans yet"
+    "command": "/gsd-discuss-phase",
+    "label": "Discuss the first phase",
+    "reason": "Project initialized — plan your first phase"
   },
-  "updated_at": "2026-10-28T23:15:20.000Z"
+  "updated_at": "2026-10-29T02:41:45.931Z"
 }

@@ -26,14 +26,14 @@ current_plan: 11
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 17 — Native Save State Core
+**Current focus:** Phase 18 — Player Save Slots and Host Contract
 
 ## Current Position
 
-Phase: 18 (Player Save Slots and Host Contract) — READY TO EXECUTE
-Plan: 0 of 9 executed (18-01..18-09 planned; gap slot 18-10 reserved, cap 10)
-Status: Ready to execute — next `/gsd-execute-phase 18`
-Last activity: 2026-10-28 — Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Earlier: Phase 18 discussion complete ([18-CONTEXT.md](phases/GB-18-player-save-slots-and-host-contract/18-CONTEXT.md), D-114); PR130 squash-merged as `f4082a6` (Phase 17 boundary). Earlier: Phase 17 complete. 11/11 plans; goal verification passed 8/8 ([17-VERIFICATION.md](phases/GB-17-native-save-state-core/17-VERIFICATION.md)); Nyquist 0 gaps; security 29/29 closed; code review found 5 critical findings, all closed in review-fix round 1 of 2 with negative controls ([17-REVIEW-DISPOSITION.md](phases/GB-17-native-save-state-core/17-REVIEW-DISPOSITION.md)); full suite 1496/1496 at `e9e2d57`; PR130 hosted exact-head CI green at `2eb492f` (41 pass, 3 path-skipped). Release preconditions before v0.3.0: re-cite the provisional `nightly-asan.yml:report-red` row from a main dry run (WR-C03) and `release.yml:candidate-performance` from the next release run; RM-027 remains the Phase 19 entry blocker.
+Phase: 18 (Player Save Slots and Host Contract) — EXECUTING
+Plan: 1 of 9
+Status: Executing Phase 18
+Last activity: 2026-10-28 — Phase 18 execution started
 
 Prior phase evidence: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
 
