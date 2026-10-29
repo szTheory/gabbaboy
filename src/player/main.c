@@ -4,11 +4,14 @@
 #include "limitations.h"
 #include "presentation.h"
 #include "session.h"
+#include "slots.h"
+#include "gbb_host.h"
 #include "audio.h"
 #include "script_smoke.h"
 
 #include <stdatomic.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -81,6 +84,12 @@ typedef struct {
     char status[192];
     char save_status[192];
     char save_error[128];
+    /* D-25: the slot message of the last slot key. While save_status_active is set, the title shows
+     * `<save_status> · <slot_message>`; any later set_status clears it. */
+    char slot_message[128];
+    player_slot_store slots;   /* D-21: the numbered save-state slots of the loaded ROM */
+    bool slots_ready;          /* false when the pref directory or ROM could not back a store */
+    unsigned selected_slot;    /* 1..9; starts at 1 on every ROM load and is not persisted */
     Uint32 dialog_event_type;
     uint64_t displayed_generation;
     atomic_bool dialog_callback_done;
@@ -109,6 +118,7 @@ typedef struct {
 extern char **environ;
 
 static void set_status(player *app, const char *status);
+static void slots_attach(player *app, gbb_profile profile);
 static void catch_up_on_open(const player *app, gbb_instance *machine,
                              player_save_identity *identity, bool battery_loaded,
                              char *in_out_status, size_t status_capacity);
@@ -1598,16 +1608,25 @@ static void update_battery_save(player *app) {
         (void)attempt_battery_save(app, true);
 }
 
-static bool push_key(player *app, Uint32 type, SDL_Scancode scancode, Uint64 timestamp) {
+/* Pushes a key event with a keycode, modifier state and repeat flag, so the slot keys (D-21) can be
+ * driven through the real event pump. push_key is the unmodified, non-repeating form. */
+static bool push_key_mod(player *app, Uint32 type, SDL_Scancode scancode, SDL_Keycode keycode,
+                         SDL_Keymod mod, bool repeat, Uint64 timestamp) {
     SDL_Event event;
     SDL_zero(event);
     event.type = type;
     event.key.timestamp = timestamp;
     event.key.windowID = app->window != NULL ? SDL_GetWindowID(app->window) : 0;
     event.key.scancode = scancode;
+    event.key.key = keycode;
+    event.key.mod = mod;
     event.key.down = type == SDL_EVENT_KEY_DOWN;
-    event.key.repeat = false;
+    event.key.repeat = repeat;
     return SDL_PushEvent(&event);
+}
+
+static bool push_key(player *app, Uint32 type, SDL_Scancode scancode, Uint64 timestamp) {
+    return push_key_mod(app, type, scancode, SDLK_UNKNOWN, SDL_KMOD_NONE, false, timestamp);
 }
 
 static bool smoke_send_z(player *app, bool down) {

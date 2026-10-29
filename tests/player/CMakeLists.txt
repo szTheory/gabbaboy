@@ -34,6 +34,31 @@ function(gbb_player_mutant_binary target main_source colour_source)
   set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
 endfunction()
 
+# The player-slot test executable: tests/player/test_slots.c embeds a copy of src/player/main.c (the real one, or a
+# mutated copy named by `main_source`) the way test_reset_transition.c does. The mutant executables are named
+# *variant*, not *mutant*, because verify-core-linkage.py requires every *mutant* target that links the
+# acceptance helpers to carry a mutant core and only the player source is mutated here.
+function(gbb_player_slots_test_executable target main_source)
+  add_executable(${target}
+    test_slots.c
+    "${PROJECT_SOURCE_DIR}/src/player/audio.c"
+    "${PROJECT_SOURCE_DIR}/src/player/colour.c"
+    "${PROJECT_SOURCE_DIR}/src/player/input.c"
+    "${PROJECT_SOURCE_DIR}/src/player/presentation.c"
+    "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
+  target_link_libraries(${target} PRIVATE
+    gabbaboy-player-session-test gabbaboy_accept gabbaboy_player_slots gabbaboy_host)
+  target_compile_features(${target} PRIVATE c_std_17)
+  target_compile_definitions(${target} PRIVATE
+    GBB_PLAYER_AUDIO_TESTING GBB_PLAYER_SESSION_TESTING
+    GABBABOY_PLAYER_DEMO_ROM="${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb"
+    GABBABOY_PLAYER_INVALID_ROM="${PROJECT_SOURCE_DIR}/fixtures/visible-demo/LICENSE.txt")
+  if(NOT "${main_source}" STREQUAL "")
+    target_compile_definitions(${target} PRIVATE GBB_PLAYER_MAIN_C="${main_source}")
+  endif()
+  set_target_properties(${target} PROPERTIES C_EXTENSIONS OFF)
+endfunction()
+
 # D-30: the pinned SHA-256 of the 160x144 RGBA buffer the player uploads for colour-attr.gb after
 # 30 frames. The close-out plan re-runs the player suite at the merged head, so a later core
 # change cannot leave this pin stale unnoticed.
@@ -377,7 +402,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       "${PROJECT_SOURCE_DIR}/src/player/presentation.c"
       "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
     target_link_libraries(test_player_reset_transition PRIVATE
-      gabbaboy-player-session-test gabbaboy_accept)
+      gabbaboy-player-session-test gabbaboy_accept gabbaboy_player_slots gabbaboy_host)
     target_compile_features(test_player_reset_transition PRIVATE c_std_17)
     target_compile_definitions(test_player_reset_transition PRIVATE
       GBB_PLAYER_AUDIO_TESTING GBB_PLAYER_SESSION_TESTING
@@ -389,6 +414,19 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       COMMAND test_player_reset_transition)
     set_tests_properties(player_reset_transition PROPERTIES
       ENVIRONMENT "SDL_AUDIO_DRIVER=dummy")
+  elseif(test_name MATCHES "^player_slot_(keys|reanchor|status_line|help_text)$")
+    # Phase 18 plan 06: the slot keys, status line, input re-anchor and help text through the real SDL event
+    # queue. Each test gets its own HOME so the slot files of parallel tests never meet (the ROM digest, and so
+    # the file names, are the same). The shared executable embeds src/player/main.c.
+    if(NOT TARGET test_player_slots)
+      gbb_player_slots_test_executable(test_player_slots "")
+    endif()
+    set(slot_home "${CMAKE_CURRENT_BINARY_DIR}/${test_name}-home")
+    file(MAKE_DIRECTORY "${slot_home}")
+    add_test(NAME ${test_name} COMMAND test_player_slots ${CMAKE_MATCH_1}
+      ${PROJECT_SOURCE_DIR}/fixtures/mbc1-continuation/continuation.gb)
+    set_tests_properties(${test_name} PROPERTIES TIMEOUT 120
+      ENVIRONMENT "SDL_AUDIO_DRIVER=dummy;HOME=${slot_home};CFFIXED_USER_HOME=${slot_home}")
   elseif(test_name MATCHES "^player_script_smoke_surface(_selftest|_main_selftest)?$")
     # D-38: the scripted-smoke diagnostic stays free of environment, network, save writes
     # and persistence. The selftest runs the same check on a copy with an injected getenv
