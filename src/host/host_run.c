@@ -208,6 +208,33 @@ static void release(host_run_state *state) {
     state->dirfd = -1;
 }
 
+/* The D-11 flush rule: export the image and write it iff it differs from what the .sav last held
+ * (`has_last` false means the .sav is absent, which differs from every image). `imported` is the
+ * last-persisted copy and advances only after the writer succeeded, so a failed or half-reported
+ * flush (including a directory-sync failure after the rename) stays dirty and is rewritten later.
+ * Returns NULL on success or the failing stage name. */
+static const char *flush_battery(host_run_state *state, const char *sav_name, size_t want,
+                                 bool *has_last, bool *wrote) {
+    *wrote = false;
+    if (gbb_copy_battery(state->machine, state->exported, want) != GBB_OK) return "export";
+    if (*has_last && memcmp(state->exported, state->imported, want) == 0) return NULL;
+    const int status = host_save_io_replace(state->dirfd, sav_name, state->exported, want);
+    if (status != HOST_IO_OK) return host_io_stage_name(status);
+    memcpy(state->imported, state->exported, want);
+    *has_last = true;
+    *wrote = true;
+    return NULL;
+}
+
+static void print_flush(const char *reason, uint64_t frame, const char *result, const char *stage) {
+    if (stage != NULL)
+        (void)fprintf(stderr, "gbb-host: flush reason=%s frame=%llu result=%s stage=%s\n", reason,
+                      (unsigned long long)frame, result, stage);
+    else
+        (void)fprintf(stderr, "gbb-host: flush reason=%s frame=%llu result=%s\n", reason,
+                      (unsigned long long)frame, result);
+}
+
 static int run_host(const host_args *args, const char *stem) {
     host_run_state state = {-1, NULL, NULL, NULL, NULL};
     char sav_name[GBB_HOST_STEM_MAX_BYTES + 8u];
@@ -262,6 +289,17 @@ static int run_host(const host_args *args, const char *stem) {
         }
     }
 
+    /* D-10: every refusal check has passed. Remove this stem's stale temps once, before the first frame.
+     * A sweep failure is reported but never fatal: a leftover temp cannot corrupt the .sav. */
+    const int swept = host_save_io_sweep(state.dirfd, stem);
+    if (swept >= 0) (void)fprintf(stderr, "gbb-host: sweep removed=%d\n", swept);
+    else (void)fprintf(stderr, "gbb-host: sweep removed=0 result=failed stage=%s\n", host_io_stage_name(swept));
+
+    host_cadence cadence;
+    uint64_t generation = 0u;
+    if (battery && gbb_battery_generation(state.machine, &generation) != GBB_OK) generation = 0u;
+    host_cadence_reset(&cadence, generation, 0u);
+
     (void)fprintf(stderr, "gbb-host: ready\n");
     (void)fflush(stderr);
 
@@ -280,34 +318,34 @@ static int run_host(const host_args *args, const char *stem) {
             break;
         }
         ++frame;
+        if (!battery || gbb_battery_generation(state.machine, &generation) != GBB_OK) continue;
+        const host_cadence_action action = host_cadence_step(&cadence, frame, generation);
+        if (action == HOST_CADENCE_NONE) continue;
+        const char *reason = action == HOST_CADENCE_FLUSH ? "generation" : "rtc-drift";
+        bool wrote = false;
+        const char *stage = flush_battery(&state, sav_name, want, &has_last, &wrote);
+        if (stage == NULL) {
+            print_flush(reason, frame, wrote ? "written" : "unchanged", NULL);
+            host_cadence_flushed(&cadence, generation, frame);
+        } else {
+            /* A periodic failure never stops the run; only the final flush decides the exit status. */
+            print_flush(reason, frame, "failed", stage);
+            host_cadence_flush_failed(&cadence, frame);
+        }
     }
 
     /* Final flush (D-11): write iff the exported image differs from what the .sav last held. */
     const char *flush = "none";
     if (battery) {
-        if (gbb_copy_battery(state.machine, state.exported, want) != GBB_OK) {
-            (void)fprintf(stderr, "gbb-host: flush reason=final frame=%llu result=failed stage=export\n",
-                          (unsigned long long)frame);
+        bool wrote = false;
+        const char *stage = flush_battery(&state, sav_name, want, &has_last, &wrote);
+        if (stage != NULL) {
+            print_flush("final", frame, "failed", stage);
             release(&state);
             return 1;
         }
-        if (!has_last || memcmp(state.exported, state.imported, want) != 0) {
-            status = host_save_io_replace(state.dirfd, sav_name, state.exported, want);
-            if (status != HOST_IO_OK) {
-                (void)fprintf(stderr,
-                              "gbb-host: flush reason=final frame=%llu result=failed stage=%s\n",
-                              (unsigned long long)frame, host_io_stage_name(status));
-                release(&state);
-                return 1;
-            }
-            memcpy(state.imported, state.exported, want);
-            has_last = true;
-            flush = "written";
-        } else {
-            flush = "unchanged";
-        }
-        (void)fprintf(stderr, "gbb-host: flush reason=final frame=%llu result=%s\n",
-                      (unsigned long long)frame, flush);
+        flush = wrote ? "written" : "unchanged";
+        print_flush("final", frame, flush, NULL);
     }
 
     if (core_stop) {

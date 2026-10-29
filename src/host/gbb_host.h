@@ -27,6 +27,12 @@
 #define GBB_HOST_STEM_MAX_BYTES 200u
 #define GBB_HOST_TEMP_RETRIES 16u
 
+/* D-11 cadence, in host frames. A generation change flushes after 16 quiet frames, or once the first
+ * unflushed change is 300 frames old; the image is exported and compared every 3,600 frames. */
+#define GBB_HOST_QUIET_FRAMES UINT64_C(16)
+#define GBB_HOST_MAX_DIRTY_FRAMES UINT64_C(300)
+#define GBB_HOST_RTC_COMPARE_FRAMES UINT64_C(3600)
+
 /* D-07: every input has exactly one status; the first matching check decides. */
 typedef enum {
     HOST_STEM_OK = 0,
@@ -78,6 +84,46 @@ int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t wa
 int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size_t len);
 /* Reason token or stage name for a HOST_IO_* code. */
 const char *host_io_stage_name(int code);
+
+/* Removes stale temp files left by a crashed writer: every entry of dirfd whose name starts with exactly
+ * `.<stem>.sav.tmp-` is unlinked without following links (D-10). Returns the number removed or a negative
+ * HOST_IO_* code. Run once, after every refusal check and before the first frame; the contract is one
+ * writer per (save dir, stem), so there is no liveness check. */
+int host_save_io_sweep(int dirfd, const char *stem);
+
+/* ---- Flush cadence (D-11): a pure state machine, no clock, no I/O ------------------------------- */
+
+typedef enum {
+    HOST_CADENCE_NONE = 0,
+    HOST_CADENCE_FLUSH,          /* a generation change is due: export, compare, write if different */
+    HOST_CADENCE_EXPORT_COMPARE  /* periodic: export and compare, which catches RTC-only drift */
+} host_cadence_action;
+
+typedef struct {
+    bool dirty;                     /* an unflushed generation change is pending */
+    uint64_t observed_generation;   /* the last generation seen, compared with != */
+    uint64_t flushed_generation;    /* the generation covered by the last successful flush */
+    uint64_t first_dirty_frame;     /* frame of the first unflushed change */
+    uint64_t last_change_frame;     /* frame of the latest change */
+    uint64_t last_compare_frame;    /* frame of the last successful flush or compare */
+    uint64_t retry_after_frame;     /* no action before this frame after a failed flush */
+} host_cadence;
+
+void host_cadence_reset(host_cadence *cadence, uint64_t generation, uint64_t frame);
+/* Call at every frame boundary with the frame count so far and gbb_battery_generation. */
+host_cadence_action host_cadence_step(host_cadence *cadence, uint64_t frame, uint64_t generation);
+/* Call only after the writer succeeded (or the compare found the image unchanged). */
+void host_cadence_flushed(host_cadence *cadence, uint64_t generation, uint64_t frame);
+/* Keeps the image dirty and retries 16 frames later (a recorded D-11 discretion choice). */
+void host_cadence_flush_failed(host_cadence *cadence, uint64_t frame);
+
+#ifdef GBB_HOST_TESTING
+/* Test builds only (gabbaboy_host_testing): the next call at `stage_code` fails once with errno `err`.
+ * `stage_code` is a HOST_IO_* writer stage (ETEMP, EWRITE, ESYNC, ECLOSE, ETARGET, ERENAME, EDIRSYNC). */
+void host_save_io_test_fail_next(int stage_code, int err);
+/* Number of sync calls made by host_save_io_replace since the process started. */
+unsigned host_save_io_test_sync_calls(void);
+#endif
 
 /* True when any argument selects host mode: `--rom`, `--save-dir`, or either with `=`.
  * `--help` alone stays in acceptance mode. */

@@ -14,6 +14,7 @@
 #include <string.h>
 
 #ifndef _WIN32
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -164,6 +165,29 @@ int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size
     return HOST_IO_OK;
 }
 
+/* D-10. The directory is read through a duplicate descriptor so closedir cannot close the caller's
+ * dirfd, and rewound first so a shared file offset cannot hide entries. unlinkat without
+ * AT_REMOVEDIR removes a symlink itself and never follows it to its target. */
+int host_save_io_sweep(int dirfd, const char *stem) {
+    if (stem == NULL || stem[0] == '\0') return HOST_IO_EREAD;
+    char prefix[GBB_HOST_STEM_MAX_BYTES + 16u];
+    const int length = snprintf(prefix, sizeof(prefix), ".%s.sav.tmp-", stem);
+    if (length <= 0 || (size_t)length >= sizeof(prefix)) return HOST_IO_EREAD;
+    const int duplicate = fcntl(dirfd, F_DUPFD_CLOEXEC, 0);
+    if (duplicate < 0) return HOST_IO_EREAD;
+    DIR *directory = fdopendir(duplicate);
+    if (directory == NULL) { (void)close(duplicate); return HOST_IO_EREAD; }
+    rewinddir(directory);
+    int removed = 0;
+    struct dirent *entry;
+    while ((entry = readdir(directory)) != NULL) {
+        if (strncmp(entry->d_name, prefix, (size_t)length) != 0) continue;
+        if (unlinkat(dirfd, entry->d_name, 0) == 0) ++removed;
+    }
+    (void)closedir(directory);
+    return removed;
+}
+
 #else /* _WIN32: host mode refuses before any filesystem access (D-05); these satisfy the linker. */
 
 int host_save_io_open_dir(const char *path, int *out_dirfd) {
@@ -178,6 +202,12 @@ int host_save_io_read_exact(int dirfd, const char *name, uint8_t *buf, size_t wa
     (void)buf;
     (void)want;
     return HOST_IO_EMISSING;
+}
+
+int host_save_io_sweep(int dirfd, const char *stem) {
+    (void)dirfd;
+    (void)stem;
+    return HOST_IO_EREAD;
 }
 
 int host_save_io_replace(int dirfd, const char *name, const uint8_t *bytes, size_t len) {
