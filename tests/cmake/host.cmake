@@ -328,6 +328,16 @@ if(NOT WIN32)
     gabbaboy-runner-hostvariant-ignore_import continuation
     "second run counter is 0x01, expected 0x02")
 
+  # IN-04: a `$0N`-style MBC2 .sav is the same save as its canonical `$FN` form, so an untouched run leaves it
+  # alone. The control compares the final flush against the raw file again and must rewrite it.
+  gbb_add_host_mode_test(host_import_mbc2_noncanonical import-mbc2-noncanonical)
+  gbb_host_mutant_library(raw_baseline host_run.c
+    "memcpy(state.imported, state.exported, want); /* canonical baseline (IN-04) */"
+    "(void)0; /* decoy: the raw file stays the baseline */")
+  gbb_host_mutant_runner(raw_baseline gabbaboy_host_mutant_raw_baseline)
+  gbb_add_host_mutant_scenario(host_import_mutant_raw_baseline gabbaboy-runner-hostvariant-raw_baseline
+    import-mbc2-noncanonical "a non-canonical MBC2 save was rewritten")
+
   # D-06: open_dir first creates the directory, so a missing save dir silently exists.
   gbb_host_mutant_library(mkdir host_save_io.c
     "const int fd = open(path, O_RDONLY | O_DIRECTORY | O_CLOEXEC);"

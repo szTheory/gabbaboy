@@ -30,6 +30,7 @@ _spec.loader.exec_module(host_fixture)
 RUN_TIMEOUT = 50.0  # below the 60 s CTest bound so a hang fails here with a reason
 MBC1_RAM_BATTERY = 0x03
 MBC5_RAM_BATTERY = 0x1B
+MBC2_BATTERY = 0x06
 RAM_8K = 0x02
 
 
@@ -522,6 +523,30 @@ def scenario_import_exact(runner: str, work: Path) -> None:
     forbid_work_path(base, out, err)
 
 
+def scenario_import_mbc2_noncanonical(runner: str, work: Path) -> None:
+    """IN-04: the core normalises MBC2 RAM to $F0 | nibble on import, so a `$0N`-style .sav holds the same save.
+    A run whose guest never touches cartridge RAM must leave it alone: the final flush is unchanged and the
+    file keeps its bytes, inode and mtime."""
+    base = fresh_dir(work)
+    rom = base / "nibbles.gb"
+    rom.write_bytes(host_fixture.build_rom("idle", MBC2_BATTERY, 0x00))
+    saves = fresh_dir(base / "saves")
+    sav = saves / "nibbles.sav"
+    raw = bytes(index & 0x0F for index in range(512))
+    sav.write_bytes(raw)
+    before = sav.stat()
+    code, out, err = run(runner, rom, saves, 4, base)
+    expect_clean_exit(code, err, 4)
+    require(flush_lines(err) == [("final", 4, "unchanged")],
+            f"a non-canonical MBC2 save was rewritten although the guest changed nothing: {flush_lines(err)}")
+    after = sav.stat()
+    require(sav.read_bytes() == raw, "the MBC2 .sav bytes changed")
+    require(after.st_ino == before.st_ino and after.st_mtime_ns == before.st_mtime_ns,
+            "the MBC2 .sav inode or mtime changed")
+    require(listing(saves) == ["nibbles.sav"], f"unexpected directory entries {listing(saves)}")
+    forbid_work_path(base, out, err)
+
+
 def prepare_fifo(base: Path, saves: Path, sav: Path, image: bytes) -> None:
     os.mkfifo(sav)
 
@@ -662,6 +687,7 @@ SCENARIOS = {
     "import-directory": lambda runner, work: import_refusal(runner, work, "save-not-regular",
                                                              prepare_directory),
     "import-stray-nobattery": scenario_import_stray_nobattery,
+    "import-mbc2-noncanonical": scenario_import_mbc2_noncanonical,
     "rom-fifo": rom_special_scenario("fifo"),
     "rom-directory": rom_special_scenario("directory"),
     "continuation": scenario_continuation,

@@ -71,6 +71,8 @@ filter_expected_for_platform() {
         -e '/^host_import_fifo$/d' \
         -e '/^host_import_directory$/d' \
         -e '/^host_import_stray_nobattery$/d' \
+        -e '/^host_import_mbc2_noncanonical$/d' \
+        -e '/^host_import_mutant_raw_baseline$/d' \
         -e '/^host_import_device$/d' \
         -e '/^host_rom_fifo$/d' \
         -e '/^host_rom_directory$/d' \
@@ -207,6 +209,8 @@ _self_test_platform_filter_cases() {
     host_import_fifo \
     host_import_directory \
     host_import_stray_nobattery \
+    host_import_mbc2_noncanonical \
+    host_import_mutant_raw_baseline \
     host_import_device \
     host_rom_fifo \
     host_rom_directory \
@@ -344,6 +348,8 @@ _self_test_platform_filter_cases() {
     host_import_fifo \
     host_import_directory \
     host_import_stray_nobattery \
+    host_import_mbc2_noncanonical \
+    host_import_mutant_raw_baseline \
     host_import_device \
     host_rom_fifo \
     host_rom_directory \

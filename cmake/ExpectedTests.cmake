@@ -62,6 +62,8 @@ function(gabbaboy_verify_registered_tests)
       host_import_fifo
       host_import_directory
       host_import_stray_nobattery
+      host_import_mbc2_noncanonical
+      host_import_mutant_raw_baseline
       host_import_device
       host_rom_fifo
       host_rom_directory

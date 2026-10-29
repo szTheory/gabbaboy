@@ -389,10 +389,18 @@ static int run_host(const host_args *args, const char *stem) {
         }
         status = host_save_io_read_exact(state.dirfd, sav_name, state.imported, want);
         if (status == HOST_IO_OK) {
+            /* The cartridge has a battery image and the file is exactly its size (both checked above), so the
+             * core's only possible refusal of these bytes is a malformed clock block. */
             if (gbb_import_battery(state.machine, state.imported, want) != GBB_OK) {
                 release(&state);
                 return refuse("save-rtc-block");
             }
+            /* The baseline is the image the core now holds, not the raw file. MBC2 RAM is normalised to
+             * $F0 | nibble on import, so a `$0N`-style file of the same nibbles would otherwise differ at the
+             * final flush and be rewritten although the guest changed nothing. A failed export keeps the raw
+             * bytes, which costs at most one rewrite. */
+            if (gbb_copy_battery(state.machine, state.exported, want) == GBB_OK)
+                memcpy(state.imported, state.exported, want); /* canonical baseline (IN-04) */
             has_last = true;
         } else if (status != HOST_IO_EMISSING) { /* absent is a fresh image; anything else refuses */
             release(&state);
