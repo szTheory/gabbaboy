@@ -261,7 +261,9 @@ def flattened_instance(core: str, header: str) -> list[dict[str, str]]:
 
 
 def parse_treatments(core: str) -> list[tuple[str, str, str]]:
-    match = re.search(r"STATE_FIELD_TREATMENT\s*\[\s*\]\s*=\s*\{(.*?)\};", core, re.S)
+    match = re.search(
+        r"STATE_FIELD_TREATMENT\s*\[\s*\]\s*(?:GBB_MAYBE_UNUSED\s*)?=\s*\{(.*?)\};",
+        core, re.S)
     if not match:
         raise ContractError("STATE_FIELD_TREATMENT table is missing")
     rows = re.findall(r'\{\s*"([^"\n]+)"\s*,\s*(STATE_TREAT_[A-Z_]+)\s*,\s*"([^"\n]+)"\s*\}', match.group(1))
@@ -673,6 +675,19 @@ struct gbb_instance {
         raise ContractError("inventory positive control failed")
     if not next(item for item in actual if item["path"] == "conditional")["condition"]:
         raise ContractError("conditional discriminator was not retained")
+    decorated_treatments = (
+        'static const state_field_treatment_rule STATE_FIELD_TREATMENT[] '
+        'GBB_MAYBE_UNUSED = { { "keep", STATE_TREAT_SERIALIZE, "explicit" } };')
+    if parse_treatments(decorated_treatments) != [
+            ("keep", "STATE_TREAT_SERIALIZE", "explicit")]:
+        raise ContractError("decorated STATE_FIELD_TREATMENT positive control failed")
+    try:
+        parse_treatments("static const state_field_treatment_rule OTHER[] = {};\n")
+    except ContractError as error:
+        if "STATE_FIELD_TREATMENT table is missing" not in str(error):
+            raise ContractError(f"wrong missing-treatment diagnostic: {error}") from error
+    else:
+        raise ContractError("missing STATE_FIELD_TREATMENT negative control survived")
     rules = [("nested.*", "STATE_TREAT_SERIALIZE", "nested fields are explicit"),
              ("root", "STATE_TREAT_EXCLUDE", "root observer excluded"),
              ("conditional", "STATE_TREAT_EXCLUDE", "conditional test field excluded")]
