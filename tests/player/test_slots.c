@@ -6,7 +6,7 @@
  * SDL_GetPrefPath("GabbaBoy","GabbaBoy"), so CTest runs this with HOME and CFFIXED_USER_HOME pointing at a
  * fresh build-tree directory; every case refuses to run when the pref path is not inside it.
  *
- * Usage: test_player_slots <case> [rom]   case: keys | reanchor | status_line */
+ * Usage: test_player_slots <case> [rom]   case: keys | reanchor | status_line | help_text */
 #define main gabbaboy_player_embedded_main
 #ifndef GBB_PLAYER_MAIN_C
 #define GBB_PLAYER_MAIN_C "../../src/player/main.c"
@@ -602,6 +602,38 @@ static bool case_status_line(const char *rom_path) {
     return ok;
 }
 
+/* ---- Case: help_text ------------------------------------------------------------------------------- */
+
+static size_t count_occurrences(const char *text, const char *needle) {
+    size_t count = 0u;
+    for (const char *at = strstr(text, needle); at != NULL; at = strstr(at + strlen(needle), needle)) ++count;
+    return count;
+}
+
+static bool case_help_text_body(fixture *fx) {
+    char message[4096];
+    const int written = format_help_message(&fx->app, message, sizeof(message));
+    REQUIRE(written > 0 && (size_t)written < sizeof(message));
+    REQUIRE(strstr(message, "Select state slot: 1-9\n") != NULL);
+    REQUIRE(strstr(message, "Save state to slot: Command-S\n") != NULL);
+    REQUIRE(strstr(message, "Load state from slot: Command-L\n") != NULL);
+    REQUIRE(strstr(message, "Undo last load: Command-Z\n") != NULL);
+    REQUIRE(count_occurrences(message,
+        "Saving replaces the slot. Loading also replaces the game's battery save; "
+        COMMAND_GLYPH "Z undoes the last load.") == 1u);
+    /* The prior help lines survive, and the limitations text ends the message. */
+    REQUIRE(strstr(message, "Reset current ROM: R\n") != NULL);
+    REQUIRE(strstr(message, "hidden in fullscreen and is not announced by VoiceOver.") != NULL);
+    return true;
+}
+
+static bool case_help_text(const char *rom_path) {
+    fixture fx;
+    const bool ok = fx_setup(&fx, rom_path) && case_help_text_body(&fx);
+    fx_teardown(&fx);
+    return ok;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         fputs("usage: test_player_slots <case> [rom]\n", stderr);
@@ -613,6 +645,7 @@ int main(int argc, char **argv) {
     if (strcmp(g_case, "keys") == 0 && rom != NULL) ok = case_keys(rom);
     else if (strcmp(g_case, "reanchor") == 0) ok = case_reanchor();
     else if (strcmp(g_case, "status_line") == 0 && rom != NULL) ok = case_status_line(rom);
+    else if (strcmp(g_case, "help_text") == 0 && rom != NULL) ok = case_help_text(rom);
     else {
         fprintf(stderr, "unknown case or missing rom: %s\n", g_case);
         return 2;

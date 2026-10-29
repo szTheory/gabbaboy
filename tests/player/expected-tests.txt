@@ -101,3 +101,4 @@ player_slot_reanchor
 player_slot_status_line
 player_slot_mutant_no_rebase
 player_slot_mutant_command_guard
+player_slot_help_text

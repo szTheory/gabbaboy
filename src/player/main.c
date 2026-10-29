@@ -816,14 +816,12 @@ static void set_status(player *app, const char *status) {
     update_window_title(app);
 }
 
-static void show_help(player *app) {
-    const bool resume_after = !app->user_paused && app->window_focused &&
-                              !app->dialog_pending;
-    (void)player_input_focus_lost(&app->input, app->machine, SDL_GetTicksNS());
-    if (!player_audio_clear(app->audio))
-        set_status(app, "Audio flush failed before the help dialog");
-    char message[4096];
-    (void)snprintf(message, sizeof(message),
+/* The help dialog text (D-29). Returns the snprintf result, so a caller can tell a truncated message from one
+ * that fits in `capacity`. */
+static int format_help_message(const player *app, char *out, size_t capacity) {
+    char status_text[sizeof(app->save_status) + sizeof(app->slot_message) + 8u];
+    format_status_text(app, status_text, sizeof(status_text));
+    return snprintf(out, capacity,
         "Current ROM: %s\n\n"
         "Open ROM: Command-O\nQuit: Command-Q\n"
         "D-pad: arrow keys\nA / B: Z / X\nStart / Select: Return / Right Shift\n"
@@ -844,9 +842,18 @@ static void show_help(player *app) {
         "Status: %.160s\n"
         "%s",
         rom_basename(app->current_rom_path),
-        (unsigned)(player_audio_gain(app->audio) * 100.0f), app->save_status_active
-            ? app->save_status : (app->status[0] == '\0' ? "Ready" : app->status),
+        (unsigned)(player_audio_gain(app->audio) * 100.0f), status_text,
         GBB_PLAYER_LIMITATIONS_TEXT);
+}
+
+static void show_help(player *app) {
+    const bool resume_after = !app->user_paused && app->window_focused &&
+                              !app->dialog_pending;
+    (void)player_input_focus_lost(&app->input, app->machine, SDL_GetTicksNS());
+    if (!player_audio_clear(app->audio))
+        set_status(app, "Audio flush failed before the help dialog");
+    char message[4096];
+    (void)format_help_message(app, message, sizeof(message));
     if (!SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_INFORMATION,
                                   "GabbaBoy Controls and Limitations",
                                   message, app->window))
