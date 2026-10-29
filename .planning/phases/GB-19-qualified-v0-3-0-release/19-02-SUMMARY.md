@@ -80,7 +80,7 @@ coverage:
         ref: "ctest --test-dir build -R '^(planning_hygiene_controls|plan_cap|planning_labels(_controls)?)$' --output-on-failure --no-tests=error; 4 of 4 passed, planning hygiene controls=87"
         status: pass
       - kind: other
-        ref: "python3 -I tests/scripts/verify-planning-hygiene.py --check deferrals --rev HEAD --repo .; deferrals pass pins=8; eight omission controls and an unrelated positive twin passed"
+        ref: "python3 -I tests/scripts/verify-planning-hygiene.py --check deferrals --rev 6c330e48ca94095fb77fa0ef63da6456a7677e83 --repo .; deferrals pass pins=8; eight omission controls and an unrelated positive twin passed"
         status: pass
 metrics:
   duration: 23min
