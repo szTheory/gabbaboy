@@ -14,4 +14,4 @@ Constraints:
 - RM-027, WR-C03 and the `candidate-performance` re-citation stay Phase 19 entry blockers.
 - Both automatic advance flags stay false.
 
-Execution progress: plans 18-01 to 18-07 are complete (SUMMARYs `71e0232`, `eccc214`, `7ae5004`, `ac01321`, `f246619`, `60acda6`, `1ff9698`). Next plan: **18-08 — `docs/host-contract.json`, `--print-save-format`, save-format completeness/produced-file/freeze checks** (wave 7). Command: `/gsd-execute-phase 18`, run only when the owner chooses. HOST-02 stays open in REQUIREMENTS.md until 18-08 and 18-09 finish (shared-ID gate).
+Execution progress: plans 18-01 to 18-08 are complete (SUMMARYs `71e0232`, `eccc214`, `7ae5004`, `ac01321`, `f246619`, `60acda6`, `1ff9698a`, `5266f422`). Next plan: **18-09 — installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification** (wave 8). Command: `/gsd-execute-phase 18`, run only when the owner chooses. HOST-01, HOST-02 and HOST-03 stay open in REQUIREMENTS.md until 18-09's closing traceability (shared-ID gate).

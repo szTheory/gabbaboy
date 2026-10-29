@@ -31,7 +31,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 ## Current Position
 
 Phase: 18 (Player Save Slots and Host Contract) — EXECUTING
-Plan: 8 of 9
+Plan: 9 of 9
 Status: Ready to execute
 Last activity: 2026-10-28 — Phase 18 execution started
 
@@ -68,6 +68,9 @@ Historical decisions, including the per-plan records of Phases 1-16, moved to [v
 - [Phase 18]: 18-07: exit table rows are X(code, IDENT, name, meaning); the boundary poll runs before frame 0 and after each frame's cadence flush and pacing wait; a failed final flush and a core stop exit 1 with status=failure
 - [Phase 18]: 18-07: SA_RESETHAND is asserted by behaviour (disposition back to SIG_DFL after one delivery) because Darwin does not report the flag from a sigaction query
 - [Phase 18]: 18-07: gbb_host_mutant_library takes extra anchor pairs via ARGV (C replacements contain semicolons); the partial-frame decoy removes the boundary poll so every stop is mid-frame
+- [Phase 18]: 18-08: save-format rows ascend by (type, ram_code) as numbers, so MBC5 lists RAM code 0x04 (128k) before 0x05 (64k); the freeze CTest accepts baseline=none or baseline=vX.Y.Z
+- [Phase 18]: 18-08: --print-save-format prints save_format=none bytes=0 for a no-battery cartridge (A5); none is a sentinel, not an id, and never appears in save_formats rows
+- [Phase 18]: 18-08: a re-sorted canonical JSON is still self-consistent, so canonical form also requires keys in the written order (REJECT non-canonical); the table claims no emulator interoperability (REJECT interop-claim)
 
 ### Pending Todos
 
@@ -102,11 +105,11 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T05:02:08.031Z
-**Stopped at:** Completed 18-07-PLAN.md
+**Last session:** 2026-10-29T05:22:04.275Z
+**Stopped at:** Completed 18-08-PLAN.md
 **Resume file:** None
 
-Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Plan 18-04 (host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep) is complete at `8335fba` with SUMMARY `ac01321`; full suite 1581/1581. Plan 18-05 (SDL-free slot engine) is complete at `4c9962b` with SUMMARY `f246619`; full suite 1610/1610. Plan 18-06 (player slot keys, status line, input rebase, help/limitations, macOS menu-shortcut scan) is complete at `67bb2bd` with SUMMARY `60acda6`; player suite 106/106 through `--build-package`, main suite 1610/1610 after reconfiguring the revision-pinned tests. Next plan within Phase 18: **18-07 — SIGTERM/SIGINT/SIGHUP handling, exit table, real-signal harness with decoys, core no-signal check** (wave 6). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
+Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Plan 18-04 (host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep) is complete at `8335fba` with SUMMARY `ac01321`; full suite 1581/1581. Plan 18-05 (SDL-free slot engine) is complete at `4c9962b` with SUMMARY `f246619`; full suite 1610/1610. Plan 18-06 (player slot keys, status line, input rebase, help/limitations, macOS menu-shortcut scan) is complete at `67bb2bd` with SUMMARY `60acda6`; player suite 106/106 through `--build-package`, main suite 1610/1610 after reconfiguring the revision-pinned tests. Plan 18-07 (SIGTERM/SIGINT/SIGHUP handling, exit table, real-signal harness with decoys, core no-signal check) is complete at `64c6749b` with SUMMARY `1ff9698a`; full suite 1628/1628. Plan 18-08 (`docs/host-contract.json`, `--print-save-format`, save-format completeness/produced-file/freeze checks with 36 seeded controls) is complete at `c2239bef` with SUMMARY `5266f422`; full suite 1637/1637 at `befd624c`. Next plan within Phase 18: **18-09 — installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification** (wave 8, the last primary plan). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
@@ -123,3 +126,4 @@ Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**.
 | Phase 18 P05 | 21 min | 3 tasks | 13 files |
 | Phase 18 P06 | 26 min | 3 tasks | 9 files |
 | Phase 18 P07 | 18 min | 3 tasks | 13 files |
+| Phase 18 P08 | 17min | 3 tasks | 13 files |
