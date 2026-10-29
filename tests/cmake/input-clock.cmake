@@ -44,6 +44,10 @@ function(gbb_input_clock_mutant name anchor replacement case)
     COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:test_input_clock_mutant_${name}>;${case}"
       -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=FAIL ${case}"
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
+  # The mutant is meant to trip a REQUIRE, and REQUIRE returns early without destroying the instance. Under
+  # phase1-asan on Linux, LeakSanitizer would then exit through _exit with its own report, dropping the buffered
+  # `FAIL <case>` line, so leak detection is off for this deliberately failing run only. The control keeps it.
+  set_tests_properties(input_clock_mutant_${name} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
   add_test(NAME input_clock_mutant_${name}_control
     COMMAND ${CMAKE_COMMAND} "-DGBB_CMD=$<TARGET_FILE:test_input_clock>;${case}"
       -DGBB_EXPECT_CODE=0 "-DGBB_EXPECT_REGEX=PASS ${case}"
