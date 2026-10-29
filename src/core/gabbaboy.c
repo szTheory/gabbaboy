@@ -5459,9 +5459,19 @@ gbb_error gbb_get_info(const gbb_instance *instance, gbb_info *out_info) {
 
 /* MODEL: BOTH GATE-00 basis=host-api */
 gbb_error gbb_get_input_clock(const gbb_instance *instance, gbb_input_clock *out) {
-    (void)instance;
-    (void)out;
-    return GBB_INVALID_ARGUMENT; /* RED stub */
+    if (instance == NULL || out == NULL || out->struct_size < GBB_INPUT_CLOCK_SIZE_V1)
+        return GBB_INVALID_ARGUMENT;
+    /* The admission cursor gbb_queue_events computes as `previous`: the last queued event's time,
+     * or the instance time when nothing is queued. */
+    uint64_t last = instance->time_half_dots;
+    if (instance->input_event_count != 0)
+        last = instance->input_events[instance->input_event_count - 1].at_half_dots;
+    /* Field by field, never a struct copy: the caller's struct may be larger than V1. */
+    out->queued_count = (uint32_t)instance->input_event_count; /* at most GBB_INPUT_EVENT_CAPACITY */
+    out->now_half_dots = instance->time_half_dots;
+    out->last_queued_half_dots = last;
+    out->struct_size = GBB_INPUT_CLOCK_SIZE_V1;
+    return GBB_OK;
 }
 
 /* A timer cartridge is battery-backed even when it has no RAM ($0F): its image

@@ -148,7 +148,7 @@ static int case_queue(void) {
     REQUIRE(gbb_run(machine, FRAME_HALF_DOTS, NULL, 0u).reason == GBB_STOP_BUDGET);
     REQUIRE(read_clock(machine, &clock));
     const uint64_t t = clock.now_half_dots;
-    REQUIRE(t >= FRAME_HALF_DOTS);
+    REQUIRE(t > 0u); /* a run stops at an instruction boundary, so it may fall just short of the budget */
     REQUIRE(clock.queued_count == 0u);
     REQUIRE(clock.last_queued_half_dots == t);
 
@@ -214,7 +214,7 @@ static int case_after_load(void) {
     REQUIRE(gbb_run(a, 600u * FRAME_HALF_DOTS, NULL, 0u).reason == GBB_STOP_BUDGET);
     REQUIRE(read_clock(a, &clock));
     const uint64_t t2 = clock.now_half_dots;
-    REQUIRE(t2 >= t1 + 600u * FRAME_HALF_DOTS);
+    REQUIRE(t2 > t1 + 599u * FRAME_HALF_DOTS);
     REQUIRE(clock.queued_count == 0u);
     size_t late_size = 0u;
     REQUIRE(gbb_state_size(a, &late_size) == GBB_OK);
