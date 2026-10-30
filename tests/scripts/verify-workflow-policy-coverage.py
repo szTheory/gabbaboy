@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -39,8 +40,20 @@ GROUP_BY_WORKFLOW = {
     "version-pr-gate.yml": "rehearsal", "config": "rehearsal",
 }
 EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workflow_policy_coverage_controls"}
+POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
 ALL_PLATFORMS = ("posix", "windows")
 POSIX_ONLY = ("posix",)
+ADDED_POLICY_FUNCTIONS = {
+    "_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test",
+}
+ADDED_POLICY_GLOBALS = {
+    "_POLICY_PARTITION_GROUPS", "_ACTIVE_POLICY_GROUP", "_ACTIVE_POLICY_CONTROLS", "_COMPLETED_POLICY_CONTROLS",
+}
+INSTRUMENTED_POLICY_FUNCTIONS = {
+    "_window_discovery_shell_controls", "report_red_replay_controls", "_ledger_boundary_controls",
+    "_ledger_git_object_controls", "_ledger_disclosure_scratch_controls", "_ledger_release_object_scratch_controls",
+    "verify_cited_stub_controls", "rehearsal_bash_resolver_controls", "rehearsal_tag_guard_controls", "self_test",
+}
 
 
 class CoverageError(Exception):
@@ -297,7 +310,14 @@ def manifest_for(source: bytes) -> dict:
 
 
 class _StripMarkersAndSelectors(ast.NodeTransformer):
-    """Remove only verified coverage markers and group-only guards before baseline AST comparison."""
+    """Normalize only the self-test instrumentation and selectors before baseline AST comparison."""
+
+    def __init__(self, *, strip_cli_selectors: bool = False, normalize_self_test: bool = False,
+                 strip_markers: bool = False, normalize_main: bool = False):
+        self.strip_cli_selectors = strip_cli_selectors
+        self.normalize_self_test = normalize_self_test
+        self.strip_markers = strip_markers
+        self.normalize_main = normalize_main
     def visit_FunctionDef(self, node: ast.FunctionDef):
         node = self.generic_visit(node)
         if node.name == "self_test":
@@ -308,22 +328,24 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
 
     def visit_Expr(self, node: ast.Expr):
         value = node.value
-        if isinstance(value, ast.Call) and isinstance(value.func, ast.Name) and value.func.id == "_mark_policy_control":
+        if (self.strip_markers and isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name) and value.func.id == "_mark_policy_control"):
             return None
-        if isinstance(value, ast.Call) and isinstance(value.func, ast.Attribute) and value.func.attr == "add_argument":
+        if (self.strip_cli_selectors and isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Attribute) and value.func.attr == "add_argument"):
             if value.args and isinstance(value.args[0], ast.Constant) and value.args[0].value in ("--group", "--completed-file"):
                 return None
         return self.generic_visit(node)
 
     def visit_If(self, node: ast.If):
         node = self.generic_visit(node)
-        if isinstance(node.test, ast.Name) and node.test.id == "run_helpers":
+        if (self.normalize_self_test and isinstance(node.test, ast.Name) and node.test.id == "run_helpers"):
             return node.body
         return node
 
     def visit_Call(self, node: ast.Call):
         node = self.generic_visit(node)
-        if isinstance(node.func, ast.Name) and node.func.id == "run_policy_self_test":
+        if self.normalize_main and isinstance(node.func, ast.Name) and node.func.id == "run_policy_self_test":
             return ast.copy_location(ast.Call(func=ast.Name(id="self_test", ctx=ast.Load()),
                                               args=[node.args[0]], keywords=[]), node)
         return node
@@ -335,90 +357,114 @@ def verify_source_identity(baseline: bytes, current: bytes) -> None:
         current_tree = ast.parse(current, filename=POLICY_PATH)
     except SyntaxError as error:
         reject(f"workflow-policy source does not parse: {error}")
-    baseline_functions = {node.name: node for node in baseline_tree.body
-                          if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
-    current_functions = {node.name: node for node in current_tree.body
-                         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    def unique_functions(tree: ast.Module, source_name: str) -> dict[str, ast.FunctionDef | ast.AsyncFunctionDef]:
+        functions = [node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+        names = [node.name for node in functions]
+        if len(names) != len(set(names)):
+            reject(f"{source_name} contains duplicate top-level function definitions")
+        return {node.name: node for node in functions}
+
+    baseline_functions = unique_functions(baseline_tree, "immutable workflow-policy source")
+    current_functions = unique_functions(current_tree, "candidate workflow-policy source")
+    missing_functions = set(baseline_functions) - set(current_functions)
     added_functions = set(current_functions) - set(baseline_functions)
-    if added_functions != {"_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test"}:
+    if missing_functions:
+        reject(f"baseline checker functions were removed: {sorted(missing_functions)}")
+    if added_functions != ADDED_POLICY_FUNCTIONS:
         reject(f"workflow-policy selector functions differ from the approved set: {sorted(added_functions)}")
+    for name in ADDED_POLICY_FUNCTIONS:
+        function = current_functions[name]
+        if function.decorator_list:
+            reject(f"new selector function {name} has an unapproved import-time decorator")
+        if any(not isinstance(default, ast.Constant) for default in [*function.args.defaults, *function.args.kw_defaults]
+               if default is not None):
+            reject(f"new selector function {name} has a nonliteral import-time default")
+
+    # Exactly one of each CLI selector may be added to main; a duplicate option can silently change argparse behavior.
+    main_node = current_functions.get("main")
+    if main_node is None:
+        reject("candidate workflow-policy source is missing main")
+    selector_counts = {"--group": 0, "--completed-file": 0}
+    for node in ast.walk(main_node):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument"
+                and node.args and isinstance(node.args[0], ast.Constant) and node.args[0].value in selector_counts):
+            selector_counts[node.args[0].value] += 1
+    if selector_counts != {"--group": 1, "--completed-file": 1}:
+        reject("workflow-policy CLI selector arguments are missing or duplicated")
+    expected_selector_calls = [
+        node for node in ast.parse(
+            'parser.add_argument("--group", choices=(*_POLICY_PARTITION_GROUPS, "all"), default="all",\n'
+            '                    help="limit --self-test to one registered control group; defaults to all controls")\n'
+            'parser.add_argument("--completed-file", type=Path, default=None,\n'
+            '                    help="write completed stable control IDs after a successful --self-test")\n'
+        ).body
+    ]
+    actual_selector_calls = [
+        node for node in ast.walk(main_node)
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute) and node.value.func.attr == "add_argument"
+        and node.value.args and isinstance(node.value.args[0], ast.Constant)
+        and node.value.args[0].value in selector_counts
+    ]
+    if ([ast.dump(node, include_attributes=False) for node in actual_selector_calls]
+            != [ast.dump(node, include_attributes=False) for node in expected_selector_calls]):
+        reject("workflow-policy group/completion CLI selectors differ from their approved defaults and semantics")
+
     for name, baseline_node in baseline_functions.items():
-        if name not in current_functions:
-            reject(f"baseline checker function was removed: {name}")
-        if name in ("self_test", "main"):
-            continue
-        normalized = _StripMarkersAndSelectors().visit(copy.deepcopy(current_functions[name]))
+        transform = _StripMarkersAndSelectors(
+            strip_cli_selectors=(name == "main"), normalize_self_test=(name == "self_test"),
+            strip_markers=(name in INSTRUMENTED_POLICY_FUNCTIONS), normalize_main=(name == "main"),
+        )
+        normalized = transform.visit(copy.deepcopy(current_functions[name]))
         if ast.dump(normalized, include_attributes=False) != ast.dump(baseline_node, include_attributes=False):
+            if name == "self_test":
+                reject("self-test assertion/oracle statements changed outside verified group guards and completion markers")
+            if name == "main":
+                reject("main CLI production path changed outside the self-test selector extension")
             reject(f"baseline checker function or assertion semantics changed: {name}")
 
-    current_self_test = _StripMarkersAndSelectors().visit(copy.deepcopy(current_functions["self_test"]))
-    if ast.dump(current_self_test, include_attributes=False) != ast.dump(baseline_functions["self_test"], include_attributes=False):
-        reject("self-test assertion/oracle statements changed outside verified group guards and completion markers")
-    current_main = _StripMarkersAndSelectors().visit(copy.deepcopy(current_functions["main"]))
-    if ast.dump(current_main, include_attributes=False) != ast.dump(baseline_functions["main"], include_attributes=False):
-        reject("main CLI production path changed outside the self-test selector extension")
-
-    baseline_imports = [node for node in baseline_tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
-    current_imports = [node for node in current_tree.body if isinstance(node, (ast.Import, ast.ImportFrom))]
-    if any(ast.dump(node, include_attributes=False) not in {ast.dump(item, include_attributes=False) for item in current_imports}
-           for node in baseline_imports):
-        reject("baseline module imports changed")
-    baseline_import_dumps = [ast.dump(node, include_attributes=False) for node in baseline_imports]
-    added_imports = []
-    for node in current_imports:
-        dumped = ast.dump(node, include_attributes=False)
-        if dumped in baseline_import_dumps:
-            baseline_import_dumps.remove(dumped)
-        else:
-            added_imports.append(dumped)
-    allowed_import = ast.dump(ast.parse("import hashlib").body[0], include_attributes=False)
-    if added_imports != [allowed_import]:
-        reject("workflow-policy added imports beyond the stable-ID hash dependency")
-    # Top-level baseline constants/classes and module guard are exact; selector globals are the only new assignments.
-    base_nonfunctions = [node for node in baseline_tree.body if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Import, ast.ImportFrom))]
-    current_nonfunctions = [node for node in current_tree.body if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Import, ast.ImportFrom))]
-    base_by_name = {}
-    current_by_name = {}
-    for node in base_nonfunctions:
-        if isinstance(node, (ast.Assign, ast.AnnAssign)):
-            names = [item.id for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
-                     for item in ast.walk(target) if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store)]
-            for name in names:
-                base_by_name[name] = node
-    for node in current_nonfunctions:
-        if isinstance(node, (ast.Assign, ast.AnnAssign)):
-            names = [item.id for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
-                     for item in ast.walk(target) if isinstance(item, ast.Name) and isinstance(item.ctx, ast.Store)]
-            for name in names:
-                current_by_name[name] = node
-    for name, node in base_by_name.items():
-        if name not in current_by_name or ast.dump(node, include_attributes=False) != ast.dump(current_by_name[name], include_attributes=False):
-            reject(f"baseline production constant changed: {name}")
-    added_assignments = set(current_by_name) - set(base_by_name)
-    allowed_assignments = {"_POLICY_PARTITION_GROUPS", "_ACTIVE_POLICY_GROUP", "_ACTIVE_POLICY_CONTROLS",
-                           "_COMPLETED_POLICY_CONTROLS"}
-    if added_assignments != allowed_assignments:
-        reject(f"workflow-policy selector constants differ from the approved set: {sorted(added_assignments)}")
     expected_assignments = ast.parse(
         "_POLICY_PARTITION_GROUPS = ('ci', 'release_jobs', 'release_support', 'rehearsal', 'ledger', 'helpers')\n"
         "_ACTIVE_POLICY_GROUP: str | None = None\n"
         "_ACTIVE_POLICY_CONTROLS: dict[str, dict] = {}\n"
         "_COMPLETED_POLICY_CONTROLS: set[str] = set()\n"
     ).body
-    expected_assignment_dumps = {ast.dump(node, include_attributes=False) for node in expected_assignments}
-    actual_assignment_dumps = {ast.dump(current_by_name[name], include_attributes=False) for name in allowed_assignments}
-    if actual_assignment_dumps != expected_assignment_dumps:
-        reject("workflow-policy selector constants changed")
-    base_classes = [node for node in base_nonfunctions if isinstance(node, ast.ClassDef)]
-    current_classes = [node for node in current_nonfunctions if isinstance(node, ast.ClassDef)]
-    if [ast.dump(node, include_attributes=False) for node in base_classes] != [ast.dump(node, include_attributes=False) for node in current_classes]:
-        reject("baseline production classes changed")
-    base_side_effects = [node for node in base_nonfunctions
-                         if not isinstance(node, (ast.Assign, ast.AnnAssign, ast.ClassDef))]
-    current_side_effects = [node for node in current_nonfunctions
-                            if not isinstance(node, (ast.Assign, ast.AnnAssign, ast.ClassDef))]
-    if [ast.dump(node, include_attributes=False) for node in base_side_effects] != [ast.dump(node, include_attributes=False) for node in current_side_effects]:
-        reject("baseline module-level control flow or side effects changed")
+    expected_assignment_dumps = [ast.dump(node, include_attributes=False) for node in expected_assignments]
+    if len(expected_assignment_dumps) != len(ADDED_POLICY_GLOBALS):
+        reject("internal selector-constant contract is malformed")
+    expected_assignment_by_dump = {value: index for index, value in enumerate(expected_assignment_dumps)}
+    expected_hash_import = ast.dump(ast.parse("import hashlib").body[0], include_attributes=False)
+    consumed_selector_assignments: set[int] = set()
+    consumed_hash_import = False
+    normalized_current_body: list[ast.stmt] = []
+    for node in current_tree.body:
+        dumped = ast.dump(node, include_attributes=False)
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and dumped == expected_hash_import and not consumed_hash_import:
+            consumed_hash_import = True
+            continue
+        if isinstance(node, (ast.Assign, ast.AnnAssign)) and dumped in expected_assignment_by_dump:
+            assignment_index = expected_assignment_by_dump[dumped]
+            if assignment_index not in consumed_selector_assignments:
+                consumed_selector_assignments.add(assignment_index)
+                continue
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in ADDED_POLICY_FUNCTIONS:
+            continue
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            transform = _StripMarkersAndSelectors(
+                strip_cli_selectors=(node.name == "main"), normalize_self_test=(node.name == "self_test"),
+                strip_markers=(node.name in INSTRUMENTED_POLICY_FUNCTIONS), normalize_main=(node.name == "main"),
+            )
+            node = transform.visit(copy.deepcopy(node))
+        normalized_current_body.append(node)
+    if not consumed_hash_import:
+        reject("workflow-policy is missing its approved stable-ID hash import")
+    if len(consumed_selector_assignments) != len(expected_assignment_dumps):
+        reject("workflow-policy selector constants differ from the approved set")
+    if len(ADDED_POLICY_FUNCTIONS & set(current_functions)) != len(ADDED_POLICY_FUNCTIONS):
+        reject("workflow-policy selector function set is incomplete")
+    normalized_current = ast.Module(body=normalized_current_body, type_ignores=current_tree.type_ignores)
+    if ast.dump(normalized_current, include_attributes=False) != ast.dump(baseline_tree, include_attributes=False):
+        reject("ordered workflow-policy module differs from the immutable baseline after approved selector normalization")
 
 
 def validate_manifest(manifest: dict, expected: dict) -> None:
@@ -457,105 +503,233 @@ def validate_manifest(manifest: dict, expected: dict) -> None:
 def _test_properties(test: dict) -> dict[str, object]:
     result = {}
     for item in test.get("properties", []):
-        if isinstance(item, dict) and isinstance(item.get("name"), str):
-            result[item["name"]] = item.get("value")
+        if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            reject("CTest test contains a malformed property")
+        name = item["name"]
+        if name in result:
+            reject(f"CTest test repeats property {name}")
+        result[name] = item.get("value")
     return result
 
 
-def _wrapper_command(test: dict) -> tuple[list[str], dict[str, object]]:
+def _same_path(left: str | Path, right: str | Path) -> bool:
+    return os.path.normcase(str(Path(left).resolve())) == os.path.normcase(str(Path(right).resolve()))
+
+
+def _cmake_cache(build_dir: Path) -> dict[str, str]:
+    cache_path = build_dir / "CMakeCache.txt"
+    try:
+        lines = cache_path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        reject(f"configured CMake cache is unavailable: {error}")
+    result: dict[str, str] = {}
+    for line in lines:
+        if line.startswith(("//", "#")) or "=" not in line or ":" not in line.partition("=")[0]:
+            continue
+        result[line.partition(":")[0]] = line.partition("=")[2]
+    return result
+
+
+def _truthy_cmake(value: str) -> bool:
+    return value.upper() in {"ON", "TRUE", "YES", "Y", "1"}
+
+
+def _parse_wrapper_definitions(test: dict, root: Path, cmake_executable: str) -> dict[str, str]:
     command = [str(value) for value in test.get("command", [])]
-    properties = _test_properties(test)
-    cmd = next((item.partition("=")[2] for item in command if item.startswith("-DGBB_CMD=")), "")
-    return cmd.split(";") if cmd else [], properties
+    if not command or not _same_path(command[0], cmake_executable):
+        reject("CTest does not invoke the configured CMake executable")
+    wrapper_path = (root / "tests/expect_exit.cmake").resolve()
+    script_positions = [index for index, value in enumerate(command) if value == "-P"]
+    if len(script_positions) != 1 or script_positions[0] != len(command) - 2:
+        reject("CTest wrapper must have one final -P script argument and no trailing arguments")
+    if not _same_path(command[-1], wrapper_path):
+        reject("CTest does not invoke the exact tests/expect_exit.cmake wrapper")
+
+    definitions: dict[str, str] = {}
+    index = 1
+    while index < script_positions[0]:
+        part = command[index]
+        if part == "-D":
+            index += 1
+            if index >= script_positions[0]:
+                reject("CTest has a dangling -D option")
+            assignment = command[index]
+        elif part.startswith("-D"):
+            assignment = part[2:]
+        else:
+            reject(f"CTest wrapper has an unapproved CMake argument: {part}")
+        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)(?::[A-Za-z_][A-Za-z0-9_]*)?=(.*)", assignment, re.DOTALL)
+        if not match:
+            reject(f"CTest wrapper has a malformed -D definition: {assignment}")
+        name, value = match.groups()
+        if name in definitions:
+            reject(f"CTest wrapper repeats or overrides -D{name}")
+        definitions[name] = value
+        index += 1
+    return definitions
 
 
-def _has_argument(command: list[str], prefix: str, expected: str | None = None) -> bool:
-    for part in command:
-        if part.startswith(prefix):
-            return expected is None or part.partition("=")[2] == expected
-    return False
+def _parse_python_cli(command: list[str], expected_executable: str, expected_script: Path,
+                      value_flags: set[str], boolean_flags: set[str]) -> tuple[dict[str, str], set[str]]:
+    if len(command) < 3 or not _same_path(command[0], expected_executable):
+        reject("CTest does not invoke the configured Python interpreter")
+    if command[1] != "-I":
+        reject("CTest Python command must place -I immediately before the checker script")
+    if not _same_path(command[2], expected_script):
+        reject("CTest Python command does not invoke the exact checker script")
+    parsed_values: dict[str, str] = {}
+    parsed_booleans: set[str] = set()
+    index = 3
+    while index < len(command):
+        token = command[index]
+        if not token.startswith("--"):
+            reject(f"CTest checker command contains an unapproved positional argument: {token}")
+        flag, separator, inline_value = token.partition("=")
+        if flag in boolean_flags:
+            if separator or flag in parsed_booleans:
+                reject(f"CTest checker command repeats or assigns boolean option {flag}")
+            parsed_booleans.add(flag)
+        elif flag in value_flags:
+            if flag in parsed_values:
+                reject(f"CTest checker command repeats or overrides {flag}")
+            if separator:
+                value = inline_value
+            else:
+                index += 1
+                if index >= len(command) or command[index].startswith("--"):
+                    reject(f"CTest checker command is missing a value for {flag}")
+                value = command[index]
+            if not value:
+                reject(f"CTest checker command has an empty value for {flag}")
+            parsed_values[flag] = value
+        else:
+            reject(f"CTest checker command contains an unapproved option: {flag}")
+        index += 1
+    return parsed_values, parsed_booleans
+
+
+def _path_option_is(values: dict[str, str], flag: str, path: Path) -> bool:
+    return flag in values and _same_path(values[flag], path)
+
+
+def _expected_timeout(name: str, sanitizer_enabled: bool) -> int:
+    base = (180 if name in GROUPS.values() else 60 if name == "workflow_policy_coverage"
+            else 30 if name == "workflow_policy_coverage_controls" else 60)
+    return base * (3 if sanitizer_enabled else 1)
 
 
 def validate_cmake_registration(ci_lanes: str) -> None:
-    registered = re.findall(r"gbb_add_ci_lane_test\((workflow_policy_group_[a-z_]+)\b", ci_lanes)
-    if sorted(registered) != sorted(GROUPS.values()):
-        reject("tests/cmake/ci-lanes.cmake group declarations do not match the immutable registry")
-    expected_controls = ["workflow_policy_coverage", "workflow_policy_coverage_controls"]
-    found_controls = re.findall(r"gbb_add_ci_lane_test\((workflow_policy_coverage(?:_controls)?)\b", ci_lanes)
-    if sorted(found_controls) != sorted(expected_controls):
-        reject("tests/cmake/ci-lanes.cmake coverage controls do not match the immutable registration contract")
-    if re.search(r"gbb_add_ci_lane_test\(workflow_policy_controls\b", ci_lanes):
-        reject("tests/cmake/ci-lanes.cmake still registers the stale aggregate policy test")
+    calls = re.findall(r"(?im)^\s*gbb_add_ci_lane_test\s*\(\s*([A-Za-z0-9_]+)", ci_lanes)
+    policy_calls = [name for name in calls if name.startswith("workflow_policy_")]
+    if sorted(policy_calls) != sorted(POLICY_TEST_NAMES):
+        reject("tests/cmake/ci-lanes.cmake policy declarations are missing, duplicated, or unexpected")
 
 
-def validate_registration(root: Path, expected_tests: list[str], ctest_tests: list[dict],
-                          ci_lanes: str | None = None) -> None:
+def validate_registration(root: Path, expected_tests: list[str], ctest_tests: list[dict], ci_lanes: str,
+                          *, build_dir: Path, candidate: str, sanitizer_enabled: bool,
+                          cmake_executable: str, python_executable: str) -> None:
     if len(expected_tests) != len(set(expected_tests)):
         reject("tests/expected-tests.txt contains duplicate test names")
     inventory = set(expected_tests)
-    if not EXPECTED_TEST_NAMES <= inventory:
-        reject("tests/expected-tests.txt is missing a workflow-policy group or coverage test")
-    if "workflow_policy_controls" in inventory:
-        reject("legacy aggregate workflow_policy_controls registration is stale")
+    if not POLICY_TEST_NAMES <= inventory:
+        reject("tests/expected-tests.txt is missing a workflow-policy group, coverage test, or production check")
+    if any(name.startswith("workflow_policy_") and name not in POLICY_TEST_NAMES for name in inventory):
+        reject("tests/expected-tests.txt contains an unexpected workflow-policy registration")
 
     actual_by_name: dict[str, list[dict]] = {}
     for test in ctest_tests:
         name = test.get("name")
         if isinstance(name, str):
             actual_by_name.setdefault(name, []).append(test)
-    for name in EXPECTED_TEST_NAMES | {"workflow_policy_check"}:
+    actual_policy_names = {name for name in actual_by_name if name.startswith("workflow_policy_")}
+    if actual_policy_names != POLICY_TEST_NAMES:
+        reject("configured CTest workflow-policy names contain an omission or unexpected group")
+    for name in POLICY_TEST_NAMES:
         if len(actual_by_name.get(name, [])) != 1:
             reject(f"CTest must register {name} exactly once")
-    if "workflow_policy_controls" in actual_by_name:
-        reject("CTest still registers the stale aggregate workflow_policy_controls test")
+
     completion_paths: set[str] = set()
-    for name in EXPECTED_TEST_NAMES:
+    for name in sorted(POLICY_TEST_NAMES):
         test = actual_by_name[name][0]
-        command, properties = _wrapper_command(test)
-        raw_command = [str(value) for value in test.get("command", [])]
+        properties = _test_properties(test)
+        if set(properties) != {"TIMEOUT", "WORKING_DIRECTORY"}:
+            reject(f"CTest {name} has an unexpected property that can change execution or qualification")
         timeout = properties.get("TIMEOUT")
-        if ("-P" not in raw_command or not any(part.replace("\\", "/").endswith("tests/expect_exit.cmake")
-                                              for part in raw_command)
-                or not _has_argument(raw_command, "-DGBB_EXPECT_CODE=", "0")):
-            reject(f"CTest {name} lost the exact exit-plus-marker wrapper")
+        expected_timeout = _expected_timeout(name, sanitizer_enabled)
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout != expected_timeout:
+            reject(f"CTest {name} must retain its {expected_timeout}-second configured timeout")
+        if not _same_path(str(properties.get("WORKING_DIRECTORY", "")), build_dir / "tests"):
+            reject(f"CTest {name} has an unexpected working directory")
+
+        definitions = _parse_wrapper_definitions(test, root, cmake_executable)
+        cli = definitions.get("GBB_CMD", "").split(";")
         if name in GROUPS.values():
             group = next(group for group, test_name in GROUPS.items() if test_name == name)
-            if str(timeout) not in ("180", "180.0"):
-                reject(f"CTest {name} must retain its 180-second timeout")
-            if ("--self-test" not in command or "--group" not in command or group not in command
-                    or "--completed-file" not in command or not any(POLICY_PATH in part for part in command)):
-                reject(f"CTest {name} does not invoke its exact policy group through the production wrapper")
-            completed_index = command.index("--completed-file")
-            expected_completion_name = f"workflow-policy-{GROUP_COMPLETION_FILES[group]}.json"
-            if completed_index + 1 >= len(command) or Path(command[completed_index + 1]).name != expected_completion_name:
-                reject(f"CTest {name} does not write its own group-specific completion file")
-            completion_arg = next((part.partition("=")[2] for part in raw_command
-                                   if part.startswith("-DGBB_EXPECT_FILE=")), "")
-            if (not completion_arg or Path(completion_arg).name != expected_completion_name
-                    or completion_arg in completion_paths):
-                reject(f"CTest {name} has a missing or shared completion-file destination")
-            completion_paths.add(completion_arg)
-            if (not _has_argument(raw_command, "-DGBB_EXPECT_REGEX=", f"PASS: workflow policy group {group} controls=[0-9]+ ids_sha256=[0-9a-f]+")
-                    or not _has_argument(raw_command, "-DGBB_EXPECT_FILE_FRESH=", "TRUE")
-                    or not _has_argument(raw_command, "-DGBB_EXPECT_FILE=")):
-                reject(f"CTest {name} does not require a fresh completion file and unique success marker")
+            completion_path = build_dir / f"workflow-policy-{GROUP_COMPLETION_FILES[group]}.json"
+            cli_values, cli_booleans = _parse_python_cli(
+                cli, python_executable, root / POLICY_PATH,
+                {"--group", "--root", "--completed-file"}, {"--self-test"},
+            )
+            if cli_booleans != {"--self-test"} or set(cli_values) != {"--group", "--root", "--completed-file"}:
+                reject(f"CTest {name} does not invoke exactly one selected policy self-test group")
+            if (cli_values["--group"] != group or not _path_option_is(cli_values, "--root", root)
+                    or not _path_option_is(cli_values, "--completed-file", completion_path)):
+                reject(f"CTest {name} has a wrong group, root, or completion-file argument")
+            completion_key = os.path.normcase(str(completion_path.resolve()))
+            if completion_key in completion_paths:
+                reject(f"CTest {name} shares a completion-file destination with another group")
+            completion_paths.add(completion_key)
+            expected_definitions = {
+                "GBB_CMD": definitions["GBB_CMD"],
+                "GBB_EXPECT_CODE": "0",
+                "GBB_EXPECT_REGEX": f"PASS: workflow policy group {group} controls=[0-9]+ ids_sha256=[0-9a-f]+",
+                "GBB_EXPECT_FILE": str(completion_path),
+                "GBB_EXPECT_FILE_FRESH": "TRUE",
+            }
+            if not _path_option_is(definitions, "GBB_EXPECT_FILE", completion_path):
+                reject(f"CTest {name} does not require its group-specific fresh completion file")
         elif name == "workflow_policy_coverage":
-            if (str(timeout) not in ("60", "60.0") or not any(Path(part).name == Path(__file__).name for part in command) or "--check" not in command
-                    or "--rev" not in command or not any(re.fullmatch(r"[0-9a-f]{40,64}", part) for part in command)
-                    or not _has_argument(raw_command, "-DGBB_EXPECT_REGEX=", "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)")):
-                reject("workflow_policy_coverage is not the immutable registry/CTest checker")
+            cli_values, cli_booleans = _parse_python_cli(
+                cli, python_executable, root / "tests/scripts/verify-workflow-policy-coverage.py",
+                {"--root", "--build-dir", "--rev"}, {"--check"},
+            )
+            if (cli_booleans != {"--check"} or set(cli_values) != {"--root", "--build-dir", "--rev"}
+                    or not _path_option_is(cli_values, "--root", root)
+                    or not _path_option_is(cli_values, "--build-dir", build_dir)
+                    or cli_values["--rev"] != candidate):
+                reject("workflow_policy_coverage does not check the configured build at the exact candidate commit")
+            expected_definitions = {
+                "GBB_CMD": definitions["GBB_CMD"],
+                "GBB_EXPECT_CODE": "0",
+                "GBB_EXPECT_REGEX": "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)",
+            }
         elif name == "workflow_policy_coverage_controls":
-            if (str(timeout) not in ("30", "30.0") or not any(Path(part).name == Path(__file__).name for part in command) or "--self-test" not in command
-                    or "--rev" not in command or not any(re.fullmatch(r"[0-9a-f]{40,64}", part) for part in command)
-                    or not _has_argument(raw_command, "-DGBB_EXPECT_REGEX=", "PASS: workflow policy coverage self-test controls=12")):
-                reject("workflow_policy_coverage_controls is not the registry negative-control suite")
-        elif name == "workflow_policy_check":
-            if (not any(POLICY_PATH in part for part in command) or "--check" not in command
-                    or str(timeout) not in ("60", "60.0")):
-                reject("workflow_policy_check must remain the separate 60-second production checker invocation")
+            cli_values, cli_booleans = _parse_python_cli(
+                cli, python_executable, root / "tests/scripts/verify-workflow-policy-coverage.py",
+                {"--root", "--rev"}, {"--self-test"},
+            )
+            if (cli_booleans != {"--self-test"} or set(cli_values) != {"--root", "--rev"}
+                    or not _path_option_is(cli_values, "--root", root) or cli_values["--rev"] != candidate):
+                reject("workflow_policy_coverage_controls does not run self-tests at the exact candidate commit")
+            expected_definitions = {
+                "GBB_CMD": definitions["GBB_CMD"],
+                "GBB_EXPECT_CODE": "0",
+                "GBB_EXPECT_REGEX": "PASS: workflow policy coverage self-test controls=50",
+            }
+        else:
+            cli_values, cli_booleans = _parse_python_cli(
+                cli, python_executable, root / POLICY_PATH, {"--root"}, {"--check"},
+            )
+            if cli_booleans != {"--check"} or set(cli_values) != {"--root"} or not _path_option_is(cli_values, "--root", root):
+                reject("workflow_policy_check must invoke the production --check command at the source root")
+            expected_definitions = {
+                "GBB_CMD": definitions["GBB_CMD"],
+                "GBB_EXPECT_CODE": "0",
+                "GBB_EXPECT_REGEX": "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+",
+            }
+        if definitions != expected_definitions:
+            reject(f"CTest {name} wrapper definitions differ from the exact exit-plus-marker contract")
 
-    if ci_lanes is None:
-        ci_lanes = (root / "tests/cmake/ci-lanes.cmake").read_text(encoding="utf-8")
     validate_cmake_registration(ci_lanes)
 
 
@@ -564,98 +738,270 @@ def _self_test(root: Path, revision: str) -> int:
     source = baseline_source(root)
     expected = manifest_for(source)
     candidate_source = git_text(root, candidate, POLICY_PATH)
-    ci_lanes = "\n".join(
-        [f"gbb_add_ci_lane_test({name} 0 marker 180 \"\")" for name in GROUPS.values()]
-        + ["gbb_add_ci_lane_test(workflow_policy_coverage 0 marker 60 \"\")",
-           "gbb_add_ci_lane_test(workflow_policy_coverage_controls 0 marker 30 \"\")"]
-    )
-    manifest = copy.deepcopy(expected)
-    validate_manifest(manifest, expected)
+    build_dir = root / "build/phase19-policy-coverage-fixture"
+    cmake_executable = shutil.which("cmake") or "cmake"
+    python_executable = sys.executable
+    expected_tests = sorted(POLICY_TEST_NAMES)
+    ci_lanes = "\n".join(f"gbb_add_ci_lane_test({name} 0 marker 60 \"\")" for name in expected_tests)
+    controls = 0
 
-    for name, mutate, reason in (
-        ("omission", lambda value: value["controls"].pop(), "baseline control IDs"),
-        ("duplicate", lambda value: value["controls"].append(copy.deepcopy(value["controls"][0])), "duplicate"),
-    ):
-        mutant = copy.deepcopy(manifest)
-        mutate(mutant)
+    def rejected(label: str, operation) -> None:
+        nonlocal controls
         try:
-            validate_manifest(mutant, expected)
-        except CoverageError as error:
-            if reason not in str(error):
-                reject(f"negative control {name} refused for the wrong reason: {error}")
+            operation()
+        except CoverageError:
+            controls += 1
         else:
-            reject(f"negative control {name} was accepted")
+            reject(f"negative control {label} was accepted")
 
-    for name, field, value in (("wrong-group", "group", "helpers"), ("wrong-platform", "platforms", ["windows"])):
-        mutant = copy.deepcopy(manifest)
+    def test_entry(name: str, argv: list[str], marker: str, timeout: int,
+                   completion: Path | None = None) -> dict:
+        definitions = [
+            ("GBB_CMD", ";".join(argv)),
+            ("GBB_EXPECT_CODE", "0"),
+            ("GBB_EXPECT_REGEX", marker),
+        ]
+        if completion is not None:
+            definitions.extend((("GBB_EXPECT_FILE", str(completion)), ("GBB_EXPECT_FILE_FRESH", "TRUE")))
+        command = [cmake_executable, *(f"-D{name}={value}" for name, value in definitions),
+                   "-P", str(root / "tests/expect_exit.cmake")]
+        return {
+            "name": name,
+            "command": command,
+            "properties": [
+                {"name": "TIMEOUT", "value": timeout},
+                {"name": "WORKING_DIRECTORY", "value": str(build_dir / "tests")},
+            ],
+        }
+
+    for name, mutate in (
+        ("omission", lambda value: value["controls"].pop()),
+        ("duplicate", lambda value: value["controls"].append(copy.deepcopy(value["controls"][0]))),
+    ):
+        mutant = copy.deepcopy(expected)
+        mutate(mutant)
+        rejected(name, lambda mutant=mutant: validate_manifest(mutant, expected))
+    for name, field, value in (("wrong-group", "group", "helpers"),
+                               ("wrong-platform", "platforms", ["windows"])):
+        mutant = copy.deepcopy(expected)
         target = next(row for row in mutant["controls"] if row["group"] != "helpers")
         target[field] = value
-        try:
-            validate_manifest(mutant, expected)
-        except CoverageError as error:
-            if "group/platform/semantics" not in str(error):
-                reject(f"negative control {name} refused for the wrong reason: {error}")
-        else:
-            reject(f"negative control {name} was accepted")
+        rejected(name, lambda mutant=mutant: validate_manifest(mutant, expected))
 
-    listed = sorted(EXPECTED_TEST_NAMES | {"workflow_policy_check"})
-    ctest = []
+    tests: list[dict] = []
     for group, name in GROUPS.items():
+        completion = build_dir / f"workflow-policy-{GROUP_COMPLETION_FILES[group]}.json"
         marker = f"PASS: workflow policy group {group} controls=[0-9]+ ids_sha256=[0-9a-f]+"
-        completed = f"/tmp/workflow-policy-{GROUP_COMPLETION_FILES[group]}.json"
-        command = ["cmake", f"-DGBB_CMD=python;-I;{POLICY_PATH};--self-test;--group;{group};--completed-file;{completed}",
-                   "-DGBB_EXPECT_CODE=0", f"-DGBB_EXPECT_REGEX={marker}", f"-DGBB_EXPECT_FILE={completed}",
-                   "-DGBB_EXPECT_FILE_FRESH=TRUE", "-P", "tests/expect_exit.cmake"]
-        ctest.append({"name": name, "command": command, "properties": [{"name": "TIMEOUT", "value": "180"}]})
-    ctest.extend([
-        {"name": "workflow_policy_coverage", "command": ["cmake", "-DGBB_CMD=python;-I;tests/scripts/verify-workflow-policy-coverage.py;--check;--rev;" + candidate,
-                                                                 "-DGBB_EXPECT_CODE=0", "-DGBB_EXPECT_REGEX=PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)", "-P", "tests/expect_exit.cmake"],
-         "properties": [{"name": "TIMEOUT", "value": "60"}]},
-        {"name": "workflow_policy_coverage_controls", "command": ["cmake", "-DGBB_CMD=python;-I;tests/scripts/verify-workflow-policy-coverage.py;--self-test;--rev;" + candidate,
-                                                                          "-DGBB_EXPECT_CODE=0", "-DGBB_EXPECT_REGEX=PASS: workflow policy coverage self-test controls=12", "-P", "tests/expect_exit.cmake"],
-         "properties": [{"name": "TIMEOUT", "value": "30"}]},
-        {"name": "workflow_policy_check", "command": ["cmake", "-DGBB_CMD=python;-I;" + POLICY_PATH + ";--check",
-                                                             "-DGBB_EXPECT_CODE=0", "-DGBB_EXPECT_REGEX=PASS:", "-P", "tests/expect_exit.cmake"],
-         "properties": [{"name": "TIMEOUT", "value": "60"}]},
-    ])
-    validate_registration(root, listed, ctest, ci_lanes)
-    try:
-        validate_registration(root, [name for name in listed if name != GROUPS["ledger"]], ctest, ci_lanes)
-    except CoverageError:
-        pass
-    else:
-        reject("negative control missing CTest inventory registration was accepted")
-    try:
-        validate_registration(root, listed, [test for test in ctest if test["name"] != GROUPS["ledger"]], ci_lanes)
-    except CoverageError:
-        pass
-    else:
-        reject("negative control missing configured CTest registration was accepted")
-    try:
-        validate_cmake_registration(ci_lanes.replace(f"gbb_add_ci_lane_test({GROUPS['ledger']}", "# removed registration\ngbb_add_ci_lane_test(omitted_group"))
-    except CoverageError:
-        pass
-    else:
-        reject("negative control missing CMake group declaration was accepted")
+        tests.append(test_entry(name, [python_executable, "-I", str(root / POLICY_PATH), "--self-test",
+                                       "--group", group, "--root", str(root), "--completed-file", str(completion)],
+                                marker, 180, completion))
+    coverage_script = root / "tests/scripts/verify-workflow-policy-coverage.py"
+    tests.extend((
+        test_entry("workflow_policy_coverage",
+                   [python_executable, "-I", str(coverage_script), "--check", "--root", str(root),
+                    "--build-dir", str(build_dir), "--rev", candidate],
+                   "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)", 60),
+        test_entry("workflow_policy_coverage_controls",
+                   [python_executable, "-I", str(coverage_script), "--self-test", "--root", str(root), "--rev", candidate],
+                   "PASS: workflow policy coverage self-test controls=50", 30),
+        test_entry("workflow_policy_check",
+                   [python_executable, "-I", str(root / POLICY_PATH), "--check", "--root", str(root)],
+                   "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+", 60),
+    ))
 
-    current = candidate_source
-    verify_source_identity(source, current)
-    changed = current.replace(b'"PASS: workflow privilege and trust wiring"', b'"PASS: weakened workflow judge"', 1)
-    try:
-        verify_source_identity(source, changed)
-    except CoverageError:
-        pass
-    else:
-        reject("negative control changed production function source was accepted")
+    def validate(tests_to_check: list[dict] = tests, names: list[str] = expected_tests, *, sanitizer: bool = False,
+                 lanes: str = ci_lanes) -> None:
+        validate_registration(root, names, tests_to_check, lanes, build_dir=build_dir, candidate=candidate,
+                              sanitizer_enabled=sanitizer, cmake_executable=cmake_executable,
+                              python_executable=python_executable)
 
-    namespace = {"__name__": "candidate_workflow_policy", "__file__": str(root / POLICY_PATH)}
-    exec(compile(candidate_source, POLICY_PATH, "exec"), namespace)
-    recorder = namespace.get("_record_policy_completion")
+    validate()
+    scaled = copy.deepcopy(tests)
+    for test in scaled:
+        for prop in test["properties"]:
+            if prop["name"] == "TIMEOUT":
+                prop["value"] *= 3
+    validate(scaled, sanitizer=True)
+
+    reordered = copy.deepcopy(tests)
+    for test in reordered:
+        command = test["command"]
+        script_index = command.index("-P")
+        command[1:script_index] = reversed(command[1:script_index])
+        cmd_index = next(index for index, arg in enumerate(command) if arg.startswith("-DGBB_CMD="))
+        argv = command[cmd_index].partition("=")[2].split(";")
+        units: list[list[str]] = []
+        index = 3
+        while index < len(argv):
+            if argv[index] in {"--check", "--self-test"}:
+                units.append([argv[index]])
+                index += 1
+            else:
+                units.append(argv[index:index + 2])
+                index += 2
+        command[cmd_index] = "-DGBB_CMD=" + ";".join(argv[:3] + [part for unit in reversed(units) for part in unit])
+    validate(reordered)
+
+    # Inventory omissions, stale rows, and duplicate or unexpected CTest registrations.
+    rejected("missing expected inventory row", lambda: validate(tests, [name for name in expected_tests if name != GROUPS["ledger"]]))
+    rejected("missing configured CTest registration",
+             lambda: validate([test for test in tests if test["name"] != GROUPS["ledger"]]))
+    rejected("missing CMake declaration",
+             lambda: validate_cmake_registration(ci_lanes.replace(
+                 f"gbb_add_ci_lane_test({GROUPS['ledger']}", "# removed\ngbb_add_ci_lane_test(omitted_group")))
+    rejected("duplicate CTest registration", lambda: validate([*tests, copy.deepcopy(tests[0])]))
+    rejected("unexpected CTest group", lambda: validate([*tests, {**copy.deepcopy(tests[0]),
+                                                                    "name": "workflow_policy_group_extra"}]))
+    rejected("unexpected expected-test group", lambda: validate(tests, [*expected_tests, "workflow_policy_group_extra"]))
+
+    def set_timeout(test_list: list[dict], value: int) -> None:
+        target = next(test for test in test_list if test["name"] == GROUPS["ci"])
+        next(prop for prop in target["properties"] if prop["name"] == "TIMEOUT")["value"] = value
+
+    mutant = copy.deepcopy(tests)
+    set_timeout(mutant, 540)
+    rejected("incorrectly scaled native timeout", lambda: validate(mutant))
+    mutant = copy.deepcopy(tests)
+    set_timeout(mutant, 180)
+    rejected("unscaled sanitizer timeout", lambda: validate(mutant, sanitizer=True))
+
+    def named_test(test_list: list[dict], name: str) -> dict:
+        return next(test for test in test_list if test["name"] == name)
+
+    def change_cli(test: dict, argv: list[str]) -> None:
+        for index, part in enumerate(test["command"]):
+            if part.startswith("-DGBB_CMD="):
+                test["command"][index] = "-DGBB_CMD=" + ";".join(argv)
+                return
+        reject("self-test fixture has no GBB_CMD definition")
+
+    def add_definition(test: dict, definition: str) -> None:
+        test["command"].insert(test["command"].index("-P"), definition)
+
+    def replace_definition(test: dict, name: str, value: str) -> None:
+        for index, part in enumerate(test["command"]):
+            if part.startswith(f"-D{name}="):
+                test["command"][index] = f"-D{name}={value}"
+                return
+        reject(f"self-test fixture has no {name} definition")
+
+    def validate_mutated(mutate, *, sanitizer: bool = False) -> None:
+        mutant = copy.deepcopy(tests)
+        mutate(mutant)
+        validate(mutant, sanitizer=sanitizer)
+
+    ci_name = GROUPS["ci"]
+    completion = build_dir / "workflow-policy-ci.json"
+    ci_argv = [python_executable, "-I", str(root / POLICY_PATH), "--self-test", "--group", "ci",
+               "--root", str(root), "--completed-file", str(completion)]
+    helper_marker = "PASS: workflow policy group helpers controls=[0-9]+ ids_sha256=[0-9a-f]+"
+    def combined_override(test_list: list[dict]) -> None:
+        target = named_test(test_list, ci_name)
+        change_cli(target, [*ci_argv, "--group", "helpers"])
+        add_definition(target, f"-DGBB_EXPECT_REGEX={helper_marker}")
+
+    rejected("combined extra-group and later marker override", lambda: validate_mutated(combined_override))
+    for label, definition in (
+        ("typed duplicate command override", "-DGBB_CMD:STRING=echo;PASS"),
+        ("typed duplicate exit override", "-DGBB_EXPECT_CODE:STRING=7"),
+        ("typed duplicate marker override", "-DGBB_EXPECT_REGEX:STRING=PASS: injected"),
+        ("typed duplicate completion override", "-DGBB_EXPECT_FILE:FILEPATH=/tmp/stale.json"),
+        ("typed duplicate freshness override", "-DGBB_EXPECT_FILE_FRESH:BOOL=FALSE"),
+    ):
+        rejected(label, lambda definition=definition: validate_mutated(
+            lambda test_list: add_definition(named_test(test_list, ci_name), definition)))
+    rejected("single exit override", lambda: validate_mutated(
+        lambda test_list: replace_definition(named_test(test_list, ci_name), "GBB_EXPECT_CODE", "7")))
+    rejected("single marker override", lambda: validate_mutated(
+        lambda test_list: replace_definition(named_test(test_list, ci_name), "GBB_EXPECT_REGEX", "PASS: injected")))
+    rejected("single freshness override", lambda: validate_mutated(
+        lambda test_list: replace_definition(named_test(test_list, ci_name), "GBB_EXPECT_FILE_FRESH", "FALSE")))
+    rejected("single completion override", lambda: validate_mutated(
+        lambda test_list: replace_definition(named_test(test_list, ci_name), "GBB_EXPECT_FILE", str(build_dir / "stale.json"))))
+    rejected("group wrong script", lambda: validate_mutated(lambda test_list: change_cli(named_test(test_list, ci_name),
+        [python_executable, "-I", str(coverage_script), "--self-test", "--group", "ci", "--root", str(root),
+         "--completed-file", str(completion)])))
+    rejected("Python -c substitution", lambda: validate_mutated(lambda test_list: change_cli(named_test(test_list, ci_name),
+        [python_executable, "-I", "-c", "pass()", str(root / POLICY_PATH), "--self-test", "--group", "ci",
+         "--root", str(root), "--completed-file", str(completion)])))
+    rejected("Python isolation flag moved", lambda: validate_mutated(lambda test_list: change_cli(named_test(test_list, ci_name),
+        [python_executable, str(root / POLICY_PATH), "-I", "--self-test", "--group", "ci", "--root", str(root),
+         "--completed-file", str(completion)])))
+    rejected("wrong policy root", lambda: validate_mutated(lambda test_list: change_cli(named_test(test_list, ci_name),
+        [python_executable, "-I", str(root / POLICY_PATH), "--self-test", "--group", "ci", "--root", "/tmp/other",
+         "--completed-file", str(completion)])))
+    rejected("wrong group value", lambda: validate_mutated(lambda test_list: change_cli(named_test(test_list, ci_name),
+        [python_executable, "-I", str(root / POLICY_PATH), "--self-test", "--group", "helpers", "--root", str(root),
+         "--completed-file", str(completion)])))
+    rejected("duplicate group flag", lambda: validate_mutated(lambda test_list: change_cli(named_test(test_list, ci_name),
+        [python_executable, "-I", str(root / POLICY_PATH), "--self-test", "--group", "ci", "--group", "helpers",
+         "--root", str(root), "--completed-file", str(completion)])))
+    rejected("wrong group completion path", lambda: validate_mutated(lambda test_list: change_cli(named_test(test_list, ci_name),
+        [python_executable, "-I", str(root / POLICY_PATH), "--self-test", "--group", "ci", "--root", str(root),
+         "--completed-file", str(build_dir / "workflow-policy-helpers.json")])))
+    rejected("workflow-policy check echo substitution", lambda: validate_mutated(lambda test_list: change_cli(
+        named_test(test_list, "workflow_policy_check"), ["echo", "PASS:"])))
+    rejected("wrong exit-plus-marker script", lambda: validate_mutated(lambda test_list:
+        named_test(test_list, ci_name)["command"].__setitem__(
+            slice(-1, None), [str(root / "tests/scripts/verify-workflow-policy-coverage.py")])))
+    rejected("wrong CMake executable", lambda: validate_mutated(lambda test_list:
+        named_test(test_list, ci_name)["command"].__setitem__(0, python_executable)))
+    rejected("extra ignored CMake argument", lambda: validate_mutated(lambda test_list:
+        named_test(test_list, ci_name)["command"].insert(
+            named_test(test_list, ci_name)["command"].index("-P"), "--fresh")))
+
+    def change_coverage_cli(test_list: list[dict], name: str, argv: list[str]) -> None:
+        change_cli(named_test(test_list, name), argv)
+
+    coverage_script_text = str(coverage_script)
+    check_argv = [python_executable, "-I", coverage_script_text, "--check", "--root", str(root),
+                  "--build-dir", str(build_dir), "--rev", candidate]
+    rejected("stale coverage candidate", lambda: validate_mutated(lambda test_list: change_coverage_cli(
+        test_list, "workflow_policy_coverage", [*check_argv[:-1], BASELINE_COMMIT])))
+    rejected("duplicate candidate revision", lambda: validate_mutated(lambda test_list: change_coverage_cli(
+        test_list, "workflow_policy_coverage", [*check_argv, "--rev", BASELINE_COMMIT])))
+    rejected("wrong coverage script", lambda: validate_mutated(lambda test_list: change_coverage_cli(
+        test_list, "workflow_policy_coverage", [python_executable, "-I", str(root / POLICY_PATH), *check_argv[3:]])))
+    rejected("wrong coverage build directory", lambda: validate_mutated(lambda test_list: change_coverage_cli(
+        test_list, "workflow_policy_coverage", [python_executable, "-I", coverage_script_text,
+          "--check", "--root", str(root), "--build-dir", "/tmp/other", "--rev", candidate])))
+    rejected("coverage mode flag substitution", lambda: validate_mutated(lambda test_list: change_coverage_cli(
+        test_list, "workflow_policy_coverage", [python_executable, "-I", coverage_script_text,
+          "--self-test", "--root", str(root), "--build-dir", str(build_dir), "--rev", candidate])))
+    rejected("coverage-control stale candidate", lambda: validate_mutated(lambda test_list: change_coverage_cli(
+        test_list, "workflow_policy_coverage_controls", [python_executable, "-I", coverage_script_text,
+          "--self-test", "--root", str(root), "--rev", BASELINE_COMMIT])))
+    rejected("coverage marker override", lambda: validate_mutated(lambda test_list: replace_definition(
+        named_test(test_list, "workflow_policy_coverage"), "GBB_EXPECT_REGEX", "PASS: injected")))
+
+    verify_source_identity(source, candidate_source)
+    changed = candidate_source.replace(b'"PASS: workflow privilege and trust wiring"', b'"PASS: weakened workflow judge"', 1)
+    rejected("production source mutation", lambda: verify_source_identity(source, changed))
+    changed_selector_default = candidate_source.replace(b'default="all"', b'default="helpers"', 1)
+    if changed_selector_default == candidate_source:
+        reject("selector-default negative fixture did not locate default=all")
+    rejected("selector default change", lambda: verify_source_identity(source, changed_selector_default))
+    injected_assignment = candidate_source.replace(
+        b"WORKFLOWS = (", b'WORKFLOWS = print("unapproved import-time side effect")\nWORKFLOWS = (', 1)
+    if injected_assignment == candidate_source:
+        reject("source side-effect fixture did not locate WORKFLOWS")
+    rejected("module-level assignment side effect", lambda: verify_source_identity(source, injected_assignment))
+    duplicate_function = candidate_source + b"\n\ndef check_all(root):\n    return {}\n"
+    rejected("duplicate baseline function shadow", lambda: verify_source_identity(source, duplicate_function))
+    decorated_selector = candidate_source.replace(b"def _policy_control_id(", b"@print('unapproved import effect')\ndef _policy_control_id(", 1)
+    rejected("selector decorator import-time effect", lambda: verify_source_identity(source, decorated_selector))
+    default_effect = candidate_source.replace(
+        b"def _policy_control_id(kind: str,", b"def _policy_control_id(kind: str = print('unapproved import effect'),", 1)
+    rejected("selector default import-time effect", lambda: verify_source_identity(source, default_effect))
+
+    candidate_namespace = {"__name__": "candidate_workflow_policy", "__file__": str(root / POLICY_PATH)}
+    exec(compile(candidate_source, POLICY_PATH, "exec"), candidate_namespace)
+    recorder = candidate_namespace.get("_record_policy_completion")
     if not callable(recorder):
         reject("candidate checker is missing its runtime completion-ID validator")
     sample = {"group": "ci", "platforms": list(ALL_PLATFORMS)}
     control_id = "mutation-test-id"
-    completed = set()
+    completed: set[str] = set()
     recorder(completed, control_id, sample, "ci", "posix")
     if completed != {control_id}:
         reject("runtime completion recorder did not retain a valid control ID")
@@ -671,9 +1017,12 @@ def _self_test(root: Path, revision: str) -> int:
         except SystemExit as error:
             if expected_text not in str(error):
                 reject(f"runtime completion negative {name} refused for the wrong reason: {error}")
+            controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    return 12
+    if controls != 50:
+        reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
+    return controls
 
 
 def _check(root: Path, build_dir: Path, revision: str) -> None:
@@ -696,7 +1045,15 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     except (ValueError, KeyError, TypeError) as error:
         reject(f"configured CTest inventory is malformed: {error}")
     ci_lanes = git_text(root, candidate, "tests/cmake/ci-lanes.cmake").decode("utf-8")
-    validate_registration(root, expected_tests, ctest_tests, ci_lanes)
+    cache = _cmake_cache(build_dir)
+    cmake_executable = cache.get("CMAKE_COMMAND")
+    python_executable = cache.get("_Python3_EXECUTABLE", cache.get("Python3_EXECUTABLE"))
+    if not cmake_executable or not python_executable:
+        reject("configured CMake/Python executable paths are missing from CMakeCache.txt")
+    sanitizer_enabled = _truthy_cmake(cache.get("GABBABOY_ENABLE_SANITIZERS", "OFF"))
+    validate_registration(root, expected_tests, ctest_tests, ci_lanes, build_dir=build_dir,
+                          candidate=candidate, sanitizer_enabled=sanitizer_enabled,
+                          cmake_executable=cmake_executable, python_executable=python_executable)
     platform = "windows" if os.name == "nt" else "posix"
     controls = sum(1 for row in manifest["controls"] if platform in row["platforms"])
     print(f"PASS: workflow policy coverage controls={controls} groups={len(GROUPS)} platform={platform}")

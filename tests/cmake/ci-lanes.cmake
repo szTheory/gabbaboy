@@ -91,10 +91,26 @@ gbb_add_ci_lane_test(workflow_policy_check 0 "PASS: workflow privilege and trust
 # after its completed stable IDs equal the registry slice. All groups use the existing exit-plus-marker wrapper and
 # retain the unchanged 180-second ceiling. The legacy --self-test with no --group still runs the complete suite.
 set(GBB_POLICY_COVERAGE_REV_RESULT "")
-execute_process(COMMAND git -C "${PROJECT_SOURCE_DIR}" rev-parse --verify "HEAD^{commit}"
-  OUTPUT_VARIABLE GBB_POLICY_COVERAGE_REV OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE GBB_POLICY_COVERAGE_REV_RESULT)
-if(NOT GBB_POLICY_COVERAGE_REV_RESULT EQUAL 0 OR NOT GBB_POLICY_COVERAGE_REV MATCHES "^[0-9a-f]+$")
-  message(FATAL_ERROR "workflow-policy coverage needs an immutable Git commit at configure time")
+# Do not let Git discover an unrelated parent repository when this project is an extracted source archive.
+# Ordinary source builds remain configurable without Git; the immutable CTest checker still fails closed if run.
+file(REAL_PATH "${PROJECT_SOURCE_DIR}" GBB_POLICY_PROJECT_REAL)
+execute_process(COMMAND git -C "${PROJECT_SOURCE_DIR}" rev-parse --show-toplevel
+  OUTPUT_VARIABLE GBB_POLICY_GIT_TOP OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE GBB_POLICY_GIT_TOP_RESULT
+  ERROR_QUIET)
+if("${GBB_POLICY_GIT_TOP_RESULT}" STREQUAL "0")
+  file(REAL_PATH "${GBB_POLICY_GIT_TOP}" GBB_POLICY_GIT_TOP_REAL)
+  if(GBB_POLICY_GIT_TOP_REAL STREQUAL GBB_POLICY_PROJECT_REAL)
+    execute_process(COMMAND git -C "${PROJECT_SOURCE_DIR}" rev-parse --verify "HEAD^{commit}"
+      OUTPUT_VARIABLE GBB_POLICY_COVERAGE_REV OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE GBB_POLICY_COVERAGE_REV_RESULT ERROR_QUIET)
+  endif()
+endif()
+string(LENGTH "${GBB_POLICY_COVERAGE_REV}" GBB_POLICY_COVERAGE_REV_LENGTH)
+if(NOT "${GBB_POLICY_COVERAGE_REV_RESULT}" STREQUAL "0"
+   OR NOT (GBB_POLICY_COVERAGE_REV_LENGTH EQUAL 40 OR GBB_POLICY_COVERAGE_REV_LENGTH EQUAL 64)
+   OR NOT GBB_POLICY_COVERAGE_REV MATCHES "^[0-9a-f]+$")
+  set(GBB_POLICY_COVERAGE_REV "unknown")
+  message(STATUS "Workflow-policy coverage CTests remain registered with an unresolved revision and will fail closed when invoked")
 endif()
 
 set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-ci.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
@@ -125,7 +141,7 @@ set(GBB_CI_LANE_EXTRA_ARGS)
 gbb_add_ci_lane_test(workflow_policy_coverage 0 "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)" 60 ""
   "${GBB_WORKFLOW_POLICY_COVERAGE}" --check --root "${PROJECT_SOURCE_DIR}" --build-dir "${PROJECT_BINARY_DIR}"
   --rev "${GBB_POLICY_COVERAGE_REV}")
-gbb_add_ci_lane_test(workflow_policy_coverage_controls 0 "PASS: workflow policy coverage self-test controls=12" 30 ""
+gbb_add_ci_lane_test(workflow_policy_coverage_controls 0 "PASS: workflow policy coverage self-test controls=50" 30 ""
   "${GBB_WORKFLOW_POLICY_COVERAGE}" --self-test --root "${PROJECT_SOURCE_DIR}" --rev "${GBB_POLICY_COVERAGE_REV}")
 set(GBB_CI_LANE_EXTRA_ARGS)
 

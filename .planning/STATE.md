@@ -5,10 +5,10 @@ milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
 status: executing
-stopped_at: Plan19-07 held; D127 partition implemented; immutable checks, independent review and fresh PR135 qualification pending
+stopped_at: Plan19-07 held; D127 bounded correction passes focused checks; immutable re-verification and independent re-review pending before fresh CI
 last_updated: "2026-10-30T19:13:26Z"
 last_activity: 2026-10-30
-last_activity_desc: "D127 partition implemented with complete local executed-ID coverage; release held for immutable checks, independent review and fresh exact-head qualification"
+last_activity_desc: "D127 four consolidated review findings corrected; focused checker/archive/scaling regressions pass; independent re-review and fresh exact-head qualification pending"
 state_head: 9895896922f51f48a225636f4b587e3ab1be7058
 progress:
   total_phases: 4
@@ -33,7 +33,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 Phase: 19 (Qualified v0.3.0 Release) — EXECUTING
 Plan: 7 of 7
 Status: Release window held: PR135 failed both Windows policy-control checks at the unchanged limit. The owner approved the bounded policy partition under D-127; implementation and fresh qualification are pending. No tag exists.
-Last activity: 2026-10-30 — Owner approved D-127, the coverage-preserving workflow-policy test partition in existing PR135. Implementation and independent immutable-baseline audit are complete; all six local groups and the production policy check pass. Immutable-revision coverage checks, consolidated review and fresh hosted qualification remain pending. Prior Windows timeouts remain failed evidence; fresh consolidated review and exact-head hosted qualification are required before the existing D125 guarded merge and fresh19-07 window.
+Last activity: 2026-10-30 — Owner approved D-127, the coverage-preserving workflow-policy test partition in existing PR135. Implementation and independent immutable-baseline audit are complete; all six local groups and the production policy check pass. Immutable native checks passed; consolidated review identified registration overrides, sanitizer scaling, archive configure and source-integrity gaps. One bounded correction pass has addressed all four findings with focused passing checks, including archive configure/core build and valid sanitizer scaling. Independent re-review and fresh hosted qualification remain required. Prior Windows timeouts remain failed evidence; fresh consolidated review and exact-head hosted qualification are required before the existing D125 guarded merge and fresh19-07 window.
 
 Completed stage: **Phase 19 execution through Plan 19-06**. PR #133 merged after exact-head protected CI, coherent local/hosted preflight, unchanged performance gate and guarded squash. Release-please regeneration was verified. Detailed identities and evidence remain in the phase continuation and facts file; the frozen 19-06 SUMMARY is not rewritten.
 
