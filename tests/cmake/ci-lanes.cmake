@@ -141,7 +141,7 @@ set(GBB_CI_LANE_EXTRA_ARGS)
 gbb_add_ci_lane_test(workflow_policy_coverage 0 "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)" 60 ""
   "${GBB_WORKFLOW_POLICY_COVERAGE}" --check --root "${PROJECT_SOURCE_DIR}" --build-dir "${PROJECT_BINARY_DIR}"
   --rev "${GBB_POLICY_COVERAGE_REV}")
-gbb_add_ci_lane_test(workflow_policy_coverage_controls 0 "PASS: workflow policy coverage self-test controls=50" 30 ""
+gbb_add_ci_lane_test(workflow_policy_coverage_controls 0 "PASS: workflow policy coverage self-test controls=62" 30 ""
   "${GBB_WORKFLOW_POLICY_COVERAGE}" --self-test --root "${PROJECT_SOURCE_DIR}" --rev "${GBB_POLICY_COVERAGE_REV}")
 set(GBB_CI_LANE_EXTRA_ARGS)
 

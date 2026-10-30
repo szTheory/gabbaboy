@@ -21,6 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
+REVIEWED_POLICY_COMMIT = "2c4a66ad50b979bbfcf3bff6cf9f4e644a56d9b7"
+REVIEWED_POLICY_SHA256 = "f6092a477be22336ffe585c25508f3e7da761e7b9da3f3716e3f0dbdc302405c"
 GROUPS = {
     "ci": "workflow_policy_group_ci",
     "release_jobs": "workflow_policy_group_release_jobs",
@@ -78,6 +80,27 @@ def baseline_source(root: Path) -> bytes:
     if digest != POLICY_SHA256:
         reject(f"immutable workflow-policy source hash changed: {digest}")
     return result.stdout
+
+
+def reviewed_policy_source(root: Path) -> bytes:
+    result = subprocess.run(["git", "show", f"{REVIEWED_POLICY_COMMIT}:{POLICY_PATH}"], cwd=root,
+                            capture_output=True, check=False, timeout=15)
+    if result.returncode != 0:
+        reject(f"reviewed workflow-policy source is unavailable: {result.stderr.decode(errors='replace').strip()}")
+    digest = hashlib.sha256(result.stdout).hexdigest()
+    if digest != REVIEWED_POLICY_SHA256:
+        reject(f"reviewed workflow-policy source hash changed: {digest}")
+    return result.stdout
+
+
+def verify_reviewed_policy_identity(candidate: bytes, reviewed: bytes | None) -> None:
+    if reviewed is None:
+        reject("reviewed workflow-policy source identity is missing")
+    reviewed_digest = hashlib.sha256(reviewed).hexdigest()
+    if reviewed_digest != REVIEWED_POLICY_SHA256:
+        reject(f"reviewed workflow-policy source identity has the wrong digest: {reviewed_digest}")
+    if candidate != reviewed:
+        reject("candidate workflow-policy source differs from the exact reviewed snapshot")
 
 
 def git_text(root: Path, revision: str, path: str) -> bytes:
@@ -351,7 +374,7 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
         return node
 
 
-def verify_source_identity(baseline: bytes, current: bytes) -> None:
+def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
     try:
         baseline_tree = ast.parse(baseline, filename=POLICY_PATH)
         current_tree = ast.parse(current, filename=POLICY_PATH)
@@ -465,6 +488,13 @@ def verify_source_identity(baseline: bytes, current: bytes) -> None:
     normalized_current = ast.Module(body=normalized_current_body, type_ignores=current_tree.type_ignores)
     if ast.dump(normalized_current, include_attributes=False) != ast.dump(baseline_tree, include_attributes=False):
         reject("ordered workflow-policy module differs from the immutable baseline after approved selector normalization")
+
+
+def verify_source_identity(root: Path, candidate: bytes) -> None:
+    """Require the exact reviewed instrumented blob, then retain the independent baseline AST proof."""
+    reviewed = reviewed_policy_source(root)
+    verify_reviewed_policy_identity(candidate, reviewed)
+    _compare_baseline_source_identity(baseline_source(root), candidate)
 
 
 def validate_manifest(manifest: dict, expected: dict) -> None:
@@ -714,7 +744,7 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
             expected_definitions = {
                 "GBB_CMD": definitions["GBB_CMD"],
                 "GBB_EXPECT_CODE": "0",
-                "GBB_EXPECT_REGEX": "PASS: workflow policy coverage self-test controls=50",
+                "GBB_EXPECT_REGEX": "PASS: workflow policy coverage self-test controls=62",
             }
         else:
             cli_values, cli_booleans = _parse_python_cli(
@@ -803,7 +833,7 @@ def _self_test(root: Path, revision: str) -> int:
                    "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)", 60),
         test_entry("workflow_policy_coverage_controls",
                    [python_executable, "-I", str(coverage_script), "--self-test", "--root", str(root), "--rev", candidate],
-                   "PASS: workflow policy coverage self-test controls=50", 30),
+                   "PASS: workflow policy coverage self-test controls=62", 30),
         test_entry("workflow_policy_check",
                    [python_executable, "-I", str(root / POLICY_PATH), "--check", "--root", str(root)],
                    "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+", 60),
@@ -974,25 +1004,83 @@ def _self_test(root: Path, revision: str) -> int:
     rejected("coverage marker override", lambda: validate_mutated(lambda test_list: replace_definition(
         named_test(test_list, "workflow_policy_coverage"), "GBB_EXPECT_REGEX", "PASS: injected")))
 
-    verify_source_identity(source, candidate_source)
+    reviewed = reviewed_policy_source(root)
+    verify_reviewed_policy_identity(candidate_source, reviewed)
+    verify_source_identity(root, candidate_source)
+
+    def reject_source_mutant(label: str, mutant: bytes) -> None:
+        if mutant == candidate_source:
+            reject(f"{label} fixture did not modify the reviewed source")
+        try:
+            ast.parse(mutant, filename=POLICY_PATH)
+        except SyntaxError as error:
+            reject(f"{label} fixture is not valid Python: {error}")
+        rejected(label, lambda: verify_source_identity(root, mutant))
+
     changed = candidate_source.replace(b'"PASS: workflow privilege and trust wiring"', b'"PASS: weakened workflow judge"', 1)
-    rejected("production source mutation", lambda: verify_source_identity(source, changed))
+    reject_source_mutant("production source mutation", changed)
     changed_selector_default = candidate_source.replace(b'default="all"', b'default="helpers"', 1)
-    if changed_selector_default == candidate_source:
-        reject("selector-default negative fixture did not locate default=all")
-    rejected("selector default change", lambda: verify_source_identity(source, changed_selector_default))
+    reject_source_mutant("selector default change", changed_selector_default)
     injected_assignment = candidate_source.replace(
         b"WORKFLOWS = (", b'WORKFLOWS = print("unapproved import-time side effect")\nWORKFLOWS = (', 1)
-    if injected_assignment == candidate_source:
-        reject("source side-effect fixture did not locate WORKFLOWS")
-    rejected("module-level assignment side effect", lambda: verify_source_identity(source, injected_assignment))
+    reject_source_mutant("module-level assignment side effect", injected_assignment)
     duplicate_function = candidate_source + b"\n\ndef check_all(root):\n    return {}\n"
-    rejected("duplicate baseline function shadow", lambda: verify_source_identity(source, duplicate_function))
+    reject_source_mutant("duplicate baseline function shadow", duplicate_function)
     decorated_selector = candidate_source.replace(b"def _policy_control_id(", b"@print('unapproved import effect')\ndef _policy_control_id(", 1)
-    rejected("selector decorator import-time effect", lambda: verify_source_identity(source, decorated_selector))
+    reject_source_mutant("selector decorator import-time effect", decorated_selector)
     default_effect = candidate_source.replace(
         b"def _policy_control_id(kind: str,", b"def _policy_control_id(kind: str = print('unapproved import effect'),", 1)
-    rejected("selector default import-time effect", lambda: verify_source_identity(source, default_effect))
+    reject_source_mutant("selector default import-time effect", default_effect)
+
+    marker_anchor = b'_mark_policy_control("helper", "window-discovery", "legacy-query")'
+    marker_effect = candidate_source.replace(
+        marker_anchor,
+        b'_mark_policy_control("helper", print("marker side effect") or "window-discovery", "legacy-query")', 1,
+    )
+    reject_source_mutant("marker argument side effect", marker_effect)
+    selector_anchor = b"run_policy_self_test(root, args.group, args.completed_file)"
+    selector_effect = candidate_source.replace(
+        selector_anchor,
+        b'run_policy_self_test(root, print("selector side effect") or args.group, args.completed_file)', 1,
+    )
+    reject_source_mutant("selector argument side effect", selector_effect)
+
+    runner_doc = b'    """Run the unchanged complete self-test, optionally selecting one frozen mutation family."""\n'
+    runner_side_effect = candidate_source.replace(
+        runner_doc, runner_doc + b'    print("runner side effect")\n', 1,
+    )
+    reject_source_mutant("runner body side effect", runner_side_effect)
+    runner_global = b"    global _ACTIVE_POLICY_GROUP, _ACTIVE_POLICY_CONTROLS, _COMPLETED_POLICY_CONTROLS\n"
+    runner_return = candidate_source.replace(runner_global, runner_global + b"    return\n", 1)
+    reject_source_mutant("runner body early return", runner_return)
+    runner_call = b"        self_test(root)\n"
+    fabricated_runner = candidate_source.replace(
+        runner_call,
+        b'        if completed_file is not None:\n'
+        b'            completed_file.parent.mkdir(parents=True, exist_ok=True)\n'
+        b'            completed_file.write_text(json.dumps({"group": group, "control_ids": []}) + "\\n", encoding="utf-8")\n'
+        b'        print(f"PASS: workflow policy group {group} controls=0 ids_sha256={\'0\' * 64}")\n'
+        b"        return\n"
+        + runner_call,
+        1,
+    )
+    reject_source_mutant("fabricated runner completion", fabricated_runner)
+    changed_marker = candidate_source.replace(marker_anchor, marker_anchor.replace(b"legacy-query", b"legacy-query-changed"), 1)
+    reject_source_mutant("changed marker ID", changed_marker)
+    marker_statement = b'        _mark_policy_control("helper", "window-discovery", "legacy-query")\n'
+    duplicate_marker = candidate_source.replace(marker_statement, marker_statement * 2, 1)
+    reject_source_mutant("duplicated marker call", duplicate_marker)
+    changed_selector = candidate_source.replace(
+        selector_anchor, b"run_policy_self_test(root, None, args.completed_file)", 1,
+    )
+    reject_source_mutant("changed selector invocation", changed_selector)
+    duplicated_selector = candidate_source.replace(
+        selector_anchor, selector_anchor + b"\n            " + selector_anchor, 1,
+    )
+    reject_source_mutant("duplicated selector invocation", duplicated_selector)
+    rejected("missing reviewed source reference", lambda: verify_reviewed_policy_identity(candidate_source, None))
+    rejected("wrong reviewed source digest", lambda: verify_reviewed_policy_identity(candidate_source, reviewed + b"\n"))
+    rejected("wrong candidate reviewed identity", lambda: verify_reviewed_policy_identity(candidate_source + b"\n", reviewed))
 
     candidate_namespace = {"__name__": "candidate_workflow_policy", "__file__": str(root / POLICY_PATH)}
     exec(compile(candidate_source, POLICY_PATH, "exec"), candidate_namespace)
@@ -1020,7 +1108,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 50:
+    if controls != 62:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
@@ -1034,7 +1122,7 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     except (OSError, ValueError, UnicodeDecodeError) as error:
         reject(f"workflow-policy control registry is unreadable: {error}")
     validate_manifest(manifest, expected)
-    verify_source_identity(source, git_text(root, candidate, POLICY_PATH))
+    verify_source_identity(root, git_text(root, candidate, POLICY_PATH))
     expected_tests = git_text(root, candidate, "tests/expected-tests.txt").decode("utf-8").splitlines()
     result = subprocess.run(["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"], cwd=root,
                             capture_output=True, text=True, check=False, timeout=30)
