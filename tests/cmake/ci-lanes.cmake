@@ -87,10 +87,11 @@ set(GBB_CI_LANE_EXTRA_ARGS)
 gbb_add_ci_lane_test(workflow_policy_check 0 "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+" 60 ""
   "${GBB_WORKFLOW_POLICY}" --check --root "${PROJECT_SOURCE_DIR}")
 # Phase 19-06 added two aggregate host-smoke mutants. The Windows Bash resolver adds five further negative
-# controls; the version-window discovery repair adds four workflow mutants and two routing negatives.
+# controls; the version-window discovery repair adds four workflow mutants on every platform. Its two canonical-shell
+# routing negatives run on POSIX only because the production gate is Ubuntu-only.
 # Keep the platform floors at the measured prior values plus the registered new controls.
 if(WIN32)
-  set(gbb_workflow_policy_floor 432)
+  set(gbb_workflow_policy_floor 430)
 else()
   set(gbb_workflow_policy_floor 459)
 endif()

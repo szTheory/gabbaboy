@@ -2740,6 +2740,11 @@ WINDOW_JUDGE_ABSENT_BLOCK = (WINDOW_JUDGE_SKIP + '\n'
                              + '  exit 0\nfi')
 WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
                '--base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
+WINDOW_JUDGE_RUN = "\n".join((
+    "set -euo pipefail",
+    WINDOW_JUDGE_ABSENT_BLOCK,
+    WINDOW_CALL,
+))
 WINDOW_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
 WINDOW_STEP_TIMEOUT_MAX = 10
 VERSION_PR_WORKFLOW = "version-pr-gate.yml"
@@ -2854,6 +2859,8 @@ def check_version_window(root: Path) -> None:
     _check_bounded_downloads(name, tree)
     require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
     require_call(name, WINDOW_JOB, {"steps": [judge_steps[0]]}, WINDOW_CALL, conditional=True)
+    if judge_text != WINDOW_JUDGE_RUN:
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} judge body must match the trusted absent/present routing contract")
     _check_window_config(root)
 
 
@@ -2862,60 +2869,141 @@ def _check_window_discovery_contract(discover_text: str) -> None:
         raise Reject("window-discovery", "version-window discovery must query the configured component branch exactly once")
 
 
-def _controlled_window_route(query_branch: str, pull_requests: dict[str, int], record_state: str | None, judge):
-    """Reference routing model for controlled self-tests; it never runs a workflow body or subject-supplied code."""
-    number = pull_requests.get(query_branch)
-    if number is None:
-        return {"present": False, "checker_called": False, "exit_status": 0, "verdict": None}
-    exit_status, verdict = judge(number, record_state)
-    return {"present": True, "checker_called": True, "exit_status": exit_status, "verdict": verdict}
+def _window_discovery_shell_controls() -> tuple[int, int]:
+    """Run only trusted canonical bodies with local shims; never execute run text from the judged subject tree."""
+    if os.name == "nt":
+        print("SKIP: controlled version-window shell routing is POSIX-only; the production gate runs on Ubuntu")
+        return 0, 0
 
+    legacy_branch = "release-please--branches--main"
+    with tempfile.TemporaryDirectory(prefix="gbb-window-discovery.") as directory:
+        work = Path(directory)
+        shims = work / "bin"
+        runner_temp = work / "runner"
+        shims.mkdir()
+        runner_temp.mkdir()
+        gh = shims / "gh"
+        gh.write_text("""#!/bin/sh
+set -eu
+printf '%s\\n' "$*" >> "${WINDOW_CONTROL_GH_LOG:?}"
+if [ "${1:-}" = pr ] && [ "${2:-}" = list ]; then
+  requested_branch=
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = --head ]; then
+      shift
+      [ "$#" -gt 0 ] || exit 91
+      requested_branch=$1
+    fi
+    shift
+  done
+  if [ "${WINDOW_CONTROL_PRESENT:-false}" = true ] && [ "$requested_branch" = "$WINDOW_CONTROL_BRANCH" ]; then
+    printf '131\\n'
+  fi
+  exit 0
+fi
+if [ "${1:-}" = api ] && [ "${2:-}" = "repos/$GH_REPO/pulls/131" ]; then
+  case "${4:-}" in
+    .head.sha) printf '%s\\n' "$WINDOW_CONTROL_PR_HEAD" ;;
+    '.body // ""') printf '%s\\n' 'controlled release notes' ;;
+    *) exit 92 ;;
+  esac
+  exit 0
+fi
+exit 93
+""", encoding="utf-8")
+        checker = shims / "python3"
+        checker.write_text("""#!/bin/sh
+set -eu
+[ "${1:-}" = -I ] || exit 94
+[ "${2:-}" = trusted/tests/scripts/verify-version-window.py ] || exit 95
+printf '%s\\n' "${WINDOW_CONTROL_RECORD:?}" >> "${WINDOW_CONTROL_CHECKER_LOG:?}"
+case "$WINDOW_CONTROL_RECORD" in
+  inactive) printf '%s\\n' 'version-window inactive pass controlled' ;;
+  active-valid) printf '%s\\n' 'version-window active pass controlled' ;;
+  active-stale) printf '%s\\n' 'REJECT window-stale controlled' >&2; exit 47 ;;
+  *) exit 96 ;;
+esac
+""", encoding="utf-8")
+        gh.chmod(0o755)
+        checker.chmod(0o755)
 
-def _window_discovery_routing_controls() -> tuple[int, int]:
-    """Exercise controlled absent/inactive/active/stale routes and the former false-negative branch query."""
-    pull_requests = {VERSION_PR_BRANCH: 131}
-    negative, positive = 0, 0
-    for label, query_branch, record_state, expected_status, expected_verdict, expected in (
-        ("absent PR", VERSION_PR_BRANCH, None, 0, None, (False, False, 0)),
-        ("inactive record", VERSION_PR_BRANCH, "inactive", 0, "version-window inactive pass controlled", (True, True, 0)),
-        ("valid active record", VERSION_PR_BRANCH, "active-valid", 0, "version-window active pass controlled", (True, True, 0)),
-        ("stale active record", VERSION_PR_BRANCH, "active-stale", 47, "REJECT window-stale controlled", (True, True, 47)),
-    ):
-        calls = []
-        def controlled_judge(number, state):
-            calls.append((number, state))
-            return expected_status, expected_verdict
+        def control_env(label: str, record_state: str, *, pr_present: bool) -> dict[str, str]:
+            return {
+                "PATH": str(shims) + os.pathsep + os.defpath,
+                "GH_REPO": "control/repo",
+                "GH_TOKEN": "controlled-token",
+                "GITHUB_OUTPUT": str(work / f"{label}.output"),
+                "RUNNER_TEMP": str(runner_temp),
+                "WINDOW_CONTROL_BRANCH": VERSION_PR_BRANCH,
+                "WINDOW_CONTROL_PRESENT": "true" if pr_present else "false",
+                "WINDOW_CONTROL_PR_HEAD": "control-pr-head",
+                "WINDOW_CONTROL_RECORD": record_state,
+                "WINDOW_CONTROL_GH_LOG": str(work / f"{label}.gh.log"),
+                "WINDOW_CONTROL_CHECKER_LOG": str(work / f"{label}.checker.log"),
+                "MAIN_SHA": "control-main-head",
+            }
 
-        result = _controlled_window_route(query_branch, {} if label == "absent PR" else pull_requests,
-                                          record_state, controlled_judge)
-        observed = (result["present"], result["checker_called"], result["exit_status"])
-        if (observed != expected or len(calls) != int(expected[1])
-                or result["verdict"] != expected_verdict
-                or (calls and calls != [(131, record_state)])):
-            raise SystemExit(f"self-test window routing {label!r} failed: observed={observed!r}, calls={calls!r}")
-        if label == "stale active record":
-            if result["exit_status"] != expected_status or result["exit_status"] == 0:
-                raise SystemExit("self-test stale active window did not propagate the trusted checker failure")
+        def discover(label: str, record_state: str, *, pr_present: bool, body: str = WINDOW_DISCOVERY_RUN):
+            env = control_env(label, record_state, pr_present=pr_present)
+            Path(env["GITHUB_OUTPUT"]).write_text("", encoding="utf-8")
+            result = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", body],
+                                    capture_output=True, text=True, check=False, cwd=work, env=env, timeout=10)
+            if result.returncode != 0:
+                raise SystemExit(f"self-test trusted discovery body {label!r} failed: {result.stderr.strip()!r}")
+            outputs = {}
+            for line in Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8").splitlines():
+                key, separator, value = line.partition("=")
+                if not separator or key in outputs:
+                    raise SystemExit(f"self-test trusted discovery body {label!r} wrote malformed outputs")
+                outputs[key] = value
+            return env, outputs
+
+        def judge(label: str, env: dict[str, str], outputs: dict[str, str]):
+            env = {**env, "PRESENT": outputs.get("present", ""), "PR_HEAD": outputs.get("head", "")}
+            result = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", WINDOW_JUDGE_RUN],
+                                    capture_output=True, text=True, check=False, cwd=work, env=env, timeout=10)
+            calls_path = Path(env["WINDOW_CONTROL_CHECKER_LOG"])
+            calls = calls_path.read_text(encoding="utf-8").splitlines() if calls_path.exists() else []
+            return result, calls
+
+        positive = 0
+        negative = 0
+        for label, state, pr_present, expected_present, expected_status, expected_verdict, expected_calls in (
+            ("absent", "active-stale", False, "false", 0, "", []),
+            ("inactive", "inactive", True, "true", 0, "version-window inactive pass controlled", ["inactive"]),
+            ("active-valid", "active-valid", True, "true", 0, "version-window active pass controlled", ["active-valid"]),
+            ("active-stale", "active-stale", True, "true", 47, "REJECT window-stale controlled", ["active-stale"]),
+        ):
+            env, outputs = discover(label, state, pr_present=pr_present)
+            if outputs.get("present") != expected_present or (pr_present and outputs.get("head") != "control-pr-head"):
+                raise SystemExit(f"self-test discovery output {label!r} differs: {outputs!r}")
+            result, calls = judge(label, env, outputs)
+            observed_verdict = result.stdout.strip() if expected_status == 0 and calls else result.stderr.strip()
+            if result.returncode != expected_status or calls != expected_calls or observed_verdict != expected_verdict:
+                raise SystemExit(f"self-test shell route {label!r} failed: exit={result.returncode}, calls={calls!r}, "
+                                 f"stdout={result.stdout.strip()!r}, stderr={result.stderr.strip()!r}")
+            if label == "active-stale":
+                negative += 1
+            else:
+                positive += 1
+
+        env, legacy_outputs = discover("legacy-query", "active-stale", pr_present=True,
+                                       body=WINDOW_DISCOVERY_RUN.replace(VERSION_PR_BRANCH, legacy_branch))
+        legacy_result, legacy_calls = judge("legacy-query", env, legacy_outputs)
+        if (legacy_outputs.get("present") != "false" or legacy_result.returncode != 0
+                or legacy_calls or legacy_result.stderr):
+            raise SystemExit("self-test legacy shell query did not reproduce its successful skipped-checker route")
+        try:
+            _check_window_discovery_contract(WINDOW_DISCOVERY_RUN.replace(VERSION_PR_BRANCH, legacy_branch))
+        except Reject as exc:
+            if exc.code != "window-discovery":
+                raise SystemExit(f"self-test legacy discovery mutant refused with the wrong code: {exc.code}") from exc
             negative += 1
         else:
-            positive += 1
+            raise SystemExit("self-test legacy shell query was not rejected by the static discovery contract")
 
-    # The exact legacy query is modeled against the actual component PR response: it returns safe-looking absence
-    # and skips the rejecting checker. The discovery pin must refuse that query before such a route can ship.
-    legacy_branch = "release-please--branches--main"
-    legacy = _controlled_window_route(legacy_branch, pull_requests, "active-stale",
-                                      lambda _number, _state: (47, "REJECT window-stale controlled"))
-    if legacy != {"present": False, "checker_called": False, "exit_status": 0, "verdict": None}:
-        raise SystemExit(f"self-test legacy query did not reproduce the skipped-checker defect: {legacy!r}")
-    try:
-        _check_window_discovery_contract(WINDOW_DISCOVERY_CALL.replace(VERSION_PR_BRANCH, legacy_branch))
-    except Reject as exc:
-        if exc.code != "window-discovery":
-            raise SystemExit(f"self-test legacy discovery mutant refused with the wrong code: {exc.code}") from exc
-        negative += 1
-    else:
-        raise SystemExit("self-test legacy discovery mutant was not rejected by the discovery contract")
-    print("PASS: controlled version-window routing covers absent, inactive, active and stale records; legacy lookup is refused")
+    print("PASS: canonical shell routing covers absent, inactive, active-valid and stale-active records; "
+          "legacy query skips the checker and fails the static contract")
     return negative, positive
 
 
@@ -4905,7 +4993,7 @@ def self_test(root: Path) -> None:
         positive = _run_cli(fixture, work)
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
-        routing_rejected, routing_accepted = _window_discovery_routing_controls()
+        routing_rejected, routing_accepted = _window_discovery_shell_controls()
         rejected += routing_rejected
         resolver_rejected, resolver_accepted = rehearsal_bash_resolver_controls()
         rejected += resolver_rejected
