@@ -9,13 +9,14 @@ requires:
 provides:
   - Initial synthetic v0.3.0 pre-flight and documentation-contract evidence
   - Review-fix controls for publication inventory, closure paths and judge CLI
+  - Owner-approved Git Bash resolver controls, including the observed ucrt64 layout
 affects: [GB-19-qualified-v0-3-0-release/19-06-final-preflight, GB-19-qualified-v0-3-0-release/19-07]
 actuals:
   tokens: 56316
   tasks: 3
-  commits: 24
+  commits: 27
 plan_head_before: a3b5f8c88dfe5c0e3aa22867e75e38ed4cc4b438
-plan_head_after: cf07284e9e82ea9d2dd22aa984696664ba1ea6d7
+plan_head_after: 28aee3d570b0f3b233b413880611d5fe27f567e2
 tech-stack:
   added: []
   patterns: [immutable-source release checks, synthetic release-tree qualification, production-shaped negative controls]
@@ -105,6 +106,17 @@ coverage:
         ref: "Revision-bound configure and CTest at source 8f4deeddd07ddf06f9927a1c6c571b717732b06e passed 5/5: v03_dispositions_controls, test_budget_controls, test_budget, workflow_policy_check and workflow_policy_controls. Windows/POSIX floors are 426/453; the CTest timeout remains 180 seconds. Python 3.10 grammar parsing of the changed script passed using Python 3.11 feature_version=(3, 10). Logs: build/preflight/review/windows-rescope-configure-8f4deedd.log and build/preflight/review/windows-rescope-ctest-8f4deedd.log."
         status: pass
     human_judgment: false
+  - id: D6
+    description: The owner-approved ucrt64 Git-for-Windows layout selects the installation's top-level Bash, with the actual Windows CI failure preserved and Windows validation still pending.
+    requirement: REL-01
+    verification:
+      - kind: unit
+        ref: "Immutable RED at 8f4deeddd07ddf06f9927a1c6c571b717732b06e rejected a valid Git/ucrt64/bin/git.exe layout and found no bundled Bash. At dedeb22a5528b0ec6bb3cb4845a535303f66ccd4 the resolver self-test passed negative=5 and positive=5; all three tag-guard scenarios passed; workflow-policy self-test reported negative_controls=453 positive_controls=9."
+        status: pass
+      - kind: integration
+        ref: "Fresh default configure at dedeb22a5528b0ec6bb3cb4845a535303f66ccd4 captured the full source SHA. workflow_policy_controls passed 1/1 in 56.18 s with POSIX floor 453 and timeout 180 unchanged. Actual Windows CI remains pending."
+        status: pass
+    human_judgment: false
 duration: "not recorded; work continued across sessions"
 completed: 2026-10-30
 status: halted
@@ -176,7 +188,7 @@ This is the concrete changed/retained inventory; it does not claim a fixture-onl
 
 ## Task Commits
 
-Measured plan-interval commits, oldest first:
+Selected source and evidence commits from the measured plan interval, oldest first:
 
 1. `0a9a6c13` — add judge outcome preflight controls.
 2. `81c78d35` — resolve immutable release decisions.
@@ -202,7 +214,7 @@ At immutable source `b0beb4fd`, readback controls passed 48, disposition control
 
 ## Decisions Made
 
-- `19-02-D1` / D-09 remains a candidate amendment only. `GBB_MAYBE_UNUSED` was not adopted into project decisions; owner acknowledgment is still required.
+- At the earlier snapshot, `19-02-D1` / D-09 was only a candidate amendment. Owner decision D-122 has since adopted `GBB_MAYBE_UNUSED`; no acknowledgment remains pending.
 - `REL-01` remains pending until exact-tag publication and readback.
 - Historical `LEDGER_BOUND_LAST_VERSION=(0, 2, 1)` remains unchanged because it drives expiry and seventh-row controls after RM-027 removed all `release_bound` rows.
 - The initial bump-only `workflow_policy_check` passed. Negative evidence is based on the current named refusal contracts and their reason codes, not an invented failure count.
@@ -215,7 +227,7 @@ At immutable source `b0beb4fd`, readback controls passed 48, disposition control
 - **19-06-D1:** the initial “fix every version literal” wording was applied only where evidence justified a change. The source-version-derived state-contract control and the current-version adoption behavior are recorded above. `verify-state-pins.py` was changed to resolve immutable D-113/D-120 decision references, not to relabel historical rows. `REHEARSAL_TAG="v0.2.1"` remains an unchanged self-test-only fixture, and `LEDGER_BOUND_LAST_VERSION=(0, 2, 1)` remains unchanged to preserve its refusal controls. The historical and performance literals retained are enumerated above.
 - **19-06-D2:** H-prime was pushed to transient `rehearsal/v0.3.0` to exercise hosted producer steps past their tag-derivation checks. The historical branch was removed and its absence verified. The final settled-source rehearsal must repeat this and confirm deletion again before PR A.
 - **19-03-D1:** the pre-PR-A OQ-3 `perf-attribution.yml` dispatch on main was executed as authorized by 19-03; run `40936934189` completed at `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4` and its receipt is committed for PR A.
-- **19-02-D1:** the D-09 amendment candidate is explicitly not adopted and remains for owner acknowledgment.
+- **19-02-D1 (earlier snapshot):** the D-09 amendment candidate was not yet adopted. Owner decision D-122 later adopted it; see the latest continuation snapshot below.
 
 ### Template attribution correction
 
@@ -223,7 +235,7 @@ The copied plan text requests a Claude Code footer. The PR body will use truthfu
 
 ### Interim GSD status
 
-This summary records completed local and initial pre-flight evidence only. It uses `status: halted` because the required final settled-source pre-flight, PR A creation and exact-head CI readiness are not yet complete. STATE remains on executing Plan 19-06. Operational PR/merge facts belong in `build/phase19-window/facts.env` and `continue.md`; no merge, tag, publication, REL-01 completion, or 19-07 execution is claimed here.
+This summary records historical qualification snapshots and the latest local resolver continuation, not final operational completion. It uses `status: halted` because the final settled-source pre-flight, actual Windows CI, performance proof, guarded PR A merge and #131 regeneration remain incomplete. STATE remains on executing Plan 19-06. Operational PR/merge facts belong in `build/phase19-window/facts.env` and `continue.md`; no merge, tag, publication, REL-01 completion, or 19-07 execution is claimed here.
 
 ### Subsequent qualification snapshot — EC56 and round two
 
@@ -234,9 +246,9 @@ The preceding interim-status paragraph and the initial statement that PR A had n
 - Round two is the final allowed formal source-fix round. Commit `0fec185016ae4d3578b641ffc694aafdd1d8795c` changes only `tests/CMakeLists.txt` and `.github/scripts/verify-workflow-policy.py`: the two lifecycle-control CTests are serialized without changing timeout 60 or their counts/assertions; the fake-Git policy control uses a relative log path under its temporary working directory and reports captured process diagnostics. The production release guard and policy limits are unchanged. At this immutable source, `workflow_policy_controls`, `release_lifecycle_controls`, and `release_lifecycle_post_tag_controls` passed 3/3 in 87.19 seconds with parallelism 4; the test-budget, inventory self-test, and Python 3.10 grammar controls also passed. Full outputs are retained under `build/preflight/review/round2-0fec185/`.
 - Review reconciliation is recorded by commit `634a4c4ffa8ae0a6e4646628faf241ebd616ea0a`. The source review covers 56 paths with all four findings resolved. The security report records 26/35 threats closed, nine operationally pending, including four blocking; the existing AR-19-01 acceptance remains recorded. Windows hosted success at the fixed source is still pending.
 
-Current status remains `halted`, with Plan 19-06 executing and Task 4 incomplete. The current operational stage is **PR A fix qualification**: freeze a new final source head including the summary/reconciliation, repin the ignored runner, push that head to existing PR #133, then run the fresh coherent final synthetic preflight and exact-head CI. No result from EC56 substitutes for those gates. REL-01 and D-09 remain pending; no phase completion, merge, release tag, publication, or Plan 19-07 execution is claimed.
+At the EC56 snapshot, status was `halted`, Task 4 was incomplete, and PR A fix qualification was next. D-09 was then awaiting the owner decision later recorded as D-122. That operational snapshot is superseded by the owner approvals and the current b33/dedeb continuation below; no EC56 result qualifies a later source.
 
-### E0 settled-source qualification — results and blocker
+### E0 settled-source qualification — historical results and blocker
 
 This snapshot supersedes the preceding EC56-only stage description. The fresh E0 synthetic local and hosted pre-flight is complete; Plan 19-06 Task 4 and PR readiness are still blocked by exact-head CI.
 
@@ -256,7 +268,17 @@ At the E0 snapshot, the operational stage was **awaiting the Windows-harness res
 - Revision-bound local evidence at code commit `8f4deeddd07ddf06f9927a1c6c571b717732b06e`: resolver controls passed 5 negative / 4 positive cases; the full workflow-policy self-test reported 453 negative / 8 positive controls; all three tag-guard scenarios remained asserted and passed. Fresh root configure and CTest passed 5/5 (`v03_dispositions_controls`, `test_budget_controls`, `test_budget`, `workflow_policy_check`, `workflow_policy_controls`) in 69.29 seconds. The configured floors are 426 on Windows and 453 on POSIX, with the 180-second timeout unchanged. Python 3.10 grammar parsing of the changed script passed using Python 3.11's `feature_version=(3, 10)`. Logs are under `build/preflight/review/windows-rescope-*`.
 - PR #133 remains remotely at E0; source commit `8f4deeddd07ddf06f9927a1c6c571b717732b06e` has not been pushed. No exact-head CI or new H0/H-prime preflight has run for this source. Fresh final-source construction, installed-prefix/player qualification, six hosted producers, judge comparison, transient-branch deletion, actual Windows CI, exact-head checks and the unchanged performance gate remain outstanding. E0 receipts do not qualify the new source.
 
-Plan 19-06 remains `status: halted`, Task 4 incomplete, and `requirements-completed: []`; REL-01 remains pending. The D-121 additional fix/review allowance is consumed. Continue with the final source freeze and qualification; any further correctness or security finding requires a new owner rescope. Stop before merge until all required evidence and branch-protection checks pass. Do not start Plan 19-07, tag, publish, or claim Phase 19 complete.
+Plan 19-06 remains `status: halted`, Task 4 incomplete, and `requirements-completed: []`; REL-01 remains pending. The D-121 additional fix/review allowance is consumed. The current continuation and remaining gates are recorded below. Stop before merge until all required evidence and branch-protection checks pass. Do not start Plan 19-07, tag, publish, or claim Phase 19 complete.
+
+### Latest continuation — b33 superseded and ucrt64 fix qualified locally
+
+This is the current point-in-time status. It supersedes earlier statements that D-121/D-122, PR #133, or the fresh preflight were pending in a different way; prior identities and results remain bound to their original revisions.
+
+- D-121 and D-122 are approved and recorded. Focused continuation review/security reconciliation at `28aee3d570b0f3b233b413880611d5fe27f567e2` found no new defect; actual Windows CI remains unverified.
+- Candidate source `b33fa6bab36fc675cafd7d0cce7a874d501af88d` produced source → H0 `2a7382772c91448ca5c6e2ae302372eb9db566c6` → H1 `04f8480e7745ee1b10c5026b58439eeb9dc30ad9` → H-prime `1437c096c9c7ca98070d3d93fcb9e0e92236a04c`. H-prime local gates passed: installed-prefix CTest 1690/1690, CGB receipt 107/107 (25 observed pass, 82 expected XFAIL), player Release 108/108, Debug/linkage 110/110, including both Cocoa menu tests under scoped GUI escalation.
+- Hosted rehearsal [41057422573](https://github.com/szTheory/gabbaboy/actions/runs/41057422573) had four producer lanes succeed while corpus/support and aggregate were still running. It was cancelled before six-producer completion; no hosted judge differential or final fixed point was completed. Exact b33 runs [41057422573](https://github.com/szTheory/gabbaboy/actions/runs/41057422573), [41055884055](https://github.com/szTheory/gabbaboy/actions/runs/41055884055), [41055893076](https://github.com/szTheory/gabbaboy/actions/runs/41055893076), and [41055893244](https://github.com/szTheory/gabbaboy/actions/runs/41055893244) are terminal `cancelled`, not passes. Preserved Windows logs show push and PR `workflow_policy_controls` failed at `C:\Program Files\Git\ucrt64\bin\git.EXE`. The push macOS job also recorded `cgb_probe_parity` at 60.03 s against its unchanged 60-second timeout; no timeout change was made.
+- After cancellation, the transient rehearsal branch was verified at exact H-prime `1437c096c9c7ca98070d3d93fcb9e0e92236a04c`, deleted, and confirmed absent. Tag `v0.3.0` is absent and `origin/main` remains `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4`.
+- The approved continuation is code commit `dedeb22a5528b0ec6bb3cb4845a535303f66ccd4`, following b33. It recognizes `Git/ucrt64/bin/git.exe`, keeps selecting the verified installation's top-level `Git/bin/bash.exe`, and adds a durable positive control. The RED against immutable `8f4deeddd07ddf06f9927a1c6c571b717732b06e` reproduced rejection of valid ucrt64 with no bundled Bash found. At dedeb, resolver controls passed 5 negative / 5 positive, all three tag-guard scenarios passed, and workflow-policy self-test reported 453 negative / 9 positive. Fresh default configure captured dedeb; `workflow_policy_controls` passed 1/1 in 56.18 s with POSIX floor 453 and timeout 180 unchanged. Actual Windows CI, final coherent preflight, six hosted producers, judge differential, performance proof, and branch protection remain pending; PR #133 is still at b33.
 
 ## Issues Encountered and Limitations
 
@@ -264,17 +286,17 @@ The bullets below record the earlier interim snapshot. The subsequent qualificat
 
 - The initial hosted judge failure was a designed pre-PR-A refusal from the main-side judge scripts; its normalized line matched the local prediction. A hosted failure in a `uses:` step is outside the local `run:`-step emulation and must fail the final comparison closed.
 - The independent review and security audit ran after the initial synthetic H-prime. The final H0/H-prime chain, H0 receipt, final-source full suite, current CGB receipt, player gates, hosted six-producer run and judge comparison must all be rebuilt or rerun at the settled source before PR A.
-- The final exact-head CI, PR A, owner D-09 acknowledgment, squash merge and #131 regeneration have not occurred. No v0.3.0 release tag exists as of this interim summary.
+- At the interim snapshot, exact-head CI, PR A, D-09 acknowledgment, squash merge and #131 regeneration had not occurred. D-09 was later adopted under D-122; final exact-head CI, merge and #131 regeneration still remain outstanding. No v0.3.0 release tag exists.
 - The optional `gsd-tools windows append --kind unrun-verify` did not write an entry: the runtime rejected the existing Windows ledger's entry 20 because its status is `resolved`, which this runtime does not accept. No unrelated ledger entry was changed; the final verification remains explicit above.
 
 ## Next Phase Readiness
 
-Continue **Plan 19-06 — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A readiness** at final-source qualification. Resume with `/gsd-execute-phase 19`; the approved resolver fix at `8f4deeddd07ddf06f9927a1c6c571b717732b06e` is independently reviewed, and owner decisions D-121/D-122 are complete. After this documentation snapshot is committed, freeze and pin the new source head, push it once to existing PR #133, and run fresh exact-head CI plus the coherent H0-to-H-prime pre-flight. Then require source-bound performance evidence and branch protection before the authorized guarded merge. Any further finding requires a new rescope. Plan 19-06 and Phase 19 remain incomplete; do not start Plan 19-07.
+Continue **Plan 19-06 — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A readiness** at final-source qualification. Resume with `/gsd-execute-phase 19`; code commit `dedeb22a5528b0ec6bb3cb4845a535303f66ccd4` has passing local resolver evidence and was independently reviewed without a new finding at report commit `28aee3d570b0f3b233b413880611d5fe27f567e2`. After this documentation snapshot is committed, freeze and pin the new head, push it once to existing PR #133, and run actual Windows CI plus the coherent H0-to-H-prime pre-flight. Then require source-bound performance evidence and branch protection before the authorized guarded merge. Any further finding requires a new rescope. Plan 19-06 and Phase 19 remain incomplete; do not start Plan 19-07.
 
 ## Self-Check: PASSED
 
-The plan-interval base and head are ancestors of the current branch; the committed source controls and review/security reports cited above exist. This summary is intentionally halted and does not claim the remaining Task 4 outcomes.
+The plan-interval base `a3b5f8c88dfe5c0e3aa22867e75e38ed4cc4b438` and snapshot head `28aee3d570b0f3b233b413880611d5fe27f567e2` are ancestors of the branch. The dedeb source commit, report commit, RED/GREEN logs, configured targeted CTest evidence, and cancellation snapshots exist. This summary is intentionally halted and does not claim the remaining Task 4 outcomes.
 
 ---
 *Phase: GB-19-qualified-v0-3-0-release*
-*Plan: 06 — halted qualification snapshot; Windows rescope and D-09 decisions pending*
+*Plan: 06 — halted qualification snapshot; final Windows CI and final preflight pending*
