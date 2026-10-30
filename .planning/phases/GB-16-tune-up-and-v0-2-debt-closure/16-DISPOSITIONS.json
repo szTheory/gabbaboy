@@ -86,7 +86,14 @@
     ".github/workflows/release-rehearsal.yml",
     "run:40166530630",
     "ctest:workflow_policy_check",
-    "ctest:workflow_policy_controls"
+    "ctest:workflow_policy_group_ci",
+    "ctest:workflow_policy_group_release_jobs",
+    "ctest:workflow_policy_group_release_support",
+    "ctest:workflow_policy_group_rehearsal",
+    "ctest:workflow_policy_group_ledger",
+    "ctest:workflow_policy_group_helpers",
+    "ctest:workflow_policy_coverage",
+    "ctest:workflow_policy_coverage_controls"
    ],
    "owner_accepted": false,
    "basis": "Phase 16 D-31: a green exact-tag rehearsal on rehearsal/v0.2.1 at the version PR head, bound to the squash commit by tree equality. Closed by D-112 at the Phase 16 boundary with the tag-bound receipts of v0.2.1.",

@@ -19,6 +19,8 @@ a trusted checkout and pass the subject tree as --root (data only).
 from __future__ import annotations
 
 import argparse
+import ast
+import hashlib
 import json
 import math
 import os
@@ -1324,8 +1326,27 @@ RELEASE_PRESENCE = {
         ("call", 'gh release upload "$RELEASE_TAG" build/candidate-platform-manifest.json --repo "$GH_REPO"', True),
     ),
 }
+# Hosted Mac qualification uses the pinned Apple silicon macOS 15 image in all five producer/consumer jobs.
+MACOS_QUALIFICATION_RUNNER = "macos-15"
+MACOS_QUALIFICATION_JOBS = {
+    ("ci.yml", "native-macos"): MACOS_QUALIFICATION_RUNNER,
+    ("ci.yml", "macos-player-package"): MACOS_QUALIFICATION_RUNNER,
+    ("preview.yml", "installed-package-smoke-macos-arm64"): MACOS_QUALIFICATION_RUNNER,
+    ("preview.yml", "player-package-smoke-macos"): MACOS_QUALIFICATION_RUNNER,
+    ("release.yml", "candidate-macos"): MACOS_QUALIFICATION_RUNNER,
+}
+RELEASE_MACOS_BUILD_STEP = "Build and package macOS arm64 core once"
+RELEASE_MACOS_RECEIPT_PATH = "build/gabbaboy-build-receipt-macos-arm64.json"
+RELEASE_MACOS_RECEIPT_PRODUCER = r'''import json, os, pathlib, platform, subprocess
+cc = subprocess.run(["cc", "--version"], check=True, text=True, capture_output=True).stdout.splitlines()[0]
+cmake = subprocess.run(["cmake", "--version"], check=True, text=True, capture_output=True).stdout.splitlines()[0]
+pathlib.Path("build/gabbaboy-build-receipt-macos-arm64.json").write_text(json.dumps({
+    "schema_version": 1, "platform": "macos-arm64", "runner": "macos-15",
+    "os": platform.platform(), "architecture": platform.machine(), "compiler": cc,
+    "cmake": cmake, "configuration": "Release", "source_sha": os.environ["SOURCE_SHA"]
+}, indent=2) + "\n")'''
 # Hosted runner images of the native downloaded-archive lanes; a silently different image changes what was qualified.
-RELEASE_RUNNERS = {"candidate-macos": "macos-14", "candidate-windows": "windows-2022"}
+RELEASE_RUNNERS = {"candidate-macos": MACOS_QUALIFICATION_RUNNER, "candidate-windows": "windows-2022"}
 # The only events that may start release.yml: it is a reusable workflow, so a privileged event of its own
 # (pull_request_target, release, push) would run the draft-writing jobs outside the release-please entrypoint.
 RELEASE_TRIGGERS = frozenset({"workflow_call"})
@@ -2079,9 +2100,79 @@ def _check_release_presence(workflow: str, tree: dict) -> None:
         if _normalise_if(actual) != _normalise_if(expected):
             raise Reject("release-presence", f"{_where(workflow, key[0])} {subject} is not exactly the pinned guard {expected!r}")
     for job_id, runner in RELEASE_RUNNERS.items():
-        actual = str(_require_job(workflow, tree, job_id).get("runs-on", "")).strip()
+        actual = _require_job(workflow, tree, job_id).get("runs-on")
         if actual != runner:
             raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {runner}, not {actual or 'an unset image'}")
+
+
+def _check_macos_runner_pin(root: Path, workflow: str, job_id: str, expected: str) -> None:
+    tree = read_workflow(root / ".github/workflows" / workflow)
+    actual = _require_job(workflow, tree, job_id).get("runs-on")
+    if actual != expected:
+        raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {expected}, not {actual or 'an unset image'}")
+
+
+def _check_release_macos_receipt_runner(root: Path) -> None:
+    workflow = "release.yml"
+    tree = read_workflow(root / ".github/workflows" / workflow)
+    job = _require_job(workflow, tree, "candidate-macos")
+    steps = [step for step in job.get("steps", []) if step.get("name") == RELEASE_MACOS_BUILD_STEP]
+    run = str(steps[0].get("run", "")) if len(steps) == 1 else ""
+    commands = [index for index, line in enumerate(run.splitlines()) if line == "python3 - <<'PY'"]
+    lines = run.splitlines()
+    endings = [index for index, line in enumerate(lines) if line == "PY"]
+    if len(steps) != 1 or len(commands) != 1 or len(endings) != 1 or endings[0] <= commands[0] \
+            or any(line.strip() for line in lines[endings[0] + 1:]):
+        raise Reject("runner-image", "release.candidate-macos must have one terminal receipt-producing Python heredoc")
+    try:
+        producer = ast.parse("\n".join(lines[commands[0] + 1:endings[0]]))
+        canonical_producer = ast.parse(RELEASE_MACOS_RECEIPT_PRODUCER)
+    except SyntaxError as exc:
+        raise Reject("runner-image", "release.candidate-macos receipt producer is not valid Python") from exc
+    if ast.dump(producer, include_attributes=False) != ast.dump(canonical_producer, include_attributes=False):
+        raise Reject("runner-image", "release.candidate-macos receipt producer differs from the trusted canonical producer")
+
+    def is_path_call(node) -> bool:
+        return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "Path"
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == "pathlib"
+                and len(node.args) == 1 and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value == RELEASE_MACOS_RECEIPT_PATH)
+
+    writers = [node for node in ast.walk(producer)
+               if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "write_text"
+               and is_path_call(node.func.value)]
+    top_level_writers = [node.value for node in producer.body if isinstance(node, ast.Expr)
+                         and isinstance(node.value, ast.Call) and node.value in writers]
+    if len(writers) != 1 or len(top_level_writers) != 1 or top_level_writers[0] is not writers[0] or not writers[0].args:
+        raise Reject("runner-image", "release.candidate-macos must write one macOS build receipt to its pinned path")
+    payload = writers[0].args[0]
+    if not (isinstance(payload, ast.BinOp) and isinstance(payload.op, ast.Add)
+            and isinstance(payload.right, ast.Constant) and payload.right.value == "\n"):
+        raise Reject("runner-image", "release.candidate-macos receipt writer must append one newline to its JSON payload")
+    dump = payload.left
+    if not (isinstance(dump, ast.Call) and isinstance(dump.func, ast.Attribute) and dump.func.attr == "dumps"
+            and isinstance(dump.func.value, ast.Name) and dump.func.value.id == "json" and dump.args
+            and isinstance(dump.args[0], ast.Dict)):
+        raise Reject("runner-image", "release.candidate-macos receipt writer must serialize a literal JSON object")
+    receipt = dump.args[0]
+    if any(not isinstance(key, ast.Constant) or not isinstance(key.value, str) for key in receipt.keys):
+        raise Reject("runner-image", "release.candidate-macos receipt object must not use computed or expanded keys")
+
+    def field_values(name: str):
+        return [value for key, value in zip(receipt.keys, receipt.values) if key.value == name]
+
+    runner = field_values("runner")
+    platform = field_values("platform")
+    if (len(runner) != 1 or not isinstance(runner[0], ast.Constant)
+            or runner[0].value != MACOS_QUALIFICATION_RUNNER or len(platform) != 1
+            or not isinstance(platform[0], ast.Constant) or platform[0].value != "macos-arm64"):
+        raise Reject("runner-image", "release.candidate-macos build receipt must bind its macos-arm64 runner to macos-15")
+
+
+def _check_macos_qualification_runners(root: Path) -> None:
+    for (workflow, job_id), expected in MACOS_QUALIFICATION_JOBS.items():
+        _check_macos_runner_pin(root, workflow, job_id, expected)
+    _check_release_macos_receipt_runner(root)
 
 
 def _trigger_names(tree: dict) -> set[str]:
@@ -2710,13 +2801,71 @@ WINDOW_IF = "${{ !cancelled() && inputs.retry != true }}"
 WINDOW_CHECKER = "tests/scripts/verify-version-window.py"
 WINDOW_RECORD = "tests/data/version-window.json"
 WINDOW_CONFIG = "release-please-config.json"
+VERSION_PR_BRANCH = "release-please--branches--main--components--GabbaBoy"
+WINDOW_DISCOVERY_STEP = "Find the open version PR and its regenerated body"
+WINDOW_PR_LIST_LIMIT = 100
+WINDOW_DISCOVERY_BRANCH = f"branch={VERSION_PR_BRANCH}"
+WINDOW_DISCOVERY_CALL = ('candidates=$(gh pr list --repo "$GH_REPO" --head "$branch" --base main --state open '
+                         '--limit 100 --json number,headRefName,baseRefName,isCrossRepository)')
+WINDOW_DISCOVERY_SELECT = '''pr=$(jq -r --arg head "$branch" --argjson page_limit 100 '
+  def valid_pr:
+    if type != "object" then false
+    elif (.number | type) != "number" then false
+    elif .number <= 0 or (.number | floor) != .number then false
+    elif (.headRefName | type) != "string" then false
+    elif (.baseRefName | type) != "string" then false
+    elif (.isCrossRepository | type) != "boolean" then false
+    else true
+    end;
+  if type != "array" then error("expected PR array")
+  elif length >= $page_limit then error("PR list reached its limit")
+  elif any(.[]; valid_pr | not) then error("malformed PR entry")
+  else
+    [.[] | select(.headRefName == $head and .baseRefName == "main" and .isCrossRepository == false)]
+    | if length > 1 then error("multiple canonical component PRs")
+      elif length == 1 then .[0].number
+      else empty
+      end
+  end
+' <<< "$candidates")'''
+WINDOW_DISCOVERY_PRESENT_FALSE = 'echo "present=false" >> "$GITHUB_OUTPUT"'
+WINDOW_DISCOVERY_PRESENT_TRUE = 'echo "present=true" >> "$GITHUB_OUTPUT"'
+WINDOW_DISCOVERY_EMPTY_LOG = 'echo "No open version PR, so no window is frozen."'
+WINDOW_DISCOVERY_HEAD = 'head=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha)'
+WINDOW_DISCOVERY_BODY = 'gh api "repos/$GH_REPO/pulls/$pr" --jq \'.body // ""\' > "$RUNNER_TEMP/version-pr-body.md"'
+WINDOW_DISCOVERY_RUN = "\n".join((
+    "set -euo pipefail",
+    WINDOW_DISCOVERY_BRANCH,
+    WINDOW_DISCOVERY_CALL,
+    WINDOW_DISCOVERY_SELECT,
+    'if [[ -z "$pr" ]]; then',
+    f"  {WINDOW_DISCOVERY_PRESENT_FALSE}",
+    f"  {WINDOW_DISCOVERY_EMPTY_LOG}",
+    "  exit 0",
+    "fi",
+    WINDOW_DISCOVERY_HEAD,
+    WINDOW_DISCOVERY_BODY,
+    WINDOW_DISCOVERY_PRESENT_TRUE,
+    'echo "head=$head" >> "$GITHUB_OUTPUT"',
+))
+WINDOW_DISCOVERED_IF = "${{ steps.discover.outputs.present == 'true' }}"
+WINDOW_JUDGE_STEP = "Judge the regenerated version PR against its frozen window"
+WINDOW_JUDGE_SKIP = 'if [[ "$PRESENT" != true ]]; then'
+WINDOW_JUDGE_ABSENT_BLOCK = (WINDOW_JUDGE_SKIP + '\n'
+                             + '  echo "No open version PR; normal development keeps the existing release policy."\n'
+                             + '  exit 0\nfi')
 WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
                '--base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
+WINDOW_JUDGE_RUN = "\n".join((
+    "set -euo pipefail",
+    WINDOW_JUDGE_ABSENT_BLOCK,
+    WINDOW_CALL,
+))
 WINDOW_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
 WINDOW_STEP_TIMEOUT_MAX = 10
 VERSION_PR_WORKFLOW = "version-pr-gate.yml"
 VERSION_PR_JOB = "pre-tag-gate"
-VERSION_PR_IF = ("${{ github.event.pull_request.head.ref == 'release-please--branches--main--components--GabbaBoy' "
+VERSION_PR_IF = ("${{ github.event.pull_request.head.ref == '" + VERSION_PR_BRANCH + "' "
                  "&& github.event.pull_request.head.repo.full_name == github.repository }}")
 VERSION_PR_WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
                           '--base "$BASE_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
@@ -2784,6 +2933,15 @@ def check_version_window(root: Path) -> None:
         raise Reject("window-gate-skipped", f"{_where(name, WINDOW_JOB)} must run with {WINDOW_IF}, so a failed release job cannot skip it")
     if _permissions(job, tree.get("permissions", {})) != WINDOW_PERMISSIONS:
         raise Reject("window-gate-permissions", f"{_where(name, WINDOW_JOB)} needs exactly {WINDOW_PERMISSIONS}")
+    discover_steps = [step for step in job.get("steps", []) if step.get("id") == "discover"]
+    if (len(discover_steps) != 1 or discover_steps[0].get("name") != WINDOW_DISCOVERY_STEP
+            or discover_steps[0].get("env") != {"GH_TOKEN": "${{ github.token }}"}):
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} must keep one named, token-scoped version-PR discovery step")
+    discover_text = discover_steps[0].get("run", "")
+    if discover_text != WINDOW_DISCOVERY_RUN:
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} must discover the configured component branch and expose absent/present outputs")
+    _check_window_discovery_contract(discover_text)
+    require_call(name, WINDOW_JOB, {"steps": [discover_steps[0]]}, WINDOW_DISCOVERY_CALL)
     _check_checkout_credentials(name, tree, (WINDOW_JOB,))
     checkouts = _checkouts(job)
     by_path = {step.get("with", {}).get("path"): step.get("with", {}) for step in checkouts}
@@ -2793,6 +2951,19 @@ def check_version_window(root: Path) -> None:
         raise Reject("window-gate-trust", f"{_where(name, WINDOW_JOB)} must take the checker from the trusted main commit {TRUSTED_SHA_REF}")
     if str(by_path["version-pr"].get("fetch-depth", "")) != "0":
         raise Reject("window-gate-history", f"{_where(name, WINDOW_JOB)} needs the full history of the version PR to prove ancestry")
+    version_checkout = next(step for step in checkouts if step.get("with", {}).get("path") == "version-pr")
+    judge_steps = [step for step in job.get("steps", []) if step.get("name") == WINDOW_JUDGE_STEP]
+    if (version_checkout.get("if") != WINDOW_DISCOVERED_IF or len(judge_steps) != 1
+            or judge_steps[0].get("env") != {
+                "PRESENT": "${{ steps.discover.outputs.present }}",
+                "PR_HEAD": "${{ steps.discover.outputs.head }}",
+                "MAIN_SHA": "${{ github.sha }}",
+            }):
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} must route the discovered PR head to the trusted judge only when present")
+    judge_text = judge_steps[0].get("run", "")
+    absent_at = judge_text.find(WINDOW_JUDGE_ABSENT_BLOCK)
+    if absent_at < 0 or judge_text.count(WINDOW_JUDGE_ABSENT_BLOCK) != 1:
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} must skip only when absent and propagate the trusted judge result")
     for step in job.get("steps", []):
         minutes = str(step.get("timeout-minutes", ""))
         if not minutes.isdigit() or not 1 <= int(minutes) <= WINDOW_STEP_TIMEOUT_MAX:
@@ -2803,7 +2974,210 @@ def check_version_window(root: Path) -> None:
     _check_run_expressions(name, tree)
     _check_bounded_downloads(name, tree)
     require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
+    require_call(name, WINDOW_JOB, {"steps": [judge_steps[0]]}, WINDOW_CALL, conditional=True)
+    if judge_text != WINDOW_JUDGE_RUN:
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} judge body must match the trusted absent/present routing contract")
     _check_window_config(root)
+
+
+def _check_window_discovery_contract(discover_text: str) -> None:
+    if discover_text != WINDOW_DISCOVERY_RUN:
+        raise Reject("window-discovery", "version-window discovery must use the canonical same-repository, main-base, unique component-PR lookup")
+
+
+def _window_discovery_shell_controls() -> tuple[int, int]:
+    """Run only trusted canonical bodies with local shims; never execute run text from the judged subject tree."""
+    if os.name == "nt":
+        print("SKIP: controlled version-window shell routing is POSIX-only; the production gate runs on Ubuntu")
+        return 0, 0
+
+    legacy_branch = "release-please--branches--main"
+    jq_binary = shutil.which("jq")
+    if jq_binary is None:
+        raise SystemExit("self-test requires the jq executable used by the Ubuntu version-window job")
+    with tempfile.TemporaryDirectory(prefix="gbb-window-discovery.") as directory:
+        work = Path(directory)
+        shims = work / "bin"
+        runner_temp = work / "runner"
+        shims.mkdir()
+        runner_temp.mkdir()
+        gh = shims / "gh"
+        gh.write_text("""#!/bin/sh
+set -eu
+printf '%s\\n' "$*" >> "${WINDOW_CONTROL_GH_LOG:?}"
+if [ "${1:-}" = pr ] && [ "${2:-}" = list ]; then
+  shift 2
+  requested_branch=
+  requested_base=
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --head) shift; [ "$#" -gt 0 ] || exit 91; requested_branch=$1 ;;
+      --base) shift; [ "$#" -gt 0 ] || exit 91; requested_base=$1 ;;
+    esac
+    shift
+  done
+  if [ "$requested_branch" != "$WINDOW_CONTROL_BRANCH" ] || [ "$requested_base" != main ]; then
+    printf '[]\\n'
+  else
+    cat "${WINDOW_CONTROL_RESPONSE_FILE:?}"
+  fi
+  exit 0
+fi
+if [ "${1:-}" = api ]; then
+  printf '%s\\n' "$*" >> "${WINDOW_CONTROL_API_LOG:?}"
+  [ "${2:-}" = "repos/$GH_REPO/pulls/131" ] || exit 92
+  case "${4:-}" in
+    .head.sha) printf '%s\\n' "$WINDOW_CONTROL_PR_HEAD" ;;
+    '.body // ""') printf '%s\\n' 'controlled release notes' ;;
+    *) exit 93 ;;
+  esac
+  exit 0
+fi
+exit 94
+""", encoding="utf-8")
+        checker = shims / "python3"
+        checker.write_text("""#!/bin/sh
+set -eu
+[ "${1:-}" = -I ] || exit 94
+[ "${2:-}" = trusted/tests/scripts/verify-version-window.py ] || exit 95
+printf '%s:%s\\n' "${WINDOW_CONTROL_RECORD:?}" "${6:-}" >> "${WINDOW_CONTROL_CHECKER_LOG:?}"
+case "$WINDOW_CONTROL_RECORD" in
+  inactive) printf '%s\\n' 'version-window inactive pass controlled' ;;
+  active-valid) printf '%s\\n' 'version-window active pass controlled' ;;
+  active-stale) printf '%s\\n' 'REJECT window-stale controlled' >&2; exit 47 ;;
+  *) exit 96 ;;
+esac
+""", encoding="utf-8")
+        gh.chmod(0o755)
+        checker.chmod(0o755)
+
+        def control_env(label: str, record_state: str, response: str) -> dict[str, str]:
+            return {
+                "PATH": os.pathsep.join((str(shims), str(Path(jq_binary).parent), os.defpath)),
+                "GH_REPO": "control/repo",
+                "GH_TOKEN": "controlled-token",
+                "GITHUB_OUTPUT": str(work / f"{label}.output"),
+                "RUNNER_TEMP": str(runner_temp),
+                "WINDOW_CONTROL_BRANCH": VERSION_PR_BRANCH,
+                "WINDOW_CONTROL_RESPONSE_FILE": str(work / f"{label}.response.json"),
+                "WINDOW_CONTROL_PR_HEAD": "control-pr-head",
+                "WINDOW_CONTROL_RECORD": record_state,
+                "WINDOW_CONTROL_GH_LOG": str(work / f"{label}.gh.log"),
+                "WINDOW_CONTROL_API_LOG": str(work / f"{label}.api.log"),
+                "WINDOW_CONTROL_CHECKER_LOG": str(work / f"{label}.checker.log"),
+                "MAIN_SHA": "control-main-head",
+            }
+
+        def discover(label: str, record_state: str, response: str, *, body: str = WINDOW_DISCOVERY_RUN,
+                     expected_status: int = 0):
+            env = control_env(label, record_state, response)
+            Path(env["WINDOW_CONTROL_RESPONSE_FILE"]).write_text(response, encoding="utf-8")
+            Path(env["GITHUB_OUTPUT"]).write_text("", encoding="utf-8")
+            result = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", body],
+                                    capture_output=True, text=True, check=False, cwd=work, env=env, timeout=10)
+            if (result.returncode == 0 if expected_status == -1 else result.returncode != expected_status):
+                raise SystemExit(f"self-test trusted discovery body {label!r} returned {result.returncode}, "
+                                 f"expected {expected_status}: {result.stderr.strip()!r}")
+            outputs = {}
+            for line in Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8").splitlines():
+                key, separator, value = line.partition("=")
+                if not separator or key in outputs:
+                    raise SystemExit(f"self-test trusted discovery body {label!r} wrote malformed outputs")
+                outputs[key] = value
+            gh_calls = Path(env["WINDOW_CONTROL_GH_LOG"]).read_text(encoding="utf-8").splitlines()
+            expected_list_call = (f"pr list --repo control/repo --head {VERSION_PR_BRANCH} --base main --state open "
+                                  "--limit 100 --json number,headRefName,baseRefName,isCrossRepository")
+            if body == WINDOW_DISCOVERY_RUN and gh_calls[:1] != [expected_list_call]:
+                raise SystemExit(f"self-test canonical discovery argv changed: {gh_calls!r}")
+            return env, outputs
+
+        def judge(label: str, env: dict[str, str], outputs: dict[str, str]):
+            env = {**env, "PRESENT": outputs.get("present", ""), "PR_HEAD": outputs.get("head", "")}
+            result = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", WINDOW_JUDGE_RUN],
+                                    capture_output=True, text=True, check=False, cwd=work, env=env, timeout=10)
+            calls_path = Path(env["WINDOW_CONTROL_CHECKER_LOG"])
+            calls = calls_path.read_text(encoding="utf-8").splitlines() if calls_path.exists() else []
+            return result, calls
+
+        def row(number: int, *, branch: str = VERSION_PR_BRANCH, base: str = "main",
+                cross_repository: bool = False) -> dict[str, object]:
+            return {"number": number, "headRefName": branch, "baseRefName": base,
+                    "isCrossRepository": cross_repository}
+
+        canonical = [row(131)]
+        decoys_and_canonical = [row(132, cross_repository=True), row(133, base="develop"), row(131)]
+        positive = 0
+        negative = 0
+        for label, state, response_rows, expected_present, expected_status, expected_verdict, expected_calls in (
+            ("absent", "active-stale", [], "false", 0, "", []),
+            ("inactive", "inactive", canonical, "true", 0, "version-window inactive pass controlled", ["inactive:control-pr-head"]),
+            ("active-valid", "active-valid", canonical, "true", 0, "version-window active pass controlled", ["active-valid:control-pr-head"]),
+            ("active-valid-after-decoys", "active-valid", decoys_and_canonical, "true", 0,
+             "version-window active pass controlled", ["active-valid:control-pr-head"]),
+            ("active-stale", "active-stale", canonical, "true", 47, "REJECT window-stale controlled",
+             ["active-stale:control-pr-head"]),
+        ):
+            env, outputs = discover(label, state, json.dumps(response_rows))
+            if outputs.get("present") != expected_present or (expected_present == "true" and outputs.get("head") != "control-pr-head"):
+                raise SystemExit(f"self-test discovery output {label!r} differs: {outputs!r}")
+            result, calls = judge(label, env, outputs)
+            observed_verdict = result.stdout.strip() if expected_status == 0 and calls else result.stderr.strip()
+            if result.returncode != expected_status or calls != expected_calls or observed_verdict != expected_verdict:
+                raise SystemExit(f"self-test shell route {label!r} failed: exit={result.returncode}, calls={calls!r}, "
+                                 f"stdout={result.stdout.strip()!r}, stderr={result.stderr.strip()!r}")
+            api_path = Path(env["WINDOW_CONTROL_API_LOG"])
+            api_calls = api_path.read_text(encoding="utf-8").splitlines() if api_path.exists() else []
+            expected_api_calls = ([] if label == "absent" else [
+                "api repos/control/repo/pulls/131 --jq .head.sha",
+                'api repos/control/repo/pulls/131 --jq .body // ""',
+            ])
+            if api_calls != expected_api_calls:
+                raise SystemExit(f"self-test route {label!r} fetched the wrong PR identity: {api_calls!r}")
+            if label == "active-stale":
+                negative += 1
+            else:
+                positive += 1
+            _mark_policy_control("helper", "window-discovery", label)
+
+        legacy_body = WINDOW_DISCOVERY_RUN.replace(WINDOW_DISCOVERY_BRANCH,
+                                                   f"branch={legacy_branch}")
+        env, legacy_outputs = discover("legacy-query", "active-stale", json.dumps(canonical), body=legacy_body)
+        legacy_result, legacy_calls = judge("legacy-query", env, legacy_outputs)
+        if (legacy_outputs.get("present") != "false" or legacy_result.returncode != 0
+                or legacy_calls or legacy_result.stderr):
+            raise SystemExit("self-test legacy shell query did not reproduce its successful skipped-checker route")
+        try:
+            _check_window_discovery_contract(legacy_body)
+        except Reject as exc:
+            if exc.code != "window-discovery":
+                raise SystemExit(f"self-test legacy discovery mutant refused with the wrong code: {exc.code}") from exc
+            negative += 1
+        else:
+            raise SystemExit("self-test legacy shell query was not rejected by the static discovery contract")
+        _mark_policy_control("helper", "window-discovery", "legacy-query")
+
+        invalid_cases = (
+            ("ambiguous", json.dumps([row(131), row(134)])),
+            ("malformed-json", "{"),
+            ("malformed-row", json.dumps([{"number": "131", "headRefName": VERSION_PR_BRANCH,
+                                            "baseRefName": "main", "isCrossRepository": False}])),
+            ("full-page", json.dumps([row(131, base="develop"), *[row(number + 200, base="develop")
+                                                                      for number in range(WINDOW_PR_LIST_LIMIT - 1)]])),
+        )
+        for label, response in invalid_cases:
+            env, outputs = discover(label, "active-valid", response, expected_status=-1)
+            if outputs:
+                raise SystemExit(f"self-test invalid discovery {label!r} exposed a successful output: {outputs!r}")
+            api_path = Path(env["WINDOW_CONTROL_API_LOG"])
+            checker_path = Path(env["WINDOW_CONTROL_CHECKER_LOG"])
+            if api_path.exists() or checker_path.exists():
+                raise SystemExit(f"self-test invalid discovery {label!r} reached the PR API or window checker")
+            negative += 1
+            _mark_policy_control("helper", "window-discovery", label)
+
+    print("PASS: canonical Bash/jq routing covers absent, inactive, active-valid, fork/non-main decoys and stale-active; "
+          "ambiguous, malformed and full-page discovery fail closed; legacy query skips the checker and fails its contract")
+    return negative, positive
 
 
 def check_version_pr_gate(root: Path) -> None:
@@ -3024,6 +3398,7 @@ def check_all(root: Path, release_head: bool = False, git_root: Path | None = No
     check_rehearsal_flag_scope(root)
     check_rehearsal(root)
     check_ci(root)
+    _check_macos_qualification_runners(root)
     check_perf_attribution(root)
     check_nightly(root)
     check_readonly_workflows(root)
@@ -3154,6 +3529,7 @@ def report_red_replay_controls(root: Path) -> int:
                 raise SystemExit(f"self-test red-report replay: {scenario[0]}: exit={status} sent={sent} recorded={recorded}, "
                                  f"wanted sent={scenario[4]} recorded={scenario[5]}")
             controls += 1
+            _mark_policy_control("helper", "red-report-scenario", scenario[0])
         # Each mutant must behave differently from the production body on the scenario that exists to catch it.
         by_name = {scenario[0]: scenario for scenario in _REPORT_SCENARIOS}
         mutants = (
@@ -3182,12 +3558,117 @@ def report_red_replay_controls(root: Path) -> int:
             if status == 0 and sent == scenario[4] and recorded == scenario[5]:
                 raise SystemExit(f"self-test red-report replay: the mutant {label!r} behaved like the production body on {scenario_name!r}")
             controls += 1
+            _mark_policy_control("helper", "red-report-mutant", label)
     print(f"rejected: red-report body replay holds {len(_REPORT_SCENARIOS)} scenarios and refuses {len(mutants)} mutants")
     return controls
 
 
 # --------------------------------------------------------------------------- self-test
 WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "version-pr-gate.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml", "libbet-repro.yml")
+
+_POLICY_PARTITION_GROUPS = ("ci", "release_jobs", "release_support", "rehearsal", "ledger", "helpers")
+_ACTIVE_POLICY_GROUP: str | None = None
+_ACTIVE_POLICY_CONTROLS: dict[str, dict] = {}
+_COMPLETED_POLICY_CONTROLS: set[str] = set()
+
+
+def _policy_control_id(kind: str, *parts: str) -> str:
+    payload = json.dumps([kind, *parts], ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+    return f"{kind}-{hashlib.sha256(payload).hexdigest()[:20]}"
+
+
+def _record_policy_completion(completed: set[str], control_id: str, control: dict | None,
+                              active_group: str, platform: str) -> None:
+    if control is None:
+        raise SystemExit(f"self-test completed an unknown control ID: {control_id}")
+    if platform not in control["platforms"]:
+        raise SystemExit(f"self-test completed a wrong-platform control ID: {control_id}")
+    if active_group != "all" and control["group"] != active_group:
+        raise SystemExit(f"self-test completed an out-of-group control ID: {control_id}")
+    if control_id in completed:
+        raise SystemExit(f"self-test control completed more than once: {control_id}")
+    completed.add(control_id)
+
+
+def _mark_policy_control(kind: str, *parts: str) -> None:
+    """Record a control only after its original assertion has completed successfully."""
+    if _ACTIVE_POLICY_GROUP is None:
+        return
+    control_id = _policy_control_id(kind, *parts)
+    control = _ACTIVE_POLICY_CONTROLS.get(control_id)
+    platform = "windows" if os.name == "nt" else "posix"
+    _record_policy_completion(_COMPLETED_POLICY_CONTROLS, control_id, control, _ACTIVE_POLICY_GROUP, platform)
+
+
+def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | None = None) -> None:
+    """Run the unchanged complete self-test, optionally selecting one frozen mutation family."""
+    global _ACTIVE_POLICY_GROUP, _ACTIVE_POLICY_CONTROLS, _COMPLETED_POLICY_CONTROLS
+    if group not in (*_POLICY_PARTITION_GROUPS, "all"):
+        raise SystemExit(f"unknown workflow-policy control group: {group}")
+    repository = Path(__file__).resolve().parents[2]
+    manifest_path = repository / "tests/data/workflow-policy-controls.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        controls = manifest["controls"]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise SystemExit(f"workflow-policy control inventory is unavailable: {error}") from error
+    platform = "windows" if os.name == "nt" else "posix"
+    active_rows = [row for row in controls if platform in row["platforms"]]
+    _ACTIVE_POLICY_CONTROLS = {row["id"]: row for row in active_rows}
+    if len(_ACTIVE_POLICY_CONTROLS) != len(active_rows):
+        raise SystemExit("workflow-policy control inventory contains duplicate stable IDs")
+    _ACTIVE_POLICY_GROUP = group
+    _COMPLETED_POLICY_CONTROLS = set()
+
+    generator_names = ("_mutations", "_window_mutations", "_version_pr_gate_mutations", "_ledger_mutations")
+    original_generators = {name: globals()[name] for name in generator_names}
+    if group != "all":
+        for name in generator_names:
+            original = original_generators[name]
+            is_ledger = name == "_ledger_mutations"
+
+            def selected(*args, _original=original, _is_ledger=is_ledger):
+                if group == "helpers":
+                    return []
+                result = []
+                for row in _original(*args):
+                    label, expected = row[0], row[-1]
+                    kind = "ledger-mutation" if _is_ledger else "mutation"
+                    control_id = _policy_control_id(kind, label, expected)
+                    control = _ACTIVE_POLICY_CONTROLS.get(control_id)
+                    if control is None:
+                        raise SystemExit(f"generated control is absent from the frozen inventory: {control_id}")
+                    if control["group"] == group:
+                        result.append(row)
+                return result
+
+            globals()[name] = selected
+    try:
+        self_test(root)
+    finally:
+        for name, original in original_generators.items():
+            globals()[name] = original
+
+    expected_ids = {
+        row["id"] for row in active_rows
+        if group == "all" or row["group"] == group
+    }
+    actual_ids = set(_COMPLETED_POLICY_CONTROLS)
+    if actual_ids != expected_ids:
+        missing = sorted(expected_ids - actual_ids)
+        unexpected = sorted(actual_ids - expected_ids)
+        raise SystemExit(f"workflow-policy group {group} coverage mismatch: missing={missing} unexpected={unexpected}")
+    id_digest = hashlib.sha256("\n".join(sorted(actual_ids)).encode("ascii")).hexdigest()
+    if completed_file is not None:
+        completed_file.parent.mkdir(parents=True, exist_ok=True)
+        completed_file.write_text(json.dumps({
+            "baseline_commit": manifest["baseline_commit"],
+            "group": group,
+            "platform": platform,
+            "control_ids": sorted(actual_ids),
+            "ids_sha256": id_digest,
+        }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(f"PASS: workflow policy group {group} controls={len(actual_ids)} ids_sha256={id_digest}")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -3880,7 +4361,34 @@ def _mutations():
         _m("W6-04d candidate stops requiring release_created", rel, "  candidate:\n", " && needs.release.outputs.release_created == 'true'",
            "", "release-presence"),
         _m("W6-04e candidate loses its retry input", rel, "  candidate:\n", "      RETRY: ${{ inputs.retry }}\n", "", "release-presence"),
-        _m("W6-05a candidate-macos runner changed", rel, "  candidate-macos:\n", "runs-on: macos-14", "runs-on: macos-latest", "runner-image"),
+        _m("D126 ci native-macos runner pin changed", "ci.yml", "  native-macos:\n", "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 ci macos-player-package runner pin changed", "ci.yml", "  macos-player-package:\n", "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 preview installed-package Mac runner pin changed", "preview.yml", "  installed-package-smoke-macos-arm64:\n",
+           "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 preview player-package Mac runner pin changed", "preview.yml", "  player-package-smoke-macos:\n",
+           "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 macOS runner pin contains surrounding whitespace", "ci.yml", "  native-macos:\n",
+           "runs-on: macos-15", "runs-on: ' macos-15 '", "runner-image"),
+        _m("D126 macOS runner pin is a list instead of one scalar", "ci.yml", "  native-macos:\n",
+           "runs-on: macos-15", "runs-on: [macos-15]", "runner-image"),
+        _m("D126 macOS runner pin is an expression instead of one scalar", "ci.yml", "  native-macos:\n",
+           "runs-on: macos-15", "runs-on: ${{ vars.MACOS_RUNNER }}", "runner-image"),
+        _m("W6-05a candidate-macos runner changed", rel, "  candidate-macos:\n", "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 release macOS build receipt runner drifted", rel, f"name: {RELEASE_MACOS_BUILD_STEP}\n",
+           '"runner": "macos-15"', '"runner": "macos-14"', "runner-image"),
+        ("D126 stale receipt runner is not hidden by an expected-value comment decoy", rel, [
+            (f"name: {RELEASE_MACOS_BUILD_STEP}\n", '"runner": "macos-15"', '"runner": "macos-14"'),
+            (f"name: {RELEASE_MACOS_BUILD_STEP}\n", "import json, os, pathlib, platform, subprocess\n",
+             'import json, os, pathlib, platform, subprocess\n{I}# decoy: "schema_version": 1, "platform": "macos-arm64", "runner": "macos-15",\n'),
+        ], "runner-image"),
+        ("D126 duplicate receipt runner key cannot override the pinned value", rel, [
+            (f"name: {RELEASE_MACOS_BUILD_STEP}\n", '"runner": "macos-15",',
+             '"runner": "macos-15",\n{I}"runner": "macos-14",'),
+        ], "runner-image"),
+        ("D126 receipt producer cannot rebind json.dumps before writing", rel, [
+            (f"name: {RELEASE_MACOS_BUILD_STEP}\n", "import json, os, pathlib, platform, subprocess\n",
+             "import json, os, pathlib, platform, subprocess\n{I}json.dumps = lambda *_args, **_kwargs: '{\"schema_version\":1,\"platform\":\"macos-arm64\",\"runner\":\"macos-14\"}'\n"),
+        ], "runner-image"),
         _m("W6-05b candidate-windows runner changed", rel, "  candidate-windows:\n", "runs-on: windows-2022", "runs-on: windows-latest", "runner-image"),
         _m("W6-06 windows archive name changed in the extract call", rel, "  candidate-windows:\n",
            "bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz",
@@ -4091,6 +4599,25 @@ def _window_mutations():
            "window-config"),
         _m("W17-20 changelog path moved", "config", "", '"changelog-path": "CHANGELOG.md"', '"changelog-path": "docs/CHANGELOG.md"',
            "window-config"),
+        _m("W17-21 legacy release-please branch misses the component PR", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           WINDOW_DISCOVERY_BRANCH, WINDOW_DISCOVERY_BRANCH.replace(VERSION_PR_BRANCH, "release-please--branches--main"),
+           "window-discovery"),
+        _m("W17-22 component PR discovery omits its head filter", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           WINDOW_DISCOVERY_CALL, WINDOW_DISCOVERY_CALL.replace('--head "$branch"', ""), "window-discovery"),
+        _m("W17-23 component PR discovery output step is renamed", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           "id: discover\n", "id: find-version-pr\n", "window-discovery"),
+        _m("W17-24 discovered PR is not marked present", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           WINDOW_DISCOVERY_PRESENT_TRUE, ": # present output omitted", "window-discovery"),
+        _m("W17-25 component PR discovery omits its main-base filter", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           WINDOW_DISCOVERY_CALL, WINDOW_DISCOVERY_CALL.replace("--base main", ""), "window-discovery"),
+        _m("W17-26 component PR discovery admits fork candidates", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           '.isCrossRepository == false', '.isCrossRepository == true', "window-discovery"),
+        _m("W17-27 duplicate canonical component PRs select the first", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           'if length > 1 then error("multiple canonical component PRs")',
+           'if length > 1 then empty', "window-discovery"),
+        _m("W17-28 full component PR page is treated as complete", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           'elif length >= $page_limit then error("PR list reached its limit")',
+           'elif false then error("PR list reached its limit")', "window-discovery"),
     ]
 
 
@@ -4206,8 +4733,10 @@ def _ledger_boundary_controls() -> int:
 
     judge({})                                   # exactly ceil(2 x 12.4) = 25 passes
     done += 1
+    _mark_policy_control("helper", "ledger-boundary", "exact ceil ratio passes")
     judge({"tree_equal_sha": "b" * 40, "cited_tree": "c" * 40})
     done += 1
+    _mark_policy_control("helper", "ledger-boundary", "tree-equal exact ceil ratio passes")
     for label, code, call in (
         ("timeout one minute below ceil(2 x p50) fails", "timeout-ledger-ratio", lambda: judge({}, timeout=24)),
         ("tree-equal row one minute below ceil(2 x p50) fails", "timeout-ledger-ratio",
@@ -4231,6 +4760,7 @@ def _ledger_boundary_controls() -> int:
             if code is not None:
                 raise SystemExit(f"self-test boundary {label!r}: accepted")
         done += 1
+        _mark_policy_control("helper", "ledger-boundary", label)
     return done
 
 
@@ -4274,6 +4804,7 @@ def _ledger_git_object_controls() -> int:
     if any("origin/" in arg for call in calls for arg in call):
         raise SystemExit("self-test tree-equality default ref read origin/*")
     done += 1
+    _mark_policy_control("helper", "ledger-git-object", "default ref avoids origin")
 
     def expect(label: str, expected: str, invoke) -> None:
         try:
@@ -4288,18 +4819,22 @@ def _ledger_git_object_controls() -> int:
     expect("tree mismatch", "timeout-ledger-tree-mismatch",
            lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=mismatch))
     done += 1
+    _mark_policy_control("helper", "ledger-git-object", "tree mismatch")
     off_main, _ = fake_git(ancestor_code=1)
     expect("anchor not on main", "timeout-ledger-anchor-not-on-main",
            lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=off_main))
     done += 1
+    _mark_policy_control("helper", "ledger-git-object", "anchor not on main")
     missing, _ = fake_git(unreadable_anchor=True)
     expect("unreadable anchor", "timeout-ledger-git-unavailable",
            lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=missing))
     done += 1
+    _mark_policy_control("helper", "ledger-git-object", "unreadable anchor")
     no_live_ref, _ = fake_git(reject_origin=True)
     expect("explicit origin ref is honored", "timeout-ledger-git-unavailable",
            lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "origin/main", False, git=no_live_ref))
     done += 1
+    _mark_policy_control("helper", "ledger-git-object", "explicit origin ref honored")
     return done
 
 
@@ -4347,9 +4882,13 @@ def _ledger_disclosure_scratch_controls() -> int:
                 raise SystemExit(f"self-test disclosure scratch: wrong refusal {exc.code}")
         else:
             raise SystemExit("self-test disclosure scratch: changed job body without disclosure was accepted")
+        _mark_policy_control("helper", "ledger-disclosure", "changed body without disclosure refused")
         check({"disclosure": "changed this job's body after the cited run"})
+        _mark_policy_control("helper", "ledger-disclosure", "disclosed body accepted")
         check({}, key="ci.yml:stable")
+        _mark_policy_control("helper", "ledger-disclosure", "unchanged body accepted")
         check({}, base=None)
+        _mark_policy_control("helper", "ledger-disclosure", "disclosure comparison disabled")
     return 4
 
 
@@ -4407,6 +4946,7 @@ def _ledger_release_object_scratch_controls(root: Path, work: Path) -> int:
         positive = check()
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test release-object positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+        _mark_policy_control("helper", "ledger-release-object", "retained tree-equal citation accepted")
         print("passed: release-head reads retained tree-equal citations and skips an unreadable plain citation")
         git("update-ref", "-d", "refs/heads/side")
         git("reflog", "expire", "--expire=now", "--all")
@@ -4417,6 +4957,7 @@ def _ledger_release_object_scratch_controls(root: Path, work: Path) -> int:
         expected = f"REJECT timeout-ledger-cited-object-missing: {tree_rows[0][0]}:"
         if negative.returncode != 1 or expected not in negative.stderr or "PASS:" in negative.stdout:
             raise SystemExit(f"self-test release-object negative control failed: exit={negative.returncode} stderr={negative.stderr.strip()!r}")
+        _mark_policy_control("helper", "ledger-release-object", "pruned tree-equal citation refused")
         print(f"rejected: pruned tree-equal cited object: {negative.stderr.strip()}")
     return 2
 
@@ -4452,12 +4993,14 @@ def verify_cited_stub_controls(root: Path, work: Path) -> int:
         if positive.returncode != 0 or "verify-cited rows=1 failures=0" not in positive.stdout:
             raise SystemExit(f"self-test verify-cited positive control failed: {positive.stdout!r} {positive.stderr!r}")
         controls += 1
+        _mark_policy_control("helper", "verify-cited-stub", "tree-equal citation accepted")
         row["cited_job_name"] = "missing predecessor job"
         ledger_path.write_text(json.dumps({"release-rehearsal.yml:performance": row}, indent=1) + "\n", encoding="utf-8")
         missing_job = run()
         if missing_job.returncode != 1 or "FAIL release-rehearsal.yml:performance: job missing or not successful" not in missing_job.stdout:
             raise SystemExit(f"self-test verify-cited missing-job control failed: {missing_job.stdout!r} {missing_job.stderr!r}")
         controls += 1
+        _mark_policy_control("helper", "verify-cited-stub", "missing predecessor job refused")
         row["cited_job_name"] = "rehearse-paired-performance-qualification"
         ledger_path.write_text(json.dumps({"release-rehearsal.yml:performance": row}, indent=1) + "\n", encoding="utf-8")
         env["STUB_TREE"] = "e" * 40
@@ -4465,6 +5008,7 @@ def verify_cited_stub_controls(root: Path, work: Path) -> int:
         if wrong_tree.returncode != 1 or "does not match cited_tree" not in wrong_tree.stdout:
             raise SystemExit(f"self-test verify-cited wrong-tree control failed: {wrong_tree.stdout!r} {wrong_tree.stderr!r}")
         controls += 1
+        _mark_policy_control("helper", "verify-cited-stub", "wrong API tree refused")
     finally:
         ledger_path.write_text(original, encoding="utf-8")
     print("passed: online citation stub verifies tree-equal heads and refuses missing jobs and mismatched API trees")
@@ -4632,6 +5176,7 @@ def rehearsal_bash_resolver_controls() -> tuple[int, int]:
                 raise SystemExit(f"self-test Git Bash resolver supported {label} layout failed: "
                                  f"selected={selected!r} lookup_calls={lookup.call_args_list!r}")
             accepted += 1
+            _mark_policy_control("helper", "git-bash-resolver", label)
 
         with patch.object(shutil, "which", return_value=None) as lookup:
             try:
@@ -4644,6 +5189,7 @@ def rehearsal_bash_resolver_controls() -> tuple[int, int]:
             if lookup.call_args_list != [call("git")]:
                 raise SystemExit(f"self-test Git Bash resolver missing Git lookup was not explicit: {lookup.call_args_list!r}")
         rejected += 1
+        _mark_policy_control("helper", "git-bash-resolver", "missing Git lookup")
 
         absent_git = fixture / "Git-missing-file" / "cmd" / "git.exe"
         with patch.object(shutil, "which", return_value=str(absent_git)) as lookup:
@@ -4657,6 +5203,7 @@ def rehearsal_bash_resolver_controls() -> tuple[int, int]:
             if lookup.call_args_list != [call("git")]:
                 raise SystemExit(f"self-test Git Bash resolver missing-file lookup was not explicit: {lookup.call_args_list!r}")
         rejected += 1
+        _mark_policy_control("helper", "git-bash-resolver", "missing git.exe file")
 
         unsupported_git = fixture / "Git-unrecognized-layout" / "Tools" / "git.exe"
         seed(unsupported_git)
@@ -4672,6 +5219,7 @@ def rehearsal_bash_resolver_controls() -> tuple[int, int]:
             if lookup.call_args_list != [call("git")]:
                 raise SystemExit(f"self-test Git Bash resolver unsupported-layout lookup was not explicit: {lookup.call_args_list!r}")
         rejected += 1
+        _mark_policy_control("helper", "git-bash-resolver", "unsupported Git layout")
 
         system_git = system_root / "System32" / "git.exe"
         seed(system_git)
@@ -4686,6 +5234,7 @@ def rehearsal_bash_resolver_controls() -> tuple[int, int]:
             if lookup.call_args_list != [call("git")]:
                 raise SystemExit(f"self-test Git Bash resolver system-alias lookup was not explicit: {lookup.call_args_list!r}")
         rejected += 1
+        _mark_policy_control("helper", "git-bash-resolver", "Windows system-directory alias")
 
         git_without_bash = fixture / "Git-no-bash" / "cmd" / "git.exe"
         seed(git_without_bash)
@@ -4702,6 +5251,7 @@ def rehearsal_bash_resolver_controls() -> tuple[int, int]:
             if lookup.call_args_list != [call("git")]:
                 raise SystemExit(f"self-test Git Bash resolver consulted an ambient shell lookup: {lookup.call_args_list!r}")
         rejected += 1
+        _mark_policy_control("helper", "git-bash-resolver", "WSL System32 alias refusal")
 
         with patch.object(shutil, "which") as lookup:
             selected = _rehearsal_bash_executable(windows=False)
@@ -4709,6 +5259,7 @@ def rehearsal_bash_resolver_controls() -> tuple[int, int]:
             raise SystemExit(f"self-test Git Bash resolver changed non-Windows behavior: "
                              f"selected={selected!r} lookup_calls={lookup.call_args_list!r}")
         accepted += 1
+        _mark_policy_control("helper", "git-bash-resolver", "non-Windows behavior")
 
     print(f"PASS: Git for Windows Bash resolver controls negative={rejected} positive={accepted}")
     return rejected, accepted
@@ -4758,34 +5309,55 @@ git() {
         if absent.returncode != 0 or absent_read_error is not None or len(absent_lines) != 1:
             raise SystemExit("self-test release tag guard failed to allow an untagged release rehearsal: "
                              + details(absent, absent_lines, absent_read_error))
+        _mark_policy_control("helper", "tag-guard", "untagged release rehearsal")
         present = run("rehearsal/v0.3.0", True)
         present_lines, present_read_error = log_state()
         if (present.returncode == 0 or "Tag v0.3.0 already exists; a rehearsal after the tag cannot bind a release." not in present.stderr
                 or present_read_error is not None or len(present_lines) != 1):
             raise SystemExit("self-test release tag guard did not refuse an existing release tag: "
                              + details(present, present_lines, present_read_error))
+        _mark_policy_control("helper", "tag-guard", "existing release tag")
         other = run("rehearsal/phase-15.1-demo", True)
         other_lines, other_read_error = log_state()
         if other.returncode != 0 or other_read_error is not None or other_lines:
             raise SystemExit("self-test release tag guard did not skip a non-release rehearsal branch: "
                              + details(other, other_lines, other_read_error))
+        _mark_policy_control("helper", "tag-guard", "non-release rehearsal branch")
     print("PASS: rehearsal tag guard allows an untagged release rehearsal and refuses an existing tag; non-release branch skips")
     return 1
 
 
 def self_test(root: Path) -> None:
     rejected = 0
+    run_helpers = _ACTIVE_POLICY_GROUP is None or _ACTIVE_POLICY_GROUP in ("all", "helpers")
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
         fixture = Path(directory) / "subject"
         work = Path(directory) / "work"
         work.mkdir()
         _copy_fixture(root, fixture)
-        positive = _run_cli(fixture, work)
-        if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
-            raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
-        resolver_rejected, resolver_accepted = rehearsal_bash_resolver_controls()
-        rejected += resolver_rejected
-        rejected += rehearsal_tag_guard_controls(fixture)
+        if run_helpers:
+            positive = _run_cli(fixture, work)
+            if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
+                raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+            _mark_policy_control("helper", "baseline-positive-cli", "workflow checker accepts the baseline")
+            runner_positive_controls = 0
+            for (workflow, job_id), expected in MACOS_QUALIFICATION_JOBS.items():
+                _check_macos_runner_pin(fixture, workflow, job_id, expected)
+                runner_positive_controls += 1
+                _mark_policy_control("helper", "macos-runner-positive", workflow, job_id)
+            _check_release_macos_receipt_runner(fixture)
+            runner_positive_controls += 1
+            _mark_policy_control("helper", "release-receipt-runner-positive", "macOS receipt runner")
+            routing_rejected, routing_accepted = _window_discovery_shell_controls()
+            rejected += routing_rejected
+            resolver_rejected, resolver_accepted = rehearsal_bash_resolver_controls()
+            rejected += resolver_rejected
+            rejected += rehearsal_tag_guard_controls(fixture)
+        else:
+            runner_positive_controls = 0
+            routing_accepted = 0
+            resolver_accepted = 0
+            accepted = 0
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
         baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
         baselines["config"] = (fixture / WINDOW_CONFIG).read_text(encoding="utf-8")
@@ -4821,6 +5393,7 @@ def self_test(root: Path) -> None:
                                  f"stdout={result.stdout!r}, stderr={diagnostic!r}")
             rejected += 1
             print(f"rejected: {label}: {diagnostic}")
+            _mark_policy_control("mutation", label, expected)
             path.write_text(baselines[workflow], encoding="utf-8")
         # Timeout ledger (D-20): data mutations through the CLI, each restoring the baseline afterwards.
         ledger_baseline = (fixture / LEDGER_PATH).read_text(encoding="utf-8")
@@ -4834,99 +5407,112 @@ def self_test(root: Path) -> None:
                                  f"stdout={result.stdout!r}, stderr={diagnostic!r}")
             rejected += 1
             print(f"rejected: {label}: {diagnostic}")
+            _mark_policy_control("ledger-mutation", label, expected)
             (fixture / LEDGER_PATH).write_text(ledger_baseline, encoding="utf-8")
             (fixture / "CMakeLists.txt").write_text(cmake_baseline, encoding="utf-8")
             for item in WORKFLOWS:
                 (fixture / ".github/workflows" / item).write_text(baselines[item], encoding="utf-8")
-        rejected += _ledger_boundary_controls()
-        rejected += _ledger_git_object_controls()
-        rejected += _ledger_disclosure_scratch_controls()
-        rejected += _ledger_release_object_scratch_controls(root, work)
-        rejected += verify_cited_stub_controls(fixture, work)
+        if run_helpers:
+            rejected += _ledger_boundary_controls()
+            rejected += _ledger_git_object_controls()
+            rejected += _ledger_disclosure_scratch_controls()
+            rejected += _ledger_release_object_scratch_controls(root, work)
+            rejected += verify_cited_stub_controls(fixture, work)
         # WR-C01: the workflow set is closed. A new file (here a pull_request_target job with contents: write) is refused
         # before anything reads it, and so is a judged file that disappears.
-        intruder = fixture / ".github/workflows/evil.yml"
-        intruder.write_text("name: evil\non:\n  pull_request_target:\npermissions:\n  contents: write\njobs:\n  evil:\n"
-                            "    runs-on: ubuntu-22.04\n    steps:\n      - run: echo evil\n", encoding="utf-8")
-        for label, mutate, restore in (
-            ("WR-C01 an unlisted workflow file", lambda: None, intruder.unlink),
-            ("WR-C01 a judged workflow file renamed to .yaml",
-             lambda: (fixture / ".github/workflows/libbet-repro.yml").rename(fixture / ".github/workflows/libbet-repro.yaml"),
-             lambda: (fixture / ".github/workflows/libbet-repro.yaml").rename(fixture / ".github/workflows/libbet-repro.yml")),
-        ):
-            mutate()
-            result = _run_cli(fixture, work)
-            restore()
-            if result.returncode != 1 or "REJECT workflow-unlisted:" not in result.stderr or "PASS:" in result.stdout:
-                raise SystemExit(f"self-test negative {label!r} failed: exit={result.returncode} stderr={result.stderr.strip()!r}")
-            rejected += 1
-            print(f"rejected: {label}: {result.stderr.strip()}")
+        if run_helpers:
+            intruder = fixture / ".github/workflows/evil.yml"
+            intruder.write_text("name: evil\non:\n  pull_request_target:\npermissions:\n  contents: write\njobs:\n  evil:\n"
+                                "    runs-on: ubuntu-22.04\n    steps:\n      - run: echo evil\n", encoding="utf-8")
+            for label, mutate, restore in (
+                ("WR-C01 an unlisted workflow file", lambda: None, intruder.unlink),
+                ("WR-C01 a judged workflow file renamed to .yaml",
+                 lambda: (fixture / ".github/workflows/libbet-repro.yml").rename(fixture / ".github/workflows/libbet-repro.yaml"),
+                 lambda: (fixture / ".github/workflows/libbet-repro.yaml").rename(fixture / ".github/workflows/libbet-repro.yml")),
+            ):
+                mutate()
+                result = _run_cli(fixture, work)
+                restore()
+                if result.returncode != 1 or "REJECT workflow-unlisted:" not in result.stderr or "PASS:" in result.stdout:
+                    raise SystemExit(f"self-test negative {label!r} failed: exit={result.returncode} stderr={result.stderr.strip()!r}")
+                rejected += 1
+                print(f"rejected: {label}: {result.stderr.strip()}")
+                _mark_policy_control("helper", "closed-workflow-set", label)
         # Equivalent shell formatting of a required call stays valid: continuation, quoting, extra spaces,
         # interleaved comments and blank lines do not change what runs.
-        path = fixture / ".github/workflows/release-rehearsal.yml"
-        accepted = 0
-        for variant in (
+        if run_helpers:
+            path = fixture / ".github/workflows/release-rehearsal.yml"
+            accepted = 0
+            for variant in (
             "python3  -I \\\n{I}  trusted-judge/.github/scripts/verify-workflow-policy.py \\\n{I}  --check --root subject --release-head",
             'python3 -I "trusted-judge/.github/scripts/verify-workflow-policy.py" --check --root \'subject\' --release-head',
             "# the judge\n{I}\n{I}python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head  # trailing",
-        ):
-            variant = variant.replace("--release-head", "--release-head --git-root trusted-judge")
-            text = baselines["release-rehearsal.yml"]
-            position = text.find(JUDGE_CALL, text.find("  judge:\n"))
-            line_start = text.rfind("\n", 0, position) + 1
-            indent = " " * (position - line_start)
-            path.write_text(text[:position] + variant.replace("{I}", indent) + text[position + len(JUDGE_CALL):], encoding="utf-8")
-            result = _run_cli(fixture, work)
-            if result.returncode != 0 or "PASS:" not in result.stdout:
-                raise SystemExit(f"self-test equivalent formatting {variant!r} was rejected: {result.stderr.strip()!r}")
-            accepted += 1
-        path.write_text(baselines["release-rehearsal.yml"], encoding="utf-8")
-        # A subject that ships its own judge, and shadows standard-library modules, cannot change the verdict:
-        # the trusted script ignores the subject tree except as workflow text.
-        bad = baselines["release-rehearsal.yml"].replace("permissions:\n  contents: read\n", "permissions:\n  contents: write\n", 1)
-        (fixture / ".github/workflows/release-rehearsal.yml").write_text(bad, encoding="utf-8")
-        hostile = fixture / ".github/scripts/verify-workflow-policy.py"
-        hostile.parent.mkdir(parents=True, exist_ok=True)
-        hostile.write_text("print('PASS: workflow privilege and trust wiring')\nraise SystemExit(0)\n", encoding="utf-8")
-        (fixture / "re.py").write_text("raise SystemExit('subject re.py executed')\n", encoding="utf-8")
-        (fixture / "pathlib.py").write_text("raise SystemExit('subject pathlib.py executed')\n", encoding="utf-8")
-        result = _run_cli(fixture, fixture)
-        if result.returncode != 1 or "REJECT workflow-permissions:" not in result.stderr or "PASS:" in result.stdout:
-            raise SystemExit(f"self-test hostile subject judge was not ignored: exit={result.returncode} stderr={result.stderr.strip()!r}")
-        rejected += 1
-        print("rejected: subject-supplied judge and shadowed modules cannot approve a mutated workflow")
+            ):
+                variant = variant.replace("--release-head", "--release-head --git-root trusted-judge")
+                text = baselines["release-rehearsal.yml"]
+                position = text.find(JUDGE_CALL, text.find("  judge:\n"))
+                line_start = text.rfind("\n", 0, position) + 1
+                indent = " " * (position - line_start)
+                path.write_text(text[:position] + variant.replace("{I}", indent) + text[position + len(JUDGE_CALL):], encoding="utf-8")
+                result = _run_cli(fixture, work)
+                if result.returncode != 0 or "PASS:" not in result.stdout:
+                    raise SystemExit(f"self-test equivalent formatting {variant!r} was rejected: {result.stderr.strip()!r}")
+                accepted += 1
+                _mark_policy_control("helper", "formatting-positive", str(accepted))
+            path.write_text(baselines["release-rehearsal.yml"], encoding="utf-8")
+        if run_helpers:
+            # A subject that ships its own judge, and shadows standard-library modules, cannot change the verdict:
+            # the trusted script ignores the subject tree except as workflow text.
+            bad = baselines["release-rehearsal.yml"].replace("permissions:\n  contents: read\n", "permissions:\n  contents: write\n", 1)
+            (fixture / ".github/workflows/release-rehearsal.yml").write_text(bad, encoding="utf-8")
+            hostile = fixture / ".github/scripts/verify-workflow-policy.py"
+            hostile.parent.mkdir(parents=True, exist_ok=True)
+            hostile.write_text("print('PASS: workflow privilege and trust wiring')\nraise SystemExit(0)\n", encoding="utf-8")
+            (fixture / "re.py").write_text("raise SystemExit('subject re.py executed')\n", encoding="utf-8")
+            (fixture / "pathlib.py").write_text("raise SystemExit('subject pathlib.py executed')\n", encoding="utf-8")
+            result = _run_cli(fixture, fixture)
+            if result.returncode != 1 or "REJECT workflow-permissions:" not in result.stderr or "PASS:" in result.stdout:
+                raise SystemExit(f"self-test hostile subject judge was not ignored: exit={result.returncode} stderr={result.stderr.strip()!r}")
+            rejected += 1
+            _mark_policy_control("helper", "hostile-subject", "judge and module shadowing refused")
+            print("rejected: subject-supplied judge and shadowed modules cannot approve a mutated workflow")
         # Residual classification is data, so it is attacked in-process: a job in both sets, then a job in neither.
-        for label, kwargs in (
-            ("residual job listed in both the subject set and the exemption map", {"exempt": {**TOKEN_SCOPE_EXEMPT, "candidate": "claimed exempt"}}),
-            ("residual job missing from both sets", {"subject": tuple(job for job in RESIDUAL_SUBJECT_JOBS if job != "candidate")}),
-            ("exempt job without a reason", {"exempt": {**TOKEN_SCOPE_EXEMPT, "publish-qualified-release": " "}}),
-        ):
-            try:
-                _check_residual_classification(**kwargs)
-            except Reject as exc:
-                if exc.code != "residual-classification":
-                    raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
-                rejected += 1
-                print(f"rejected: {label}: {exc}")
-            else:
-                raise SystemExit(f"self-test negative {label!r} failed: accepted")
+        if run_helpers:
+            for label, kwargs in (
+                ("residual job listed in both the subject set and the exemption map", {"exempt": {**TOKEN_SCOPE_EXEMPT, "candidate": "claimed exempt"}}),
+                ("residual job missing from both sets", {"subject": tuple(job for job in RESIDUAL_SUBJECT_JOBS if job != "candidate")}),
+                ("exempt job without a reason", {"exempt": {**TOKEN_SCOPE_EXEMPT, "publish-qualified-release": " "}}),
+            ):
+                try:
+                    _check_residual_classification(**kwargs)
+                except Reject as exc:
+                    if exc.code != "residual-classification":
+                        raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
+                    rejected += 1
+                    print(f"rejected: {label}: {exc}")
+                    _mark_policy_control("helper", "residual-classification", label)
+                else:
+                    raise SystemExit(f"self-test negative {label!r} failed: accepted")
         # The credential exemption is data too: a stale job name and a reasonless entry are both rejected.
-        for label, exempt in (
-            ("credential exemption names a job that does not exist", {("ci.yml", "no-such-job"): "claimed"}),
-            ("credential exemption without a reason", {("ci.yml", "native-linux"): " "}),
-        ):
-            try:
-                check_readonly_workflows(root, exempt)
-            except Reject as exc:
-                if exc.code != "checkout-credentials":
-                    raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
-                rejected += 1
-                print(f"rejected: {label}: {exc}")
-            else:
-                raise SystemExit(f"self-test negative {label!r} failed: accepted")
-    rejected += report_red_replay_controls(root)
+        if run_helpers:
+            for label, exempt in (
+                ("credential exemption names a job that does not exist", {("ci.yml", "no-such-job"): "claimed"}),
+                ("credential exemption without a reason", {("ci.yml", "native-linux"): " "}),
+            ):
+                try:
+                    check_readonly_workflows(root, exempt)
+                except Reject as exc:
+                    if exc.code != "checkout-credentials":
+                        raise SystemExit(f"self-test negative {label!r} failed: wrong code {exc.code}")
+                    rejected += 1
+                    print(f"rejected: {label}: {exc}")
+                    _mark_policy_control("helper", "credential-exemption", label)
+                else:
+                    raise SystemExit(f"self-test negative {label!r} failed: accepted")
+    if run_helpers:
+        rejected += report_red_replay_controls(root)
     print(f"PASS: workflow policy self-test negative_controls={rejected} "
-          f"positive_controls={1 + resolver_accepted + accepted}")
+          f"positive_controls={1 + runner_positive_controls + resolver_accepted + accepted + routing_accepted}")
 
 
 def main() -> int:
@@ -4934,6 +5520,10 @@ def main() -> int:
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument("--check", action="store_true", help="judge the workflow files under --root")
     modes.add_argument("--self-test", action="store_true", help="run positive and intended-defect controls through the CLI")
+    parser.add_argument("--group", choices=(*_POLICY_PARTITION_GROUPS, "all"), default="all",
+                        help="limit --self-test to one registered control group; defaults to all controls")
+    parser.add_argument("--completed-file", type=Path, default=None,
+                        help="write completed stable control IDs after a successful --self-test")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="tree whose .github/workflows files are judged as data")
     parser.add_argument("--git-root", type=Path, default=None,
@@ -4950,7 +5540,7 @@ def main() -> int:
     root = args.root.resolve()
     try:
         if args.self_test:
-            self_test(root)
+            run_policy_self_test(root, args.group, args.completed_file)
             return 0
         if args.verify_cited:
             return verify_cited(root)

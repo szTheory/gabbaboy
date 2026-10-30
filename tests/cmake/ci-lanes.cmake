@@ -7,6 +7,7 @@
 set(GBB_CLASSIFY_CHANGES "${PROJECT_SOURCE_DIR}/.github/scripts/classify-changes.py")
 set(GBB_CHECK_REQUIRED_NATIVE "${PROJECT_SOURCE_DIR}/.github/scripts/check-required-native.py")
 set(GBB_WORKFLOW_POLICY "${PROJECT_SOURCE_DIR}/.github/scripts/verify-workflow-policy.py")
+set(GBB_WORKFLOW_POLICY_COVERAGE "${PROJECT_SOURCE_DIR}/tests/scripts/verify-workflow-policy-coverage.py")
 set(GBB_CLASSIFY_DATA "${PROJECT_SOURCE_DIR}/tests/data/classify-changes")
 
 # Immutable recorded raw diffs: SHA256SUMS lists every fixture and its digest, and the manifest itself is pinned
@@ -86,16 +87,62 @@ set(GBB_CI_LANE_EXTRA_ARGS)
 # D-20/D-21: every workflow-policy control from plans 16-02 to 16-04 is reachable from CTest.
 gbb_add_ci_lane_test(workflow_policy_check 0 "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+" 60 ""
   "${GBB_WORKFLOW_POLICY}" --check --root "${PROJECT_SOURCE_DIR}")
-# Phase 19-06 added two aggregate host-smoke mutants. The Windows Bash resolver adds five further negative
-# controls. Keep the platform floors at the measured prior values plus the registered new controls.
-if(WIN32)
-  set(gbb_workflow_policy_floor 426)
-else()
-  set(gbb_workflow_policy_floor 453)
+# The control registry is generated from immutable baseline 70d3e422. Each group emits a fresh completion file only
+# after its completed stable IDs equal the registry slice. All groups use the existing exit-plus-marker wrapper and
+# retain the unchanged 180-second ceiling. The legacy --self-test with no --group still runs the complete suite.
+set(GBB_POLICY_COVERAGE_REV_RESULT "")
+# Do not let Git discover an unrelated parent repository when this project is an extracted source archive.
+# Ordinary source builds remain configurable without Git; the immutable CTest checker still fails closed if run.
+file(REAL_PATH "${PROJECT_SOURCE_DIR}" GBB_POLICY_PROJECT_REAL)
+execute_process(COMMAND git -C "${PROJECT_SOURCE_DIR}" rev-parse --show-toplevel
+  OUTPUT_VARIABLE GBB_POLICY_GIT_TOP OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE GBB_POLICY_GIT_TOP_RESULT
+  ERROR_QUIET)
+if("${GBB_POLICY_GIT_TOP_RESULT}" STREQUAL "0")
+  file(REAL_PATH "${GBB_POLICY_GIT_TOP}" GBB_POLICY_GIT_TOP_REAL)
+  if(GBB_POLICY_GIT_TOP_REAL STREQUAL GBB_POLICY_PROJECT_REAL)
+    execute_process(COMMAND git -C "${PROJECT_SOURCE_DIR}" rev-parse --verify "HEAD^{commit}"
+      OUTPUT_VARIABLE GBB_POLICY_COVERAGE_REV OUTPUT_STRIP_TRAILING_WHITESPACE
+      RESULT_VARIABLE GBB_POLICY_COVERAGE_REV_RESULT ERROR_QUIET)
+  endif()
 endif()
-set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=negative_controls -DGBB_EXPECT_MIN_VALUE=${gbb_workflow_policy_floor})
-gbb_add_ci_lane_test(workflow_policy_controls 0 "PASS: workflow policy self-test negative_controls=[0-9]+ positive_controls=[0-9]+" 180 ""
-  "${GBB_WORKFLOW_POLICY}" --self-test --root "${PROJECT_SOURCE_DIR}")
+string(LENGTH "${GBB_POLICY_COVERAGE_REV}" GBB_POLICY_COVERAGE_REV_LENGTH)
+if(NOT "${GBB_POLICY_COVERAGE_REV_RESULT}" STREQUAL "0"
+   OR NOT (GBB_POLICY_COVERAGE_REV_LENGTH EQUAL 40 OR GBB_POLICY_COVERAGE_REV_LENGTH EQUAL 64)
+   OR NOT GBB_POLICY_COVERAGE_REV MATCHES "^[0-9a-f]+$")
+  set(GBB_POLICY_COVERAGE_REV "unknown")
+  message(STATUS "Workflow-policy coverage CTests remain registered with an unresolved revision and will fail closed when invoked")
+endif()
+
+set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-ci.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
+gbb_add_ci_lane_test(workflow_policy_group_ci 0 "PASS: workflow policy group ci controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
+  "${GBB_WORKFLOW_POLICY}" --self-test --group ci --root "${PROJECT_SOURCE_DIR}"
+  --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-ci.json")
+set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-release-jobs.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
+gbb_add_ci_lane_test(workflow_policy_group_release_jobs 0 "PASS: workflow policy group release_jobs controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
+  "${GBB_WORKFLOW_POLICY}" --self-test --group release_jobs --root "${PROJECT_SOURCE_DIR}"
+  --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-release-jobs.json")
+set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-release-support.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
+gbb_add_ci_lane_test(workflow_policy_group_release_support 0 "PASS: workflow policy group release_support controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
+  "${GBB_WORKFLOW_POLICY}" --self-test --group release_support --root "${PROJECT_SOURCE_DIR}"
+  --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-release-support.json")
+set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-rehearsal.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
+gbb_add_ci_lane_test(workflow_policy_group_rehearsal 0 "PASS: workflow policy group rehearsal controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
+  "${GBB_WORKFLOW_POLICY}" --self-test --group rehearsal --root "${PROJECT_SOURCE_DIR}"
+  --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-rehearsal.json")
+set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-ledger.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
+gbb_add_ci_lane_test(workflow_policy_group_ledger 0 "PASS: workflow policy group ledger controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
+  "${GBB_WORKFLOW_POLICY}" --self-test --group ledger --root "${PROJECT_SOURCE_DIR}"
+  --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-ledger.json")
+set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-helpers.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
+gbb_add_ci_lane_test(workflow_policy_group_helpers 0 "PASS: workflow policy group helpers controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
+  "${GBB_WORKFLOW_POLICY}" --self-test --group helpers --root "${PROJECT_SOURCE_DIR}"
+  --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-helpers.json")
+set(GBB_CI_LANE_EXTRA_ARGS)
+gbb_add_ci_lane_test(workflow_policy_coverage 0 "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)" 60 ""
+  "${GBB_WORKFLOW_POLICY_COVERAGE}" --check --root "${PROJECT_SOURCE_DIR}" --build-dir "${PROJECT_BINARY_DIR}"
+  --rev "${GBB_POLICY_COVERAGE_REV}")
+gbb_add_ci_lane_test(workflow_policy_coverage_controls 0 "PASS: workflow policy coverage self-test controls=62" 30 ""
+  "${GBB_WORKFLOW_POLICY_COVERAGE}" --self-test --root "${PROJECT_SOURCE_DIR}" --rev "${GBB_POLICY_COVERAGE_REV}")
 set(GBB_CI_LANE_EXTRA_ARGS)
 
 # D-22 planning-label lint. It reads the configured tree's CTest listing, never a built artifact, so it runs from the

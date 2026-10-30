@@ -75,7 +75,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          pr=$(gh pr list --repo "$GH_REPO" --head release-please--branches--main --state open --json number --jq '.[0].number // empty')
+          branch=release-please--branches--main--components--GabbaBoy
+          candidates=$(gh pr list --repo "$GH_REPO" --head "$branch" --base main --state open --limit 100 --json number,headRefName,baseRefName,isCrossRepository)
+          pr=$(jq -r --arg head "$branch" --argjson page_limit 100 '
+            def valid_pr:
+              if type != "object" then false
+              elif (.number | type) != "number" then false
+              elif .number <= 0 or (.number | floor) != .number then false
+              elif (.headRefName | type) != "string" then false
+              elif (.baseRefName | type) != "string" then false
+              elif (.isCrossRepository | type) != "boolean" then false
+              else true
+              end;
+            if type != "array" then error("expected PR array")
+            elif length >= $page_limit then error("PR list reached its limit")
+            elif any(.[]; valid_pr | not) then error("malformed PR entry")
+            else
+              [.[] | select(.headRefName == $head and .baseRefName == "main" and .isCrossRepository == false)]
+              | if length > 1 then error("multiple canonical component PRs")
+                elif length == 1 then .[0].number
+                else empty
+                end
+            end
+          ' <<< "$candidates")
           if [[ -z "$pr" ]]; then
             echo "present=false" >> "$GITHUB_OUTPUT"
             echo "No open version PR, so no window is frozen."

@@ -63,7 +63,7 @@ jobs:
 
   installed-package-smoke-macos-arm64:
     name: installed-package-smoke-macos-arm64
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 55
     steps:
       - name: Check out tested source revision
@@ -111,7 +111,7 @@ jobs:
 
   player-package-smoke-macos:
     name: player-package-smoke-macos
-    runs-on: macos-14
+    runs-on: macos-15
     # The wait covers the whole exact-head CI run, whose ASan lane now takes about 35 minutes.
     timeout-minutes: 60
     steps:
