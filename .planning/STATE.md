@@ -5,10 +5,10 @@ milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
 status: executing
-stopped_at: Plan19-07 held; D128 exact-source guard repair approved and implementing before re-review/fresh CI
-last_updated: "2026-10-30T20:02:17Z"
+stopped_at: Plan19-07 held; D129 CI wiring repair approved and implementing before independent review and fresh qualification
+last_updated: "2026-10-30T20:52:19Z"
 last_activity: 2026-10-30
-last_activity_desc: "D128 approved: pin complete reviewed harness; implement bounded correction then independent review and fresh exact-head qualification"
+last_activity_desc: "D129 approved: Windows path identity and live evidence-link wiring repair; preserve all previous failures and release hold pending qualification"
 state_head: 9895896922f51f48a225636f4b587e3ab1be7058
 progress:
   total_phases: 4
@@ -32,8 +32,8 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 Phase: 19 (Qualified v0.3.0 Release) — EXECUTING
 Plan: 7 of 7
-Status: Release window held: PR135 failed both Windows policy-control checks at the unchanged limit. The owner approved the bounded policy partition under D-127; D-128 source-guard correction and fresh qualification are pending. No tag exists.
-Last activity: 2026-10-30 — Owner approved D-128 to close the remaining source-integrity guard gap by pinning the entire reviewed runner blob and adding rejecting controls. The focused correction is implementing in existing PR135 before independent re-review and fresh exact-head hosted qualification. Prior local passes, rejected candidates and historical Windows timeouts remain separate; no release/window/merge is qualified yet.
+Status: Release window held. D127/D128 are implemented and reviewed; fresh PR135 CI fails the live evidence-link and Windows path-identity wiring. The bounded integration repair is approved under D129 and implementing. No tag or release window exists.
+Last activity: 2026-10-30 — D-128 source guard is implemented/reviewed at52fd7cad and pushed to PR135. Fresh CI confirms the split groups and source controls pass Windows, but qualification fails a stale live disposition CTest link and Windows output-path string equality. Independent diagnosis and minimal prototypes are ready. Source remains frozen while the owner decides [bounded CI wiring recovery](phases/GB-19-qualified-v0-3-0-release/19-CI-WIRING-RESCOPE.md); no new correction or unchanged CI retry is assumed.
 
 Completed stage: **Phase 19 execution through Plan 19-06**. PR #133 merged after exact-head protected CI, coherent local/hosted preflight, unchanged performance gate and guarded squash. Release-please regeneration was verified. Detailed identities and evidence remain in the phase continuation and facts file; the frozen 19-06 SUMMARY is not rewritten.
 
@@ -41,9 +41,9 @@ Current stage: **19-07 — approved guard and hosted-runner recovery before the 
 
 Current recovery: [D-127 approved policy-control partition](phases/GB-19-qualified-v0-3-0-release/19-POLICY-PARTITION-RESCOPE.md) is implemented in existing PR135 with all six local groups passing. Preserve immutable baseline and failed attempts; no unchanged retry, timeout increase, merge or window restart before complete retained coverage, independent review and fresh exact-head qualification. Detailed failure evidence and exact current refs are in continue.md and ignored facts/snapshots. The Mac player/SDL now declare minimum OS15.0 / SDK15.5; final core preview remains blocked before build.
 
-Current approved recovery: [D-128 bounded exact-source guard repair](phases/GB-19-qualified-v0-3-0-release/19-SOURCE-GUARD-RESCOPE.md) is approved. Implement the exact reviewed source pin and rejecting controls, then independent re-review and fresh CI. The release stays held until those prerequisites pass; no repeated approval is required for this scope.
+Current approved recovery: [D-129 bounded CI wiring repair](phases/GB-19-qualified-v0-3-0-release/19-CI-WIRING-RESCOPE.md) is approved. Implement the two narrow corrections, run affected checks and independent review, then fresh exact-head CI. Keep the release held until qualification passes; no repeated approval is needed for this scope.
 
-Next within Phase19, under approved D-128: qualify PR135 with complete retained CLI coverage, then resume **19-07 — controlled version window, tag and readback**. REL-01 stays pending. Exact active continuation: `/gsd-execute-phase 19`. Final execution handoff remains `/gsd-verify-work 19`, not automatic.
+Next within Phase19, under approved D129: qualify PR135 with complete retained CLI coverage, then resume **19-07 — controlled version window, tag and readback**. REL-01 stays pending. Exact active continuation: `/gsd-execute-phase 19`. Final execution handoff remains `/gsd-verify-work 19`, not automatic.
 
 Prior stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
 
