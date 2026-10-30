@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(GabbaBoy VERSION 0.2.1 LANGUAGES C) # x-release-please-version
+project(GabbaBoy VERSION 0.3.0 LANGUAGES C) # x-release-please-version
 
 include(cmake/StateVersion.cmake)
 gbb_parse_state_release_version(

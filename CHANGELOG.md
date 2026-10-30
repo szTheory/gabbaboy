@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/szTheory/gabbaboy/compare/v0.2.1...v0.3.0) (2026-10-30)
+
+
+### Features
+
+* add player save slots and host contract (Phase 18) ([#132](https://github.com/szTheory/gabbaboy/issues/132)) ([f80bdf5](https://github.com/szTheory/gabbaboy/commit/f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4))
+* **phase-17:** native save state core ([#130](https://github.com/szTheory/gabbaboy/issues/130)) ([f4082a6](https://github.com/szTheory/gabbaboy/commit/f4082a657bffad80c5b5d487a55ee748ce00d8f6))
+
 ## [0.2.1](https://github.com/szTheory/gabbaboy/compare/v0.2.0...v0.2.1) (2026-10-25)
 
 
