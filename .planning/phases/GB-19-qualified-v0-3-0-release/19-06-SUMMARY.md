@@ -211,7 +211,20 @@ The copied plan text requests a Claude Code footer. The PR body will use truthfu
 
 This summary records completed local and initial pre-flight evidence only. It uses `status: halted` because the required final settled-source pre-flight, PR A creation and exact-head CI readiness are not yet complete. STATE remains on executing Plan 19-06. Operational PR/merge facts belong in `build/phase19-window/facts.env` and `continue.md`; no merge, tag, publication, REL-01 completion, or 19-07 execution is claimed here.
 
+### Subsequent qualification snapshot — EC56 and round two
+
+The preceding interim-status paragraph and the initial statement that PR A had not been created describe the earlier `ec56d260df555d68ddf003adf7c5224bfd65ee1f` snapshot. They are retained as historical records and superseded by this continuation; receipts, source identities, and outcomes are not rewritten. PR A is now [#133](https://github.com/szTheory/gabbaboy/pull/133), opened from EC56. It is not merge-ready.
+
+- The EC56 coherent synthetic chain completed at H0 `b8142743...`, H1 `de3701e...`, and H-prime `18b43756fdf1630cb7f0fe8d889cce9ca4bd36da`. The EC56 installed-prefix CTest suite passed 1690/1690; CGB passed 107/107; player Release passed 108/108; Debug plus linkage passed 110/110. Hosted rehearsal run [41023196879](https://github.com/szTheory/gabbaboy/actions/runs/41023196879) completed all six producer lanes, the local/hosted judge differential matched using the downloaded run-scoped fuzz artifact, and transient `rehearsal/v0.3.0` deletion was verified. These are EC56 historical results and do not qualify a later source head.
+- Exact-head CI for PR #133 at EC56 did not pass. Push run `41027765333` and PR run `41027775658` both ended with two failure families: lifecycle-control CTests timed out at their unchanged 60-second limit on macOS and other affected jobs; Windows `workflow_policy_controls` failed its untagged-release fake-Git self-test. The Linux full suite had 1689/1690 pass with `release_lifecycle_post_tag_controls` timing out; the CMake 3.25 job had the same post-tag control timeout. ASan shards, perf-gate, fixture-repro, and the PR macOS player package passed on their respective runs. Preview smoke `41027775458` failed while waiting for/discovering successful required CI and skipped artifact download/verification; it is downstream of the failed CI, not independent package evidence. No EC56 failure is counted green or carried forward as success for the next head.
+- Round two is the final allowed formal source-fix round. Commit `0fec185016ae4d3578b641ffc694aafdd1d8795c` changes only `tests/CMakeLists.txt` and `.github/scripts/verify-workflow-policy.py`: the two lifecycle-control CTests are serialized without changing timeout 60 or their counts/assertions; the fake-Git policy control uses a relative log path under its temporary working directory and reports captured process diagnostics. The production release guard and policy limits are unchanged. At this immutable source, `workflow_policy_controls`, `release_lifecycle_controls`, and `release_lifecycle_post_tag_controls` passed 3/3 in 87.19 seconds with parallelism 4; the test-budget, inventory self-test, and Python 3.10 grammar controls also passed. Full outputs are retained under `build/preflight/review/round2-0fec185/`.
+- Review reconciliation is recorded by commit `634a4c4ffa8ae0a6e4646628faf241ebd616ea0a`. The source review covers 56 paths with all four findings resolved. The security report records 26/35 threats closed, nine operationally pending, including four blocking; the existing AR-19-01 acceptance remains recorded. Windows hosted success at the fixed source is still pending.
+
+Current status remains `halted`, with Plan 19-06 executing and Task 4 incomplete. The current operational stage is **PR A fix qualification**: freeze a new final source head including the summary/reconciliation, repin the ignored runner, push that head to existing PR #133, then run the fresh coherent final synthetic preflight and exact-head CI. No result from EC56 substitutes for those gates. REL-01 and D-09 remain pending; no phase completion, merge, release tag, publication, or Plan 19-07 execution is claimed.
+
 ## Issues Encountered and Limitations
+
+The bullets below record the earlier interim snapshot. The subsequent qualification snapshot above supersedes its point-in-time statements about whether PR A, final local preflight, and exact-head CI had occurred.
 
 - The initial hosted judge failure was a designed pre-PR-A refusal from the main-side judge scripts; its normalized line matched the local prediction. A hosted failure in a `uses:` step is outside the local `run:`-step emulation and must fail the final comparison closed.
 - The independent review and security audit ran after the initial synthetic H-prime. The final H0/H-prime chain, H0 receipt, final-source full suite, current CGB receipt, player gates, hosted six-producer run and judge comparison must all be rebuilt or rerun at the settled source before PR A.
@@ -220,7 +233,7 @@ This summary records completed local and initial pre-flight evidence only. It us
 
 ## Next Phase Readiness
 
-Continue **Plan 19-06 — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A readiness**. Resume with `/gsd-execute-phase 19`; first update the ignored runner's source pin to the committed summary head, then run the fresh coherent H0-to-H-prime construction and final local/hosted gates. Do not start Plan 19-07. After a reviewable PR A and exact-head CI readiness exist, stop for the D-09 owner acknowledgment before any squash merge.
+Continue **Plan 19-06 — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A readiness** at the **PR A fix qualification** stage. Resume with `/gsd-execute-phase 19`; freeze and pin the new final head, push it to existing PR #133, and run the fresh coherent H0-to-H-prime construction plus final local/hosted gates. Do not start Plan 19-07. After the new exact-head preflight and CI are ready, stop for the already-pending D-09 owner acknowledgment before any squash merge.
 
 ## Self-Check: PASSED
 
@@ -228,4 +241,4 @@ The plan-interval base and head are ancestors of the current branch; the committ
 
 ---
 *Phase: GB-19-qualified-v0-3-0-release*
-*Plan: 06 — interim summary; final preflight and PR A readiness pending*
+*Plan: 06 — halted qualification snapshot; PR A fix qualification and final preflight pending*
