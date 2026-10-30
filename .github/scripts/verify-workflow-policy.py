@@ -2710,13 +2710,41 @@ WINDOW_IF = "${{ !cancelled() && inputs.retry != true }}"
 WINDOW_CHECKER = "tests/scripts/verify-version-window.py"
 WINDOW_RECORD = "tests/data/version-window.json"
 WINDOW_CONFIG = "release-please-config.json"
+VERSION_PR_BRANCH = "release-please--branches--main--components--GabbaBoy"
+WINDOW_DISCOVERY_STEP = "Find the open version PR and its regenerated body"
+WINDOW_DISCOVERY_CALL = ('pr=$(gh pr list --repo "$GH_REPO" --head ' + VERSION_PR_BRANCH
+                         + " --state open --json number --jq '.[0].number // empty')")
+WINDOW_DISCOVERY_PRESENT_FALSE = 'echo "present=false" >> "$GITHUB_OUTPUT"'
+WINDOW_DISCOVERY_PRESENT_TRUE = 'echo "present=true" >> "$GITHUB_OUTPUT"'
+WINDOW_DISCOVERY_EMPTY_LOG = 'echo "No open version PR, so no window is frozen."'
+WINDOW_DISCOVERY_HEAD = 'head=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha)'
+WINDOW_DISCOVERY_BODY = 'gh api "repos/$GH_REPO/pulls/$pr" --jq \'.body // ""\' > "$RUNNER_TEMP/version-pr-body.md"'
+WINDOW_DISCOVERY_RUN = "\n".join((
+    "set -euo pipefail",
+    WINDOW_DISCOVERY_CALL,
+    'if [[ -z "$pr" ]]; then',
+    f"  {WINDOW_DISCOVERY_PRESENT_FALSE}",
+    f"  {WINDOW_DISCOVERY_EMPTY_LOG}",
+    "  exit 0",
+    "fi",
+    WINDOW_DISCOVERY_HEAD,
+    WINDOW_DISCOVERY_BODY,
+    WINDOW_DISCOVERY_PRESENT_TRUE,
+    'echo "head=$head" >> "$GITHUB_OUTPUT"',
+))
+WINDOW_DISCOVERED_IF = "${{ steps.discover.outputs.present == 'true' }}"
+WINDOW_JUDGE_STEP = "Judge the regenerated version PR against its frozen window"
+WINDOW_JUDGE_SKIP = 'if [[ "$PRESENT" != true ]]; then'
+WINDOW_JUDGE_ABSENT_BLOCK = (WINDOW_JUDGE_SKIP + '\n'
+                             + '  echo "No open version PR; normal development keeps the existing release policy."\n'
+                             + '  exit 0\nfi')
 WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
                '--base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
 WINDOW_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
 WINDOW_STEP_TIMEOUT_MAX = 10
 VERSION_PR_WORKFLOW = "version-pr-gate.yml"
 VERSION_PR_JOB = "pre-tag-gate"
-VERSION_PR_IF = ("${{ github.event.pull_request.head.ref == 'release-please--branches--main--components--GabbaBoy' "
+VERSION_PR_IF = ("${{ github.event.pull_request.head.ref == '" + VERSION_PR_BRANCH + "' "
                  "&& github.event.pull_request.head.repo.full_name == github.repository }}")
 VERSION_PR_WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
                           '--base "$BASE_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
@@ -2784,6 +2812,15 @@ def check_version_window(root: Path) -> None:
         raise Reject("window-gate-skipped", f"{_where(name, WINDOW_JOB)} must run with {WINDOW_IF}, so a failed release job cannot skip it")
     if _permissions(job, tree.get("permissions", {})) != WINDOW_PERMISSIONS:
         raise Reject("window-gate-permissions", f"{_where(name, WINDOW_JOB)} needs exactly {WINDOW_PERMISSIONS}")
+    discover_steps = [step for step in job.get("steps", []) if step.get("id") == "discover"]
+    if (len(discover_steps) != 1 or discover_steps[0].get("name") != WINDOW_DISCOVERY_STEP
+            or discover_steps[0].get("env") != {"GH_TOKEN": "${{ github.token }}"}):
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} must keep one named, token-scoped version-PR discovery step")
+    discover_text = discover_steps[0].get("run", "")
+    if discover_text != WINDOW_DISCOVERY_RUN:
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} must discover the configured component branch and expose absent/present outputs")
+    _check_window_discovery_contract(discover_text)
+    require_call(name, WINDOW_JOB, {"steps": [discover_steps[0]]}, WINDOW_DISCOVERY_CALL)
     _check_checkout_credentials(name, tree, (WINDOW_JOB,))
     checkouts = _checkouts(job)
     by_path = {step.get("with", {}).get("path"): step.get("with", {}) for step in checkouts}
@@ -2793,6 +2830,19 @@ def check_version_window(root: Path) -> None:
         raise Reject("window-gate-trust", f"{_where(name, WINDOW_JOB)} must take the checker from the trusted main commit {TRUSTED_SHA_REF}")
     if str(by_path["version-pr"].get("fetch-depth", "")) != "0":
         raise Reject("window-gate-history", f"{_where(name, WINDOW_JOB)} needs the full history of the version PR to prove ancestry")
+    version_checkout = next(step for step in checkouts if step.get("with", {}).get("path") == "version-pr")
+    judge_steps = [step for step in job.get("steps", []) if step.get("name") == WINDOW_JUDGE_STEP]
+    if (version_checkout.get("if") != WINDOW_DISCOVERED_IF or len(judge_steps) != 1
+            or judge_steps[0].get("env") != {
+                "PRESENT": "${{ steps.discover.outputs.present }}",
+                "PR_HEAD": "${{ steps.discover.outputs.head }}",
+                "MAIN_SHA": "${{ github.sha }}",
+            }):
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} must route the discovered PR head to the trusted judge only when present")
+    judge_text = judge_steps[0].get("run", "")
+    absent_at = judge_text.find(WINDOW_JUDGE_ABSENT_BLOCK)
+    if absent_at < 0 or judge_text.count(WINDOW_JUDGE_ABSENT_BLOCK) != 1:
+        raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} must skip only when absent and propagate the trusted judge result")
     for step in job.get("steps", []):
         minutes = str(step.get("timeout-minutes", ""))
         if not minutes.isdigit() or not 1 <= int(minutes) <= WINDOW_STEP_TIMEOUT_MAX:
@@ -2803,7 +2853,70 @@ def check_version_window(root: Path) -> None:
     _check_run_expressions(name, tree)
     _check_bounded_downloads(name, tree)
     require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
+    require_call(name, WINDOW_JOB, {"steps": [judge_steps[0]]}, WINDOW_CALL, conditional=True)
     _check_window_config(root)
+
+
+def _check_window_discovery_contract(discover_text: str) -> None:
+    if discover_text.count(WINDOW_DISCOVERY_CALL) != 1:
+        raise Reject("window-discovery", "version-window discovery must query the configured component branch exactly once")
+
+
+def _controlled_window_route(query_branch: str, pull_requests: dict[str, int], record_state: str | None, judge):
+    """Reference routing model for controlled self-tests; it never runs a workflow body or subject-supplied code."""
+    number = pull_requests.get(query_branch)
+    if number is None:
+        return {"present": False, "checker_called": False, "exit_status": 0, "verdict": None}
+    exit_status, verdict = judge(number, record_state)
+    return {"present": True, "checker_called": True, "exit_status": exit_status, "verdict": verdict}
+
+
+def _window_discovery_routing_controls() -> tuple[int, int]:
+    """Exercise controlled absent/inactive/active/stale routes and the former false-negative branch query."""
+    pull_requests = {VERSION_PR_BRANCH: 131}
+    negative, positive = 0, 0
+    for label, query_branch, record_state, expected_status, expected_verdict, expected in (
+        ("absent PR", VERSION_PR_BRANCH, None, 0, None, (False, False, 0)),
+        ("inactive record", VERSION_PR_BRANCH, "inactive", 0, "version-window inactive pass controlled", (True, True, 0)),
+        ("valid active record", VERSION_PR_BRANCH, "active-valid", 0, "version-window active pass controlled", (True, True, 0)),
+        ("stale active record", VERSION_PR_BRANCH, "active-stale", 47, "REJECT window-stale controlled", (True, True, 47)),
+    ):
+        calls = []
+        def controlled_judge(number, state):
+            calls.append((number, state))
+            return expected_status, expected_verdict
+
+        result = _controlled_window_route(query_branch, {} if label == "absent PR" else pull_requests,
+                                          record_state, controlled_judge)
+        observed = (result["present"], result["checker_called"], result["exit_status"])
+        if (observed != expected or len(calls) != int(expected[1])
+                or result["verdict"] != expected_verdict
+                or (calls and calls != [(131, record_state)])):
+            raise SystemExit(f"self-test window routing {label!r} failed: observed={observed!r}, calls={calls!r}")
+        if label == "stale active record":
+            if result["exit_status"] != expected_status or result["exit_status"] == 0:
+                raise SystemExit("self-test stale active window did not propagate the trusted checker failure")
+            negative += 1
+        else:
+            positive += 1
+
+    # The exact legacy query is modeled against the actual component PR response: it returns safe-looking absence
+    # and skips the rejecting checker. The discovery pin must refuse that query before such a route can ship.
+    legacy_branch = "release-please--branches--main"
+    legacy = _controlled_window_route(legacy_branch, pull_requests, "active-stale",
+                                      lambda _number, _state: (47, "REJECT window-stale controlled"))
+    if legacy != {"present": False, "checker_called": False, "exit_status": 0, "verdict": None}:
+        raise SystemExit(f"self-test legacy query did not reproduce the skipped-checker defect: {legacy!r}")
+    try:
+        _check_window_discovery_contract(WINDOW_DISCOVERY_CALL.replace(VERSION_PR_BRANCH, legacy_branch))
+    except Reject as exc:
+        if exc.code != "window-discovery":
+            raise SystemExit(f"self-test legacy discovery mutant refused with the wrong code: {exc.code}") from exc
+        negative += 1
+    else:
+        raise SystemExit("self-test legacy discovery mutant was not rejected by the discovery contract")
+    print("PASS: controlled version-window routing covers absent, inactive, active and stale records; legacy lookup is refused")
+    return negative, positive
 
 
 def check_version_pr_gate(root: Path) -> None:
@@ -4091,6 +4204,15 @@ def _window_mutations():
            "window-config"),
         _m("W17-20 changelog path moved", "config", "", '"changelog-path": "CHANGELOG.md"', '"changelog-path": "docs/CHANGELOG.md"',
            "window-config"),
+        _m("W17-21 legacy release-please branch misses the component PR", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           WINDOW_DISCOVERY_CALL, WINDOW_DISCOVERY_CALL.replace(VERSION_PR_BRANCH, "release-please--branches--main"),
+           "window-discovery"),
+        _m("W17-22 component PR discovery omits its head filter", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           WINDOW_DISCOVERY_CALL, WINDOW_DISCOVERY_CALL.replace("--head " + VERSION_PR_BRANCH, ""), "window-discovery"),
+        _m("W17-23 component PR discovery output step is renamed", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           "id: discover\n", "id: find-version-pr\n", "window-discovery"),
+        _m("W17-24 discovered PR is not marked present", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           WINDOW_DISCOVERY_PRESENT_TRUE, ": # present output omitted", "window-discovery"),
     ]
 
 
@@ -4783,6 +4905,8 @@ def self_test(root: Path) -> None:
         positive = _run_cli(fixture, work)
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+        routing_rejected, routing_accepted = _window_discovery_routing_controls()
+        rejected += routing_rejected
         resolver_rejected, resolver_accepted = rehearsal_bash_resolver_controls()
         rejected += resolver_rejected
         rejected += rehearsal_tag_guard_controls(fixture)
@@ -4926,7 +5050,7 @@ def self_test(root: Path) -> None:
                 raise SystemExit(f"self-test negative {label!r} failed: accepted")
     rejected += report_red_replay_controls(root)
     print(f"PASS: workflow policy self-test negative_controls={rejected} "
-          f"positive_controls={1 + resolver_accepted + accepted}")
+          f"positive_controls={1 + resolver_accepted + accepted + routing_accepted}")
 
 
 def main() -> int:

@@ -75,7 +75,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          pr=$(gh pr list --repo "$GH_REPO" --head release-please--branches--main --state open --json number --jq '.[0].number // empty')
+          pr=$(gh pr list --repo "$GH_REPO" --head release-please--branches--main--components--GabbaBoy --state open --json number --jq '.[0].number // empty')
           if [[ -z "$pr" ]]; then
             echo "present=false" >> "$GITHUB_OUTPUT"
             echo "No open version PR, so no window is frozen."
