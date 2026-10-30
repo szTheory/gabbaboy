@@ -1324,8 +1324,21 @@ RELEASE_PRESENCE = {
         ("call", 'gh release upload "$RELEASE_TAG" build/candidate-platform-manifest.json --repo "$GH_REPO"', True),
     ),
 }
+# Hosted Mac qualification uses the pinned Apple silicon macOS 15 image in all five producer/consumer jobs.
+MACOS_QUALIFICATION_RUNNER = "macos-15"
+MACOS_QUALIFICATION_JOBS = {
+    ("ci.yml", "native-macos"): MACOS_QUALIFICATION_RUNNER,
+    ("ci.yml", "macos-player-package"): MACOS_QUALIFICATION_RUNNER,
+    ("preview.yml", "installed-package-smoke-macos-arm64"): MACOS_QUALIFICATION_RUNNER,
+    ("preview.yml", "player-package-smoke-macos"): MACOS_QUALIFICATION_RUNNER,
+    ("release.yml", "candidate-macos"): MACOS_QUALIFICATION_RUNNER,
+}
+RELEASE_MACOS_BUILD_STEP = "Build and package macOS arm64 core once"
+RELEASE_MACOS_RECEIPT_RUNNER_PIN = (
+    '"schema_version": 1, "platform": "macos-arm64", "runner": "macos-15",'
+)
 # Hosted runner images of the native downloaded-archive lanes; a silently different image changes what was qualified.
-RELEASE_RUNNERS = {"candidate-macos": "macos-14", "candidate-windows": "windows-2022"}
+RELEASE_RUNNERS = {"candidate-macos": MACOS_QUALIFICATION_RUNNER, "candidate-windows": "windows-2022"}
 # The only events that may start release.yml: it is a reusable workflow, so a privileged event of its own
 # (pull_request_target, release, push) would run the draft-writing jobs outside the release-please entrypoint.
 RELEASE_TRIGGERS = frozenset({"workflow_call"})
@@ -2082,6 +2095,29 @@ def _check_release_presence(workflow: str, tree: dict) -> None:
         actual = str(_require_job(workflow, tree, job_id).get("runs-on", "")).strip()
         if actual != runner:
             raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {runner}, not {actual or 'an unset image'}")
+
+
+def _check_macos_runner_pin(root: Path, workflow: str, job_id: str, expected: str) -> None:
+    tree = read_workflow(root / ".github/workflows" / workflow)
+    actual = str(_require_job(workflow, tree, job_id).get("runs-on", "")).strip()
+    if actual != expected:
+        raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {expected}, not {actual or 'an unset image'}")
+
+
+def _check_release_macos_receipt_runner(root: Path) -> None:
+    workflow = "release.yml"
+    tree = read_workflow(root / ".github/workflows" / workflow)
+    job = _require_job(workflow, tree, "candidate-macos")
+    steps = [step for step in job.get("steps", []) if step.get("name") == RELEASE_MACOS_BUILD_STEP]
+    run = str(steps[0].get("run", "")) if len(steps) == 1 else ""
+    if len(steps) != 1 or run.count(RELEASE_MACOS_RECEIPT_RUNNER_PIN) != 1:
+        raise Reject("runner-image", "release.candidate-macos build receipt must record the pinned macos-15 runner")
+
+
+def _check_macos_qualification_runners(root: Path) -> None:
+    for (workflow, job_id), expected in MACOS_QUALIFICATION_JOBS.items():
+        _check_macos_runner_pin(root, workflow, job_id, expected)
+    _check_release_macos_receipt_runner(root)
 
 
 def _trigger_names(tree: dict) -> set[str]:
@@ -3304,6 +3340,7 @@ def check_all(root: Path, release_head: bool = False, git_root: Path | None = No
     check_rehearsal_flag_scope(root)
     check_rehearsal(root)
     check_ci(root)
+    _check_macos_qualification_runners(root)
     check_perf_attribution(root)
     check_nightly(root)
     check_readonly_workflows(root)
@@ -4160,7 +4197,15 @@ def _mutations():
         _m("W6-04d candidate stops requiring release_created", rel, "  candidate:\n", " && needs.release.outputs.release_created == 'true'",
            "", "release-presence"),
         _m("W6-04e candidate loses its retry input", rel, "  candidate:\n", "      RETRY: ${{ inputs.retry }}\n", "", "release-presence"),
-        _m("W6-05a candidate-macos runner changed", rel, "  candidate-macos:\n", "runs-on: macos-14", "runs-on: macos-latest", "runner-image"),
+        _m("D126 ci native-macos runner pin changed", "ci.yml", "  native-macos:\n", "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 ci macos-player-package runner pin changed", "ci.yml", "  macos-player-package:\n", "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 preview installed-package Mac runner pin changed", "preview.yml", "  installed-package-smoke-macos-arm64:\n",
+           "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 preview player-package Mac runner pin changed", "preview.yml", "  player-package-smoke-macos:\n",
+           "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("W6-05a candidate-macos runner changed", rel, "  candidate-macos:\n", "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 release macOS build receipt runner drifted", rel, f"name: {RELEASE_MACOS_BUILD_STEP}\n",
+           '"runner": "macos-15"', '"runner": "macos-14"', "runner-image"),
         _m("W6-05b candidate-windows runner changed", rel, "  candidate-windows:\n", "runs-on: windows-2022", "runs-on: windows-latest", "runner-image"),
         _m("W6-06 windows archive name changed in the extract call", rel, "  candidate-windows:\n",
            "bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz",
@@ -5082,6 +5127,12 @@ def self_test(root: Path) -> None:
         positive = _run_cli(fixture, work)
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+        runner_positive_controls = 0
+        for (workflow, job_id), expected in MACOS_QUALIFICATION_JOBS.items():
+            _check_macos_runner_pin(fixture, workflow, job_id, expected)
+            runner_positive_controls += 1
+        _check_release_macos_receipt_runner(fixture)
+        runner_positive_controls += 1
         routing_rejected, routing_accepted = _window_discovery_shell_controls()
         rejected += routing_rejected
         resolver_rejected, resolver_accepted = rehearsal_bash_resolver_controls()
@@ -5227,7 +5278,7 @@ def self_test(root: Path) -> None:
                 raise SystemExit(f"self-test negative {label!r} failed: accepted")
     rejected += report_red_replay_controls(root)
     print(f"PASS: workflow policy self-test negative_controls={rejected} "
-          f"positive_controls={1 + resolver_accepted + accepted + routing_accepted}")
+          f"positive_controls={1 + runner_positive_controls + resolver_accepted + accepted + routing_accepted}")
 
 
 def main() -> int:

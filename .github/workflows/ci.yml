@@ -225,7 +225,7 @@ jobs:
   native-macos:
     name: native-macos-arm64
     # Timeout ledger (D-20): p50 17.80 min in main run 40156247875, so ceil(2 x p50) = 36; 40 keeps a margin.
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 40
     needs: changes
     if: needs.changes.outputs.kind == 'full'
@@ -597,7 +597,7 @@ jobs:
     name: macos-player-package
     needs: [changes, player-gate]
     if: needs.changes.outputs.kind == 'full' && needs.player-gate.outputs.player_required == 'true'
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - name: Check out exact pull request source

@@ -226,7 +226,7 @@ candidate byte comparison. Ordinary core tests remain offline.
 ## Continuous integration and fixture reproduction
 
 Pull requests run `native-linux-x64` on Ubuntu 22.04, `native-macos-arm64` on
-macOS 14, and `native-windows-x64` on Windows Server 2022. Each lane installs
+macOS 15 ARM64, and `native-windows-x64` on Windows Server 2022. Each lane installs
 the package and checks the exact required CTest inventory, including the
 installed runner and external C/C++ consumers of the timestamped API.
 `linux-asan-ubsan-tests` runs the core suite with AddressSanitizer and

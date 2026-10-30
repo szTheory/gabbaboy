@@ -45,7 +45,8 @@
   "cited_sha": "e719aa7e2a336717d0c9500eb7e473b774847078",
   "p50_minutes": "2.52",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
  },
  "ci.yml:native-linux": {
   "timeout_minutes": 31,
@@ -62,7 +63,8 @@
   "cited_sha": "711f4fd7e66a8ae67f2013edc39c98cfa21ea5fe",
   "p50_minutes": "17.80",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
  },
  "ci.yml:native-windows": {
   "timeout_minutes": 50,
@@ -208,7 +210,8 @@
   "cited_sha": "8738d07e61cf50bc3cb297c50b3ebe690112ebbe",
   "p50_minutes": "22.75",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
  },
  "preview.yml:player-package-smoke-macos": {
   "timeout_minutes": 60,
@@ -216,7 +219,8 @@
   "cited_sha": "5d26b7eb8cc4f7bf2fc725615becb5e494d02ba2",
   "p50_minutes": "22.50",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
  },
  "preview.yml:preview-package-smoke": {
   "timeout_minutes": 5,
@@ -337,7 +341,7 @@
   "p50_minutes": "1.45",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The job body changed after the cited sample; changed this job's body after the cited run."
+  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
  },
  "release.yml:candidate-performance": {
   "timeout_minutes": 45,
