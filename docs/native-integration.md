@@ -145,7 +145,7 @@ tree, pass its directory as `--prefix` and choose a fresh receipt path:
 
 ```sh
 python3 -I tests/scripts/verify-v02-consumers.py \
-  --prefix "$TMPDIR/gabbaboy-v0.2.0" \
+  --prefix "$TMPDIR/gabbaboy-prefix" \
   --output build/v02-downloaded-consumers.json
 ```
 
@@ -392,10 +392,9 @@ of that kind creates no `.sav` file.
 
 ## Support and upgrade
 
-The tracked [v0.1.0 support ledger](support/v0.1.0.md) describes the exact
-bootless DMG-CPU-B model, ROM-only and standard MBC1 subset, three eligible
-derived CPU/timer corpus cases, fixture identities, failures, exclusions, and
-evidence classes. The tagged release publishes a separate
+The tracked [versioned support ledger](support/v0.2.1.md) describes the
+bootless DMG-CPU-B and CGB-CPU-E models, cartridge and save matrix, corpus
+evidence, exclusions, and known limits. The tagged release publishes a separate
 `support-ledger.json` attachment binding the exact source SHA to the
 tagged ledger blob digest and fixture/corpus identities. The three-case corpus
 is not a game compatibility percentage. No physical DMG observation, CGB,

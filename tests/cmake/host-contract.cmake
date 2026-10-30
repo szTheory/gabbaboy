@@ -129,34 +129,6 @@ add_test(NAME readme_host_mode_contract
 set_tests_properties(readme_host_mode_contract PROPERTIES TIMEOUT 60
   PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_README_HOST_PHRASE_COUNT}[^0-9]")
 
-# The ledger carries one entry per requirement group, each with its destination and the CTest names that decide it.
-set(GBB_UNRELEASED_HOST_PHRASES
-  "destination v0.3.0"
-  "HOST-01..03"
-  "PLAY-01"
-  "`host_continuation`"
-  "`host_cadence_retry`"
-  "`host_signal_term`"
-  "`host_exit_table_codes`"
-  "`save_format_files`"
-  "`save_format_completeness`"
-  "`save_format_freeze`"
-  "`host_contract_json`"
-  "`host_contract_docs`"
-  "`installed_host_smoke`"
-  "`slot_message_table`"
-  "`slot_reanchor_plan`"
-  "`input_clock_after_load`")
-list(LENGTH GBB_UNRELEASED_HOST_PHRASES GBB_UNRELEASED_HOST_PHRASE_COUNT)
-add_test(NAME unreleased_host_entries
-  COMMAND ${CMAKE_COMMAND}
-    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/support/unreleased.md
-    "-DGBB_DECLARATIONS=${GBB_HOST_CONTRACT_DECLARATIONS}"
-    "-DGBB_REQUIRED=${GBB_UNRELEASED_HOST_PHRASES}"
-    -P ${GBB_HOST_CONTRACT_DOC_SCRIPT})
-set_tests_properties(unreleased_host_entries PROPERTIES TIMEOUT 60
-  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_UNRELEASED_HOST_PHRASE_COUNT}[^0-9]")
-
 # gbb_host_contract_missing_control(name source_relative phrase scope_start): a copy without one pinned phrase must
 # fail with exactly `doc-contract-missing: <phrase>`.
 function(gbb_host_contract_missing_control name source_relative phrase scope_start)
@@ -185,9 +157,6 @@ gbb_host_contract_missing_control(doc_contract_readme_host_missing_selftest
 gbb_host_contract_missing_control(doc_contract_cartridge_slots_missing_selftest
   docs/cartridge-and-saves.md "Loading a slot also replaces the game's battery save"
   "## Host raw saves and player state slots")
-gbb_host_contract_missing_control(doc_contract_unreleased_host_missing_selftest
-  docs/support/unreleased.md "destination v0.3.0" "")
-
 # ---- D-29: the published tables against docs/host-contract.json ------------------------------------------------
 add_test(NAME host_contract_docs
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_CONTRACT_CHECKER}"

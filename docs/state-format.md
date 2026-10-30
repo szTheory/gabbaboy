@@ -437,4 +437,7 @@ pin changes require an exact old/new digest disposition, independent continuatio
 evidence present at the immutable base, and the applicable release, format, or
 behavior token change. A local receipt does not qualify Linux, macOS, and Windows
 together; that claim requires receipts from the same hosted source revision.
-Phase 19 regenerates and requalifies the pins when the release becomes 0.3.0.
+Release 0.3.0 keeps the format and behavior tokens at 1 while advancing the
+exact release token from 0.2.1. Its state loads therefore require a state file
+written by that exact release; battery saves remain the cross-version
+persistence path.

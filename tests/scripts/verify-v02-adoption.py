@@ -39,6 +39,7 @@ PROFILE = "docs/cgb-profile.md"
 AUDIO = "docs/audio-and-playback.md"
 PREVIEW = "docs/preview.md"
 RELEASE = "docs/release.md"
+UNRELEASED = "docs/support/unreleased.md"
 NOTICES = "THIRD_PARTY_NOTICES.md"
 HEADER = "include/gabbaboy/gabbaboy.h"
 
@@ -84,7 +85,7 @@ ABSENCE_SENTENCE = "No CGB game-level evidence exists."
 # Surfaces whose symbols must resolve and whose claims must stay qualified.
 PUBLIC_SURFACES = (
     README, NATIVE, SAVES, GAME_GUIDE, PROFILE, AUDIO, PREVIEW, RELEASE,
-    LEDGER, NOTICES,
+    LEDGER, UNRELEASED, NOTICES,
 )
 # Internal constants that public prose names for explanation.  Each must still
 # exist in the named source file, so the allowance cannot outlive the symbol.
@@ -128,6 +129,16 @@ def publication_claim_pattern(version: str) -> re.Pattern[str]:
 
 
 FALSE_PUBLICATION_CLAIM = publication_claim_pattern(RELEASE_VERSION)
+FALSE_RETRY_TAMPER_CLAIM = re.compile(
+    r"\bretry(?:\s+check)?\b.{0,120}\b(?:"
+    r"(?:detects?|detecting|proves?)\s+(?:tampering|a\s+(?:swap|replacement))|"
+    r"(?:provides?|offers?|performs?)\s+tamper[- ]detection|"
+    r"tamper[- ]proof)\b",
+    re.IGNORECASE,
+)
+PENDING_V030_SECTION = re.compile(
+    r"(?im)^#{1,6}\s+[^\n]*\bpending\s+v0\.3\.0\b"
+)
 FALSE_PLATFORM_CLAIM = re.compile(
     r"(?:\bsupports?\s+(?:all|every|any)\s+(?:architectures?|platforms?|operating\s+systems?)\b|"
     r"\bminimum\s+(?:supported\s+)?(?:OS|operating\s+system)\s+(?:version\s+)?is\b)",
@@ -305,8 +316,16 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
          "product-package-distinction-missing"),
         ("unsigned and not notarized", "unsigned-limit-missing"),
         ("`support-ledger.json`", "ledger-sidecar-missing"),
-        ("`release-performance-receipt.json`", "performance-sidecar-missing"),
+        ("`v02-performance-receipt.json`", "performance-sidecar-missing"),
         ("`v02-fuzz-receipt.json`", "fuzz-sidecar-missing"),
+        ("identity and consistency check", "retry-identity-wording-missing"),
+        ("The `v02-*` evidence names are the evidence-schema family",
+         "evidence-name-note-missing"),
+        ("back up the preference directory", "upgrade-guidance-missing"),
+        ("slots and the undo file do not survive an upgrade",
+         "upgrade-guidance-missing"),
+        ("`version-pr-gate` is not a required check",
+         "pre-tag-gate-enforcement-missing"),
         ("no fuzz campaign result is claimed by this document", "fuzz-limit-missing"),
         ("installed-prefix check", "installed-proof-missing"),
         ("downloaded-asset check", "downloaded-proof-missing"),
@@ -315,7 +334,12 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
         ("Physical CGB-E remains UNKNOWN/POLICY", "physical-cgb-limit-missing"),
         ("does not establish physical-device, perceptual, or hardware equivalence",
          "perceptual-output-limit-missing"),
-        ("makes no publication claim for v0.2.0", "publication-limit-missing"),
+        ("this page makes no publication claim for the version in this tree",
+         "publication-limit-missing"),
+    ),
+    UNRELEASED: (
+        ("Reconciled into v0.3.0: the save-state and host-contract entries are scoped claims",
+         "unreleased-reconciliation-missing"),
     ),
 }
 # Claim markers parsed with the production CGB claim parser.
@@ -566,6 +590,14 @@ def check_surface(root: Path, relative: str) -> int:
     text = prose(read_document(root, relative))
     checks = check_phrases(relative, text, REQUIRED[relative])
     checks += check_unqualified(relative, text)
+    if relative == UNRELEASED:
+        require(PENDING_V030_SECTION.search(text) is None,
+                f"unreleased-pending-stale:{relative}")
+        checks += 1
+    if relative == RELEASE:
+        require(not unnegated(FALSE_RETRY_TAMPER_CLAIM, text),
+                f"retry-tamper-overclaim:{relative}")
+        checks += 1
     if relative == PREVIEW:
         checks += check_claim_boundaries(relative, text)
     return checks
@@ -1037,6 +1069,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
     originals = {relative: read_document(root, relative)
                  for relative in PUBLIC_SURFACES}
     rejected = 0
+    rejected_reasons: list[str] = []
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-docs-") as temp:
         test_root = Path(temp)
         copy_inputs(root, test_root)
@@ -1098,6 +1131,36 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             ("comment-only-release-absence", RELEASE,
              comment_out(ABSENCE_STATEMENT),
              f"absence-statement-missing:{RELEASE}"),
+            ("missing-unreleased-reconciliation", UNRELEASED,
+             drop("Reconciled into v0.3.0: the save-state and host-contract entries are scoped claims",
+                  "unreleased-reconciliation"),
+             f"unreleased-reconciliation-missing:{UNRELEASED}"),
+            ("stale-unreleased-pending", UNRELEASED,
+             append("## Host mode (HOST-01..03, pending v0.3.0)"),
+             f"unreleased-pending-stale:{UNRELEASED}"),
+            ("missing-publication-limit", RELEASE,
+             drop("this page makes no publication claim for the version in this tree",
+                  "publication-limit"),
+             f"publication-limit-missing:{RELEASE}"),
+            ("missing-retry-identity-wording", RELEASE,
+             drop("identity and consistency check", "retry-identity"),
+             f"retry-identity-wording-missing:{RELEASE}"),
+            ("missing-evidence-family-note", RELEASE,
+             drop("The `v02-*` evidence names are the evidence-schema family",
+                  "evidence-family"),
+             f"evidence-name-note-missing:{RELEASE}"),
+            ("missing-upgrade-preference-backup", RELEASE,
+             drop("back up the preference directory", "preference-backup"),
+             f"upgrade-guidance-missing:{RELEASE}"),
+            ("missing-upgrade-state-limit", RELEASE,
+             drop("slots and the undo file do not survive an upgrade", "state-upgrade"),
+             f"upgrade-guidance-missing:{RELEASE}"),
+            ("missing-pretag-gate-guidance", RELEASE,
+             drop("`version-pr-gate` is not a required check", "pretag-gate"),
+             f"pre-tag-gate-enforcement-missing:{RELEASE}"),
+            ("retry-tamper-overclaim", RELEASE,
+             append("The retry check provides tamper detection for attached assets."),
+             f"retry-tamper-overclaim:{RELEASE}"),
             ("cross-version-state-claim", README,
              append("Save states load across GabbaBoy versions."),
              f"false-cross-version-state-claim:{README}"),
@@ -1195,6 +1258,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             target = test_root / relative
             write_lf(target, changed)
             child_result(test_root, "docs", reason)
+            rejected_reasons.append(reason.split(":", 1)[0])
             write_lf(target, original)
             rejected += 1
         child_result(test_root, "docs")
@@ -1228,6 +1292,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
     controls = len(mutations) + 4
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
+    print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
     return controls + notes_controls, rejected + notes_rejected
 
 
