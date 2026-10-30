@@ -11,6 +11,8 @@ created: "2026-10-30"
 
 This interim audit covers the authored threat register in plans 19-01..19-07. The independent ASVS L1 audit at `29f6ae2b818fdc4dac8b73b3107b5a9722e10578` found two implementation gaps under T-19-22. The focused re-audit of the complete six-file correction diff at `b0beb4fd8d1c2290d89b707860bf23c899e12fac` closed both gaps. With the existing acceptance recorded as AR-19-01, 26/35 unique threats are closed and nine operational verifications remain pending; four meet the high blocking threshold. This report does not certify publication or phase completion.
 
+The second focused audit at `0fec185016ae4d3578b641ffc694aafdd1d8795c` verified that CI integration fixes preserve the registered mitigations: production tag and publication guards are unchanged; the tag-guard fixture uses a relative log path with an explicit temporary working directory; and the two lifecycle control suites run serially with unchanged 60-second limits, minimum counts and semantic assertions. The independent auditor executed all three tag-guard scenarios successfully. Subsequent local targeted CTests passed 3/3; actual final-head Windows CI and renewed preflight remain pending. This adds no risk acceptance and changes no threat status.
+
 ## Trust Boundaries
 
 | Boundary | Data crossing |
@@ -88,6 +90,7 @@ The code review additionally found WR-01: changed-path closure accepted internal
 | 2026-10-30 |29f6ae2b818fdc4dac8b73b3107b5a9722e10578|24|11|6|Independent initial audit; T-19-SC log absent |
 | 2026-10-30 |Same source; acceptance logged here|25|10|5|Orchestrator records existing AR-19-01; two independently confirmed T-19-22 gaps remain |
 | 2026-10-30 |b0beb4fd8d1c2290d89b707860bf23c899e12fac|26|9|4|Independent gsd-security-auditor focused re-audit closes both T-19-22 implementation gaps; existing AR-19-01 verified |
+| 2026-10-30 |0fec185016ae4d3578b641ffc694aafdd1d8795c|26|9|4|Independent focused round 2 audit preserves T-19-14/T-19-22 and AR-19-01; tag scenarios executed; executor targeted controls subsequently pass 3/3; Windows CI pending |
 
 No missing subject-ancestry dependency was established: ancestry/object checks use full-history trusted-judge; subject derivation reads CMake/manifest; fuzz exact-tree/blob validation follows fetching the subject commit. The local differential uses full-history worktrees and does not exercise a shallow subject checkout; this is a coverage limitation, not a verified defect. The five completed summaries have no explicit Threat Flags sections; that is not proof of an exhaustive attack-surface inventory.
 

@@ -1,6 +1,6 @@
 ---
 phase: GB-19-qualified-v0-3-0-release
-reviewed: 2026-10-30T07:33:13Z
+reviewed: 2026-10-30T09:17:06Z
 depth: standard
 files_reviewed: 56
 files_reviewed_list:
@@ -67,51 +67,43 @@ findings:
   total: 0
 status: clean
 review_base: f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4
-review_head: b0beb4fd8d1c2290d89b707860bf23c899e12fac
-fix_round_delta: 29f6ae2b818fdc4dac8b73b3107b5a9722e10578..b0beb4fd8d1c2290d89b707860bf23c899e12fac
+review_head: 0fec185016ae4d3578b641ffc694aafdd1d8795c
+fix_round_delta: ec56d260df555d68ddf003adf7c5224bfd65ee1f..0fec185016ae4d3578b641ffc694aafdd1d8795c
 ---
 
-# Phase 19: Code Review Report — Review-Fix Round 1
+# Phase 19: Code Review Report — Review-Fix Round 2
 
-**Reviewed:** 2026-10-30T07:33:13Z  
+**Reviewed:** 2026-10-30T09:17:06Z
 **Depth:** standard  
 **Files Reviewed:** 56  
 **Status:** clean
 
 ## Summary
 
-Rechecked the six-file fix-round diff `29f6ae2b818fdc4dac8b73b3107b5a9722e10578..b0beb4fd8d1c2290d89b707860bf23c899e12fac` in the context of the original 55-file Phase 19 scope. The new verifier adds the 56th unique source file. All three findings in the premerge report and the judge-CLI integration mismatch are resolved at this head; no new correctness or security finding was verified.
+Re-reviewed the exact two-file round-two delta `ec56d260df555d68ddf003adf7c5224bfd65ee1f..0fec185016ae4d3578b641ffc694aafdd1d8795c` in the context of the original 56-file Phase 19 scope. The changes correct the workflow-policy self-test's temporary Git log path for Windows Bash and serialize two POSIX release lifecycle control suites. The count assertions and 60-second timeout values are unchanged. No new correctness or security finding was verified. This is a source review disposition; it does not substitute for completion of the pending CTest run or hosted Windows CI.
 
 ## Prior Findings and Dispositions
 
-### CR-01: Production release readback is incompatible with the publisher's final-asset inventory — RESOLVED (BLOCKER)
+The three original findings and the judge CLI integration mismatch remain resolved as documented in [Review-Fix Round 1](https://github.com/szTheory/gabbaboy/blob/33d3d63d1a079e6c4ce72b863e25033cc80c43de/.planning/phases/GB-19-qualified-v0-3-0-release/19-REVIEW.md): CR-01 production readback inventory compatibility, CR-02 immediate prepublish frozen-inventory comparison, WR-01 path traversal in changed-path exclusion, and IR-01 judge CLI argument parsing.
 
-**Original files:** `.github/scripts/release-evidence-lifecycle.sh:252-276`; `tests/scripts/verify-v03-dispositions.py:386-435` at `29f6ae2b818fdc4dac8b73b3107b5a9722e10578`  
-**Verified fix:** The validator now requires both final metadata assets in the full sourced inventory, compares all published API names/IDs/digests against that inventory, and defines checksum and release-receipt coverage as the inventory minus `SHA256SUMS` and `release-receipt.json` (`tests/scripts/verify-v03-dispositions.py:386-444`). The final metadata assets are separately bound by their own API digests and asset IDs. The lifecycle fixture now includes both final assets and their metadata checks. This matches the production publisher, which deliberately excludes the two self-referential final files from payload checksums.
+The API pagination concern remains not a finding: the qualified release inventory is bounded to 22 names and the final-gate and prepublish equality checks reject a truncated or changed list. The shallow subject checkout versus full-history local differential remains a coverage limitation; no ancestry-dependent Git query on subject was verified.
 
-### CR-02: Publisher does not recheck the frozen asset inventory before publishing — RESOLVED (BLOCKER)
+## Round 2 CI Integration Dispositions
 
-**Original files:** `.github/scripts/release-evidence-lifecycle.sh:310-326,362-376`; `.github/workflows/release.yml:1424-1440` at `29f6ae2b818fdc4dac8b73b3107b5a9722e10578`  
-**Verified fix:** `publish-draft` now fetches the live asset list and invokes `verify_pre_publish` before the draft-to-published transition (`.github/scripts/release-evidence-lifecycle.sh:365-372`). The verifier binds the inventory to tag, source commit, release ID, run ID and attempt, rejects malformed or duplicate IDs/names, and requires live IDs and SHA-256 digests to exactly equal the frozen inventory (`.github/scripts/verify-published-release-assets.py:52-113`). The lifecycle control exercises a successful final-gate/nightly/publish path and removes a qualified asset after those gates; the changed code refuses publication while the release remains a draft. The retained post-tag evidence is at `build/preflight/runs/4291d7b05419162f3db9a518c5fdcd0e69388b79/review/`.
+### CI-01: Parallel lifecycle control timeouts — source correction and targeted execution verified
 
-### WR-01: PR changed-path exclusion can be bypassed with internal traversal components — RESOLVED (WARNING)
+**File:** `tests/CMakeLists.txt:5557-5582`
+**Disposition:** `release_lifecycle_controls` and `release_lifecycle_post_tag_controls` now have `RUN_SERIAL TRUE`, which keeps either control suite from overlapping other CTest cases and keeps the two suites from overlapping each other. Their existing `TIMEOUT 60`, output regexes, and minimum control counts (95 and 80) are unchanged. This addresses the reported contention path without weakening the test contract. It does not protect against an individual suite exceeding 60 seconds when run alone. The executor's targeted CTest log showed `workflow_policy_controls` passing in 45 seconds and had started `release_lifecycle_controls`; the lifecycle results were not complete in the evidence observed for this review. Completion of both lifecycle controls remains required before treating this correction as execution-verified.
 
-**Original file:** `tests/scripts/verify-v03-dispositions.py:481-484` at `29f6ae2b818fdc4dac8b73b3107b5a9722e10578`  
-**Verified fix:** Path validation rejects backslashes, absolute and drive-prefixed paths, empty/dot/dot-dot components, and noncanonical POSIX forms before checking the root component (`tests/scripts/verify-v03-dispositions.py:490-498`). The negative control now includes `docs/placeholder/../../src/core/gabbaboy.c` and expects rejection.
+**Subsequent executor verification, reconciled by the orchestrator:** the run with `--parallel 4` at immutable `0fec185016ae4d3578b641ffc694aafdd1d8795c` completed all three controls: workflow policy 45.00s, lifecycle 18.30s and post-tag 23.87s, with zero failures. The log shows the serial suites starting after preceding tests completed. The existing 60-second limits and semantic assertions remain intact. `test-budget` passed against immutable base `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4`, its 54 self-test controls passed, the inventory self-test includes missing-test rejection, and Python 3.10 grammar parsing passed. Local evidence is retained in ignored `build/preflight/review/round2-0fec185/`. Final-head remote CI and the repeated coherent preflight remain required.
 
-### IR-01: Documented local judge CLI invocation disagreed with its parser — RESOLVED (WARNING)
+### CI-02: Windows workflow-policy fixture path — portability correction verified by inspection; hosted Windows validation pending
 
-**Original file:** `tests/scripts/verify-judge-outcome.py` at `29f6ae2b818fdc4dac8b73b3107b5a9722e10578`  
-**Verified fix:** The parser now accepts the documented `--key STDERR_FILE --exit N` form and requires a nonnegative integer exit code (`tests/scripts/verify-judge-outcome.py:246-281`). Self-tests execute the documented positive form and reject omitted, noninteger, and negative exit values.
-
-## Rechecked Concern — API Pagination (Not a Finding)
-
-The release asset calls request `per_page=100` without `--paginate`, so a multi-page result would be truncated. The production path cannot qualify such a result: `REQUIRED_ASSETS` contains 20 exact payload names, `check_asset_inventory` accepts only those names with at most the two final metadata names, and `check_final_receipt` requires exactly 22 unique assets (`.github/scripts/verify-release-gates.sh:21,226-237,286-295`). A response with more than 100 release assets has 100 rows on its first page and fails these cardinality/name checks before the frozen inventory is produced. If an asset is added after the 22-row snapshot and the list exceeds one page, the prepublish exact-map comparison sees the 100-row response and refuses it. Thus the proposed later-page-hidden asset does not have a reachable successful final-gate/prepublish path under the current qualified inventory.
-
-The earlier shallow subject checkout versus full-history local differential remains a coverage limitation, not a verified defect: the subject path has no ancestry-dependent Git query, and history/object queries use the trusted checkout.
+**File:** `.github/scripts/verify-workflow-policy.py:4520-4558`
+**Disposition:** The harness now passes the relative name `git.log` and starts Bash with the temporary directory as its working directory. The stub writes to that relative file, and Python reads the corresponding native temporary-directory path, avoiding the prior absolute Windows path crossing into Git Bash. All three guard cases remain asserted: untagged release rehearsal is allowed with one Git call, an existing release tag is refused with one Git call, and a non-release rehearsal branch skips the lookup. Read failures are now explicit and diagnostics include exit status and captured output. The production workflow guard at `.github/workflows/release-rehearsal.yml:350-361` is unchanged. The local targeted `workflow_policy_controls` run passed, but this review did not execute it and that local result does not prove Windows portability. The hosted Windows `workflow_policy_controls` job remains mandatory and pending.
 
 ---
 
-_Reviewed: 2026-10-30T07:33:13Z_  
+_Reviewed: 2026-10-30T09:17:06Z_
 _Reviewer: the agent (gsd-code-reviewer)_  
 _Depth: standard_
