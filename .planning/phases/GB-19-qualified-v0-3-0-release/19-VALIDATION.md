@@ -115,3 +115,11 @@ All failures from the Wave 1 run are covered by these repairs and focused reruns
 ## Wave 2 Integration Evidence
 
 At `8c906de57abe9337d3c1784221b5659a1e46b256`, phase1 configure/build passed and the complete CTest suite passed 1,682/1,682 with four parallel workers. JUnit: `build/phase19-wave2.xml`; log: `build/phase19-wave2-ctest.log`. The suite ran with scoped access for its temporary Git worktrees, and retained every test and timeout. Schema and UI gates were non-blocking; codebase drift skipped because no structure map exists. REL-01 remains pending until publication and readback; 19-04 supplies rehearsal-binding coverage only.
+
+## Wave 3 Integration Evidence
+
+At `2be716eb`, configure/build passed. The 1,685-test integration run recorded 13 timeouts across unrelated cases, one dependency-blocked case, and a missing planning label on `v03_readback_controls`. Several reported timeout durations substantially exceeded the configured limits; those failed results remain in `build/phase19-wave3.xml` and are not a passing full-suite claim.
+
+The failed-case rerun, including fixture dependencies, passed 139/140 without source changes; only the known label defect remained (`build/phase19-wave3-rerun.xml`). All timed-out cases passed in that rerun. Commit `1b9540f6` adds the planning label to the shared-module readback test. The affected selection passed 5/5: readback controls, test budget and controls, planning labels and controls (`build/phase19-wave3-label-fix.xml`). The timeout-generated dense-input fixture was preserved under `build/phase19-wave3-timeout-artifacts/`.
+
+These checks resolve the failures from the integration run without changing limits or omitting cases. Schema/UI gates were non-blocking; codebase drift skipped because no structure map exists. Phase 19 remains active at plan 19-06; REL-01 remains pending.

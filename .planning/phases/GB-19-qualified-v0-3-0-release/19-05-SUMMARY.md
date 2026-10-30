@@ -127,6 +127,8 @@ status: complete
 
 ## Accomplishments
 
+Wave 3 integration follow-up: `v03_readback_controls` shares a module containing planning readers and therefore needs the `planning` label. Commit `1b9540f6` supplies it; the five affected readback, budget, and planning-label checks passed. The full integration run and timeout rerun are recorded separately in 19-VALIDATION.md; no timeout limit was changed.
+
 - The CI perf gate emits a source- and limits-bound receipt before returning a verdict, preserves the deciding retry attempt, uploads even after a red gate, and the release candidate verifies it against the exact push run. OQ-2 is resolved by embedding `perf_gate` in the existing `release-receipt.json`; the asset list and Ir limit stay unchanged.
 - The rehearsal and release candidate run host-contract smoke on extracted archive bytes for Linux and macOS. Consumer receipts carry `host_smoke` and `platform`; Windows records `not-applicable`.
 - The final-gate persists `release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}` before publication. Readback checks use the embedded raw artifact as the expected inventory, and the post-tag inventory covers the `ci_run` GET and same-run perf artifact download forms.
