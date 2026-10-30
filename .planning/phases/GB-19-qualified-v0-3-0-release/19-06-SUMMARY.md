@@ -222,6 +222,18 @@ The preceding interim-status paragraph and the initial statement that PR A had n
 
 Current status remains `halted`, with Plan 19-06 executing and Task 4 incomplete. The current operational stage is **PR A fix qualification**: freeze a new final source head including the summary/reconciliation, repin the ignored runner, push that head to existing PR #133, then run the fresh coherent final synthetic preflight and exact-head CI. No result from EC56 substitutes for those gates. REL-01 and D-09 remain pending; no phase completion, merge, release tag, publication, or Plan 19-07 execution is claimed.
 
+### E0 settled-source qualification — results and blocker
+
+This snapshot supersedes the preceding EC56-only stage description. The fresh E0 synthetic local and hosted pre-flight is complete; Plan 19-06 Task 4 and PR readiness are still blocked by exact-head CI.
+
+- Frozen PR source: `e0ca6463c3b6379fe65f28bb1fa0673be79ee071`. Its coherent synthetic identities are H0 `59ed280652edbe683aa68650f0817885333677de`, H1 `2c6c8a675a9aece27cd8cd598a71470b4f7451d7`, H-prime `58b51a707834db51a175d66723c4b5d0d8a8d878`, and W-equivalent `5e650c97e9c3b2935da8a126d61e864a6f17088b`. These identities are distinct from EC56 and the earlier historical chains.
+- Fresh exact-H-prime local qualification passed: installed-prefix CTest and verified inventory 1690/1690, no skips; the CGB corpus receipt is complete with 107/107 cases classified (25 observed pass, 82 expected XFAIL; 2845/4959 assertions); player Release 108/108; Debug plus linkage 110/110. Both Cocoa menu shortcut CTests passed in E0's native player qualification with scoped GUI escalation and `caffeinate`. Earlier sandbox attempts from prior chains could not exercise Cocoa and remain preserved separately; no human UAT was used. Finalization revalidated the 1690-case JUnit and W-equivalent version-window fixed point.
+- Hosted rehearsal [41034255964](https://github.com/szTheory/gabbaboy/actions/runs/41034255964) completed all six producer lanes. The actual run-scoped fuzz artifact was downloaded; the three local judge environments used six registered Git worktree checkouts and matched the trusted hosted result exactly: `failure|Judge workflow privilege and trust wiring from the trusted checkout|2|usage unrecognized --git-root`. The transient `rehearsal/v0.3.0` branch was deleted and absence verified. No release tag was created.
+- Exact-head CI remains red only at Windows `workflow_policy_controls` in both event instances: push [41033231735](https://github.com/szTheory/gabbaboy/actions/runs/41033231735), job [123987812944](https://github.com/szTheory/gabbaboy/actions/runs/41033231735/job/123987812944), and PR [41033238701](https://github.com/szTheory/gabbaboy/actions/runs/41033238701), job [123987817960](https://github.com/szTheory/gabbaboy/actions/runs/41033238701/job/123987817960). The control's bare `bash` resolves to the Windows WSL launcher, whose output says no distributions are installed; the fake-Git guard never runs. The production workflow-policy check and all other applicable jobs passed. Preview smoke [41033238657](https://github.com/szTheory/gabbaboy/actions/runs/41033238657) failed downstream after its three jobs observed the exact-head CI failure; package artifact smoke was not reached.
+- Review-fix rounds 1 and 2 have both been used. The ignored review note `build/preflight/review/19-WINDOWS-RESCOPE.md` documents the bounded resolver-only proposal. The owner rescope request is pending; no further code fix, source commit, or source push is authorized before that response. Handoff documentation may still be committed separately. D-09 acknowledgment is a separate pending owner decision. PR #133 exists at E0 and remains unmergeable.
+
+The current operational stage is **awaiting the explicit Windows-harness rescope decision and the separate D-09 acknowledgment**. This plan remains `status: halted`, Task 4 incomplete, and `requirements-completed: []`; REL-01 remains pending. If the owner approves the bounded rescope, continue Plan 19-06 with the authorized resolver fix, independent review, a new frozen source head, fresh coherent local/hosted pre-flight and exact-head CI. Stop before merge until both owner gates and required evidence are satisfied. Do not start Plan 19-07, merge, tag, publish, or claim Phase 19 complete.
+
 ## Issues Encountered and Limitations
 
 The bullets below record the earlier interim snapshot. The subsequent qualification snapshot above supersedes its point-in-time statements about whether PR A, final local preflight, and exact-head CI had occurred.
@@ -233,7 +245,7 @@ The bullets below record the earlier interim snapshot. The subsequent qualificat
 
 ## Next Phase Readiness
 
-Continue **Plan 19-06 — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A readiness** at the **PR A fix qualification** stage. Resume with `/gsd-execute-phase 19`; freeze and pin the new final head, push it to existing PR #133, and run the fresh coherent H0-to-H-prime construction plus final local/hosted gates. Do not start Plan 19-07. After the new exact-head preflight and CI are ready, stop for the already-pending D-09 owner acknowledgment before any squash merge.
+Continue **Plan 19-06 — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A readiness** after the owner responds to the bounded Windows-harness rescope request; D-09 acknowledgment remains a separate pending decision. Resume with `/gsd-execute-phase 19` to continue the same plan. If the rescope is approved, perform only its bounded test-harness fix, independent review and fresh coherent qualification; then stop before any merge until the owner gates and required exact-head evidence are satisfied. Plan 19-06 and Phase 19 remain incomplete; do not start Plan 19-07.
 
 ## Self-Check: PASSED
 
@@ -241,4 +253,4 @@ The plan-interval base and head are ancestors of the current branch; the committ
 
 ---
 *Phase: GB-19-qualified-v0-3-0-release*
-*Plan: 06 — halted qualification snapshot; PR A fix qualification and final preflight pending*
+*Plan: 06 — halted qualification snapshot; Windows rescope and D-09 decisions pending*

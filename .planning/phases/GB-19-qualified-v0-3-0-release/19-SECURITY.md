@@ -13,6 +13,8 @@ This interim audit covers the authored threat register in plans 19-01..19-07. Th
 
 The second focused audit at `0fec185016ae4d3578b641ffc694aafdd1d8795c` verified that CI integration fixes preserve the registered mitigations: production tag and publication guards are unchanged; the tag-guard fixture uses a relative log path with an explicit temporary working directory; and the two lifecycle control suites run serially with unchanged 60-second limits, minimum counts and semantic assertions. The independent auditor executed all three tag-guard scenarios successfully. Subsequent local targeted CTests passed 3/3; actual final-head Windows CI and renewed preflight remain pending. This adds no risk acceptance and changes no threat status.
 
+**E0 execution update:** the coherent preflight at frozen PR head `e0ca6463c3b6379fe65f28bb1fa0673be79ee071` fulfilled T-19-25, including the bump-only negative, all six hosted producers, exact judge comparison and transient-branch deletion. This is 27/35 threats closed, eight operational items open, four at the blocking threshold. Both E0 Windows CI instances failed the test harness by selecting a WSL launcher; T-19-26 remains open and PR #133 cannot merge. Two fix rounds are used, so a further interpreter-selection fix requires owner rescope. The production tag/publication guards remain unchanged. Any later source head requires its own qualification; E0 evidence is not relabeled.
+
 ## Trust Boundaries
 
 | Boundary | Data crossing |
@@ -55,7 +57,7 @@ Evidence paths below are relative to `tests/scripts/` unless otherwise qualified
 | T-19-22 | Tampering | Publication inventory/readback | high | mitigate | Full API inventory includes final metadata; checksum/receipt coverage uses payload names; shared verifier binds complete name/ID/digest maps and release/run/source identity before publication. Independent post-gate removal refuses with draft=true and zero publication decisions; omitted-guard mutant publishes then refuses. | closed |
 | T-19-23 | Information disclosure | Readback | medium | mitigate | verify-v03-dispositions.py privacy scan and immutable lifecycle pattern parity | closed |
 | T-19-24 | Repudiation | Release profiles | low | mitigate | Lifecycle derives profiles/ledger from tag; profile control | closed |
-| T-19-25 | Denial of service | Final synthetic preflight | medium | mitigate | Final-head hosted producers, bump-only negative and transient branch deletion pending | open — below high threshold |
+| T-19-25 | Denial of service | Final synthetic preflight | medium | mitigate | At frozen E0: all six producers in run 41034255964 succeeded; negative/positive local gates, exact judge comparison and transient-branch deletion verified. A later source requires new qualification. | closed |
 | T-19-26 | Tampering | PR A merge | high | mitigate | Exact-head required checks and guarded squash with match-head pending | open |
 | T-19-27 | Tampering | PR titles/file set | medium | mitigate | Observed PR A title and regenerated #131 title/file set pending | open — below high threshold |
 | T-19-28 | Repudiation | Documentation | low | mitigate | Doc links and first CHANGELOG heading contract checks with refusing controls | closed |
@@ -91,7 +93,8 @@ The code review additionally found WR-01: changed-path closure accepted internal
 | 2026-10-30 |Same source; acceptance logged here|25|10|5|Orchestrator records existing AR-19-01; two independently confirmed T-19-22 gaps remain |
 | 2026-10-30 |b0beb4fd8d1c2290d89b707860bf23c899e12fac|26|9|4|Independent gsd-security-auditor focused re-audit closes both T-19-22 implementation gaps; existing AR-19-01 verified |
 | 2026-10-30 |0fec185016ae4d3578b641ffc694aafdd1d8795c|26|9|4|Independent focused round 2 audit preserves T-19-14/T-19-22 and AR-19-01; tag scenarios executed; executor targeted controls subsequently pass 3/3; Windows CI pending |
+| 2026-10-30 |e0ca6463c3b6379fe65f28bb1fa0673be79ee071|27|8|4|Orchestrator records completed E0 preflight and actual Windows WSL-launcher failure; T-19-26 remains blocking; owner rescope pending |
 
 No missing subject-ancestry dependency was established: ancestry/object checks use full-history trusted-judge; subject derivation reads CMake/manifest; fuzz exact-tree/blob validation follows fetching the subject commit. The local differential uses full-history worktrees and does not exercise a shallow subject checkout; this is a coverage limitation, not a verified defect. The five completed summaries have no explicit Threat Flags sections; that is not proof of an exhaustive attack-surface inventory.
 
-Audit-time linkage, managed claims, interop scan, CHANGELOG heading and doc link checks passed. Reproductions were isolated; no remote mutation occurred. The final-head synthetic rehearsal has not yet run after the fixes, so T-19-25 remains open. Publication operations and REL-01 remain pending. No security or phase-completion sign-off is claimed.
+Audit-time linkage, managed claims, interop scan, CHANGELOG heading and doc link checks passed. Reproductions were isolated. The subsequent E0 rehearsal used a transient remote branch, deleted after its terminal run. T-19-25 is closed for E0 only; exact-head Windows CI and the guarded merge remain blocked. Publication operations and REL-01 remain pending. No security or phase-completion sign-off is claimed.
