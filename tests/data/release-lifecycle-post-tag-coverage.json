@@ -1,0 +1,354 @@
+{
+  "schema_version": 1,
+  "baseline_revision": "dcb2c92668a47bc04f88fd3c57bc0d2e978473e1",
+  "controls": [
+    {
+      "id": "trust.wiring",
+      "group": "trust"
+    },
+    {
+      "id": "trust.wrong-repository",
+      "group": "trust"
+    },
+    {
+      "id": "trust.no-repository-fallback",
+      "group": "trust"
+    },
+    {
+      "id": "trust.missing-attachment",
+      "group": "trust"
+    },
+    {
+      "id": "trust.missing-final-gate",
+      "group": "trust"
+    },
+    {
+      "id": "trust.advisory-consumers",
+      "group": "trust"
+    },
+    {
+      "id": "trust.non-advisory-refusal",
+      "group": "trust"
+    },
+    {
+      "id": "trust.unexpected-endpoint",
+      "group": "trust"
+    },
+    {
+      "id": "trust.endpoint-inventory",
+      "group": "trust"
+    },
+    {
+      "id": "capture_source.positive-baseline",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.capture-contract",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.sanitizer",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-stale-check-head",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-check-run-of-another-app-id",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-check-run-of-another-app-slug",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-check-run-url-of-another-repository",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-check-run-url-with-a-lookalike-repository-prefix",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-check-run-html-url-of-another-repository",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-check-run-without-its-check-suite",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.the-old-repository-only-check-run-shape",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-required-context-without-evidence",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-failed-required-context",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-mixed-duplicate-of-a-required-context",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-pull-request-merged-to-another-source",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.source-proof.a-pull-request-of-another-base-repository",
+      "group": "capture_source"
+    },
+    {
+      "id": "capture_source.perf-ci-run-receipt",
+      "group": "capture_source"
+    },
+    {
+      "id": "draft_assets.positive-baseline",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.attached-bytes-that-differ-from-the-api-digest",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.replaced-bytes-with-a-recomputed-digest",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-candidate-receipt-of-another-source",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-source-receipt-of-another-release-id",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-source-receipt-of-another-tag",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-support-sidecar-of-another-tag",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-platform-manifest-of-another-source",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-platform-manifest-entry-that-no-longer-matches-its-asset",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-partial-asset-set",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-duplicated-asset-name",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.an-unknown-extra-asset",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-tag-that-moved-off-the-frozen-source",
+      "group": "draft_assets"
+    },
+    {
+      "id": "draft_assets.candidate.a-release-that-is-already-published",
+      "group": "draft_assets"
+    },
+    {
+      "id": "recovery_sums.positive-baseline",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.recovery.this-run-absent-from-the-live-run-list",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.recovery.a-later-attempt-of-this-run",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.recovery.a-concurrent-unfinished-run-of-the-same-source",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.recovery.a-concurrent-manual-retry-dispatch",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.sha256sums.a-name-listed-twice",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.sha256sums.a-line-with-one-space",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.sha256sums.a-path-like-name",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.sha256sums.a-manifest-without-its-final-newline",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.sha256sums.a-manifest-that-omits-an-asset",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "recovery_sums.sha256sums.a-digest-that-is-not-the-asset-s",
+      "group": "recovery_sums"
+    },
+    {
+      "id": "consumer.retry-reuse",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.downstream.a-campaign-receipt-that-passes-identity-but-is-not-a-complete-exploration",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.downstream.a-consumer-receipt-of-another-source",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.downstream.a-required-platform-asset-removed",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.downstream.an-unknown-extra-asset-at-the-manifest-step",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.downstream.final-receipts-without-a-platform-manifest",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.downstream.an-unknown-extra-asset-beside-the-final-receipts-and-manifest",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.downstream.a-platform-manifest-entry-altered-after-attachment",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.ordering.removed-tamper-check",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.ordering.check-after-reuse",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.an-altered-corpus-receipt-with-a-recomputed-api-digest",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.a-fuzz-receipt-of-another-source",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.a-sidecar-of-another-tag",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.a-sidecar-of-another-source",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.attached-bytes-that-differ-from-the-digest-github-reports",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.a-performance-receipt-that-did-not-pass",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.an-unknown-extra-asset",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.a-duplicated-performance-receipt-refused-by-the-inventory-check-that-precedes-the-download",
+      "group": "consumer"
+    },
+    {
+      "id": "consumer.attached-evidence.a-sidecar-without-its-corpus-receipt-refused-by-the-inventory-check-that-precedes-the-download",
+      "group": "consumer"
+    },
+    {
+      "id": "publication.live-publish-command",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-failed-run",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-cancelled-run",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-newer-run-at-another-head",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-skipped-replay-job",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-failed-replay-job",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-run-still-in-progress",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.no-run-at-the-rehearsed-head",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-newer-red-run-behind-which-an-older-green-one-sits",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-nightly-run-of-another-workflow",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.a-rehearsed-head-with-another-tree",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.an-attempt-completed-after-the-version-pr-merged",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.no-successful-rehearsal-run",
+      "group": "publication"
+    },
+    {
+      "id": "publication.nightly.no-nightly-run-at-all",
+      "group": "publication"
+    },
+    {
+      "id": "publication.perf-receipt-tamper",
+      "group": "publication"
+    },
+    {
+      "id": "publication.profile-string",
+      "group": "publication"
+    },
+    {
+      "id": "publication.pre-publish-inventory",
+      "group": "publication"
+    }
+  ]
+}

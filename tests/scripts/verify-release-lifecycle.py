@@ -3,6 +3,9 @@
 
     verify-release-lifecycle.py [--rev SHA] --replay
     verify-release-lifecycle.py [--rev SHA] --self-test
+    verify-release-lifecycle.py [--rev SHA] --self-test-post-tag
+    verify-release-lifecycle.py [--rev SHA] --self-test-post-tag-group {trust,capture_source,draft_assets,recovery_sums,consumer,publication}
+    verify-release-lifecycle.py [--rev SHA] --self-test-post-tag-coverage
     verify-release-lifecycle.py [--rev SHA] --check-capture
     verify-release-lifecycle.py --sanitize-capture RAW_DIR OUTPUT
 
@@ -28,6 +31,8 @@ import argparse
 import ast
 import concurrent.futures
 import copy
+from collections.abc import Callable
+from dataclasses import dataclass
 import hashlib
 import importlib.util
 import json
@@ -52,6 +57,7 @@ WORKFLOW = ".github/workflows/release.yml"
 DELIVERY = "tests/scripts/verify-v02-delivery.py"
 CAPTURE = "tests/data/release-api/captured.json"
 SOURCES = "tests/data/release-api/SOURCES.md"
+POST_TAG_COVERAGE = "tests/data/release-lifecycle-post-tag-coverage.json"
 # Production files the replay materializes from --rev into the judge checkout (the `trusted/` tree of every job).
 JUDGE_FILES = (
     LIFECYCLE,
@@ -91,6 +97,26 @@ class Reject(Exception):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(f"REJECT {code}: {message}")
         self.code = code
+
+
+@dataclass(frozen=True)
+class ControlOutcome:
+    control_id: str
+    message: str
+
+
+@dataclass(frozen=True)
+class PostTagRegistration:
+    group: str
+    control_ids: tuple[str, ...]
+    run: Callable[[Context], str | ControlOutcome | list[ControlOutcome]]
+
+
+def _post_tag_case_id(prefix: str, label: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", label.casefold()).strip("-")
+    if not slug:
+        raise Reject("post-tag-coverage", f"control label has no stable id characters: {label!r}")
+    return f"{prefix}.{slug}"
 
 
 # ----------------------------------------------------------------------------------------------- immutable source
@@ -2071,23 +2097,38 @@ SUMS_CASES = (
 )
 
 
-def positive_baselines(ctx: Context) -> int:
-    """The positive production result for each gate group, shown before any rejection of that group is credited."""
+def positive_source_baseline(ctx: Context) -> str:
     s = ctx.scenario("baseline-proof", "manifested")
     ws = publish_from(ctx, s)
     done = merged_source(ctx, s, ws)
     if done.rc != 0 or "agree" not in done.out:
         raise Reject("baseline", f"the real captured shapes did not pass the production source proof: {done.text.strip()[-300:]}")
+    return "the captured exact-head source proof passes its production gate"
+
+
+def positive_draft_baseline(ctx: Context) -> str:
     s2 = ctx.scenario("baseline-draft", "manifested")
     done = draft_gate(ctx, s2)
     if done.rc != 0:
         raise Reject("baseline", f"the qualified draft did not pass the production draft gate: {done.text.strip()[-300:]}")
+    return "the qualified candidate asset set passes the production draft gate"
+
+
+def positive_final_baseline(ctx: Context) -> str:
     s3 = ctx.scenario("baseline-final", "finalized")
     ws3 = publish_from(ctx, s3)
     done = s3.run_mode(ws3, "validate-draft", **PUBLISH_ENV)
     done_gate = s3.run_mode(ws3, "final-gate", **PUBLISH_ENV)
     if done.rc != 0 or done_gate.rc != 0:
         raise Reject("baseline", f"identical final metadata did not pass reuse and the final gate: {(done.text + done_gate.text).strip()[-300:]}")
+    return "identical attached evidence passes reuse and the final gate"
+
+
+def positive_baselines(ctx: Context) -> int:
+    """Run the same three positive gate baselines used by the legacy lifecycle controls."""
+    positive_source_baseline(ctx)
+    positive_draft_baseline(ctx)
+    positive_final_baseline(ctx)
     return 3
 
 
@@ -2199,9 +2240,9 @@ def c_retry_reuse(ctx: Context) -> str:
     return "a retry reuses the identical attached bytes, uploads nothing and replaces nothing"
 
 
-def c_downstream_refusals(ctx: Context) -> list[str]:
+def c_downstream_refusals(ctx: Context) -> list[ControlOutcome]:
     """Evidence that passes the independent check is still judged downstream; every refusal precedes the publish decision."""
-    results: list[str] = []
+    results: list[ControlOutcome] = []
 
     def stage(label: str, tamper, mode: str, needle: str, from_stage: str = "attached", attach_first: bool = True) -> None:
         s = retry_scenario(ctx, "downstream-" + label, from_stage)
@@ -2222,7 +2263,8 @@ def c_downstream_refusals(ctx: Context) -> list[str]:
         expect_fail(outcome, label, needle)
         if s.state()["decisions"] or "publish-decision" in s.mutations_logged():
             raise Reject("control-effect", f"{label}: a decision was recorded")
-        results.append(f"retry downstream: {label} is refused before the publish decision")
+        results.append(ControlOutcome(_post_tag_case_id("consumer.downstream", label),
+                                      f"retry downstream: {label} is refused before the publish decision"))
 
     stage("a campaign receipt that passes identity but is not a complete exploration",
           lambda s: edit_json_asset(s, "v02-fuzz-receipt.json", lambda v: v.update(status="incomplete")),
@@ -2247,7 +2289,7 @@ ATTACH_CHECK_LINE = ('bash trusted/.github/scripts/verify-release-gates.sh --che
 REUSE_LOOP_END = '      cp "$RUNNER_TEMP/attached-$name/$name" "$dir/$name"\n    fi\n  done\n'
 
 
-def c_ordering_mutants(ctx: Context) -> list[str]:
+def c_ordering_mutants(ctx: Context) -> list[ControlOutcome]:
     """IN-01: the unmutated lifecycle refuses a tampered attachment before it touches anything; a removed check lets it through
     to the recovery decision, and a check moved after the destructive reuse destroys the regenerated evidence first."""
     tamper = RETRY_TAMPER_CASES[0]
@@ -2272,8 +2314,12 @@ def c_ordering_mutants(ctx: Context) -> list[str]:
         raise Reject("mutant-unexercised", "a check moved after the reuse still left the regenerated evidence untouched: the ordering control proves nothing")
     if "download" not in {c.get("kind") for c in late.calls}:
         raise Reject("mutant-unexercised", "the misordered lifecycle never fetched the attachments")
-    return ["a removed tamper check lets altered attachments reach the recovery decision; the real lifecycle refuses first",
-            "a tamper check moved after the reuse destroys the regenerated evidence before it refuses; the real lifecycle does not"]
+    return [
+        ControlOutcome("consumer.ordering.removed-tamper-check",
+                       "a removed tamper check lets altered attachments reach the recovery decision; the real lifecycle refuses first"),
+        ControlOutcome("consumer.ordering.check-after-reuse",
+                       "a tamper check moved after the reuse destroys the regenerated evidence before it refuses; the real lifecycle does not"),
+    ]
 
 
 def task3_controls(ctx: Context) -> list:
@@ -2320,7 +2366,27 @@ def _late_rehearsal_attempt(state: dict) -> None:
     state["attempt_jobs"]["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
 
 
-def c_nightly_gate(ctx: Context) -> list:
+NIGHTLY_CASES = (
+    ("a failed run", "nightly-not-success", lambda st, t: _nightly(st, conclusion="failure")),
+    ("a cancelled run", "nightly-not-success", lambda st, t: _nightly(st, conclusion="cancelled")),
+    ("a newer run at another head", "nightly-head-mismatch", lambda st, t: _nightly_other_run(st, "1" * 40)),
+    ("a skipped replay job", "nightly-replay-not-success", lambda st, t: _nightly_replay(st, conclusion="skipped")),
+    ("a failed replay job", "nightly-replay-not-success", lambda st, t: _nightly_replay(st, conclusion="failure")),
+    ("a run still in progress", "nightly-in-progress", lambda st, t: _nightly(st, status="in_progress", conclusion="")),
+    ("no run at the rehearsed head", "nightly-no-run-at-head", lambda st, t: _nightly(st, headSha="2" * 40)),
+    ("a newer red run behind which an older green one sits", "nightly-not-success",
+     lambda st, t: _nightly_other_run(st, t.rehearsal_head, conclusion="failure")),
+    ("a nightly run of another workflow", "nightly-no-run-at-head", lambda st, t: _nightly(st, workflowName="ci")),
+    ("a rehearsed head with another tree", "differs from the tagged tree",
+     lambda st, t: st["rehearsal_runs"][0].update(head_sha=t.other_head)),
+    ("an attempt completed after the version PR merged", "rehearsal-postdates-tag",
+     lambda st, t: _late_rehearsal_attempt(st)),
+    ("no successful rehearsal run", "no successful rehearsal run", lambda st, t: st.update(rehearsal_runs=[])),
+    ("no nightly run at all", "No nightly-asan run exists", lambda st, t: st.update(nightly_runs=[])),
+)
+
+
+def c_nightly_gate(ctx: Context) -> list[ControlOutcome]:
     positive = Scenario(ctx.t, "nightly-positive")
     ws = positive.subject_workspace("publish")
     ok = positive.run_mode(ws, "nightly-gate", RELEASE_ID=str(RELEASE_ID))
@@ -2333,43 +2399,201 @@ def c_nightly_gate(ctx: Context) -> list:
         raise Reject("replay-failed", "the nightly receipt is not bound to the rehearsed head, the tagged source and the run")
     if any(c.get("outcome") == "refused" for c in positive.calls()):
         raise Reject("replay-refused", "the transport refused a production nightly call")
-    cases = (
-        ("a failed run", "nightly-not-success", lambda st, t: _nightly(st, conclusion="failure")),
-        ("a cancelled run", "nightly-not-success", lambda st, t: _nightly(st, conclusion="cancelled")),
-        ("a newer run at another head", "nightly-head-mismatch", lambda st, t: _nightly_other_run(st, "1" * 40)),
-        ("a skipped replay job", "nightly-replay-not-success", lambda st, t: _nightly_replay(st, conclusion="skipped")),
-        ("a failed replay job", "nightly-replay-not-success", lambda st, t: _nightly_replay(st, conclusion="failure")),
-        ("a run still in progress", "nightly-in-progress", lambda st, t: _nightly(st, status="in_progress", conclusion="")),
-        ("no run at the rehearsed head", "nightly-no-run-at-head", lambda st, t: _nightly(st, headSha="2" * 40)),
-        ("a newer red run behind which an older green one sits", "nightly-not-success",
-         lambda st, t: _nightly_other_run(st, t.rehearsal_head, conclusion="failure")),
-        ("a nightly run of another workflow", "nightly-no-run-at-head", lambda st, t: _nightly(st, workflowName="ci")),
-        ("a rehearsed head with another tree", "differs from the tagged tree",
-         lambda st, t: st["rehearsal_runs"][0].update(head_sha=t.other_head)),
-        ("an attempt completed after the version PR merged", "rehearsal-postdates-tag",
-         lambda st, t: _late_rehearsal_attempt(st)),
-        ("no successful rehearsal run", "no successful rehearsal run", lambda st, t: st.update(rehearsal_runs=[])),
-        ("no nightly run at all", "No nightly-asan run exists", lambda st, t: st.update(nightly_runs=[])),
-    )
     base_state = positive.state()
-    return [nightly_control(positive, ws, base_state, ctx, label, needle, change) for label, needle, change in cases]
+    return [ControlOutcome(_post_tag_case_id("publication.nightly", label),
+                           nightly_control(positive, ws, base_state, ctx, label, needle, change))
+            for label, needle, change in NIGHTLY_CASES]
 
 
 TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_advisory_consumers, c_non_advisory,
                   c_unexpected_endpoint_in_script, c_live_publication, c_nightly_gate)
 
-# Keep the established control CTest's 95-control floor stable while running every release-plan control through its own
-# bounded CTest. Task 4's endpoint mutants and the ci_run capture contract are included with the Task 1-3 trust controls.
-POST_TAG_CONTROLS = (TASK1_CONTROLS, task2_controls, task3_controls,
-                     (c_endpoint_inventory, c_perf_receipt_ci_run, c_perf_receipt_tamper,
-                      c_profile_string, c_pre_publish_inventory))
+POST_TAG_GROUP_NAMES = ("trust", "capture_source", "draft_assets", "recovery_sums", "consumer", "publication")
+DOWNSTREAM_CASE_LABELS = (
+    "a campaign receipt that passes identity but is not a complete exploration",
+    "a consumer receipt of another source",
+    "a required platform asset removed",
+    "an unknown extra asset at the manifest step",
+    "final receipts without a platform manifest",
+    "an unknown extra asset beside the final receipts and manifest",
+    "a platform manifest entry altered after attachment",
+)
 
 
-def _post_tag_control_functions(ctx: Context) -> tuple:
-    controls = []
-    for group in POST_TAG_CONTROLS:
-        controls.extend(group(ctx) if callable(group) else group)
-    return tuple(controls)
+def _single_post_tag_registration(group: str, control_id: str, run) -> PostTagRegistration:
+    return PostTagRegistration(group, (control_id,), run)
+
+
+def _parameterized_post_tag_registrations(group: str, prefix: str, cases: tuple, run) -> tuple[PostTagRegistration, ...]:
+    return tuple(_single_post_tag_registration(
+        group, _post_tag_case_id(prefix, case[0]), lambda ctx, case=case: run(ctx, *case)) for case in cases)
+
+
+def _post_tag_registrations() -> tuple[PostTagRegistration, ...]:
+    trust = (
+        _single_post_tag_registration("trust", "trust.wiring", c_wiring),
+        _single_post_tag_registration("trust", "trust.wrong-repository", c_wrong_repo),
+        _single_post_tag_registration("trust", "trust.no-repository-fallback", c_no_fallback),
+        _single_post_tag_registration("trust", "trust.missing-attachment", c_missing_attach),
+        _single_post_tag_registration("trust", "trust.missing-final-gate", c_missing_gate),
+        _single_post_tag_registration("trust", "trust.advisory-consumers", c_advisory_consumers),
+        _single_post_tag_registration("trust", "trust.non-advisory-refusal", c_non_advisory),
+        _single_post_tag_registration("trust", "trust.unexpected-endpoint", c_unexpected_endpoint_in_script),
+        _single_post_tag_registration("trust", "trust.endpoint-inventory", c_endpoint_inventory),
+    )
+    capture_source = (
+        _single_post_tag_registration("capture_source", "capture_source.positive-baseline", positive_source_baseline),
+        _single_post_tag_registration("capture_source", "capture_source.capture-contract", c_capture_contract),
+        _single_post_tag_registration("capture_source", "capture_source.sanitizer", c_sanitizer),
+        *_parameterized_post_tag_registrations("capture_source", "capture_source.source-proof", SOURCE_PROOF_CASES,
+                                                source_proof_control),
+        _single_post_tag_registration("capture_source", "capture_source.perf-ci-run-receipt", c_perf_receipt_ci_run),
+    )
+    draft_assets = (
+        _single_post_tag_registration("draft_assets", "draft_assets.positive-baseline", positive_draft_baseline),
+        *_parameterized_post_tag_registrations("draft_assets", "draft_assets.candidate", DRAFT_CASES, draft_control),
+    )
+    recovery_sums = (
+        _single_post_tag_registration("recovery_sums", "recovery_sums.positive-baseline", positive_final_baseline),
+        *_parameterized_post_tag_registrations("recovery_sums", "recovery_sums.recovery", RECOVERY_CASES, recovery_control),
+        *_parameterized_post_tag_registrations("recovery_sums", "recovery_sums.sha256sums", SUMS_CASES, sums_control),
+    )
+    consumer = (
+        _single_post_tag_registration("consumer", "consumer.retry-reuse", c_retry_reuse),
+        PostTagRegistration("consumer", tuple(_post_tag_case_id("consumer.downstream", label)
+                                                for label in DOWNSTREAM_CASE_LABELS), c_downstream_refusals),
+        PostTagRegistration("consumer", ("consumer.ordering.removed-tamper-check", "consumer.ordering.check-after-reuse"),
+                            c_ordering_mutants),
+        *_parameterized_post_tag_registrations("consumer", "consumer.attached-evidence", RETRY_TAMPER_CASES,
+                                                refused_before_reuse),
+    )
+    publication = (
+        _single_post_tag_registration("publication", "publication.live-publish-command", c_live_publication),
+        PostTagRegistration("publication", tuple(_post_tag_case_id("publication.nightly", case[0])
+                                                    for case in NIGHTLY_CASES), c_nightly_gate),
+        _single_post_tag_registration("publication", "publication.perf-receipt-tamper", c_perf_receipt_tamper),
+        _single_post_tag_registration("publication", "publication.profile-string", c_profile_string),
+        _single_post_tag_registration("publication", "publication.pre-publish-inventory", c_pre_publish_inventory),
+    )
+    return (*trust, *capture_source, *draft_assets, *recovery_sums, *consumer, *publication)
+
+
+def _manifest_controls(manifest: dict) -> tuple[dict, ...]:
+    if (not isinstance(manifest, dict) or set(manifest) != {"schema_version", "baseline_revision", "controls"}
+            or manifest.get("schema_version") != 1 or manifest.get("baseline_revision") != "dcb2c92668a47bc04f88fd3c57bc0d2e978473e1"
+            or not isinstance(manifest.get("controls"), list)):
+        raise Reject("post-tag-coverage", "the immutable expected-control manifest has an unsupported schema")
+    expected = []
+    seen = set()
+    for item in manifest["controls"]:
+        if not isinstance(item, dict) or set(item) != {"id", "group"}:
+            raise Reject("post-tag-coverage", "an expected-control entry must contain only id and group")
+        control_id, group = item["id"], item["group"]
+        if (not isinstance(control_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", control_id)
+                or group not in POST_TAG_GROUP_NAMES or control_id in seen):
+            raise Reject("post-tag-coverage", f"invalid or duplicate expected control {control_id!r}")
+        seen.add(control_id)
+        expected.append({"id": control_id, "group": group})
+    if not expected or set(item["group"] for item in expected) != set(POST_TAG_GROUP_NAMES):
+        raise Reject("post-tag-coverage", "the expected-control manifest omits a semantic group")
+    return tuple(expected)
+
+
+def _load_post_tag_expected(rev: str) -> tuple[dict, ...]:
+    try:
+        manifest = json.loads(git_show(rev, POST_TAG_COVERAGE).decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise Reject("post-tag-coverage", f"the immutable expected-control manifest is invalid: {error}") from error
+    return _manifest_controls(manifest)
+
+
+def _registration_controls(registrations: tuple[PostTagRegistration, ...]) -> tuple[dict, ...]:
+    registered = []
+    seen = set()
+    for registration in registrations:
+        if registration.group not in POST_TAG_GROUP_NAMES or not registration.control_ids:
+            raise Reject("post-tag-coverage", "a registration has no known semantic group or no control IDs")
+        for control_id in registration.control_ids:
+            if control_id in seen:
+                raise Reject("post-tag-coverage", f"control {control_id!r} is registered more than once")
+            if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", control_id):
+                raise Reject("post-tag-coverage", f"control ID is not stable: {control_id!r}")
+            seen.add(control_id)
+            registered.append({"id": control_id, "group": registration.group})
+    return tuple(registered)
+
+
+def _validate_post_tag_registration(registrations: tuple[PostTagRegistration, ...], expected: tuple[dict, ...]) -> None:
+    actual = _registration_controls(registrations)
+    if actual != expected:
+        expected_by_id = {item["id"]: item["group"] for item in expected}
+        actual_by_id = {item["id"]: item["group"] for item in actual}
+        missing = sorted(set(expected_by_id) - set(actual_by_id))
+        extra = sorted(set(actual_by_id) - set(expected_by_id))
+        wrong_group = sorted(control_id for control_id in set(expected_by_id) & set(actual_by_id)
+                             if expected_by_id[control_id] != actual_by_id[control_id])
+        raise Reject("post-tag-coverage", f"registration differs from baseline: missing={missing} extra={extra} wrong_group={wrong_group}")
+    if set(item["group"] for item in actual) != set(POST_TAG_GROUP_NAMES):
+        raise Reject("post-tag-coverage", "registration is not a complete disjoint union of semantic groups")
+
+
+def _expect_coverage_rejection(registrations: tuple[PostTagRegistration, ...], expected: tuple[dict, ...], label: str) -> None:
+    try:
+        _validate_post_tag_registration(registrations, expected)
+    except Reject as error:
+        if error.code != "post-tag-coverage":
+            raise Reject("coverage-self-test", f"{label}: wrong rejection {error}") from error
+        return
+    raise Reject("coverage-self-test", f"{label}: an invalid registration was accepted")
+
+
+def post_tag_coverage_controls(rev: str) -> tuple[int, int]:
+    expected = _load_post_tag_expected(rev)
+    registrations = _post_tag_registrations()
+    _validate_post_tag_registration(registrations, expected)
+    _expect_coverage_rejection(registrations[1:], expected, "omitted registration")
+    _expect_coverage_rejection((registrations[0], registrations[0], *registrations[1:]), expected, "duplicated registration")
+    wrong_group = PostTagRegistration("publication", registrations[0].control_ids, registrations[0].run)
+    _expect_coverage_rejection((wrong_group, *registrations[1:]), expected, "wrong-group registration")
+    _expect_exit_contract_control(rev)
+    return len(expected), len(registrations)
+
+
+def _expect_exit_contract_control(rev: str) -> None:
+    cmake = shutil.which("cmake")
+    if cmake is None:
+        raise Reject("expect-exit-control", "cmake is required to exercise the immutable expect_exit.cmake helper")
+    helper = git_show(rev, "tests/expect_exit.cmake")
+    with tempfile.TemporaryDirectory(prefix="gb-expect-exit-controls.") as name:
+        lab = Path(name)
+        helper_path = lab / "expect_exit.cmake"
+        helper_path.write_bytes(helper)
+        accepted = lab / "accepted.py"
+        failed = lab / "failed.py"
+        wrong_marker = lab / "wrong-marker.py"
+        accepted.write_text("import sys\nprint('PASS expected-marker')\nraise SystemExit(0)\n", encoding="utf-8", newline="\n")
+        failed.write_text("import sys\nprint('PASS expected-marker')\nraise SystemExit(1)\n", encoding="utf-8", newline="\n")
+        wrong_marker.write_text("import sys\nprint('FAIL wrong-marker')\nraise SystemExit(0)\n", encoding="utf-8", newline="\n")
+
+        def invoke(child: Path) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                [cmake, f"-DGBB_CMD={Path(sys.executable).as_posix()};-I;{child.as_posix()}", "-DGBB_EXPECT_CODE=0",
+                 "-DGBB_EXPECT_REGEX=PASS expected-marker", "-P", helper_path.as_posix()],
+                cwd=lab, capture_output=True, text=True, timeout=10)
+
+        passed = invoke(accepted)
+        if passed.returncode != 0:
+            raise Reject("expect-exit-control", f"the matching marker and zero exit were refused: {passed.stdout}{passed.stderr}")
+        code_refusal = invoke(failed)
+        code_output = code_refusal.stdout + code_refusal.stderr
+        code_reason = "expected exit code 0 but the command returned '1'"
+        if code_refusal.returncode == 0 or code_reason not in code_output or "PASS expected-marker" not in code_output:
+            raise Reject("expect-exit-control", f"the matching marker did not lose to the child exit status: {code_output}")
+        regex_refusal = invoke(wrong_marker)
+        regex_output = regex_refusal.stdout + regex_refusal.stderr
+        regex_reason = "exit code 0 was right but the output did not match 'PASS expected-marker'"
+        if regex_refusal.returncode == 0 or regex_reason not in regex_output or "FAIL wrong-marker" not in regex_output:
+            raise Reject("expect-exit-control", f"the wrong marker was not refused for the exact regex reason: {regex_output}")
 
 
 def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tuple[int, int]:
@@ -2404,20 +2628,78 @@ def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tu
     return positives, len(results)
 
 
-def post_tag_controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tuple[int, int, int]:
+def _run_post_tag_registration(registration: PostTagRegistration, ctx: Context) -> list[ControlOutcome]:
+    result = registration.run(ctx)
+    if isinstance(result, ControlOutcome):
+        outcomes = [result]
+    elif isinstance(result, list) and all(isinstance(item, ControlOutcome) for item in result):
+        outcomes = result
+    elif isinstance(result, str):
+        outcomes = [ControlOutcome(registration.control_ids[0], result)]
+    else:
+        raise Reject("post-tag-coverage", f"{registration.control_ids[0]} returned no identifiable control outcome")
+    actual_ids = tuple(outcome.control_id for outcome in outcomes)
+    if actual_ids != registration.control_ids:
+        raise Reject("post-tag-coverage", f"{registration.group} emitted {actual_ids!r}; expected {registration.control_ids!r}")
+    if any(not outcome.message.strip() for outcome in outcomes):
+        raise Reject("post-tag-coverage", f"{registration.group} emitted an empty control result")
+    return outcomes
+
+
+def _run_post_tag_group(group: str, registrations: tuple[PostTagRegistration, ...], expected: tuple[dict, ...],
+                        ctx: Context) -> tuple[list[ControlOutcome], int]:
+    group_registrations = tuple(reg for reg in registrations if reg.group == group)
+    expected_ids = tuple(item["id"] for item in expected if item["group"] == group)
+    if not group_registrations or not expected_ids:
+        raise Reject("post-tag-coverage", f"semantic group {group!r} is empty")
+
+    outcomes: list[ControlOutcome] = []
+    baseline_registrations = tuple(reg for reg in group_registrations
+                                   if reg.control_ids[0].endswith(".positive-baseline"))
+    control_registrations = tuple(reg for reg in group_registrations if reg not in baseline_registrations)
+    for registration in baseline_registrations:
+        outcomes.extend(_run_post_tag_registration(registration, ctx))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+        futures = [pool.submit(_run_post_tag_registration, registration, ctx) for registration in control_registrations]
+        for future in futures:
+            outcomes.extend(future.result())
+
+    executed_ids = tuple(outcome.control_id for outcome in outcomes)
+    if executed_ids != expected_ids:
+        raise Reject("post-tag-coverage", f"{group} executed IDs differ from the immutable manifest: {executed_ids!r}")
+    if len(set(executed_ids)) != len(executed_ids):
+        raise Reject("post-tag-coverage", f"{group} executed a duplicate control ID")
+    return outcomes, len(baseline_registrations)
+
+
+def post_tag_controls(rev: str, files: dict[str, bytes], capture: dict, base: Path,
+                      group: str | None = None) -> tuple[int, int, str, str]:
     wf = files[WORKFLOW].decode("utf-8")
     script = files[LIFECYCLE].decode("utf-8")
     template = Template(base, rev, files, capture)
     ctx = Context(template, wf, script, files)
     build_stages(ctx)
-    positives = positive_baselines(ctx)
-    results: list[str] = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL) as pool:
-        futures = [pool.submit(fn, ctx) for fn in _post_tag_control_functions(ctx)]
-        for future in futures:
-            outcome = future.result()
-            results.extend(outcome if isinstance(outcome, list) else [outcome])
-    return positives, len(results), check_endpoint_inventory(files)
+    expected = _load_post_tag_expected(rev)
+    registrations = _post_tag_registrations()
+    _validate_post_tag_registration(registrations, expected)
+    groups = (group,) if group is not None else POST_TAG_GROUP_NAMES
+    if any(name not in POST_TAG_GROUP_NAMES for name in groups):
+        raise Reject("post-tag-coverage", f"unknown semantic group {group!r}")
+    all_outcomes: list[ControlOutcome] = []
+    positives = 0
+    for name in groups:
+        outcomes, group_positives = _run_post_tag_group(name, registrations, expected, ctx)
+        all_outcomes.extend(outcomes)
+        positives += group_positives
+    executed_ids = tuple(outcome.control_id for outcome in all_outcomes)
+    expected_ids = tuple(item["id"] for item in expected if group is None or item["group"] == group)
+    if executed_ids != expected_ids:
+        raise Reject("post-tag-coverage", "the completed group union differs from the immutable manifest")
+    for control_id in executed_ids:
+        print(f"post-tag-control PASS {control_id}")
+    digest = hashlib.sha256("\n".join(executed_ids).encode("utf-8")).hexdigest()
+    endpoint_status = "pass" if group is None or group == "trust" else "not-in-group"
+    return positives, len(all_outcomes), endpoint_status, digest
 
 
 def lab_integrity(workspace: Path, files: dict[str, bytes]) -> None:
@@ -2441,7 +2723,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--rev")
     parser.add_argument("--replay", action="store_true")
     parser.add_argument("--self-test", action="store_true")
-    parser.add_argument("--self-test-post-tag", action="store_true")
+    post_tag_mode = parser.add_mutually_exclusive_group()
+    post_tag_mode.add_argument("--self-test-post-tag", action="store_true")
+    post_tag_mode.add_argument("--self-test-post-tag-group", choices=POST_TAG_GROUP_NAMES)
+    post_tag_mode.add_argument("--self-test-post-tag-coverage", action="store_true")
     parser.add_argument("--check-capture", action="store_true")
     parser.add_argument("--sanitize-capture", nargs=2, metavar=("RAW_DIR", "OUTPUT"))
     args = parser.parse_args(argv)
@@ -2467,8 +2752,14 @@ def main(argv: list[str]) -> int:
             capture = check_capture(files[CAPTURE], files[SOURCES].decode("utf-8"))
             print(f"release-lifecycle capture pass responses={len(capture['responses'])} bytes={len(files[CAPTURE])}")
             return 0
-        if not (args.replay or args.self_test or args.self_test_post_tag):
-            parser.error("choose --replay, --self-test, --self-test-post-tag, --check-capture or --sanitize-capture")
+        if args.self_test_post_tag_coverage:
+            baseline_ids, registrations = post_tag_coverage_controls(rev)
+            print(f"release-lifecycle post-tag coverage controls pass baseline_ids={baseline_ids} registrations={registrations} "
+                  "omitted=refused duplicate=refused wrong_group=refused expect_exit=pass")
+            return 0
+        if not (args.replay or args.self_test or args.self_test_post_tag or args.self_test_post_tag_group):
+            parser.error("choose --replay, --self-test, --self-test-post-tag, --self-test-post-tag-group, "
+                         "--self-test-post-tag-coverage, --check-capture or --sanitize-capture")
         try:
             script = git_show(rev, LIFECYCLE)
         except Reject:
@@ -2482,9 +2773,12 @@ def main(argv: list[str]) -> int:
                 print("release-lifecycle replay pass modes={modes} publish_decisions={publish_decisions} live_mutations={live_mutations} "
                       "uploads={uploads} calls={calls}".format(**facts))
                 return 0
-            if args.self_test_post_tag:
-                positives, count, endpoint_count = post_tag_controls(rev, files, capture, base)
-                print(f"release-lifecycle post-tag controls pass positives={positives} controls={count} endpoints={endpoint_count}")
+            if args.self_test_post_tag or args.self_test_post_tag_group:
+                group = args.self_test_post_tag_group
+                positives, count, endpoint_status, digest = post_tag_controls(rev, files, capture, base, group)
+                label = group or "all"
+                print(f"release-lifecycle post-tag group={label} controls={count} positives={positives} "
+                      f"endpoint_inventory={endpoint_status} ids_sha256={digest}")
                 return 0
             positives, count = controls(rev, files, capture, base)
             print(f"release-lifecycle controls pass positives={positives} controls={count}")

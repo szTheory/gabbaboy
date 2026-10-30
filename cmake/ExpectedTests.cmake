@@ -21,7 +21,14 @@ function(gabbaboy_verify_registered_tests)
       cgb_speed_repro_tool_failure cgb_speed_repro_missing_pin
       age_repro_selfcheck age_repro_selfcheck_tampered age_repro_compare_tampered
       core_linkage_links core_linkage_controls
-      release_lifecycle_replay release_lifecycle_controls release_lifecycle_post_tag_controls
+      release_lifecycle_replay release_lifecycle_controls
+      release_lifecycle_post_tag_capture_source_controls
+      release_lifecycle_post_tag_consumer_controls
+      release_lifecycle_post_tag_coverage_controls
+      release_lifecycle_post_tag_draft_assets_controls
+      release_lifecycle_post_tag_publication_controls
+      release_lifecycle_post_tag_recovery_sums_controls
+      release_lifecycle_post_tag_trust_controls
       perf_advisory_pipeline perf_advisory_controls
       host_continuation host_rom_max_size host_rom_oversize host_rom_unreadable
       host_cli_stem_refusal host_api_surface host_api_surface_controls
