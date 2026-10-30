@@ -89,6 +89,51 @@
           "patch": 1
         }
       }
+    },
+    {
+      "accepted": true,
+      "affected_semantics": [
+        "State-load identity is bound to the exact release version.",
+        "The release header changes serialized state-golden bytes and digests and state_sha256; format_version and behavior_version remain 1.",
+        "Battery saves remain the cross-version persistence path."
+      ],
+      "approval_basis": "Delegated phase-orchestrator approval under AGENTS.md routine in-phase authorization for this exact state-pin release transition, applying adopted decisions D-113 and D-120.",
+      "approved_by": "delegated-phase-orchestrator",
+      "base_revision": "9c405b01fa40e177f9efc52752d835fee5a3c7c1",
+      "decision": "Advance the exact serialized state release token from 0.2.1 to 0.3.0 while retaining format and behavior tokens at 1; regenerate release-bound state goldens for the changed serialized release header. Exact cross-release state loads remain rejected; battery saves are the cross-version persistence path.",
+      "decision_refs": [
+        "DECISIONS.md#D-113",
+        "DECISIONS.md#D-120"
+      ],
+      "evidence": {
+        "description": "The completed Phase 17 snapshot-fork summary covers 198 serialized fields and 14 model-applicable in-flight categories; this release transition retains those state-format and behavior contracts while advancing only the exact release token.",
+        "revision": "f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4",
+        "summary_path": "phase:GB-17-native-save-state-core/17-05-SUMMARY.md"
+      },
+      "id": "release-0.3.0-state-version",
+      "kind": "release-change",
+      "new_golden_sha256": "b5d9b3404b627a776268304551d2c2d86cae69f580752d11e3d22fd5666d3750",
+      "old_golden_sha256": "ab3ef83a47e33005218fe2f2b9acb3150c16caf972800c6babb82aa2263b06b1",
+      "rationale": "The release header changes serialized state-golden bytes, golden digests, and state_sha256; format and behavior compatibility tokens remain 1. Exact cross-release state loads remain rejected, and battery saves remain the cross-version persistence path.",
+      "required_token": "release",
+      "tokens_after": {
+        "behavior_version": 1,
+        "format_version": 1,
+        "release": {
+          "major": 0,
+          "minor": 3,
+          "patch": 0
+        }
+      },
+      "tokens_before": {
+        "behavior_version": 1,
+        "format_version": 1,
+        "release": {
+          "major": 0,
+          "minor": 2,
+          "patch": 1
+        }
+      }
     }
   ],
   "schema": "state-compatibility-v1"
