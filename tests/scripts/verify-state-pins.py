@@ -54,12 +54,15 @@ def digest_json(value):
 
 
 def run_git(repo, *args, allow_missing=False):
-    result = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
+    result = subprocess.run(["git", "-C", repo, *args], capture_output=True)
     if allow_missing and result.returncode != 0:
         return None
     if result.returncode != 0:
         reject("immutable-source", "git %s failed" % " ".join(args))
-    return result.stdout
+    try:
+        return result.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        reject("immutable-source-encoding", "git output is not valid UTF-8")
 
 
 def immutable_revision(repo, revision):
@@ -524,6 +527,8 @@ def initial_disposition(base_revision, golden, evidence_revision, tokens_before=
 
 
 def self_test():
+    from unittest import mock
+
     controls = 0
     with tempfile.TemporaryDirectory(prefix="state-pins-selftest-") as scratch:
         repo = os.path.join(scratch, "repo")
@@ -554,9 +559,49 @@ set_tests_properties(state_portable_pins PROPERTIES FIXTURES_REQUIRED gbb_state_
         write_git_file(repo, "CMakeLists.txt", valid_wiring)
         write_git_file(repo, os.path.join("tests", "CMakeLists.txt"), valid_wiring)
         write_git_file(repo, OWNER_RULES_FILE, "# Workflow contract\n")
-        write_git_file(repo, DECISIONS_FILE, "| D-113 | State compatibility contract |\n| D-120 | Release version contract |\n")
+        write_git_file(repo, DECISIONS_FILE,
+                       "| D-113 | State compatibility contract |\n"
+                       "| D-120 | Release version contract |\n"
+                       "| D-UTF8 | Immutable “quoted” decision text |\n")
         write_git_file(repo, "src/core/gabbaboy.c", "/* no state support declared at this base */\n")
         base_revision = commit_fixture(repo, "synthetic pre-state base")
+        decision_text = run_git(repo, "show", base_revision + ":" + DECISIONS_FILE)
+        if "Immutable “quoted” decision text" not in decision_text:
+            reject("self-test-failed", "immutable Git text did not preserve its UTF-8 characters")
+        controls += 1
+
+        real_subprocess_run = subprocess.run
+
+        def cp1252_default(*args, **kwargs):
+            if kwargs.get("text") and "encoding" not in kwargs:
+                kwargs["encoding"] = "cp1252"
+            return real_subprocess_run(*args, **kwargs)
+
+        with mock.patch.object(subprocess, "run", side_effect=cp1252_default):
+            try:
+                windows_decision_text = run_git(repo, "show", base_revision + ":" + DECISIONS_FILE)
+            except (UnicodeDecodeError, Rejected):
+                reject("self-test-failed", "run_git failed under a simulated Windows cp1252 default")
+            if windows_decision_text != decision_text:
+                reject("self-test-failed", "run_git changed immutable UTF-8 text under cp1252 simulation")
+        controls += 1
+
+        with mock.patch.object(subprocess, "run", return_value=subprocess.CompletedProcess(
+                ["git"], 0, stdout=b"\x9d", stderr=b"")):
+            try:
+                run_git(repo, "show", "malformed-utf8-fixture")
+            except Rejected as error:
+                if error.code != "immutable-source-encoding":
+                    reject("self-test-failed", "malformed UTF-8 produced the wrong rejection")
+            else:
+                reject("self-test-failed", "malformed UTF-8 was accepted or replacement-decoded")
+        controls += 1
+
+        missing = run_git(repo, "show", base_revision + ":missing-file", allow_missing=True)
+        if missing is not None:
+            reject("self-test-failed", "allow_missing Git lookup did not remain absent")
+        controls += 1
+
         resolve_immutable_reference(repo, base_revision, "DECISIONS.md#D-113")
         controls += 1
         try:
