@@ -1686,3 +1686,5 @@ host_exit_pacing_unavailable
 host_signal_decoy_pacing_ignored
 contract_rev_wiring_bare_form
 contract_rev_wiring_bare_prefix_control
+contract_rev_default_head
+contract_rev_unreadable_ref_control

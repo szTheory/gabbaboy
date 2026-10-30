@@ -24,7 +24,9 @@ repository; a fixture is not hosted evidence.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
+import io
 import json
 import pathlib
 import re
@@ -32,6 +34,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tokenize
 
 if not __debug__:
     raise SystemExit("verify-v03-dispositions refuses to run under python -O (its asserts and checks must stay on)")
@@ -646,10 +649,11 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
     inventory_raw = (json.dumps(inventory, sort_keys=True, indent=2) + "\n")
     receipt_asset_digest = hashlib.sha256(b"release receipt fixture bytes\n").hexdigest()
     sums_lines = [f"{original_digest}  {inventory_assets[0]['name']}"]
+    sums_asset_bytes = b"sums asset bytes\n"
     api_assets = [
         {"name": inventory_assets[0]["name"], "id": 901, "size": 27, "digest": f"sha256:{original_digest}"},
         {"name": "SHA256SUMS", "id": 902, "size": len((sums_lines[0] + "\n").encode()),
-         "digest": f"sha256:{hashlib.sha256(b'sums asset bytes\n').hexdigest()}"},
+         "digest": f"sha256:{hashlib.sha256(sums_asset_bytes).hexdigest()}"},
         {"name": "release-receipt.json", "id": 903, "size": 30, "digest": f"sha256:{receipt_asset_digest}"},
     ]
     readback = {
@@ -685,8 +689,65 @@ def run_cli(repo: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
                           timeout=120, check=False)
 
 
+def require_python_310_grammar(source: str) -> None:
+    """Reject syntax newer than the supported Python 3.10 grammar, including PEP 701 f-string escapes."""
+    ast.parse(source, feature_version=(3, 10))
+    fstring_start = getattr(tokenize, "FSTRING_START", None)
+    fstring_end = getattr(tokenize, "FSTRING_END", None)
+    if fstring_start is None or fstring_end is None:
+        # Python 3.10/3.11's parser itself rejects backslashes in f-string expressions.
+        return
+
+    contexts: list[dict[str, int | bool]] = []
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type == fstring_start:
+            contexts.append({"in_expression": False, "brace_depth": 0})
+            continue
+        if token.type == fstring_end:
+            if not contexts:
+                raise ValueError("unbalanced f-string token stream")
+            contexts.pop()
+            continue
+        if not contexts:
+            continue
+
+        context = contexts[-1]
+        if context["in_expression"] and token.type == tokenize.STRING and "\\" in token.string:
+            raise ValueError("Python 3.10 does not allow backslashes in f-string expressions")
+        if token.type != tokenize.OP:
+            continue
+        if not context["in_expression"] and token.string == "{":
+            context["in_expression"] = True
+            context["brace_depth"] = 1
+        elif context["in_expression"] and token.string == "{":
+            context["brace_depth"] = int(context["brace_depth"]) + 1
+        elif context["in_expression"] and token.string == "}":
+            context["brace_depth"] = int(context["brace_depth"]) - 1
+            if context["brace_depth"] == 0:
+                context["in_expression"] = False
+
+
+def python_310_grammar_controls() -> int:
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    require_python_310_grammar(source)
+
+    # Python 3.12 accepts this PEP 701 form; Python 3.10 rejects its backslash in the
+    # replacement field. Keep the exact escaped bytes-literal shape that failed in CI.
+    incompatible = "value = f\"{hashlib.sha256(b'sums asset bytes\\n').hexdigest()}\""
+    try:
+        ast.parse(incompatible)
+    except SyntaxError:
+        # Running directly on the supported floor naturally rejects the seeded syntax.
+        return 2
+    try:
+        require_python_310_grammar(incompatible)
+    except (SyntaxError, ValueError):
+        return 2
+    raise SystemExit("Python 3.10 grammar controls accepted the seeded PEP 701 f-string")
+
+
 def self_test() -> int:
-    controls = 0
+    controls = python_310_grammar_controls()
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v03-dispositions-") as temporary:
         base = pathlib.Path(temporary)
         facts = build_fixture(base)

@@ -1,14 +1,11 @@
-# Checks how the save-format and host-contract CTests name the commit they read (review WR-04).
-#
-# A checker that is handed a 40-digit SHA resolved at configure time keeps reading that commit after a later commit,
-# until the next configure, while the runner under test is built from the newer tree: a false green or red for the
-# wrong revision. The default is therefore the symbolic `HEAD`, which git resolves when each test runs; a full SHA is
-# for a deliberate boundary-commit run (-DGBB_SAVE_FORMATS_REV=<sha>), and this script then requires exactly that SHA.
+# Checks that the save-format and host-contract CTests all name the same immutable commit captured at configure time.
+# CMake resolves the default symbolic `HEAD` (or an explicit revision ref) once before registering these tests, so a
+# boundary test reads exactly the commit that existed when it was configured.
 #
 # Inputs (all passed with -D):
 #   GBB_TESTFILE      the generated CTestTestfile.cmake that holds the add_test lines
 #   GBB_TEST_NAMES    CMake list of the tests that take --rev
-#   GBB_EXPECT_REV    HEAD, or the full SHA a boundary run pinned
+#   GBB_EXPECT_REV    the full SHA resolved during CMake configuration
 foreach(required GBB_TESTFILE GBB_TEST_NAMES GBB_EXPECT_REV)
   if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
     message(FATAL_ERROR "CheckContractRevWiring.cmake is missing ${required}")
@@ -38,7 +35,7 @@ foreach(name IN LISTS GBB_TEST_NAMES)
   if(NOT rev STREQUAL GBB_EXPECT_REV)
     message(FATAL_ERROR
       "contract-rev-wiring: test ${name} reads revision ${rev}, expected ${GBB_EXPECT_REV}"
-      " (a configure-time SHA goes stale at the next commit)")
+      " (all boundary tests must read the captured configure-time commit)")
   endif()
   math(EXPR checked "${checked} + 1")
 endforeach()

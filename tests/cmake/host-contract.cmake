@@ -31,7 +31,7 @@ endif()
 # (it separates list elements), so a sentence that has one is pinned as its halves. The checker modes below read
 # the documents with `git show <rev>:<path>` at HEAD as of the run, so commit before running them.
 
-# The revision is the save-format one (tests/cmake/save-formats.cmake, included first): HEAD at run time by default.
+# The revision is the save-format one (tests/cmake/save-formats.cmake, included first): a full commit SHA resolved at configure.
 set(GBB_HOST_CONTRACT_REV "${GBB_SAVE_FORMATS_REV}")
 
 set(GBB_HOST_CONTRACT_DOC_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyDocContract.cmake")
@@ -287,3 +287,22 @@ add_test(NAME contract_rev_wiring_bare_prefix_control
     "-DGBB_EXPECT_REGEX=test save_format_files is not registered"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(contract_rev_wiring_bare_prefix_control PROPERTIES TIMEOUT 60)
+
+# Default CMake configuration must resolve symbolic HEAD to the same full immutable SHA supplied to registered
+# boundary tests. An unreadable ref must fail closed rather than silently falling back to a moving revision.
+add_test(NAME contract_rev_default_head
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_RESOLVE_CONTRACT_REVISION_SOURCE=${PROJECT_SOURCE_DIR}"
+    -DGBB_RESOLVE_CONTRACT_REVISION_REF=HEAD
+    -DGBB_RESOLVE_CONTRACT_REVISION_EXPECT=resolved
+    -P "${PROJECT_SOURCE_DIR}/cmake/ResolveContractRevision.cmake")
+set_tests_properties(contract_rev_default_head PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "contract-revision pass input=HEAD rev=[0-9a-f]+")
+add_test(NAME contract_rev_unreadable_ref_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_RESOLVE_CONTRACT_REVISION_SOURCE=${PROJECT_SOURCE_DIR}"
+    -DGBB_RESOLVE_CONTRACT_REVISION_REF=__gbb_unreadable_revision_control__
+    -DGBB_RESOLVE_CONTRACT_REVISION_EXPECT=unreadable
+    -P "${PROJECT_SOURCE_DIR}/cmake/ResolveContractRevision.cmake")
+set_tests_properties(contract_rev_unreadable_ref_control PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "contract-revision reject reason=unreadable")

@@ -1576,7 +1576,7 @@ add_test(NAME v03_dispositions_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=v03-dispositions self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=37
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_dispositions_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 # D-23 (19-05): the v0.3 readback is checked against tag objects and its embedded pre-publish artifact;
