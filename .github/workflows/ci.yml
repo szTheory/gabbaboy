@@ -143,7 +143,11 @@ jobs:
       - name: Check per-test TIMEOUT budgets against the base allowlist
         env:
           BUDGET_BASE: ${{ steps.budget_base.outputs.base }}
-        run: python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"
+        run: |
+          git show "$BUDGET_BASE:tests/scripts/verify-test-budget.py" > "$RUNNER_TEMP/verify-test-budget.py"
+          python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --base "$BUDGET_BASE" --repo "$GITHUB_WORKSPACE"
+      - name: Self-test the per-test TIMEOUT budget checker
+        run: python3 -I tests/scripts/verify-test-budget.py --self-test
       - name: Build
         run: cmake --build --preset phase1 --verbose
       - name: Run state pins against the immutable event base
@@ -639,12 +643,23 @@ jobs:
       - name: Gate cachegrind Ir against v0.2.0 and the realtime floor
         shell: bash
         run: bash tests/scripts/run-perf-gate.sh --gate
+      - name: Retain the perf-gate receipt on pass or failure
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: perf-gate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/perf-gate-receipt.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Prove the gate rejects a seeded regression
         shell: bash
         run: bash tests/scripts/run-perf-gate.sh --seeded-regression
       - name: Prove the gate accepts a no-op twin patch
         shell: bash
         run: bash tests/scripts/run-perf-gate.sh --noop-twin
+      - name: Verify the perf-gate receipt reader
+        shell: bash
+        run: python3 -I tests/scripts/verify-perf-gate.py --self-test-receipt
       - name: Run the release gate controls (OWNER-approved Ir exception and exact-head nightly)
         shell: bash
         run: python3 -I tests/scripts/verify-release-gates.py --self-test --rev "$GITHUB_SHA"

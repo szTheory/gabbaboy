@@ -29,6 +29,7 @@ import sys
 import tempfile
 from fractions import Fraction
 from pathlib import Path
+from unittest.mock import call, patch
 
 
 class Reject(Exception):
@@ -362,6 +363,50 @@ def _upload(job: dict, workflow: str, job_id: str, name: str, must_contain: tupl
 def _download(job: dict, workflow: str, job_id: str, name: str) -> None:
     if not any(step.get("with", {}).get("name") == name for step in _artifact_steps(job, "download")):
         raise Reject("artifact-flow", f"{_where(workflow, job_id)} must download retained artifact {name}")
+
+
+def perf_gate_artifact_name(ci_tree: dict, release_tree: dict) -> None:
+    """Bind the release reader's run-scoped artifact name to the CI producer's exact upload name."""
+    ci_job = _require_job("ci.yml", ci_tree, "perf-gate")
+    release_job = _require_job("release.yml", release_tree, "candidate-fuzz")
+    uploads = [step for step in _artifact_steps(ci_job, "upload")
+               if str(step.get("with", {}).get("name", "")).startswith("perf-gate-")]
+    download_commands = [line for step in release_job.get("steps", [])
+                         for line in str(step.get("run", "")).splitlines()
+                         if 'gh run download "$run_id"' in line and '--name "perf-gate-' in line]
+    downloads = [re.search(r'--name\s+"([^"]+)"', command) for command in download_commands]
+    downloads = [match.group(1) for match in downloads if match is not None]
+    if len(uploads) != 1 or len(downloads) != 1:
+        raise Reject("perf-gate-artifact-name", "CI must upload and candidate-fuzz must select exactly one run-scoped perf-gate artifact")
+    produced = str(uploads[0].get("with", {}).get("name", ""))
+    expected = produced.replace("${{ github.run_id }}", "$run_id").replace("${{ github.run_attempt }}", "$attempt")
+    if downloads[0] != expected:
+        raise Reject("perf-gate-artifact-name", f"candidate-fuzz selects {downloads[0]!r}, but CI uploads {expected!r}")
+
+
+PRE_PUBLISH_INVENTORY_NAME = "release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}"
+PRE_PUBLISH_INVENTORY_PATH = "build/release-final/pre-publish-inventory.json"
+
+
+def _check_pre_publish_inventory(workflow: str, publisher: dict) -> None:
+    uploads = [step for step in _artifact_steps(publisher, "upload")
+               if step.get("with", {}).get("name") == PRE_PUBLISH_INVENTORY_NAME]
+    steps = publisher.get("steps", [])
+    final_gate = [i for i, step in enumerate(steps)
+                  if "--check-draft-final" in str(step.get("run", ""))]
+    nightly = [i for i, step in enumerate(steps)
+               if step.get("name") == "Require the successful exact-tree nightly ASan replay"]
+    publish = [i for i, step in enumerate(steps)
+               if step.get("name") == "Publish the one qualified draft"]
+    if len(uploads) != 1 or len(final_gate) != 1 or len(nightly) != 1 or len(publish) != 1:
+        raise Reject("pre-publish-inventory-order", "the publisher needs one inventory upload between final-gate and nightly-gate")
+    upload = uploads[0]
+    inputs = upload.get("with", {})
+    if (inputs.get("path") != PRE_PUBLISH_INVENTORY_PATH or inputs.get("if-no-files-found") != "error"
+            or str(inputs.get("retention-days")) != "90"
+            or not final_gate[0] < steps.index(upload) < nightly[0] < publish[0]
+            or steps.index(upload) != final_gate[0] + 1):
+        raise Reject("pre-publish-inventory-order", "the sorted inventory artifact must be required directly after final-gate and before publication")
 
 
 # Release reuses a successful rehearsal receipt for the exact tag tree. Paired wall-clock timing itself is advisory,
@@ -1053,9 +1098,10 @@ RELEASE_ROLES = {
 _VERIFIER_PAIR = ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-consumers.py")
 TRUSTED_OVERLAYS = {
     "candidate": ("tests/scripts/verify-release-candidate.sh", "tests/scripts/verify-v02-source-archive.py",
-                  "tests/scripts/verify-v02-consumers.py", "cmake/VerifyReleaseReceipt.cmake"),
+                  "tests/scripts/verify-v02-consumers.py", "tests/scripts/test_installed_host.py",
+                  "cmake/VerifyReleaseReceipt.cmake"),
     # verify-release-candidate.sh --extract reaches verify-v02-consumers.py, so both are overlaid before either runs.
-    "candidate-macos": _VERIFIER_PAIR,
+    "candidate-macos": (*_VERIFIER_PAIR, "tests/scripts/test_installed_host.py"),
     "candidate-windows": _VERIFIER_PAIR,
 }
 # Residual jobs that run tagged-tree code: no job-wide token, the token only on gh steps.
@@ -1071,10 +1117,12 @@ TOKEN_SCOPE_EXEMPT = {
 RELEASE_ARTIFACTS = {
     "candidate-corpus": ("release-evidence-corpus", ("build/cgb-corpus-receipt.json", "build/support-ledger.json")),
     "candidate-performance": ("release-evidence-performance", ("build/v02-performance-receipt.json",)),
-    "candidate-fuzz": ("release-evidence-fuzz", ("build/ci-fuzz/v02-fuzz-receipt.json",)),
+    "candidate-fuzz": ("release-evidence-fuzz", ("build/ci-fuzz/v02-fuzz-receipt.json",
+                                                   "build/ci-fuzz/perf-gate/perf-gate-receipt.json",
+                                                   "build/ci-fuzz/perf-gate-run.json")),
 }
 SUBJECT_REF = "${{ env.SOURCE_SHA }}"
-JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head"
+JUDGE_CALL_POLICY = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head --git-root trusted-judge"
 PRODUCER_SCRIPT = ".github/scripts/produce-release-evidence.sh"
 PRODUCER_SCRIPT_REQUIRED = (
     'same_commit "$head" "$source_sha"',
@@ -1130,7 +1178,7 @@ REHEARSAL_REQUIRED = {
         _REHEARSAL_TAG,
         'bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"',
         'python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt',
-        'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --output build/v02-consumer-receipt.json',
+        'python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --platform linux-x64 --host-smoke-receipt build/host-smoke-receipt.json --output build/v02-consumer-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json',
         'python3 -I tests/scripts/verify-v02-source-archive.py --check-receipt build/source-archive-receipt.json --archive "$archive" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo .',
     ),
@@ -1178,6 +1226,9 @@ RELEASE_REQUIRED = {
         '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]]',
         'gh run download "$run_id" --repo "$GH_REPO" --name "v02-fuzz-$run_id-$attempt" --dir build/ci-fuzz',
         'python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json --poll-seconds "$HOSTED_POLL_SECONDS"',
+        'gh api "repos/$GH_REPO/actions/runs/$run_id" > build/ci-fuzz/perf-gate-run.json',
+        'gh run download "$run_id" --repo "$GH_REPO" --name "perf-gate-$run_id-$attempt" --dir build/ci-fuzz/perf-gate',
+        'python3 -I tests/scripts/verify-perf-gate.py --verify-receipt build/ci-fuzz/perf-gate/perf-gate-receipt.json --source-sha "$SOURCE_SHA" --run-json build/ci-fuzz/perf-gate-run.json --run-id "$run_id" --attempt "$attempt" --repo .',
     ),
     "candidate-platform-manifest": (
         _MANIFEST_ARCHIVE_DOWNLOAD,
@@ -1230,7 +1281,7 @@ RELEASE_GUARD_EXPRESSIONS = {
     ("candidate",): "always() && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
     ("candidate-macos",): "always() && needs.candidate.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
     ("candidate-windows",): "always() && needs.candidate-macos.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
-    ("publish-qualified-release",): "always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-platform-manifest.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
+    ("publish-qualified-release",): "always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-fuzz.result == 'success' && needs.candidate-platform-manifest.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true'))",
     ("candidate-macos", "Build and package macOS arm64 core once"): _REUSE_MACOS_GUARD,
     ("candidate-macos", "Build pinned SDL player and verify extracted package"): _REUSE_MACOS_GUARD,
     ("candidate-macos", "Attach macOS candidate bytes to the unpublished draft"): _REUSE_MACOS_GUARD,
@@ -1337,7 +1388,9 @@ CI_STATUS_CALLS = (
 # The per-test TIMEOUT ratchet (D-18): the native-linux job passes the PR base or push parent as --base so a change
 # cannot judge its own allowlist against itself.
 CI_BUDGET_COMMANDS = (
-    'python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"',
+    'git show "$BUDGET_BASE:tests/scripts/verify-test-budget.py" > "$RUNNER_TEMP/verify-test-budget.py"',
+    'python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --base "$BUDGET_BASE" --repo "$GITHUB_WORKSPACE"',
+    'python3 -I tests/scripts/verify-test-budget.py --self-test',
 )
 # The budget base falls back to the merge base with origin/main when the push parent is all-zero or no longer a
 # reachable commit (rebased and force-pushed branch), and still fails closed on an unresolvable final base.
@@ -1483,6 +1536,71 @@ def _check_performance_reuse(workflow: str, job: dict) -> None:
         raise Reject("performance-reuse-unbound", f"{_where(workflow, 'candidate-performance')} must reuse a rehearsal receipt only through --verify-reuse with the tag's tree")
 
 
+REHEARSAL_FETCH_STEP_NAME = "Fetch the rehearsal run and its attempt jobs for binding"
+REHEARSAL_BIND_STEP_NAME = "Bind the exact-tag rehearsal to the version PR head"
+REHEARSAL_BIND_COMMAND = ('python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --bind-rehearsal-run '
+                          '"$RUNNER_TEMP/rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" '
+                          '--repo "$GH_REPO" --selected-run "$RUNNER_TEMP/rehearsal-run.json" '
+                          '--pr-head "$PR_HEAD_SHA" --merged-at "$PR_MERGED_AT" '
+                          '--attempt-jobs "$RUNNER_TEMP/rehearsal-attempt-jobs.json"')
+
+
+def _check_candidate_rehearsal_binding(workflow: str, job: dict) -> None:
+    steps = job.get("steps", [])
+    proofs = [step for step in steps if step.get("name") == "Verify merged PR exact-head required evidence"]
+    fetches = [step for step in steps if step.get("name") == REHEARSAL_FETCH_STEP_NAME]
+    bindings = [step for step in steps if step.get("name") == REHEARSAL_BIND_STEP_NAME]
+    if (len(proofs) != 1 or len(fetches) != 1 or len(bindings) != 1
+            or steps.index(fetches[0]) != steps.index(proofs[0]) + 1
+            or steps.index(bindings[0]) != steps.index(fetches[0]) + 1):
+        raise Reject("rehearsal-binding-order", "release candidate must bind rehearsal immediately after the merged PR proof")
+    proof_text = proofs[0].get("run", "")
+    if ("merged_at=$(jq -r '.merged_at' <<<\"$pr\")" not in proof_text
+            or "merged_at=%s\\n" not in proof_text):
+        raise Reject("rehearsal-binding-unbound", "release candidate must output the server-recorded merged_at of its exact PR")
+    fetch = fetches[0]
+    fetch_text = fetch.get("run", "")
+    fetch_pins = (
+        "actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success&per_page=100",
+        'actions/runs/$run_id/attempts/$attempt/jobs?per_page=100',
+        'max_by(.id)',
+    )
+    if fetch.get("env", {}).get("GH_TOKEN") != "${{ github.token }}" or any(pin not in fetch_text for pin in fetch_pins):
+        raise Reject("rehearsal-binding-unbound", "release candidate must fetch the newest rehearsal and its selected attempt jobs")
+    bind = bindings[0]
+    if bind.get("env", {}).get("PR_HEAD_SHA") != "${{ steps.proof.outputs.head_sha }}" \
+            or bind.get("env", {}).get("PR_MERGED_AT") != "${{ steps.proof.outputs.merged_at }}" \
+            or bind.get("env", {}).get("GH_TOKEN"):
+        raise Reject("rehearsal-binding-unbound", "release candidate must bind the proof step's PR head and merged_at outputs")
+    text = bind.get("run", "")
+    pins = (
+        'git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"',
+    )
+    if any(pin not in text for pin in pins) or "set -euo pipefail" not in text or "|| true" in text:
+        raise Reject("rehearsal-binding-unbound", "release candidate must fetch and judge the newest rehearsal and its attempt jobs without a fallback")
+    require_call(workflow, "candidate", {"steps": [bind]}, REHEARSAL_BIND_COMMAND)
+
+
+def _check_host_smoke_wiring(workflow: str, job_id: str, job: dict, platform_id: str,
+                             *, smoke_required: bool) -> None:
+    smoke_at = None
+    if smoke_required:
+        smoke_at = require_call(
+            workflow, job_id, job, "python3 -I tests/scripts/test_installed_host.py",
+            contains=("--prefix", "$RUNNER_TEMP/v02-extracted", "--work", "$RUNNER_TEMP/host-smoke",
+                      "--source-contract", "docs/host-contract.json", "--receipt", "build/host-smoke-receipt.json"))
+    host_option = "--host-smoke-not-applicable" if platform_id == "windows-x64" else "--host-smoke-receipt"
+    consumer_contains = ("--prefix", "$RUNNER_TEMP/v02-extracted", "--candidate-manifest", "--platform", platform_id,
+                        host_option, "--output")
+    if platform_id != "windows-x64":
+        consumer_contains += ("build/host-smoke-receipt.json",)
+    consumer_at = require_call(
+        workflow, job_id, job, "python3 -I tests/scripts/verify-v02-consumers.py",
+        contains=consumer_contains)
+    if smoke_at is not None and smoke_at >= consumer_at:
+        raise Reject("consumer-host-smoke", f"{_where(workflow, job_id)} must run installed-host smoke before writing its consumer receipt")
+
+
 def check_rehearsal(root: Path) -> None:
     name = "release-rehearsal"
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
@@ -1495,6 +1613,10 @@ def check_rehearsal(root: Path) -> None:
     _check_run_expressions(name, tree)
     _check_no_duplicate_setup(name, tree)
     _check_checkout_credentials(name, tree, tree["jobs"])
+    _check_host_smoke_wiring(name, "package", _require_job(name, tree, "package"), "linux-x64",
+                             smoke_required=True)
+    _check_host_smoke_wiring(name, "aggregate", _require_job(name, tree, "aggregate"), "linux-x64",
+                             smoke_required=True)
     dispatch = tree.get("on", {}).get("workflow_dispatch", {})
     inputs = dispatch.get("inputs", {}) if isinstance(dispatch, dict) else {}
     if isinstance(inputs, dict) and {"performance_decision", "measurement_run_id"} & set(inputs):
@@ -1512,11 +1634,27 @@ def check_rehearsal(root: Path) -> None:
     if "if" in judge:
         raise Reject("workflow-dependency", f"{_where(name, 'judge')} must run unconditionally after every producer")
     _check_unprivileged(name, tree, "judge")
+    judge_steps = judge.get("steps", [])
+    tag_guard = judge_steps[0] if judge_steps else {}
+    tag_guard_run = tag_guard.get("run", "")
+    required_tag_guard = (
+        'TAG="${GITHUB_REF_NAME#rehearsal/}"',
+        'if [[ "$TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then',
+        'git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG"',
+        'Tag $TAG already exists; a rehearsal after the tag cannot bind a release.',
+        'if [[ -n "$tag_ref" ]]; then',
+        "exit 1",
+    )
+    if tag_guard.get("name") != "Refuse rehearsal after its release tag exists" \
+            or any(pin not in tag_guard_run for pin in required_tag_guard) or not _runs_under_errexit(tag_guard):
+        raise Reject("rehearsal-tag-exists", "the rehearsal judge must first refuse a release-shaped branch whose tag already exists")
     checkouts = {step.get("with", {}).get("path"): step.get("with", {}) for step in _checkouts(judge)}
     if set(checkouts) != {"trusted-judge", "subject"}:
         raise Reject("judge-trust", f"{_where(name, 'judge')} needs one trusted-judge checkout and one subject-data checkout")
     if checkouts["trusted-judge"].get("ref") != DEFAULT_BRANCH_REF:
         raise Reject("judge-trust", f"{_where(name, 'judge')} judge code must come from the default branch, not the rehearsed subject")
+    if checkouts["trusted-judge"].get("fetch-depth") not in (0, "0"):
+        raise Reject("judge-history-shallow", f"{_where(name, 'judge')} trusted-judge checkout must use fetch-depth: 0 for release-head object checks")
     if checkouts["subject"].get("ref", TRUSTED_SHA_REF) != TRUSTED_SHA_REF:
         raise Reject("judge-trust", f"{_where(name, 'judge')} subject data must be the rehearsed commit")
     _download(judge, name, "judge", REHEARSAL_FUZZ_ARTIFACT)
@@ -1533,7 +1671,7 @@ def check_rehearsal(root: Path) -> None:
 # Read-only workflows must not leave the checkout token in .git/config for later steps (IN-08). A job that truly
 # needs the persisted credential is listed here as (workflow file, job id) -> reason; none does today, because the
 # jobs authenticate gh through an explicit step-level token and fetch only public sources.
-READONLY_WORKFLOWS = ("ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml")
+READONLY_WORKFLOWS = ("ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "libbet-repro.yml")
 CREDENTIAL_EXEMPT: dict[tuple[str, str], str] = {}
 
 
@@ -1667,6 +1805,18 @@ def check_ci(root: Path) -> None:
         raise Reject("runner-image", "ci.perf-gate must run on the pinned ubuntu-24.04 image")
     for command in PERF_GATE_COMMANDS:
         require_call(name, "perf-gate", perf_job, command)
+    require_call(name, "perf-gate", perf_job, "python3 -I tests/scripts/verify-perf-gate.py --self-test-receipt")
+    _upload(perf_job, name, "perf-gate", "perf-gate-${{ github.run_id }}-${{ github.run_attempt }}",
+            ("build/perf-gate-receipt.json",), retain_on_failure=True)
+    gate_at = require_call(name, "perf-gate", perf_job, PERF_GATE_COMMANDS[0])
+    seeded_at = require_call(name, "perf-gate", perf_job, "bash tests/scripts/run-perf-gate.sh --seeded-regression")
+    receipt_uploads = [step for step in _artifact_steps(perf_job, "upload")
+                       if step.get("with", {}).get("name") == "perf-gate-${{ github.run_id }}-${{ github.run_attempt }}"]
+    if len(receipt_uploads) != 1 or receipt_uploads[0].get("if") != "always()":
+        raise Reject("artifact-flow", "ci.perf-gate must retain its same-run receipt on pass or failure")
+    upload_at = perf_job["steps"].index(receipt_uploads[0])
+    if not gate_at[0] < upload_at < seeded_at[0]:
+        raise Reject("artifact-flow", "ci.perf-gate must retain its receipt after the deciding gate and before seeded controls")
     for shard, commands in CI_SANITIZER_SHARDS.items():
         shard_job = _require_job(name, tree, shard)
         for command in commands:
@@ -2106,6 +2256,7 @@ def check_release(root: Path) -> None:
     _check_ignored_failures(name, tree)
     _check_run_expressions(name, tree)
     jobs = tree["jobs"]
+    perf_gate_artifact_name(read_workflow(root / ".github/workflows/ci.yml"), tree)
     for job_id in jobs:
         if job_id not in RELEASE_ROLES:
             raise Reject("job-unclassified", f"{_where(name, job_id)} has no declared trust role; classify it in the policy")
@@ -2152,6 +2303,9 @@ def check_release(root: Path) -> None:
                 raise Reject("attacher-subject-execution", f"{_where(name, job_id)} must execute trusted code only")
     _require_needs(name, "candidate-platform-manifest", jobs["candidate-platform-manifest"], {"attach-v02-evidence"}, "workflow-dependency")
     _require_needs(name, "publish-qualified-release", jobs["publish-qualified-release"], {"candidate-platform-manifest"}, "workflow-dependency")
+    _require_needs(name, "publish-qualified-release", jobs["publish-qualified-release"], {"candidate-fuzz"}, "workflow-dependency")
+    if "needs.candidate-fuzz.result == 'success'" not in str(jobs["publish-qualified-release"].get("if", "")):
+        raise Reject("workflow-dependency", "release publisher must wait for the exact-source performance receipt producer")
     for job_id in ("candidate-platform-manifest", "publish-qualified-release"):
         job = jobs[job_id]
         _check_checkout_credentials(name, tree, (job_id,))
@@ -2164,6 +2318,15 @@ def check_release(root: Path) -> None:
             require_call(name, job_id, jobs[job_id], command, conditional=command == PERFORMANCE_MEASURE and job_id == "candidate-performance")
     _check_performance_reuse(name, jobs["candidate-performance"])
     _check_release_performance_consumer(jobs["candidate-performance"])
+    _check_candidate_rehearsal_binding(name, jobs["candidate"])
+    _check_host_smoke_wiring(name, "candidate", jobs["candidate"], "linux-x64", smoke_required=True)
+    _check_host_smoke_wiring(name, "candidate-macos", jobs["candidate-macos"], "macos-arm64", smoke_required=True)
+    _check_host_smoke_wiring(name, "candidate-windows", jobs["candidate-windows"], "windows-x64",
+                             smoke_required=False)
+    window_copy_at = require_call(name, "candidate", jobs["candidate"], VERSION_WINDOW_SOURCE_COPY)
+    window_check_at = require_call(name, "candidate", jobs["candidate"], VERSION_WINDOW_SOURCE_CALL)
+    if window_copy_at >= window_check_at:
+        raise Reject("judge-trust", "release candidate must copy the trusted version-window checker before requiring the active record")
     _check_attach_reuse(name, jobs["attach-v02-evidence"])
     _check_fuzz_source_binding(name, tree)
     _check_fuzz_wait_budget(name, tree)
@@ -2172,6 +2335,8 @@ def check_release(root: Path) -> None:
     publish_at = require_call(name, "publish-qualified-release", publisher, RELEASE_REQUIRED["publish-qualified-release"][4])
     if gate_at >= publish_at:
         raise Reject("publication-order", f"{_where(name, 'publish-qualified-release')} must run the final downloaded-byte gate before the one publication transition")
+    _download(publisher, name, "publish-qualified-release", RELEASE_ARTIFACTS["candidate-fuzz"][0])
+    _check_pre_publish_inventory(name, publisher)
     # Recovery decides from independently read live state BEFORE any retry write (P15-09): inventory, then the decision,
     # then the upload; and the published-asset readback only after the one publication transition.
     upload = 'gh release upload "$RELEASE_TAG" "build/release-final/$name" --repo "$GH_REPO"'
@@ -2217,17 +2382,19 @@ def check_release(root: Path) -> None:
 LEDGER_PATH = ".github/ci-timeouts.json"
 LEDGER_WHOLE_RUN_MINUTES = Fraction(30)
 LEDGER_NORMAL_FIELDS = frozenset({"timeout_minutes", "cited_run_id", "cited_sha", "p50_minutes", "samples", "provisional"})
+LEDGER_NORMAL_OPTIONAL = frozenset({"tree_equal_sha", "cited_tree", "cited_job_name", "disclosure"})
 LEDGER_BOUND_FIELDS = frozenset({"timeout_minutes", "release_bound", "provisional", "sizing_basis"})
-# D-20 'release-bound ledger row (Phase 16)': release-only and rehearsal-only job bodies that have no green run since they were written. Each
-# is exempt from the samples, cited run, cited sha and ceil(2 x p50) rules, only while the project VERSION is at most
-# LEDGER_BOUND_LAST_VERSION; 16-06 and 16-07 re-cite them from the rehearsal rerun and the v0.2.1 release run. A generic skip is never allowed.
+# D-20 'release-bound ledger row (Phase 16)': no release_bound row remains after RM-027. Keep the narrow legacy whitelist and
+# expiry rule so any row reintroduced at VERSION > 0.2.1 is refused; a generic skip is never allowed.
 LEDGER_RELEASE_BOUND_KEYS = ("release.yml:attach-v02-evidence", "release.yml:candidate-fuzz", "release-rehearsal.yml:judge",
                              # D-111: the rehearsal producers that cannot pass until the version-bound ledger and the owner-recorded
                              # performance review exist; a provisional row would make the rehearsal judge's own --release-head check circular.
-                             "release-rehearsal.yml:corpus", "release-rehearsal.yml:performance", "release-rehearsal.yml:aggregate")
+                             "release-rehearsal.yml:corpus", "release-rehearsal.yml:aggregate")
 LEDGER_BOUND_LAST_VERSION = (0, 2, 1)
 _P50 = re.compile(r"^[0-9]+(?:\.[0-9]+)?$")
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
+_LEDGER_JOB_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._()/-]{0,99}$")
+_LEDGER_DISCLOSURE = re.compile(r"^[\x20-\x7e]{1,400}$")
 
 
 def _ledger_pairs(pairs):
@@ -2252,6 +2419,119 @@ def _project_version(root: Path) -> tuple[int, int, int]:
     if not match:
         raise Reject("timeout-ledger-release-bound", "CMakeLists.txt has no project VERSION to check the release-bound expiry against")
     return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def _run_git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    """Run one bounded git query against the explicitly selected object database."""
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False, timeout=30)
+
+
+def _workflow_job_block(text: str | None, job_id: str) -> str | None:
+    """Return one top-level workflow job block, or None when the workflow/job is absent."""
+    if text is None:
+        return None
+    lines = text.splitlines()
+    start = next((index for index, line in enumerate(lines) if line == f"  {job_id}:"), None)
+    if start is None:
+        return None
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line.strip() and len(line) - len(line.lstrip()) <= 2:
+            end = index
+            break
+    return "\n".join(lines[start:end])
+
+
+def check_ledger_git_objects(ledger, git_root: Path, main_ref: str, release_head: bool,
+                             git=_run_git, disclosure_base: str | None = None,
+                             workflow_root: Path | None = None) -> None:
+    """Prove tree-equal citations against a fixed git object database; optional disclosure checks compare job blocks."""
+    anchors = [(key, row) for key, row in ledger.items() if isinstance(row, dict) and "tree_equal_sha" in row]
+    if not anchors and not (release_head and any(isinstance(row, dict) and "tree_equal_sha" in row for row in ledger.values())) \
+            and disclosure_base is None:
+        return
+
+    def run(*args: str, code: str = "timeout-ledger-git-unavailable", key: str | None = None):
+        try:
+            result = git(*args, cwd=git_root)
+        except (OSError, subprocess.SubprocessError) as exc:
+            subject = f"{key}: " if key else ""
+            raise Reject(code, f"{subject}git {' '.join(args)} failed: {exc}") from exc
+        if result.returncode != 0:
+            subject = f"{key}: " if key else ""
+            detail = result.stderr.strip()[:200] if result.stderr else f"exit {result.returncode}"
+            raise Reject(code, f"{subject}git {' '.join(args)} failed: {detail}")
+        return result
+
+    resolved_main = None
+    if anchors:
+        resolved_main = run("rev-parse", "--verify", "--end-of-options", f"{main_ref}^{{commit}}").stdout.strip()
+        if not _SHA40.fullmatch(resolved_main):
+            raise Reject("timeout-ledger-git-unavailable", f"git did not resolve {main_ref!r} to a commit id")
+        for key, row in anchors:
+            anchor = row["tree_equal_sha"]
+            tree = run("rev-parse", "--verify", "--end-of-options", f"{anchor}^{{tree}}", key=key).stdout.strip()
+            if not _SHA40.fullmatch(tree):
+                raise Reject("timeout-ledger-git-unavailable", f"{key}: git did not resolve the tree-equal anchor to a tree id")
+            if tree != row["cited_tree"]:
+                raise Reject("timeout-ledger-tree-mismatch", f"{key}: cited_tree {row['cited_tree']} differs from anchor tree {tree}")
+            try:
+                ancestor = git("merge-base", "--is-ancestor", anchor, resolved_main, cwd=git_root)
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise Reject("timeout-ledger-git-unavailable", f"{key}: git merge-base failed: {exc}") from exc
+            if ancestor.returncode == 1:
+                raise Reject("timeout-ledger-anchor-not-on-main", f"{key}: tree-equal anchor is not an ancestor of {main_ref}")
+            if ancestor.returncode != 0:
+                detail = ancestor.stderr.strip()[:200] if ancestor.stderr else f"exit {ancestor.returncode}"
+                raise Reject("timeout-ledger-git-unavailable", f"{key}: git merge-base --is-ancestor failed: {detail}")
+
+    if release_head:
+        for key, row in anchors:
+            cited_sha = row["cited_sha"]
+            try:
+                readable = git("cat-file", "-e", f"{cited_sha}^{{commit}}", cwd=git_root)
+                if readable.returncode != 0:
+                    detail = readable.stderr.strip()[:200] if readable.stderr else f"exit {readable.returncode}"
+                    raise Reject("timeout-ledger-cited-object-missing", f"{key}: cited run head {cited_sha} is unreadable: {detail}")
+                cited_tree = git("rev-parse", "--verify", "--end-of-options", f"{cited_sha}^{{tree}}", cwd=git_root)
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise Reject("timeout-ledger-cited-object-missing", f"{key}: cited run head is unreadable: {exc}") from exc
+            if cited_tree.returncode != 0 or not _SHA40.fullmatch(cited_tree.stdout.strip()) \
+                    or cited_tree.stdout.strip() != row["cited_tree"]:
+                detail = cited_tree.stderr.strip()[:200] if cited_tree.stderr else "cited tree is unreadable or differs"
+                raise Reject("timeout-ledger-cited-object-missing", f"{key}: cited run head {cited_sha} is unreadable or has the wrong tree: {detail}")
+
+    if disclosure_base is not None:
+        if workflow_root is None:
+            workflow_root = git_root
+        base_commit = run("rev-parse", "--verify", "--end-of-options", f"{disclosure_base}^{{commit}}").stdout.strip()
+        if not _SHA40.fullmatch(base_commit):
+            raise Reject("timeout-ledger-git-unavailable", f"git did not resolve disclosure base {disclosure_base!r} to a commit id")
+
+        def workflow_at_commit(path: str) -> str | None:
+            listed = run("ls-tree", "-z", "--name-only", base_commit, "--", path)
+            if not listed.stdout:
+                return None
+            shown = run("show", f"{base_commit}:{path}")
+            return shown.stdout
+
+        for key, row in ledger.items():
+            workflow, separator, job_id = key.partition(":")
+            if not separator:
+                continue
+            relative = f".github/workflows/{workflow}"
+            base_text = workflow_at_commit(relative)
+            try:
+                current_text = (workflow_root / relative).read_text(encoding="utf-8")
+            except FileNotFoundError:
+                current_text = None
+            except OSError as exc:
+                raise Reject("timeout-ledger-git-unavailable", f"{key}: cannot read current workflow: {exc.strerror}") from exc
+            if _workflow_job_block(base_text, job_id) != _workflow_job_block(current_text, job_id):
+                disclosure = row.get("disclosure") if isinstance(row, dict) else None
+                if not isinstance(disclosure, str) or "changed this job's body after the cited run" not in disclosure:
+                    raise Reject("timeout-ledger-body-undisclosed", f"{key}: changed this job's body after the cited run; add the required disclosure")
 
 
 def judge_timeout_ledger(ledger, yaml_timeouts: dict[str, int], gating: set[str], version: tuple[int, int, int],
@@ -2282,12 +2562,18 @@ def judge_timeout_ledger(ledger, yaml_timeouts: dict[str, int], gating: set[str]
             if row["timeout_minutes"] != yaml_timeouts[key]:
                 raise Reject("timeout-ledger-stale", f"{key}: ledger timeout {row['timeout_minutes']} differs from the workflow's {yaml_timeouts[key]}")
             continue
-        if set(row) != LEDGER_NORMAL_FIELDS:
-            raise Reject("timeout-ledger-schema", f"{key}: a row holds exactly {sorted(LEDGER_NORMAL_FIELDS)}")
+        if not LEDGER_NORMAL_FIELDS.issubset(row) or set(row) - (LEDGER_NORMAL_FIELDS | LEDGER_NORMAL_OPTIONAL):
+            raise Reject("timeout-ledger-schema", f"{key}: a row holds required {sorted(LEDGER_NORMAL_FIELDS)} and only optional {sorted(LEDGER_NORMAL_OPTIONAL)}")
+        if ("tree_equal_sha" in row) != ("cited_tree" in row):
+            raise Reject("timeout-ledger-schema", f"{key}: tree_equal_sha and cited_tree must appear together")
         if not _is_int(row["timeout_minutes"]) or not _is_int(row["cited_run_id"]) or row["cited_run_id"] <= 0 \
                 or not _is_int(row["samples"]) or row["samples"] < 1 or not isinstance(row["provisional"], bool) \
                 or not isinstance(row["cited_sha"], str) or not _SHA40.match(row["cited_sha"]) \
-                or not isinstance(row["p50_minutes"], str) or not _P50.match(row["p50_minutes"]):
+                or not isinstance(row["p50_minutes"], str) or not _P50.match(row["p50_minutes"]) \
+                or ("tree_equal_sha" in row and (not isinstance(row["tree_equal_sha"], str) or not _SHA40.fullmatch(row["tree_equal_sha"]))) \
+                or ("cited_tree" in row and (not isinstance(row["cited_tree"], str) or not _SHA40.fullmatch(row["cited_tree"]))) \
+                or ("cited_job_name" in row and (not isinstance(row["cited_job_name"], str) or not _LEDGER_JOB_NAME.fullmatch(row["cited_job_name"]))) \
+                or ("disclosure" in row and (not isinstance(row["disclosure"], str) or not _LEDGER_DISCLOSURE.fullmatch(row["disclosure"]))):
             raise Reject("timeout-ledger-schema", f"{key}: malformed field (timeout and samples integers, cited_sha 40 hex, p50 a decimal string)")
         if row["timeout_minutes"] != yaml_timeouts[key]:
             raise Reject("timeout-ledger-stale", f"{key}: ledger timeout {row['timeout_minutes']} differs from the workflow's {yaml_timeouts[key]}")
@@ -2302,7 +2588,8 @@ def judge_timeout_ledger(ledger, yaml_timeouts: dict[str, int], gating: set[str]
         raise Reject("timeout-ledger-whole-run", f"the longest p50 behind required-native is {float(longest):g} min, over {LEDGER_WHOLE_RUN_MINUTES}")
 
 
-def check_timeout_ledger(root: Path, release_head: bool = False) -> None:
+def check_timeout_ledger(root: Path, release_head: bool = False, git_root: Path | None = None,
+                         main_ref: str = "HEAD", disclosure_base: str | None = None) -> None:
     try:
         text = (root / LEDGER_PATH).read_text(encoding="utf-8")
         ledger = json.loads(text, object_pairs_hook=_ledger_pairs)
@@ -2323,6 +2610,8 @@ def check_timeout_ledger(root: Path, release_head: bool = False) -> None:
                 yaml_timeouts[f"{path.name}:{job_id}"] = int(raw)
     gating = {f"ci.yml:{need}" for need in _needs(trees["ci.yml"]["jobs"]["required-native"])} if "ci.yml" in trees else set()
     judge_timeout_ledger(ledger, yaml_timeouts, gating, _project_version(root), release_head)
+    check_ledger_git_objects(ledger, git_root or root, main_ref, release_head,
+                             disclosure_base=disclosure_base, workflow_root=root)
 
 
 
@@ -2348,7 +2637,10 @@ def verify_cited(root: Path) -> int:
         try:
             run = gh("repos/{owner}/{repo}/actions/runs/%d" % row["cited_run_id"])
             jobs = gh("repos/{owner}/{repo}/actions/runs/%d/jobs?per_page=100" % row["cited_run_id"], "--paginate")
-            found = [j for page in ([jobs] if isinstance(jobs, dict) else jobs) for j in page.get("jobs", []) if j["name"] == display[key]]
+            cited_job_name = row.get("cited_job_name")
+            expected_job = (f"release-candidate / {cited_job_name}" if key.startswith("release.yml:") else cited_job_name) \
+                if cited_job_name is not None else display[key]
+            found = [j for page in ([jobs] if isinstance(jobs, dict) else jobs) for j in page.get("jobs", []) if j["name"] == expected_job]
             problems = []
             if run["head_sha"] != row["cited_sha"]:
                 problems.append(f"run head {run['head_sha'][:8]} is not the cited sha")
@@ -2360,7 +2652,13 @@ def verify_cited(root: Path) -> int:
                 seconds = (datetime.strptime(started[1], "%Y-%m-%dT%H:%M:%SZ") - datetime.strptime(started[0], "%Y-%m-%dT%H:%M:%SZ")).total_seconds()
                 if Fraction(math.ceil(Fraction(seconds) / 60 * 100), 100) != Fraction(row["p50_minutes"]):
                     problems.append(f"cited job lasted {seconds / 60:.2f} min, not p50 {row['p50_minutes']}")
-            if run["event"] == "pull_request":
+            if "tree_equal_sha" in row:
+                commit = gh("repos/{owner}/{repo}/git/commits/%s" % run["head_sha"])
+                api_tree = commit.get("tree", {}).get("sha")
+                if api_tree != row["cited_tree"]:
+                    problems.append(f"run head tree {api_tree!r} does not match cited_tree {row['cited_tree']}")
+                provisional = False
+            elif run["event"] == "pull_request":
                 pulls = gh("repos/{owner}/{repo}/commits/%s/pulls" % row["cited_sha"])
                 provisional = not any(item.get("merged_at") for item in pulls)
             else:
@@ -2416,6 +2714,31 @@ WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo
                '--base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
 WINDOW_PERMISSIONS = {"contents": "read", "pull-requests": "read"}
 WINDOW_STEP_TIMEOUT_MAX = 10
+VERSION_PR_WORKFLOW = "version-pr-gate.yml"
+VERSION_PR_JOB = "pre-tag-gate"
+VERSION_PR_IF = ("${{ github.event.pull_request.head.ref == 'release-please--branches--main--components--GabbaBoy' "
+                 "&& github.event.pull_request.head.repo.full_name == github.repository }}")
+VERSION_PR_WINDOW_CALL = ('python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" '
+                          '--base "$BASE_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"')
+VERSION_PR_BODY_WRITE = "printf '%s' \"$PR_BODY\" > \"$RUNNER_TEMP/version-pr-body.md\""
+VERSION_PR_RUNS_API = ('gh api "repos/$GH_REPO/actions/workflows/release-rehearsal.yml/runs?'
+                       'branch=rehearsal/$RELEASE_TAG&per_page=100"')
+VERSION_PR_BIND_CALL = ('python3 -I .github/scripts/verify-release-source-proof.py --bind-rehearsal-run '
+                        '"$RUNNER_TEMP/rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$PR_HEAD" '
+                        '--repo "$GH_REPO" --selected-run "$RUNNER_TEMP/rehearsal-run.json" --pr-head "$PR_HEAD"')
+VERSION_WINDOW_SOURCE_COPY = ('git show "${GITHUB_SHA}:tests/scripts/verify-version-window.py" > '
+                              '"$RUNNER_TEMP/verify-version-window.py"')
+VERSION_WINDOW_SOURCE_CALL = ('python3 -I "$RUNNER_TEMP/verify-version-window.py" --check-tracked '
+                              '--rev "$SOURCE_SHA" --require-active --repo .')
+VERSION_PR_STEP_NAMES = {
+    "trusted": "Check out the trusted PR base",
+    "head": "Check out the version PR head as data",
+    "body": "Write the event's reviewed PR body",
+    "window": "Judge the version window on the exact PR base",
+    "state": "Select rehearsal only for an active window",
+    "fetch": "Fetch rehearsal runs for the active version window",
+    "bind": "Bind the rehearsal to the reviewed version PR head",
+}
 # release-please already ignores its own workflow and script paths when attributing commits; anything wider would hide
 # a source, release-note or generator-input change from the version PR the window freezes.
 WINDOW_EXCLUDED_PATHS_ALLOWED = (".github/workflows", ".github/scripts")
@@ -2481,6 +2804,101 @@ def check_version_window(root: Path) -> None:
     _check_bounded_downloads(name, tree)
     require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
     _check_window_config(root)
+
+
+def check_version_pr_gate(root: Path) -> None:
+    name = VERSION_PR_WORKFLOW
+    tree = read_workflow(root / ".github/workflows" / VERSION_PR_WORKFLOW)
+    triggers = tree.get("on")
+    expected_types = ["opened", "synchronize", "reopened", "edited"]
+    pull_request = triggers.get("pull_request") if isinstance(triggers, dict) else None
+    if (set(triggers or {}) != {"pull_request"} or not isinstance(pull_request, dict)
+            or pull_request.get("types") != expected_types or pull_request.get("branches") != ["main"]):
+        raise Reject("version-pr-gate-trigger", f"{name} must run only on opened, synchronized, reopened or edited PRs to main")
+    if tree.get("permissions") != {"contents": "read"}:
+        raise Reject("version-pr-gate-permissions", f"{name} needs top-level contents: read only")
+    jobs = tree.get("jobs", {})
+    if set(jobs) != {VERSION_PR_JOB}:
+        raise Reject("version-pr-gate-trust", f"{name} must contain exactly the pre-tag gate job")
+    job = jobs[VERSION_PR_JOB]
+    if _permissions(job, tree["permissions"]) != {"actions": "read", "contents": "read"}:
+        raise Reject("version-pr-gate-permissions", f"{_where(name, VERSION_PR_JOB)} needs exactly actions: read and contents: read")
+    if (job.get("name") != "version-pr-pre-tag-gate" or str(job.get("if", "")).strip() != VERSION_PR_IF
+            or job.get("runs-on") != "ubuntu-22.04" or "needs" in job):
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} must run only for the same-repository release-please version PR")
+    if "timeout-minutes" in job:
+        raise Reject("version-pr-gate-timeout", f"{_where(name, VERSION_PR_JOB)} must have per-step timeouts and no job-level timeout")
+    steps = job.get("steps", [])
+    expected_names = [VERSION_PR_STEP_NAMES[key] for key in ("trusted", "head", "body", "window", "state", "fetch", "bind")]
+    if len(steps) != len(expected_names) or [step.get("name") for step in steps] != expected_names:
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} must keep the trusted, data, window and R2 steps in order")
+    for step in steps:
+        minutes = str(step.get("timeout-minutes", ""))
+        if not minutes.isdigit() or not 1 <= int(minutes) <= WINDOW_STEP_TIMEOUT_MAX:
+            raise Reject("version-pr-gate-timeout", f"{_where(name, VERSION_PR_JOB)} step {step.get('name', '?')!r} needs a timeout from 1 to {WINDOW_STEP_TIMEOUT_MAX} minutes")
+    _check_actions(name, tree)
+    _check_disabled(name, tree)
+    _check_ignored_failures(name, tree)
+    _check_run_expressions(name, tree)
+    _check_bounded_downloads(name, tree)
+    _check_checkout_credentials(name, tree, (VERSION_PR_JOB,))
+    _check_token_scope(name, VERSION_PR_JOB, job)
+    _check_token_subject_execution(name, VERSION_PR_JOB, job)
+
+    if job.get("env") != {
+        "GH_REPO": "${{ github.repository }}",
+        "PR_HEAD": "${{ github.event.pull_request.head.sha }}",
+    }:
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} must use the exact PR base and head identities")
+    checkouts = _checkouts(job)
+    by_path = {step.get("with", {}).get("path"): step.get("with", {}) for step in checkouts}
+    if len(checkouts) != 2 or set(by_path) != {"trusted", "version-pr"}:
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} needs one trusted base checkout and one version-pr data checkout")
+    if (by_path["trusted"].get("ref") != "${{ github.event.pull_request.base.sha }}"
+            or by_path["version-pr"].get("ref") != "${{ github.event.pull_request.head.sha }}"
+            or any(str(by_path[path].get("fetch-depth", "")) != "0" for path in ("trusted", "version-pr"))):
+        raise Reject("version-pr-gate-trust", f"{_where(name, VERSION_PR_JOB)} must trust the immutable PR base and read the full PR-head history as data")
+
+    body = steps[2]
+    if body.get("env", {}).get("PR_BODY") != "${{ github.event.pull_request.body }}":
+        raise Reject("version-pr-gate-trust", "the PR body must pass through an environment variable before writing to a file")
+    require_call(name, VERSION_PR_JOB, {"steps": [body]}, VERSION_PR_BODY_WRITE)
+
+    window = steps[3]
+    window_text = window.get("run", "")
+    if "python3 -I version-pr/" in window_text:
+        raise Reject("version-pr-gate-trust", "the version PR head is data and cannot provide the window checker")
+    if "BASE_SHA=$(git -C trusted rev-parse HEAD)" not in window_text:
+        raise Reject("version-pr-gate-trust", "the window base must be the immutable trusted PR-base checkout")
+    require_call(name, VERSION_PR_JOB, {"steps": [window]}, VERSION_PR_WINDOW_CALL)
+    state = steps[4]
+    if state.get("id") != "window":
+        raise Reject("version-pr-gate-trust", "the window state step must expose whether a valid active record exists")
+    window_text = state.get("run", "")
+    for pin in ('"version-window inactive pass "*', '"version-window active pass "*', 'active=false', 'active=true'):
+        if pin not in window_text:
+            raise Reject("version-pr-gate-trust", "the window step must pass an inactive record and gate rehearsal only for an active record")
+
+    fetch = steps[5]
+    active_if = "${{ steps.window.outputs.active == 'true' }}"
+    if fetch.get("id") != "rehearsal" or fetch.get("if") != active_if \
+            or fetch.get("env", {}).get("GH_TOKEN") != "${{ github.token }}":
+        raise Reject("version-pr-gate-trust", "the rehearsal API read must run only after an active window using actions: read")
+    fetch_text = fetch.get("run", "")
+    for pin in ('version-pr/tests/data/version-window.json', 'RELEASE_TAG="v$version"',
+                'printf \'tag=%s\\n\' "$RELEASE_TAG" >> "$GITHUB_OUTPUT"'):
+        if pin not in fetch_text:
+            raise Reject("version-pr-gate-trust", "the active version must select and name the rehearsal branch")
+    fetch_job = {"steps": [{key: value for key, value in fetch.items() if key != "if"}]}
+    require_call(name, VERSION_PR_JOB, fetch_job, VERSION_PR_RUNS_API)
+    _check_token_step_commands(name, VERSION_PR_JOB, fetch_job)
+
+    bind = steps[6]
+    if (bind.get("if") != active_if or bind.get("working-directory") != "trusted"
+            or bind.get("env", {}).get("RELEASE_TAG") != "${{ steps.rehearsal.outputs.tag }}"):
+        raise Reject("version-pr-gate-trust", "the rehearsal judge must use trusted base code and run only for an active window")
+    bind_job = {"steps": [{key: value for key, value in bind.items() if key != "if"}]}
+    require_call(name, VERSION_PR_JOB, bind_job, VERSION_PR_BIND_CALL)
 
 
 
@@ -2598,7 +3016,8 @@ def check_workflow_closed_world(root: Path) -> None:
                                      f"${{{{ {expression.strip()} }}}} into a run body; pass it through step-level env")
 
 
-def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
+def check_all(root: Path, release_head: bool = False, git_root: Path | None = None, main_ref: str = "HEAD",
+              disclosure_base: str | None = None) -> dict[str, int]:
     check_workflow_set(root)
     check_producer_script(root)
     check_ir_exception_env(root)
@@ -2612,7 +3031,8 @@ def check_all(root: Path, release_head: bool = False) -> dict[str, int]:
     check_release(root)
     check_release_gate_wiring(root)
     check_version_window(root)
-    check_timeout_ledger(root, release_head)
+    check_version_pr_gate(root)
+    check_timeout_ledger(root, release_head, git_root, main_ref, disclosure_base)
     check_workflow_closed_world(root)
     residual = sorted(job_id for job_id, role in RELEASE_ROLES.items() if role == "residual")
     return {"residual": len(residual)}
@@ -2635,6 +3055,18 @@ case "$1 ${2:-}" in
   "issue list") printf '%s' "$STUB_ISSUES" | jq -r "$expr" ;;
   "label create"|"issue create"|"issue comment") printf 'SENT gh %s\n' "$*" >> "$STUB_LOG" ;;
   *) printf 'unexpected gh call: %s\n' "$*" >&2; exit 97 ;;
+esac
+"""
+_VERIFY_CITED_STUB = r"""#!/usr/bin/env bash
+set -eu
+case "${1:-} ${2:-}" in
+  "api repos/{owner}/{repo}/actions/runs/40257161612")
+    printf '{"head_sha":"%s","event":"workflow_dispatch"}\n' "$STUB_HEAD_SHA" ;;
+  "api repos/{owner}/{repo}/actions/runs/40257161612/jobs?per_page=100")
+    printf '{"jobs":[{"name":"%s","conclusion":"success","started_at":"2026-10-26T02:02:59Z","completed_at":"2026-10-26T02:03:07Z"}]}\n' "$STUB_JOB_NAME" ;;
+  "api repos/{owner}/{repo}/git/commits/c6dc575b6a84cf51a56688948fce9241ba323400")
+    printf '{"tree":{"sha":"%s"}}\n' "$STUB_TREE" ;;
+  *) printf 'unexpected gh route: %s\n' "$*" >&2; exit 97 ;;
 esac
 """
 _REPORT_TITLE = "nightly-red: asan-full-replay"
@@ -2755,7 +3187,7 @@ def report_red_replay_controls(root: Path) -> int:
 
 
 # --------------------------------------------------------------------------- self-test
-WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml", "libbet-repro.yml")
+WORKFLOWS = ("release-rehearsal.yml", "release.yml", "release-please.yml", "version-pr-gate.yml", "ci.yml", "fixture-repro.yml", "preview.yml", "perf-attribution.yml", "nightly-asan.yml", "libbet-repro.yml")
 
 
 def _copy_fixture(root: Path, target: Path) -> None:
@@ -2775,7 +3207,8 @@ def _copy_fixture(root: Path, target: Path) -> None:
 
 def _run_cli(fixture: Path, cwd: Path, *extra: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--root", str(fixture), *extra],
+        [sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--root", str(fixture),
+         "--git-root", str(Path(__file__).resolve().parents[2]), *extra],
         capture_output=True, text=True, check=False, cwd=cwd, timeout=60,
     )
 
@@ -2784,9 +3217,23 @@ def _m(label: str, workflow: str, after: str, old: str, new: str, expected: str)
     return (label, workflow, [(after, old, new)], expected)
 
 
-JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head"
+JUDGE_CALL = "python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head --git-root trusted-judge"
 _REHEARSAL_TAG_LINE = "bash .github/scripts/produce-release-evidence.sh verify-subject --subject . --source-sha \"$GITHUB_SHA\" --tag \"$REHEARSAL_TAG\" --local-tag"
 JUDGE_STEP = "      - name: Judge workflow privilege and trust wiring from the trusted checkout\n"
+REHEARSAL_TAG_EXISTS_STEP = (
+    '      - name: Refuse rehearsal after its release tag exists\n'
+    '        shell: bash\n'
+    '        run: |\n'
+    '          set -euo pipefail\n'
+    '          TAG="${GITHUB_REF_NAME#rehearsal/}"\n'
+    '          if [[ "$TAG" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then\n'
+    '            tag_ref=$(git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG")\n'
+    '            if [[ -n "$tag_ref" ]]; then\n'
+    '              echo "Tag $TAG already exists; a rehearsal after the tag cannot bind a release." >&2\n'
+    '              exit 1\n'
+    '            fi\n'
+    '          fi\n'
+)
 FUZZ_TAG_CHECK = '[[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || {'
 
 
@@ -2824,6 +3271,66 @@ def _mutations():
     reh = "release-rehearsal.yml"
     rel = "release.yml"
     return [
+        _m("rehearsal package omits installed-host smoke", reh, "  package:\n",
+           "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("rehearsal aggregate omits installed-host smoke", reh, "  aggregate:\n",
+           "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("rehearsal aggregate consumer omits platform-bound host-smoke receipt", reh, "  aggregate:\n",
+           "--host-smoke-receipt build/host-smoke-receipt.json", "", "required-command-not-executed"),
+        _m("release candidate omits installed-host smoke", rel, "  candidate:\n",
+           "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("release macOS candidate omits installed-host smoke", rel, "  candidate-macos:\n",
+           "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("release Windows candidate omits host-mode exclusion", rel, "  candidate-windows:\n",
+           "--host-smoke-not-applicable", "--host-smoke-receipt", "required-command-not-executed"),
+        _m("release candidate stops binding the host-smoke receipt", rel, "  candidate:\n",
+           "--host-smoke-receipt build/host-smoke-receipt.json", "--host-smoke-receipt build/other.json",
+           "required-command-not-executed"),
+        _m("release candidate perf gate receipt verifier is removed", rel, "  candidate-fuzz:\n",
+           "python3 -I tests/scripts/verify-perf-gate.py --verify-receipt",
+           "# python3 -I tests/scripts/verify-perf-gate.py --verify-receipt", "required-command-not-executed"),
+        _m("release candidate renames the same-run perf-gate artifact", rel, "  candidate-fuzz:\n",
+           '--name "perf-gate-$run_id-$attempt"', '--name "perf-gate-$run_id"', "perf-gate-artifact-name"),
+        _m("release publisher stops downloading the verified perf-gate artifact", rel, "  publish-qualified-release:\n",
+           "uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+           "uses: actions/upload-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", "artifact-flow"),
+        ("release publisher removes the persisted pre-publish inventory", rel, [
+            ("  publish-qualified-release:\n", "      - name: Persist the exact pre-publish asset inventory\n"
+             "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+             "        with:\n"
+             "          name: release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}\n"
+             "          path: build/release-final/pre-publish-inventory.json\n"
+             "          if-no-files-found: error\n"
+             "          retention-days: 90\n", "")], "pre-publish-inventory-order"),
+        ("release publisher uploads the inventory after the publish decision", rel, [
+            ("  publish-qualified-release:\n", "      - name: Persist the exact pre-publish asset inventory\n"
+             "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+             "        with:\n"
+             "          name: release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}\n"
+             "          path: build/release-final/pre-publish-inventory.json\n"
+             "          if-no-files-found: error\n"
+             "          retention-days: 90\n", ""),
+            ("  publish-qualified-release:\n", "      - name: Publish the one qualified draft\n"
+             "        shell: bash\n"
+             "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft\n",
+             "      - name: Publish the one qualified draft\n"
+             "        shell: bash\n"
+             "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft\n"
+             "      - name: Persist the exact pre-publish asset inventory\n"
+             "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n"
+             "        with:\n"
+             "          name: release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}\n"
+             "          path: build/release-final/pre-publish-inventory.json\n"
+             "          if-no-files-found: error\n"
+             "          retention-days: 90\n")], "pre-publish-inventory-order"),
+        _m("CI perf gate receipt upload is not retained on failure", "ci.yml", "  perf-gate:\n",
+           "        if: always()\n", "        if: success()\n", "artifact-flow"),
+        _m("CI perf gate receipt upload is removed", "ci.yml", "  perf-gate:\n",
+           "uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+           "uses: actions/download-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", "artifact-flow"),
+        ("CI perf gate receipt upload is delayed until after the seeded control", "ci.yml", [
+            ("  perf-gate:\n", "      - name: Retain the perf-gate receipt on pass or failure\n        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n        if: always()\n        with:\n          name: perf-gate-${{ github.run_id }}-${{ github.run_attempt }}\n          path: build/perf-gate-receipt.json\n          if-no-files-found: error\n          retention-days: 7\n", ""),
+            ("  perf-gate:\n", "      - name: Prove the gate rejects a seeded regression\n        shell: bash\n        run: bash tests/scripts/run-perf-gate.sh --seeded-regression\n", "      - name: Prove the gate rejects a seeded regression\n        shell: bash\n        run: bash tests/scripts/run-perf-gate.sh --seeded-regression\n      - name: Retain the perf-gate receipt on pass or failure\n        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2\n        if: always()\n        with:\n          name: perf-gate-${{ github.run_id }}-${{ github.run_attempt }}\n          path: build/perf-gate-receipt.json\n          if-no-files-found: error\n          retention-days: 7\n")], "artifact-flow"),
         _m("release attacher takes attached evidence on every run", rel, "  attach-v02-evidence:\n",
            ATTACH_REUSE_GUARD, "if true; then", "attach-reuse-unguarded"),
         _m("release attacher retry flag is a constant", rel, "  attach-v02-evidence:\n",
@@ -2913,7 +3420,14 @@ def _mutations():
            "run: bash tests/scripts/run-perf-gate.sh --gate", "run: echo bash tests/scripts/run-perf-gate.sh --gate",
            "required-command-not-executed"),
         _m("ci budget ratchet drops --base", "ci.yml", "  native-linux:\n",
-           'verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "verify-test-budget.py --build-dir build",
+           'python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --base "$BUDGET_BASE" --repo "$GITHUB_WORKSPACE"',
+           'python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --repo "$GITHUB_WORKSPACE"',
+           "required-command-not-executed"),
+        _m("ci budget ratchet runs the head copy instead of the base copy", "ci.yml", "  native-linux:\n",
+           'python3 -I "$RUNNER_TEMP/verify-test-budget.py" --build-dir build --base "$BUDGET_BASE" --repo "$GITHUB_WORKSPACE"',
+           'python3 -I tests/scripts/verify-test-budget.py --build-dir build --base "$BUDGET_BASE"', "required-command-not-executed"),
+        _m("ci budget checker self-test is removed", "ci.yml", "  native-linux:\n",
+           "python3 -I tests/scripts/verify-test-budget.py --self-test", "echo budget self-test removed",
            "required-command-not-executed"),
         _m("ci budget base loses the unreachable-parent fallback", "ci.yml", "      - name: Resolve the per-test budget base commit\n",
            ' || ! git cat-file -e "${base}^{commit}"; then', "; then", "budget-base-fallback"),
@@ -2979,6 +3493,8 @@ def _mutations():
            "    runs-on: ubuntu-24.04\n    permissions:\n      contents: write\n", "producer-write-authority"),
         _m("perf-attribution checkout persists credentials", "perf-attribution.yml", "  attribution:\n", "persist-credentials: false",
            "persist-credentials: true", "checkout-credentials"),
+        _m("libbet-repro checkout persists credentials", "libbet-repro.yml", "  libbet-repro:\n", "persist-credentials: false",
+           "persist-credentials: true", "checkout-credentials"),
         _m("perf-attribution dry run before cachegrind work removed", "perf-attribution.yml", "  attribution:\n",
            "run: bash tests/scripts/run-perf-gate.sh --attribution-dry-run", "run: true", "required-command-not-executed"),
         _m("rehearsal fuzz artifact no longer retained", reh, "  fuzz:\n", "name: " + REHEARSAL_FUZZ_ARTIFACT,
@@ -2994,6 +3510,18 @@ def _mutations():
          "    env:\n      GH_TOKEN: ${{ github.token }}\n", "producer-token"),
         _m("release performance checkout persists credentials", rel, "  candidate-performance:\n",
          "persist-credentials: false", "persist-credentials: true", "checkout-credentials"),
+        _m("release candidate rehearsal binding call removed", rel, "  candidate:\n",
+           REHEARSAL_BIND_COMMAND, "true", "required-command-not-executed"),
+        _m("release candidate rehearsal binding loses --pr-head", rel, "  candidate:\n",
+           REHEARSAL_BIND_COMMAND, REHEARSAL_BIND_COMMAND.replace(' --pr-head "$PR_HEAD_SHA"', ""),
+           "required-command-not-executed"),
+        _m("release candidate rehearsal binding loses --merged-at", rel, "  candidate:\n",
+           REHEARSAL_BIND_COMMAND, REHEARSAL_BIND_COMMAND.replace(' --merged-at "$PR_MERGED_AT"', ""),
+           "required-command-not-executed"),
+        _m("release candidate rehearsal binding loses --attempt-jobs", rel, "  candidate:\n",
+           REHEARSAL_BIND_COMMAND,
+           REHEARSAL_BIND_COMMAND.replace(' --attempt-jobs "$RUNNER_TEMP/rehearsal-attempt-jobs.json"', ""),
+           "required-command-not-executed"),
         _m("release fuzz reader checks out the tagged subject", rel, "  candidate-fuzz:\n", "ref: ${{ github.sha }}",
          "ref: ${{ env.SOURCE_SHA }}", "judge-trust"),
         _m("release attacher checks out the tagged subject", rel, "  attach-v02-evidence:\n", "    steps:\n",
@@ -3023,8 +3551,14 @@ def _mutations():
         _m("errexit disabled before the call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "set +e\n{I}" + JUDGE_CALL, "required-command-not-executed"),
         _m("exit before the call", "release-rehearsal.yml", "  judge:\n", JUDGE_CALL, "exit 0\n{I}" + JUDGE_CALL, "required-command-not-executed"),
         _m("continue-on-error on the judge step", "release-rehearsal.yml", "  judge:\n", JUDGE_STEP, JUDGE_STEP + "        continue-on-error: true\n", "ignored-gate"),
+        _m("rehearsal judge tag-existence refusal removed", reh, "  judge:\n", REHEARSAL_TAG_EXISTS_STEP, "",
+           "rehearsal-tag-exists"),
         _m("step disabled with if false", "release-rehearsal.yml", "  judge:\n", JUDGE_STEP, JUDGE_STEP + "        if: ${{ false }}\n", "disabled-gate"),
         _m("judge job disabled with if false", "release-rehearsal.yml", "  judge:\n", "    runs-on: ubuntu-24.04\n", "    if: ${{ false }}\n    runs-on: ubuntu-24.04\n", "disabled-gate"),
+        _m("trusted judge checkout loses full history", "release-rehearsal.yml", "  judge:\n",
+           "          path: trusted-judge\n          fetch-depth: 0\n", "          path: trusted-judge\n", "judge-history-shallow"),
+        _m("release-head judge call loses explicit git root", "release-rehearsal.yml", "  judge:\n",
+           JUDGE_CALL, JUDGE_CALL.removesuffix(" --git-root trusted-judge"), "required-command-not-executed"),
         ("call moved to the wrong job", "release-rehearsal.yml", [
             ("  judge:\n", JUDGE_CALL, "true"),
             ("  package:\n", "# does not exist yet, so build the equivalent from the local-only tag and run the same checker.\n",
@@ -3139,8 +3673,8 @@ def _mutations():
             ("  publish-qualified-release:\n", 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"', "true"),
             ("  publish-qualified-release:\n", 'echo "Published the exact qualified release', 'bash trusted/.github/scripts/verify-release-gates.sh --check-draft-final "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"\n{I}echo "Published the exact qualified release')],
          "publication-order"),
-        _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-platform-manifest]",
-           "candidate-windows]", "workflow-dependency"),
+        _m("release publisher does not wait for the manifest judge", "release.yml", "  publish-qualified-release:\n", "candidate-windows, candidate-fuzz, candidate-platform-manifest]",
+           "candidate-windows, candidate-fuzz]", "workflow-dependency"),
         _m("required-native stops waiting for the sanitizer lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers\n", "", "workflow-dependency"),
         _m("required-native stops waiting for the sanitizer test lane", "ci.yml", "  required-native:\n", "      - linux-sanitizers-tests\n", "",
            "workflow-dependency"),
@@ -3341,6 +3875,8 @@ def _mutations():
            "api_commit=$SOURCE_SHA", "release-presence"),
         _m("W6-04c candidate drops the merged-PR lookup", rel, "  candidate:\n", 'prs=$(gh api "repos/$GH_REPO/commits/$SOURCE_SHA/pulls")',
            "prs='[]'", "release-presence"),
+        _m("candidate skips the exact-source active version-window check", rel, "  candidate:\n",
+           VERSION_WINDOW_SOURCE_CALL, "true", "required-command-not-executed"),
         _m("W6-04d candidate stops requiring release_created", rel, "  candidate:\n", " && needs.release.outputs.release_created == 'true'",
            "", "release-presence"),
         _m("W6-04e candidate loses its retry input", rel, "  candidate:\n", "      RETRY: ${{ inputs.retry }}\n", "", "release-presence"),
@@ -3558,6 +4094,33 @@ def _window_mutations():
     ]
 
 
+def _version_pr_gate_mutations():
+    """The new pre-tag gate must be same-repository, read-only, trusted and fatal on both window and R2 defects."""
+    workflow = VERSION_PR_WORKFLOW
+    job = f"  {VERSION_PR_JOB}:\n"
+    judge = f"name: {VERSION_PR_STEP_NAMES['window']}\n"
+    return [
+        _m("version PR gate uses pull_request_target", workflow, "on:\n", "  pull_request:\n",
+           "  pull_request_target:\n", "version-pr-gate-trigger"),
+        _m("version PR gate changes its trusted base to the PR head", workflow, "name: Check out the trusted PR base\n",
+           "ref: ${{ github.event.pull_request.base.sha }}", "ref: ${{ github.event.pull_request.head.sha }}",
+           "version-pr-gate-trust"),
+        _m("version PR gate gains actions write permission", workflow, job, "      actions: read\n",
+           "      actions: write\n", "version-pr-gate-permissions"),
+        _m("version PR gate gains contents write permission", workflow, job, "      contents: read\n",
+           "      contents: write\n", "version-pr-gate-permissions"),
+        _m("version PR window judge loses its step timeout", workflow, judge,
+           "        timeout-minutes: 5\n", "", "version-pr-gate-timeout"),
+        _m("version PR window checker runs from the PR head", workflow, judge,
+           "python3 -I trusted/tests/scripts/verify-version-window.py",
+           "python3 -I version-pr/tests/scripts/verify-version-window.py", "version-pr-gate-trust"),
+        _m("version PR gate ignores a failing window judge", workflow, judge,
+           "        timeout-minutes: 5\n", "        timeout-minutes: 5\n        continue-on-error: true\n", "ignored-gate"),
+        _m("version PR gate drops the R2 bind call", workflow, f"name: {VERSION_PR_STEP_NAMES['bind']}\n",
+           VERSION_PR_BIND_CALL, "echo 'rehearsal omitted'", "required-command-not-executed"),
+    ]
+
+
 def _ledger_edit(fixture: Path, edit) -> None:
     path = fixture / LEDGER_PATH
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -3578,6 +4141,25 @@ def _ledger_mutations():
 
     def ledger(edit):
         return lambda fixture: _ledger_edit(fixture, edit)
+
+    def bound_at(key: str, edit=None):
+        def apply(fixture: Path) -> None:
+            # Schema controls need an unexpired legacy row so the intended
+            # shape validation wins. The dedicated expiry case raises VERSION
+            # to 0.3.0 after this helper runs.
+            cmake = fixture / "CMakeLists.txt"
+            cmake.write_text(
+                re.sub(r"VERSION \d+\.\d+\.\d+", "VERSION 0.2.1",
+                       cmake.read_text(encoding="utf-8"), count=1),
+                encoding="utf-8",
+            )
+            def set_bound(data: dict) -> None:
+                row = {**bound, "timeout_minutes": data[key]["timeout_minutes"]}
+                if edit is not None:
+                    edit(row)
+                data[key] = row
+            _ledger_edit(fixture, set_bound)
+        return apply
 
     def both(first, second):
         def apply(fixture: Path) -> None:
@@ -3600,12 +4182,15 @@ def _ledger_mutations():
             ledger(lambda d: d["ci.yml:native-windows"].update(timeout_minutes=70, p50_minutes="30.1"))), (), "timeout-ledger-whole-run"),
         ("ledger: release_bound row under a different key", ledger(lambda d: d.update({"ci.yml:native-linux": {**bound, "timeout_minutes": 31}})), (), "timeout-ledger-release-bound"),
         ("ledger: release_bound row under a third key", ledger(lambda d: d["fixture-repro.yml:fixture-repro"].clear() or d["fixture-repro.yml:fixture-repro"].update({**bound, "timeout_minutes": 15})), (), "timeout-ledger-release-bound"),
-        ("ledger: release_bound row once VERSION is above 0.2.1", lambda fixture: (fixture / "CMakeLists.txt").write_text(
-            re.sub(r"VERSION \d+\.\d+\.\d+", "VERSION 0.3.0", (fixture / "CMakeLists.txt").read_text(encoding="utf-8"), count=1), encoding="utf-8"), (), "timeout-ledger-release-bound"),
+        ("ledger: release_bound row once VERSION is above 0.2.1", both(bound_at("release-rehearsal.yml:judge"), lambda fixture: (fixture / "CMakeLists.txt").write_text(
+            re.sub(r"VERSION \d+\.\d+\.\d+", "VERSION 0.3.0", (fixture / "CMakeLists.txt").read_text(encoding="utf-8"), count=1), encoding="utf-8")), (), "timeout-ledger-release-bound"),
         ("ledger: normal row with samples removed", ledger(lambda d: d["ci.yml:native-linux"].pop("samples")), (), "timeout-ledger-schema"),
-        ("ledger: release_bound row that also cites a run", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(cited_run_id=1)), (), "timeout-ledger-schema"),
-        ("ledger: release_bound row that is provisional", ledger(lambda d: d["release.yml:candidate-fuzz"].update(provisional=True)), (), "timeout-ledger-schema"),
-        ("ledger: release_bound row without a sizing basis", ledger(lambda d: d["release.yml:attach-v02-evidence"].update(sizing_basis=" ")), (), "timeout-ledger-schema"),
+        ("ledger: cited_tree without tree_equal_sha", ledger(lambda d: d["ci.yml:native-linux"].update(cited_tree="b" * 40)), (), "timeout-ledger-schema"),
+        ("ledger: tree_equal_sha without cited_tree", ledger(lambda d: d["ci.yml:native-linux"].update(tree_equal_sha="b" * 40)), (), "timeout-ledger-schema"),
+        ("ledger: unknown optional field", ledger(lambda d: d["ci.yml:native-linux"].update(sizing_note="not allowed")), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row that also cites a run", bound_at("release-rehearsal.yml:judge", lambda row: row.update(cited_run_id=1)), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row that is provisional", bound_at("release.yml:candidate-fuzz", lambda row: row.update(provisional=True)), (), "timeout-ledger-schema"),
+        ("ledger: release_bound row without a sizing basis", bound_at("release.yml:attach-v02-evidence", lambda row: row.update(sizing_basis=" ")), (), "timeout-ledger-schema"),
         ("ledger: empty ledger", lambda fixture: (fixture / LEDGER_PATH).write_text("{}\n", encoding="utf-8"), (), "timeout-ledger-schema"),
     ]
 
@@ -3621,8 +4206,12 @@ def _ledger_boundary_controls() -> int:
 
     judge({})                                   # exactly ceil(2 x 12.4) = 25 passes
     done += 1
+    judge({"tree_equal_sha": "b" * 40, "cited_tree": "c" * 40})
+    done += 1
     for label, code, call in (
         ("timeout one minute below ceil(2 x p50) fails", "timeout-ledger-ratio", lambda: judge({}, timeout=24)),
+        ("tree-equal row one minute below ceil(2 x p50) fails", "timeout-ledger-ratio",
+         lambda: judge({"tree_equal_sha": "b" * 40, "cited_tree": "c" * 40}, timeout=24)),
         ("p50 of exactly 30 behind required-native passes", None, lambda: judge({"p50_minutes": "30"}, timeout=60, gating=True)),
         ("p50 of 30.1 behind required-native fails", "timeout-ledger-whole-run", lambda: judge({"p50_minutes": "30.1"}, timeout=61, gating=True)),
         ("p50 of 30.1 outside required-native passes", None, lambda: judge({"p50_minutes": "30.1"}, timeout=61)),
@@ -3643,6 +4232,243 @@ def _ledger_boundary_controls() -> int:
                 raise SystemExit(f"self-test boundary {label!r}: accepted")
         done += 1
     return done
+
+
+def _ledger_git_object_controls() -> int:
+    """Use injected Git results to pin each offline tree-equality refusal and default-ref behavior."""
+    anchor = "a" * 40
+    tree = "b" * 40
+    commit = "c" * 40
+    row = {"timeout_minutes": 45, "cited_run_id": 1, "cited_sha": "d" * 40,
+           "p50_minutes": "0.14", "samples": 1, "provisional": False,
+           "tree_equal_sha": anchor, "cited_tree": tree}
+
+    def fake_git(anchor_tree: str = tree, ancestor_code: int = 0, unreadable_anchor: bool = False,
+                 reject_origin: bool = False, calls: list | None = None):
+        if calls is None:
+            calls = []
+
+        def invoke(*args: str, cwd: Path):
+            calls.append(args)
+            if reject_origin and any("origin/" in arg for arg in args):
+                return subprocess.CompletedProcess(["git", *args], 1, "", "origin refs are forbidden in this control")
+            if args[0] == "rev-parse":
+                target = args[-1]
+                if target == "HEAD^{commit}":
+                    return subprocess.CompletedProcess(["git", *args], 0, commit, "")
+                if target == "origin/main^{commit}":
+                    return subprocess.CompletedProcess(["git", *args], 1, "", "unknown ref")
+                if target == f"{anchor}^{{tree}}":
+                    if unreadable_anchor:
+                        return subprocess.CompletedProcess(["git", *args], 128, "", "missing object")
+                    return subprocess.CompletedProcess(["git", *args], 0, anchor_tree, "")
+            if args[0] == "merge-base":
+                return subprocess.CompletedProcess(["git", *args], ancestor_code, "", "")
+            raise SystemExit(f"unhandled fake git request: {args!r}")
+
+        return invoke, calls
+
+    done = 0
+    valid, calls = fake_git(reject_origin=True)
+    check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=valid)
+    if any("origin/" in arg for call in calls for arg in call):
+        raise SystemExit("self-test tree-equality default ref read origin/*")
+    done += 1
+
+    def expect(label: str, expected: str, invoke) -> None:
+        try:
+            invoke()
+        except Reject as exc:
+            if exc.code != expected:
+                raise SystemExit(f"self-test git-object control {label!r}: wrong code {exc.code}")
+        else:
+            raise SystemExit(f"self-test git-object control {label!r}: accepted")
+
+    mismatch, _ = fake_git(anchor_tree="e" * 40)
+    expect("tree mismatch", "timeout-ledger-tree-mismatch",
+           lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=mismatch))
+    done += 1
+    off_main, _ = fake_git(ancestor_code=1)
+    expect("anchor not on main", "timeout-ledger-anchor-not-on-main",
+           lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=off_main))
+    done += 1
+    missing, _ = fake_git(unreadable_anchor=True)
+    expect("unreadable anchor", "timeout-ledger-git-unavailable",
+           lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "HEAD", False, git=missing))
+    done += 1
+    no_live_ref, _ = fake_git(reject_origin=True)
+    expect("explicit origin ref is honored", "timeout-ledger-git-unavailable",
+           lambda: check_ledger_git_objects({"w.yml:j": row}, Path("."), "origin/main", False, git=no_live_ref))
+    done += 1
+    return done
+
+
+def _ledger_disclosure_scratch_controls() -> int:
+    """Exercise changed, unchanged and disabled disclosure checks against a real scratch Git repository."""
+    with tempfile.TemporaryDirectory(prefix="gbb-ledger-disclosure.") as directory:
+        repo = Path(directory)
+        workflow = repo / ".github/workflows/ci.yml"
+        workflow.parent.mkdir(parents=True)
+        base_text = ("name: fixture\n"
+                     "jobs:\n"
+                     "  build:\n"
+                     "    runs-on: ubuntu-latest\n"
+                     "    steps:\n"
+                     "      - run: echo before\n"
+                     "  stable:\n"
+                     "    runs-on: ubuntu-latest\n"
+                     "    steps:\n"
+                     "      - run: echo stable\n")
+        workflow.write_text(base_text, encoding="utf-8")
+        env = os.environ.copy()
+        env.update(GIT_AUTHOR_NAME="GabbaBoy Fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid",
+                   GIT_COMMITTER_NAME="GabbaBoy Fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid")
+
+        def git(*args: str) -> subprocess.CompletedProcess[str]:
+            result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, env=env, check=False, timeout=30)
+            if result.returncode != 0:
+                raise SystemExit(f"self-test disclosure scratch git failed: {' '.join(args)}: {result.stderr.strip()}")
+            return result
+
+        git("init", "-q", "--initial-branch=main")
+        git("add", ".github/workflows/ci.yml")
+        git("commit", "-q", "-m", "fixture base")
+        changed_text = base_text.replace("echo before", "echo after", 1)
+        workflow.write_text(changed_text, encoding="utf-8")
+
+        def check(row: dict, key: str = "ci.yml:build", base: str | None = "main") -> None:
+            check_ledger_git_objects({key: row}, repo, "HEAD", False,
+                                     disclosure_base=base, workflow_root=repo)
+
+        try:
+            check({})
+        except Reject as exc:
+            if exc.code != "timeout-ledger-body-undisclosed":
+                raise SystemExit(f"self-test disclosure scratch: wrong refusal {exc.code}")
+        else:
+            raise SystemExit("self-test disclosure scratch: changed job body without disclosure was accepted")
+        check({"disclosure": "changed this job's body after the cited run"})
+        check({}, key="ci.yml:stable")
+        check({}, base=None)
+    return 4
+
+
+def _ledger_release_object_scratch_controls(root: Path, work: Path) -> int:
+    """Prove release-head reads tree-equal commit objects but leaves merged-PR plain citations alone."""
+    with tempfile.TemporaryDirectory(prefix="gbb-ledger-release-objects.") as directory:
+        scratch = Path(directory)
+        fixture = scratch / "subject"
+        repo = scratch / "trusted-objects"
+        _copy_fixture(root, fixture)
+        cmake = fixture / "CMakeLists.txt"
+        cmake_text = cmake.read_text(encoding="utf-8")
+        bumped, replacements = re.subn(r"(project\(\s*\w+\s+VERSION\s+)\d+\.\d+\.\d+", r"\g<1>0.3.0", cmake_text, count=1)
+        if replacements != 1:
+            raise SystemExit("self-test release-object scratch: fixture VERSION could not be set to 0.3.0")
+        cmake.write_text(bumped, encoding="utf-8")
+        ledger_path = fixture / LEDGER_PATH
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"), object_pairs_hook=_ledger_pairs)
+        tree_rows = [(key, row) for key, row in ledger.items() if "tree_equal_sha" in row]
+        plain_rows = [(key, row) for key, row in ledger.items() if "tree_equal_sha" not in row]
+        if not tree_rows or not plain_rows:
+            raise SystemExit("self-test release-object scratch: live ledger needs tree-equal and plain rows")
+        repo.mkdir()
+        env = os.environ.copy()
+        env.update(GIT_AUTHOR_NAME="GabbaBoy Fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid",
+                   GIT_COMMITTER_NAME="GabbaBoy Fixture", GIT_COMMITTER_EMAIL="fixture@example.invalid",
+                   GIT_CONFIG_GLOBAL=str(scratch / "gitconfig"), GIT_CONFIG_SYSTEM="/dev/null" if os.name != "nt" else "NUL")
+
+        def git(*args: str, allow_failure: bool = False) -> subprocess.CompletedProcess[str]:
+            result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, env=env,
+                                    check=False, timeout=30)
+            if result.returncode != 0 and not allow_failure:
+                raise SystemExit(f"self-test release-object scratch git failed: {' '.join(args)}: {result.stderr.strip()}")
+            return result
+
+        git("init", "-q", "--initial-branch=main")
+        (repo / "CMakeLists.txt").write_text(bumped, encoding="utf-8")
+        git("add", "CMakeLists.txt")
+        git("commit", "-q", "-m", "main anchor")
+        anchor = git("rev-parse", "HEAD").stdout.strip()
+        tree = git("rev-parse", "HEAD^{tree}").stdout.strip()
+        cited = git("commit-tree", tree, "-p", anchor, "-m", "same-tree citation").stdout.strip()
+        git("update-ref", "refs/heads/side", cited)
+        for _, row in tree_rows:
+            row.update(tree_equal_sha=anchor, cited_sha=cited, cited_tree=tree)
+        plain_rows[0][1]["cited_sha"] = "f" * 40
+        ledger_path.write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8")
+        script = Path(__file__).resolve()
+
+        def check() -> subprocess.CompletedProcess[str]:
+            return subprocess.run([sys.executable, "-I", str(script), "--check", "--release-head", "--root", str(fixture),
+                                   "--git-root", str(repo), "--main-ref", "main"], cwd=work, capture_output=True,
+                                  text=True, check=False, timeout=60)
+
+        positive = check()
+        if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
+            raise SystemExit(f"self-test release-object positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+        print("passed: release-head reads retained tree-equal citations and skips an unreadable plain citation")
+        git("update-ref", "-d", "refs/heads/side")
+        git("reflog", "expire", "--expire=now", "--all")
+        git("gc", "--prune=now")
+        if git("cat-file", "-e", f"{cited}^{{commit}}", allow_failure=True).returncode == 0:
+            raise SystemExit("self-test release-object scratch: cited commit survived pruning")
+        negative = check()
+        expected = f"REJECT timeout-ledger-cited-object-missing: {tree_rows[0][0]}:"
+        if negative.returncode != 1 or expected not in negative.stderr or "PASS:" in negative.stdout:
+            raise SystemExit(f"self-test release-object negative control failed: exit={negative.returncode} stderr={negative.stderr.strip()!r}")
+        print(f"rejected: pruned tree-equal cited object: {negative.stderr.strip()}")
+    return 2
+
+
+def verify_cited_stub_controls(root: Path, work: Path) -> int:
+    """Verify online tree-equal and predecessor-name checks through a refusing gh stand-in."""
+    if os.name == "nt":
+        print("skipped: online citation gh stub (POSIX shell stand-in)")
+        return 0
+    ledger_path = root / LEDGER_PATH
+    original = ledger_path.read_text(encoding="utf-8")
+    data = json.loads(original, object_pairs_hook=_ledger_pairs)
+    row = dict(data["release-rehearsal.yml:performance"])
+    ledger_path.write_text(json.dumps({"release-rehearsal.yml:performance": row}, indent=1) + "\n", encoding="utf-8")
+    stub_dir = work / "verify-cited-bin"
+    stub_dir.mkdir(exist_ok=True)
+    stub = stub_dir / "gh"
+    stub.write_bytes(_VERIFY_CITED_STUB.encode("utf-8"))
+    stub.chmod(0o755)
+    env = {key: value for key, value in os.environ.items() if key in ("PATH", "TMPDIR", "HOME", "LANG")}
+    env.update(PATH=f"{stub_dir}{os.pathsep}{env.get('PATH', '')}",
+               STUB_HEAD_SHA="c6dc575b6a84cf51a56688948fce9241ba323400",
+               STUB_JOB_NAME="rehearse-paired-performance-qualification",
+               STUB_TREE="b02c14bbdc9be80b7aa6b6145cb8b89331388cca")
+
+    def run() -> subprocess.CompletedProcess[str]:
+        return subprocess.run([sys.executable, "-I", str(Path(__file__).resolve()), "--check", "--verify-cited", "--root", str(root)],
+                              cwd=work, capture_output=True, text=True, check=False, env=env, timeout=60)
+
+    controls = 0
+    try:
+        positive = run()
+        if positive.returncode != 0 or "verify-cited rows=1 failures=0" not in positive.stdout:
+            raise SystemExit(f"self-test verify-cited positive control failed: {positive.stdout!r} {positive.stderr!r}")
+        controls += 1
+        row["cited_job_name"] = "missing predecessor job"
+        ledger_path.write_text(json.dumps({"release-rehearsal.yml:performance": row}, indent=1) + "\n", encoding="utf-8")
+        missing_job = run()
+        if missing_job.returncode != 1 or "FAIL release-rehearsal.yml:performance: job missing or not successful" not in missing_job.stdout:
+            raise SystemExit(f"self-test verify-cited missing-job control failed: {missing_job.stdout!r} {missing_job.stderr!r}")
+        controls += 1
+        row["cited_job_name"] = "rehearse-paired-performance-qualification"
+        ledger_path.write_text(json.dumps({"release-rehearsal.yml:performance": row}, indent=1) + "\n", encoding="utf-8")
+        env["STUB_TREE"] = "e" * 40
+        wrong_tree = run()
+        if wrong_tree.returncode != 1 or "does not match cited_tree" not in wrong_tree.stdout:
+            raise SystemExit(f"self-test verify-cited wrong-tree control failed: {wrong_tree.stdout!r} {wrong_tree.stderr!r}")
+        controls += 1
+    finally:
+        ledger_path.write_text(original, encoding="utf-8")
+    print("passed: online citation stub verifies tree-equal heads and refuses missing jobs and mismatched API trees")
+    return controls
 
 
 _LIFECYCLE_JOB_ANCHORS = {f"  {job}:\n": next(mode for mode, owner in LIFECYCLE_MODES.items() if owner == job) for job in set(LIFECYCLE_MODES.values())}
@@ -3680,6 +4506,273 @@ def _route_lifecycle(workflow: str, edits, workflow_text: str, script_text: str)
     return ("lifecycle", routed) if routed else (workflow, edits)
 
 
+def _path_is_within(path: Path, parent: Path) -> bool:
+    """Return whether a resolved path is the parent itself or one of its descendants."""
+    try:
+        common = os.path.commonpath((str(path), str(parent)))
+    except ValueError:
+        return False
+    return os.path.normcase(common) == os.path.normcase(str(parent))
+
+
+def _resolve_git_for_windows_bash(git_executable: str | None, system_root: str | None) -> str:
+    """Select Git for Windows Bash from the same verified installation as git.exe."""
+    if not system_root:
+        raise ValueError("Windows SystemRoot/WINDIR is unset")
+    if not git_executable:
+        raise ValueError("git lookup returned no executable")
+
+    try:
+        git_path = Path(git_executable).resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Git executable path is unavailable: {git_executable!r}: {type(exc).__name__}") from exc
+    if git_path.name.casefold() != "git.exe" or not git_path.is_file():
+        raise ValueError(f"Git executable path is not a git.exe file: {git_path}")
+
+    try:
+        windows_root = Path(system_root).resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Windows system root is invalid: {system_root!r}: {type(exc).__name__}") from exc
+    if _path_is_within(git_path, windows_root):
+        raise ValueError(f"Git executable is under the Windows system root: {git_path}")
+
+    git_parent = git_path.parent
+    parent_name = git_parent.name.casefold()
+    grandparent_name = git_parent.parent.name.casefold()
+    if parent_name == "cmd":
+        git_root = git_parent.parent
+    elif parent_name == "bin" and grandparent_name in ("mingw64", "ucrt64", "usr"):
+        git_root = git_parent.parent.parent
+    elif parent_name == "bin":
+        git_root = git_parent.parent
+    else:
+        raise ValueError(f"unsupported Git executable layout: {git_path}; expected Git/cmd, Git/bin, "
+                         "Git/mingw64/bin, Git/ucrt64/bin, or Git/usr/bin")
+
+    try:
+        git_root = git_root.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Git installation root is unavailable: {git_root}: {type(exc).__name__}") from exc
+    if _path_is_within(git_root, windows_root):
+        raise ValueError(f"Git installation root is under the Windows system root: {git_root}")
+
+    candidates = (
+        git_root / "bin" / "bash.exe",
+        git_root / "usr" / "bin" / "bash.exe",
+        git_root / "mingw64" / "bin" / "bash.exe",
+    )
+    rejected_candidates: list[str] = []
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            rejected_candidates.append(f"{candidate} ({type(exc).__name__})")
+            continue
+        if not _path_is_within(resolved, git_root):
+            rejected_candidates.append(f"{candidate} (resolves outside Git root to {resolved})")
+            continue
+        if _path_is_within(resolved, windows_root):
+            rejected_candidates.append(f"{candidate} (resolves under Windows system root to {resolved})")
+            continue
+        return str(resolved)
+
+    suffix = f"; rejected candidates={rejected_candidates!r}" if rejected_candidates else ""
+    raise ValueError("no bundled Bash executable in the recognized Git installation; checked "
+                     f"{[str(candidate) for candidate in candidates]!r}{suffix}")
+
+
+def _rehearsal_bash_executable(*, windows: bool | None = None, system_root: str | None = None) -> str:
+    """Use Git's bundled Bash on Windows; preserve the existing POSIX lookup elsewhere."""
+    if windows is None:
+        windows = os.name == "nt"
+    if not windows:
+        return "bash"
+
+    if system_root is None:
+        system_root = os.environ.get("SystemRoot") or os.environ.get("WINDIR")
+    git_executable = shutil.which("git")
+    try:
+        return _resolve_git_for_windows_bash(git_executable, system_root)
+    except ValueError as exc:
+        raise RuntimeError(f"Git for Windows Bash resolution failed: git_lookup={git_executable!r} "
+                           f"system_root={system_root!r}: {exc}") from exc
+
+
+def rehearsal_bash_resolver_controls() -> tuple[int, int]:
+    """Exercise supported Git install layouts and fail-closed Windows shell lookup."""
+    rejected = 0
+    accepted = 0
+    with tempfile.TemporaryDirectory(prefix="gbb-git-bash-resolver.") as directory:
+        fixture = Path(directory)
+        system_root = fixture / "Windows"
+        wsl_bash = system_root / "System32" / "bash.exe"
+
+        def seed(path: Path) -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fixture executable\n")
+
+        seed(wsl_bash)
+
+        for label, git_relative in (
+            ("cmd", Path("cmd") / "git.exe"),
+            ("bin", Path("bin") / "git.exe"),
+            ("mingw64", Path("mingw64") / "bin" / "git.exe"),
+            ("ucrt64", Path("ucrt64") / "bin" / "git.exe"),
+        ):
+            install = fixture / ("Git-" + label)
+            git_executable = install / git_relative
+            bundled_bash = install / "bin" / "bash.exe"
+            seed(git_executable)
+            seed(bundled_bash)
+            with patch.object(shutil, "which", return_value=str(git_executable)) as lookup:
+                selected = _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            if (Path(selected) != bundled_bash.resolve() or lookup.call_args_list != [call("git")]):
+                raise SystemExit(f"self-test Git Bash resolver supported {label} layout failed: "
+                                 f"selected={selected!r} lookup_calls={lookup.call_args_list!r}")
+            accepted += 1
+
+        with patch.object(shutil, "which", return_value=None) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "git lookup returned no executable" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver missing Git diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver accepted a missing Git executable")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver missing Git lookup was not explicit: {lookup.call_args_list!r}")
+        rejected += 1
+
+        absent_git = fixture / "Git-missing-file" / "cmd" / "git.exe"
+        with patch.object(shutil, "which", return_value=str(absent_git)) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "Git executable path is unavailable" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver missing file diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver accepted a missing git.exe file")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver missing-file lookup was not explicit: {lookup.call_args_list!r}")
+        rejected += 1
+
+        unsupported_git = fixture / "Git-unrecognized-layout" / "Tools" / "git.exe"
+        seed(unsupported_git)
+        seed(unsupported_git.parent.parent / "bin" / "bash.exe")
+        with patch.object(shutil, "which", return_value=str(unsupported_git)) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "unsupported Git executable layout" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver unsupported layout diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver accepted an unsupported Git layout")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver unsupported-layout lookup was not explicit: {lookup.call_args_list!r}")
+        rejected += 1
+
+        system_git = system_root / "System32" / "git.exe"
+        seed(system_git)
+        with patch.object(shutil, "which", return_value=str(system_git)) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "Git executable is under the Windows system root" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver system alias diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver accepted a Windows system-directory alias")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver system-alias lookup was not explicit: {lookup.call_args_list!r}")
+        rejected += 1
+
+        git_without_bash = fixture / "Git-no-bash" / "cmd" / "git.exe"
+        seed(git_without_bash)
+        with patch.object(shutil, "which", side_effect=lambda name: {
+            "git": str(git_without_bash), "bash": str(wsl_bash),
+        }.get(name)) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "no bundled Bash executable in the recognized Git installation" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver WSL alias refusal diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver fell back to the WSL System32 alias")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver consulted an ambient shell lookup: {lookup.call_args_list!r}")
+        rejected += 1
+
+        with patch.object(shutil, "which") as lookup:
+            selected = _rehearsal_bash_executable(windows=False)
+        if selected != "bash" or lookup.called:
+            raise SystemExit(f"self-test Git Bash resolver changed non-Windows behavior: "
+                             f"selected={selected!r} lookup_calls={lookup.call_args_list!r}")
+        accepted += 1
+
+    print(f"PASS: Git for Windows Bash resolver controls negative={rejected} positive={accepted}")
+    return rejected, accepted
+
+
+def rehearsal_tag_guard_controls(root: Path) -> int:
+    tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
+    step = tree["jobs"]["judge"]["steps"][0]
+    shell = step["run"]
+    harness = '''
+git() {
+  printf '%s\\n' "$*" >> "$TAG_GIT_LOG"
+  if [[ "$TAG_EXISTS" == true ]]; then
+    printf '0123456789abcdef0123456789abcdef01234567\\trefs/tags/v0.3.0\\n'
+  fi
+}
+'''
+    try:
+        bash_executable = _rehearsal_bash_executable()
+    except RuntimeError as exc:
+        raise SystemExit("self-test release tag guard could not resolve its Bash executable: " + str(exc)) from exc
+    with tempfile.TemporaryDirectory(prefix="gbb-release-tag-guard.") as directory:
+        log = Path(directory) / "git.log"
+
+        def run(ref_name: str, tag_exists: bool) -> subprocess.CompletedProcess[str]:
+            log.write_text("", encoding="utf-8")
+            env = {**os.environ, "GITHUB_REF_NAME": ref_name, "GITHUB_REPOSITORY": "szTheory/gabbaboy",
+                   "TAG_EXISTS": "true" if tag_exists else "false", "TAG_GIT_LOG": log.name}
+            return subprocess.run([bash_executable, "-c", harness + shell], capture_output=True, text=True,
+                                  check=False, cwd=directory, env=env, timeout=10)
+
+        def log_state() -> tuple[list[str], str | None]:
+            try:
+                return log.read_text(encoding="utf-8").splitlines(), None
+            except OSError as exc:
+                return [], type(exc).__name__
+
+        def details(result: subprocess.CompletedProcess[str], lines: list[str], read_error: str | None) -> str:
+            stderr = result.stderr.strip().replace(str(directory), "<tempdir>")[:400]
+            stdout = result.stdout.strip().replace(str(directory), "<tempdir>")[:400]
+            return (f"bash={bash_executable!r} exit={result.returncode} git_calls={len(lines)} "
+                    f"log_read_error={read_error or 'none'} "
+                    f"stdout={stdout!r} stderr={stderr!r}")
+
+        absent = run("rehearsal/v0.3.0", False)
+        absent_lines, absent_read_error = log_state()
+        if absent.returncode != 0 or absent_read_error is not None or len(absent_lines) != 1:
+            raise SystemExit("self-test release tag guard failed to allow an untagged release rehearsal: "
+                             + details(absent, absent_lines, absent_read_error))
+        present = run("rehearsal/v0.3.0", True)
+        present_lines, present_read_error = log_state()
+        if (present.returncode == 0 or "Tag v0.3.0 already exists; a rehearsal after the tag cannot bind a release." not in present.stderr
+                or present_read_error is not None or len(present_lines) != 1):
+            raise SystemExit("self-test release tag guard did not refuse an existing release tag: "
+                             + details(present, present_lines, present_read_error))
+        other = run("rehearsal/phase-15.1-demo", True)
+        other_lines, other_read_error = log_state()
+        if other.returncode != 0 or other_read_error is not None or other_lines:
+            raise SystemExit("self-test release tag guard did not skip a non-release rehearsal branch: "
+                             + details(other, other_lines, other_read_error))
+    print("PASS: rehearsal tag guard allows an untagged release rehearsal and refuses an existing tag; non-release branch skips")
+    return 1
+
+
 def self_test(root: Path) -> None:
     rejected = 0
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
@@ -3690,6 +4783,9 @@ def self_test(root: Path) -> None:
         positive = _run_cli(fixture, work)
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+        resolver_rejected, resolver_accepted = rehearsal_bash_resolver_controls()
+        rejected += resolver_rejected
+        rejected += rehearsal_tag_guard_controls(fixture)
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
         baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
         baselines["config"] = (fixture / WINDOW_CONFIG).read_text(encoding="utf-8")
@@ -3705,7 +4801,7 @@ def self_test(root: Path) -> None:
                 return fixture / LIFECYCLE_SCRIPT
             return fixture / (PRODUCER_SCRIPT if workflow == "script" else f".github/workflows/{workflow}")
 
-        for label, workflow, edits, expected in (*_mutations(), *_window_mutations()):
+        for label, workflow, edits, expected in (*_mutations(), *_window_mutations(), *_version_pr_gate_mutations()):
             workflow, edits = _route_lifecycle(workflow, edits, baselines["release.yml"], baselines["lifecycle"])
             text = baselines[workflow]
             for after, old, replacement in edits:
@@ -3743,6 +4839,10 @@ def self_test(root: Path) -> None:
             for item in WORKFLOWS:
                 (fixture / ".github/workflows" / item).write_text(baselines[item], encoding="utf-8")
         rejected += _ledger_boundary_controls()
+        rejected += _ledger_git_object_controls()
+        rejected += _ledger_disclosure_scratch_controls()
+        rejected += _ledger_release_object_scratch_controls(root, work)
+        rejected += verify_cited_stub_controls(fixture, work)
         # WR-C01: the workflow set is closed. A new file (here a pull_request_target job with contents: write) is refused
         # before anything reads it, and so is a judged file that disappears.
         intruder = fixture / ".github/workflows/evil.yml"
@@ -3770,6 +4870,7 @@ def self_test(root: Path) -> None:
             'python3 -I "trusted-judge/.github/scripts/verify-workflow-policy.py" --check --root \'subject\' --release-head',
             "# the judge\n{I}\n{I}python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head  # trailing",
         ):
+            variant = variant.replace("--release-head", "--release-head --git-root trusted-judge")
             text = baselines["release-rehearsal.yml"]
             position = text.find(JUDGE_CALL, text.find("  judge:\n"))
             line_start = text.rfind("\n", 0, position) + 1
@@ -3824,7 +4925,8 @@ def self_test(root: Path) -> None:
             else:
                 raise SystemExit(f"self-test negative {label!r} failed: accepted")
     rejected += report_red_replay_controls(root)
-    print(f"PASS: workflow policy self-test negative_controls={rejected} positive_controls={1 + accepted}")
+    print(f"PASS: workflow policy self-test negative_controls={rejected} "
+          f"positive_controls={1 + resolver_accepted + accepted}")
 
 
 def main() -> int:
@@ -3834,8 +4936,14 @@ def main() -> int:
     modes.add_argument("--self-test", action="store_true", help="run positive and intended-defect controls through the CLI")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="tree whose .github/workflows files are judged as data")
+    parser.add_argument("--git-root", type=Path, default=None,
+                        help="git object database for citation checks (default: --root)")
+    parser.add_argument("--main-ref", default="HEAD",
+                        help="revision under test for tree-equal anchor ancestry (default: HEAD in --git-root)")
+    parser.add_argument("--disclosure-base", default=None,
+                        help="optional commit whose workflow job bodies are compared for required disclosures")
     parser.add_argument("--release-head", action="store_true",
-                        help="judge as the release head: a provisional timeout-ledger row is rejected")
+                        help="judge as the release head: provisional rows and unreadable tree-equal citation objects are rejected")
     parser.add_argument("--verify-cited", action="store_true",
                         help="online and advisory (never in CTest): confirm each ledger citation through gh")
     args = parser.parse_args()
@@ -3846,7 +4954,8 @@ def main() -> int:
             return 0
         if args.verify_cited:
             return verify_cited(root)
-        facts = check_all(root, args.release_head)
+        facts = check_all(root, args.release_head, args.git_root.resolve() if args.git_root else root,
+                          args.main_ref, args.disclosure_base)
         print(f"PASS: workflow privilege and trust wiring residual_write_jobs={facts['residual']}")
         return 0
     except Reject as exc:

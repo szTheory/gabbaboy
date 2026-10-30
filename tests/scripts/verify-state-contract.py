@@ -261,7 +261,9 @@ def flattened_instance(core: str, header: str) -> list[dict[str, str]]:
 
 
 def parse_treatments(core: str) -> list[tuple[str, str, str]]:
-    match = re.search(r"STATE_FIELD_TREATMENT\s*\[\s*\]\s*=\s*\{(.*?)\};", core, re.S)
+    match = re.search(
+        r"STATE_FIELD_TREATMENT\s*\[\s*\]\s*(?:GBB_MAYBE_UNUSED\s*)?=\s*\{(.*?)\};",
+        core, re.S)
     if not match:
         raise ContractError("STATE_FIELD_TREATMENT table is missing")
     rows = re.findall(r'\{\s*"([^"\n]+)"\s*,\s*(STATE_TREAT_[A-Z_]+)\s*,\s*"([^"\n]+)"\s*\}', match.group(1))
@@ -673,6 +675,19 @@ struct gbb_instance {
         raise ContractError("inventory positive control failed")
     if not next(item for item in actual if item["path"] == "conditional")["condition"]:
         raise ContractError("conditional discriminator was not retained")
+    decorated_treatments = (
+        'static const state_field_treatment_rule STATE_FIELD_TREATMENT[] '
+        'GBB_MAYBE_UNUSED = { { "keep", STATE_TREAT_SERIALIZE, "explicit" } };')
+    if parse_treatments(decorated_treatments) != [
+            ("keep", "STATE_TREAT_SERIALIZE", "explicit")]:
+        raise ContractError("decorated STATE_FIELD_TREATMENT positive control failed")
+    try:
+        parse_treatments("static const state_field_treatment_rule OTHER[] = {};\n")
+    except ContractError as error:
+        if "STATE_FIELD_TREATMENT table is missing" not in str(error):
+            raise ContractError(f"wrong missing-treatment diagnostic: {error}") from error
+    else:
+        raise ContractError("missing STATE_FIELD_TREATMENT negative control survived")
     rules = [("nested.*", "STATE_TREAT_SERIALIZE", "nested fields are explicit"),
              ("root", "STATE_TREAT_EXCLUDE", "root observer excluded"),
              ("conditional", "STATE_TREAT_EXCLUDE", "conditional test field excluded")]
@@ -984,6 +999,7 @@ def verify_state_documentation(state_format: str, cartridge_saves: str) -> None:
         "maximum admitted descriptor body is 320184 bytes",
         "maximum emitted state is 320248 bytes",
         "`GBB_STATE_INVALID_CONTENT`",
+        "`gbb_state_size` and `gbb_save_state` return `GBB_STATE_INVALID_CONTENT` for a live machine that breaks a state invariant; states produced by this emulator are not expected to.",
         "externally serialized",
         "does not allocate memory or hash the ROM per call",
     )
@@ -1008,8 +1024,24 @@ def verify_state_documentation_negative_control(state_format: str, cartridge_sav
     try:
         verify_state_documentation(mutant, cartridge_saves)
     except ContractError:
+        pass
+    else:
+        raise ContractError("state documentation magic negative control survived")
+
+    in_02_claim = (
+        "`gbb_state_size` and `gbb_save_state` return `GBB_STATE_INVALID_CONTENT` for a live machine "
+        "that breaks a state invariant; states produced by this emulator are not expected to."
+    )
+    mutant = state_format.replace(in_02_claim, "", 1)
+    if mutant == state_format:
+        raise ContractError("state documentation IN-02 mutant was not seeded")
+    try:
+        verify_state_documentation(mutant, cartridge_saves)
+    except ContractError as error:
+        if in_02_claim not in str(error):
+            raise ContractError("state documentation IN-02 negative control rejected the wrong claim") from error
         return
-    raise ContractError("state documentation magic negative control survived")
+    raise ContractError("state documentation IN-02 negative control survived")
 
 
 def version_component_self_test(cmake: str, module: Path, root: Path, rev: str) -> None:
@@ -1039,12 +1071,18 @@ def version_component_self_test(cmake: str, module: Path, root: Path, rev: str) 
                           f"-DGBB_VERSION_UNDER_TEST={version}"])
             if result.returncode == 0 or "GabbaBoy state release version" not in result.stdout + result.stderr:
                 raise ContractError(f"invalid state version control survived for {version}: {result.stdout}{result.stderr}")
+        immutable_cmake = git_show(root, rev, "CMakeLists.txt")
+        immutable_version = re.search(r"^project\(GabbaBoy VERSION ([^\s)]+)", immutable_cmake, re.M)
+        if immutable_version is None or len(immutable_version.group(1).split(".")) != 3:
+            raise ContractError("immutable CMakeLists.txt has no three-part GabbaBoy project version")
+        release_version = immutable_version.group(1)
         cache = control_root / "project" / "CMakeCache.txt"
         cache.parent.mkdir()
-        cache.write_text("CMAKE_PROJECT_VERSION:STATIC=0.2.1\n")
-        if state_release_from_cmake_cache(cache, module, cmake, root, rev) != ("0", "2", "1"):
+        cache.write_text(f"CMAKE_PROJECT_VERSION:STATIC={release_version}\n")
+        expected_triplet = tuple(release_version.split("."))
+        if state_release_from_cmake_cache(cache, module, cmake, root, rev) != expected_triplet:
             raise ContractError("CMake cache release triplet control returned the wrong version")
-        cache.write_text("CMAKE_PROJECT_VERSION:STATIC=0.2.1.4\n")
+        cache.write_text(f"CMAKE_PROJECT_VERSION:STATIC={release_version}.4\n")
         try:
             state_release_from_cmake_cache(cache, module, cmake, root, rev)
         except ContractError:

@@ -246,6 +246,16 @@ def validate_consumer_receipt(consumer: dict[str, Any], source: str) -> None:
                 or not isinstance(compiler_id, dict) or not isinstance(compiler_id.get("id"), str)
                 or not isinstance(compiler_id.get("version"), str)):
             reject("consumer-binding", f"downloaded {language.upper()} consumer result is malformed or unsuccessful")
+    platform = consumer.get("platform")
+    host_smoke = consumer.get("host_smoke")
+    if platform in ("linux-x64", "macos-arm64"):
+        expected_host_smoke = {"result": "passed", "continuation": "01,02", "preload": "42"}
+    elif platform == "windows-x64":
+        expected_host_smoke = {"result": "not-applicable"}
+    else:
+        reject("consumer-host-smoke", "consumer receipt has no supported release platform")
+    if host_smoke != expected_host_smoke:
+        reject("consumer-host-smoke", "consumer receipt lacks the required installed-host result for its platform")
 
 
 # ------------------------------------------------------------------------- evidence directory
@@ -702,6 +712,7 @@ def make_evidence(directory: Path, source: str, repo: Path | None = None) -> Pat
                                              "tag": "v0.2.0", "source_sha": source})
     write_json(directory / CONSUMER, {
         "schema_version": 2, "result": "passed", "source_sha": source,
+        "platform": "linux-x64", "host_smoke": {"result": "passed", "continuation": "01,02", "preload": "42"},
         "runner_reported_source_sha": source, "candidate_source_sha": source,
         "candidate_manifest_sha256": "a" * 64, "candidate_build_receipt_sha256": "b" * 64,
         "archive_sha256": "c" * 64, "installed_tree_sha256": "d" * 64, "package_sha256": "d" * 64,
@@ -880,6 +891,13 @@ def evidence_controls(base: Path, repo: Path, producer: str, source: str) -> tup
            lambda w: edit(w / CONSUMER, lambda d: d["results"].pop("cpp")))
     mutate("partial C/C++ behavior coverage", "consumer-binding",
            lambda w: edit(w / CONSUMER, lambda d: d["api_behaviors"]["rtc_catch_up"].update(cpp="failed")))
+    mutate("missing installed-host receipt", "consumer-host-smoke",
+           lambda w: edit(w / CONSUMER, lambda d: d.pop("host_smoke")))
+    mutate("failed installed-host smoke", "consumer-host-smoke",
+           lambda w: edit(w / CONSUMER, lambda d: d["host_smoke"].update(result="failed")))
+    mutate("Windows host smoke marked as passed", "consumer-host-smoke",
+           lambda w: edit(w / CONSUMER, lambda d: (d.update(platform="windows-x64"),
+               d.update(host_smoke={"result": "passed", "continuation": "01,02", "preload": "42"}))))
     mutate("archive receipt for other bytes", "owner-archive",
            lambda w: edit(w / ARCHIVE_RECEIPT, lambda d: d.update(archive_sha256="0" * 64)))
 

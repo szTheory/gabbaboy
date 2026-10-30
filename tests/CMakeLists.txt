@@ -1490,6 +1490,16 @@ gbb_add_v02_contract(release_window_contract 60
 gbb_add_v02_contract(release_window_controls 60
   [=[version-window controls pass positives=[1-9][0-9]* controls=([2-9][0-9]|[1-9][0-9][0-9]+)]=]
   verify-version-window.py --self-test)
+# Phase 19 D-19: local and hosted rehearsal outcomes share this message-key rule. The checker
+# refuses empty, ambiguous and cross-job log evidence instead of manufacturing a comparable result.
+add_test(NAME judge_outcome_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-judge-outcome.py;--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=judge-outcome controls pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=22
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(judge_outcome_controls PROPERTIES TIMEOUT 60)
 # Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
 # so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
 gbb_add_v02_contract(v02_consumer_controls_c 600
@@ -1566,9 +1576,19 @@ add_test(NAME v03_dispositions_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=v03-dispositions self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=10
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=39
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_dispositions_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+# D-23 (19-05): the v0.3 readback is checked against tag objects and its embedded pre-publish artifact;
+# this fixture shares a module with planning readers and is the executable contract for 19-07.
+add_test(NAME v03_readback_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test-readback"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=v03-readback controls pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=48
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(v03_readback_controls PROPERTIES TIMEOUT 60 LABELS planning)
 # The v0.2 checker asserts owner_accepted=0 for the archived 15.1-17 record only. Pointed at the new record it must reject on its plan
 # id, which proves that expectation is scoped and is never asserted on the v0.3 record (verify-closeout-dispositions.py is unedited).
 add_test(NAME closeout_dispositions_scope_v03
@@ -4944,6 +4964,20 @@ if(NOT GBB_STATE_REV_RESULT EQUAL 0 OR NOT GBB_STATE_SOURCE_REV_LENGTH EQUAL 40 
   message(STATUS
     "State evidence CTests remain registered with an unresolved revision and will fail closed when invoked")
 endif()
+gbb_add_ledger_contract(support_claims
+  [=[support-claims pass claims=9 non_claims=10 rev=[0-9a-f]+]=]
+  --check-claims --rev "${GBB_STATE_SOURCE_REV}")
+set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=16)
+gbb_add_ledger_contract(support_claims_controls
+  [=[support-claims controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  --self-test-claims --rev "${GBB_STATE_SOURCE_REV}")
+unset(GBB_LEDGER_MIN)
+add_test(NAME adoption_claim_boundaries_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-adoption.py"
+    --self-test-claim-boundaries --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(adoption_claim_boundaries_controls PROPERTIES TIMEOUT 60 LABELS v02
+  PASS_REGULAR_EXPRESSION
+    "adoption-claim-boundaries pass positives=[1-9][0-9]* controls=[1-9][0-9]* rev=[0-9a-f]+")
 set(GBB_STATE_CONTRACT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-state-contract.py")
 add_executable(test_state_api test_state_api.c)
 target_include_directories(test_state_api PRIVATE
@@ -5317,13 +5351,19 @@ endfunction()
 
 gbb_state_internal_mutant(palette_omitted state_rtc_palette same_palette state_control
   [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
-            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=]
+            uint8_t *address = field->storage == STATE_STORAGE_CARTRIDGE_RAM
+                ? &instance->cartridge_ram[i]
+                : (uint8_t *)(void *)instance + field->offset + i * field->stride;
+            state_raw_to_host(address, field, raw);]=]
   [=[const uint64_t raw = state_get_u64(body + offset, field->wire_width);
             if (strcmp(field->path, "compat_rgb555") == 0) {
                 offset += field->wire_width;
                 continue;
             }
-            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {]=])
+            uint8_t *address = field->storage == STATE_STORAGE_CARTRIDGE_RAM
+                ? &instance->cartridge_ram[i]
+                : (uint8_t *)(void *)instance + field->offset + i * field->stride;
+            state_raw_to_host(address, field, raw);]=])
 gbb_state_internal_mutant(catch_up_on_load state_rtc_palette same_rtc state_control
   [=[static void state_apply_observers(gbb_instance *instance, uint8_t old_rumble,
                                   int battery_changed) {]=]
@@ -5518,7 +5558,8 @@ if(NOT WIN32)
   # Each case: name | checker mode | output regex | key whose value must reach a minimum | minimum.
   foreach(gbb_lifecycle_case IN ITEMS
       "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0|uploads|7"
-      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95")
+      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95"
+      "release_lifecycle_post_tag_controls|--self-test-post-tag|release-lifecycle post-tag controls pass positives=[1-9][0-9]* controls=[1-9][0-9]* endpoints=[1-9][0-9]*|controls|80")
     string(REPLACE "|" ";" gbb_lifecycle_fields "${gbb_lifecycle_case}")
     list(GET gbb_lifecycle_fields 0 gbb_lifecycle_name)
     list(GET gbb_lifecycle_fields 1 gbb_lifecycle_mode)
@@ -5534,6 +5575,10 @@ if(NOT WIN32)
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
   endforeach()
+  # These control suites launch many short subprocesses. Run them alone so
+  # parallel test load cannot push either fixed 60-second budget over its cap.
+  set_tests_properties(release_lifecycle_controls release_lifecycle_post_tag_controls
+    PROPERTIES RUN_SERIAL TRUE)
 endif()
 
 # Phase 17 RM-030 / D-22 (17-11): release gates. The owner-approval gate (a deterministic Ir exception bound to the

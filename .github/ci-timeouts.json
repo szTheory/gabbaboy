@@ -53,7 +53,8 @@
   "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
   "p50_minutes": "11.07",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The native Linux job body changed after the cited sample; changed this job's body after the cited run."
  },
  "ci.yml:native-macos": {
   "timeout_minutes": 40,
@@ -77,7 +78,8 @@
   "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
   "p50_minutes": "0.80",
   "samples": 3,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The perf-gate job body changed after the cited sample; changed this job's body after the cited run."
  },
  "ci.yml:planning-checks": {
   "timeout_minutes": 15,
@@ -165,7 +167,8 @@
   "cited_sha": "2d25a47f1b05844b4da829aa9d0978f2cb348df1",
   "p50_minutes": "0.15",
   "samples": 2,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The libbet-repro job body changed after the cited sample; changed this job's body after the cited run."
  },
  "nightly-asan.yml:asan-full-replay": {
   "timeout_minutes": 60,
@@ -177,11 +180,11 @@
  },
  "nightly-asan.yml:report-red": {
   "timeout_minutes": 5,
-  "cited_run_id": 40749683012,
-  "cited_sha": "fe4c9329dcada9ae0b7e3f71fdf55bb4b75f66cf",
-  "p50_minutes": "0.07",
+  "cited_run_id": 40927061574,
+  "cited_sha": "f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4",
+  "p50_minutes": "0.05",
   "samples": 1,
-  "provisional": true
+  "provisional": false
  },
  "perf-attribution.yml:attribution": {
   "timeout_minutes": 150,
@@ -225,15 +228,24 @@
  },
  "release-rehearsal.yml:aggregate": {
   "timeout_minutes": 75,
-  "release_bound": true,
+  "cited_run_id": 40257161612,
+  "cited_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+  "p50_minutes": "23.67",
+  "samples": 1,
   "provisional": false,
-  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-v02-evidence-aggregate fails at the same --check-current step and the same pending measurement; the last green sample (run 39391950429 at 56eaf1b, 12.42 min) is on a non-ancestor rehearsal branch. The 75-minute cap is the reviewed limit for the six evidence families; the v0.2.1 rehearsal re-cites this row (D-111)."
+  "tree_equal_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+  "cited_tree": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca",
+  "disclosure": "Predecessor-body sample: PR #130 changed this job's body after the cited run. The 75-minute cap remains the reviewed limit for the six evidence families."
  },
  "release-rehearsal.yml:corpus": {
   "timeout_minutes": 60,
-  "release_bound": true,
+  "cited_run_id": 40257161612,
+  "cited_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+  "p50_minutes": "12.19",
+  "samples": 1,
   "provisional": false,
-  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-corpus-and-support-sidecar fails its --check-current step because docs/support/v0.2.0.md pins source digests that moved after the tag; the last green sample (run 39382974145 at 6b83695, 6.57 min) is on a rehearsal branch that is not an ancestor of main. The 60-minute cap is the reviewed limit for the full CTest stream; the v0.2.1 rehearsal re-cites this row (D-111)."
+  "tree_equal_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+  "cited_tree": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca"
  },
  "release-rehearsal.yml:fuzz": {
   "timeout_minutes": 45,
@@ -245,9 +257,14 @@
  },
  "release-rehearsal.yml:judge": {
   "timeout_minutes": 15,
-  "release_bound": true,
+  "cited_run_id": 40257161612,
+  "cited_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+  "p50_minutes": "0.15",
+  "samples": 1,
   "provisional": false,
-  "sizing_basis": "Needs every rehearsal producer, so it only runs when all of them succeed. 0 success in every rehearsal run: the five post-15.1 runs skipped it, and probe run 40166530630 at 2bd618d skipped it because rehearse-paired-performance-qualification failed. The 15-minute cap is the reviewed limit for one --check run; 16-06 re-cites this row from the green rehearsal rerun."
+  "tree_equal_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+  "cited_tree": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca",
+  "disclosure": "The trusted-judge checkout and command changed this job's body after the cited run; the release-head caller will use full history from the trusted judge object database."
  },
  "release-rehearsal.yml:package": {
   "timeout_minutes": 35,
@@ -255,7 +272,8 @@
   "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
   "p50_minutes": "0.40",
   "samples": 1,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The rehearsal package job body changed after the cited sample; changed this job's body after the cited run."
  },
  "release-rehearsal.yml:perf-gate": {
   "timeout_minutes": 40,
@@ -267,15 +285,24 @@
  },
  "release-rehearsal.yml:performance": {
   "timeout_minutes": 45,
-  "release_bound": true,
+  "cited_run_id": 40257161612,
+  "cited_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+  "p50_minutes": "0.14",
+  "samples": 1,
   "provisional": false,
-  "sizing_basis": "Probe rehearsal run 40166530630 at 2bd618d (an ancestor of main) failed this job, and the 2026-10-25 16-06 analysis found it cannot pass before the version-bound v0.2.1 ledger exists. rehearse-paired-performance-qualification stays pending-investigation (median 118.35 percent, review trigger fired) until an owner-recorded, receipt-bound review decision is applied through the dispatch inputs; the last green sample (run 39382974145, 0.50 min) is on a non-ancestor rehearsal branch. The 45-minute cap is the reviewed limit for one paired measurement; the v0.2.1 rehearsal re-cites this row (D-111)."
+  "tree_equal_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+  "cited_tree": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca",
+  "cited_job_name": "rehearse-paired-performance-qualification",
+  "disclosure": "Predecessor-name citation: the job was renamed to rehearse-advisory-paired-performance-observation; the old sample was a reuse path."
  },
  "release.yml:attach-v02-evidence": {
   "timeout_minutes": 15,
-  "release_bound": true,
+  "cited_run_id": 40332345735,
+  "cited_sha": "113b98c03e88f20ea5f90d9b56a22d9999ab2666",
+  "p50_minutes": "0.40",
+  "samples": 1,
   "provisional": false,
-  "sizing_basis": "Runs only when release-please creates a release. Full-history search on 2026-10-25: 94 release-please runs, 14 contain attach-qualified-v02-evidence, all 14 skipped, 0 success. The 15-minute cap is the reviewed limit for one published-asset readback and attach; 16-07 re-cites this row from the v0.2.1 release run."
+  "disclosure": "Retry-mode sample: attach ran with retry=true and its body moved into release-evidence-lifecycle.sh; changed this job's body after the cited run."
  },
  "release.yml:candidate": {
   "timeout_minutes": 35,
@@ -283,7 +310,8 @@
   "cited_sha": "01b514f5f45b0594fba24767d3f1ba90754962af",
   "p50_minutes": "0.34",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The job body changed after the cited sample; changed this job's body after the cited run."
  },
  "release.yml:candidate-corpus": {
   "timeout_minutes": 60,
@@ -295,9 +323,12 @@
  },
  "release.yml:candidate-fuzz": {
   "timeout_minutes": 112,
-  "release_bound": true,
+  "cited_run_id": 40332345735,
+  "cited_sha": "113b98c03e88f20ea5f90d9b56a22d9999ab2666",
+  "p50_minutes": "0.22",
+  "samples": 1,
   "provisional": false,
-  "sizing_basis": "Runs only when release-please creates a release. Full-history search on 2026-10-25: 94 release-please runs, 14 contain exact-source-ci-campaign-receipt-reader, all 14 skipped, 0 success; the earlier exact-tag-clang-libfuzzer-campaign run 39406047351 was a different job body. The 112-minute cap is the policy-enforced worst-case poll budget (fuzz-wait-budget); 16-07 re-cites this row from the v0.2.1 release run."
+  "disclosure": "Run 40332345735 is the green exact-source receipt-reader sample; later v0.3.0 receipt work changed this job's body after the cited run."
  },
  "release.yml:candidate-macos": {
   "timeout_minutes": 60,
@@ -305,15 +336,18 @@
   "cited_sha": "01b514f5f45b0594fba24767d3f1ba90754962af",
   "p50_minutes": "1.45",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The job body changed after the cited sample; changed this job's body after the cited run."
  },
  "release.yml:candidate-performance": {
   "timeout_minutes": 45,
-  "cited_run_id": 39406047351,
-  "cited_sha": "08e7309aab699333d73f7ffeae58a5332133f242",
-  "p50_minutes": "0.67",
+  "cited_run_id": 40332345735,
+  "cited_sha": "113b98c03e88f20ea5f90d9b56a22d9999ab2666",
+  "p50_minutes": "0.15",
   "samples": 1,
-  "provisional": false
+  "provisional": false,
+  "cited_job_name": "exact-tag-paired-performance-qualification",
+  "disclosure": "Predecessor-name citation: the job was renamed to exact-tag-advisory-paired-performance-observation; the old sample was a reuse path."
  },
  "release.yml:candidate-platform-manifest": {
   "timeout_minutes": 25,
@@ -329,7 +363,8 @@
   "cited_sha": "01b514f5f45b0594fba24767d3f1ba90754962af",
   "p50_minutes": "0.74",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The job body changed after the cited sample; changed this job's body after the cited run."
  },
  "release.yml:publish-qualified-release": {
   "timeout_minutes": 20,
@@ -337,7 +372,8 @@
   "cited_sha": "3fa00be9d8ad8ca12a9bc4672d4851db1eabfa8e",
   "p50_minutes": "0.27",
   "samples": 2,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The job body changed after the cited sample; changed this job's body after the cited run."
  },
  "release.yml:release": {
   "timeout_minutes": 10,

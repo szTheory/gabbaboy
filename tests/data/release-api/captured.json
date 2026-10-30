@@ -56,6 +56,319 @@
       ],
       "total_count": 3
     },
+    "attempt_jobs": {
+      "jobs": [
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121361375228",
+          "completed_at": "2026-10-26T02:03:44Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:02:57Z",
+          "head_branch": "rehearsal/v0.2.1",
+          "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40257161612/job/121361375228",
+          "id": 121361375228,
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "name": "rehearse-perf-gate",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQbOf_A",
+          "run_attempt": 1,
+          "run_id": 40257161612,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40257161612",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:02:58Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:02:59Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:02:59Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:03:01Z",
+              "conclusion": "success",
+              "name": "Check out the rehearsed source with full history",
+              "number": 2,
+              "started_at": "2026-10-26T02:02:59Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121361375228",
+          "workflow_name": "release-rehearsal"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121361375420",
+          "completed_at": "2026-10-26T02:05:12Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:02:57Z",
+          "head_branch": "rehearsal/v0.2.1",
+          "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40257161612/job/121361375420",
+          "id": 121361375420,
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "name": "rehearse-clang-libfuzzer-campaign",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQbOgvA",
+          "run_attempt": 1,
+          "run_id": 40257161612,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40257161612",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:02:58Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:03:00Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:02:59Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:03:01Z",
+              "conclusion": "success",
+              "name": "Check out the rehearsed source with full history",
+              "number": 2,
+              "started_at": "2026-10-26T02:03:00Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121361375420",
+          "workflow_name": "release-rehearsal"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121361375442",
+          "completed_at": "2026-10-26T02:15:10Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:02:57Z",
+          "head_branch": "rehearsal/v0.2.1",
+          "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40257161612/job/121361375442",
+          "id": 121361375442,
+          "labels": [
+            "ubuntu-22.04"
+          ],
+          "name": "rehearse-corpus-and-support-sidecar",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQbOg0g",
+          "run_attempt": 1,
+          "run_id": 40257161612,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40257161612",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:02:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:03:00Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:02:59Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:03:01Z",
+              "conclusion": "success",
+              "name": "Check out the rehearsed source with full history",
+              "number": 2,
+              "started_at": "2026-10-26T02:03:00Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121361375442",
+          "workflow_name": "release-rehearsal"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121361375464",
+          "completed_at": "2026-10-26T02:03:07Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:02:57Z",
+          "head_branch": "rehearsal/v0.2.1",
+          "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40257161612/job/121361375464",
+          "id": 121361375464,
+          "labels": [
+            "ubuntu-22.04"
+          ],
+          "name": "rehearse-paired-performance-qualification",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQbOg6A",
+          "run_attempt": 1,
+          "run_id": 40257161612,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40257161612",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:02:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:03:00Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:02:59Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:03:01Z",
+              "conclusion": "success",
+              "name": "Check out the rehearsed source with full history",
+              "number": 2,
+              "started_at": "2026-10-26T02:03:00Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121361375464",
+          "workflow_name": "release-rehearsal"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121361375468",
+          "completed_at": "2026-10-26T02:03:12Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:02:57Z",
+          "head_branch": "rehearsal/v0.2.1",
+          "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40257161612/job/121361375468",
+          "id": 121361375468,
+          "labels": [
+            "ubuntu-22.04"
+          ],
+          "name": "rehearse-package-consumers-and-archive",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQbOg7A",
+          "run_attempt": 1,
+          "run_id": 40257161612,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40257161612",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:02:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:03:00Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:02:59Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:03:03Z",
+              "conclusion": "success",
+              "name": "Check out the rehearsed source with full history",
+              "number": 2,
+              "started_at": "2026-10-26T02:03:00Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121361375468",
+          "workflow_name": "release-rehearsal"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121361375542",
+          "completed_at": "2026-10-26T02:26:39Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:02:57Z",
+          "head_branch": "rehearsal/v0.2.1",
+          "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40257161612/job/121361375542",
+          "id": 121361375542,
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "name": "rehearse-v02-evidence-aggregate",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQbOhNg",
+          "run_attempt": 1,
+          "run_id": 40257161612,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40257161612",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:02:59Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:03:01Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:03:00Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:03:04Z",
+              "conclusion": "success",
+              "name": "Check out the rehearsed source with full history",
+              "number": 2,
+              "started_at": "2026-10-26T02:03:01Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121361375542",
+          "workflow_name": "release-rehearsal"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121367397151",
+          "completed_at": "2026-10-26T02:26:50Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:26:39Z",
+          "head_branch": "rehearsal/v0.2.1",
+          "head_sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40257161612/job/121367397151",
+          "id": 121367397151,
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "name": "rehearse-trusted-judge",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQg-DHw",
+          "run_attempt": 1,
+          "run_id": 40257161612,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40257161612",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:26:41Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:26:43Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:26:42Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:26:45Z",
+              "conclusion": "success",
+              "name": "Check out the trusted judge code from the default branch",
+              "number": 2,
+              "started_at": "2026-10-26T02:26:43Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121367397151",
+          "workflow_name": "release-rehearsal"
+        }
+      ],
+      "total_count": 7
+    },
     "check_runs": {
       "check_runs": [
         {
@@ -283,7 +596,31 @@
             "text": null,
             "title": null
           },
-          "pull_requests": [],
+          "pull_requests": [
+            {
+              "base": {
+                "ref": "main",
+                "repo": {
+                  "id": 1403278117,
+                  "name": "gabbaboy",
+                  "url": "https://api.github.com/repos/szTheory/gabbaboy"
+                },
+                "sha": "f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4"
+              },
+              "head": {
+                "ref": "release-please--branches--main--components--GabbaBoy",
+                "repo": {
+                  "id": 1403278117,
+                  "name": "gabbaboy",
+                  "url": "https://api.github.com/repos/szTheory/gabbaboy"
+                },
+                "sha": "55ac5b758f902bda60819f67b46e11247120495a"
+              },
+              "id": 5059547038,
+              "number": 131,
+              "url": "https://api.github.com/repos/szTheory/gabbaboy/pulls/131"
+            }
+          ],
           "started_at": "2026-10-26T00:05:18Z",
           "status": "completed",
           "url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121332487520"
@@ -521,6 +858,230 @@
       ],
       "total_count": 87
     },
+    "ci_run": {
+      "actor": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
+        "events_url": "https://api.github.com/users/szTheory/events{/privacy}",
+        "followers_url": "https://api.github.com/users/szTheory/followers",
+        "following_url": "https://api.github.com/users/szTheory/following{/other_user}",
+        "gists_url": "https://api.github.com/users/szTheory/gists{/gist_id}",
+        "gravatar_id": "",
+        "html_url": "https://github.com/szTheory",
+        "id": 28652,
+        "login": "szTheory",
+        "node_id": "MDQ6VXNlcjI4NjUy",
+        "organizations_url": "https://api.github.com/users/szTheory/orgs",
+        "received_events_url": "https://api.github.com/users/szTheory/received_events",
+        "repos_url": "https://api.github.com/users/szTheory/repos",
+        "site_admin": false,
+        "starred_url": "https://api.github.com/users/szTheory/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/szTheory/subscriptions",
+        "type": "User",
+        "url": "https://api.github.com/users/szTheory",
+        "user_view_type": "public"
+      },
+      "artifacts_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198255/artifacts",
+      "cancel_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198255/cancel",
+      "check_suite_id": 109112213613,
+      "check_suite_node_id": "CS_kwDOU6RTJc8AAAAZZ5hAbQ",
+      "check_suite_url": "https://api.github.com/repos/szTheory/gabbaboy/check-suites/109112213613",
+      "conclusion": "success",
+      "created_at": "2026-10-26T02:27:37Z",
+      "display_title": "chore(main): release 0.2.1 (#75)",
+      "event": "push",
+      "head_branch": "main",
+      "head_commit": {
+        "author": {
+          "email": "redacted@example.invalid",
+          "name": "github-actions[bot]"
+        },
+        "committer": {
+          "email": "redacted@example.invalid",
+          "name": "GitHub"
+        },
+        "id": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+        "message": "chore(main): release 0.2.1 (#75)\n\n* chore(main): release 0.2.1\n\n* test(release): follow the tree version in the release-bound expiry control and repoint the docs to the v0.2.1 ledger\n\n- the expiry con...[truncated]",
+        "timestamp": "2026-10-26T02:27:34Z",
+        "tree_id": "b02c14bbdc9be80b7aa6b6145cb8b89331388cca"
+      },
+      "head_repository": {
+        "archive_url": "https://api.github.com/repos/szTheory/gabbaboy/{archive_format}{/ref}",
+        "assignees_url": "https://api.github.com/repos/szTheory/gabbaboy/assignees{/user}",
+        "blobs_url": "https://api.github.com/repos/szTheory/gabbaboy/git/blobs{/sha}",
+        "branches_url": "https://api.github.com/repos/szTheory/gabbaboy/branches{/branch}",
+        "collaborators_url": "https://api.github.com/repos/szTheory/gabbaboy/collaborators{/collaborator}",
+        "comments_url": "https://api.github.com/repos/szTheory/gabbaboy/comments{/number}",
+        "commits_url": "https://api.github.com/repos/szTheory/gabbaboy/commits{/sha}",
+        "compare_url": "https://api.github.com/repos/szTheory/gabbaboy/compare/{base}...{head}",
+        "contents_url": "https://api.github.com/repos/szTheory/gabbaboy/contents/{+path}",
+        "contributors_url": "https://api.github.com/repos/szTheory/gabbaboy/contributors",
+        "deployments_url": "https://api.github.com/repos/szTheory/gabbaboy/deployments",
+        "description": "Portable Game Boy and Game Boy Color emulator core in C.",
+        "downloads_url": "https://api.github.com/repos/szTheory/gabbaboy/downloads",
+        "events_url": "https://api.github.com/repos/szTheory/gabbaboy/events",
+        "fork": false,
+        "forks_url": "https://api.github.com/repos/szTheory/gabbaboy/forks",
+        "full_name": "szTheory/gabbaboy",
+        "git_commits_url": "https://api.github.com/repos/szTheory/gabbaboy/git/commits{/sha}",
+        "git_refs_url": "https://api.github.com/repos/szTheory/gabbaboy/git/refs{/sha}",
+        "git_tags_url": "https://api.github.com/repos/szTheory/gabbaboy/git/tags{/sha}",
+        "hooks_url": "https://api.github.com/repos/szTheory/gabbaboy/hooks",
+        "html_url": "https://github.com/szTheory/gabbaboy",
+        "id": 1403278117,
+        "issue_comment_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/comments{/number}",
+        "issue_events_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/events{/number}",
+        "issues_url": "https://api.github.com/repos/szTheory/gabbaboy/issues{/number}",
+        "keys_url": "https://api.github.com/repos/szTheory/gabbaboy/keys{/key_id}",
+        "labels_url": "https://api.github.com/repos/szTheory/gabbaboy/labels{/name}",
+        "languages_url": "https://api.github.com/repos/szTheory/gabbaboy/languages",
+        "merges_url": "https://api.github.com/repos/szTheory/gabbaboy/merges",
+        "milestones_url": "https://api.github.com/repos/szTheory/gabbaboy/milestones{/number}",
+        "name": "gabbaboy",
+        "node_id": "R_kgDOU6RTJQ",
+        "notifications_url": "https://api.github.com/repos/szTheory/gabbaboy/notifications{?since,all,participating}",
+        "owner": {
+          "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
+          "events_url": "https://api.github.com/users/szTheory/events{/privacy}",
+          "followers_url": "https://api.github.com/users/szTheory/followers",
+          "following_url": "https://api.github.com/users/szTheory/following{/other_user}",
+          "gists_url": "https://api.github.com/users/szTheory/gists{/gist_id}",
+          "gravatar_id": "",
+          "html_url": "https://github.com/szTheory",
+          "id": 28652,
+          "login": "szTheory",
+          "node_id": "MDQ6VXNlcjI4NjUy",
+          "organizations_url": "https://api.github.com/users/szTheory/orgs",
+          "received_events_url": "https://api.github.com/users/szTheory/received_events",
+          "repos_url": "https://api.github.com/users/szTheory/repos",
+          "site_admin": false,
+          "starred_url": "https://api.github.com/users/szTheory/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/szTheory/subscriptions",
+          "type": "User",
+          "url": "https://api.github.com/users/szTheory",
+          "user_view_type": "public"
+        },
+        "private": false,
+        "pulls_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls{/number}",
+        "releases_url": "https://api.github.com/repos/szTheory/gabbaboy/releases{/id}",
+        "stargazers_url": "https://api.github.com/repos/szTheory/gabbaboy/stargazers",
+        "statuses_url": "https://api.github.com/repos/szTheory/gabbaboy/statuses/{sha}",
+        "subscribers_url": "https://api.github.com/repos/szTheory/gabbaboy/subscribers",
+        "subscription_url": "https://api.github.com/repos/szTheory/gabbaboy/subscription",
+        "tags_url": "https://api.github.com/repos/szTheory/gabbaboy/tags",
+        "teams_url": "https://api.github.com/repos/szTheory/gabbaboy/teams",
+        "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
+        "url": "https://api.github.com/repos/szTheory/gabbaboy"
+      },
+      "head_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+      "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40259198255",
+      "id": 40259198255,
+      "jobs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198255/jobs",
+      "logs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198255/logs",
+      "name": "ci",
+      "node_id": "WFR_kwLOU6RTJc8AAAAJX6KdLw",
+      "path": ".github/workflows/ci.yml",
+      "previous_attempt_url": null,
+      "pull_requests": [],
+      "referenced_workflows": [],
+      "repository": {
+        "archive_url": "https://api.github.com/repos/szTheory/gabbaboy/{archive_format}{/ref}",
+        "assignees_url": "https://api.github.com/repos/szTheory/gabbaboy/assignees{/user}",
+        "blobs_url": "https://api.github.com/repos/szTheory/gabbaboy/git/blobs{/sha}",
+        "branches_url": "https://api.github.com/repos/szTheory/gabbaboy/branches{/branch}",
+        "collaborators_url": "https://api.github.com/repos/szTheory/gabbaboy/collaborators{/collaborator}",
+        "comments_url": "https://api.github.com/repos/szTheory/gabbaboy/comments{/number}",
+        "commits_url": "https://api.github.com/repos/szTheory/gabbaboy/commits{/sha}",
+        "compare_url": "https://api.github.com/repos/szTheory/gabbaboy/compare/{base}...{head}",
+        "contents_url": "https://api.github.com/repos/szTheory/gabbaboy/contents/{+path}",
+        "contributors_url": "https://api.github.com/repos/szTheory/gabbaboy/contributors",
+        "deployments_url": "https://api.github.com/repos/szTheory/gabbaboy/deployments",
+        "description": "Portable Game Boy and Game Boy Color emulator core in C.",
+        "downloads_url": "https://api.github.com/repos/szTheory/gabbaboy/downloads",
+        "events_url": "https://api.github.com/repos/szTheory/gabbaboy/events",
+        "fork": false,
+        "forks_url": "https://api.github.com/repos/szTheory/gabbaboy/forks",
+        "full_name": "szTheory/gabbaboy",
+        "git_commits_url": "https://api.github.com/repos/szTheory/gabbaboy/git/commits{/sha}",
+        "git_refs_url": "https://api.github.com/repos/szTheory/gabbaboy/git/refs{/sha}",
+        "git_tags_url": "https://api.github.com/repos/szTheory/gabbaboy/git/tags{/sha}",
+        "hooks_url": "https://api.github.com/repos/szTheory/gabbaboy/hooks",
+        "html_url": "https://github.com/szTheory/gabbaboy",
+        "id": 1403278117,
+        "issue_comment_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/comments{/number}",
+        "issue_events_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/events{/number}",
+        "issues_url": "https://api.github.com/repos/szTheory/gabbaboy/issues{/number}",
+        "keys_url": "https://api.github.com/repos/szTheory/gabbaboy/keys{/key_id}",
+        "labels_url": "https://api.github.com/repos/szTheory/gabbaboy/labels{/name}",
+        "languages_url": "https://api.github.com/repos/szTheory/gabbaboy/languages",
+        "merges_url": "https://api.github.com/repos/szTheory/gabbaboy/merges",
+        "milestones_url": "https://api.github.com/repos/szTheory/gabbaboy/milestones{/number}",
+        "name": "gabbaboy",
+        "node_id": "R_kgDOU6RTJQ",
+        "notifications_url": "https://api.github.com/repos/szTheory/gabbaboy/notifications{?since,all,participating}",
+        "owner": {
+          "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
+          "events_url": "https://api.github.com/users/szTheory/events{/privacy}",
+          "followers_url": "https://api.github.com/users/szTheory/followers",
+          "following_url": "https://api.github.com/users/szTheory/following{/other_user}",
+          "gists_url": "https://api.github.com/users/szTheory/gists{/gist_id}",
+          "gravatar_id": "",
+          "html_url": "https://github.com/szTheory",
+          "id": 28652,
+          "login": "szTheory",
+          "node_id": "MDQ6VXNlcjI4NjUy",
+          "organizations_url": "https://api.github.com/users/szTheory/orgs",
+          "received_events_url": "https://api.github.com/users/szTheory/received_events",
+          "repos_url": "https://api.github.com/users/szTheory/repos",
+          "site_admin": false,
+          "starred_url": "https://api.github.com/users/szTheory/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/szTheory/subscriptions",
+          "type": "User",
+          "url": "https://api.github.com/users/szTheory",
+          "user_view_type": "public"
+        },
+        "private": false,
+        "pulls_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls{/number}",
+        "releases_url": "https://api.github.com/repos/szTheory/gabbaboy/releases{/id}",
+        "stargazers_url": "https://api.github.com/repos/szTheory/gabbaboy/stargazers",
+        "statuses_url": "https://api.github.com/repos/szTheory/gabbaboy/statuses/{sha}",
+        "subscribers_url": "https://api.github.com/repos/szTheory/gabbaboy/subscribers",
+        "subscription_url": "https://api.github.com/repos/szTheory/gabbaboy/subscription",
+        "tags_url": "https://api.github.com/repos/szTheory/gabbaboy/tags",
+        "teams_url": "https://api.github.com/repos/szTheory/gabbaboy/teams",
+        "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
+        "url": "https://api.github.com/repos/szTheory/gabbaboy"
+      },
+      "rerun_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198255/rerun",
+      "run_attempt": 1,
+      "run_number": 713,
+      "run_started_at": "2026-10-26T02:27:37Z",
+      "status": "completed",
+      "triggering_actor": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
+        "events_url": "https://api.github.com/users/szTheory/events{/privacy}",
+        "followers_url": "https://api.github.com/users/szTheory/followers",
+        "following_url": "https://api.github.com/users/szTheory/following{/other_user}",
+        "gists_url": "https://api.github.com/users/szTheory/gists{/gist_id}",
+        "gravatar_id": "",
+        "html_url": "https://github.com/szTheory",
+        "id": 28652,
+        "login": "szTheory",
+        "node_id": "MDQ6VXNlcjI4NjUy",
+        "organizations_url": "https://api.github.com/users/szTheory/orgs",
+        "received_events_url": "https://api.github.com/users/szTheory/received_events",
+        "repos_url": "https://api.github.com/users/szTheory/repos",
+        "site_admin": false,
+        "starred_url": "https://api.github.com/users/szTheory/starred{/owner}{/repo}",
+        "subscriptions_url": "https://api.github.com/users/szTheory/subscriptions",
+        "type": "User",
+        "url": "https://api.github.com/users/szTheory",
+        "user_view_type": "public"
+      },
+      "updated_at": "2026-10-26T02:47:06Z",
+      "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198255",
+      "workflow_id": 373960325,
+      "workflow_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/workflows/373960325"
+    },
     "commit": {
       "author": {
         "avatar_url": "https://avatars.githubusercontent.com/in/15368?v=4",
@@ -711,6 +1272,270 @@
           ],
           "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121367685749",
           "workflow_name": "release-please"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121367893317",
+          "completed_at": "2026-10-26T02:31:41Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:28:38Z",
+          "head_branch": "main",
+          "head_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40259198302/job/121367893317",
+          "id": 121367893317,
+          "labels": [
+            "macos-14"
+          ],
+          "name": "release-candidate / downloaded-macos-arm64-candidates",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQhcVRQ",
+          "run_attempt": 1,
+          "run_id": 40259198302,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198302",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:28:39Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:28:41Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:28:40Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:28:42Z",
+              "conclusion": "success",
+              "name": "Require trusted candidate identity and unpublished matching draft",
+              "number": 2,
+              "started_at": "2026-10-26T02:28:41Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121367893317",
+          "workflow_name": "release-please"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121367893338",
+          "completed_at": "2026-10-26T02:50:11Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:28:38Z",
+          "head_branch": "main",
+          "head_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40259198302/job/121367893338",
+          "id": 121367893338,
+          "labels": [
+            "ubuntu-22.04"
+          ],
+          "name": "release-candidate / exact-tag-corpus-and-support-sidecar",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQhcVWg",
+          "run_attempt": 1,
+          "run_id": 40259198302,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198302",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:28:40Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:28:41Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:28:40Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:28:44Z",
+              "conclusion": "success",
+              "name": "Check out exact tagged source",
+              "number": 2,
+              "started_at": "2026-10-26T02:28:41Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121367893338",
+          "workflow_name": "release-please"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121367893369",
+          "completed_at": "2026-10-26T02:47:37Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:28:38Z",
+          "head_branch": "main",
+          "head_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40259198302/job/121367893369",
+          "id": 121367893369,
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "name": "release-candidate / exact-source-ci-campaign-receipt-reader",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQhcVeQ",
+          "run_attempt": 1,
+          "run_id": 40259198302,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198302",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:28:40Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:28:41Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:28:41Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:28:43Z",
+              "conclusion": "success",
+              "name": "Check out the trusted workflow revision",
+              "number": 2,
+              "started_at": "2026-10-26T02:28:41Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121367893369",
+          "workflow_name": "release-please"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121367893425",
+          "completed_at": "2026-10-26T02:28:48Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:28:38Z",
+          "head_branch": "main",
+          "head_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40259198302/job/121367893425",
+          "id": 121367893425,
+          "labels": [
+            "ubuntu-22.04"
+          ],
+          "name": "release-candidate / exact-tag-paired-performance-qualification",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQhcVsQ",
+          "run_attempt": 1,
+          "run_id": 40259198302,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198302",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:28:39Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:28:41Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:28:40Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:28:42Z",
+              "conclusion": "success",
+              "name": "Check out exact tagged source",
+              "number": 2,
+              "started_at": "2026-10-26T02:28:41Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121367893425",
+          "workflow_name": "release-please"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121368684815",
+          "completed_at": "2026-10-26T02:32:31Z",
+          "conclusion": "success",
+          "created_at": "2026-10-26T02:31:41Z",
+          "head_branch": "main",
+          "head_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40259198302/job/121368684815",
+          "id": 121368684815,
+          "labels": [
+            "windows-2022"
+          ],
+          "name": "release-candidate / downloaded-windows-x64-core-candidate",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQiMpDw",
+          "run_attempt": 1,
+          "run_id": 40259198302,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198302",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:31:43Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:31:45Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:31:44Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:31:50Z",
+              "conclusion": "success",
+              "name": "Require trusted candidate identity and unpublished matching draft",
+              "number": 2,
+              "started_at": "2026-10-26T02:31:45Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121368684815",
+          "workflow_name": "release-please"
+        },
+        {
+          "check_run_url": "https://api.github.com/repos/szTheory/gabbaboy/check-runs/121373341714",
+          "completed_at": "2026-10-26T02:50:26Z",
+          "conclusion": "failure",
+          "created_at": "2026-10-26T02:50:11Z",
+          "head_branch": "main",
+          "head_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40259198302/job/121373341714",
+          "id": 121373341714,
+          "labels": [
+            "ubuntu-22.04"
+          ],
+          "name": "release-candidate / attach-qualified-v02-evidence",
+          "node_id": "CR_kwDOU6RTJc8AAAAcQmo4Eg",
+          "run_attempt": 1,
+          "run_id": 40259198302,
+          "run_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40259198302",
+          "runner_group_id": 0,
+          "runner_group_name": "GitHub Actions",
+          "runner_id": 0,
+          "runner_name": "GitHub Actions",
+          "started_at": "2026-10-26T02:50:14Z",
+          "status": "completed",
+          "steps": [
+            {
+              "completed_at": "2026-10-26T02:50:15Z",
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "started_at": "2026-10-26T02:50:14Z",
+              "status": "completed"
+            },
+            {
+              "completed_at": "2026-10-26T02:50:17Z",
+              "conclusion": "success",
+              "name": "Check out the trusted workflow revision as the recovery judge",
+              "number": 2,
+              "started_at": "2026-10-26T02:50:15Z",
+              "status": "completed"
+            }
+          ],
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/jobs/121373341714",
+          "workflow_name": "release-please"
         }
       ],
       "total_count": 10
@@ -839,9 +1664,9 @@
           "private": false,
           "pull_request_creation_policy": "all",
           "pulls_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls{/number}",
-          "pushed_at": "2026-10-28T16:47:51Z",
+          "pushed_at": "2026-10-29T12:53:47Z",
           "releases_url": "https://api.github.com/repos/szTheory/gabbaboy/releases{/id}",
-          "size": 11414,
+          "size": 14001,
           "ssh_url": "redacted@example.invalid:szTheory/gabbaboy.git",
           "stargazers_count": 0,
           "stargazers_url": "https://api.github.com/repos/szTheory/gabbaboy/stargazers",
@@ -853,7 +1678,7 @@
           "teams_url": "https://api.github.com/repos/szTheory/gabbaboy/teams",
           "topics": [],
           "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
-          "updated_at": "2026-10-26T16:53:53Z",
+          "updated_at": "2026-10-29T12:53:34Z",
           "url": "https://api.github.com/repos/szTheory/gabbaboy",
           "visibility": "public",
           "watchers": 0,
@@ -985,9 +1810,9 @@
           "private": false,
           "pull_request_creation_policy": "all",
           "pulls_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls{/number}",
-          "pushed_at": "2026-10-28T16:47:51Z",
+          "pushed_at": "2026-10-29T12:53:47Z",
           "releases_url": "https://api.github.com/repos/szTheory/gabbaboy/releases{/id}",
-          "size": 11414,
+          "size": 14001,
           "ssh_url": "redacted@example.invalid:szTheory/gabbaboy.git",
           "stargazers_count": 0,
           "stargazers_url": "https://api.github.com/repos/szTheory/gabbaboy/stargazers",
@@ -999,7 +1824,7 @@
           "teams_url": "https://api.github.com/repos/szTheory/gabbaboy/teams",
           "topics": [],
           "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
-          "updated_at": "2026-10-26T16:53:53Z",
+          "updated_at": "2026-10-29T12:53:34Z",
           "url": "https://api.github.com/repos/szTheory/gabbaboy",
           "visibility": "public",
           "watchers": 0,
@@ -1110,6 +1935,371 @@
         "user_view_type": "public"
       }
     },
+    "pull_requests": [
+      {
+        "_links": {
+          "comments": {
+            "href": "https://api.github.com/repos/szTheory/gabbaboy/issues/75/comments"
+          },
+          "commits": {
+            "href": "https://api.github.com/repos/szTheory/gabbaboy/pulls/75/commits"
+          },
+          "html": {
+            "href": "https://github.com/szTheory/gabbaboy/pull/75"
+          },
+          "issue": {
+            "href": "https://api.github.com/repos/szTheory/gabbaboy/issues/75"
+          },
+          "review_comment": {
+            "href": "https://api.github.com/repos/szTheory/gabbaboy/pulls/comments{/number}"
+          },
+          "review_comments": {
+            "href": "https://api.github.com/repos/szTheory/gabbaboy/pulls/75/comments"
+          },
+          "self": {
+            "href": "https://api.github.com/repos/szTheory/gabbaboy/pulls/75"
+          },
+          "statuses": {
+            "href": "https://api.github.com/repos/szTheory/gabbaboy/statuses/c6dc575b6a84cf51a56688948fce9241ba323400"
+          }
+        },
+        "active_lock_reason": null,
+        "assignee": null,
+        "assignees": [],
+        "author_association": "CONTRIBUTOR",
+        "auto_merge": null,
+        "base": {
+          "label": "szTheory:main",
+          "ref": "main",
+          "repo": {
+            "allow_forking": true,
+            "archive_url": "https://api.github.com/repos/szTheory/gabbaboy/{archive_format}{/ref}",
+            "archived": false,
+            "assignees_url": "https://api.github.com/repos/szTheory/gabbaboy/assignees{/user}",
+            "blobs_url": "https://api.github.com/repos/szTheory/gabbaboy/git/blobs{/sha}",
+            "branches_url": "https://api.github.com/repos/szTheory/gabbaboy/branches{/branch}",
+            "clone_url": "https://github.com/szTheory/gabbaboy.git",
+            "collaborators_url": "https://api.github.com/repos/szTheory/gabbaboy/collaborators{/collaborator}",
+            "comments_url": "https://api.github.com/repos/szTheory/gabbaboy/comments{/number}",
+            "commits_url": "https://api.github.com/repos/szTheory/gabbaboy/commits{/sha}",
+            "compare_url": "https://api.github.com/repos/szTheory/gabbaboy/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/szTheory/gabbaboy/contents/{+path}",
+            "contributors_url": "https://api.github.com/repos/szTheory/gabbaboy/contributors",
+            "created_at": "2026-10-03T14:24:04Z",
+            "default_branch": "main",
+            "deployments_url": "https://api.github.com/repos/szTheory/gabbaboy/deployments",
+            "description": "Portable Game Boy and Game Boy Color emulator core in C.",
+            "disabled": false,
+            "downloads_url": "https://api.github.com/repos/szTheory/gabbaboy/downloads",
+            "events_url": "https://api.github.com/repos/szTheory/gabbaboy/events",
+            "fork": false,
+            "forks": 0,
+            "forks_count": 0,
+            "forks_url": "https://api.github.com/repos/szTheory/gabbaboy/forks",
+            "full_name": "szTheory/gabbaboy",
+            "git_commits_url": "https://api.github.com/repos/szTheory/gabbaboy/git/commits{/sha}",
+            "git_refs_url": "https://api.github.com/repos/szTheory/gabbaboy/git/refs{/sha}",
+            "git_tags_url": "https://api.github.com/repos/szTheory/gabbaboy/git/tags{/sha}",
+            "git_url": "git://github.com/szTheory/gabbaboy.git",
+            "has_discussions": false,
+            "has_downloads": false,
+            "has_issues": true,
+            "has_pages": false,
+            "has_projects": true,
+            "has_pull_requests": true,
+            "has_wiki": true,
+            "homepage": null,
+            "hooks_url": "https://api.github.com/repos/szTheory/gabbaboy/hooks",
+            "html_url": "https://github.com/szTheory/gabbaboy",
+            "id": 1403278117,
+            "is_template": false,
+            "issue_comment_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/comments{/number}",
+            "issue_events_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/events{/number}",
+            "issues_url": "https://api.github.com/repos/szTheory/gabbaboy/issues{/number}",
+            "keys_url": "https://api.github.com/repos/szTheory/gabbaboy/keys{/key_id}",
+            "labels_url": "https://api.github.com/repos/szTheory/gabbaboy/labels{/name}",
+            "language": "C",
+            "languages_url": "https://api.github.com/repos/szTheory/gabbaboy/languages",
+            "license": {
+              "key": "mit",
+              "name": "MIT License",
+              "node_id": "MDc6TGljZW5zZTEz",
+              "spdx_id": "MIT",
+              "url": "https://api.github.com/licenses/mit"
+            },
+            "merges_url": "https://api.github.com/repos/szTheory/gabbaboy/merges",
+            "milestones_url": "https://api.github.com/repos/szTheory/gabbaboy/milestones{/number}",
+            "mirror_url": null,
+            "name": "gabbaboy",
+            "node_id": "R_kgDOU6RTJQ",
+            "notifications_url": "https://api.github.com/repos/szTheory/gabbaboy/notifications{?since,all,participating}",
+            "open_issues": 1,
+            "open_issues_count": 1,
+            "owner": {
+              "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
+              "events_url": "https://api.github.com/users/szTheory/events{/privacy}",
+              "followers_url": "https://api.github.com/users/szTheory/followers",
+              "following_url": "https://api.github.com/users/szTheory/following{/other_user}",
+              "gists_url": "https://api.github.com/users/szTheory/gists{/gist_id}",
+              "gravatar_id": "",
+              "html_url": "https://github.com/szTheory",
+              "id": 28652,
+              "login": "szTheory",
+              "node_id": "MDQ6VXNlcjI4NjUy",
+              "organizations_url": "https://api.github.com/users/szTheory/orgs",
+              "received_events_url": "https://api.github.com/users/szTheory/received_events",
+              "repos_url": "https://api.github.com/users/szTheory/repos",
+              "site_admin": false,
+              "starred_url": "https://api.github.com/users/szTheory/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/szTheory/subscriptions",
+              "type": "User",
+              "url": "https://api.github.com/users/szTheory",
+              "user_view_type": "public"
+            },
+            "private": false,
+            "pull_request_creation_policy": "all",
+            "pulls_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls{/number}",
+            "pushed_at": "2026-10-29T12:53:47Z",
+            "releases_url": "https://api.github.com/repos/szTheory/gabbaboy/releases{/id}",
+            "size": 14001,
+            "ssh_url": "redacted@example.invalid:szTheory/gabbaboy.git",
+            "stargazers_count": 0,
+            "stargazers_url": "https://api.github.com/repos/szTheory/gabbaboy/stargazers",
+            "statuses_url": "https://api.github.com/repos/szTheory/gabbaboy/statuses/{sha}",
+            "subscribers_url": "https://api.github.com/repos/szTheory/gabbaboy/subscribers",
+            "subscription_url": "https://api.github.com/repos/szTheory/gabbaboy/subscription",
+            "svn_url": "https://github.com/szTheory/gabbaboy",
+            "tags_url": "https://api.github.com/repos/szTheory/gabbaboy/tags",
+            "teams_url": "https://api.github.com/repos/szTheory/gabbaboy/teams",
+            "topics": [],
+            "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
+            "updated_at": "2026-10-29T12:53:34Z",
+            "url": "https://api.github.com/repos/szTheory/gabbaboy",
+            "visibility": "public",
+            "watchers": 0,
+            "watchers_count": 0,
+            "web_commit_signoff_required": false
+          },
+          "sha": "75d627cfc37d42169186c6f61b97b9b269b620fd",
+          "user": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
+            "events_url": "https://api.github.com/users/szTheory/events{/privacy}",
+            "followers_url": "https://api.github.com/users/szTheory/followers",
+            "following_url": "https://api.github.com/users/szTheory/following{/other_user}",
+            "gists_url": "https://api.github.com/users/szTheory/gists{/gist_id}",
+            "gravatar_id": "",
+            "html_url": "https://github.com/szTheory",
+            "id": 28652,
+            "login": "szTheory",
+            "node_id": "MDQ6VXNlcjI4NjUy",
+            "organizations_url": "https://api.github.com/users/szTheory/orgs",
+            "received_events_url": "https://api.github.com/users/szTheory/received_events",
+            "repos_url": "https://api.github.com/users/szTheory/repos",
+            "site_admin": false,
+            "starred_url": "https://api.github.com/users/szTheory/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/szTheory/subscriptions",
+            "type": "User",
+            "url": "https://api.github.com/users/szTheory",
+            "user_view_type": "public"
+          }
+        },
+        "body": "[omitted by the capture sanitizer]",
+        "closed_at": "2026-10-26T02:27:35Z",
+        "comments_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/75/comments",
+        "commits_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls/75/commits",
+        "created_at": "2026-10-20T10:10:05Z",
+        "diff_url": "https://github.com/szTheory/gabbaboy/pull/75.diff",
+        "draft": false,
+        "head": {
+          "label": "szTheory:release-please--branches--main--components--GabbaBoy",
+          "ref": "release-please--branches--main--components--GabbaBoy",
+          "repo": {
+            "allow_forking": true,
+            "archive_url": "https://api.github.com/repos/szTheory/gabbaboy/{archive_format}{/ref}",
+            "archived": false,
+            "assignees_url": "https://api.github.com/repos/szTheory/gabbaboy/assignees{/user}",
+            "blobs_url": "https://api.github.com/repos/szTheory/gabbaboy/git/blobs{/sha}",
+            "branches_url": "https://api.github.com/repos/szTheory/gabbaboy/branches{/branch}",
+            "clone_url": "https://github.com/szTheory/gabbaboy.git",
+            "collaborators_url": "https://api.github.com/repos/szTheory/gabbaboy/collaborators{/collaborator}",
+            "comments_url": "https://api.github.com/repos/szTheory/gabbaboy/comments{/number}",
+            "commits_url": "https://api.github.com/repos/szTheory/gabbaboy/commits{/sha}",
+            "compare_url": "https://api.github.com/repos/szTheory/gabbaboy/compare/{base}...{head}",
+            "contents_url": "https://api.github.com/repos/szTheory/gabbaboy/contents/{+path}",
+            "contributors_url": "https://api.github.com/repos/szTheory/gabbaboy/contributors",
+            "created_at": "2026-10-03T14:24:04Z",
+            "default_branch": "main",
+            "deployments_url": "https://api.github.com/repos/szTheory/gabbaboy/deployments",
+            "description": "Portable Game Boy and Game Boy Color emulator core in C.",
+            "disabled": false,
+            "downloads_url": "https://api.github.com/repos/szTheory/gabbaboy/downloads",
+            "events_url": "https://api.github.com/repos/szTheory/gabbaboy/events",
+            "fork": false,
+            "forks": 0,
+            "forks_count": 0,
+            "forks_url": "https://api.github.com/repos/szTheory/gabbaboy/forks",
+            "full_name": "szTheory/gabbaboy",
+            "git_commits_url": "https://api.github.com/repos/szTheory/gabbaboy/git/commits{/sha}",
+            "git_refs_url": "https://api.github.com/repos/szTheory/gabbaboy/git/refs{/sha}",
+            "git_tags_url": "https://api.github.com/repos/szTheory/gabbaboy/git/tags{/sha}",
+            "git_url": "git://github.com/szTheory/gabbaboy.git",
+            "has_discussions": false,
+            "has_downloads": false,
+            "has_issues": true,
+            "has_pages": false,
+            "has_projects": true,
+            "has_pull_requests": true,
+            "has_wiki": true,
+            "homepage": null,
+            "hooks_url": "https://api.github.com/repos/szTheory/gabbaboy/hooks",
+            "html_url": "https://github.com/szTheory/gabbaboy",
+            "id": 1403278117,
+            "is_template": false,
+            "issue_comment_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/comments{/number}",
+            "issue_events_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/events{/number}",
+            "issues_url": "https://api.github.com/repos/szTheory/gabbaboy/issues{/number}",
+            "keys_url": "https://api.github.com/repos/szTheory/gabbaboy/keys{/key_id}",
+            "labels_url": "https://api.github.com/repos/szTheory/gabbaboy/labels{/name}",
+            "language": "C",
+            "languages_url": "https://api.github.com/repos/szTheory/gabbaboy/languages",
+            "license": {
+              "key": "mit",
+              "name": "MIT License",
+              "node_id": "MDc6TGljZW5zZTEz",
+              "spdx_id": "MIT",
+              "url": "https://api.github.com/licenses/mit"
+            },
+            "merges_url": "https://api.github.com/repos/szTheory/gabbaboy/merges",
+            "milestones_url": "https://api.github.com/repos/szTheory/gabbaboy/milestones{/number}",
+            "mirror_url": null,
+            "name": "gabbaboy",
+            "node_id": "R_kgDOU6RTJQ",
+            "notifications_url": "https://api.github.com/repos/szTheory/gabbaboy/notifications{?since,all,participating}",
+            "open_issues": 1,
+            "open_issues_count": 1,
+            "owner": {
+              "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
+              "events_url": "https://api.github.com/users/szTheory/events{/privacy}",
+              "followers_url": "https://api.github.com/users/szTheory/followers",
+              "following_url": "https://api.github.com/users/szTheory/following{/other_user}",
+              "gists_url": "https://api.github.com/users/szTheory/gists{/gist_id}",
+              "gravatar_id": "",
+              "html_url": "https://github.com/szTheory",
+              "id": 28652,
+              "login": "szTheory",
+              "node_id": "MDQ6VXNlcjI4NjUy",
+              "organizations_url": "https://api.github.com/users/szTheory/orgs",
+              "received_events_url": "https://api.github.com/users/szTheory/received_events",
+              "repos_url": "https://api.github.com/users/szTheory/repos",
+              "site_admin": false,
+              "starred_url": "https://api.github.com/users/szTheory/starred{/owner}{/repo}",
+              "subscriptions_url": "https://api.github.com/users/szTheory/subscriptions",
+              "type": "User",
+              "url": "https://api.github.com/users/szTheory",
+              "user_view_type": "public"
+            },
+            "private": false,
+            "pull_request_creation_policy": "all",
+            "pulls_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls{/number}",
+            "pushed_at": "2026-10-29T12:53:47Z",
+            "releases_url": "https://api.github.com/repos/szTheory/gabbaboy/releases{/id}",
+            "size": 14001,
+            "ssh_url": "redacted@example.invalid:szTheory/gabbaboy.git",
+            "stargazers_count": 0,
+            "stargazers_url": "https://api.github.com/repos/szTheory/gabbaboy/stargazers",
+            "statuses_url": "https://api.github.com/repos/szTheory/gabbaboy/statuses/{sha}",
+            "subscribers_url": "https://api.github.com/repos/szTheory/gabbaboy/subscribers",
+            "subscription_url": "https://api.github.com/repos/szTheory/gabbaboy/subscription",
+            "svn_url": "https://github.com/szTheory/gabbaboy",
+            "tags_url": "https://api.github.com/repos/szTheory/gabbaboy/tags",
+            "teams_url": "https://api.github.com/repos/szTheory/gabbaboy/teams",
+            "topics": [],
+            "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
+            "updated_at": "2026-10-29T12:53:34Z",
+            "url": "https://api.github.com/repos/szTheory/gabbaboy",
+            "visibility": "public",
+            "watchers": 0,
+            "watchers_count": 0,
+            "web_commit_signoff_required": false
+          },
+          "sha": "c6dc575b6a84cf51a56688948fce9241ba323400",
+          "user": {
+            "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
+            "events_url": "https://api.github.com/users/szTheory/events{/privacy}",
+            "followers_url": "https://api.github.com/users/szTheory/followers",
+            "following_url": "https://api.github.com/users/szTheory/following{/other_user}",
+            "gists_url": "https://api.github.com/users/szTheory/gists{/gist_id}",
+            "gravatar_id": "",
+            "html_url": "https://github.com/szTheory",
+            "id": 28652,
+            "login": "szTheory",
+            "node_id": "MDQ6VXNlcjI4NjUy",
+            "organizations_url": "https://api.github.com/users/szTheory/orgs",
+            "received_events_url": "https://api.github.com/users/szTheory/received_events",
+            "repos_url": "https://api.github.com/users/szTheory/repos",
+            "site_admin": false,
+            "starred_url": "https://api.github.com/users/szTheory/starred{/owner}{/repo}",
+            "subscriptions_url": "https://api.github.com/users/szTheory/subscriptions",
+            "type": "User",
+            "url": "https://api.github.com/users/szTheory",
+            "user_view_type": "public"
+          }
+        },
+        "html_url": "https://github.com/szTheory/gabbaboy/pull/75",
+        "id": 4934238707,
+        "issue_url": "https://api.github.com/repos/szTheory/gabbaboy/issues/75",
+        "labels": [
+          {
+            "archived_at": null,
+            "archived_by": null,
+            "color": "ededed",
+            "default": false,
+            "description": null,
+            "id": 12605166235,
+            "name": "autorelease: tagged",
+            "node_id": "LA_kwDOU6RTJc8AAAAC71OSmw",
+            "url": "https://api.github.com/repos/szTheory/gabbaboy/labels/autorelease:%20tagged"
+          }
+        ],
+        "locked": false,
+        "merge_commit_sha": "b93137f00d07b11dc74e40330e0ddf6029c0677d",
+        "merged_at": "2026-10-26T02:27:35Z",
+        "milestone": null,
+        "node_id": "PR_kwDOU6RTJc8AAAABJhqB8w",
+        "number": 75,
+        "patch_url": "https://github.com/szTheory/gabbaboy/pull/75.patch",
+        "requested_reviewers": [],
+        "requested_teams": [],
+        "review_comment_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls/comments{/number}",
+        "review_comments_url": "https://api.github.com/repos/szTheory/gabbaboy/pulls/75/comments",
+        "state": "closed",
+        "statuses_url": "https://api.github.com/repos/szTheory/gabbaboy/statuses/c6dc575b6a84cf51a56688948fce9241ba323400",
+        "title": "chore(main): release 0.2.1",
+        "updated_at": "2026-10-26T02:27:45Z",
+        "url": "https://api.github.com/repos/szTheory/gabbaboy/pulls/75",
+        "user": {
+          "avatar_url": "https://avatars.githubusercontent.com/in/15368?v=4",
+          "events_url": "https://api.github.com/users/github-actions%5Bbot%5D/events{/privacy}",
+          "followers_url": "https://api.github.com/users/github-actions%5Bbot%5D/followers",
+          "following_url": "https://api.github.com/users/github-actions%5Bbot%5D/following{/other_user}",
+          "gists_url": "https://api.github.com/users/github-actions%5Bbot%5D/gists{/gist_id}",
+          "gravatar_id": "",
+          "html_url": "https://github.com/apps/github-actions",
+          "id": 41898282,
+          "login": "github-actions[bot]",
+          "node_id": "MDM6Qm90NDE4OTgyODI=",
+          "organizations_url": "https://api.github.com/users/github-actions%5Bbot%5D/orgs",
+          "received_events_url": "https://api.github.com/users/github-actions%5Bbot%5D/received_events",
+          "repos_url": "https://api.github.com/users/github-actions%5Bbot%5D/repos",
+          "site_admin": false,
+          "starred_url": "https://api.github.com/users/github-actions%5Bbot%5D/starred{/owner}{/repo}",
+          "subscriptions_url": "https://api.github.com/users/github-actions%5Bbot%5D/subscriptions",
+          "type": "Bot",
+          "url": "https://api.github.com/users/github-actions%5Bbot%5D",
+          "user_view_type": "public"
+        }
+      }
+    ],
     "release": {
       "assets": [
         {
@@ -1530,7 +2720,7 @@
       "workflow_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/workflows/379131148"
     },
     "workflow_runs": {
-      "total_count": 116,
+      "total_count": 118,
       "workflow_runs": [
         {
           "actor": {
@@ -1554,14 +2744,14 @@
             "url": "https://api.github.com/users/szTheory",
             "user_view_type": "public"
           },
-          "artifacts_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40363495265/artifacts",
-          "cancel_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40363495265/cancel",
-          "check_suite_id": 109399190835,
-          "check_suite_node_id": "CS_kwDOU6RTJc8AAAAZeLMtMw",
-          "check_suite_url": "https://api.github.com/repos/szTheory/gabbaboy/check-suites/109399190835",
+          "artifacts_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40877052053/artifacts",
+          "cancel_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40877052053/cancel",
+          "check_suite_id": 110802454627,
+          "check_suite_node_id": "CS_kwDOU6RTJc8AAAAZzFdIYw",
+          "check_suite_url": "https://api.github.com/repos/szTheory/gabbaboy/check-suites/110802454627",
           "conclusion": "success",
-          "created_at": "2026-10-26T16:53:51Z",
-          "display_title": "docs(pause): phase 16 complete, paused before Phase 17 (#129)",
+          "created_at": "2026-10-29T12:53:31Z",
+          "display_title": "feat: add player save slots and host contract (Phase 18) (#132)",
           "event": "push",
           "head_branch": "main",
           "head_commit": {
@@ -1573,10 +2763,10 @@
               "email": "redacted@example.invalid",
               "name": "GitHub"
             },
-            "id": "5ca03b394f2a3e0640f69d94e5eda5622753b36c",
-            "message": "docs(pause): phase 16 complete, paused before Phase 17 (#129)\n\nCo-authored-by: GabbaBoy contributors <redacted@example.invalid>\nCo-authored-by: Claude Opus 5.5 <redacted@example.invalid>",
-            "timestamp": "2026-10-26T16:53:48Z",
-            "tree_id": "4e23d09b9685e542ceae77313647b9b57acd4186"
+            "id": "f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4",
+            "message": "feat: add player save slots and host contract (Phase 18) (#132)\n\n* docs(18): capture phase context\n\nCo-Authored-By: Claude Opus 5.5 <redacted@example.invalid>\n\n* docs(state): record phase 18 context s...[truncated]",
+            "timestamp": "2026-10-29T12:53:28Z",
+            "tree_id": "fbb9afd29ee5c51d4979208fadf0c677974f7a2f"
           },
           "head_repository": {
             "archive_url": "https://api.github.com/repos/szTheory/gabbaboy/{archive_format}{/ref}",
@@ -1646,21 +2836,21 @@
             "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
             "url": "https://api.github.com/repos/szTheory/gabbaboy"
           },
-          "head_sha": "5ca03b394f2a3e0640f69d94e5eda5622753b36c",
-          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40363495265",
-          "id": 40363495265,
-          "jobs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40363495265/jobs",
-          "logs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40363495265/logs",
+          "head_sha": "f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40877052053",
+          "id": 40877052053,
+          "jobs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40877052053/jobs",
+          "logs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40877052053/logs",
           "name": "release-please",
-          "node_id": "WFR_kwLOU6RTJc8AAAAJZdoPYQ",
+          "node_id": "WFR_kwLOU6RTJc8AAAAJhHZQlQ",
           "path": ".github/workflows/release-please.yml",
           "previous_attempt_url": null,
           "pull_requests": [],
           "referenced_workflows": [
             {
-              "path": "szTheory/gabbaboy/.github/workflows/release.yml@5ca03b394f2a3e0640f69d94e5eda5622753b36c",
+              "path": "szTheory/gabbaboy/.github/workflows/release.yml@f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4",
               "ref": "refs/heads/main",
-              "sha": "5ca03b394f2a3e0640f69d94e5eda5622753b36c"
+              "sha": "f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4"
             }
           ],
           "repository": {
@@ -1731,10 +2921,10 @@
             "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
             "url": "https://api.github.com/repos/szTheory/gabbaboy"
           },
-          "rerun_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40363495265/rerun",
+          "rerun_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40877052053/rerun",
           "run_attempt": 1,
-          "run_number": 116,
-          "run_started_at": "2026-10-26T16:53:51Z",
+          "run_number": 118,
+          "run_started_at": "2026-10-29T12:53:31Z",
           "status": "completed",
           "triggering_actor": {
             "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
@@ -1757,8 +2947,8 @@
             "url": "https://api.github.com/users/szTheory",
             "user_view_type": "public"
           },
-          "updated_at": "2026-10-26T16:55:07Z",
-          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40363495265",
+          "updated_at": "2026-10-29T12:54:03Z",
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40877052053",
           "workflow_id": 379131148,
           "workflow_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/workflows/379131148"
         },
@@ -1784,14 +2974,14 @@
             "url": "https://api.github.com/users/szTheory",
             "user_view_type": "public"
           },
-          "artifacts_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40358732686/artifacts",
-          "cancel_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40358732686/cancel",
-          "check_suite_id": 109385939404,
-          "check_suite_node_id": "CS_kwDOU6RTJc8AAAAZd-j5zA",
-          "check_suite_url": "https://api.github.com/repos/szTheory/gabbaboy/check-suites/109385939404",
+          "artifacts_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40789911355/artifacts",
+          "cancel_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40789911355/cancel",
+          "check_suite_id": 110567274988,
+          "check_suite_node_id": "CS_kwDOU6RTJc8AAAAZvlK57A",
+          "check_suite_url": "https://api.github.com/repos/szTheory/gabbaboy/check-suites/110567274988",
           "conclusion": "success",
-          "created_at": "2026-10-26T16:23:59Z",
-          "display_title": "docs(phase-16): verify Phase 16 complete and route to discuss-phase 1\u2026",
+          "created_at": "2026-10-28T23:48:49Z",
+          "display_title": "feat(phase-17): native save state core (#130)",
           "event": "push",
           "head_branch": "main",
           "head_commit": {
@@ -1803,10 +2993,10 @@
               "email": "redacted@example.invalid",
               "name": "GitHub"
             },
-            "id": "792c33401a97876da6d8b6fc4287a52c3e2b786a",
-            "message": "docs(phase-16): verify Phase 16 complete and route to discuss-phase 17 (#128)\n\n* test(16): complete UAT - 51 passed, 0 issues\n\n* docs(phase-16): verify Phase 16 complete and route to discuss-phase 17\n...[truncated]",
-            "timestamp": "2026-10-26T16:23:55Z",
-            "tree_id": "c93c20228580d958cd89132466677f0f540e7250"
+            "id": "f4082a657bffad80c5b5d487a55ee748ce00d8f6",
+            "message": "feat(phase-17): native save state core (#130)\n\n* docs(17): capture phase context\n\n* docs(state): record phase 17 discussion handoff\n\n* docs(17): plan native save state core\n\n* test(17-01): add pre-cod...[truncated]",
+            "timestamp": "2026-10-28T23:48:46Z",
+            "tree_id": "ccd6e8d55e1bcb29885970299a859ee639a02679"
           },
           "head_repository": {
             "archive_url": "https://api.github.com/repos/szTheory/gabbaboy/{archive_format}{/ref}",
@@ -1876,21 +3066,21 @@
             "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
             "url": "https://api.github.com/repos/szTheory/gabbaboy"
           },
-          "head_sha": "792c33401a97876da6d8b6fc4287a52c3e2b786a",
-          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40358732686",
-          "id": 40358732686,
-          "jobs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40358732686/jobs",
-          "logs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40358732686/logs",
+          "head_sha": "f4082a657bffad80c5b5d487a55ee748ce00d8f6",
+          "html_url": "https://github.com/szTheory/gabbaboy/actions/runs/40789911355",
+          "id": 40789911355,
+          "jobs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40789911355/jobs",
+          "logs_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40789911355/logs",
           "name": "release-please",
-          "node_id": "WFR_kwLOU6RTJc8AAAAJZZFjjg",
+          "node_id": "WFR_kwLOU6RTJc8AAAAJf0SnOw",
           "path": ".github/workflows/release-please.yml",
           "previous_attempt_url": null,
           "pull_requests": [],
           "referenced_workflows": [
             {
-              "path": "szTheory/gabbaboy/.github/workflows/release.yml@792c33401a97876da6d8b6fc4287a52c3e2b786a",
+              "path": "szTheory/gabbaboy/.github/workflows/release.yml@f4082a657bffad80c5b5d487a55ee748ce00d8f6",
               "ref": "refs/heads/main",
-              "sha": "792c33401a97876da6d8b6fc4287a52c3e2b786a"
+              "sha": "f4082a657bffad80c5b5d487a55ee748ce00d8f6"
             }
           ],
           "repository": {
@@ -1961,10 +3151,10 @@
             "trees_url": "https://api.github.com/repos/szTheory/gabbaboy/git/trees{/sha}",
             "url": "https://api.github.com/repos/szTheory/gabbaboy"
           },
-          "rerun_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40358732686/rerun",
+          "rerun_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40789911355/rerun",
           "run_attempt": 1,
-          "run_number": 115,
-          "run_started_at": "2026-10-26T16:23:59Z",
+          "run_number": 117,
+          "run_started_at": "2026-10-28T23:48:49Z",
           "status": "completed",
           "triggering_actor": {
             "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
@@ -1987,8 +3177,8 @@
             "url": "https://api.github.com/users/szTheory",
             "user_view_type": "public"
           },
-          "updated_at": "2026-10-26T16:24:12Z",
-          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40358732686",
+          "updated_at": "2026-10-28T23:49:22Z",
+          "url": "https://api.github.com/repos/szTheory/gabbaboy/actions/runs/40789911355",
           "workflow_id": 379131148,
           "workflow_url": "https://api.github.com/repos/szTheory/gabbaboy/actions/workflows/379131148"
         }
@@ -2014,7 +3204,7 @@
         9
       ],
       "jobs": [
-        2,
+        8,
         10
       ],
       "release_assets": [
@@ -2023,7 +3213,7 @@
       ],
       "steps": [
         2,
-        27
+        10
       ],
       "workflow_runs": [
         2,

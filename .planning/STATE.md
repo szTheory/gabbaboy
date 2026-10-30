@@ -4,18 +4,19 @@ milestone: v0.3
 milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
-status: ready_to_plan
-last_updated: "2026-10-29T00:00:00.000Z"
-last_activity: 2026-10-29
-last_activity_desc: Phase 18 verified (UAT 73/73 automated, 0 human; verification passed 4/4; security 33/33 closed; Nyquist-compliant); exact-head CI green at abd8ceed
-state_head: abd8ceede0c992b91b5606d5ba3f399a52235ee3
+status: executing
+stopped_at: Plan 19-06 dedeb22 resolver controls pass; final-source CI and preflight pending
+last_updated: "2026-10-30T13:12:43Z"
+last_activity: 2026-10-30
+last_activity_desc: "b33 preflight and CI candidate was superseded and cancelled; dedeb22a ucrt64 resolver continuation is independently reviewed with local controls passing; actual Windows CI and final preflight pending"
+state_head: 28aee3d570b0f3b233b413880611d5fe27f567e2
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 27
-  completed_plans: 27
+  total_plans: 34
+  completed_plans: 32
   percent: 75
-current_plan: 0
+current_plan: 6
 ---
 
 # Project State
@@ -25,16 +26,22 @@ current_plan: 0
 See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 18 — Player Save Slots and Host Contract
+**Current focus:** Phase 19 — Qualified v0.3.0 Release
 
 ## Current Position
 
-Phase: 19 — Qualified v0.3.0 Release
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-10-29 — Phase 18 verified and complete; next is Phase 19 discussion
+Phase: 19 (Qualified v0.3.0 Release) — EXECUTING
+Plan: 6 of 7
+Status: Executing renewed qualification after the approved ucrt64 resolver continuation; Plan 19-06 and Phase 19 remain incomplete.
+Last activity: 2026-10-30 — D-121's bounded resolver continuation is committed and independently reviewed; D-122 adopted the D-09 unused-attribute amendment. Both approvals persist and need no repeated confirmation.
 
-Completed stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
+Completed stage: Phase 19 execution plans 19-01..19-05, plus the E0 local/hosted synthetic preflight in plan 19-06. E0 `e0ca6463c3b6379fe65f28bb1fa0673be79ee071` passed local installed-prefix 1690/1690, CGB receipt complete 107/107 (25 observed pass, 82 expected XFAIL), Release 108/108 and Debug/linkage 110/110. All six hosted producers, judge differential and W fixed point met their contracts, and the transient branch was deleted. E0 exact-head CI failed the Windows harness selecting WSL; none of this E0 evidence qualifies the later resolver source.
+
+Current stage: **19-06 — final qualification after the approved ucrt64 resolver continuation**. Code commit `dedeb22a5528b0ec6bb3cb4845a535303f66ccd4` recognizes the observed `Git/ucrt64/bin/git.exe` layout and is independently reviewed without a new finding at report commit `28aee3d570b0f3b233b413880611d5fe27f567e2`. Local resolver tests pass 5 negative / 5 positive; workflow-policy self-test reports 453 negative / 9 positive; fresh `workflow_policy_controls` passed 1/1 with the POSIX floor 453 and timeout 180 unchanged. Candidate b33's local chain passed installed-prefix 1690/1690, CGB 107/107 (25 observed pass, 82 expected XFAIL), Release 108/108 and Debug/linkage 110/110, including Cocoa menu tests with scoped GUI escalation. Its rehearsal had four of six producers green when cancelled; corpus/support and aggregate remained running. Its push/PR/preview runs ended cancelled, with preserved logs of the actual Windows ucrt64 failure and a push macOS `cgb_probe_parity` timeout at 60.03 seconds. Cancellation is not passing evidence. The rehearsal branch was verified at H-prime, deleted and confirmed absent; the tag is absent and origin/main remains f80bdf54. PR #133 remains at b33; actual Windows CI, a fresh coherent preflight, all six hosted producers, judge differential, performance proof and branch protection remain pending. After this documentation snapshot is committed, freeze the new head, push it once to PR #133, and run fresh exact-head CI and preflight in parallel where guards permit. No timeout or policy limit changes. Any unrelated correctness/security finding requires a new rescope. Both automatic advance flags remain false; owner JSON edits remain untouched.
+
+Next within Phase 19: finish Plan 19-06's fresh CI/preflight/performance gates, then its authorized guarded PR A merge and #131 regeneration. Only after actual prerequisite verification, continue to **19-07 — controlled version window, tag and readback**. REL-01 stays pending through exact-tag publication/readback. Exact continuation command: `/gsd-execute-phase 19`.
+
+Prior stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
 
 Prior phase evidence: **Phase 16 execution** — plans 16-01..16-07 merged; [16-VERIFICATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VERIFICATION.md) `passed` 5/5 (TUNE-01..06); [16-VALIDATION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-VALIDATION.md) Nyquist-compliant; code review 0 critical / 5 warning / 4 info, all deferred to Phase 17 as RM-030 ([16-REVIEW-DISPOSITION.md](phases/GB-16-tune-up-and-v0-2-debt-closure/16-REVIEW-DISPOSITION.md)). Boundary commit `boundary_sha: 92364c78ac002b8e199ca7e6cad4130701fe98ba`; `verify-v03-dispositions.py --check ... --rev 92364c7` passes (rows=26 pending=0 closed=6). Deviations (owner-waived gap rounds #116/#118/#120, post-tag fixes #123/#124/#125, four review issues with #122 approved) are in D-112.
 
@@ -46,6 +53,8 @@ Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false; sto
 Runtime configuration (2026-10-26): owner switched future OpenGSD work to Codex, retaining the `adaptive` profile. Heavy/opus uses `gpt-6.1-sol` at `high` effort; standard/sonnet and light/haiku use `gpt-6-luna` at `xhigh` effort. Project `.planning/config.json` is authoritative; resolve each role's model and effort before dispatch. This configuration change does not start Phase 17.
 
 Runtime configuration (2026-10-28): owner moved OpenGSD work from Codex to Claude Code (`runtime: claude`, `adaptive` profile; opus/sonnet/haiku resolve to `claude-opus-5-5`/`claude-sonnet-5-5`/`claude-haiku-5-5`). The stale Codex `milestone.lock` and its uncommitted `state.json` route regression are left for owner cleanup.
+
+Runtime configuration (2026-10-29, current): owner switched future OpenGSD work back to **Codex**, retaining the **adaptive** profile. Heavy/opus uses `gpt-6.1-sol` at `high` effort; standard/sonnet and light/haiku use `gpt-6-luna` at `xhigh` effort. Project `.planning/config.json` is authoritative; retain the Claude mappings for future switches and resolve both model and effort before each dispatch. Completed workflow stage remains **Phase 19 planning**; next is **Phase 19 — Qualified v0.3.0 Release, execution**, command `/gsd-execute-phase 19`, only when the owner chooses. Both automatic advance flags remain false.
 
 ## Accumulated Context
 
@@ -74,6 +83,15 @@ Historical decisions, including the per-plan records of Phases 1-16, moved to [v
 - [Phase 18]: 18-08: a re-sorted canonical JSON is still self-consistent, so canonical form also requires keys in the written order (REJECT non-canonical); the table claims no emulator interoperability (REJECT interop-claim)
 - [Phase 18]: 18-09: installed_host_smoke is a stdlib Python harness (NUL bytes cannot be held in CMake strings); the interop-claim scan is its own planning-labelled script
 - [Phase 18]: 18-09: five planner discretion choices recorded as D-115..D-119 in DECISIONS.md; Linux LeakSanitizer fix for deliberately failing mutants routed to 18-02 and 18-05 (detect_leaks=0)
+- [Phase 19]: Release-head object retention applies to tree-equal citations only; plain rows can cite merged PR heads no longer present in the checkout.
+- [Phase 19]: Keep package settings unchanged and use a distinct Debug player build for linkage identity checks.
+- [Phase 19]: REL-01 remains pending until exact v0.3.0 publication and readback; 19-01 closes only release-entry work.
+- [Phase 19]: OQ-4: the dedicated version-pr-gate checks pull requests with a trusted base-SHA checkout.
+- [Phase 19]: OQ-5: the pre-tag gate remains non-required until the owner configures branch protection; 19-07 records merge discipline.
+- [Phase 19]: D-21: immutable endpoint forms are inventoried as replayed with required capture paths or pinned to named policy rules.
+- [Phase 19, 19-05]: OQ-2 is resolved by embedding the verified `perf_gate` block in the existing release receipt; the asset list and Ir policy remain unchanged.
+- [Phase 19, 19-05]: Consumer receipts name their platform so Windows `not-applicable` host smoke cannot substitute for Linux/macOS smoke.
+- [Phase 19, 19-05]: Published asset identity is checked against the raw pre-publish artifact rather than the post-publish API list alone.
 
 ### Pending Todos
 
@@ -108,14 +126,18 @@ The archived v0.2 requirements are in [v0.2-REQUIREMENTS.md](milestones/v0.2-REQ
 
 ## Session Continuity
 
-**Last session:** 2026-10-29T06:17:42.774Z
-**Stopped at:** Phase 18 verified and complete; next `/gsd-discuss-phase 19` (owner choice)
-**Resume file:** None
+**Last session:** 2026-10-30T13:12:43Z
+**Stopped at:** Plan 19-06 dedeb22 resolver controls passed; exact-head CI and final-source preflight pending
+**Resume file:** phases/GB-19-qualified-v0-3-0-release/19-06-PLAN.md
+
+Latest completed plan: 19-05 — Perf-gate receipt, host smoke and readback. Current work is Phase 19 plan 19-06. D-121 and D-122 are approved. The b33 candidate's cancellation and actual failure logs are preserved; code commit `dedeb22a5528b0ec6bb3cb4845a535303f66ccd4` has green local resolver controls and independent review found no new defect. After committing this summary/state route, freeze the new source head, push it once to existing PR #133, and run fresh exact-head CI and coherent preflight; no cancelled result counts as a pass. Do not ask again for the approved decisions. Finish Phase 19 only and then stop at `/gsd-verify-work 19`. Exact resume command for the active work: `/gsd-execute-phase 19`.
 
 Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**. Phase 18 planned: 9 plans in 8 waves (18-01..18-09; gap slot 18-10 reserved, cap 10). Research, pattern map and validation strategy committed; plan checker ran 3 iterations (15 → 5 → 3 warnings, 0 blockers at the end); the final 3 warnings plus advisories were applied as narrow edits without a 4th checker pass (passed with override, iteration cap reached). Requirements 4/4 and decisions 31/31 covered. Plans: [18-01..18-09](phases/GB-18-player-save-slots-and-host-contract/); waves serialize the plans sharing `tests/expected-tests.txt` (GB-CART-003), only 18-06 ‖ 18-07 run in parallel. Branch `gsd/phase-18-player-save-slots-and-host-contract` from `f4082a6`. Plan 18-01 (host-mode tracer) is complete at `8261d35` with SUMMARY `71e0232`. Plan 18-02 (host grammar, stem and Windows-gate negatives; D-04 API and dirty-list checks) is complete at `5292988` with SUMMARY `eccc214`; full suite 1526/1526. Plan 18-03 (`gbb_get_input_clock` getter, mutants, installed consumers, API docs) is complete at `6a52d61` with SUMMARY `7ae5004`; full suite 1535/1535. Plan 18-04 (host cadence, stale-temp sweep, writer fault seams, hostile save-dir/import sweep) is complete at `8335fba` with SUMMARY `ac01321`; full suite 1581/1581. Plan 18-05 (SDL-free slot engine) is complete at `4c9962b` with SUMMARY `f246619`; full suite 1610/1610. Plan 18-06 (player slot keys, status line, input rebase, help/limitations, macOS menu-shortcut scan) is complete at `67bb2bd` with SUMMARY `60acda6`; player suite 106/106 through `--build-package`, main suite 1610/1610 after reconfiguring the revision-pinned tests. Plan 18-07 (SIGTERM/SIGINT/SIGHUP handling, exit table, real-signal harness with decoys, core no-signal check) is complete at `64c6749b` with SUMMARY `1ff9698a`; full suite 1628/1628. Plan 18-08 (`docs/host-contract.json`, `--print-save-format`, save-format completeness/produced-file/freeze checks with 36 seeded controls) is complete at `c2239bef` with SUMMARY `5266f422`; full suite 1637/1637 at `befd624c`. Next plan within Phase 18: **18-09 — installed host smoke, host-contract and slot docs with contract checks, phase-tail qualification** (wave 8, the last primary plan). Next phase: **18 — Player Save Slots and Host Contract, execution**. Next command: `/gsd-execute-phase 18`, only when the owner chooses. The v0.3.0 release-please PR stays unmerged during Phase 18. Both automatic advance flags stay false.
 
 ## Operator Next Steps
 
+- Current stage: **Phase 19 execution, plan 19-06 — final qualification after the ucrt64 resolver continuation**. D-121/D-122 approvals are complete. Code commit `dedeb22a5528b0ec6bb3cb4845a535303f66ccd4` has passing local controls and independent review; actual Windows CI and final preflight remain pending. b33's partial rehearsal and CI runs were cancelled and are not passes. After this documentation snapshot is committed, freeze the new source head, push once to PR #133, and run fresh exact-head CI plus coherent preflight and source-bound performance proof before the authorized guarded merge. Do not repeat approval questions. Phase 19 and REL-01 remain incomplete; automatic advance remains false.
+- Completed stage: **Phase 19 execution, plan 19-03**. [19-03-SUMMARY.md](phases/GB-19-qualified-v0-3-0-release/19-03-SUMMARY.md) records the automated claim, note, interop, and receipt evidence. Next plan: **19-04 — Rehearsal Binding**, in the same phase. Command: `/gsd-execute-phase 19`. REL-01 remains pending until exact-tag publication and readback; both automatic advance flags remain false.
 - Completed stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
 - Phase 18 execution is complete (plans 18-01..18-09, gap slot 18-10 unused): full phase1 suite 1650/1650 at `3c148865`, 18-09 SUMMARY committed. Next stage: verification of **Phase 18 — Player Save Slots and Host Contract**. Command: `/gsd-verify-work 18`, run only when the owner chooses, after code review and the PR's exact-head CI (`linux-asan-ubsan`, `native-windows-x64`, `macos-player-package`) are recorded as the 18-09 post-CI addendum. This is not Phase 19. Do not start Phase 19 automatically; RM-027 remains a Phase 19 entry blocker.
 - Phase 18 execute-phase gates ran at `d3b0f0dd`: full build + CTest 1650/1650 (`build/18-gate-ctest-d3b0f0d.log`); code review [18-REVIEW.md](phases/GB-18-player-save-slots-and-host-contract/18-REVIEW.md) 0 critical / 6 warning / 9 info, all `open` in [18-REVIEW-DISPOSITION.md](phases/GB-18-player-save-slots-and-host-contract/18-REVIEW-DISPOSITION.md); [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) `human_needed`, 4/4 success criteria verified. Open before closure: owner triage of the review findings (WR-03 cross-session preload-backup overwrite first, then WR-01 ignored rollback/clock results; D-102–D-105 allow at most 2 review-fix rounds, and an unresolved correctness finding forces a rescope or gap slot 18-10), and the PR's exact-head hosted CI. Next command: `/gsd-code-review 18 --fix` (review-fix round 1), then `/gsd-verify-work 18`. The phase is not marked complete.
@@ -134,3 +156,8 @@ Completed stage: **Phase 18 — Player Save Slots and Host Contract: planning**.
 | Phase 18 P07 | 18 min | 3 tasks | 13 files |
 | Phase 18 P08 | 17min | 3 tasks | 13 files |
 | Phase 18 P09 | 50 min | 3 tasks | 18 files |
+| Phase 19 P01 | 35min | 4 tasks | 8 files |
+| Phase 19 P2 | 23min | 3 tasks | 11 files |
+| Phase 19 P03 | 20min | 3 tasks | 10 files |
+| Phase 19 P04 | 53min | 4 tasks | 15 files |
+| Phase 19 P05 | not recorded | 4 tasks | 16 files |

@@ -6,28 +6,28 @@
     {
       "number": "16",
       "name": "Tune-up and v0.2 Debt Closure",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "17",
       "name": "Native Save State Core",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "18",
       "name": "Player Save Slots and Host Contract",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "19",
       "name": "Qualified v0.3.0 Release",
-      "status": "pending"
+      "status": "in_progress"
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase",
-    "label": "Discuss the first phase",
-    "reason": "Project initialized — plan your first phase"
+    "command": "/gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 4 of 4 · 75% · executing"
   },
-  "updated_at": "2026-10-29T12:15:19.010Z"
+  "updated_at": "2026-10-29T17:03:30.208Z"
 }

@@ -25,6 +25,7 @@ release or asset.
 from __future__ import annotations
 
 import argparse
+import ast
 import concurrent.futures
 import copy
 import hashlib
@@ -72,6 +73,8 @@ MODES = {
     "publish-draft": "publish-qualified-release",
 }
 NIGHTLY_RUN_ID = 40245698754
+PERF_SOURCE_REV = "b93137f00d07b11dc74e40330e0ddf6029c0677d"
+PERF_LIMITS_BASE_REV = "947d6a9d177af6c04a5f9ea6abcc2c470ab9be57"
 LOAD_VERIFIERS_STEP = "Load trusted release evidence verifiers"
 EVIDENCE_ATTACHED = ("support-ledger.json", "cgb-corpus-receipt.json", "v02-fuzz-receipt.json", "v02-performance-receipt.json")
 FINAL_NAMES = ("SHA256SUMS", "release-receipt.json")
@@ -80,7 +83,7 @@ FIRST_ASSET_ID = 900100001
 RUN_ID = 50000000001
 MAX_CAPTURE_BYTES = 256 * 1024
 RESPONSE_KEYS = ("release", "release_assets", "workflow_runs", "workflow_run", "jobs", "artifacts", "check_runs",
-                 "pull_request", "commit")
+                 "pull_request", "pull_requests", "attempt_jobs", "ci_run", "commit")
 PARALLEL = max(2, min(8, os.cpu_count() or 2))
 
 
@@ -156,15 +159,95 @@ REQUIRED_PATHS = {
                    "check_runs.0.check_suite.id", "check_runs.0.app.id", "check_runs.0.app.slug"),
     "pull_request": ("number", "state", "merged_at", "merge_commit_sha", "base.ref", "base.repo.full_name",
                      "head.sha", "head.repo.full_name"),
+    "pull_requests": ("0.number", "0.merged_at", "0.merge_commit_sha", "0.base.ref", "0.head.sha"),
+    "attempt_jobs": ("jobs.0.completed_at", "jobs.0.run_id", "jobs.0.run_attempt", "total_count"),
+    "ci_run": ("id", "run_attempt", "head_sha", "path", "event", "status", "conclusion"),
     "commit": ("sha",),
 }
+
+# D-21 inventory. Forms use `{}` for a shell-expanded path segment, so different variable spellings for the same
+# endpoint share one entry. `route` identifies the immutable replay transport branch; pinned forms name a rule in the
+# trusted workflow policy checker. `ci_run` is captured ahead of its first consumer in 19-05.
+POST_TAG_ENDPOINTS = (
+    {"form": "gh api repos/{}/actions/runs/{}/attempts/{}/jobs?per_page=100",
+     "sources": (LIFECYCLE, WORKFLOW), "consumer": "nightly-gate and candidate rehearsal binder",
+     "coverage": "replayed:attempt_jobs", "route": "actions/runs/([0-9]+)/attempts/([0-9]+)/jobs"},
+    {"form": "gh api repos/{}/actions/runs/{}/artifacts?per_page=100",
+     "sources": (WORKFLOW,), "consumer": "rehearsal performance artifact selection",
+     "coverage": "pinned:check_release"},
+    {"form": "gh api repos/{}/actions/runs/{}",
+     "sources": (SOURCES, WORKFLOW), "consumer": "19-05 exact-source CI performance receipt verifier input",
+     "coverage": "replayed:ci_run", "route": "actions/runs/[0-9]+"},
+    {"form": "gh api repos/{}/actions/workflows/ci.yml/runs?head_sha={}&event=push&branch=main&per_page=100",
+     "sources": (WORKFLOW,), "consumer": "candidate fuzz receipt source-run lookup",
+     "coverage": "pinned:check_release"},
+    {"form": "gh api repos/{}/actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/{}&status=success&per_page=100",
+     "sources": (LIFECYCLE, WORKFLOW), "consumer": "newest exact-tag rehearsal selection",
+     "coverage": "replayed:workflow_runs", "route": "actions/workflows/release-rehearsal.yml/runs"},
+    {"form": "gh api repos/{}/actions/workflows/{}/runs?per_page=100",
+     "sources": (".github/scripts/verify-release-gates.sh",), "consumer": "recovery run identity check",
+     "coverage": "pinned:check_release_gate_wiring"},
+    {"form": "gh api repos/{}/branches/main/protection",
+     "sources": (".github/scripts/verify-release-gates.sh",), "consumer": "version PR required-check policy",
+     "coverage": "pinned:check_release_gate_wiring"},
+    {"form": "gh api repos/{}/commits/{}",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "tag-to-source identity check", "coverage": "replayed:commit", "route": "commits/[^/]+"},
+    {"form": "gh api repos/{}/commits/{}/check-runs?per_page=100",
+     "sources": (".github/scripts/verify-release-gates.sh",), "consumer": "exact-head required-check evidence",
+     "coverage": "replayed:check_runs", "route": "commits/[0-9a-f]{40}/check-runs"},
+    {"form": "gh api repos/{}/commits/{}/pulls",
+     "sources": (LIFECYCLE, WORKFLOW), "consumer": "merged version PR identity and merge time",
+     "coverage": "replayed:pull_requests", "route": "commits/[0-9a-f]{40}/pulls"},
+    {"form": "gh api repos/{}/contents/CMakeLists.txt?ref={}",
+     "sources": (WORKFLOW,), "consumer": "tagged source version extraction", "coverage": "pinned:check_release"},
+    {"form": "gh api repos/{}/pulls/{}",
+     "sources": (".github/scripts/verify-release-gates.sh",), "consumer": "merged source PR proof",
+     "coverage": "replayed:pull_request", "route": "pulls/\\d+"},
+    {"form": "gh api repos/{}/releases/{}",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "draft and published release state", "coverage": "replayed:release", "route": "releases/\\d+"},
+    {"form": "gh api repos/{}/releases/{}/assets?per_page=100",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "release asset inventory and digest readback", "coverage": "replayed:release_assets",
+     "route": "releases/\\d+/assets"},
+    {"form": "gh api repos/{}/releases?per_page=100",
+     "sources": (LIFECYCLE, WORKFLOW), "consumer": "release lookup by tag", "coverage": "replayed:release",
+     "route": "tail == \"releases\""},
+    {"form": "gh pr checks",
+     "sources": (WORKFLOW,), "consumer": "merged version PR required-check gate", "coverage": "pinned:check_release"},
+    {"form": "gh release download",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "readback of already-uploaded release bytes", "coverage": "replayed:release_assets",
+     "route": '["release", "download"]'},
+    {"form": "gh release edit",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh"), "consumer": "single intercepted publish decision", "coverage": "replayed:release",
+     "route": '["release", "edit"]'},
+    {"form": "gh release upload",
+     "sources": (LIFECYCLE, ".github/scripts/verify-release-gates.sh", WORKFLOW),
+     "consumer": "in-memory upload and retry lifecycle", "coverage": "replayed:release",
+     "route": '["release", "upload"]'},
+    {"form": "gh run download",
+     "sources": (WORKFLOW,), "consumer": "candidate and rehearsal artifact download", "coverage": "pinned:check_release"},
+    {"form": "gh run download {} --name perf-gate-{}-{}",
+     "sources": (WORKFLOW,), "consumer": "same-run performance gate receipt download",
+     "coverage": "pinned:perf_gate_artifact_name"},
+    {"form": "gh run list",
+     "sources": (LIFECYCLE, "tests/scripts/verify-release-gates.py"), "consumer": "newest nightly-asan run selection", "coverage": "replayed:workflow_runs",
+     "route": "run command is allowed only as the two nightly gate reads"},
+    {"form": "gh run view",
+     "sources": (LIFECYCLE, "tests/scripts/verify-release-gates.py"), "consumer": "nightly-asan replay job result", "coverage": "replayed:workflow_runs",
+     "route": "run command is allowed only as the two nightly gate reads"},
+)
+SELF = "tests/scripts/verify-release-lifecycle.py"
+POLICY = ".github/scripts/verify-workflow-policy.py"
 FORBIDDEN_MEMBERS = {"check_runs": ("check_runs.0.repository",)}
 EMAIL = re.compile(r"[A-Za-z0-9._%+\[\]-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 REDACTED_EMAIL = "redacted@example.invalid"
 FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY")
 KEEP_LOGINS = {"szTheory", "github"}
 USER_KEYS = {"login", "node_id", "avatar_url"}
-TRUNCATE_ARRAYS = {"assets": 2, "workflow_runs": 2, "jobs": 2, "artifacts": 2, "files": 1, "steps": 2}
+TRUNCATE_ARRAYS = {"assets": 2, "workflow_runs": 2, "jobs": 8, "artifacts": 2, "files": 1, "steps": 2}
 OMITTED = "[omitted by the capture sanitizer]"
 SOURCES_DIGEST = re.compile(r"(?m)^- captured\.json sha256: ([0-9a-f]{64})$")
 
@@ -254,7 +337,8 @@ def assemble_capture(raw: dict[str, object]) -> dict:
     responses = {
         "release": release, "release_assets": assets[:2], "workflow_runs": raw["workflow_runs"],
         "workflow_run": raw["workflow_run"], "jobs": raw["jobs"], "artifacts": raw["artifacts"],
-        "check_runs": checks, "pull_request": raw["pull_request"], "commit": raw["commit"],
+        "check_runs": checks, "pull_request": raw["pull_request"], "pull_requests": raw["pull_requests"],
+        "attempt_jobs": raw["attempt_jobs"], "ci_run": raw["ci_run"], "commit": raw["commit"],
     }
     responses = {name: sanitize(value, "", log) for name, value in responses.items()}
     return {"schema_version": 1, "kind": "github-api-capture", "api_version": "2022-11-28", "repository": REPO,
@@ -419,6 +503,19 @@ def api(args):
         if ref not in st["commits"]:
             fail("HTTP 404: Not Found (" + route + ")")
         body = st["commits"][ref]
+    elif re.fullmatch(r"actions/runs/[0-9]+", tail) and not query:
+        if int(tail.split("/")[2]) != st["ci_run"]["id"]:
+            fail("HTTP 404: Not Found (" + route + ")")
+        kind, body = "ci_run", st["ci_run"]
+    elif re.fullmatch(r"commits/[0-9a-f]{40}/pulls", tail) and not query:
+        if tail.split("/")[1] != st["source_sha"]:
+            fail("HTTP 404: Not Found (" + route + ")")
+        kind, body = "pull_requests", st["pull_requests"]
+    elif re.fullmatch(r"actions/runs/[0-9]+/attempts/[0-9]+/jobs", tail) and query == "per_page=100":
+        match = re.fullmatch(r"actions/runs/([0-9]+)/attempts/([0-9]+)/jobs", tail)
+        if int(match.group(1)) != st["rehearsal_run_id"] or int(match.group(2)) != st["rehearsal_attempt"]:
+            fail("HTTP 404: Not Found (" + route + ")")
+        kind, body = "attempt_jobs", st["attempt_jobs"]
     elif tail == "releases" and query == "per_page=100":
         kind, body = "release", [release_object(st)]
     elif re.fullmatch(r"releases/\d+", tail) and not query:
@@ -643,6 +740,34 @@ class Template:
         self.judge_parent = base / "judge"
         repo, producer, source = self.delivery.make_fixture_repo(self.judge_parent)
         self.judge, self.source, self.tag = repo, source, "v0.2.0"
+        # The production perf-receipt verifier reads immutable Git objects from both the tagged source and the
+        # ratchet base. Give this synthetic source those exact committed bytes and an alternates link to the project
+        # object database; the temporary replay repository itself remains isolated and has no network access.
+        objects = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-path", "objects"],
+                                 capture_output=True, text=True, timeout=60)
+        if objects.returncode != 0 or not Path(objects.stdout.strip()).is_dir():
+            raise Reject("fixture-perf-receipt", "the immutable project Git object store is unavailable")
+        alternates = repo / ".git/objects/info/alternates"
+        alternates.parent.mkdir(parents=True, exist_ok=True)
+        alternates.write_text(objects.stdout.strip() + "\n", encoding="utf-8")
+        perf_source_files = ("tests/baseline/perf-gate-v1.txt", "fixtures/tracer/tracer.gb",
+                             "fixtures/libbet/libbet.gb", "fixtures/visible-demo/demo.gb")
+        for relative in perf_source_files:
+            done = subprocess.run(["git", "-C", str(ROOT), "show", f"{PERF_SOURCE_REV}:{relative}"],
+                                  capture_output=True, timeout=60)
+            if done.returncode != 0:
+                raise Reject("fixture-perf-receipt", f"the immutable performance source lacks {relative}")
+            target = repo / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(done.stdout)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                        "add", "--", *perf_source_files], check=True, capture_output=True, timeout=60)
+        subprocess.run(["git", "-C", str(repo), "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid",
+                        "-c", "commit.gpgsign=false", "commit", "-q", "-m", "source: pinned performance policy and ROMs"],
+                       check=True, capture_output=True, timeout=60)
+        self.source = run_git(repo, "rev-parse", "HEAD")
+        run_git(repo, "tag", "-f", self.tag, self.source)
+        source = self.source
         for relative in JUDGE_FILES:
             target = repo / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -650,6 +775,23 @@ class Template:
         run_git(repo, "add", "-A")
         run_git(repo, "commit", "-q", "-m", "judge: production scripts at the replay revision")
         self.judge_sha = run_git(repo, "rev-parse", "HEAD")
+        fixture_data = repo / "tests/data/perf-gate"
+        shutil.copytree(ROOT / "tests/data/perf-gate", fixture_data)
+        perf_receipt = base / "perf-gate-receipt.json"
+        perf_env = os.environ.copy()
+        perf_env.update(GITHUB_RUN_ID="40259198255", GITHUB_RUN_ATTEMPT="1")
+        perf = subprocess.run([sys.executable, "-I", str(repo / "tests/scripts/verify-perf-gate.py"), "--evaluate",
+                               "--limits", "tests/baseline/perf-gate-v1.txt", "--base", "tests/data/perf-gate/base",
+                               "--head", "tests/data/perf-gate/head-pass", "--realtime", "tests/data/perf-gate/realtime-pass.txt",
+                               "--base-rev", PERF_LIMITS_BASE_REV, "--source-head-rev", self.source,
+                               "--build-base-identity", "a" * 64, "--build-head-identity", "b" * 64,
+                               "--emit-receipt", str(perf_receipt)], cwd=repo, env=perf_env,
+                              capture_output=True, text=True, timeout=60)
+        if perf.returncode != 0 or not perf_receipt.is_file():
+            raise Reject("fixture-perf-receipt", f"the exact source performance receipt fixture failed: {perf.stderr.strip()[-250:]}")
+        self.perf_gate_receipt = perf_receipt.read_bytes()
+        self.perf_gate_run = (json.dumps({"event": "push", "head_sha": self.source, "path": ".github/workflows/ci.yml",
+                                          "id": 40259198255, "run_attempt": 1}, sort_keys=True, indent=2) + "\n").encode()
         # The rehearsed head: another commit with exactly the tagged tree (a squash commit differs, its tree does not), kept
         # on a branch so every clone of the judge repository holds it.
         self.rehearsal_head = run_git(repo, "commit-tree", f"{source}^{{tree}}", "-p", source, "-m", "rehearsal head")
@@ -711,13 +853,15 @@ class Template:
         mapping = {
             str(identity["release_id"]): str(RELEASE_ID), identity["tag"]: self.tag,
             identity["source_sha"]: self.source, identity["pr_head_sha"]: self.pr_head,
-            str(identity["run_id"]): str(RUN_ID - 1000),
+            str(identity["run_id"]): str(RUN_ID - 1000), "40257161612": str(RUN_ID - 500),
         }
         responses = {name: retarget(value, mapping) for name, value in responses.items()}
         shapes = {
-            "commit": key_shape(responses["commit"]), "release": key_shape(responses["release"]),
+            "commit": key_shape(responses["commit"]), "ci_run": key_shape(responses["ci_run"]),
+            "release": key_shape(responses["release"]),
             "release_assets": key_shape(responses["release_assets"]), "workflow_runs": key_shape(responses["workflow_runs"]),
-            "pull_request": key_shape(responses["pull_request"]), "check_runs": key_shape(responses["check_runs"]),
+            "pull_request": key_shape(responses["pull_request"]), "pull_requests": key_shape(responses["pull_requests"]),
+            "attempt_jobs": key_shape(responses["attempt_jobs"]), "check_runs": key_shape(responses["check_runs"]),
         }
         release = responses["release"]
         template = copy.deepcopy(release["assets"][0])
@@ -745,6 +889,17 @@ class Template:
                          path=".github/workflows/release-rehearsal.yml")
         rehearsal["repository"]["full_name"] = REPO
         rehearsal["head_repository"]["full_name"] = REPO
+        pull_requests = responses["pull_requests"]
+        if not isinstance(pull_requests, list) or not pull_requests:
+            raise Reject("capture-incomplete", "the captured merge commit has no pull request")
+        matching_prs = [pr for pr in pull_requests if pr.get("merge_commit_sha") == self.source and pr.get("base", {}).get("ref") == "main"]
+        if len(matching_prs) != 1:
+            raise Reject("capture-incomplete", "the captured merge commit does not map to exactly one merged main PR")
+        matching_prs[0]["head"]["sha"] = self.rehearsal_head
+        attempt_jobs = responses["attempt_jobs"]
+        for job in attempt_jobs["jobs"]:
+            job["run_id"] = RUN_ID - 500
+            job["run_attempt"] = rehearsal["run_attempt"]
         nightly = {"databaseId": NIGHTLY_RUN_ID, "attempt": 1, "headSha": self.rehearsal_head,
                    "headBranch": "rehearsal/" + self.tag, "event": "workflow_dispatch", "status": "completed",
                    "conclusion": "success", "createdAt": "2026-10-26T12:00:00Z", "workflowName": "nightly-asan"}
@@ -755,6 +910,9 @@ class Template:
             "release": release, "assets": [], "asset_template": template, "next_asset_id": FIRST_ASSET_ID,
             "runs": [old], "run_template": run_template, "pull_request": pull, "check_runs": checks,
             "check_runs_head": self.pr_head, "commits": {self.tag: commit, self.source: commit},
+            "source_sha": self.source, "pull_requests": pull_requests, "attempt_jobs": attempt_jobs,
+            "ci_run": responses["ci_run"],
+            "rehearsal_run_id": rehearsal["id"], "rehearsal_attempt": rehearsal["run_attempt"],
             "decisions": [], "shapes": shapes, "rehearsal_runs": [rehearsal],
             "nightly_runs": [nightly], "nightly_view": {str(NIGHTLY_RUN_ID): nightly_view},
         }
@@ -903,6 +1061,10 @@ class Scenario:
         run_git(self.root, "clone", "-q", "--no-hardlinks", str(self.t.judge), str(ws))
         run_git(ws, "checkout", "-q", "--detach", self.t.source)
         self.trusted(ws, script)
+        perf_dir = ws / "build/evidence-fuzz/perf-gate"
+        perf_dir.mkdir(parents=True, exist_ok=True)
+        (perf_dir / "perf-gate-receipt.json").write_bytes(self.t.perf_gate_receipt)
+        (ws / "build/evidence-fuzz/perf-gate-run.json").write_bytes(self.t.perf_gate_run)
         self.workspaces[name] = ws
         return ws
 
@@ -1028,6 +1190,23 @@ def replay(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> dict
         raise Reject("replay-mutations", f"the lifecycle wrote something other than the evidence, manifest, final receipts and one decision: {uploads}")
     if len(state["decisions"]) != 1 or "--draft=false" not in state["decisions"][0]["argv"]:
         raise Reject("replay-decision", "the publish decision was not recorded exactly once")
+    release_receipt = json.loads(s.asset_bytes("release-receipt.json"))
+    if release_receipt.get("perf_gate") != json.loads(template.perf_gate_receipt):
+        raise Reject("replay-perf-gate", "release-receipt.json does not carry the verified CI performance gate receipt")
+    expected_profile = f"{template.tag} deterministic software profiles DMG-CPU-B and CGB-CPU-E as scoped by docs/support/{template.tag}.md"
+    if release_receipt.get("limits", [None])[0] != expected_profile:
+        raise Reject("replay-profile", "release receipt does not name both version-scoped software profiles")
+    inventory_path = s.workspaces["publish"] / "build/release-final/pre-publish-inventory.json"
+    if not inventory_path.is_file():
+        raise Reject("replay-pre-publish-inventory", "final-gate did not write the durable pre-publish inventory")
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    expected_assets = sorted(({"name": row["name"], "id": row["id"], "digest": row["digest"]}
+                              for row in state["assets"]), key=lambda row: row["name"])
+    expected_inventory = {"schema_version": 1, "kind": "pre-publish-inventory", "tag": template.tag,
+                          "source_sha": template.source, "release_id": RELEASE_ID, "run_id": RUN_ID,
+                          "run_attempt": 1, "assets": expected_assets}
+    if inventory != expected_inventory:
+        raise Reject("replay-pre-publish-inventory", "pre-publish inventory does not bind the exact sorted draft asset names, ids and digests")
     sums = s.asset_bytes("SHA256SUMS").decode().splitlines()
     if sorted(line.split("  ", 1)[1] for line in sums) != sorted(n for n in names if n not in FINAL_NAMES):
         raise Reject("replay-sha256sums", "SHA256SUMS does not cover exactly the qualified inventory")
@@ -1214,7 +1393,14 @@ def c_live_publication(ctx: Context) -> str:
     publish_line = 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag'
     mutated = mutate_script(ctx.script, publish_line, publish_line + " --latest")
     s = ctx.scenario("live-publication", "finalized")
-    publish = s.subject_workspace("publish", mutated)
+    publish = publish_from(ctx, s, "publish", mutated)
+    validation = s.run_mode(publish, "validate-draft", **PUBLISH_ENV)
+    if validation.rc != 0:
+        raise Reject("control-setup", f"the live-publication control's validation setup failed: {validation.text.strip()[-250:]}")
+    for mode in ("final-gate", "nightly-gate"):
+        gate = s.run_mode(publish, mode, **PUBLISH_ENV)
+        if gate.rc != 0:
+            raise Reject("control-setup", f"the live-publication control's {mode} setup failed: {gate.text.strip()[-250:]}")
     outcome = s.run_mode(publish, "publish-draft", **PUBLISH_ENV)
     if outcome.rc == 0 or "only as the one publish command" not in outcome.err or s.state()["decisions"] or not s.state()["release"]["draft"]:
         raise Reject("control-wrong-reason", "a publish command other than the intercepted one was not refused")
@@ -1304,6 +1490,319 @@ def c_wiring(ctx: Context) -> str:
     return "the wiring check rejects an uncalled mode, a tagged-checkout call, a cross-job call and an absent script"
 
 
+def _normalize_endpoint_path(path: str) -> str:
+    return re.sub(r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*|\$[0-9]+", "{}", path)
+
+
+def _gh_forms(source: str) -> set[str]:
+    forms = set()
+    api_call = re.compile(r"\bgh\s+api\s+(?:\"([^\"]+)\"|'([^']+)'|(\S+))")
+    for match in api_call.finditer(source):
+        endpoint = next(value for value in match.groups() if value is not None)
+        forms.add("gh api " + _normalize_endpoint_path(endpoint))
+    for match in re.finditer(r"\bgh\s+(run|release|pr)\s+(list|view|download|checks|upload|edit)\b", source):
+        forms.add(f"gh {match.group(1)} {match.group(2)}")
+    if ('gh run download "$run_id"' in source and
+            '--name "perf-gate-$run_id-$attempt"' in source):
+        forms.add("gh run download {} --name perf-gate-{}-{}")
+    return forms
+
+
+def _workflow_run_blocks(source: str) -> list[str]:
+    """Return commands from every YAML `run:` scalar, keeping embedded shell as source data."""
+    lines = source.splitlines()
+    blocks = []
+    index = 0
+    while index < len(lines):
+        match = re.match(r"^(?P<indent>\s*)run:\s*(?P<value>.*)$", lines[index])
+        if not match:
+            index += 1
+            continue
+        indent = len(match.group("indent"))
+        value = match.group("value").strip()
+        if value.startswith(("|", ">")):
+            content = []
+            index += 1
+            while index < len(lines):
+                line = lines[index]
+                if line.strip() and len(line) - len(line.lstrip()) <= indent:
+                    break
+                content.append(line)
+                index += 1
+            blocks.append("\n".join(content))
+            continue
+        blocks.append(value)
+        index += 1
+    return blocks
+
+
+def _inventory_from_source(source: str) -> tuple[dict, ...]:
+    names = {"LIFECYCLE": LIFECYCLE, "WORKFLOW": WORKFLOW, "SOURCES": SOURCES}
+
+    def literal(item):
+        if isinstance(item, ast.Constant):
+            return item.value
+        if isinstance(item, ast.Name) and item.id in names:
+            return names[item.id]
+        if isinstance(item, ast.Tuple):
+            return tuple(literal(child) for child in item.elts)
+        if isinstance(item, ast.List):
+            return [literal(child) for child in item.elts]
+        if isinstance(item, ast.Dict):
+            return {literal(key): literal(value) for key, value in zip(item.keys, item.values)}
+        raise ValueError(f"unsupported inventory expression {type(item).__name__}")
+
+    try:
+        tree = ast.parse(source)
+        node = next(item for item in tree.body if isinstance(item, ast.Assign)
+                    and any(isinstance(target, ast.Name) and target.id == "POST_TAG_ENDPOINTS" for target in item.targets))
+        value = literal(node.value)
+    except (SyntaxError, StopIteration, ValueError) as error:
+        raise Reject("endpoint-uncovered", f"POST_TAG_ENDPOINTS is not an immutable literal inventory: {error}") from error
+    if not isinstance(value, tuple) or not all(isinstance(item, dict) for item in value):
+        raise Reject("endpoint-uncovered", "POST_TAG_ENDPOINTS must be a tuple of endpoint records")
+    return value
+
+
+def check_endpoint_inventory(files: dict[str, bytes], required_paths: dict = REQUIRED_PATHS,
+                             response_keys: tuple = RESPONSE_KEYS) -> int:
+    """Audit command forms from immutable lifecycle/judge/workflow files against the committed inventory."""
+    inventory = _inventory_from_source(files[SELF].decode("utf-8"))
+    policy = files[POLICY].decode("utf-8")
+    self_source = files[SELF].decode("utf-8")
+    by_form = {}
+    for entry in inventory:
+        if not all(key in entry for key in ("form", "sources", "consumer", "coverage")):
+            raise Reject("endpoint-uncovered", "an endpoint entry lacks form, sources, consumer or coverage")
+        if entry["form"] in by_form:
+            raise Reject("endpoint-uncovered", f"POST_TAG_ENDPOINTS repeats {entry['form']}")
+        by_form[entry["form"]] = entry
+
+    observed: dict[str, set[str]] = {}
+    for relative in JUDGE_FILES:
+        observed[relative] = _gh_forms(files[relative].decode("utf-8"))
+    for block in _workflow_run_blocks(files[WORKFLOW].decode("utf-8")):
+        observed.setdefault(WORKFLOW, set()).update(_gh_forms(block))
+
+    for relative, forms in observed.items():
+        for form in forms:
+            entry = by_form.get(form)
+            if entry is None:
+                raise Reject("endpoint-uncovered", f"{relative} uses unlisted form {form}")
+            if relative not in entry["sources"]:
+                raise Reject("endpoint-uncovered", f"{form} omits source file {relative}")
+
+    for entry in inventory:
+        form, coverage = entry["form"], entry["coverage"]
+        if coverage.startswith("replayed:"):
+            key = coverage.split(":", 1)[1]
+            paths = required_paths.get(key)
+            if key not in response_keys or not paths:
+                raise Reject("endpoint-uncovered", f"{form} replay key {key!r} has no REQUIRED_PATHS contract")
+            route = entry.get("route")
+            route_marker = route.replace("\\", "\\\\") if isinstance(route, str) else ""
+            if not route_marker or route_marker not in self_source:
+                raise Reject("endpoint-uncovered", f"{form} replay key {key!r} has no immutable transport route")
+        elif coverage.startswith("pinned:"):
+            rule = coverage.split(":", 1)[1]
+            if not re.search(rf"(?m)^def {re.escape(rule)}\s*\(", policy):
+                raise Reject("endpoint-uncovered", f"{form} names missing workflow policy rule {rule}")
+        else:
+            raise Reject("endpoint-uncovered", f"{form} has unknown coverage {coverage!r}")
+    return len(inventory)
+
+
+def c_endpoint_inventory(ctx: Context) -> str:
+    count = check_endpoint_inventory(ctx.files)
+    cases = []
+
+    route_scenario = Scenario(ctx.t, "ci-run-capture-route")
+    stub = route_scenario.stub / "gh_stub.py"
+    env = {"PATH": os.environ.get("PATH", ""), "GB_STUB_DIR": str(route_scenario.stub), "GB_STUB_REPO": REPO}
+    route = subprocess.run([sys.executable, "-I", str(stub), "api",
+                            f"repos/{REPO}/actions/runs/40259198255"], capture_output=True, text=True, env=env, timeout=60)
+    if route.returncode != 0:
+        raise Reject("endpoint-route", f"the ci_run capture route refused its published run: {route.stderr.strip()[:200]}")
+    try:
+        ci_run = json.loads(route.stdout)
+    except json.JSONDecodeError as error:
+        raise Reject("endpoint-route", "the ci_run capture route did not return JSON") from error
+    if (ci_run.get("id") != 40259198255 or ci_run.get("path") != ".github/workflows/ci.yml"
+            or ci_run.get("event") != "push" or ci_run.get("head_sha") != ctx.t.source):
+        raise Reject("endpoint-route", "the ci_run route did not serve the exact-source v0.2.1 CI push run")
+    refused = subprocess.run([sys.executable, "-I", str(stub), "api",
+                              f"repos/{REPO}/actions/runs/40259198254"], capture_output=True, text=True, env=env, timeout=60)
+    if refused.returncode != 1 or "HTTP 404" not in refused.stderr:
+        raise Reject("endpoint-route", "the ci_run route accepted a run id outside its captured fixture")
+
+    mutated = dict(ctx.files)
+    lifecycle = ctx.script.replace("# BEGIN publish-draft\n", '# BEGIN publish-draft\ngh api "repos/$GH_REPO/unlisted/lifecycle" >/dev/null\n', 1)
+    mutated[LIFECYCLE] = lifecycle.encode("utf-8")
+    cases.append(("an unrouted lifecycle API endpoint", mutated, REQUIRED_PATHS))
+
+    mutated = dict(ctx.files)
+    workflow = ctx.wf
+    run_header = re.search(r"(?m)^(?P<indent>\s*)run:\s*\|\s*$", workflow)
+    if run_header is None:
+        raise Reject("control-setup", "release.yml has no block-style run step to seed")
+    insertion = run_header.group(0) + "\n" + run_header.group("indent") + '  gh api "repos/$GH_REPO/unlisted/workflow"'
+    mutated[WORKFLOW] = (workflow[:run_header.start()] + insertion + workflow[run_header.end():]).encode("utf-8")
+    cases.append(("an unlisted API endpoint in a release.yml run block", mutated, REQUIRED_PATHS))
+
+    missing_paths = dict(REQUIRED_PATHS)
+    missing_paths.pop("attempt_jobs")
+    cases.append(("a replay entry without REQUIRED_PATHS", ctx.files, missing_paths))
+
+    for label, files, paths in cases:
+        try:
+            check_endpoint_inventory(files, paths)
+        except Reject as error:
+            if error.code != "endpoint-uncovered":
+                raise Reject("control-wrong-reason", f"{label}: {error}") from error
+        else:
+            raise Reject("control-accepted", f"{label}: endpoint inventory accepted it")
+    return f"endpoint inventory covers {count} forms and rejects an unlisted lifecycle endpoint, a run-block endpoint, and missing REQUIRED_PATHS"
+
+
+def c_perf_receipt_ci_run(ctx: Context) -> str:
+    """Generate against the captured source and prove ci_run passes while the neighboring release-please run fails."""
+    ci_run = ctx.t.capture["responses"]["ci_run"]
+    release_run = ctx.t.capture["responses"]["workflow_run"]
+    source = ci_run["head_sha"]
+    if (ci_run.get("id") != 40259198255 or ci_run.get("run_attempt") != 1
+            or source != PERF_SOURCE_REV or ci_run.get("path") != ".github/workflows/ci.yml"):
+        raise Reject("perf-receipt-capture", "the immutable ci_run fixture no longer matches the declared exact-source campaign")
+    with tempfile.TemporaryDirectory(prefix="perf-receipt-ci-run-") as scratch:
+        receipt = Path(scratch) / "receipt.json"
+        ci_path = Path(scratch) / "ci-run.json"
+        release_path = Path(scratch) / "release-run.json"
+        ci_path.write_text(json.dumps(ci_run, sort_keys=True), encoding="utf-8", newline="\n")
+        release_path.write_text(json.dumps(release_run, sort_keys=True), encoding="utf-8", newline="\n")
+        env = os.environ.copy()
+        env.update(GITHUB_RUN_ID=str(ci_run["id"]), GITHUB_RUN_ATTEMPT=str(ci_run["run_attempt"]))
+        generated = subprocess.run([sys.executable, "-I", str(ROOT / "tests/scripts/verify-perf-gate.py"), "--evaluate",
+                                     "--limits", "tests/baseline/perf-gate-v1.txt",
+                                     "--base", "tests/data/perf-gate/base", "--head", "tests/data/perf-gate/head-pass",
+                                     "--realtime", "tests/data/perf-gate/realtime-pass.txt", "--base-rev", PERF_LIMITS_BASE_REV,
+                                     "--source-head-rev", source, "--build-base-identity", "a" * 64,
+                                     "--build-head-identity", "b" * 64, "--emit-receipt", str(receipt)],
+                                    cwd=ROOT, env=env, capture_output=True, text=True, timeout=60)
+        if generated.returncode != 0 or not receipt.is_file():
+            raise Reject("perf-receipt-fixture", f"the captured ci_run receipt could not be generated: {generated.stderr.strip()[-250:]}")
+        command = [sys.executable, "-I", str(ROOT / "tests/scripts/verify-perf-gate.py"), "--verify-receipt",
+                   str(receipt), "--source-sha", source, "--run-json", str(ci_path), "--run-id", str(ci_run["id"]),
+                   "--attempt", str(ci_run["run_attempt"]), "--repo", str(ROOT)]
+        positive = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=60)
+        if positive.returncode != 0:
+            raise Reject("perf-receipt-capture", f"the captured ci_run did not verify: {positive.stderr.strip()[-250:]}")
+        release_command = command.copy()
+        release_command[release_command.index(str(ci_path))] = str(release_path)
+        rejected = subprocess.run(release_command, cwd=ROOT, capture_output=True, text=True, timeout=60)
+        if rejected.returncode != 1 or "REJECT perf-receipt-run" not in rejected.stderr:
+            raise Reject("perf-receipt-capture", "the same receipt did not reject the captured release-please run with perf-receipt-run")
+    return "the immutable ci_run response verifies the receipt; the captured release-please workflow response is rejected"
+
+
+def c_perf_receipt_tamper(ctx: Context) -> str:
+    s = ctx.scenario("perf-receipt-tamper", "finalized")
+    ws = publish_from(ctx, s, "publish")
+    path = ws / "build/evidence-fuzz/perf-gate/perf-gate-receipt.json"
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    receipt["run_id"] += 1
+    path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+    before = s.asset_names()
+    outcome = s.run_mode(ws, "validate-draft", **PUBLISH_ENV)
+    expect_fail(outcome, "tampered perf-gate receipt run id", "perf-receipt-run")
+    if s.asset_names() != before or s.mutations_logged():
+        raise Reject("control-effect", "a tampered perf-gate receipt changed the draft before refusal")
+    return "the trusted draft validator rejects a receipt bound to another CI run without writing"
+
+
+def c_profile_string(ctx: Context) -> str:
+    s = ctx.scenario("profile-string", "finalized")
+    receipt = json.loads(s.asset_bytes("release-receipt.json"))
+    expected = f"{ctx.t.tag} deterministic software profiles DMG-CPU-B and CGB-CPU-E as scoped by docs/support/{ctx.t.tag}.md"
+    if receipt.get("limits", [None])[0] != expected:
+        raise Reject("profile-string", "the release receipt does not carry the exact version-aware DMG and CGB profile contract")
+    mutant = json.loads(json.dumps(receipt))
+    mutant["limits"][0] = "DMG-CPU-B deterministic software profile only"
+    if mutant["limits"][0] == expected:
+        raise Reject("profile-string-control", "the profile assertion accepted the old single-profile contract")
+    return "the receipt carries both version-scoped profiles, and the former single-profile text fails the contract"
+
+
+def c_pre_publish_inventory(ctx: Context) -> str:
+    real = ctx.scenario("inventory-write-present", "finalized")
+    workspace = real.subject_workspace("publish")
+    outcome = real.run_mode(workspace, "final-gate", **PUBLISH_ENV)
+    if outcome.rc != 0:
+        raise Reject("inventory-control", f"the real final gate failed: {outcome.text.strip()[-200:]}")
+    inventory = workspace / "build/release-final/pre-publish-inventory.json"
+    if not inventory.is_file():
+        raise Reject("inventory-control", "the real final gate omitted its persisted asset inventory")
+    mutant_text = mutate_script(ctx.script,
+        'path.write_text(json.dumps(inventory, sort_keys=True, indent=2) + "\\n", encoding="utf-8", newline="\\n")\n',
+        'pass # omitted pre-publish inventory write\n')
+    mutant = ctx.scenario("inventory-write-omitted", "finalized")
+    mutant_workspace = mutant.subject_workspace("publish", mutant_text)
+    omitted = mutant.run_mode(mutant_workspace, "final-gate", **PUBLISH_ENV)
+    if omitted.rc != 0 or (mutant_workspace / "build/release-final/pre-publish-inventory.json").exists():
+        raise Reject("inventory-control", "the omitted-write mutant did not leave the required inventory absent")
+
+    def remove_qualified_archive(scenario: Scenario, workspace: Path) -> str:
+        inventory_doc = json.loads((workspace / "build/release-final/pre-publish-inventory.json").read_text(encoding="utf-8"))
+        name = next((row["name"] for row in inventory_doc["assets"] if row["name"] not in FINAL_NAMES), None)
+        if name is None:
+            raise Reject("inventory-control", "the final-gate fixture has no qualified archive to mutate")
+        scenario.remove_asset(name)
+        return name
+
+    def prepare_publish(scenario: Scenario, script: str | None = None) -> Path:
+        workspace = publish_from(ctx, scenario, "publish", script)
+        validation = scenario.run_mode(workspace, "validate-draft", **PUBLISH_ENV)
+        if validation.rc != 0:
+            raise Reject("inventory-control", f"the publication fixture could not validate its draft: {validation.text.strip()[-250:]}")
+        return workspace
+
+    positive = ctx.scenario("publish-inventory-guard-positive", "finalized")
+    positive_workspace = prepare_publish(positive)
+    for mode in ("final-gate", "nightly-gate"):
+        result = positive.run_mode(positive_workspace, mode, **PUBLISH_ENV)
+        if result.rc != 0:
+            raise Reject("inventory-control", f"the positive {mode} gate failed: {result.text.strip()[-250:]}")
+    published = positive.run_mode(positive_workspace, "publish-draft", **PUBLISH_ENV)
+    if published.rc != 0 or positive.state()["release"]["draft"] is not False \
+            or len(positive.state()["decisions"]) != 1:
+        raise Reject("inventory-control", f"the identical final-gate inventory did not publish exactly once: {published.text.strip()[-250:]}")
+
+    guarded = ctx.scenario("publish-inventory-guard", "finalized")
+    guarded_workspace = prepare_publish(guarded)
+    for mode in ("final-gate", "nightly-gate"):
+        result = guarded.run_mode(guarded_workspace, mode, **PUBLISH_ENV)
+        if result.rc != 0:
+            raise Reject("inventory-control", f"the production {mode} gate failed: {result.text.strip()[-250:]}")
+    removed = remove_qualified_archive(guarded, guarded_workspace)
+    refused = guarded.run_mode(guarded_workspace, "publish-draft", **PUBLISH_ENV)
+    if refused.rc == 0 or "REJECT published-assets:" not in refused.text \
+            or guarded.state()["release"]["draft"] is not True or guarded.state()["decisions"]:
+        raise Reject("inventory-control", f"the live inventory mutation {removed} was not refused before publication")
+
+    guard_line = 'python3 -I trusted/.github/scripts/verify-published-release-assets.py --verify-pre-publish "$assets" build/release-final/pre-publish-inventory.json "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"\n'
+    mutant_text = mutate_script(ctx.script, guard_line, "")
+    unguarded = ctx.scenario("publish-inventory-guard-omitted", "finalized")
+    unguarded_workspace = prepare_publish(unguarded, mutant_text)
+    for mode in ("final-gate", "nightly-gate"):
+        result = unguarded.run_mode(unguarded_workspace, mode, **PUBLISH_ENV)
+        if result.rc != 0:
+            raise Reject("inventory-control", f"the mutant production {mode} gate failed: {result.text.strip()[-250:]}")
+    remove_qualified_archive(unguarded, unguarded_workspace)
+    mutant_result = unguarded.run_mode(unguarded_workspace, "publish-draft", **PUBLISH_ENV)
+    if mutant_result.rc == 0 or unguarded.state()["release"]["draft"] is not False \
+            or len(unguarded.state()["decisions"]) != 1 or "REJECT published-assets:" not in mutant_result.text:
+        raise Reject("inventory-control", "the missing-guard mutant did not demonstrate publication before its post-publish refusal")
+    return "the final gate persists the frozen inventory, and the live pre-publish comparison refuses removal before the one-way transition"
+
+
 # ----------------------------------------------------------------------------------------- Task 2: captured shapes
 
 def sources_with_digest(sources: str, text: bytes) -> str:
@@ -1343,6 +1842,9 @@ def c_capture_contract(ctx: Context) -> str:
     mutated("a check run without its check_suite", "capture-schema", lambda v: first_run(v).pop("check_suite"))
     mutated("a check run without its html_url", "capture-schema", lambda v: first_run(v).pop("html_url"))
     mutated("a pull request without its merge commit", "capture-schema", lambda v: v["responses"]["pull_request"].pop("merge_commit_sha"))
+    mutated("a commit pull listing without merged_at", "capture-schema", lambda v: v["responses"]["pull_requests"][0].pop("merged_at"))
+    mutated("an attempt job without completed_at", "capture-schema", lambda v: v["responses"]["attempt_jobs"]["jobs"][0].pop("completed_at"))
+    mutated("a CI run without its path", "capture-schema", lambda v: v["responses"]["ci_run"].pop("path"))
     mutated("a release asset without its digest", "capture-schema", lambda v: v["responses"]["release_assets"][0].pop("digest"))
     mutated("an undeclared response", "capture-schema", lambda v: v["responses"].update(extra={}))
     mutated("a missing response", "capture-schema", lambda v: v["responses"].pop("artifacts"))
@@ -1814,12 +2316,18 @@ def _nightly_other_run(state: dict, head: str, **changes) -> None:
     state["nightly_view"][str(run["databaseId"])] = dict(state["nightly_view"][str(NIGHTLY_RUN_ID)], **run)
 
 
+def _late_rehearsal_attempt(state: dict) -> None:
+    state["attempt_jobs"]["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
+
+
 def c_nightly_gate(ctx: Context) -> list:
     positive = Scenario(ctx.t, "nightly-positive")
     ws = positive.subject_workspace("publish")
     ok = positive.run_mode(ws, "nightly-gate", RELEASE_ID=str(RELEASE_ID))
     if ok.rc != 0 or f"nightly-gate pass run_id={NIGHTLY_RUN_ID}" not in ok.out or positive.mutations_logged():
         raise Reject("replay-failed", f"nightly gate positive control: exit {ok.rc}: {ok.text.strip()[-300:]}")
+    if f"rehearsal-bound run_id={RUN_ID - 500} head_sha={ctx.t.rehearsal_head}" not in ok.out:
+        raise Reject("replay-failed", "the nightly gate did not report the rehearsal run it bound")
     receipt = json.loads(ok.out[ok.out.index("{"):])
     if receipt["head_sha"] != ctx.t.rehearsal_head or receipt["source_sha"] != ctx.t.source or receipt["run_id"] != NIGHTLY_RUN_ID:
         raise Reject("replay-failed", "the nightly receipt is not bound to the rehearsed head, the tagged source and the run")
@@ -1838,6 +2346,8 @@ def c_nightly_gate(ctx: Context) -> list:
         ("a nightly run of another workflow", "nightly-no-run-at-head", lambda st, t: _nightly(st, workflowName="ci")),
         ("a rehearsed head with another tree", "differs from the tagged tree",
          lambda st, t: st["rehearsal_runs"][0].update(head_sha=t.other_head)),
+        ("an attempt completed after the version PR merged", "rehearsal-postdates-tag",
+         lambda st, t: _late_rehearsal_attempt(st)),
         ("no successful rehearsal run", "no successful rehearsal run", lambda st, t: st.update(rehearsal_runs=[])),
         ("no nightly run at all", "No nightly-asan run exists", lambda st, t: st.update(nightly_runs=[])),
     )
@@ -1847,6 +2357,19 @@ def c_nightly_gate(ctx: Context) -> list:
 
 TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_advisory_consumers, c_non_advisory,
                   c_unexpected_endpoint_in_script, c_live_publication, c_nightly_gate)
+
+# Keep the established control CTest's 95-control floor stable while running every release-plan control through its own
+# bounded CTest. Task 4's endpoint mutants and the ci_run capture contract are included with the Task 1-3 trust controls.
+POST_TAG_CONTROLS = (TASK1_CONTROLS, task2_controls, task3_controls,
+                     (c_endpoint_inventory, c_perf_receipt_ci_run, c_perf_receipt_tamper,
+                      c_profile_string, c_pre_publish_inventory))
+
+
+def _post_tag_control_functions(ctx: Context) -> tuple:
+    controls = []
+    for group in POST_TAG_CONTROLS:
+        controls.extend(group(ctx) if callable(group) else group)
+    return tuple(controls)
 
 
 def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tuple[int, int]:
@@ -1881,6 +2404,22 @@ def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tu
     return positives, len(results)
 
 
+def post_tag_controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tuple[int, int, int]:
+    wf = files[WORKFLOW].decode("utf-8")
+    script = files[LIFECYCLE].decode("utf-8")
+    template = Template(base, rev, files, capture)
+    ctx = Context(template, wf, script, files)
+    build_stages(ctx)
+    positives = positive_baselines(ctx)
+    results: list[str] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+        futures = [pool.submit(fn, ctx) for fn in _post_tag_control_functions(ctx)]
+        for future in futures:
+            outcome = future.result()
+            results.extend(outcome if isinstance(outcome, list) else [outcome])
+    return positives, len(results), check_endpoint_inventory(files)
+
+
 def lab_integrity(workspace: Path, files: dict[str, bytes]) -> None:
     for relative in JUDGE_FILES:
         if relative.endswith("download-release-artifact.py"):
@@ -1892,7 +2431,7 @@ def lab_integrity(workspace: Path, files: dict[str, bytes]) -> None:
 # ------------------------------------------------------------------------------------------------------- the CLI
 
 def load_inputs(rev: str) -> tuple[dict[str, bytes], dict]:
-    files = {path: git_show(rev, path) for path in (*JUDGE_FILES, WORKFLOW, DELIVERY, CAPTURE, SOURCES)}
+    files = {path: git_show(rev, path) for path in (*JUDGE_FILES, WORKFLOW, DELIVERY, CAPTURE, SOURCES, SELF, POLICY)}
     capture = check_capture(files[CAPTURE], files[SOURCES].decode("utf-8"))
     return files, capture
 
@@ -1902,6 +2441,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--rev")
     parser.add_argument("--replay", action="store_true")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--self-test-post-tag", action="store_true")
     parser.add_argument("--check-capture", action="store_true")
     parser.add_argument("--sanitize-capture", nargs=2, metavar=("RAW_DIR", "OUTPUT"))
     args = parser.parse_args(argv)
@@ -1911,6 +2451,8 @@ def main(argv: list[str]) -> int:
             names = {"release": "release.json", "release_assets": "assets.json", "workflow_runs": "runs.json",
                      "workflow_run": "run.json", "jobs": "jobs.json", "artifacts": "artifacts.json",
                      "check_runs": "checks.json", "pull_request": "pull.json", "commit": "commit.json",
+                     "pull_requests": "pull_requests.json", "attempt_jobs": "attempt_jobs.json",
+                     "ci_run": "ci_run.json",
                      "identity": "identity.json"}
             raw = {key: json.loads((raw_dir / name).read_text(encoding="utf-8")) for key, name in names.items()}
             output.write_text(capture_text(assemble_capture(raw)), encoding="utf-8", newline="\n")
@@ -1925,8 +2467,8 @@ def main(argv: list[str]) -> int:
             capture = check_capture(files[CAPTURE], files[SOURCES].decode("utf-8"))
             print(f"release-lifecycle capture pass responses={len(capture['responses'])} bytes={len(files[CAPTURE])}")
             return 0
-        if not (args.replay or args.self_test):
-            parser.error("choose --replay, --self-test, --check-capture or --sanitize-capture")
+        if not (args.replay or args.self_test or args.self_test_post_tag):
+            parser.error("choose --replay, --self-test, --self-test-post-tag, --check-capture or --sanitize-capture")
         try:
             script = git_show(rev, LIFECYCLE)
         except Reject:
@@ -1939,6 +2481,10 @@ def main(argv: list[str]) -> int:
                 facts = replay(rev, files, capture, base)
                 print("release-lifecycle replay pass modes={modes} publish_decisions={publish_decisions} live_mutations={live_mutations} "
                       "uploads={uploads} calls={calls}".format(**facts))
+                return 0
+            if args.self_test_post_tag:
+                positives, count, endpoint_count = post_tag_controls(rev, files, capture, base)
+                print(f"release-lifecycle post-tag controls pass positives={positives} controls={count} endpoints={endpoint_count}")
                 return 0
             positives, count = controls(rev, files, capture, base)
             print(f"release-lifecycle controls pass positives={positives} controls={count}")

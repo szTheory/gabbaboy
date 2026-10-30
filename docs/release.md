@@ -1,9 +1,10 @@
 # Release, downloads, and recovery
 
-GabbaBoy v0.2 is a limited, bootless software preview with a DMG-CPU-B and a
+GabbaBoy v0.3.0 is a limited, bootless software preview with a DMG-CPU-B and a
 selected CGB-CPU-E software model. Find the current candidate or published
 release under the repository's GitHub Releases page; it is the only record of
-what has been published, and this page makes no publication claim for v0.2.0.
+what has been published, and this page makes no publication claim for the
+version in this tree.
 The release notes identify the version and list assets. The package
 matrix is Linux x64, macOS arm64, and Windows x64 core archives; the optional
 SDL3 player archive is macOS arm64 only. These are tested runner/configuration
@@ -41,7 +42,7 @@ does not stand in for the downloaded-asset check.
 
 The tagged release evidence is bound to the exact tag and source revision:
 `support-ledger.json` binds the applicable ledger blob and the fresh corpus
-receipt, and `release-performance-receipt.json` records the paired v0.1.0
+receipt, and `v02-performance-receipt.json` records the paired v0.1.0
 comparison for that source. The bounded fuzz campaign receipt
 `v02-fuzz-receipt.json` is a release requirement that is attached only after an
 actual campaign passes on the exact source; no fuzz campaign result is claimed
@@ -54,6 +55,10 @@ patch release (for example v0.1.1 or v0.1.2) binds the unchanged
 [`docs/support/v0.1.0.md`](support/v0.1.0.md) and records both versions.
 The source ledger intentionally does not contain its future commit SHA, so its
 own source can be reviewed before tagging without a self-reference.
+
+The `v02-*` evidence names are the evidence-schema family. Receipts bind by
+their `tag` and `source_sha` fields, not by filename; a version-neutral rename
+belongs on the v0.4 roadmap.
 
 ## Support-ledger generator and managed inputs
 
@@ -153,25 +158,33 @@ release note or generator input therefore invalidates the old reviewed digests
 rather than preserving stale hand edits. Phase 17 does not open, regenerate or
 merge a live version PR and ships only the inactive record.
 
-For a future version PR, in order:
+For a future version PR, follow the D-17/D-18/D-26 order:
 
-1. Let release-please regenerate the PR, then render the ledger with
-   `--write-current` from the managed inputs; commit no hand-edited generated
-   file.
-2. Run the required checks on that exact head and push the matching
-   `rehearsal/vX.Y.Z` branch for the rehearsal.
-3. When both are green on the same head, run `--digest` for that head, main and
-   the PR body, fill in the run identities, and commit only the resulting
-   `tests/data/version-window.json` as the next commit. Run `--check` on that
-   commit before asking for merge.
-4. Any later change reopens the work: regenerate, repeat steps 1 to 3 on the new
-   exact head, and merge only a commit whose `--check` passes with the current
-   main.
+1. Let release-please regenerate the version PR, render the versioned ledger,
+   pins, links and notes preface, then run the required checks on that exact
+   head H.
+2. Run R1 on `rehearsal/vX.Y.Z` at H. After it completes, run `--digest` for H,
+   the main base and the PR body; commit only the resulting
+   `tests/data/version-window.json` as W.
+3. Fast-forward the rehearsal branch to W, then run R2, nightly replay and the
+   required checks at W. Run `--check` against the current main before merge.
+4. Merge only with the D-18 pre-tag gate green and tree equality between the
+   reviewed version PR and W. After tagging, the release and nightly gates also
+   require the version-PR head and merge-time bindings to match.
+5. Any changed source, generated content, PR body, main base or run identity
+   reopens the work: regenerate and repeat the sequence at the new exact head.
 
-The six release-bound timeout citations tracked as RM-027 are separate and
-remain an entry blocker for Phase 19; nothing here closes them, and the window
-gate has per-step timeouts because a new job has no completed run to cite in
-`.github/ci-timeouts.json`.
+The `version-pr-gate` is not a required check until the repository owner
+configures it in branch protection. Phase 19-07 enforces the corresponding
+pre-tag merge discipline in its scripted precondition; do not infer that branch
+protection enforces this gate.
+
+The six former `release_bound` timeout rows have been replaced by verified
+normal citations. Four rehearsal rows use tree-equal citations whose commits
+and trees are checked from the release checkout; the two release workflow rows
+cite merged PR evidence and are not object-read. Before publishing v0.3.0, run
+the release-head policy check from a fresh heads-and-tags checkout and require
+zero provisional rows.
 
 ## Evidence lifecycle and its local replay
 
@@ -196,11 +209,12 @@ permissions, hosted runner behavior, or the real corpus, fuzz, performance and
 archive owner validators (the delivery self-test runs those).
 
 On a retry the evidence a failed attempt already attached is downloaded and
-judged first by `verify-release-gates.sh --check-attached-evidence` (tag and
-source identity, the sidecar's binding to the attached corpus receipt, each
-digest GitHub reports, and the allowed inventory). Only then do the identical
-attached bytes replace the regenerated run-specific copies; nothing is uploaded,
-replaced or deleted, and a refusal leaves the regenerated evidence untouched.
+judged first by `verify-release-gates.sh --check-attached-evidence`. Its
+identity and consistency check covers the tag and source identity, the
+sidecar's binding to the attached corpus receipt, each digest GitHub reports,
+and the allowed inventory. Only then do the identical attached bytes replace
+the regenerated run-specific copies; nothing is uploaded, replaced or deleted,
+and a refusal leaves the regenerated evidence untouched.
 The platform-manifest step accepts the final receipts of an earlier attempt, so a
 retry that stopped after the final upload can reach the publish job, whose
 recovery decision then compares them byte for byte.
@@ -253,10 +267,12 @@ written exclusively and on success alone. `verify-state-contract.py --boundary
 receipt timestamps and the Phase 16 receipts) from that one commit and never
 from the live tree or later ancestry.
 
-The six `release_bound` rows of `.github/ci-timeouts.json` remain a named Phase
-19 entry blocker (RM-027): they must be replaced by verified tree-equality
-citations before `VERSION` exceeds 0.2.1, and the boundary check refuses a
-seventh row or a version that moved past 0.2.1 with any row left.
+The six former `release_bound` timeout rows have been replaced by verified
+normal citations. Four rehearsal rows use tree-equal citations whose commits
+and trees are checked from the release checkout; the two release workflow rows
+cite merged PR evidence and are not object-read. Before publishing v0.3.0, run
+the release-head policy check from a fresh heads-and-tags checkout and require
+zero provisional rows.
 
 ## Performance measurement and qualification
 
@@ -324,17 +340,15 @@ reviewer's identity or prove that an external link represents a real
 independent review. Do not create a review record on a reviewer's behalf or use
 a self-test fixture as approval.
 
-The release rehearsal carries that decision through the hosted workflow without
-creating one. A rehearsal run whose paired measurement is `pending-investigation`
-still uploads the measurement as an artifact (`if: always()`, seven days). After
-the independent reviewer has recorded a decision outside the checkout, dispatch
-`release-rehearsal.yml` on the same `rehearsal/vX.Y.Z` branch with the inputs
-`measurement_run_id` (the run that produced the pending measurement) and
-`performance_decision` (the decision as a JSON string). The step downloads that
-artifact, requires that run to be a `release-rehearsal` run on a commit with the
-same tree as this run, applies the decision as shown above, verifies
-the result and uploads the qualified receipt. With neither input the step is
-the plain paired measurement.
+The release rehearsal does not create an independent-review decision. A run
+whose paired measurement is `pending-investigation` retains that measurement as
+an artifact (`if: always()`, seven days). The current
+`release-rehearsal.yml` manual dispatch accepts no inputs, so it cannot receive
+`measurement_run_id` or `performance_decision`; `release-please.yml` dispatch
+inputs are only for retrying an existing unpublished draft. A locally applied
+decision result is not hosted release evidence by itself. The release
+workflow reuses only a qualifying receipt produced by its trusted path at the
+same tree, or it measures afresh and applies the same thresholds.
 
 The release workflow may reuse the performance receipt of a rehearsal run instead
 of measuring again, but only under a judge it takes from the trusted workflow
@@ -414,8 +428,8 @@ documents these responsibilities and transfers exactly the byte count
 reported by `gbb_battery_size`; the core does not read or write files.
 
 The SDL player stores identity-bound battery saves in its per-user preferences
-directory. Before an upgrade, quit the player cleanly and back up that
-application's save directory. Keep the backup until the new version opens the
+directory. Before an upgrade, quit the player cleanly and back up the
+preference directory. Keep the backup until the new version opens the
 same ROM and confirms progress. If rolling back, quit first and restore the
 matching backup; do not run two writers against one save. The player's save
 envelope is versioned and tied to the exact ROM bytes. A malformed or
@@ -424,6 +438,11 @@ succeeds; the player starts with fresh RAM and shows a warning instead of
 silently importing it. Recovery files are not automatically loaded. See
 [`cartridge-and-saves.md`](cartridge-and-saves.md) for the envelope and
 recovery limits.
+
+Player slots and the undo file are local state snapshots; slots and the undo
+file do not survive an upgrade. Battery saves and host raw `.sav` files remain
+the cross-version persistence path, subject to each format's documented ROM
+identity and import rules.
 
 If a final save fails, the player pauses quit, reset, or ROM replacement and
 offers retry, continue without saving, or cancel. Continuing without saving

@@ -222,12 +222,16 @@ jobs:
           set -euo pipefail
           bash tests/scripts/verify-release-candidate.sh --extract \
             build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/test_installed_host.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --work "$RUNNER_TEMP/host-smoke" --source-contract docs/host-contract.json \
+            --receipt build/host-smoke-receipt.json
           # The hardened verifier needs a candidate manifest binding the archive to the source and build; the
           # rehearsal built both itself, so it writes one (the release gate gets its own from the build receipt).
           python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
             --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
             --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --platform linux-x64 --host-smoke-receipt build/host-smoke-receipt.json \
             --output build/v02-consumer-receipt.json
       - name: Inspect a git-generated source archive of the rehearsed tree
         shell: bash
@@ -316,7 +320,13 @@ jobs:
           python3 -I tests/scripts/verify-v02-source-archive.py --check-product-archive build/gabbaboy-core-linux-x64.tar.gz --repo-root .
           bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
           python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt
-          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --output build/v02-consumer-receipt.json
+          python3 -I tests/scripts/test_installed_host.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --work "$RUNNER_TEMP/host-smoke" --source-contract docs/host-contract.json \
+            --receipt build/host-smoke-receipt.json
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --platform linux-x64 --host-smoke-receipt build/host-smoke-receipt.json \
+            --output build/v02-consumer-receipt.json
           git archive --format=tar.gz --prefix="gabbaboy-${RELEASE_TAG#v}/" -o "$RUNNER_TEMP/source-archive.tar.gz" "$RELEASE_TAG"
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$RUNNER_TEMP/source-archive.tar.gz" \
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json
@@ -337,11 +347,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - name: Refuse rehearsal after its release tag exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#rehearsal/}"
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            tag_ref=$(git ls-remote --tags "https://github.com/$GITHUB_REPOSITORY" "refs/tags/$TAG")
+            if [[ -n "$tag_ref" ]]; then
+              echo "Tag $TAG already exists; a rehearsal after the tag cannot bind a release." >&2
+              exit 1
+            fi
+          fi
       - name: Check out the trusted judge code from the default branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.repository.default_branch }}
           path: trusted-judge
+          fetch-depth: 0
           persist-credentials: false
       - name: Check out the rehearsed commit as data only
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -357,7 +380,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head
+          python3 -I trusted-judge/.github/scripts/verify-workflow-policy.py --check --root subject --release-head --git-root trusted-judge
       - name: Confirm the rehearsal ref names the rehearsed tree's own version
         shell: bash
         run: |

@@ -71,8 +71,20 @@ function(gbb_add_perf_receipt_test name regex argument min_controls)
 endfunction()
 
 # The control count is a parsed minimum: adding controls is allowed, dropping one is rejected.
-set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=33)
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=34)
 gbb_add_perf_gate_test(perf_gate_controls 0 "perf-gate self-test pass controls=[0-9]+" --self-test)
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=6)
+gbb_add_perf_gate_test(perf_gate_receipt_controls 0 "perf-gate receipt self-test pass controls=[0-9]+"
+  --self-test-receipt)
+set(GBB_PERF_GATE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=4)
+add_test(NAME perf_gate_retry_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=bash;${PROJECT_SOURCE_DIR}/tests/scripts/run-perf-gate.sh;--self-test-retry"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=perf-gate retry controls pass controls=[0-9]+"
+    ${GBB_PERF_GATE_EXTRA_ARGS}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(perf_gate_retry_controls PROPERTIES TIMEOUT 60)
 set(GBB_PERF_GATE_EXTRA_ARGS)
 
 gbb_add_perf_gate_test(perf_gate_canned_pass 0 "perf-gate pass ratios tracer=1[.]081"

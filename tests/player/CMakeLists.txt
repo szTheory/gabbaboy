@@ -26,7 +26,11 @@ endfunction()
 function(gbb_player_mutant_binary target main_source colour_source)
   add_executable(${target} "${main_source}" "${colour_source}")
   target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
-  target_link_libraries(${target} PRIVATE ${ARGN} gabbaboy-player-adapter SDL3::SDL3)
+  if(ARGN)
+    target_link_libraries(${target} PRIVATE ${ARGN})
+  else()
+    target_link_libraries(${target} PRIVATE gabbaboy-player-adapter SDL3::SDL3)
+  endif()
   target_compile_features(${target} PRIVATE c_std_17)
   target_compile_definitions(${target} PRIVATE
     GABBABOY_PLAYER_DEMO_ROM=\"${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb\"
@@ -136,16 +140,33 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       include("${PROJECT_SOURCE_DIR}/cmake/P12Mutants.cmake")
       set(mutant_core_source "${CMAKE_CURRENT_BINARY_DIR}/gabbaboy_core_p12_mutant_m1.c")
       gbb_p12_make_mutant_core("${mutant_core_source}" 2)
-      add_library(gabbaboy-player-mutant-core-m1 STATIC "${mutant_core_source}")
-      target_include_directories(gabbaboy-player-mutant-core-m1 PRIVATE
+      add_library(gabbaboy_core_player_mutant_m1 STATIC "${mutant_core_source}")
+      target_include_directories(gabbaboy_core_player_mutant_m1 PRIVATE
         "${PROJECT_SOURCE_DIR}/include")
-      target_compile_features(gabbaboy-player-mutant-core-m1 PRIVATE c_std_17)
-      set_target_properties(gabbaboy-player-mutant-core-m1 PROPERTIES C_EXTENSIONS OFF)
+      target_compile_features(gabbaboy_core_player_mutant_m1 PRIVATE c_std_17)
+      set_target_properties(gabbaboy_core_player_mutant_m1 PROPERTIES C_EXTENSIONS OFF)
+      # The standard adapter transitively links GabbaBoy::core through gabbaboy_accept.
+      # This player-only adapter instead pairs the bare acceptance helpers with M1 so the
+      # finished executable carries exactly one core archive.
+      add_library(gabbaboy-player-adapter-core-mutant-m1 STATIC
+        "${PROJECT_SOURCE_DIR}/src/player/audio.c"
+        "${PROJECT_SOURCE_DIR}/src/player/catch_up_policy.c"
+        "${PROJECT_SOURCE_DIR}/src/player/input.c"
+        "${PROJECT_SOURCE_DIR}/src/player/presentation.c"
+        "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c"
+        "${PROJECT_SOURCE_DIR}/src/player/session.c")
+      target_include_directories(gabbaboy-player-adapter-core-mutant-m1 PUBLIC
+        "${PROJECT_SOURCE_DIR}/src/player")
+      target_link_libraries(gabbaboy-player-adapter-core-mutant-m1 PUBLIC
+        gabbaboy_player_slots gabbaboy_host gabbaboy_accept_bare gabbaboy_core_player_mutant_m1 SDL3::SDL3)
+      target_compile_features(gabbaboy-player-adapter-core-mutant-m1 PUBLIC c_std_17)
+      target_compile_definitions(gabbaboy-player-adapter-core-mutant-m1 PRIVATE GBB_PLAYER_AUDIO_TESTING)
+      set_target_properties(gabbaboy-player-adapter-core-mutant-m1 PROPERTIES C_EXTENSIONS OFF)
       set(mutant_player gabbaboy-player-mutant-ppu-follows-cpu)
       gbb_player_mutant_binary(${mutant_player}
         "${PROJECT_SOURCE_DIR}/src/player/main.c"
         "${PROJECT_SOURCE_DIR}/src/player/colour.c"
-        gabbaboy-player-mutant-core-m1)
+        gabbaboy-player-adapter-core-mutant-m1)
       add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
         "-DGBB_CMD=${CMAKE_COMMAND};-DGBB_CHECK=speed;-DGBB_PLAYER=$<TARGET_FILE:${mutant_player}>;-DGBB_ROM=${GBB_PLAYER_CGB_SPEED_ROM};-DGBB_EXPECT_RGBA_SHA=${GBB_PLAYER_CGB_SPEED_RGBA_SHA};-P;${GBB_PLAYER_CGB_SMOKE_SCRIPT}"
         -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=cgb speed smoke: RGBA buffer digest"
@@ -184,12 +205,12 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       endif()
       set(colour_target test_player_colour)
       if(test_name STREQUAL "player_cgb_expand_mutant_rb_swap")
-        set(colour_target test_player_colour_mutant_rb_swap)
+        set(colour_target test_player_colour_playervariant_rb_swap)
       endif()
       if(NOT TARGET ${colour_target})
         add_executable(${colour_target} test_colour.c "${colour_source}")
         target_include_directories(${colour_target} PRIVATE "${PROJECT_SOURCE_DIR}/src/player")
-        target_link_libraries(${colour_target} PRIVATE GabbaBoy::core gabbaboy_accept)
+        target_link_libraries(${colour_target} PRIVATE gabbaboy_accept)
         target_compile_features(${colour_target} PRIVATE c_std_17)
         set_target_properties(${colour_target} PROPERTIES C_EXTENSIONS OFF)
       endif()
@@ -216,7 +237,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
           "out[2] = gbb_accept_expand5(value & 31u);")
         gbb_player_mutate_source("${CMAKE_CURRENT_BINARY_DIR}/colour_smoke_mutant_rb_swap_step2.c"
           "${mutant_colour}" "GBB_SWAP_BLUE" "(value >> 10) & 31u")
-        set(mutant_target gabbaboy-player-mutant-rb-swap)
+        set(mutant_target gabbaboy-player-playervariant-rb-swap)
       else()
         # update_frame forced onto the DMG path: the CGB profile then rejects gbb_copy_frame.
         set(mutant_main "${CMAKE_CURRENT_BINARY_DIR}/main_mutant_dmg_path.c")
@@ -224,7 +245,7 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
         gbb_player_mutate_source("${PROJECT_SOURCE_DIR}/src/player/main.c" "${mutant_main}"
           "if (machine_info.profile == GBB_PROFILE_CGB_CPU_E)"
           "if (machine_info.profile == GBB_PROFILE_CGB_CPU_E && 0)")
-        set(mutant_target gabbaboy-player-mutant-dmg-path)
+        set(mutant_target gabbaboy-player-playervariant-dmg-path)
       endif()
       gbb_player_mutant_binary(${mutant_target} "${mutant_main}" "${mutant_colour}")
       add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
@@ -247,18 +268,18 @@ foreach(test_name IN LISTS GABBABOY_PLAYER_EXPECTED_TESTS)
       target_compile_features(gabbaboy-player-session-mutant PUBLIC c_std_17)
       target_compile_definitions(gabbaboy-player-session-mutant PRIVATE GBB_PLAYER_SESSION_TESTING)
       set_target_properties(gabbaboy-player-session-mutant PROPERTIES C_EXTENSIONS OFF)
-      add_executable(test_player_session_mutant_ignores_flag test_session.c
+      add_executable(test_player_session_playervariant_ignores_flag test_session.c
         "${PROJECT_SOURCE_DIR}/src/player/audio.c"
         "${PROJECT_SOURCE_DIR}/src/player/input.c"
         "${PROJECT_SOURCE_DIR}/src/player/script_smoke.c")
-      target_link_libraries(test_player_session_mutant_ignores_flag PRIVATE
+      target_link_libraries(test_player_session_playervariant_ignores_flag PRIVATE
         gabbaboy-player-session-mutant gabbaboy_accept)
-      target_compile_features(test_player_session_mutant_ignores_flag PRIVATE c_std_17)
-      target_compile_definitions(test_player_session_mutant_ignores_flag PRIVATE
+      target_compile_features(test_player_session_playervariant_ignores_flag PRIVATE c_std_17)
+      target_compile_definitions(test_player_session_playervariant_ignores_flag PRIVATE
         GBB_PLAYER_SESSION_TESTING GBB_PLAYER_AUDIO_TESTING)
-      set_target_properties(test_player_session_mutant_ignores_flag PROPERTIES C_EXTENSIONS OFF)
+      set_target_properties(test_player_session_playervariant_ignores_flag PROPERTIES C_EXTENSIONS OFF)
       add_test(NAME ${test_name} COMMAND ${CMAKE_COMMAND}
-        "-DGBB_CMD=$<TARGET_FILE:test_player_session_mutant_ignores_flag>;player_session_model_select;${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb;${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb;${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data"
+        "-DGBB_CMD=$<TARGET_FILE:test_player_session_playervariant_ignores_flag>;player_session_model_select;${PROJECT_SOURCE_DIR}/fixtures/visible-demo/demo.gb;${CMAKE_CURRENT_BINARY_DIR}/${test_name}-temp.gb;${CMAKE_CURRENT_BINARY_DIR}/${test_name}-data"
         -DGBB_EXPECT_CODE=1 "-DGBB_EXPECT_REGEX=test_session[.]c:[0-9]+: "
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
       # The mutant trips a REQUIRE that returns early without destroying its temporary files or any

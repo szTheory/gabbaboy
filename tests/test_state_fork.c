@@ -679,6 +679,11 @@ static uint64_t poison_value(const gbb_instance *source,
                              size_t state_size,
                              const state_field_descriptor *field,
                              size_t index, uint64_t value) {
+    /* Keep setup poison inside the public count range. The later mutated load
+     * restores the event slots, so omitting the count is then responsible for
+     * any queue-relation rejection rather than an out-of-range poison value. */
+    if (strcmp(field->path, "input_event_count") == 0)
+        return value == 0u ? 1u : 0u;
     uint64_t proposed;
     if (field->kind == STATE_VALUE_BOOL) proposed = value == 0u ? 1u : 0u;
     else if (field->kind == STATE_VALUE_EVENT_KIND)

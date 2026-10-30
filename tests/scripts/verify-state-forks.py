@@ -88,7 +88,8 @@ def fork_mutant_source(source: str) -> str:
     if start < 0 or end < 0:
         raise ForkError("cannot find the immutable state_apply source-copy boundaries")
     function = source[start:end]
-    assignment_start = function.find("            if (field->storage == STATE_STORAGE_CARTRIDGE_RAM) {")
+    assignment_start = function.find(
+        "            uint8_t *address = field->storage == STATE_STORAGE_CARTRIDGE_RAM")
     offset_anchor = "            offset += field->wire_width;"
     assignment_end = function.find(offset_anchor, assignment_start)
     if assignment_start < 0 or assignment_end < 0:
@@ -758,8 +759,6 @@ MALFORMED_TARGET_REASONS = {
         "The div_read DMG seed ties div=0xAC to divider_counter=0xAC00, and the state invariant requires div to equal the counter high byte; omitting div therefore causes canonical save rejection.",
     ("hdma.active", "generated:native_pipeline_hdma:cgb"):
         "The native_pipeline_hdma CGB cut is mid-byte with nonzero HDMA byte phase; the accepted-state invariant requires an active transfer for that phase, so omitting hdma.active causes canonical save rejection.",
-    ("input_event_count", "generated:accepted_dma_phase:dmg"):
-        "The accepted_dma_phase DMG cut has a nonzero queued event in slot zero; the state invariant requires unused event slots to be zero, so omitting input_event_count makes the receiver invalid and canonical save rejects it.",
     ("serial_control", "generated:bus_unsupported:cgb"):
         "At the bus_unsupported CGB cut, an active external serial transfer has serial_control=0x80 and zero edge countdown; any distinct legal single-field control value breaks the active/control/countdown invariant, so canonical save rejects the omitted target.",
     ("serial_active", "generated:bus_unsupported:cgb"):
@@ -859,6 +858,22 @@ def mutant_controls(args: argparse.Namespace) -> None:
             raise ForkError(f"unexercising-fixture control failed for wrong reason: {exc}") from exc
     else:
         raise ForkError("mutation checker accepted an unexercising fixture")
+    count_spec = json.loads(json.dumps(spec))
+    count_item = next((item for item in count_spec["field_mutants"]
+                       if item.get("field") == "input_event_count"), None)
+    if (count_item is None or count_item.get("case") != "generated:accepted_dma_phase:dmg" or
+        count_item.get("expected_observations") != ["post-load-canonical-state-bytes"] or
+        "malformed_target_reason" in count_item):
+        raise ForkError("input event count control does not require an accepted canonical-byte discrepancy")
+    count_item["expected_observations"] = ["post-load-canonical-save-rejected"]
+    count_item["malformed_target_reason"] = "old count omission rejection"
+    try:
+        validate_mutant_manifest(report, count_spec)
+    except ForkError as exc:
+        if "exact fixture invariant" not in str(exc):
+            raise ForkError(f"input event count rejection control failed for wrong reason: {exc}") from exc
+    else:
+        raise ForkError("mutation checker accepted the obsolete input event count rejection proof")
     wrong_invariant = json.loads(json.dumps(spec))
     malformed_item = next((item for item in wrong_invariant["field_mutants"]
                            if "malformed_target_reason" in item), None)

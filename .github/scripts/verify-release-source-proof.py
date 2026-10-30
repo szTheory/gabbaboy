@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -120,7 +121,20 @@ def _repository_name(run: dict[str, Any], key: str) -> Any:
     return member.get("full_name") if isinstance(member, dict) else None
 
 
-def validate_rehearsal_run(run: Any, tag: str, source_sha: str, repo: str, tree_of: TreeOf) -> None:
+def _rehearsal_timestamp(value: Any, label: str) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"rehearsal-postdates-tag: {label} missing or invalid")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    except ValueError as error:
+        raise ValueError(f"rehearsal-postdates-tag: {label} missing or invalid") from error
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"rehearsal-postdates-tag: {label} missing or invalid")
+    return parsed.astimezone(timezone.utc)
+
+
+def validate_rehearsal_run(run: Any, tag: str, source_sha: str, repo: str, tree_of: TreeOf,
+                           pr_head: str | None = None, not_after: dict[str, Any] | None = None) -> None:
     """Raise ValueError unless this run object is the successful rehearsal of exactly the tagged tree."""
     if not isinstance(run, dict) or not _is_id(run.get("id")) or not _is_id(run.get("run_attempt")):
         raise ValueError("rehearsal run object is malformed")
@@ -144,6 +158,36 @@ def validate_rehearsal_run(run: Any, tag: str, source_sha: str, repo: str, tree_
             raise ValueError("the tree of the rehearsal head or of the tagged source cannot be proved from git objects")
         if head_tree != source_tree:
             raise ValueError("rehearsal run head tree differs from the tagged tree")
+    if pr_head is not None and head != pr_head:
+        raise ValueError("rehearsal-not-version-pr-head: the run head is not the merged version PR head")
+    if not_after is not None:
+        merged_at = _rehearsal_timestamp(not_after.get("merged_at"), "merged_at")
+        attempt_jobs = not_after.get("attempt_jobs")
+        jobs = attempt_jobs.get("jobs") if isinstance(attempt_jobs, dict) else None
+        if (not isinstance(attempt_jobs, dict) or type(attempt_jobs.get("total_count")) is not int
+                or not isinstance(jobs, list) or not jobs or len(jobs) != attempt_jobs["total_count"]
+                or len(jobs) > MAX_RUN_LIST):
+            raise ValueError("rehearsal-postdates-tag: attempt jobs are missing, truncated or malformed")
+        completed = []
+        for job in jobs:
+            if (not isinstance(job, dict) or job.get("run_id") != run["id"]
+                    or job.get("run_attempt") != run["run_attempt"]):
+                raise ValueError("rehearsal-postdates-tag: attempt jobs do not match the selected run and attempt")
+            completed.append(_rehearsal_timestamp(job.get("completed_at"), "attempt job completed_at"))
+        if max(completed) > merged_at:
+            raise ValueError("rehearsal-postdates-tag: the selected run attempt completed after the version PR merged")
+
+
+def bind_rehearsal_run(document: Any, tag: str, source_sha: str, repo: str, tree_of: TreeOf,
+                       pr_head: str, merged_at: str | None = None,
+                       attempt_jobs: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Select the newest successful rehearsal of the tagged tree, then bind it to the reviewed PR and merge time."""
+    if (merged_at is None) != (attempt_jobs is None):
+        raise ValueError("rehearsal-postdates-tag: incomplete not_after binding")
+    run = select_performance_run(document, tag, source_sha, repo, tree_of)
+    not_after = None if merged_at is None else {"merged_at": merged_at, "attempt_jobs": attempt_jobs}
+    validate_rehearsal_run(run, tag, source_sha, repo, tree_of, pr_head=pr_head, not_after=not_after)
+    return run
 
 
 def select_performance_run(document: Any, tag: str, source_sha: str, repo: str, tree_of: TreeOf) -> dict[str, Any]:
@@ -319,6 +363,15 @@ def rehearsal_reuse_self_test(base_run: "dict[str, Any] | None" = None,
     older = dict(run, id=8000, head_sha="d" * 40)
     require(select([older, run], {**trees, "d" * 40: "2" * 40})["id"] == 9000, "the newest valid run is chosen over an older one")
 
+    merged_at = "2026-10-26T02:27:35Z"
+    attempt_jobs = {"total_count": 2, "jobs": [
+        {"run_id": run["id"], "run_attempt": run["run_attempt"], "completed_at": "2026-10-26T02:15:10Z"},
+        {"run_id": run["id"], "run_attempt": run["run_attempt"], "completed_at": "2026-10-26T02:03:44Z"},
+    ]}
+    bound = bind_rehearsal_run({"total_count": 1, "workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                               EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at, attempt_jobs)
+    require(bound["id"] == run["id"], "PR-head and pre-merge attempt binding")
+
     def refuse(label: str, reason: str, call: Callable[[], Any]) -> None:
         nonlocal controls
         try:
@@ -332,6 +385,55 @@ def rehearsal_reuse_self_test(base_run: "dict[str, Any] | None" = None,
 
     def run_defect(label: str, reason: str, **changes: Any) -> None:
         refuse(label, reason, lambda: select([dict(run, **changes)], trees))
+
+    late_first_attempt = json.loads(json.dumps(attempt_jobs))
+    for job in late_first_attempt["jobs"]:
+        job["run_attempt"] = 1
+    late_first_attempt["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
+    first_attempt = dict(run, run_attempt=1)
+    refuse("a postdated first run attempt", "rehearsal-postdates-tag",
+           lambda: bind_rehearsal_run({"workflow_runs": [first_attempt]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, first_attempt["head_sha"], merged_at,
+                                      late_first_attempt))
+
+    late_second_attempt = json.loads(json.dumps(attempt_jobs))
+    late_second_attempt["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
+    refuse("attempt 2 completing after the version PR merged", "rehearsal-postdates-tag",
+           lambda: bind_rehearsal_run({"workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at,
+                                      late_second_attempt))
+
+    equal_tree_pr_head = "d" * 40
+    pr_head_trees = {**trees, equal_tree_pr_head: trees[run["head_sha"]]}
+    refuse("a tree-equal commit that is not the version PR head", "rehearsal-not-version-pr-head",
+           lambda: bind_rehearsal_run({"workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, pr_head_trees.get, equal_tree_pr_head, merged_at,
+                                      attempt_jobs))
+    refuse("a missing merged_at binding", "incomplete not_after binding",
+           lambda: bind_rehearsal_run({"workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], None, attempt_jobs))
+    other_run_jobs = json.loads(json.dumps(attempt_jobs))
+    other_run_jobs["jobs"][0]["run_id"] += 1
+    refuse("attempt jobs from another run id", "do not match the selected run and attempt",
+           lambda: bind_rehearsal_run({"workflow_runs": [run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at,
+                                      other_run_jobs))
+    pull_request_run = dict(run, event="pull_request")
+    refuse("a pull_request rehearsal", "was triggered by",
+           lambda: bind_rehearsal_run({"workflow_runs": [pull_request_run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at, attempt_jobs))
+    fork_run = dict(run, head_repository={"full_name": "fork/gabbaboy"})
+    refuse("a fork rehearsal", "another repository or a fork",
+           lambda: bind_rehearsal_run({"workflow_runs": [fork_run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at, attempt_jobs))
+    other_workflow_run = dict(run, path=".github/workflows/release.yml")
+    refuse("a run from another workflow", "not a run of the rehearsal workflow",
+           lambda: bind_rehearsal_run({"workflow_runs": [other_workflow_run]}, REHEARSAL_TAG, REHEARSAL_SOURCE,
+                                      EXPECTED_REPOSITORY, trees.get, run["head_sha"], merged_at, attempt_jobs))
+    r1_green_stale = dict(run, id=9000, run_attempt=1, head_sha="d" * 40)
+    r2_red = dict(run, id=9001, run_attempt=2, conclusion="failure", head_sha="e" * 40)
+    refuse("R2 is red while older R1 is green on a different tree", "not completed successfully",
+           lambda: select([r1_green_stale, r2_red], {**trees, "d" * 40: "2" * 40, "e" * 40: "1" * 40}))
 
     run_defect("another workflow", "not a run of the rehearsal workflow", path=".github/workflows/release-please.yml")
     run_defect("a workflow path that only starts like the rehearsal", "not a run of the rehearsal workflow",
@@ -464,6 +566,25 @@ def rehearsal_cli_self_test() -> None:
         missing = select("a" * 40)
         if missing.returncode != 1 or "cannot be proved from git objects" not in missing.stderr:
             raise SystemExit(f"rehearsal CLI accepted a head that is not in the object database: {missing.stderr}")
+        jobs_file = Path(scratch) / "attempt-jobs.json"
+        jobs_file.write_text(json.dumps({"total_count": 1, "jobs": [{"run_id": run["id"], "run_attempt": run["run_attempt"],
+                                                                         "completed_at": "2026-10-26T02:15:10Z"}]}))
+        selected = select(same_tree)
+        if selected.returncode != 0:
+            raise SystemExit(f"rehearsal CLI setup refused the same-tree PR head: {selected.stderr}")
+        bound = cli("--bind-rehearsal-run", str(runs_file), "--tag", REHEARSAL_TAG, "--source-sha", source,
+                    "--repo", EXPECTED_REPOSITORY, "--selected-run", str(run_out), "--pr-head", same_tree,
+                    "--merged-at", "2026-10-26T02:27:35Z", "--attempt-jobs", str(jobs_file))
+        if (bound.returncode != 0 or bound.stdout.strip() != f"rehearsal-bound run_id={run['id']} head_sha={same_tree}"):
+            raise SystemExit(f"rehearsal CLI failed to bind the selected PR head: {bound.stdout}{bound.stderr}")
+        jobs_doc = json.loads(jobs_file.read_text())
+        jobs_doc["jobs"][0]["completed_at"] = "2026-10-26T02:27:36Z"
+        jobs_file.write_text(json.dumps(jobs_doc))
+        late = cli("--bind-rehearsal-run", str(runs_file), "--tag", REHEARSAL_TAG, "--source-sha", source,
+                   "--repo", EXPECTED_REPOSITORY, "--selected-run", str(run_out), "--pr-head", same_tree,
+                   "--merged-at", "2026-10-26T02:27:35Z", "--attempt-jobs", str(jobs_file))
+        if late.returncode != 1 or "REJECT: rehearsal-postdates-tag" not in late.stderr or late.stdout.strip():
+            raise SystemExit(f"rehearsal CLI accepted a postdated attempt: {late.returncode} {late.stdout}{late.stderr}")
     print("PASS: rehearsal CLI proves equal trees from git objects and prints nothing for a refusal")
 
 
@@ -533,10 +654,15 @@ def main() -> int:
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--select-performance-run", metavar="RUNS_JSON",
                         help="print the id of the newest successful rehearsal run of --tag when it built the tagged tree")
+    parser.add_argument("--bind-rehearsal-run", metavar="RUNS_JSON",
+                        help="select the newest successful rehearsal and bind it to the reviewed version PR head")
     parser.add_argument("--select-performance-artifact", metavar="ARTIFACTS_JSON",
                         help="print the name of the one artifact the run in --selected-run uploaded")
     parser.add_argument("--selected-run", metavar="FILE", help="written by --select-performance-run, read by --select-performance-artifact")
     parser.add_argument("--repo", help="OWNER/NAME the rehearsal run must belong to")
+    parser.add_argument("--pr-head", help="exact version PR head that the rehearsal must name")
+    parser.add_argument("--merged-at", help="server-recorded version PR merge time for the selected attempt")
+    parser.add_argument("--attempt-jobs", metavar="JOBS_JSON", help="jobs for exactly the selected run attempt")
     args = parser.parse_args()
     if args.self_test:
         run_self_test()
@@ -544,11 +670,25 @@ def main() -> int:
         rehearsal_cli_self_test()
         captured_shape_self_test()
         return 0
-    if args.select_performance_run or args.select_performance_artifact:
+    if args.select_performance_run or args.bind_rehearsal_run or args.select_performance_artifact:
         try:
-            if args.select_performance_run:
+            if args.select_performance_run or args.bind_rehearsal_run:
                 if None in (args.tag, args.source_sha, args.repo, args.selected_run):
-                    parser.error("--select-performance-run requires --tag, --source-sha, --repo and --selected-run")
+                    parser.error("run selection requires --tag, --source-sha, --repo and --selected-run")
+                if args.select_performance_run and args.bind_rehearsal_run:
+                    parser.error("choose one of --select-performance-run or --bind-rehearsal-run")
+                if args.bind_rehearsal_run:
+                    if args.pr_head is None:
+                        parser.error("--bind-rehearsal-run requires --pr-head")
+                    if (args.merged_at is None) != (args.attempt_jobs is None):
+                        raise ValueError("rehearsal-postdates-tag: incomplete not_after binding")
+                    jobs = json.loads(Path(args.attempt_jobs).read_text(encoding="utf-8")) if args.attempt_jobs is not None else None
+                    run = bind_rehearsal_run(json.loads(Path(args.bind_rehearsal_run).read_text(encoding="utf-8")),
+                                             args.tag, args.source_sha, args.repo, git_tree_of, args.pr_head,
+                                             args.merged_at, jobs)
+                    Path(args.selected_run).write_text(json.dumps(run), encoding="utf-8")
+                    print(f"rehearsal-bound run_id={run['id']} head_sha={run['head_sha']}")
+                    return 0
                 run = select_performance_run(json.loads(Path(args.select_performance_run).read_text(encoding="utf-8")),
                                              args.tag, args.source_sha, args.repo, git_tree_of)
                 Path(args.selected_run).write_text(json.dumps(run), encoding="utf-8")

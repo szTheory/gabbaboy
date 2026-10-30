@@ -31,7 +31,7 @@ endif()
 # (it separates list elements), so a sentence that has one is pinned as its halves. The checker modes below read
 # the documents with `git show <rev>:<path>` at HEAD as of the run, so commit before running them.
 
-# The revision is the save-format one (tests/cmake/save-formats.cmake, included first): HEAD at run time by default.
+# The revision is the save-format one (tests/cmake/save-formats.cmake, included first): a full commit SHA resolved at configure.
 set(GBB_HOST_CONTRACT_REV "${GBB_SAVE_FORMATS_REV}")
 
 set(GBB_HOST_CONTRACT_DOC_SCRIPT "${PROJECT_SOURCE_DIR}/cmake/VerifyDocContract.cmake")
@@ -129,34 +129,6 @@ add_test(NAME readme_host_mode_contract
 set_tests_properties(readme_host_mode_contract PROPERTIES TIMEOUT 60
   PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_README_HOST_PHRASE_COUNT}[^0-9]")
 
-# The ledger carries one entry per requirement group, each with its destination and the CTest names that decide it.
-set(GBB_UNRELEASED_HOST_PHRASES
-  "destination v0.3.0"
-  "HOST-01..03"
-  "PLAY-01"
-  "`host_continuation`"
-  "`host_cadence_retry`"
-  "`host_signal_term`"
-  "`host_exit_table_codes`"
-  "`save_format_files`"
-  "`save_format_completeness`"
-  "`save_format_freeze`"
-  "`host_contract_json`"
-  "`host_contract_docs`"
-  "`installed_host_smoke`"
-  "`slot_message_table`"
-  "`slot_reanchor_plan`"
-  "`input_clock_after_load`")
-list(LENGTH GBB_UNRELEASED_HOST_PHRASES GBB_UNRELEASED_HOST_PHRASE_COUNT)
-add_test(NAME unreleased_host_entries
-  COMMAND ${CMAKE_COMMAND}
-    -DGBB_DOC=${PROJECT_SOURCE_DIR}/docs/support/unreleased.md
-    "-DGBB_DECLARATIONS=${GBB_HOST_CONTRACT_DECLARATIONS}"
-    "-DGBB_REQUIRED=${GBB_UNRELEASED_HOST_PHRASES}"
-    -P ${GBB_HOST_CONTRACT_DOC_SCRIPT})
-set_tests_properties(unreleased_host_entries PROPERTIES TIMEOUT 60
-  PASS_REGULAR_EXPRESSION "doc-contract pass identifiers=[1-9][0-9]* phrases=${GBB_UNRELEASED_HOST_PHRASE_COUNT}[^0-9]")
-
 # gbb_host_contract_missing_control(name source_relative phrase scope_start): a copy without one pinned phrase must
 # fail with exactly `doc-contract-missing: <phrase>`.
 function(gbb_host_contract_missing_control name source_relative phrase scope_start)
@@ -185,9 +157,6 @@ gbb_host_contract_missing_control(doc_contract_readme_host_missing_selftest
 gbb_host_contract_missing_control(doc_contract_cartridge_slots_missing_selftest
   docs/cartridge-and-saves.md "Loading a slot also replaces the game's battery save"
   "## Host raw saves and player state slots")
-gbb_host_contract_missing_control(doc_contract_unreleased_host_missing_selftest
-  docs/support/unreleased.md "destination v0.3.0" "")
-
 # ---- D-29: the published tables against docs/host-contract.json ------------------------------------------------
 add_test(NAME host_contract_docs
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_HOST_CONTRACT_CHECKER}"
@@ -223,15 +192,44 @@ set_tests_properties(host_contract_docs_missing_control PROPERTIES TIMEOUT 60)
 add_test(NAME doc_no_interop_claims
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-no-interop-claims.py"
     --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+# The v0.3.0 release adds its scoped support ledger to the immutable document scan.
+if(PROJECT_VERSION VERSION_LESS 0.3.0)
+  set(GBB_NO_INTEROP_EXPECTED_FILES 6)
+else()
+  set(GBB_NO_INTEROP_EXPECTED_FILES 7)
+endif()
 set_tests_properties(doc_no_interop_claims PROPERTIES TIMEOUT 60 LABELS planning
-  PASS_REGULAR_EXPRESSION "no-interop-claims pass files=6 controls=6")
+  PASS_REGULAR_EXPRESSION "no-interop-claims pass files=${GBB_NO_INTEROP_EXPECTED_FILES} controls=10")
+
+# D-25: release documentation is checked from the configured immutable revision.
+add_test(NAME changelog_first_heading
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-changelog-heading.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(changelog_first_heading PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "changelog-heading pass first=.* controls=0")
+add_test(NAME changelog_first_heading_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-changelog-heading.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}" --self-test)
+set_tests_properties(changelog_first_heading_controls PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "changelog-heading pass first=.* controls=([2-9]|[1-9][0-9]+)")
+add_test(NAME doc_links_versions
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-doc-links.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(doc_links_versions PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "doc-links pass files=[0-9]+ links=[0-9]+ controls=0")
+add_test(NAME doc_links_versions_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-doc-links.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}" --self-test)
+set_tests_properties(doc_links_versions_controls PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "doc-links pass files=[0-9]+ links=[0-9]+ controls=([6-9]|[1-9][0-9]+)")
 
 # ---- WR-04: the checkers name HEAD, never a configure-time SHA ---------------------------------------------------
 # The registered commands are read back from the generated CTestTestfile.cmake. The control hands the same script a
 # file whose save_format_files line carries a 40-digit SHA (the pre-fix wiring) and a file with a test missing; each
 # must be rejected for its own reason, so the wiring check cannot pass by reading nothing.
 set(GBB_REV_WIRING_TESTS save_format_completeness save_format_freeze host_contract_json host_contract_controls
-  host_contract_docs host_contract_docs_control host_contract_docs_missing_control doc_no_interop_claims)
+  host_contract_docs host_contract_docs_control host_contract_docs_missing_control doc_no_interop_claims
+  changelog_first_heading changelog_first_heading_controls doc_links_versions doc_links_versions_controls)
 if(NOT WIN32)
   list(APPEND GBB_REV_WIRING_TESTS save_format_files save_format_controls)
 endif()
@@ -289,3 +287,22 @@ add_test(NAME contract_rev_wiring_bare_prefix_control
     "-DGBB_EXPECT_REGEX=test save_format_files is not registered"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(contract_rev_wiring_bare_prefix_control PROPERTIES TIMEOUT 60)
+
+# Default CMake configuration must resolve symbolic HEAD to the same full immutable SHA supplied to registered
+# boundary tests. An unreadable ref must fail closed rather than silently falling back to a moving revision.
+add_test(NAME contract_rev_default_head
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_RESOLVE_CONTRACT_REVISION_SOURCE=${PROJECT_SOURCE_DIR}"
+    -DGBB_RESOLVE_CONTRACT_REVISION_REF=HEAD
+    -DGBB_RESOLVE_CONTRACT_REVISION_EXPECT=resolved
+    -P "${PROJECT_SOURCE_DIR}/cmake/ResolveContractRevision.cmake")
+set_tests_properties(contract_rev_default_head PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "contract-revision pass input=HEAD rev=[0-9a-f]+")
+add_test(NAME contract_rev_unreadable_ref_control
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_RESOLVE_CONTRACT_REVISION_SOURCE=${PROJECT_SOURCE_DIR}"
+    -DGBB_RESOLVE_CONTRACT_REVISION_REF=__gbb_unreadable_revision_control__
+    -DGBB_RESOLVE_CONTRACT_REVISION_EXPECT=unreadable
+    -P "${PROJECT_SOURCE_DIR}/cmake/ResolveContractRevision.cmake")
+set_tests_properties(contract_rev_unreadable_ref_control PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "contract-revision reject reason=unreadable")

@@ -21,6 +21,7 @@ import math
 import os
 import re
 import subprocess
+import stat
 import sys
 import tempfile
 import unittest
@@ -38,6 +39,9 @@ ROM_FIELDS = ("path", "sha256", "digest", "consumed_half_dots")
 TOP_KEYS = ("schema", "ir_ratio_limit", "ir_floor", "determinism_limit", "realtime_floor")
 POLICY_FILE = "tests/baseline/perf-gate-v1.txt"
 LIMITS_BASE_REV = "947d6a9d177af6c04a5f9ea6abcc2c470ab9be57"
+POLICY_RECEIPT_SHA256 = "6f0da7c7e3850c3ea15536accd081d9676b4da6398913187e37da33f4d501067"
+POLICY_RECEIPT_HEAD = "711f4fd7e66a8ae67f2013edc39c98cfa21ea5fe"
+POLICY_RECEIPT_PATH = "tests/baseline/perf-attribution-v1.json"
 EXCEPTION_SCHEMA = "perf-gate-deterministic-exception-v1"
 
 
@@ -134,6 +138,32 @@ def read_text(path, code):
         reject(code, "cannot read %s: %s" % (path, error))
 
 
+def strict_json_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key %r" % key)
+        result[key] = value
+    return result
+
+
+def read_bounded_json(path, code, maximum=65536):
+    try:
+        info = os.lstat(path)
+        if not stat.S_ISREG(info.st_mode) or info.st_size > maximum:
+            reject(code, "%s must be a regular JSON file no larger than %d bytes" % (path, maximum))
+        with open(path, "rb") as handle:
+            raw = handle.read(maximum + 1)
+    except OSError as error:
+        reject(code, "cannot read %s: %s" % (path, error))
+    if len(raw) > maximum:
+        reject(code, "%s exceeds the %d byte JSON limit" % (path, maximum))
+    try:
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=strict_json_pairs)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+        reject(code, "%s is not strict UTF-8 JSON: %s" % (path, error))
+
+
 def parse_cachegrind(path):
     """Total Ir from a cachegrind out-file made with --cache-sim=no."""
     text = read_text(path, "cachegrind-unreadable")
@@ -216,14 +246,15 @@ def guard_vacuous(side, name, limits):
                        (name, rom, ir, limits["ir_floor"]))
 
 
-def immutable_limits(base_rev):
+def immutable_limits(base_rev, repo=None):
+    repo = REPO_ROOT if repo is None else repo
     if not isinstance(base_rev, str) or re.fullmatch(r"[0-9a-f]{40}", base_rev) is None:
         reject("ratchet-base-invalid", "--base-rev must be a resolved immutable 40-hex commit")
     resolved = subprocess.run(["git", "rev-parse", "--verify", "%s^{commit}" % base_rev],
-                              cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+                              cwd=repo, capture_output=True, text=True, check=False)
     if resolved.returncode != 0 or resolved.stdout.strip() != base_rev:
         reject("ratchet-base-not-commit", "--base-rev does not resolve to that exact commit")
-    blob = subprocess.run(["git", "show", "%s:%s" % (base_rev, POLICY_FILE)], cwd=REPO_ROOT,
+    blob = subprocess.run(["git", "show", "%s:%s" % (base_rev, POLICY_FILE)], cwd=repo,
                           capture_output=True, text=True, check=False)
     if blob.returncode != 0:
         reject("ratchet-base-policy-missing", "the immutable base has no %s" % POLICY_FILE)
@@ -397,18 +428,188 @@ def verify_deterministic_exception(path, approved_limit, base_limit, measurement
     return receipt
 
 
-def write_new_text(path, text):
+def write_new_text(path, text, reject_code="exception-measurement-output"):
     """Exclusive create: an existing path is never overwritten (evidence is not replaced)."""
     try:
         with open(path, "x", encoding="utf-8", newline="\n") as handle:
             handle.write(text)
     except OSError as error:
-        reject("exception-measurement-output", "cannot create %s: %s" % (path, error))
+        reject(reject_code, "cannot create %s: %s" % (path, error))
+
+
+def ir_exceeds_limit(head_ir, base_ir, limit):
+    """Compare Ir with exact integer arithmetic shared by evaluation and receipt verification."""
+    return head_ir * limit.denominator > base_ir * limit.numerator
+
+
+def git_text(repo, code, *arguments):
+    process = subprocess.run(["git", "-C", repo] + list(arguments), capture_output=True, text=True)
+    if process.returncode != 0:
+        reject(code, "git %s failed: %s" % (" ".join(arguments), process.stderr.strip()))
+    return process.stdout
+
+
+def git_bytes(repo, code, *arguments):
+    process = subprocess.run(["git", "-C", repo] + list(arguments), capture_output=True)
+    if process.returncode != 0:
+        message = process.stderr.decode("utf-8", errors="replace").strip()
+        reject(code, "git %s failed: %s" % (" ".join(arguments), message))
+    return process.stdout
+
+
+def source_limits(repo, source_sha):
+    blob = git_text(repo, "perf-receipt-limits-blob", "rev-parse", "--verify",
+                    "%s:%s" % (source_sha, POLICY_FILE)).strip()
+    policy_text = git_text(repo, "perf-receipt-limits-blob", "show", "%s:%s" % (source_sha, POLICY_FILE))
+    with tempfile.TemporaryDirectory(prefix="perf-receipt-limits-") as scratch:
+        path = os.path.join(scratch, "perf-gate-v1.txt")
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(policy_text)
+        limits = parse_limits(path)
+        for rom, entry in limits["roms"].items():
+            data = git_bytes(repo, "perf-receipt-limits-blob", "show",
+                             "%s:%s" % (source_sha, entry["path"]))
+            if hashlib.sha256(data).hexdigest() != entry["sha256"]:
+                reject("perf-receipt-limits-blob", "the source revision ROM pin does not match %s" % entry["path"])
+        base_limits_text, base_limits = immutable_limits(LIMITS_BASE_REV, repo)
+        if check_policy_ratchet(limits, base_limits):
+            reject("perf-receipt-limits-blob", "the source revision widens the immutable Ir policy")
+        attribution_floor_check(path, limits)
+    return blob, limits
+
+
+def _receipt_run_value(name):
+    value = os.environ.get(name)
+    if value is None or value == "":
+        return None
+    if not re.fullmatch(r"[1-9][0-9]*", value):
+        reject("perf-receipt-invalid", "%s must be a positive integer when present" % name)
+    return int(value)
+
+
+def make_perf_receipt(base, head, limits, source_sha, base_build_identity,
+                      head_build_identity, realtime_min, limits_blob):
+    if not re.fullmatch(r"[0-9a-f]{40}", source_sha or ""):
+        reject("perf-receipt-invalid", "--source-head-rev must be a full commit SHA when emitting a receipt")
+    for name, value in (("base", base_build_identity), ("head", head_build_identity)):
+        if value is not None and not re.fullmatch(r"[0-9a-f]{64}", value):
+            reject("perf-receipt-invalid", "%s build identity must be a SHA-256 digest" % name)
+    ir = {}
+    digests = {}
+    for rom in ROMS:
+        ir[rom] = {"base": base[rom]["irs"][0], "head": list(head[rom]["irs"])}
+        digests[rom] = {"base": base[rom]["lines"][0]["digest"],
+                        "head": [line["digest"] for line in head[rom]["lines"]]}
+    return {
+        "schema_version": 1,
+        "kind": "perf-gate-receipt",
+        "source_sha": source_sha,
+        "base_sha": V020_SHA,
+        "limits_blob": limits_blob,
+        "ir": ir,
+        "digests": digests,
+        "realtime_min": fraction_text(realtime_min) if realtime_min is not None else None,
+        "tool": {"base_build_identity": base_build_identity, "head_build_identity": head_build_identity},
+        "run_id": _receipt_run_value("GITHUB_RUN_ID"),
+        "run_attempt": _receipt_run_value("GITHUB_RUN_ATTEMPT"),
+    }
+
+
+def verify_perf_receipt(receipt_path, source_sha, run_json_path, run_id, attempt, repo):
+    receipt = read_bounded_json(receipt_path, "perf-receipt-invalid")
+    if not isinstance(receipt, dict):
+        reject("perf-receipt-invalid", "receipt must be a JSON object")
+    required = {"schema_version", "kind", "source_sha", "base_sha", "limits_blob", "ir", "digests",
+                "realtime_min", "tool", "run_id", "run_attempt"}
+    if set(receipt) != required or type(receipt.get("schema_version")) is not int or \
+            receipt.get("schema_version") != 1 or receipt.get("kind") != "perf-gate-receipt":
+        reject("perf-receipt-invalid", "receipt schema or exact key set is invalid")
+    if not re.fullmatch(r"[0-9a-f]{40}", source_sha or "") or \
+            not re.fullmatch(r"[0-9a-f]{40}", receipt.get("source_sha", "")):
+        reject("perf-receipt-invalid", "source SHA must be a full lowercase commit SHA")
+    if receipt["source_sha"] != source_sha:
+        reject("perf-receipt-source-mismatch", "receipt source_sha differs from --source-sha")
+    if receipt["base_sha"] != V020_SHA:
+        reject("perf-receipt-invalid", "receipt base_sha is not the immutable v0.2.0 base")
+
+    run = read_bounded_json(run_json_path, "perf-receipt-invalid")
+    if not isinstance(run, dict):
+        reject("perf-receipt-invalid", "workflow run response must be a JSON object")
+    if run.get("event") != "push":
+        reject("perf-receipt-event", "workflow run event must be push")
+    if run.get("head_sha") != source_sha:
+        reject("perf-receipt-source-mismatch", "workflow run head_sha differs from --source-sha")
+    if run.get("path") != ".github/workflows/ci.yml":
+        reject("perf-receipt-run", "workflow run path must be .github/workflows/ci.yml")
+    if not re.fullmatch(r"[1-9][0-9]*", str(run_id or "")) or \
+            not re.fullmatch(r"[1-9][0-9]*", str(attempt or "")):
+        reject("perf-receipt-run", "--run-id and --attempt must be positive integers")
+    if receipt.get("run_id") != int(run_id) or receipt.get("run_attempt") != int(attempt):
+        reject("perf-receipt-run", "receipt run id or attempt differs from the selected artifact")
+    response_id = run.get("id")
+    response_attempt = run.get("run_attempt")
+    if str(response_id) != str(int(run_id)) or str(response_attempt) != str(int(attempt)):
+        reject("perf-receipt-run", "workflow run response id or attempt differs from the selected artifact")
+
+    if not re.fullmatch(r"[0-9a-f]{40}", receipt.get("limits_blob", "")):
+        reject("perf-receipt-invalid", "limits_blob must be a full lowercase Git blob SHA")
+    actual_blob, limits = source_limits(repo, source_sha)
+    if receipt["limits_blob"] != actual_blob:
+        reject("perf-receipt-limits-blob", "limits_blob is not the blob at the source revision")
+    if not isinstance(receipt.get("ir"), dict) or set(receipt["ir"]) != set(ROMS) or \
+            not isinstance(receipt.get("digests"), dict) or set(receipt["digests"]) != set(ROMS):
+        reject("perf-receipt-invalid", "per-ROM Ir and digest maps must name every gated ROM exactly once")
+    if not isinstance(receipt.get("tool"), dict) or \
+            set(receipt["tool"]) != {"base_build_identity", "head_build_identity"}:
+        reject("perf-receipt-invalid", "tool identity has an invalid shape")
+    for key, value in receipt["tool"].items():
+        if value is not None and (not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value)):
+            reject("perf-receipt-invalid", "tool %s must be null or a SHA-256 digest" % key)
+    for name in ("run_id", "run_attempt"):
+        value = receipt[name]
+        if value is not None and (type(value) is not int or value < 1):
+            reject("perf-receipt-invalid", "%s must be null or a positive integer" % name)
+    if (receipt["run_id"] is None) != (receipt["run_attempt"] is None):
+        reject("perf-receipt-invalid", "run_id and run_attempt must either both be null or both be present")
+
+    for rom in ROMS:
+        row = receipt["ir"][rom]
+        digest_row = receipt["digests"][rom]
+        if not isinstance(row, dict) or set(row) != {"base", "head"} or \
+                type(row["base"]) is not int or row["base"] <= limits["ir_floor"] or \
+                not isinstance(row["head"], list) or len(row["head"]) != 2 or \
+                any(type(value) is not int or value <= limits["ir_floor"] for value in row["head"]):
+            reject("perf-receipt-invalid", "%s Ir values have an invalid shape or are below the proxy floor" % rom)
+        if not isinstance(digest_row, dict) or set(digest_row) != {"base", "head"} or \
+                digest_row["base"] != limits["roms"][rom]["digest"] or \
+                digest_row["head"] != [limits["roms"][rom]["digest"]] * 2:
+            reject("perf-receipt-invalid", "%s correctness digests do not match the pinned workload" % rom)
+
+    # This is deliberately the same exact predicate used by evaluate. A receipt cannot round
+    # an Ir ratio into passing: both repeats are checked by cross multiplication.
+    ratios = []
+    for rom in ROMS:
+        base_ir = receipt["ir"][rom]["base"]
+        head_irs = receipt["ir"][rom]["head"]
+        if any(ir_exceeds_limit(head_ir, base_ir, limits["ir_ratio"]) for head_ir in head_irs):
+            head_ir = max(head_irs)
+            reject("ir-budget-exceeded", "%s: receipt head Ir %d over v0.2.0 Ir %d is ratio %s, above the limit %s" %
+                   (rom, head_ir, base_ir, ratio_text(head_ir, base_ir), limits["ir_ratio"]))
+        ratios.append("%s=%s" % (rom, ratio_text(max(head_irs), base_ir)))
+    realtime_value = receipt["realtime_min"]
+    if realtime_value is None:
+        reject("realtime-format", "receipt has no valid realtime measurement")
+    realtime_min = fraction(realtime_value, "realtime_min", r"[1-9][0-9]*/[1-9][0-9]*")
+    if realtime_min < limits["realtime_floor"]:
+        reject("realtime-below-floor", "receipt realtime_min %s is below the floor %s" %
+               (realtime_min, limits["realtime_floor"]))
+    print("perf-gate receipt verified ratios %s realtime_min=%s" % (" ".join(ratios), realtime_value))
 
 
 def evaluate(limits_path, base_dir, head_dir, realtime_path, base_rev, exception_path=None,
              source_base_rev=None, source_head_rev=None,
-             build_base_identity=None, build_head_identity=None, emit_measurement_path=None):
+             build_base_identity=None, build_head_identity=None, emit_measurement_path=None,
+             emit_receipt_path=None):
     if base_rev is None:
         reject("ratchet-base-required", "--evaluate requires --base-rev with an immutable committed limits base")
     limits = parse_limits(limits_path)
@@ -438,18 +639,39 @@ def evaluate(limits_path, base_dir, head_dir, realtime_path, base_rev, exception
             reject("ir-limit-widening-unapproved",
                    "ir_ratio_limit was widened without a deterministic exception receipt")
         verify_deterministic_exception(exception_path, limits["ir_ratio"], base_limits["ir_ratio"], measurement)
+    realtime_values = None
+    realtime_error = None
+    if realtime_path is not None:
+        try:
+            realtime_values = realtime_multiples(realtime_path, limits)
+        except Rejected as error:
+            # The Ir decision keeps precedence over malformed timing input. The receipt still
+            # records the failed timing read as null before either verdict is surfaced.
+            realtime_error = error
+    if emit_receipt_path is not None:
+        source_sha = source_head_rev
+        limits_blob, _ = source_limits(REPO_ROOT, source_sha or "")
+        receipt = make_perf_receipt(base, head, limits, source_sha,
+                                    build_base_identity, build_head_identity,
+                                    min(realtime_values.values()) if realtime_values else None,
+                                    limits_blob)
+        write_new_text(emit_receipt_path, json.dumps(receipt, sort_keys=True, indent=2) + "\n",
+                       "perf-receipt-output")
+
     parts = []
     for rom in ROMS:
         base_ir = base[rom]["irs"][0]
-        head_ir = max(head[rom]["irs"])
+        head_irs = head[rom]["irs"]
+        head_ir = max(head_irs)
         limit = limits["ir_ratio"]
-        # head/base > limit, as exact cross-multiplication
-        if head_ir * limit.denominator > base_ir * limit.numerator:
+        if any(ir_exceeds_limit(repeat_ir, base_ir, limit) for repeat_ir in head_irs):
             reject("ir-budget-exceeded", "%s: head Ir %d over v0.2.0 Ir %d is ratio %s, above the limit %s" %
                    (rom, head_ir, base_ir, ratio_text(head_ir, base_ir), limit))
         parts.append("%s=%s" % (rom, ratio_text(head_ir, base_ir)))
     if realtime_path is not None:
-        multiples = realtime_multiples(realtime_path, limits)
+        if realtime_error is not None:
+            raise realtime_error
+        multiples = realtime_values
         for rom in ROMS:
             if multiples[rom] < limits["realtime_floor"]:
                 reject("realtime-below-floor", "%s: realtime multiple %s is below the floor %s" %
@@ -729,16 +951,28 @@ def check_receipt_shape(receipt, limits, repo):
     return len(derived["measured"]), len(derived["merge_set"]), smallest
 
 
-def attribution_floor_check(limits_path, limits):
-    """When the receipt sits beside the limits file, realtime_floor may not be below max(2.0, 0.6 x multiple)."""
-    receipt_path = os.path.join(os.path.dirname(os.path.abspath(limits_path)), "perf-attribution-v1.json")
-    if not os.path.exists(receipt_path):
-        return
+def policy_receipt_multiple(receipt_bytes):
+    """Read the receipt bound to the immutable limits base, not the current notes attribution receipt."""
+    if hashlib.sha256(receipt_bytes).hexdigest() != POLICY_RECEIPT_SHA256:
+        reject("attribution-policy-binding", "receipt bytes do not match the immutable performance-policy receipt")
     try:
-        receipt = json.loads(read_text(receipt_path, "attribution-format"))
+        receipt = json.loads(receipt_bytes)
+        if receipt["selection"]["head"] != POLICY_RECEIPT_HEAD:
+            reject("attribution-policy-binding", "receipt head differs from the immutable performance-policy receipt")
         multiple = fractions.Fraction(receipt["realtime"]["multiple"])
+    except Rejected:
+        raise
     except (ValueError, KeyError, TypeError, ZeroDivisionError) as error:
-        reject("attribution-format", "cannot read the receipt realtime multiple: %r" % error)
+        reject("attribution-policy-binding", "cannot read the immutable performance-policy receipt: %r" % error)
+    if multiple <= 0:
+        reject("attribution-policy-binding", "immutable performance-policy receipt multiple must be positive")
+    return multiple
+
+
+def attribution_floor_check(limits_path, limits, repo=REPO_ROOT):
+    """Keep the realtime floor bound to the receipt at the immutable limits base revision."""
+    receipt_text = git(repo, "show", "%s:%s" % (LIMITS_BASE_REV, POLICY_RECEIPT_PATH))
+    multiple = policy_receipt_multiple(receipt_text.encode("utf-8"))
     required = required_realtime_floor(multiple)
     if limits["realtime_floor"] < required:
         reject("realtime-floor-below-receipt", "realtime_floor %s is below max(2.0, 0.6 x receipt multiple) = %s" %
@@ -747,9 +981,12 @@ def attribution_floor_check(limits_path, limits):
 
 # ---------------------------------------------------------------- self-test
 
-def run_cli(arguments, cwd=None):
+def run_cli(arguments, cwd=None, env_overrides=None):
+    environment = os.environ.copy()
+    if env_overrides:
+        environment.update(env_overrides)
     process = subprocess.run([sys.executable, "-I", os.path.abspath(__file__)] + arguments,
-                             capture_output=True, text=True, cwd=cwd)
+                             capture_output=True, text=True, cwd=cwd, env=environment)
     return process.returncode, process.stdout, process.stderr
 
 
@@ -1030,16 +1267,31 @@ def attribution_self_test(limits_path, failures):
         expect("harness with two anchors is refused", 1, ["--adapt-harness", two, "--out", two + ".out"],
                "REJECT harness-adapt-anchor:")
 
-        # A committed receipt raises the floor: realtime_floor below max(2.0, 0.6 x multiple) is refused.
+        # The immutable limits base owns the 4.02 policy floor. The newer release-notes receipt is
+        # independently verified, but cannot silently raise that gate's immutable threshold.
         beside = os.path.join(scratch, "beside")
         os.makedirs(beside)
+        note_receipt_path = os.path.join(REPO_ROOT, POLICY_RECEIPT_PATH)
+        with open(note_receipt_path, "rb") as handle:
+            note_receipt_bytes = handle.read()
         with open(os.path.join(beside, "perf-attribution-v1.json"), "w", encoding="utf-8") as handle:
-            json.dump(original, handle)
-        required = required_realtime_floor(fractions.Fraction(original["realtime"]["multiple"]))
+            handle.write(note_receipt_bytes.decode("utf-8"))
+        policy_receipt_text = git(REPO_ROOT, "show", "%s:%s" % (LIMITS_BASE_REV, POLICY_RECEIPT_PATH))
+        policy_receipt_bytes = policy_receipt_text.encode("utf-8")
+        policy_multiple = policy_receipt_multiple(policy_receipt_bytes)
+        try:
+            policy_receipt_multiple(note_receipt_bytes)
+            wrong_binding = None
+        except Rejected as error:
+            wrong_binding = error.code
+        if wrong_binding != "attribution-policy-binding":
+            failures.append("new notes receipt must be rejected as a performance-policy receipt; got %r" % wrong_binding)
+        controls += 1
+        required = required_realtime_floor(policy_multiple)
         text = read_text(limits_path, "limits-schema")
         for name, floor, expected_error in (
-                ("realtime_floor below the receipt rule is refused", "2.0", "realtime-floor-below-receipt"),
-                ("realtime_floor at the receipt rule passes", "%d.%02d" % divmod(int(required * 100), 100), None)):
+                ("realtime_floor below the immutable policy receipt rule is refused", "2.0", "realtime-floor-below-receipt"),
+                ("new notes receipt does not raise the immutable policy floor", "%d.%02d" % divmod(int(required * 100), 100), None)):
             limits_copy = os.path.join(beside, "perf-gate-v1.txt")
             with open(limits_copy, "w", encoding="utf-8") as handle:
                 handle.write(re.sub(r"(?m)^realtime_floor=.*$", "realtime_floor=" + floor, text))
@@ -1277,6 +1529,170 @@ class PerfGateRepeatControlsTests(unittest.TestCase):
         self.assertIn("REJECT proxy-vacuous", err)
 
 
+class PerfGateReceiptTests(unittest.TestCase):
+    """A trusted same-run receipt carries the evaluator's exact inputs and verdict."""
+
+    def source_sha(self):
+        return git(REPO_ROOT, "rev-parse", "HEAD").strip()
+
+    def head_at_tracer_ir(self, scratch, ir):
+        head = os.path.join(scratch, "head")
+        copy_tree(os.path.join(DATA, "head-pass"), head)
+        for repeat in (1, 2):
+            path = os.path.join(head, "tracer.cg.%d" % repeat)
+            text = read_text(path, "cachegrind-format")
+            text, count = re.subn(r"(?m)^summary: [0-9]+$", "summary: %d" % ir, text)
+            if count != 1:
+                raise AssertionError("fixture must contain one summary Ir line")
+            with open(path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(text)
+        return head
+
+    def evaluate_with_receipt(self, scratch, head, realtime=None, output=None):
+        source_sha = self.source_sha()
+        output = output or os.path.join(scratch, "receipt.json")
+        arguments = ["--evaluate", "--limits", DEFAULT_LIMITS, "--base", os.path.join(DATA, "base"),
+                     "--head", head, "--base-rev", POLICY_BASE_REV, "--source-head-rev", source_sha,
+                     "--build-base-identity", "a" * 64, "--build-head-identity", "b" * 64,
+                     "--emit-receipt", output]
+        if realtime is not None:
+            arguments += ["--realtime", realtime]
+        env = {"GITHUB_RUN_ID": "40259198255", "GITHUB_RUN_ATTEMPT": "2"}
+        return source_sha, output, run_cli(arguments, env_overrides=env)
+
+    def run_json(self, scratch, source_sha, *, event="push", path=".github/workflows/ci.yml"):
+        path = os.path.join(scratch, "run.json")
+        value = {"event": event, "head_sha": source_sha, "path": ".github/workflows/ci.yml",
+                 "id": 40259198255, "run_attempt": 2}
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(value, handle, sort_keys=True)
+            handle.write("\n")
+        return path
+
+    def verify(self, receipt_path, source_sha, run_path):
+        return run_cli(["--verify-receipt", receipt_path, "--source-sha", source_sha,
+                        "--run-json", run_path, "--run-id", "40259198255", "--attempt", "2",
+                        "--repo", REPO_ROOT])
+
+    def test_receipt_binds_positive_ratio_and_same_ci_run(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-positive-") as scratch:
+            head = self.head_at_tracer_ir(scratch, 273750000)
+            source_sha, receipt_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, head, os.path.join(DATA, "realtime-pass.txt"))
+            self.assertEqual(rc, 0, out + err)
+            self.assertTrue(os.path.isfile(receipt_path), "evaluate must write its receipt before returning")
+            receipt = json.loads(read_text(receipt_path, "perf-receipt-invalid"))
+            self.assertEqual(receipt["schema_version"], 1)
+            self.assertEqual(receipt["kind"], "perf-gate-receipt")
+            self.assertEqual(receipt["source_sha"], source_sha)
+            self.assertEqual(receipt["base_sha"], V020_SHA)
+            self.assertEqual(receipt["limits_blob"], git(REPO_ROOT, "rev-parse", "%s:%s" % (source_sha, POLICY_FILE)).strip())
+            self.assertEqual(receipt["ir"]["tracer"], {"base": 250000000, "head": [273750000, 273750000]})
+            self.assertEqual(receipt["digests"]["tracer"], {"base": "4c7a57ff3d50d228", "head": ["4c7a57ff3d50d228"] * 2})
+            self.assertEqual(receipt["tool"], {"base_build_identity": "a" * 64, "head_build_identity": "b" * 64})
+            self.assertEqual(receipt["run_id"], 40259198255)
+            self.assertEqual(receipt["run_attempt"], 2)
+            run_path = self.run_json(scratch, source_sha)
+            verified_rc, verified_out, verified_err = self.verify(receipt_path, source_sha, run_path)
+            self.assertEqual(verified_rc, 0, verified_out + verified_err)
+            self.assertIn("perf-gate receipt verified", verified_out)
+
+    def test_exact_ratio_passes_and_one_ir_above_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-boundary-") as scratch:
+            source_sha, exact_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-exact"), os.path.join(DATA, "realtime-pass.txt"))
+            self.assertEqual(rc, 0, out + err)
+            if not os.path.isfile(exact_path):
+                self.fail("evaluate must write an exact-boundary receipt")
+            self.assertEqual(json.loads(read_text(exact_path, "perf-receipt-invalid"))["ir"]["tracer"]["head"],
+                             [275000000, 275000000])
+            run_path = self.run_json(scratch, source_sha)
+            verified_rc, verified_out, verified_err = self.verify(exact_path, source_sha, run_path)
+            self.assertEqual(verified_rc, 0, verified_out + verified_err)
+
+            _, over_path, (over_rc, over_out, over_err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-over"), output=os.path.join(scratch, "over.json"))
+            self.assertEqual(over_rc, 1, over_out + over_err)
+            self.assertIn("REJECT ir-budget-exceeded", over_err)
+            self.assertTrue(os.path.isfile(over_path), "a red Ir gate must leave its receipt")
+            verified_rc, verified_out, verified_err = self.verify(over_path, source_sha, run_path)
+            self.assertEqual(verified_rc, 1, verified_out + verified_err)
+            self.assertIn("REJECT ir-budget-exceeded", verified_err)
+
+    def test_existing_receipt_is_never_overwritten(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-exclusive-") as scratch:
+            receipt_path = os.path.join(scratch, "receipt.json")
+            _, _, (rc, out, err) = self.evaluate_with_receipt(scratch, os.path.join(DATA, "head-pass"),
+                                                               output=receipt_path)
+            self.assertEqual(rc, 0, out + err)
+            if not os.path.isfile(receipt_path):
+                self.fail("evaluate must create the receipt before the exclusive-create check")
+            original = read_text(receipt_path, "perf-receipt-invalid")
+            _, _, (rc, out, err) = self.evaluate_with_receipt(scratch, os.path.join(DATA, "head-pass"),
+                                                               output=receipt_path)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT perf-receipt-output", err)
+            self.assertEqual(read_text(receipt_path, "perf-receipt-invalid"), original)
+
+    def test_malformed_timing_receipt_is_written_and_ir_verdict_keeps_priority(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-timing-order-") as scratch:
+            malformed = os.path.join(scratch, "malformed-timing.txt")
+            with open(malformed, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write("invalid timing line\n")
+            source_sha, over_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-over"), malformed, os.path.join(scratch, "over.json"))
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT ir-budget-exceeded", err)
+            self.assertTrue(os.path.isfile(over_path))
+            self.assertIsNone(json.loads(read_text(over_path, "perf-receipt-invalid"))["realtime_min"])
+
+            _, valid_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-pass"), malformed, os.path.join(scratch, "valid.json"))
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT realtime-format", err)
+            self.assertIsNone(json.loads(read_text(valid_path, "perf-receipt-invalid"))["realtime_min"])
+
+    def test_source_sha_mismatch_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-source-mismatch-") as scratch:
+            source_sha, receipt_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-pass"), os.path.join(DATA, "realtime-pass.txt"))
+            self.assertEqual(rc, 0, out + err)
+            receipt = json.loads(read_text(receipt_path, "perf-receipt-invalid"))
+            receipt["source_sha"] = "f" * 40
+            with open(receipt_path, "w", encoding="utf-8", newline="\n") as handle:
+                json.dump(receipt, handle, sort_keys=True)
+                handle.write("\n")
+            run_path = self.run_json(scratch, source_sha)
+            rc, out, err = self.verify(receipt_path, source_sha, run_path)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT perf-receipt-source-mismatch", err)
+
+    def test_pull_request_event_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-event-") as scratch:
+            source_sha, receipt_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-pass"), os.path.join(DATA, "realtime-pass.txt"))
+            self.assertEqual(rc, 0, out + err)
+            run_path = self.run_json(scratch, source_sha, event="pull_request")
+            rc, out, err = self.verify(receipt_path, source_sha, run_path)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT perf-receipt-event", err)
+
+    def test_wrong_limits_blob_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="perf-receipt-limits-blob-") as scratch:
+            source_sha, receipt_path, (rc, out, err) = self.evaluate_with_receipt(
+                scratch, os.path.join(DATA, "head-pass"), os.path.join(DATA, "realtime-pass.txt"))
+            self.assertEqual(rc, 0, out + err)
+            receipt = json.loads(read_text(receipt_path, "perf-receipt-invalid"))
+            receipt["limits_blob"] = "0" * 40
+            with open(receipt_path, "w", encoding="utf-8", newline="\n") as handle:
+                json.dump(receipt, handle, sort_keys=True)
+                handle.write("\n")
+            run_path = self.run_json(scratch, source_sha)
+            rc, out, err = self.verify(receipt_path, source_sha, run_path)
+            self.assertEqual(rc, 1, out + err)
+            self.assertIn("REJECT perf-receipt-limits-blob", err)
+
+
 def contract_self_test(test_case, label):
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(test_case)
     result = unittest.TextTestRunner(stream=sys.stderr, verbosity=2).run(suite)
@@ -1303,6 +1719,8 @@ def main(argv):
             return contract_self_test(PerfGateExceptionMeasurementTests, "exception-measurement")
         elif argv == ["--self-test-repeat-controls"]:
             return contract_self_test(PerfGateRepeatControlsTests, "repeat-controls")
+        elif argv == ["--self-test-receipt"]:
+            return contract_self_test(PerfGateReceiptTests, "receipt")
         elif "--self-test" in argv:
             self_test()
         elif "--check-attribution" in argv:
@@ -1333,6 +1751,12 @@ def main(argv):
                 if check_policy_ratchet(limits, base):
                     reject("ir-limit-widening-unapproved", "ir_ratio_limit was widened without a deterministic exception receipt")
             print("perf-gate limits ok")
+        elif "--verify-receipt" in argv:
+            required = ("--source-sha", "--run-json", "--run-id", "--attempt")
+            if option("--verify-receipt") is None or any(option(flag) is None for flag in required):
+                reject("usage", "--verify-receipt needs a receipt, --source-sha, --run-json, --run-id and --attempt")
+            verify_perf_receipt(option("--verify-receipt"), option("--source-sha"), option("--run-json"),
+                                option("--run-id"), option("--attempt"), option("--repo") or REPO_ROOT)
         elif "--evaluate" in argv:
             if None in (option("--limits"), option("--base"), option("--head")):
                 reject("usage", "--evaluate needs --limits, --base and --head")
@@ -1340,9 +1764,10 @@ def main(argv):
                      option("--base-rev"), option("--exception-receipt"),
                      option("--source-base-rev"), option("--source-head-rev"),
                      option("--build-base-identity"), option("--build-head-identity"),
-                     option("--emit-exception-measurement"))
+                     option("--emit-exception-measurement"), option("--emit-receipt"))
         else:
-            reject("usage", "use --self-test, --check-limits, --evaluate, --check-attribution, --emit-attribution, --print-selection or --adapt-harness")
+            reject("usage", "use --self-test, --self-test-receipt, --verify-receipt, --check-limits, --evaluate, "
+                   "--check-attribution, --emit-attribution, --print-selection or --adapt-harness")
     except Rejected as error:
         sys.stderr.write("REJECT %s: %s\n" % (error.code, error))
         return 1

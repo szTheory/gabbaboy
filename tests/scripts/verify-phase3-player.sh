@@ -473,6 +473,19 @@ ctest --test-dir "$APP_BUILD" --output-on-failure --no-tests=error -R '^player_'
 bash "$ROOT_DIR/tests/scripts/verify-dmg-baseline.sh" --build-dir "$APP_BUILD" \
   --junit "$APP_BUILD/ctest-player.xml" --inventory player
 
+# The optimized package build omits debug records that verify-core-linkage.py uses to identify the
+# finished core member. Keep package settings Release, and run linkage against a separate Debug
+# player build so both its real link lines and binary identities remain inspectable.
+LINKAGE_BUILD="$BUILD_ROOT/gabbaboy-linkage"
+cmake --log-level=WARNING -S "$ROOT_DIR" -B "$LINKAGE_BUILD" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_PREFIX_PATH="$SDL_PREFIX" \
+  -DGABBABOY_BUILD_PLAYER=ON \
+  -DBUILD_TESTING=ON
+cmake --build "$LINKAGE_BUILD" --parallel
+ctest --test-dir "$LINKAGE_BUILD" --output-on-failure --no-tests=error -R '^(player_|core_linkage_)'
+python3 -I "$ROOT_DIR/tests/scripts/verify-core-linkage.py" --check --build-dir "$LINKAGE_BUILD"
+
 SDL_LICENSE_SHA256=$(sha256_file "$SDL_SOURCE/LICENSE.txt")
 PLAYER_BIN="$APP_BUILD/gabbaboy-player"
 [[ -x "$PLAYER_BIN" ]] || fail 'player build did not produce gabbaboy-player'

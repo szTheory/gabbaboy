@@ -133,11 +133,17 @@ jobs:
           set -euo pipefail
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           chmod +x "$RUNNER_TEMP/verify-release-gates.sh"
+      - name: Require an active version window at the exact source SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "${GITHUB_SHA}:tests/scripts/verify-version-window.py" > "$RUNNER_TEMP/verify-version-window.py"
+          python3 -I "$RUNNER_TEMP/verify-version-window.py" --check-tracked --rev "$SOURCE_SHA" --require-active --repo .
       - name: Require final release notes to satisfy the v0.2 adoption contract
         env:
           RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
         shell: bash
-        run: python3 -I tests/scripts/verify-v02-adoption.py --release-notes "$RELEASE_NOTES_FILE"
+        run: python3 -I tests/scripts/verify-v02-adoption.py --release-notes "$RELEASE_NOTES_FILE" --rev "$GITHUB_SHA"
       - name: Verify merged PR exact-head required evidence
         id: proof
         env:
@@ -160,7 +166,30 @@ jobs:
             [[ $(jq --arg name "$context" 'any(.[]; .name == $name and .bucket == "pass")' <<<"$required") == true ]] || { echo "Required exact-head context missing: $context" >&2; exit 1; }
           done
           [[ $(jq 'any(.[]; (.name | endswith("fixture-repro")) and .bucket == "pass")' <<<"$required") == true ]] || { echo "Required exact-head fixture-repro context missing." >&2; exit 1; }
-          printf 'head_sha=%s\nmerge_commit_sha=%s\npr_number=%s\n' "$pr_head" "$pr_merge" "$pr_number" >> "$GITHUB_OUTPUT"
+          merged_at=$(jq -r '.merged_at' <<<"$pr")
+          [[ -n "$merged_at" && "$merged_at" != null ]] || { echo "Merged PR evidence has no merge time." >&2; exit 1; }
+          printf 'head_sha=%s\nmerge_commit_sha=%s\npr_number=%s\nmerged_at=%s\n' "$pr_head" "$pr_merge" "$pr_number" "$merged_at" >> "$GITHUB_OUTPUT"
+      - name: Fetch the rehearsal run and its attempt jobs for binding
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/workflows/release-rehearsal.yml/runs?branch=rehearsal/$RELEASE_TAG&status=success&per_page=100" > "$RUNNER_TEMP/rehearsal-runs.json"
+          selected_rehearsal=$(jq -ec '[.workflow_runs[]] | if length == 0 then error("no successful rehearsal run exists") else max_by(.id) end' "$RUNNER_TEMP/rehearsal-runs.json")
+          run_id=$(jq -r '.id' <<<"$selected_rehearsal")
+          attempt=$(jq -r '.run_attempt' <<<"$selected_rehearsal")
+          [[ "$run_id" =~ ^[0-9]+$ && "$attempt" =~ ^[0-9]+$ ]] || { echo "No successful rehearsal run of this tag exists." >&2; exit 1; }
+          gh api "repos/$GH_REPO/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100" > "$RUNNER_TEMP/rehearsal-attempt-jobs.json"
+      - name: Bind the exact-tag rehearsal to the version PR head
+        env:
+          PR_HEAD_SHA: ${{ steps.proof.outputs.head_sha }}
+          PR_MERGED_AT: ${{ steps.proof.outputs.merged_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"
+          python3 -I "$RUNNER_TEMP/verify-release-source-proof.py" --bind-rehearsal-run "$RUNNER_TEMP/rehearsal-runs.json" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo "$GH_REPO" --selected-run "$RUNNER_TEMP/rehearsal-run.json" --pr-head "$PR_HEAD_SHA" --merged-at "$PR_MERGED_AT" --attempt-jobs "$RUNNER_TEMP/rehearsal-attempt-jobs.json"
       - name: Record or revalidate source identity receipt
         env:
           GH_TOKEN: ${{ github.token }}
@@ -223,6 +252,7 @@ jobs:
           git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
           git show "${GITHUB_SHA}:tests/scripts/verify-v02-source-archive.py" > tests/scripts/verify-v02-source-archive.py
           git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
+          git show "${GITHUB_SHA}:tests/scripts/test_installed_host.py" > tests/scripts/test_installed_host.py
           git show "${GITHUB_SHA}:cmake/VerifyReleaseReceipt.cmake" > cmake/VerifyReleaseReceipt.cmake
       - name: Fetch a previously qualified candidate before retry
         env:
@@ -419,6 +449,9 @@ jobs:
           # The v0.2 verifier rejects a prefix inside the checkout, so extract the downloaded bytes elsewhere.
           bash tests/scripts/verify-release-candidate.sh --extract \
             build/downloaded/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/test_installed_host.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --work "$RUNNER_TEMP/host-smoke" --source-contract docs/host-contract.json \
+            --receipt build/host-smoke-receipt.json
           # The consumer verifier needs a candidate manifest; bind the downloaded bytes to the source and the
           # attached build receipt the same way the final gate does.
           python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
@@ -426,6 +459,7 @@ jobs:
             --build-receipt build/downloaded/build-receipt.json
           python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
             --archive build/downloaded/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --platform linux-x64 --host-smoke-receipt build/host-smoke-receipt.json \
             --output build/v02-consumer-receipt.json
       - name: Attach the consumer receipt to the draft
         env:
@@ -690,6 +724,7 @@ jobs:
           # verify-release-candidate.sh --extract reaches verify-v02-consumers.py, so both are replaced before either runs.
           git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
           git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
+          git show "${GITHUB_SHA}:tests/scripts/test_installed_host.py" > tests/scripts/test_installed_host.py
       - name: Select a complete existing macOS candidate or a clean build
         env:
           GH_TOKEN: ${{ github.token }}
@@ -790,7 +825,7 @@ jobs:
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-preview-macos-arm64.tar.gz --pattern gabbaboy-preview-macos-arm64-build-receipt.json --dir build/downloaded-player
           cp build/downloaded-player/gabbaboy-preview-macos-arm64-build-receipt.json build/downloaded-player/build-receipt.json
           mkdir -p build/downloaded-core build/consumer-work
-          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --dir build/downloaded-core
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --pattern gabbaboy-build-receipt-macos-arm64.json --dir build/downloaded-core
       - name: Smoke the downloaded player archive and relocated C/C++ consumers
         shell: bash
         run: |
@@ -808,6 +843,18 @@ jobs:
             cmake --build "build/consumer-work/$language" --parallel 2
             "build/consumer-work/$language/consumer-$language" "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
           done
+          bash tests/scripts/verify-release-candidate.sh --extract \
+            build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --archive build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz --source-sha "$SOURCE_SHA" \
+            --build-receipt build/downloaded-core/gabbaboy-build-receipt-macos-arm64.json
+          python3 -I tests/scripts/test_installed_host.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --work "$RUNNER_TEMP/host-smoke" --source-contract docs/host-contract.json \
+            --receipt build/host-smoke-receipt.json
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --archive build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz \
+            --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --platform macos-arm64 \
+            --host-smoke-receipt build/host-smoke-receipt.json --output build/v02-consumer-receipt-macos-arm64.json
 
   candidate-windows:
     name: downloaded-windows-x64-core-candidate
@@ -949,7 +996,7 @@ jobs:
           current=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
           [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
           mkdir -p build/downloaded build/consumer-work
-          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --dir build/downloaded
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --pattern gabbaboy-build-receipt-windows-x64.json --dir build/downloaded
       - name: Overlay the trusted release-candidate verifiers from the workflow commit
         shell: bash
         run: |
@@ -973,6 +1020,15 @@ jobs:
             cmake --build "build/consumer-work/$language" --config Release --parallel 2
             "build/consumer-work/$language/Release/consumer-$language.exe" "$prefix/share/gabbaboy/fixtures/tracer/tracer.gb"
           done
+          bash tests/scripts/verify-release-candidate.sh --extract \
+            build/downloaded/gabbaboy-core-windows-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
+          python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --archive build/downloaded/gabbaboy-core-windows-x64.tar.gz --source-sha "$SOURCE_SHA" \
+            --build-receipt build/downloaded/gabbaboy-build-receipt-windows-x64.json
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --archive build/downloaded/gabbaboy-core-windows-x64.tar.gz \
+            --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --platform windows-x64 \
+            --host-smoke-not-applicable --output build/v02-consumer-receipt-windows-x64.json
           # This adds exact downloaded-byte verification while reusing the existing native consumer sources and toolchain.
 
   # Trust split for source-executing evidence (P15-01). candidate-corpus and candidate-performance run
@@ -1122,11 +1178,21 @@ jobs:
           python3 -I tests/scripts/verify-v02-fuzz.py --verify-hosted --source-sha "$SOURCE_SHA" \
             --run-id "$run_id" --attempt "$attempt" --receipt build/ci-fuzz/v02-fuzz-receipt.json \
             --poll-seconds "$HOSTED_POLL_SECONDS"
+          gh api "repos/$GH_REPO/actions/runs/$run_id" > build/ci-fuzz/perf-gate-run.json
+          mkdir -p build/ci-fuzz/perf-gate
+          gh run download "$run_id" --repo "$GH_REPO" --name "perf-gate-$run_id-$attempt" --dir build/ci-fuzz/perf-gate
+          test -s build/ci-fuzz/perf-gate/perf-gate-receipt.json
+          python3 -I tests/scripts/verify-perf-gate.py --verify-receipt \
+            build/ci-fuzz/perf-gate/perf-gate-receipt.json --source-sha "$SOURCE_SHA" \
+            --run-json build/ci-fuzz/perf-gate-run.json --run-id "$run_id" --attempt "$attempt" --repo .
       - name: Retain the verified campaign receipt for the separate attacher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-evidence-fuzz
-          path: trusted/build/ci-fuzz/v02-fuzz-receipt.json
+          path: |
+            trusted/build/ci-fuzz/v02-fuzz-receipt.json
+            trusted/build/ci-fuzz/perf-gate/perf-gate-receipt.json
+            trusted/build/ci-fuzz/perf-gate-run.json
           if-no-files-found: error
           retention-days: 7
 
@@ -1288,8 +1354,8 @@ jobs:
 
   publish-qualified-release:
     name: final-downloaded-byte-gate-and-publish
-    needs: [release, candidate, candidate-macos, candidate-windows, candidate-platform-manifest]
-    if: ${{ always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-platform-manifest.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true')) }}
+    needs: [release, candidate, candidate-macos, candidate-windows, candidate-fuzz, candidate-platform-manifest]
+    if: ${{ always() && needs.candidate.result == 'success' && needs.candidate-macos.result == 'success' && needs.candidate-windows.result == 'success' && needs.candidate-fuzz.result == 'success' && needs.candidate-platform-manifest.result == 'success' && ((inputs.retry == true) || (needs.release.result == 'success' && needs.release.outputs.release_created == 'true')) }}
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     permissions:
@@ -1347,11 +1413,23 @@ jobs:
         run: |
           set -euo pipefail
           git show "${GITHUB_SHA}:.github/scripts/verify-release-source-proof.py" > "$RUNNER_TEMP/verify-release-source-proof.py"
+      - name: Download the verified CI performance gate artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-evidence-fuzz
+          path: build/evidence-fuzz
       - name: Validate draft candidate and all downloaded platform bytes
         shell: bash
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh validate-draft
       - name: Recheck final API inventory and downloaded receipts
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh final-gate
+      - name: Persist the exact pre-publish asset inventory
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-pre-publish-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/release-final/pre-publish-inventory.json
+          if-no-files-found: error
+          retention-days: 90
       # RM-030 (D-22): the full ASan stall replay of the exact tagged tree must have succeeded, judged by the trusted
       # revision's gate immediately before the one publication transition.
       - name: Require the successful exact-tree nightly ASan replay

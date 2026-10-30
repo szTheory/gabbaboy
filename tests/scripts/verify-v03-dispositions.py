@@ -24,7 +24,9 @@ repository; a fixture is not hosted evidence.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
+import io
 import json
 import pathlib
 import re
@@ -32,6 +34,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tokenize
 
 if not __debug__:
     raise SystemExit("verify-v03-dispositions refuses to run under python -O (its asserts and checks must stay on)")
@@ -50,6 +53,20 @@ RELEASE_LINKED = ("LIM-SUPPORT-LEDGER-PIN", "LIM-PERF-REVIEW", "LIM-REHEARSAL-FA
 RELEASE_CLOSURE = ["rehearsal_run", "trusted_judge", "nightly_asan_run", "release_readback"]
 PR_ROW = "PR-78-92-SUPERSEDED"
 PR_NUMBERS = list(range(78, 93))
+READBACK_V2_KEYS = {
+    "tag", "tag_sha", "tag_tree", "is_draft", "is_prerelease", "release_id", "published_at", "url",
+    "assets", "reconciliation", "release_run", "attach_v02_evidence", "pre_publish_inventory",
+    "pre_publish_inventory_source", "sha256sums", "release_receipt", "sidecar_ledger",
+}
+PRE_PUBLISH_KEYS = {"schema_version", "kind", "tag", "source_sha", "release_id", "run_id", "run_attempt", "assets"}
+PRE_PUBLISH_SOURCE_KEYS = {"run_id", "run_attempt", "artifact_name", "artifact_id", "file_sha256", "raw"}
+FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY")
+FORBIDDEN_TEXT_ASSIGNMENT = r'''FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY")'''
+SHA256_LINE = re.compile(r"^([0-9a-f]{64})  ([^/\\\s]+)$")
+READBACK_V2_REL = "fixture/19-release-readback.json"
+READBACK_LIFECYCLE_REL = ".github/scripts/verify-release-lifecycle.py"
+READBACK_LEDGER_REL = "docs/support/v0.3.0.md"
+FINAL_ASSET_NAMES = {"SHA256SUMS", "release-receipt.json"}
 VALIDATION_ROWS = ("34-1", "34-2", "35-2", "35-3", "36-1", "36-2", "36-3")
 
 # id -> admitted statuses. The id set is exact: a missing, dropped or extra row is rejected.
@@ -255,6 +272,204 @@ def check_readback(source: Source, receipts: dict) -> None:
         reject("receipt-invalid", "the release readback must record its reconciliation")
 
 
+def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, rev: str | None) -> str:
+    """Reconcile the post-publication record to tag objects and its pre-publication artifact."""
+    if not isinstance(readback, dict):
+        reject("receipt-invalid", "readback must be a JSON object")
+    if "pre_publish_inventory_source" not in readback:
+        reject("readback-inventory-unsourced", "pre-publish inventory source is required")
+    if set(readback) != READBACK_V2_KEYS:
+        reject("receipt-invalid", f"readback must contain exactly {sorted(READBACK_V2_KEYS)}")
+    if not TAG.fullmatch(tag) or readback.get("tag") != tag or not isinstance(readback.get("tag_sha"), str) \
+            or not HEX40.fullmatch(readback["tag_sha"]) or not isinstance(readback.get("tag_tree"), str) \
+            or not HEX40.fullmatch(readback["tag_tree"]):
+        reject("readback-tag-mismatch", "readback tag, commit or tree is malformed or differs from --tag")
+    tag_commit = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{tag}^{{commit}}"],
+                                capture_output=True, text=True, check=False)
+    tag_sha = tag_commit.stdout.strip() if tag_commit.returncode == 0 else None
+    tag_tree = git_tree(repo, tag) if tag_sha is not None else None
+    if tag_sha != readback["tag_sha"] or tag_tree != readback["tag_tree"]:
+        reject("readback-tag-mismatch", "readback tag SHA/tree do not match the tag objects in the repository")
+    if readback["is_draft"] is not False or readback["is_prerelease"] is not False:
+        reject("receipt-invalid", "published readback must have is_draft and is_prerelease false")
+
+    release_id = readback.get("release_id")
+    if type(release_id) is not int or release_id < 1 or not isinstance(readback.get("published_at"), str) \
+            or not readback["published_at"].strip() or not isinstance(readback.get("url"), str) \
+            or not readback["url"].startswith("https://"):
+        reject("receipt-invalid", "readback release id, publication time and URL are malformed")
+    reconciliation = readback.get("reconciliation")
+    if not isinstance(reconciliation, dict) or set(reconciliation) != {"verifier", "result", "compared_with", "asset_count"} \
+            or any(not isinstance(reconciliation.get(key), str) or not reconciliation[key].strip()
+                   for key in ("verifier", "result", "compared_with")) \
+            or type(reconciliation.get("asset_count")) is not int or reconciliation["asset_count"] < 1:
+        reject("receipt-invalid", "reconciliation must be a complete legacy-schema result")
+    release_run = readback.get("release_run")
+    if not isinstance(release_run, dict) or set(release_run) != {
+            "workflow", "run_id", "event", "retry", "head_sha", "conclusion", "final_publish_job_id"} \
+            or not isinstance(release_run.get("workflow"), str) or not release_run["workflow"].strip() \
+            or type(release_run.get("run_id")) is not int or release_run["run_id"] < 1 \
+            or not isinstance(release_run.get("event"), str) or not release_run["event"].strip() \
+            or type(release_run.get("retry")) is not bool or release_run.get("head_sha") != readback["tag_sha"] \
+            or release_run.get("conclusion") != "success" or type(release_run.get("final_publish_job_id")) is not int \
+            or release_run["final_publish_job_id"] < 1:
+        reject("receipt-invalid", "release_run must identify a successful publication of the tag commit")
+    attach = readback.get("attach_v02_evidence")
+    if not isinstance(attach, dict) or set(attach) != {
+            "run_id", "job_id", "head_sha", "conclusion", "started_at", "completed_at", "duration_seconds"} \
+            or type(attach.get("run_id")) is not int or attach["run_id"] < 1 \
+            or type(attach.get("job_id")) is not int or attach["job_id"] < 1 \
+            or attach.get("head_sha") != readback["tag_sha"] or attach.get("conclusion") != "success" \
+            or not isinstance(attach.get("started_at"), str) or not attach["started_at"].strip() \
+            or not isinstance(attach.get("completed_at"), str) or not attach["completed_at"].strip() \
+            or type(attach.get("duration_seconds")) is not int or attach["duration_seconds"] < 0:
+        reject("receipt-invalid", "attach_v02_evidence must identify a successful tag-bound job")
+
+    source_row = readback.get("pre_publish_inventory_source")
+    if not isinstance(source_row, dict) or set(source_row) != PRE_PUBLISH_SOURCE_KEYS \
+            or type(source_row.get("run_id")) is not int or source_row["run_id"] < 1 \
+            or type(source_row.get("run_attempt")) is not int or source_row["run_attempt"] < 1 \
+            or type(source_row.get("artifact_id")) is not int or source_row["artifact_id"] < 1 \
+            or not isinstance(source_row.get("artifact_name"), str) \
+            or not isinstance(source_row.get("file_sha256"), str) or not HEX64.fullmatch(source_row["file_sha256"]) \
+            or not isinstance(source_row.get("raw"), str):
+        reject("readback-inventory-unsourced", "pre-publish inventory source metadata is missing or malformed")
+    raw_bytes = source_row["raw"].encode("utf-8")
+    if hashlib.sha256(raw_bytes).hexdigest() != source_row["file_sha256"]:
+        reject("readback-inventory-unsourced", "pre-publish inventory raw bytes do not match file_sha256")
+    try:
+        inventory = parse_json(raw_bytes, "pre-publish inventory", "readback-inventory-unsourced")
+    except Reject as error:
+        if error.code == "readback-inventory-unsourced":
+            raise
+        reject("readback-inventory-unsourced", error.message)
+    if not isinstance(inventory, dict) or set(inventory) != PRE_PUBLISH_KEYS \
+            or inventory.get("schema_version") != 1 or inventory.get("kind") != "pre-publish-inventory" \
+            or inventory.get("tag") != tag or inventory.get("source_sha") != readback["tag_sha"] \
+            or inventory.get("release_id") != release_id or inventory.get("run_id") != source_row["run_id"] \
+            or inventory.get("run_attempt") != source_row["run_attempt"] \
+            or source_row["artifact_name"] != f"release-pre-publish-inventory-{source_row['run_id']}-{source_row['run_attempt']}" \
+            or source_row["run_id"] != release_run["run_id"]:
+        reject("readback-inventory-unsourced", "pre-publish inventory is not sourced from this release run and tag")
+    inventory_assets = inventory.get("assets")
+    if not isinstance(inventory_assets, list) or not inventory_assets:
+        reject("readback-inventory-unsourced", "pre-publish inventory must contain a non-empty asset list")
+    inventory_by_name = {}
+    for item in inventory_assets:
+        if not isinstance(item, dict) or set(item) != {"name", "id", "digest"} \
+                or not isinstance(item.get("name"), str) or not item["name"] \
+                or type(item.get("id")) is not int or item["id"] < 1 \
+                or not isinstance(item.get("digest"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", item["digest"]):
+            reject("readback-inventory-unsourced", "pre-publish inventory contains a malformed asset")
+        if item["name"] in inventory_by_name:
+            reject("readback-inventory-unsourced", "pre-publish inventory repeats an asset name")
+        inventory_by_name[item["name"]] = item
+    if readback.get("pre_publish_inventory") != inventory_assets:
+        reject("readback-inventory-unsourced", "embedded inventory differs from the sourced pre-publish file")
+
+    assets = readback.get("assets")
+    if not isinstance(assets, list) or not assets:
+        reject("readback-assets-mismatch", "published API asset list must be non-empty")
+    assets_by_name = {}
+    ids = set()
+    for item in assets:
+        if not isinstance(item, dict) or set(item) != {"name", "id", "size", "digest"} \
+                or not isinstance(item.get("name"), str) or not item["name"] \
+                or type(item.get("id")) is not int or item["id"] < 1 \
+                or type(item.get("size")) is not int or item["size"] < 0 \
+                or not isinstance(item.get("digest"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", item["digest"]):
+            reject("readback-assets-mismatch", "published API asset list contains a malformed row")
+        if item["name"] in assets_by_name or item["id"] in ids:
+            reject("readback-assets-mismatch", "published API asset names and ids must be unique")
+        assets_by_name[item["name"]] = item
+        ids.add(item["id"])
+    if not FINAL_ASSET_NAMES.issubset(inventory_by_name):
+        reject("readback-inventory-unsourced", "the sourced inventory must include SHA256SUMS and release-receipt.json")
+    if set(assets_by_name) != set(inventory_by_name):
+        reject("readback-assets-mismatch", "published API asset names differ from the complete sourced inventory")
+    for name, item in inventory_by_name.items():
+        api_item = assets_by_name.get(name)
+        if api_item is None or api_item["id"] != item["id"] or api_item["digest"] != item["digest"]:
+            reject("readback-assets-mismatch", f"published asset {name} differs from its pre-publish id or digest")
+
+    payload_names = set(inventory_by_name) - FINAL_ASSET_NAMES
+    if not payload_names:
+        reject("readback-inventory-unsourced", "the sourced inventory must include qualified payload assets")
+
+    sums = readback.get("sha256sums")
+    sums_asset = assets_by_name.get("SHA256SUMS")
+    if not isinstance(sums, dict) or set(sums) != {"asset_id", "lines"} or sums_asset is None \
+            or type(sums.get("asset_id")) is not int or sums["asset_id"] != sums_asset["id"] \
+            or not isinstance(sums.get("lines"), list):
+        reject("readback-digest-mismatch", "SHA256SUMS asset reference or lines are malformed")
+    checksums = {}
+    for line in sums["lines"]:
+        if not isinstance(line, str):
+            reject("readback-digest-mismatch", "SHA256SUMS lines must be text")
+        match = SHA256_LINE.fullmatch(line)
+        if not match or match[2] in checksums:
+            reject("readback-digest-mismatch", "SHA256SUMS contains a malformed or duplicate line")
+        checksums[match[2]] = match[1]
+    expected_sum_names = payload_names
+    if set(checksums) != expected_sum_names:
+        reject("readback-digest-mismatch", "SHA256SUMS names differ from the published assets it must cover")
+    for name, digest in checksums.items():
+        if digest != assets_by_name[name]["digest"][7:]:
+            reject("readback-digest-mismatch", f"SHA256SUMS digest for {name} differs from its API digest")
+    sums_bytes = ("\n".join(sums["lines"]) + "\n").encode("utf-8")
+    if hashlib.sha256(sums_bytes).hexdigest() != sums_asset["digest"][7:]:
+        reject("readback-digest-mismatch", "SHA256SUMS bytes differ from the digest of the attached metadata asset")
+
+    receipt = readback.get("release_receipt")
+    receipt_asset = assets_by_name.get("release-receipt.json")
+    if not isinstance(receipt, dict) or set(receipt) != {"asset_id", "sha256", "assets"} \
+            or receipt_asset is None or type(receipt.get("asset_id")) is not int \
+            or receipt["asset_id"] != receipt_asset["id"] \
+            or not isinstance(receipt.get("sha256"), str) or not HEX64.fullmatch(receipt["sha256"]) \
+            or receipt["sha256"] != receipt_asset["digest"][7:]:
+        reject("readback-receipt-mismatch", "release-receipt asset id or digest differs from the API")
+    receipt_assets = receipt.get("assets")
+    if not isinstance(receipt_assets, list) or len(receipt_assets) != len(payload_names):
+        reject("readback-receipt-mismatch", "release receipt asset digests do not cover the sourced inventory")
+    receipt_by_name = {}
+    for item in receipt_assets:
+        if not isinstance(item, dict) or set(item) != {"name", "sha256"} \
+                or not isinstance(item.get("name"), str) or not item["name"] \
+                or not isinstance(item.get("sha256"), str) or not HEX64.fullmatch(item["sha256"]) \
+                or item["name"] in receipt_by_name:
+            reject("readback-receipt-mismatch", "release receipt contains a malformed asset digest")
+        receipt_by_name[item["name"]] = item["sha256"]
+    if set(receipt_by_name) != payload_names or any(
+            receipt_by_name[name] != inventory_by_name[name]["digest"][7:] for name in payload_names):
+        reject("readback-receipt-mismatch", "release receipt asset digests differ from the sourced API inventory")
+
+    ledger = readback.get("sidecar_ledger")
+    expected_ledger_path = f"docs/support/{tag}.md"
+    if not isinstance(ledger, dict) or set(ledger) != {"path", "git_blob_oid"} \
+            or ledger.get("path") != expected_ledger_path or not isinstance(ledger.get("git_blob_oid"), str) \
+            or not HEX40.fullmatch(ledger["git_blob_oid"]):
+        reject("readback-ledger-blob-mismatch", "sidecar ledger path or Git blob id is malformed")
+    blob = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{tag}:{expected_ledger_path}"],
+                          capture_output=True, text=True, check=False)
+    blob_oid = blob.stdout.strip() if blob.returncode == 0 else None
+    blob_type = subprocess.run(["git", "-C", str(repo), "cat-file", "-t", blob_oid], capture_output=True, text=True,
+                               check=False) if blob_oid else None
+    if blob_oid != ledger["git_blob_oid"] or blob_type is None or blob_type.returncode != 0 or blob_type.stdout.strip() != "blob":
+        reject("readback-ledger-blob-mismatch", "sidecar ledger blob does not match the tag's support ledger")
+
+    try:
+        if FORBIDDEN_TEXT.search(json.dumps(readback, sort_keys=True, ensure_ascii=False)):
+            reject("readback-private-text", "readback contains a personal path, token or private-key marker")
+    except (TypeError, ValueError):
+        reject("readback-private-text", "readback cannot be safely scanned for private text")
+    lifecycle = source.read(READBACK_LIFECYCLE_REL, "readback-pattern-mismatch").decode("utf-8", errors="strict")
+    copied_pattern = next((line.strip() for line in lifecycle.splitlines() if line.startswith("FORBIDDEN_TEXT =")), None)
+    if copied_pattern != FORBIDDEN_TEXT_ASSIGNMENT:
+        reject("readback-pattern-mismatch", "copied FORBIDDEN_TEXT pattern differs from the lifecycle checker at this revision")
+
+    return f"v03-readback pass tag={tag} assets={len(assets)}"
+
+
 def check_pr_closures(source: Source, receipt) -> None:
     _, closures = check_receipt_file(source, receipt, "pr_closures")
     prs = closures.get("prs") if isinstance(closures, dict) else None
@@ -273,7 +488,12 @@ def check_pr_closures(source: Source, receipt) -> None:
                 or any(not isinstance(path, str) or not path for path in item["changed_paths"]):
             reject("pr-closure-invalid", f"#{number} must be CLOSED with closed_at, an https comment_url and changed_paths")
         for path in item["changed_paths"]:
-            first = path.replace("\\", "/").lstrip("./").split("/", 1)[0].lower()
+            normalized = pathlib.PurePosixPath(path)
+            parts = path.split("/")
+            if "\\" in path or path.startswith("/") or re.match(r"^[A-Za-z]:", path) \
+                    or any(part in ("", ".", "..") for part in parts) or normalized.as_posix() != path:
+                reject("pr-closure-invalid", f"#{number} changed path {path!r} is not a canonical repository-relative path")
+            first = parts[0].lower()
             if first in ("src", "include"):
                 reject("pr-closure-invalid", f"#{number} changed {path}; a superseded PR must not touch src/ or include/")
 
@@ -421,13 +641,134 @@ def serialise(value: dict) -> bytes:
     return (json.dumps(value, indent=1, sort_keys=True) + "\n").encode("utf-8")
 
 
+def build_readback_fixture(base: pathlib.Path) -> dict:
+    repo = base / "readback-repo"
+    (repo / ".github/scripts").mkdir(parents=True)
+    (repo / "docs/support").mkdir(parents=True)
+    (repo / "fixture").mkdir()
+    (repo / READBACK_LEDGER_REL).write_text("# v0.3.0 fixture ledger\n", encoding="utf-8")
+    (repo / READBACK_LIFECYCLE_REL).write_text(FORBIDDEN_TEXT_ASSIGNMENT + "\n", encoding="utf-8")
+    git(repo.parent, "init", "-q", "readback-repo")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "fixture: tagged support ledger")
+    tag_sha = git(repo, "rev-parse", "HEAD")
+    tag_tree = git(repo, "rev-parse", "HEAD^{tree}")
+    blob_oid = git(repo, "rev-parse", f"HEAD:{READBACK_LEDGER_REL}")
+    git(repo, "tag", "v0.3.0")
+
+    payload_name = "gabbaboy-core-linux-x64.tar.gz"
+    payload_bytes = b"qualified fixture archive\n"
+    original_digest = hashlib.sha256(payload_bytes).hexdigest()
+    sums_lines = [f"{original_digest}  {payload_name}"]
+    sums_asset_bytes = (sums_lines[0] + "\n").encode("utf-8")
+    receipt_asset_bytes = b"release receipt fixture bytes\n"
+    receipt_asset_digest = hashlib.sha256(receipt_asset_bytes).hexdigest()
+    inventory_assets = [
+        {"name": payload_name, "id": 901, "digest": f"sha256:{original_digest}"},
+        {"name": "SHA256SUMS", "id": 902, "digest": f"sha256:{hashlib.sha256(sums_asset_bytes).hexdigest()}"},
+        {"name": "release-receipt.json", "id": 903, "digest": f"sha256:{receipt_asset_digest}"},
+    ]
+    inventory = {"schema_version": 1, "kind": "pre-publish-inventory", "tag": "v0.3.0", "source_sha": tag_sha,
+                 "release_id": 7001, "run_id": 8001, "run_attempt": 2, "assets": inventory_assets}
+    inventory_raw = (json.dumps(inventory, sort_keys=True, indent=2) + "\n")
+    api_assets = [
+        {"name": payload_name, "id": 901, "size": len(payload_bytes), "digest": f"sha256:{original_digest}"},
+        {"name": "SHA256SUMS", "id": 902, "size": len(sums_asset_bytes),
+         "digest": f"sha256:{hashlib.sha256(sums_asset_bytes).hexdigest()}"},
+        {"name": "release-receipt.json", "id": 903, "size": len(receipt_asset_bytes), "digest": f"sha256:{receipt_asset_digest}"},
+    ]
+    readback = {
+        "tag": "v0.3.0", "tag_sha": tag_sha, "tag_tree": tag_tree, "is_draft": False, "is_prerelease": False,
+        "release_id": 7001, "published_at": "2026-10-29T12:00:00Z",
+        "url": "https://github.com/example/gabbaboy/releases/tag/v0.3.0", "assets": api_assets,
+        "reconciliation": {"verifier": ".github/scripts/verify-published-release-assets.py",
+                            "result": "PASS: published assets match", "compared_with": "pre-publish inventory",
+                            "asset_count": len(api_assets)},
+        "release_run": {"workflow": ".github/workflows/release.yml", "run_id": 8001, "event": "workflow_dispatch",
+                        "retry": True, "head_sha": tag_sha, "conclusion": "success", "final_publish_job_id": 8101},
+        "attach_v02_evidence": {"run_id": 8001, "job_id": 8102, "head_sha": tag_sha, "conclusion": "success",
+                                 "started_at": "2026-10-29T11:00:00Z", "completed_at": "2026-10-29T11:01:00Z",
+                                 "duration_seconds": 60},
+        "pre_publish_inventory": inventory_assets,
+        "pre_publish_inventory_source": {"run_id": 8001, "run_attempt": 2,
+                                          "artifact_name": "release-pre-publish-inventory-8001-2", "artifact_id": 8201,
+                                          "file_sha256": hashlib.sha256(inventory_raw.encode()).hexdigest(),
+                                          "raw": inventory_raw},
+        "sha256sums": {"asset_id": 902, "lines": sums_lines},
+        "release_receipt": {"asset_id": 903, "sha256": receipt_asset_digest,
+                            "assets": [{"name": payload_name, "sha256": original_digest}]},
+        "sidecar_ledger": {"path": READBACK_LEDGER_REL, "git_blob_oid": blob_oid},
+    }
+    (repo / READBACK_V2_REL).write_bytes(serialise(readback))
+    git(repo, "add", READBACK_V2_REL)
+    git(repo, "commit", "-q", "-m", "fixture: committed published readback")
+    return {"repo": repo, "readback": readback, "head": git(repo, "rev-parse", "HEAD"), "tag_sha": tag_sha}
+
+
 def run_cli(repo: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-I", str(SCRIPT), "--repo", str(repo), *args], capture_output=True, text=True,
                           timeout=120, check=False)
 
 
+def require_python_310_grammar(source: str) -> None:
+    """Reject syntax newer than the supported Python 3.10 grammar, including PEP 701 f-string escapes."""
+    ast.parse(source, feature_version=(3, 10))
+    fstring_start = getattr(tokenize, "FSTRING_START", None)
+    fstring_end = getattr(tokenize, "FSTRING_END", None)
+    if fstring_start is None or fstring_end is None:
+        # Python 3.10/3.11's parser itself rejects backslashes in f-string expressions.
+        return
+
+    contexts: list[dict[str, int | bool]] = []
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type == fstring_start:
+            contexts.append({"in_expression": False, "brace_depth": 0})
+            continue
+        if token.type == fstring_end:
+            if not contexts:
+                raise ValueError("unbalanced f-string token stream")
+            contexts.pop()
+            continue
+        if not contexts:
+            continue
+
+        context = contexts[-1]
+        if context["in_expression"] and token.type == tokenize.STRING and "\\" in token.string:
+            raise ValueError("Python 3.10 does not allow backslashes in f-string expressions")
+        if token.type != tokenize.OP:
+            continue
+        if not context["in_expression"] and token.string == "{":
+            context["in_expression"] = True
+            context["brace_depth"] = 1
+        elif context["in_expression"] and token.string == "{":
+            context["brace_depth"] = int(context["brace_depth"]) + 1
+        elif context["in_expression"] and token.string == "}":
+            context["brace_depth"] = int(context["brace_depth"]) - 1
+            if context["brace_depth"] == 0:
+                context["in_expression"] = False
+
+
+def python_310_grammar_controls() -> int:
+    source = pathlib.Path(__file__).read_text(encoding="utf-8")
+    require_python_310_grammar(source)
+
+    # Python 3.12 accepts this PEP 701 form; Python 3.10 rejects its backslash in the
+    # replacement field. Keep the exact escaped bytes-literal shape that failed in CI.
+    incompatible = "value = f\"{hashlib.sha256(b'sums asset bytes\\n').hexdigest()}\""
+    try:
+        ast.parse(incompatible)
+    except SyntaxError:
+        # Running directly on the supported floor naturally rejects the seeded syntax.
+        return 2
+    try:
+        require_python_310_grammar(incompatible)
+    except (SyntaxError, ValueError):
+        return 2
+    raise SystemExit("Python 3.10 grammar controls accepted the seeded PEP 701 f-string")
+
+
 def self_test() -> int:
-    controls = 0
+    controls = python_310_grammar_controls()
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v03-dispositions-") as temporary:
         base = pathlib.Path(temporary)
         facts = build_fixture(base)
@@ -498,6 +839,12 @@ def self_test() -> int:
             files[CLOSURES_REL] = serialise(document)
             variant["receipts"]["pr_closures"]["sha256"] = hashlib.sha256(files[CLOSURES_REL]).hexdigest()
 
+        def closures_traversing_src(variant, files):
+            document = json.loads(closures_raw)
+            document["prs"][3]["changed_paths"].append("docs/placeholder/../../src/core/gabbaboy.c")
+            files[CLOSURES_REL] = serialise(document)
+            variant["receipts"]["pr_closures"]["sha256"] = hashlib.sha256(files[CLOSURES_REL]).hexdigest()
+
         def closures_open_pr(variant, files):
             document = json.loads(closures_raw)
             document["prs"][0]["state"] = "OPEN"
@@ -550,6 +897,7 @@ def self_test() -> int:
         case("tampered pr-closures digest", "receipt-digest-mismatch", tampered_closures)
         case("pr-closures receipt missing #85", "pr-closure-invalid", closures_without_85)
         case("pr-closures receipt naming a src path", "pr-closure-invalid", closures_naming_src)
+        case("pr-closures receipt traversing into src", "pr-closure-invalid", closures_traversing_src)
         case("pr-closures receipt with an open PR", "pr-closure-invalid", closures_open_pr)
         case("readback of a draft release", "receipt-invalid", draft_readback)
         case("rehearsal head with a different tree", "tree-mismatch", unequal_tree)
@@ -578,18 +926,127 @@ def self_test() -> int:
     return 0
 
 
+def self_test_readback() -> int:
+    controls = 0
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-v03-readback-") as temporary:
+        facts = build_readback_fixture(pathlib.Path(temporary))
+        repo = facts["repo"]
+        original = json.loads(json.dumps(facts["readback"]))
+
+        def invoke(rev: str | None = None) -> subprocess.CompletedProcess:
+            args = ["--check-readback", READBACK_V2_REL, "--tag", "v0.3.0"]
+            if rev is not None:
+                args.extend(("--rev", rev))
+            return run_cli(repo, *args)
+
+        def expect_pass(label: str, result: subprocess.CompletedProcess) -> None:
+            if result.returncode != 0 or "v03-readback pass tag=v0.3.0 assets=3" not in result.stdout:
+                raise SystemExit(f"self-test positive {label} failed: {result.stderr.strip() or result.stdout.strip()}")
+
+        def expect_reject(label: str, result: subprocess.CompletedProcess, code: str) -> None:
+            nonlocal controls
+            if result.returncode == 0 or "v03-readback pass" in result.stdout:
+                raise SystemExit(f"self-test accepted {label}")
+            if f"REJECT {code}:" not in result.stderr:
+                raise SystemExit(f"self-test {label}: expected REJECT {code}, got: {result.stderr.strip()[:240]}")
+            controls += 1
+
+        def case(label: str, code: str, mutate, *, lifecycle: str | None = None) -> None:
+            variant = json.loads(json.dumps(original))
+            mutate(variant)
+            (repo / READBACK_V2_REL).write_bytes(serialise(variant))
+            if lifecycle is not None:
+                (repo / READBACK_LIFECYCLE_REL).write_text(lifecycle, encoding="utf-8")
+            git(repo, "add", "-A")
+            git(repo, "commit", "-q", "--allow-empty", "-m", f"fixture: {label}")
+            head = git(repo, "rev-parse", "HEAD")
+            expect_reject(label, invoke(), code)
+            expect_reject(label + " at rev", invoke(head), code)
+
+        positive = invoke()
+        expect_pass("working tree", positive)
+        head = git(repo, "rev-parse", "HEAD")
+        committed_positive = invoke(head)
+        expect_pass("commit", committed_positive)
+        repeated_positive = invoke(head)
+        expect_pass("repeated commit", repeated_positive)
+        if committed_positive.stdout != repeated_positive.stdout:
+            raise SystemExit("self-test positive output is not byte-identical across repeated runs")
+
+        case("tag sha mismatch", "readback-tag-mismatch", lambda value: value.update(tag_sha="0" * 40))
+        case("tag tree mismatch", "readback-tag-mismatch", lambda value: value.update(tag_tree="0" * 40))
+        case("another tag", "readback-tag-mismatch", lambda value: value.update(tag="v0.3.9"))
+        case("draft release", "receipt-invalid", lambda value: value.update(is_draft=True))
+        case("added asset", "readback-assets-mismatch",
+             lambda value: value["assets"].append({"name": "unexpected.bin", "id": 999, "size": 1,
+                                                   "digest": "sha256:" + "1" * 64}))
+        case("removed asset", "readback-assets-mismatch", lambda value: value["assets"].pop(0))
+        case("changed asset id", "readback-assets-mismatch", lambda value: value["assets"][0].update(id=990))
+        case("changed asset digest", "readback-assets-mismatch",
+             lambda value: value["assets"][0].update(digest="sha256:" + "1" * 64))
+        case("changed SHA256SUMS asset id", "readback-assets-mismatch",
+             lambda value: value["assets"][1].update(id=990))
+        case("changed release-receipt asset digest", "readback-assets-mismatch",
+             lambda value: value["assets"][2].update(digest="sha256:" + "1" * 64))
+        case("checksum digest mismatch", "readback-digest-mismatch",
+             lambda value: value["sha256sums"].update(lines=["1" * 64 + "  gabbaboy-core-linux-x64.tar.gz"]))
+        case("receipt asset digest mismatch", "readback-receipt-mismatch",
+             lambda value: value["release_receipt"]["assets"][0].update(sha256="1" * 64))
+        case("receipt file digest mismatch", "readback-receipt-mismatch",
+             lambda value: value["release_receipt"].update(sha256="1" * 64))
+        case("ledger blob mismatch", "readback-ledger-blob-mismatch",
+             lambda value: value["sidecar_ledger"].update(git_blob_oid="0" * 40))
+        case("personal path", "readback-private-text", lambda value: value.update(url="https://example.invalid/Users/private"))
+        case("credential token", "readback-private-text", lambda value: value.update(url="https://example.invalid/ghp_" + "a" * 30))
+        case("inventory differs from sourced raw", "readback-inventory-unsourced",
+             lambda value: value["pre_publish_inventory"][0].update(id=990))
+        case("inventory raw digest mismatch", "readback-inventory-unsourced",
+             lambda value: value["pre_publish_inventory_source"].update(raw=value["pre_publish_inventory_source"]["raw"] + " "))
+        case("inventory raw tag mismatch", "readback-inventory-unsourced",
+             lambda value: value["pre_publish_inventory_source"].update(
+                 raw=json.dumps(dict(json.loads(value["pre_publish_inventory_source"]["raw"]), tag="v0.3.9"))))
+        case("inventory raw release id mismatch", "readback-inventory-unsourced",
+             lambda value: value["pre_publish_inventory_source"].update(
+                 raw=json.dumps(dict(json.loads(value["pre_publish_inventory_source"]["raw"],), release_id=9))))
+        case("inventory raw run id mismatch", "readback-inventory-unsourced",
+             lambda value: value["pre_publish_inventory_source"].update(
+                 raw=json.dumps(dict(json.loads(value["pre_publish_inventory_source"]["raw"]), run_id=9))))
+        case("missing inventory source", "readback-inventory-unsourced",
+             lambda value: value.pop("pre_publish_inventory_source"))
+        case("wrong inventory artifact source", "readback-inventory-unsourced",
+             lambda value: value["pre_publish_inventory_source"].update(artifact_name="untrusted.json"))
+        case("privacy pattern drift", "readback-pattern-mismatch", lambda value: None,
+             lifecycle="FORBIDDEN_TEXT = re.compile(r'wrong')\n")
+    print(f"v03-readback controls pass controls={controls}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check", metavar="PATH", help="the disposition record, relative to the repository (or absolute)")
+    parser.add_argument("--check-readback", metavar="PATH", help="the post-publication v0.3 readback JSON")
+    parser.add_argument("--tag", help="release tag expected by --check-readback")
     parser.add_argument("--rev", help="read the record and every receipt with git show REV:<path>; no working tree, no gh")
     parser.add_argument("--repo", type=pathlib.Path, default=ROOT, help=argparse.SUPPRESS)
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--self-test-readback", action="store_true")
     args = parser.parse_args()
     try:
         if args.self_test:
             return self_test()
+        if args.self_test_readback:
+            return self_test_readback()
         if args.check:
+            if args.check_readback:
+                parser.error("choose only one of --check or --check-readback")
             print(check(args.check, args.repo.resolve(), args.rev))
+            return 0
+        if args.check_readback:
+            if not args.tag:
+                parser.error("--check-readback requires --tag")
+            source = Source(args.repo.resolve(), args.rev)
+            readback = parse_json(source.read(args.check_readback, "receipt-missing"), "v0.3 release readback", "receipt-invalid")
+            print(check_readback_v2(source, readback, args.tag, args.repo.resolve(), args.rev))
             return 0
         parser.error("choose --check PATH or --self-test")
     except Reject as error:

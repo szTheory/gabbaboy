@@ -1,8 +1,7 @@
 # Phase 18: the published save-format table (HOST-03, D-16, D-19, D-20).
 #
 # docs/host-contract.json is the machine-readable host contract. The checkers read it and the C sources with
-# `git show <rev>:<path>` at HEAD as of the run, so commit before running them: an uncommitted edit checks the
-# previous commit. Generated ROMs and save directories live under
+# `git show <rev>:<path>` from the immutable commit resolved during configure. Generated ROMs and save directories live under
 # ${PROJECT_BINARY_DIR}/save-formats; nothing binary is committed. Every name registered here must also be listed
 # in tests/expected-tests.txt (append-only). The produced-file leg and the shim controls spawn POSIX processes, so
 # those names are POSIX-only and are removed from the Windows expectation in BOTH cmake/ExpectedTests.cmake and
@@ -10,20 +9,27 @@
 #
 # This fragment is included before tests/CMakeLists.txt resolves GBB_STATE_SOURCE_REV, so it resolves its own.
 
-# The commit the checkers read. `HEAD` is handed to git when each test runs, so a commit made after configure is the
-# one checked and a stale configure cannot report on an older tree (review WR-04). A boundary-commit run pins a full
-# SHA instead: -DGBB_SAVE_FORMATS_REV=<sha>. cmake/CheckContractRevWiring.cmake holds the registered tests to this.
+# The commit the checkers read. Resolve the requested ref once during configure and pass the full SHA to every
+# registered checker. This captures the boundary commit so tests cannot read moving HEAD facts at runtime.
 set(GBB_SAVE_FORMATS_REV "HEAD" CACHE STRING
-  "Revision the save-format and host-contract checkers read: HEAD (resolved at run time) or a full commit SHA")
-execute_process(
-  COMMAND git rev-parse --verify --quiet "${GBB_SAVE_FORMATS_REV}^{commit}"
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-  RESULT_VARIABLE GBB_SAVE_FORMATS_REV_RESULT
-  OUTPUT_QUIET
-  ERROR_QUIET)
-if(NOT GBB_SAVE_FORMATS_REV_RESULT EQUAL 0)
+  "Revision ref the save-format and host-contract checkers capture at configure time")
+set(GBB_SAVE_FORMATS_REV_REQUESTED "${GBB_SAVE_FORMATS_REV}")
+set(GBB_CONTRACT_REVISION_RESOLVER "${PROJECT_SOURCE_DIR}/cmake/ResolveContractRevision.cmake")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GBB_CONTRACT_REVISION_RESOLVER}")
+include("${GBB_CONTRACT_REVISION_RESOLVER}")
+gbb_resolve_contract_revision(
+  "${PROJECT_SOURCE_DIR}"
+  "${GBB_SAVE_FORMATS_REV_REQUESTED}"
+  GBB_SAVE_FORMATS_REV_RESOLVED
+  GBB_SAVE_FORMATS_REV_STATUS)
+if(NOT GBB_SAVE_FORMATS_REV_STATUS STREQUAL "resolved")
   set(GBB_SAVE_FORMATS_REV "unknown")
-  message(STATUS "Save-format CTests remain registered with an unresolved revision and will fail closed")
+  message(STATUS
+    "Save-format CTests remain registered with an unresolved revision ref (${GBB_SAVE_FORMATS_REV_REQUESTED}) and will fail closed")
+else()
+  set(GBB_SAVE_FORMATS_REV "${GBB_SAVE_FORMATS_REV_RESOLVED}")
+  message(STATUS
+    "Save-format and host-contract CTests capture immutable revision ${GBB_SAVE_FORMATS_REV} from ${GBB_SAVE_FORMATS_REV_REQUESTED}")
 endif()
 
 set(GBB_SAVE_FORMATS_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-save-formats.py")

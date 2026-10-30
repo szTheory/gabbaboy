@@ -399,6 +399,8 @@ not mutate the destination. The API checks in this order:
 | Save buffer is shorter than the required size | `GBB_BUFFER_TOO_SMALL` |
 | State bytes overlap the destination instance | `GBB_INVALID_ARGUMENT` |
 
+`gbb_state_size` and `gbb_save_state` return `GBB_STATE_INVALID_CONTENT` for a live machine that breaks a state invariant; states produced by this emulator are not expected to.
+
 The first seven state errors use the frozen public values 21 through 27 in the
 order shown by the API enum. `out_size` and save output remain untouched on an
 error. Input/output state buffers must be stable for the call and must not
@@ -435,4 +437,7 @@ pin changes require an exact old/new digest disposition, independent continuatio
 evidence present at the immutable base, and the applicable release, format, or
 behavior token change. A local receipt does not qualify Linux, macOS, and Windows
 together; that claim requires receipts from the same hosted source revision.
-Phase 19 regenerates and requalifies the pins when the release becomes 0.3.0.
+Release 0.3.0 keeps the format and behavior tokens at 1 while advancing the
+exact release token from 0.2.1. Its state loads therefore require a state file
+written by that exact release; battery saves remain the cross-version
+persistence path.
