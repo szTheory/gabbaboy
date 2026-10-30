@@ -1,6 +1,6 @@
 ---
 phase: GB-19-qualified-v0-3-0-release
-reviewed: 2026-10-30T09:17:06Z
+reviewed: 2026-10-30T12:20:50Z
 depth: standard
 files_reviewed: 56
 files_reviewed_list:
@@ -62,55 +62,62 @@ files_reviewed_list:
   - tests/test_state_fork.c
 findings:
   critical: 0
-  warning: 1
+  warning: 0
   info: 0
-  total: 1
-status: issues_found
+  total: 0
+status: clean
 review_base: f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4
-review_head: 0fec185016ae4d3578b641ffc694aafdd1d8795c
-fix_round_delta: ec56d260df555d68ddf003adf7c5224bfd65ee1f..0fec185016ae4d3578b641ffc694aafdd1d8795c
-execution_head: e0ca6463c3b6379fe65f28bb1fa0673be79ee071
+review_head: 8f4deeddd07ddf06f9927a1c6c571b717732b06e
+fix_round_delta: 41cf7cdce42b4dc6dc1dbda8cda7c3215868d3c2..8f4deeddd07ddf06f9927a1c6c571b717732b06e
 ---
 
-# Phase 19: Code Review Report — Review-Fix Round 2
+# Phase 19: Code Review Report — Approved Rescope Review
 
-**Reviewed:** 2026-10-30T09:17:06Z
-**Depth:** standard  
-**Files Reviewed:** 56  
-**Status:** unresolved Windows execution finding; owner rescope required
+**Reviewed:** 2026-10-30T12:20:50Z
+**Depth:** standard
+**Files Reviewed:** 56
+**Status:** clean
 
 ## Summary
 
-Re-reviewed the exact two-file round-two delta `ec56d260df555d68ddf003adf7c5224bfd65ee1f..0fec185016ae4d3578b641ffc694aafdd1d8795c` in the context of the original 56-file Phase 19 scope. The changes correct the workflow-policy self-test's temporary Git log path for Windows Bash and serialize two POSIX release lifecycle control suites. The count assertions and 60-second timeout values are unchanged. No new correctness or security finding was verified. This is a source review disposition; it does not substitute for completion of the pending CTest run or hosted Windows CI.
+This is the single additional review authorized by owner decision D-121 after the two recorded rounds. D-122 records the owner's D-09 acknowledgment. Neither decision waives actual Windows CI, source-bound performance evidence, final preflight or branch protection.
 
-**Subsequent execution finding, recorded by the orchestrator:** Windows CI at E0 disproved the proposed path fix as a sufficient remedy. CI-02 below remains open. Both permitted formal fix rounds are used; the proposed interpreter-selection correction requires the owner's explicit bounded rescope. No third source fix or third review round has been performed.
+Reviewed the exact two-file delta `41cf7cdce42b4dc6dc1dbda8cda7c3215868d3c2..8f4deeddd07ddf06f9927a1c6c571b717732b06e`, preserving the original 56-file Phase 19 source scope and prior finding dispositions. The only behavior change is the Windows Bash selection used by the workflow-policy guard controls, plus registration of its added control counts. The recognized paths cover the Git for Windows layouts used by `cmd`, `bin`, `mingw64`, and `usr`; resolved Bash candidates must stay inside the resolved Git root and outside the Windows system root. The POSIX executable choice remains the literal `bash`. No new correctness or security defect was verified.
+
+This review does not claim Windows CI success. The actual hosted `windows-2022` `workflow_policy_controls` run remains required to prove the native path handling and process launch.
 
 ## Prior Findings and Dispositions
 
-The three original findings and the judge CLI integration mismatch remain resolved as documented in [Review-Fix Round 1](https://github.com/szTheory/gabbaboy/blob/33d3d63d1a079e6c4ce72b863e25033cc80c43de/.planning/phases/GB-19-qualified-v0-3-0-release/19-REVIEW.md): CR-01 production readback inventory compatibility, CR-02 immediate prepublish frozen-inventory comparison, WR-01 path traversal in changed-path exclusion, and IR-01 judge CLI argument parsing.
+The prior findings remain resolved as documented in [Review-Fix Round 1](https://github.com/szTheory/gabbaboy/blob/33d3d63d1a079e6c4ce72b863e25033cc80c43de/.planning/phases/GB-19-qualified-v0-3-0-release/19-REVIEW.md) and [Review-Fix Round 2](https://github.com/szTheory/gabbaboy/blob/634a4c4ffa8ae0a6e4646628faf241ebd616ea0a/.planning/phases/GB-19-qualified-v0-3-0-release/19-REVIEW.md): CR-01 production release readback inventory compatibility, CR-02 prepublish frozen-inventory comparison, WR-01 path traversal in changed-path exclusion, and IR-01 judge CLI argument parsing. The API pagination concern remains unreachable through the bounded 22-asset qualification path. The shallow subject checkout versus full-history local differential remains a coverage limitation, with no subject-side ancestry query verified.
 
-The API pagination concern remains not a finding: the qualified release inventory is bounded to 22 names and the final-gate and prepublish equality checks reject a truncated or changed list. The shallow subject checkout versus full-history local differential remains a coverage limitation; no ancestry-dependent Git query on subject was verified.
+The earlier lifecycle serialization change is execution-verified on the local macOS run at `0fec185`: `release_lifecycle_controls` passed in 18.30 seconds and `release_lifecycle_post_tag_controls` passed in 23.87 seconds, with their original 60-second limits and control floors intact. That CMake content is unchanged at this rescope head.
 
-## Round 2 CI Integration Dispositions
+## Rescope Review
 
-### CI-01: Parallel lifecycle control timeouts — source correction and targeted execution verified
+### Windows Bash resolver — no finding
 
-**File:** `tests/CMakeLists.txt:5557-5582`
-**Disposition:** `release_lifecycle_controls` and `release_lifecycle_post_tag_controls` now have `RUN_SERIAL TRUE`, which keeps either control suite from overlapping other CTest cases and keeps the two suites from overlapping each other. Their existing `TIMEOUT 60`, output regexes, and minimum control counts (95 and 80) are unchanged. This addresses the reported contention path without weakening the test contract. It does not protect against an individual suite exceeding 60 seconds when run alone. The executor's targeted CTest log showed `workflow_policy_controls` passing in 45 seconds and had started `release_lifecycle_controls`; the lifecycle results were not complete in the evidence observed for this review. Completion of both lifecycle controls remains required before treating this correction as execution-verified.
+**Files:** `.github/scripts/verify-workflow-policy.py:4509-4773`; `tests/cmake/ci-lanes.cmake:89-99`
+**Assessment:** The resolver obtains `git.exe` through `shutil.which`, canonicalizes it, rejects an executable or installation root under `SystemRoot`/`WINDIR`, and accepts only the recognized `cmd`, `bin`, `mingw64/bin`, and `usr/bin` parent layouts. It derives Bash candidates from that same root, resolves each candidate, rejects targets outside the Git root or under the Windows system root, and fails closed when Git or a bundled Bash candidate is unavailable. The normal Windows Git for Windows wrapper location, `C:\Program Files\Git\bin\bash.exe`, is the first candidate for the standard `cmd\git.exe` layout. GitHub's Windows Server 2022 runner image lists Git Bash at that location, and Git for Windows documents `bin\bash.exe` as the wrapper that sets `MSYSTEM`/`PATH` before launching `usr\bin\bash.exe` ([Windows 2022 runner image](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md), [Git for Windows wrapper documentation](https://gitforwindows.org/git-wrapper.html)).
 
-**Subsequent executor verification, reconciled by the orchestrator:** the run with `--parallel 4` at immutable `0fec185016ae4d3578b641ffc694aafdd1d8795c` completed all three controls: workflow policy 45.00s, lifecycle 18.30s and post-tag 23.87s, with zero failures. The log shows the serial suites starting after preceding tests completed. The existing 60-second limits and semantic assertions remain intact. `test-budget` passed against immutable base `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4`, its 54 self-test controls passed, the inventory self-test includes missing-test rejection, and Python 3.10 grammar parsing passed. Local evidence is retained in ignored `build/preflight/review/round2-0fec185/`. Final-head remote CI and the repeated coherent preflight remain required.
+The new isolated resolver controls exercise three accepted Git layouts, non-Windows behavior, missing Git, missing `git.exe`, unsupported layout, a system-directory Git executable, and refusal to fall back to a WSL `System32\bash.exe`. A separate disposable symlink reproduction on this host also confirmed that a Bash candidate resolving outside the Git root is rejected. The embedded controls do not include a dedicated symlink-escape case, so that path is not protected by a persistent regression control.
 
-### CI-02: Windows workflow-policy shell selection — OPEN; round-two correction insufficient
+The guard's three existing behavior cases remain intact and run through the selected executable: allow an untagged release rehearsal, refuse an existing release tag, and skip the tag lookup for a non-release rehearsal branch. The prior relative `git.log` plus temporary working-directory correction remains in place. No production workflow guard logic changed.
 
-**File:** `.github/scripts/verify-workflow-policy.py:4520-4558`
-**Disposition:** The harness now passes the relative name `git.log` and starts Bash with the temporary directory as its working directory. The stub writes to that relative file, and Python reads the corresponding native temporary-directory path, avoiding the prior absolute Windows path crossing into Git Bash. All three guard cases remain asserted: untagged release rehearsal is allowed with one Git call, an existing release tag is refused with one Git call, and a non-release rehearsal branch skips the lookup. Read failures are now explicit and diagnostics include exit status and captured output. The production workflow guard at `.github/workflows/release-rehearsal.yml:350-361` is unchanged. The local targeted `workflow_policy_controls` run passed, but this review did not execute it and that local result does not prove Windows portability. The hosted Windows `workflow_policy_controls` job remains mandatory and pending.
+### Control-count floors — no finding
 
-**Actual target-platform result:** [PR CI job 123987817960](https://github.com/szTheory/gabbaboy/actions/runs/41033238701/job/123987817960) and [push CI job 123987812944](https://github.com/szTheory/gabbaboy/actions/runs/41033231735/job/123987812944), both at `e0ca6463c3b6379fe65f28bb1fa0673be79ee071`, failed `workflow_policy_controls`. The new diagnostic is `exit=1 git_calls=0 log_read_error=none`, with stdout `Windows Subsystem for Linux has no installed distributions` and empty stderr. Bare `bash` selected a WSL launcher before the fake Git function or log sink ran. Git for Windows Bash is present: the same job's shell banner names its bundled Bash executable. A relative log path therefore did not address the interpreter-selection defect.
+**File:** `tests/cmake/ci-lanes.cmake:89-99`
+**Assessment:** The Windows minimum increases from 421 to 426 and the POSIX minimum from 448 to 453, exactly accounting for five added negative controls on either platform. The new resolver contributes four positive controls (three supported Windows layouts plus the unchanged POSIX selection check), and the final positive count adds those to the existing accepted cases. The CTest timeout remains 180 seconds; the success regex and parsed minimum-count contract remain unchanged.
 
-The bounded proposal in ignored `build/preflight/review/19-WINDOWS-RESCOPE.md` selects Git for Windows' bundled interpreter explicitly, adds deterministic selection/refusal controls, retains all real tag scenarios, and requires the full Windows inventory to pass. It is proposed work only; approval remains pending. Production release guards and timeout limits remain unchanged. PR #133 is unmergeable. The separate D-09 acknowledgment also remains pending.
+The global `unittest.mock` import adds only a standard-library import to normal `--check` invocations; its patch helpers are used by the bounded self-test controls. No package dependency or unbounded work was introduced, and no performance defect is supported by the evidence.
+
+## Validation and Limits
+
+- The bounded resolver controls were run directly on this POSIX host: `negative=5 positive=4`. The disposable symlink escape reproduction also failed closed.
+- The executor's revision-bound local CTest log for `8f4deed` shows all five selected tests passing; `workflow_policy_controls` completed in 61.85 seconds. The configure log identifies the local environment as AppleClang/macOS. This is not Windows validation.
+- The hosted Windows `workflow_policy_controls` job must still pass before the Windows path can be considered verified. The local path tests use POSIX filesystem semantics and cannot prove Windows junction, case-folding, or `CreateProcess` behavior.
 
 ---
 
-_Reviewed: 2026-10-30T09:17:06Z_
-_Reviewer: the agent (gsd-code-reviewer)_  
+_Reviewed: 2026-10-30T12:20:50Z_
+_Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_
