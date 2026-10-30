@@ -713,7 +713,9 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
                 "GBB_CMD": definitions["GBB_CMD"],
                 "GBB_EXPECT_CODE": "0",
                 "GBB_EXPECT_REGEX": f"PASS: workflow policy group {group} controls=[0-9]+ ids_sha256=[0-9a-f]+",
-                "GBB_EXPECT_FILE": str(completion_path),
+                # Preserve the path spelling here; the identity check below runs before
+                # the remaining wrapper fields compare exactly.
+                "GBB_EXPECT_FILE": definitions["GBB_EXPECT_FILE"],
                 "GBB_EXPECT_FILE_FRESH": "TRUE",
             }
             if not _path_option_is(definitions, "GBB_EXPECT_FILE", completion_path):
@@ -922,6 +924,17 @@ def _self_test(root: Path, revision: str) -> int:
 
     ci_name = GROUPS["ci"]
     completion = build_dir / "workflow-policy-ci.json"
+
+    # These are positive spelling variants for the already identity-validated completion
+    # destination. On Windows, the second case exercises CMake's forward-slash paths against
+    # pathlib's native backslash rendering; on POSIX it remains a valid forward-slash path.
+    for path_spelling in (
+        f"{completion.parent}{os.sep}.{os.sep}{completion.name}",
+        str(completion).replace("\\", "/"),
+    ):
+        validate_mutated(lambda test_list, value=path_spelling: replace_definition(
+            named_test(test_list, ci_name), "GBB_EXPECT_FILE", value))
+
     ci_argv = [python_executable, "-I", str(root / POLICY_PATH), "--self-test", "--group", "ci",
                "--root", str(root), "--completed-file", str(completion)]
     helper_marker = "PASS: workflow policy group helpers controls=[0-9]+ ids_sha256=[0-9a-f]+"
