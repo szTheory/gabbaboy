@@ -2235,9 +2235,12 @@ def self_test_static_ledger() -> None:
 def self_test_v2_sidecar() -> None:
     """Exercise full-membership sidecars without relying on ignored build outputs."""
     global EVIDENCE_ONLY
-    ledger_path = ROOT / tree_ledger(ROOT)
+    # This is specifically a v0.2 sidecar fixture. On a later release tree,
+    # tree_ledger(ROOT) selects the newer ledger and changes its scope model.
+    # Keep the historical control bound to the immutable v0.2.1 ledger.
+    ledger_path = ROOT / "docs/support/v0.2.1.md"
     ledger_raw = bounded_file(ledger_path, MAX_LEDGER_BYTES, "ledger")
-    data = parse_ledger(ledger_raw, ledger_version(ledger_path.name))
+    data = parse_ledger(ledger_raw, "0.2.1")
     validate_data_v2(data, data["version"])
     receipt_path = pathlib.Path("build/cgb-corpus-receipt.json")
     # The tracked ledger is a frozen producer snapshot. Its source identity must

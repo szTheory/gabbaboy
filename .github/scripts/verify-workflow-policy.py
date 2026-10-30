@@ -4137,6 +4137,15 @@ def _ledger_mutations():
 
     def bound_at(key: str, edit=None):
         def apply(fixture: Path) -> None:
+            # Schema controls need an unexpired legacy row so the intended
+            # shape validation wins. The dedicated expiry case raises VERSION
+            # to 0.3.0 after this helper runs.
+            cmake = fixture / "CMakeLists.txt"
+            cmake.write_text(
+                re.sub(r"VERSION \d+\.\d+\.\d+", "VERSION 0.2.1",
+                       cmake.read_text(encoding="utf-8"), count=1),
+                encoding="utf-8",
+            )
             def set_bound(data: dict) -> None:
                 row = {**bound, "timeout_minutes": data[key]["timeout_minutes"]}
                 if edit is not None:

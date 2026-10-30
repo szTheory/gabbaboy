@@ -345,8 +345,8 @@ whose paired measurement is `pending-investigation` retains that measurement as
 an artifact (`if: always()`, seven days). The current
 `release-rehearsal.yml` manual dispatch accepts no inputs, so it cannot receive
 `measurement_run_id` or `performance_decision`; `release-please.yml` dispatch
-inputs are only for retrying an existing unpublished draft. A local
-`--apply-decision` result is not hosted release evidence by itself. The release
+inputs are only for retrying an existing unpublished draft. A locally applied
+decision result is not hosted release evidence by itself. The release
 workflow reuses only a qualifying receipt produced by its trusted path at the
 same tree, or it measures afresh and applies the same thresholds.
 

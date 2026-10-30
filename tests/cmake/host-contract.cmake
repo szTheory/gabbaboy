@@ -192,8 +192,14 @@ set_tests_properties(host_contract_docs_missing_control PROPERTIES TIMEOUT 60)
 add_test(NAME doc_no_interop_claims
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-no-interop-claims.py"
     --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+# The v0.3.0 release adds its scoped support ledger to the immutable document scan.
+if(PROJECT_VERSION VERSION_LESS 0.3.0)
+  set(GBB_NO_INTEROP_EXPECTED_FILES 6)
+else()
+  set(GBB_NO_INTEROP_EXPECTED_FILES 7)
+endif()
 set_tests_properties(doc_no_interop_claims PROPERTIES TIMEOUT 60 LABELS planning
-  PASS_REGULAR_EXPRESSION "no-interop-claims pass files=6 controls=10")
+  PASS_REGULAR_EXPRESSION "no-interop-claims pass files=${GBB_NO_INTEROP_EXPECTED_FILES} controls=10")
 
 # D-25: release documentation is checked from the configured immutable revision.
 add_test(NAME changelog_first_heading
