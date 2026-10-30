@@ -5,10 +5,10 @@ milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
 status: executing
-stopped_at: Plan19-07 held; D-125 component-PR guard repair approved, qualification pending
-last_updated: "2026-10-30T17:20:24Z"
+stopped_at: Plan19-07 held; D-126 runner migration approved for PR135, fresh qualification pending
+last_updated: "2026-10-30T18:22:00Z"
 last_activity: 2026-10-30
-last_activity_desc: "PR134 merged and regeneration verified; owner approved D125 bounded component-PR discovery repair and active-window routing regression controls"
+last_activity_desc: "D125 repair reviewed; macOS14 jobs cancelled before runner allocation; owner approved D126 pinned macOS15 migration in existing PR135"
 state_head: 9895896922f51f48a225636f4b587e3ab1be7058
 progress:
   total_phases: 4
@@ -32,14 +32,14 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 Phase: 19 (Qualified v0.3.0 Release) — EXECUTING
 Plan: 7 of 7
-Status: Release window held while the approved component-PR discovery repair is implemented and qualified. No tag exists.
-Last activity: 2026-10-30 — D-125 same-repository component-PR discovery and fatal routing controls pass locally. Fresh exact-head evidence and independent review confirmation remain.
+Status: Release window held while PR135 completes the approved D-125 guard repair and D-126 supported-runner migration with fresh exact-head qualification. No tag exists.
+Last activity: 2026-10-30 — D-125 guard repair passed local controls and independent review. Five Mac jobs were cancelled before allocation during GitHub’s announced macOS14 brownout; the owner approved D-126 to migrate the existing PR135 to pinned macos15 ARM64, with fresh review/CI and package metadata inspection.
 
 Completed stage: **Phase 19 execution through Plan 19-06**. PR #133 merged after exact-head protected CI, coherent local/hosted preflight, unchanged performance gate and guarded squash. Release-please regeneration was verified. Detailed identities and evidence remain in the phase continuation and facts file; the frozen 19-06 SUMMARY is not rewritten.
 
-Current stage: **19-07 — approved guard recovery before the fresh window**. PR134 qualified/merged and #131 regeneration is verified. The owner approved [D-125 bounded guard repair](phases/GB-19-qualified-v0-3-0-release/19-WINDOW-GUARD-RESCOPE.md): correct the legacy branch lookup, pin it and prove fatal stale-active routing, independently review and exact-head qualify before one guarded main merge. Then verify actual component-PR discovery and inactive judgment, preserve all old bases separately, and restart Task1 from the new WINDOW_BASE. No H/W/tag/publication exists. D-121..D-125 approvals need no repeated acknowledgment; owner JSON and automatic-advance flags stay untouched.
+Current stage: **19-07 — approved guard and hosted-runner recovery before the fresh window**. [D-126](phases/GB-19-qualified-v0-3-0-release/19-RUNNER-MIGRATION-RESCOPE.md) expands the existing unmerged PR135 to supported pinned macos15 ARM64 and binds all active job labels/receipt with regression controls. Previous Mac cancellations are not proof; require new exact-head review/CI and inspect package metadata without inventing a minimum-OS promise. No additional main merge beyond D-125. PR134 qualified/merged and #131 regeneration is verified. The owner approved [D-125 bounded guard repair](phases/GB-19-qualified-v0-3-0-release/19-WINDOW-GUARD-RESCOPE.md): correct the legacy branch lookup, pin it and prove fatal stale-active routing, independently review and exact-head qualify before one guarded main merge. Then verify actual component-PR discovery and inactive judgment, preserve all old bases separately, and restart Task1 from the new WINDOW_BASE. No H/W/tag/publication exists. D-121..D-126 approvals need no repeated acknowledgment; owner JSON and automatic-advance flags stay untouched.
 
-Next within Phase19: complete approved D125 guard repair, then resume **19-07 — controlled version window, tag and readback**. REL-01 stays pending. Exact active continuation: `/gsd-execute-phase 19`. Final execution handoff remains `/gsd-verify-work 19`, not automatic.
+Next within Phase19: complete approved D125/D126 guard and runner repair, then resume **19-07 — controlled version window, tag and readback**. REL-01 stays pending. Exact active continuation: `/gsd-execute-phase 19`. Final execution handoff remains `/gsd-verify-work 19`, not automatic.
 
 Prior stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
 
