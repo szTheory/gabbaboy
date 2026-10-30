@@ -1,0 +1,37 @@
+{
+  "id": "release-0.3.0-state-version",
+  "kind": "release-change",
+  "accepted": true,
+  "approved_by": "delegated-phase-orchestrator",
+  "approval_basis": "Delegated phase-orchestrator approval under AGENTS.md routine in-phase authorization for this exact state-pin release transition, applying adopted decisions D-113 and D-120.",
+  "decision_refs": [
+    "DECISIONS.md#D-113",
+    "DECISIONS.md#D-120"
+  ],
+  "decision": "Advance the exact serialized state-release token from 0.2.1 to 0.3.0 while retaining format and behavior tokens at 1 and preserving the canonical fixture bytes. State loads require the exact GabbaBoy release; battery saves remain the cross-version persistence path.",
+  "rationale": "The version bump changes state-load identity by design. The format and behavior tokens and all canonical fixture bytes remain unchanged, while a cross-version state load remains rejected.",
+  "base_revision": "f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4",
+  "old_golden_sha256": "ab3ef83a47e33005218fe2f2b9acb3150c16caf972800c6babb82aa2263b06b1",
+  "new_golden_sha256": "b5d9b3404b627a776268304551d2c2d86cae69f580752d11e3d22fd5666d3750",
+  "tokens_before": {
+    "release": {"major": 0, "minor": 2, "patch": 1},
+    "format_version": 1,
+    "behavior_version": 1
+  },
+  "tokens_after": {
+    "release": {"major": 0, "minor": 3, "patch": 0},
+    "format_version": 1,
+    "behavior_version": 1
+  },
+  "affected_semantics": [
+    "State-load identity is bound to exact release version.",
+    "Format and behavior compatibility tokens remain unchanged.",
+    "Battery saves remain the cross-version persistence path."
+  ],
+  "evidence": {
+    "revision": "f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4",
+    "summary_path": "phase:GB-17-native-save-state-core/17-05-SUMMARY.md",
+    "description": "The completed Phase 17 snapshot-fork summary covers 198 serialized fields and 14 model-applicable in-flight categories; this release transition retains those state-format and behavior contracts while advancing only the exact release token."
+  },
+  "required_token": "release"
+}
