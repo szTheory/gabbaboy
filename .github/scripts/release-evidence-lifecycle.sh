@@ -367,6 +367,8 @@ before=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
   echo "Draft changed before the one-way publish transition." >&2; exit 1;
 }
 [[ "$(gh api "repos/$GH_REPO/commits/$RELEASE_TAG" --jq .sha)" == "$SOURCE_SHA" ]] || exit 1
+assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+python3 -I trusted/.github/scripts/verify-published-release-assets.py --verify-pre-publish "$assets" build/release-final/pre-publish-inventory.json "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
 gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag
 after=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID")
 [[ $(jq -r .draft <<<"$after") == false && $(jq -r .tag_name <<<"$after") == "$RELEASE_TAG" ]] || {

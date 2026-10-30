@@ -15,7 +15,9 @@ import argparse
 import json
 import pathlib
 import re
+import subprocess
 import sys
+import tempfile
 
 if not __debug__:
     raise SystemExit("verify-judge-outcome refuses to run under python -O (its checks must stay on)")
@@ -148,6 +150,30 @@ def self_test() -> int:
     controls += expect(message_key("error: --value needs a value", 2),
                        "usage --value needs a value", "argparse key")
 
+    with tempfile.TemporaryDirectory(prefix="gbb-judge-outcome-cli.") as directory:
+        stderr_path = pathlib.Path(directory) / "stderr.txt"
+        stderr_path.write_text("REJECT workflow-unlisted: refused\n", encoding="utf-8")
+        prefix = [sys.executable, "-I", str(pathlib.Path(__file__).resolve())]
+        positive = subprocess.run(prefix + ["--key", str(stderr_path), "--exit", "1"],
+                                  capture_output=True, text=True, timeout=30)
+        if positive.returncode != 0 or positive.stdout.strip() != "REJECT workflow-unlisted":
+            raise Undecidable("documented --key STDERR --exit N invocation did not emit its message key")
+        controls += 1
+        missing_exit = subprocess.run(prefix + ["--key", str(stderr_path)], capture_output=True, text=True, timeout=30)
+        if missing_exit.returncode != 2 or "--exit" not in missing_exit.stderr:
+            raise Undecidable("the CLI accepted a --key invocation without its required --exit")
+        controls += 1
+        invalid_exit = subprocess.run(prefix + ["--key", str(stderr_path), "--exit", "invalid"],
+                                       capture_output=True, text=True, timeout=30)
+        if invalid_exit.returncode != 1 or "--exit must be an integer" not in invalid_exit.stderr:
+            raise Undecidable("the CLI did not reject a non-integer --exit cleanly")
+        controls += 1
+        negative_exit = subprocess.run(prefix + ["--key", str(stderr_path), "--exit", "-1"],
+                                       capture_output=True, text=True, timeout=30)
+        if negative_exit.returncode != 1 or "--exit must be non-negative" not in negative_exit.stderr:
+            raise Undecidable("the CLI did not reject a negative --exit cleanly")
+        controls += 1
+
     def must_be_undecidable(label: str, action) -> int:
         try:
             action()
@@ -220,19 +246,24 @@ def self_test() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--key", nargs=2, metavar=("STDERR_FILE", "EXIT"))
+    mode.add_argument("--key", metavar="STDERR_FILE")
     mode.add_argument("--hosted", nargs=2, metavar=("RUN_JSON", "FAILED_LOG"))
     mode.add_argument("--self-test", action="store_true")
+    parser.add_argument("--exit", dest="exit_code", metavar="N")
     args = parser.parse_args()
     try:
         if args.self_test:
+            if args.exit_code is not None:
+                parser.error("--exit requires --key STDERR_FILE")
             controls = self_test()
             print(f"judge-outcome controls pass controls={controls}")
             return 0
         if args.key is not None:
-            stderr_path = pathlib.Path(args.key[0])
+            if args.exit_code is None:
+                parser.error("--key STDERR_FILE requires --exit N")
+            stderr_path = pathlib.Path(args.key)
             try:
-                exit_code = int(args.key[1])
+                exit_code = int(args.exit_code)
             except ValueError as error:
                 raise Undecidable("--exit must be an integer") from error
             if exit_code < 0:
@@ -240,6 +271,8 @@ def main() -> int:
             text = bounded_bytes(stderr_path).decode("utf-8", errors="strict")
             print(message_key(text, exit_code))
             return 0
+        if args.exit_code is not None:
+            parser.error("--exit requires --key STDERR_FILE")
         run_path, log_path = (pathlib.Path(value) for value in args.hosted)
         try:
             run_data = json.loads(bounded_bytes(run_path).decode("utf-8", errors="strict"))

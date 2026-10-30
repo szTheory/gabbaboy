@@ -11,6 +11,8 @@ import sys
 from typing import Any
 
 HEX64 = re.compile(r"[0-9a-f]{64}")
+HEX40 = re.compile(r"[0-9a-f]{40}")
+TAG = re.compile(r"v[0-9]+\.[0-9]+\.[0-9]+")
 
 
 EXPECTED_ADDITIONS = {"SHA256SUMS", "release-receipt.json"}
@@ -45,6 +47,70 @@ def verify(after_json: str, before_rows: list[dict[str, Any]]) -> None:
     expected_names = {row[1] for row in before} | EXPECTED_ADDITIONS
     if {row[1] for row in after} != expected_names:
         raise ValueError("published release readback has an unexpected asset inventory")
+
+
+def verify_pre_publish(after_json: str, inventory_doc: Any, tag: str, source_sha: str,
+                       release_id: str, run_id: str, run_attempt: str) -> None:
+    """Refuse the irreversible draft transition unless live API assets still match final-gate's full inventory."""
+    try:
+        after_rows = json.loads(after_json)
+    except json.JSONDecodeError as error:
+        raise ValueError("live release asset response is not valid JSON") from error
+    if not isinstance(after_rows, list):
+        raise ValueError("live release asset response is not a JSON array")
+    if not TAG.fullmatch(tag) or not HEX40.fullmatch(source_sha):
+        raise ValueError("expected release tag or source commit is malformed")
+    if any(not re.fullmatch(r"[1-9][0-9]*", value) for value in (release_id, run_id, run_attempt)):
+        raise ValueError("release id, run id and attempt must be positive decimal values")
+    expected_identity = {
+        "tag": tag, "source_sha": source_sha, "release_id": int(release_id),
+        "run_id": int(run_id), "run_attempt": int(run_attempt),
+    }
+    if not isinstance(inventory_doc, dict) or set(inventory_doc) != {
+            "schema_version", "kind", "tag", "source_sha", "release_id", "run_id", "run_attempt", "assets"} \
+            or inventory_doc.get("schema_version") != 1 or inventory_doc.get("kind") != "pre-publish-inventory":
+        raise ValueError("frozen pre-publish inventory has an unknown schema")
+    for field, expected in expected_identity.items():
+        actual = inventory_doc.get(field)
+        if type(actual) is not type(expected) or actual != expected:
+            raise ValueError(f"frozen pre-publish inventory {field} differs from this publication attempt")
+
+    frozen_rows = inventory_doc.get("assets")
+    if not isinstance(frozen_rows, list) or not frozen_rows:
+        raise ValueError("frozen pre-publish inventory has no assets")
+    frozen: dict[str, tuple[int, str]] = {}
+    frozen_ids: set[int] = set()
+    for row in frozen_rows:
+        if not isinstance(row, dict) or set(row) != {"name", "id", "digest"} \
+                or not isinstance(row.get("name"), str) or not row["name"] \
+                or type(row.get("id")) is not int or row["id"] < 1 \
+                or not isinstance(row.get("digest"), str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", row["digest"]):
+            raise ValueError("frozen pre-publish inventory has a malformed asset")
+        if row["name"] in frozen or row["id"] in frozen_ids:
+            raise ValueError("frozen pre-publish inventory repeats an asset name or id")
+        frozen[row["name"]] = (row["id"], row["digest"])
+        frozen_ids.add(row["id"])
+    if not {"SHA256SUMS", "release-receipt.json"}.issubset(frozen):
+        raise ValueError("frozen pre-publish inventory omits final metadata assets")
+
+    live: dict[str, tuple[int, str]] = {}
+    live_ids: set[int] = set()
+    for row in after_rows:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str) or not row["name"] \
+                or type(row.get("id")) is not int or row["id"] < 1:
+            raise ValueError("live release asset list has a malformed name or id")
+        digest = row.get("digest")
+        if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            raise ValueError(f"live asset {row['name']} carries no SHA-256 digest")
+        if row["name"] in live or row["id"] in live_ids:
+            raise ValueError("live release has duplicate asset names or ids")
+        live[row["name"]] = (row["id"], digest)
+        live_ids.add(row["id"])
+    if live != frozen:
+        missing = sorted(set(frozen) - set(live))
+        unexpected = sorted(set(live) - set(frozen))
+        changed = sorted(name for name in set(live) & set(frozen) if live[name] != frozen[name])
+        raise ValueError(f"live assets differ from final-gate inventory (missing={missing}, unexpected={unexpected}, changed={changed})")
 
 
 def expected_inventory(rows: Any) -> dict[str, tuple[int, str]]:
@@ -365,8 +431,19 @@ def main(argv: list[str]) -> int:
             print(f"REJECT recovery: {error}", file=sys.stderr)
             return 1
         return 0
+    if argv and argv[0] == "--verify-pre-publish":
+        if len(argv) != 8:
+            raise SystemExit("usage: verify-published-release-assets.py --verify-pre-publish API_ASSETS_JSON_TEXT INVENTORY_PATH TAG SOURCE_SHA RELEASE_ID RUN_ID RUN_ATTEMPT")
+        try:
+            frozen = json.loads(pathlib.Path(argv[2]).read_text(encoding="utf-8"))
+            verify_pre_publish(argv[1], frozen, argv[3], argv[4], argv[5], argv[6], argv[7])
+        except (ValueError, OSError) as error:
+            print(f"REJECT published-assets: {error}", file=sys.stderr)
+            return 1
+        print("PASS: live draft assets match the final-gate inventory")
+        return 0
     if len(argv) != 2:
-        raise SystemExit("usage: verify-published-release-assets.py API_ASSETS_JSON_TEXT BASELINE_PATH | --inventory ... | --decide ... | --self-test")
+        raise SystemExit("usage: verify-published-release-assets.py API_ASSETS_JSON_TEXT BASELINE_PATH | --inventory ... | --decide ... | --verify-pre-publish ... | --self-test")
     try:
         before = json.loads(pathlib.Path(argv[1]).read_text())
         verify(argv[0], before)

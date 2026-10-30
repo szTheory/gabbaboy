@@ -383,12 +383,18 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
             reject("readback-assets-mismatch", "published API asset names and ids must be unique")
         assets_by_name[item["name"]] = item
         ids.add(item["id"])
-    if set(assets_by_name) != set(inventory_by_name) | FINAL_ASSET_NAMES:
-        reject("readback-assets-mismatch", "published API asset names differ from the sourced inventory and final metadata")
+    if not FINAL_ASSET_NAMES.issubset(inventory_by_name):
+        reject("readback-inventory-unsourced", "the sourced inventory must include SHA256SUMS and release-receipt.json")
+    if set(assets_by_name) != set(inventory_by_name):
+        reject("readback-assets-mismatch", "published API asset names differ from the complete sourced inventory")
     for name, item in inventory_by_name.items():
         api_item = assets_by_name.get(name)
         if api_item is None or api_item["id"] != item["id"] or api_item["digest"] != item["digest"]:
             reject("readback-assets-mismatch", f"published asset {name} differs from its pre-publish id or digest")
+
+    payload_names = set(inventory_by_name) - FINAL_ASSET_NAMES
+    if not payload_names:
+        reject("readback-inventory-unsourced", "the sourced inventory must include qualified payload assets")
 
     sums = readback.get("sha256sums")
     sums_asset = assets_by_name.get("SHA256SUMS")
@@ -404,12 +410,15 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
         if not match or match[2] in checksums:
             reject("readback-digest-mismatch", "SHA256SUMS contains a malformed or duplicate line")
         checksums[match[2]] = match[1]
-    expected_sum_names = set(inventory_by_name)
+    expected_sum_names = payload_names
     if set(checksums) != expected_sum_names:
         reject("readback-digest-mismatch", "SHA256SUMS names differ from the published assets it must cover")
     for name, digest in checksums.items():
         if digest != assets_by_name[name]["digest"][7:]:
             reject("readback-digest-mismatch", f"SHA256SUMS digest for {name} differs from its API digest")
+    sums_bytes = ("\n".join(sums["lines"]) + "\n").encode("utf-8")
+    if hashlib.sha256(sums_bytes).hexdigest() != sums_asset["digest"][7:]:
+        reject("readback-digest-mismatch", "SHA256SUMS bytes differ from the digest of the attached metadata asset")
 
     receipt = readback.get("release_receipt")
     receipt_asset = assets_by_name.get("release-receipt.json")
@@ -420,7 +429,7 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
             or receipt["sha256"] != receipt_asset["digest"][7:]:
         reject("readback-receipt-mismatch", "release-receipt asset id or digest differs from the API")
     receipt_assets = receipt.get("assets")
-    if not isinstance(receipt_assets, list) or len(receipt_assets) != len(inventory_by_name):
+    if not isinstance(receipt_assets, list) or len(receipt_assets) != len(payload_names):
         reject("readback-receipt-mismatch", "release receipt asset digests do not cover the sourced inventory")
     receipt_by_name = {}
     for item in receipt_assets:
@@ -430,8 +439,8 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
                 or item["name"] in receipt_by_name:
             reject("readback-receipt-mismatch", "release receipt contains a malformed asset digest")
         receipt_by_name[item["name"]] = item["sha256"]
-    if set(receipt_by_name) != set(inventory_by_name) or any(
-            receipt_by_name[name] != inventory_by_name[name]["digest"][7:] for name in inventory_by_name):
+    if set(receipt_by_name) != payload_names or any(
+            receipt_by_name[name] != inventory_by_name[name]["digest"][7:] for name in payload_names):
         reject("readback-receipt-mismatch", "release receipt asset digests differ from the sourced API inventory")
 
     ledger = readback.get("sidecar_ledger")
@@ -479,7 +488,12 @@ def check_pr_closures(source: Source, receipt) -> None:
                 or any(not isinstance(path, str) or not path for path in item["changed_paths"]):
             reject("pr-closure-invalid", f"#{number} must be CLOSED with closed_at, an https comment_url and changed_paths")
         for path in item["changed_paths"]:
-            first = path.replace("\\", "/").lstrip("./").split("/", 1)[0].lower()
+            normalized = pathlib.PurePosixPath(path)
+            parts = path.split("/")
+            if "\\" in path or path.startswith("/") or re.match(r"^[A-Za-z]:", path) \
+                    or any(part in ("", ".", "..") for part in parts) or normalized.as_posix() != path:
+                reject("pr-closure-invalid", f"#{number} changed path {path!r} is not a canonical repository-relative path")
+            first = parts[0].lower()
             if first in ("src", "include"):
                 reject("pr-closure-invalid", f"#{number} changed {path}; a superseded PR must not touch src/ or include/")
 
@@ -642,19 +656,26 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
     blob_oid = git(repo, "rev-parse", f"HEAD:{READBACK_LEDGER_REL}")
     git(repo, "tag", "v0.3.0")
 
-    original_digest = hashlib.sha256(b"qualified fixture archive\n").hexdigest()
-    inventory_assets = [{"name": "gabbaboy-core-linux-x64.tar.gz", "id": 901, "digest": f"sha256:{original_digest}"}]
+    payload_name = "gabbaboy-core-linux-x64.tar.gz"
+    payload_bytes = b"qualified fixture archive\n"
+    original_digest = hashlib.sha256(payload_bytes).hexdigest()
+    sums_lines = [f"{original_digest}  {payload_name}"]
+    sums_asset_bytes = (sums_lines[0] + "\n").encode("utf-8")
+    receipt_asset_bytes = b"release receipt fixture bytes\n"
+    receipt_asset_digest = hashlib.sha256(receipt_asset_bytes).hexdigest()
+    inventory_assets = [
+        {"name": payload_name, "id": 901, "digest": f"sha256:{original_digest}"},
+        {"name": "SHA256SUMS", "id": 902, "digest": f"sha256:{hashlib.sha256(sums_asset_bytes).hexdigest()}"},
+        {"name": "release-receipt.json", "id": 903, "digest": f"sha256:{receipt_asset_digest}"},
+    ]
     inventory = {"schema_version": 1, "kind": "pre-publish-inventory", "tag": "v0.3.0", "source_sha": tag_sha,
                  "release_id": 7001, "run_id": 8001, "run_attempt": 2, "assets": inventory_assets}
     inventory_raw = (json.dumps(inventory, sort_keys=True, indent=2) + "\n")
-    receipt_asset_digest = hashlib.sha256(b"release receipt fixture bytes\n").hexdigest()
-    sums_lines = [f"{original_digest}  {inventory_assets[0]['name']}"]
-    sums_asset_bytes = b"sums asset bytes\n"
     api_assets = [
-        {"name": inventory_assets[0]["name"], "id": 901, "size": 27, "digest": f"sha256:{original_digest}"},
-        {"name": "SHA256SUMS", "id": 902, "size": len((sums_lines[0] + "\n").encode()),
+        {"name": payload_name, "id": 901, "size": len(payload_bytes), "digest": f"sha256:{original_digest}"},
+        {"name": "SHA256SUMS", "id": 902, "size": len(sums_asset_bytes),
          "digest": f"sha256:{hashlib.sha256(sums_asset_bytes).hexdigest()}"},
-        {"name": "release-receipt.json", "id": 903, "size": 30, "digest": f"sha256:{receipt_asset_digest}"},
+        {"name": "release-receipt.json", "id": 903, "size": len(receipt_asset_bytes), "digest": f"sha256:{receipt_asset_digest}"},
     ]
     readback = {
         "tag": "v0.3.0", "tag_sha": tag_sha, "tag_tree": tag_tree, "is_draft": False, "is_prerelease": False,
@@ -675,7 +696,7 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
                                           "raw": inventory_raw},
         "sha256sums": {"asset_id": 902, "lines": sums_lines},
         "release_receipt": {"asset_id": 903, "sha256": receipt_asset_digest,
-                            "assets": [{"name": inventory_assets[0]["name"], "sha256": original_digest}]},
+                            "assets": [{"name": payload_name, "sha256": original_digest}]},
         "sidecar_ledger": {"path": READBACK_LEDGER_REL, "git_blob_oid": blob_oid},
     }
     (repo / READBACK_V2_REL).write_bytes(serialise(readback))
@@ -818,6 +839,12 @@ def self_test() -> int:
             files[CLOSURES_REL] = serialise(document)
             variant["receipts"]["pr_closures"]["sha256"] = hashlib.sha256(files[CLOSURES_REL]).hexdigest()
 
+        def closures_traversing_src(variant, files):
+            document = json.loads(closures_raw)
+            document["prs"][3]["changed_paths"].append("docs/placeholder/../../src/core/gabbaboy.c")
+            files[CLOSURES_REL] = serialise(document)
+            variant["receipts"]["pr_closures"]["sha256"] = hashlib.sha256(files[CLOSURES_REL]).hexdigest()
+
         def closures_open_pr(variant, files):
             document = json.loads(closures_raw)
             document["prs"][0]["state"] = "OPEN"
@@ -870,6 +897,7 @@ def self_test() -> int:
         case("tampered pr-closures digest", "receipt-digest-mismatch", tampered_closures)
         case("pr-closures receipt missing #85", "pr-closure-invalid", closures_without_85)
         case("pr-closures receipt naming a src path", "pr-closure-invalid", closures_naming_src)
+        case("pr-closures receipt traversing into src", "pr-closure-invalid", closures_traversing_src)
         case("pr-closures receipt with an open PR", "pr-closure-invalid", closures_open_pr)
         case("readback of a draft release", "receipt-invalid", draft_readback)
         case("rehearsal head with a different tree", "tree-mismatch", unequal_tree)
@@ -956,6 +984,10 @@ def self_test_readback() -> int:
         case("changed asset id", "readback-assets-mismatch", lambda value: value["assets"][0].update(id=990))
         case("changed asset digest", "readback-assets-mismatch",
              lambda value: value["assets"][0].update(digest="sha256:" + "1" * 64))
+        case("changed SHA256SUMS asset id", "readback-assets-mismatch",
+             lambda value: value["assets"][1].update(id=990))
+        case("changed release-receipt asset digest", "readback-assets-mismatch",
+             lambda value: value["assets"][2].update(digest="sha256:" + "1" * 64))
         case("checksum digest mismatch", "readback-digest-mismatch",
              lambda value: value["sha256sums"].update(lines=["1" * 64 + "  gabbaboy-core-linux-x64.tar.gz"]))
         case("receipt asset digest mismatch", "readback-receipt-mismatch",

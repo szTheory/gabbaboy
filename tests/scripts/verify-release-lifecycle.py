@@ -1393,7 +1393,14 @@ def c_live_publication(ctx: Context) -> str:
     publish_line = 'gh release edit "$RELEASE_TAG" --repo "$GH_REPO" --draft=false --verify-tag'
     mutated = mutate_script(ctx.script, publish_line, publish_line + " --latest")
     s = ctx.scenario("live-publication", "finalized")
-    publish = s.subject_workspace("publish", mutated)
+    publish = publish_from(ctx, s, "publish", mutated)
+    validation = s.run_mode(publish, "validate-draft", **PUBLISH_ENV)
+    if validation.rc != 0:
+        raise Reject("control-setup", f"the live-publication control's validation setup failed: {validation.text.strip()[-250:]}")
+    for mode in ("final-gate", "nightly-gate"):
+        gate = s.run_mode(publish, mode, **PUBLISH_ENV)
+        if gate.rc != 0:
+            raise Reject("control-setup", f"the live-publication control's {mode} setup failed: {gate.text.strip()[-250:]}")
     outcome = s.run_mode(publish, "publish-draft", **PUBLISH_ENV)
     if outcome.rc == 0 or "only as the one publish command" not in outcome.err or s.state()["decisions"] or not s.state()["release"]["draft"]:
         raise Reject("control-wrong-reason", "a publish command other than the intercepted one was not refused")
@@ -1741,7 +1748,59 @@ def c_pre_publish_inventory(ctx: Context) -> str:
     omitted = mutant.run_mode(mutant_workspace, "final-gate", **PUBLISH_ENV)
     if omitted.rc != 0 or (mutant_workspace / "build/release-final/pre-publish-inventory.json").exists():
         raise Reject("inventory-control", "the omitted-write mutant did not leave the required inventory absent")
-    return "the final gate persists the draft inventory; omitting its writer leaves the required artifact absent"
+
+    def remove_qualified_archive(scenario: Scenario, workspace: Path) -> str:
+        inventory_doc = json.loads((workspace / "build/release-final/pre-publish-inventory.json").read_text(encoding="utf-8"))
+        name = next((row["name"] for row in inventory_doc["assets"] if row["name"] not in FINAL_NAMES), None)
+        if name is None:
+            raise Reject("inventory-control", "the final-gate fixture has no qualified archive to mutate")
+        scenario.remove_asset(name)
+        return name
+
+    def prepare_publish(scenario: Scenario, script: str | None = None) -> Path:
+        workspace = publish_from(ctx, scenario, "publish", script)
+        validation = scenario.run_mode(workspace, "validate-draft", **PUBLISH_ENV)
+        if validation.rc != 0:
+            raise Reject("inventory-control", f"the publication fixture could not validate its draft: {validation.text.strip()[-250:]}")
+        return workspace
+
+    positive = ctx.scenario("publish-inventory-guard-positive", "finalized")
+    positive_workspace = prepare_publish(positive)
+    for mode in ("final-gate", "nightly-gate"):
+        result = positive.run_mode(positive_workspace, mode, **PUBLISH_ENV)
+        if result.rc != 0:
+            raise Reject("inventory-control", f"the positive {mode} gate failed: {result.text.strip()[-250:]}")
+    published = positive.run_mode(positive_workspace, "publish-draft", **PUBLISH_ENV)
+    if published.rc != 0 or positive.state()["release"]["draft"] is not False \
+            or len(positive.state()["decisions"]) != 1:
+        raise Reject("inventory-control", f"the identical final-gate inventory did not publish exactly once: {published.text.strip()[-250:]}")
+
+    guarded = ctx.scenario("publish-inventory-guard", "finalized")
+    guarded_workspace = prepare_publish(guarded)
+    for mode in ("final-gate", "nightly-gate"):
+        result = guarded.run_mode(guarded_workspace, mode, **PUBLISH_ENV)
+        if result.rc != 0:
+            raise Reject("inventory-control", f"the production {mode} gate failed: {result.text.strip()[-250:]}")
+    removed = remove_qualified_archive(guarded, guarded_workspace)
+    refused = guarded.run_mode(guarded_workspace, "publish-draft", **PUBLISH_ENV)
+    if refused.rc == 0 or "REJECT published-assets:" not in refused.text \
+            or guarded.state()["release"]["draft"] is not True or guarded.state()["decisions"]:
+        raise Reject("inventory-control", f"the live inventory mutation {removed} was not refused before publication")
+
+    guard_line = 'python3 -I trusted/.github/scripts/verify-published-release-assets.py --verify-pre-publish "$assets" build/release-final/pre-publish-inventory.json "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"\n'
+    mutant_text = mutate_script(ctx.script, guard_line, "")
+    unguarded = ctx.scenario("publish-inventory-guard-omitted", "finalized")
+    unguarded_workspace = prepare_publish(unguarded, mutant_text)
+    for mode in ("final-gate", "nightly-gate"):
+        result = unguarded.run_mode(unguarded_workspace, mode, **PUBLISH_ENV)
+        if result.rc != 0:
+            raise Reject("inventory-control", f"the mutant production {mode} gate failed: {result.text.strip()[-250:]}")
+    remove_qualified_archive(unguarded, unguarded_workspace)
+    mutant_result = unguarded.run_mode(unguarded_workspace, "publish-draft", **PUBLISH_ENV)
+    if mutant_result.rc == 0 or unguarded.state()["release"]["draft"] is not False \
+            or len(unguarded.state()["decisions"]) != 1 or "REJECT published-assets:" not in mutant_result.text:
+        raise Reject("inventory-control", "the missing-guard mutant did not demonstrate publication before its post-publish refusal")
+    return "the final gate persists the frozen inventory, and the live pre-publish comparison refuses removal before the one-way transition"
 
 
 # ----------------------------------------------------------------------------------------- Task 2: captured shapes
