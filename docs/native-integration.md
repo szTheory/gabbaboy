@@ -392,7 +392,7 @@ of that kind creates no `.sav` file.
 
 ## Support and upgrade
 
-The tracked [versioned support ledger](support/v0.2.1.md) describes the
+The tracked [versioned support ledger](support/v0.3.0.md) describes the
 bootless DMG-CPU-B and CGB-CPU-E models, cartridge and save matrix, corpus
 evidence, exclusions, and known limits. The tagged release publishes a separate
 `support-ledger.json` attachment binding the exact source SHA to the
@@ -400,8 +400,12 @@ tagged ledger blob digest and fixture/corpus identities. The three-case corpus
 is not a game compatibility percentage. No physical DMG observation, CGB,
 MBC1M, RTC, broad game-library, or perceptual claim is made.
 
-The optional macOS SDL3 player is the current interactive host. The inspected
-Playstead adapter, at Playstead main
+The optional macOS SDL3 player is the current interactive host. The inspected hosted
+macOS ARM64 core archive, installed runner, player and bundled SDL declare macOS 15.0 as
+their minimum deployment target and were built with the macOS 15.5 SDK. These are build
+facts for the inspected artifacts; broader OS compatibility remains untested. This
+describes those qualified artifacts; it does not promise support on older macOS releases.
+The inspected Playstead adapter, at Playstead main
 [`234bd45b21`](https://github.com/szTheory/playstead/commit/234bd45b21),
 runs GB, GBC and GBA through mGBA 0.10.5 as an external process adapter, not
 through libretro or an FFI binding. This native C example shows a possible

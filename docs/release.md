@@ -9,7 +9,12 @@ The release notes identify the version and list assets. The package
 matrix is Linux x64, macOS arm64, and Windows x64 core archives; the optional
 SDL3 player archive is macOS arm64 only. These are tested runner/configuration
 combinations, not minimum OS versions, all-architecture promises, or general
-platform support floors. The C core itself has no SDL runtime dependency.
+platform support floors. The inspected hosted macOS ARM64 core archive, installed
+runner, player and bundled SDL declare macOS 15.0 as their minimum deployment target
+and were built with the macOS 15.5 SDK. These are build facts for the inspected
+artifacts; broader OS compatibility remains untested. This describes those qualified
+artifacts; it does not promise support on older macOS releases. The C core itself has
+no SDL runtime dependency.
 
 ## Source archives and product packages
 
@@ -27,11 +32,13 @@ answers "what do I run"; neither is a substitute for the other.
 ## Verify and unpack
 
 Download the asset for your runner and its matching `.sha256` file where
-provided. Check it before extraction (for example,
-`sha256sum --check gabbaboy-core-macos-arm64.tar.gz.sha256`; use the platform's
-SHA-256 utility on macOS/Windows). The release's candidate/platform manifest,
-build receipts, and `support-ledger.json` (named `support-ledger-v0.1.0.json` on v0.1.0) provide additional provenance;
-compare each asset name and digest with the downloaded bytes.
+provided. Before extraction, compute the archive digest with `shasum -a 256`
+on macOS or `sha256sum` on Linux, then compare its 64-hex value with the
+matching sidecar. These sidecars contain only the digest, not the filename
+record required by `sha256sum --check`. The release's candidate/platform
+manifest, build receipts, and `support-ledger.json` (named
+`support-ledger-v0.1.0.json` on v0.1.0) provide additional provenance; compare
+each asset name and digest with the downloaded bytes.
 
 Native proof comes in two kinds that are kept apart. The installed-prefix check
 installs the build, relocates the prefix and runs C and C++ consumers against
@@ -451,7 +458,7 @@ attempt. See [`preview.md`](preview.md) for controls and player behavior.
 
 ## Support and troubleshooting
 
-The versioned [support ledger](support/v0.2.1.md) records the bootless
+The versioned [support ledger](support/v0.3.0.md) records the bootless
 DMG-CPU-B and CGB-CPU-E software models, the cartridge and save matrix, the
 CGB test-ROM corpus rows, exclusions, and known issues; the earlier
 [v0.1.0 ledger](support/v0.1.0.md) remains the record for that release. The
