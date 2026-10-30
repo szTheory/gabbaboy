@@ -320,7 +320,13 @@ jobs:
           python3 -I tests/scripts/verify-v02-source-archive.py --check-product-archive build/gabbaboy-core-linux-x64.tar.gz --repo-root .
           bash tests/scripts/verify-release-candidate.sh --extract build/gabbaboy-core-linux-x64.tar.gz "$RUNNER_TEMP/v02-extracted"
           python3 -I tests/scripts/verify-v02-consumers.py --write-candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --archive build/gabbaboy-core-linux-x64.tar.gz --source-sha "$SOURCE_SHA" --build-receipt build/release/CMakeCache.txt
-          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" --output build/v02-consumer-receipt.json
+          python3 -I tests/scripts/test_installed_host.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --work "$RUNNER_TEMP/host-smoke" --source-contract docs/host-contract.json \
+            --receipt build/host-smoke-receipt.json
+          python3 -I tests/scripts/verify-v02-consumers.py --prefix "$RUNNER_TEMP/v02-extracted" \
+            --archive build/gabbaboy-core-linux-x64.tar.gz --candidate-manifest "$RUNNER_TEMP/candidate-manifest.json" \
+            --platform linux-x64 --host-smoke-receipt build/host-smoke-receipt.json \
+            --output build/v02-consumer-receipt.json
           git archive --format=tar.gz --prefix="gabbaboy-${RELEASE_TAG#v}/" -o "$RUNNER_TEMP/source-archive.tar.gz" "$RELEASE_TAG"
           python3 -I tests/scripts/verify-v02-source-archive.py --archive "$RUNNER_TEMP/source-archive.tar.gz" \
             --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" --repo . --output build/source-archive-receipt.json

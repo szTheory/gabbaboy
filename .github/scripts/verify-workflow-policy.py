@@ -1614,6 +1614,8 @@ def check_rehearsal(root: Path) -> None:
     _check_checkout_credentials(name, tree, tree["jobs"])
     _check_host_smoke_wiring(name, "package", _require_job(name, tree, "package"), "linux-x64",
                              smoke_required=True)
+    _check_host_smoke_wiring(name, "aggregate", _require_job(name, tree, "aggregate"), "linux-x64",
+                             smoke_required=True)
     dispatch = tree.get("on", {}).get("workflow_dispatch", {})
     inputs = dispatch.get("inputs", {}) if isinstance(dispatch, dict) else {}
     if isinstance(inputs, dict) and {"performance_decision", "measurement_run_id"} & set(inputs):
@@ -3270,6 +3272,10 @@ def _mutations():
     return [
         _m("rehearsal package omits installed-host smoke", reh, "  package:\n",
            "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("rehearsal aggregate omits installed-host smoke", reh, "  aggregate:\n",
+           "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
+        _m("rehearsal aggregate consumer omits platform-bound host-smoke receipt", reh, "  aggregate:\n",
+           "--host-smoke-receipt build/host-smoke-receipt.json", "", "required-command-not-executed"),
         _m("release candidate omits installed-host smoke", rel, "  candidate:\n",
            "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
         _m("release macOS candidate omits installed-host smoke", rel, "  candidate-macos:\n",
