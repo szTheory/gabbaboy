@@ -2712,8 +2712,31 @@ WINDOW_RECORD = "tests/data/version-window.json"
 WINDOW_CONFIG = "release-please-config.json"
 VERSION_PR_BRANCH = "release-please--branches--main--components--GabbaBoy"
 WINDOW_DISCOVERY_STEP = "Find the open version PR and its regenerated body"
-WINDOW_DISCOVERY_CALL = ('pr=$(gh pr list --repo "$GH_REPO" --head ' + VERSION_PR_BRANCH
-                         + " --state open --json number --jq '.[0].number // empty')")
+WINDOW_PR_LIST_LIMIT = 100
+WINDOW_DISCOVERY_BRANCH = f"branch={VERSION_PR_BRANCH}"
+WINDOW_DISCOVERY_CALL = ('candidates=$(gh pr list --repo "$GH_REPO" --head "$branch" --base main --state open '
+                         '--limit 100 --json number,headRefName,baseRefName,isCrossRepository)')
+WINDOW_DISCOVERY_SELECT = '''pr=$(jq -r --arg head "$branch" --argjson page_limit 100 '
+  def valid_pr:
+    if type != "object" then false
+    elif (.number | type) != "number" then false
+    elif .number <= 0 or (.number | floor) != .number then false
+    elif (.headRefName | type) != "string" then false
+    elif (.baseRefName | type) != "string" then false
+    elif (.isCrossRepository | type) != "boolean" then false
+    else true
+    end;
+  if type != "array" then error("expected PR array")
+  elif length >= $page_limit then error("PR list reached its limit")
+  elif any(.[]; valid_pr | not) then error("malformed PR entry")
+  else
+    [.[] | select(.headRefName == $head and .baseRefName == "main" and .isCrossRepository == false)]
+    | if length > 1 then error("multiple canonical component PRs")
+      elif length == 1 then .[0].number
+      else empty
+      end
+  end
+' <<< "$candidates")'''
 WINDOW_DISCOVERY_PRESENT_FALSE = 'echo "present=false" >> "$GITHUB_OUTPUT"'
 WINDOW_DISCOVERY_PRESENT_TRUE = 'echo "present=true" >> "$GITHUB_OUTPUT"'
 WINDOW_DISCOVERY_EMPTY_LOG = 'echo "No open version PR, so no window is frozen."'
@@ -2721,7 +2744,9 @@ WINDOW_DISCOVERY_HEAD = 'head=$(gh api "repos/$GH_REPO/pulls/$pr" --jq .head.sha
 WINDOW_DISCOVERY_BODY = 'gh api "repos/$GH_REPO/pulls/$pr" --jq \'.body // ""\' > "$RUNNER_TEMP/version-pr-body.md"'
 WINDOW_DISCOVERY_RUN = "\n".join((
     "set -euo pipefail",
+    WINDOW_DISCOVERY_BRANCH,
     WINDOW_DISCOVERY_CALL,
+    WINDOW_DISCOVERY_SELECT,
     'if [[ -z "$pr" ]]; then',
     f"  {WINDOW_DISCOVERY_PRESENT_FALSE}",
     f"  {WINDOW_DISCOVERY_EMPTY_LOG}",
@@ -2865,8 +2890,8 @@ def check_version_window(root: Path) -> None:
 
 
 def _check_window_discovery_contract(discover_text: str) -> None:
-    if discover_text.count(WINDOW_DISCOVERY_CALL) != 1:
-        raise Reject("window-discovery", "version-window discovery must query the configured component branch exactly once")
+    if discover_text != WINDOW_DISCOVERY_RUN:
+        raise Reject("window-discovery", "version-window discovery must use the canonical same-repository, main-base, unique component-PR lookup")
 
 
 def _window_discovery_shell_controls() -> tuple[int, int]:
@@ -2876,6 +2901,9 @@ def _window_discovery_shell_controls() -> tuple[int, int]:
         return 0, 0
 
     legacy_branch = "release-please--branches--main"
+    jq_binary = shutil.which("jq")
+    if jq_binary is None:
+        raise SystemExit("self-test requires the jq executable used by the Ubuntu version-window job")
     with tempfile.TemporaryDirectory(prefix="gbb-window-discovery.") as directory:
         work = Path(directory)
         shims = work / "bin"
@@ -2887,36 +2915,41 @@ def _window_discovery_shell_controls() -> tuple[int, int]:
 set -eu
 printf '%s\\n' "$*" >> "${WINDOW_CONTROL_GH_LOG:?}"
 if [ "${1:-}" = pr ] && [ "${2:-}" = list ]; then
+  shift 2
   requested_branch=
+  requested_base=
   while [ "$#" -gt 0 ]; do
-    if [ "$1" = --head ]; then
-      shift
-      [ "$#" -gt 0 ] || exit 91
-      requested_branch=$1
-    fi
+    case "$1" in
+      --head) shift; [ "$#" -gt 0 ] || exit 91; requested_branch=$1 ;;
+      --base) shift; [ "$#" -gt 0 ] || exit 91; requested_base=$1 ;;
+    esac
     shift
   done
-  if [ "${WINDOW_CONTROL_PRESENT:-false}" = true ] && [ "$requested_branch" = "$WINDOW_CONTROL_BRANCH" ]; then
-    printf '131\\n'
+  if [ "$requested_branch" != "$WINDOW_CONTROL_BRANCH" ] || [ "$requested_base" != main ]; then
+    printf '[]\\n'
+  else
+    cat "${WINDOW_CONTROL_RESPONSE_FILE:?}"
   fi
   exit 0
 fi
-if [ "${1:-}" = api ] && [ "${2:-}" = "repos/$GH_REPO/pulls/131" ]; then
+if [ "${1:-}" = api ]; then
+  printf '%s\\n' "$*" >> "${WINDOW_CONTROL_API_LOG:?}"
+  [ "${2:-}" = "repos/$GH_REPO/pulls/131" ] || exit 92
   case "${4:-}" in
     .head.sha) printf '%s\\n' "$WINDOW_CONTROL_PR_HEAD" ;;
     '.body // ""') printf '%s\\n' 'controlled release notes' ;;
-    *) exit 92 ;;
+    *) exit 93 ;;
   esac
   exit 0
 fi
-exit 93
+exit 94
 """, encoding="utf-8")
         checker = shims / "python3"
         checker.write_text("""#!/bin/sh
 set -eu
 [ "${1:-}" = -I ] || exit 94
 [ "${2:-}" = trusted/tests/scripts/verify-version-window.py ] || exit 95
-printf '%s\\n' "${WINDOW_CONTROL_RECORD:?}" >> "${WINDOW_CONTROL_CHECKER_LOG:?}"
+printf '%s:%s\\n' "${WINDOW_CONTROL_RECORD:?}" "${6:-}" >> "${WINDOW_CONTROL_CHECKER_LOG:?}"
 case "$WINDOW_CONTROL_RECORD" in
   inactive) printf '%s\\n' 'version-window inactive pass controlled' ;;
   active-valid) printf '%s\\n' 'version-window active pass controlled' ;;
@@ -2927,35 +2960,44 @@ esac
         gh.chmod(0o755)
         checker.chmod(0o755)
 
-        def control_env(label: str, record_state: str, *, pr_present: bool) -> dict[str, str]:
+        def control_env(label: str, record_state: str, response: str) -> dict[str, str]:
             return {
-                "PATH": str(shims) + os.pathsep + os.defpath,
+                "PATH": os.pathsep.join((str(shims), str(Path(jq_binary).parent), os.defpath)),
                 "GH_REPO": "control/repo",
                 "GH_TOKEN": "controlled-token",
                 "GITHUB_OUTPUT": str(work / f"{label}.output"),
                 "RUNNER_TEMP": str(runner_temp),
                 "WINDOW_CONTROL_BRANCH": VERSION_PR_BRANCH,
-                "WINDOW_CONTROL_PRESENT": "true" if pr_present else "false",
+                "WINDOW_CONTROL_RESPONSE_FILE": str(work / f"{label}.response.json"),
                 "WINDOW_CONTROL_PR_HEAD": "control-pr-head",
                 "WINDOW_CONTROL_RECORD": record_state,
                 "WINDOW_CONTROL_GH_LOG": str(work / f"{label}.gh.log"),
+                "WINDOW_CONTROL_API_LOG": str(work / f"{label}.api.log"),
                 "WINDOW_CONTROL_CHECKER_LOG": str(work / f"{label}.checker.log"),
                 "MAIN_SHA": "control-main-head",
             }
 
-        def discover(label: str, record_state: str, *, pr_present: bool, body: str = WINDOW_DISCOVERY_RUN):
-            env = control_env(label, record_state, pr_present=pr_present)
+        def discover(label: str, record_state: str, response: str, *, body: str = WINDOW_DISCOVERY_RUN,
+                     expected_status: int = 0):
+            env = control_env(label, record_state, response)
+            Path(env["WINDOW_CONTROL_RESPONSE_FILE"]).write_text(response, encoding="utf-8")
             Path(env["GITHUB_OUTPUT"]).write_text("", encoding="utf-8")
             result = subprocess.run(["/bin/bash", "-e", "-o", "pipefail", "-c", body],
                                     capture_output=True, text=True, check=False, cwd=work, env=env, timeout=10)
-            if result.returncode != 0:
-                raise SystemExit(f"self-test trusted discovery body {label!r} failed: {result.stderr.strip()!r}")
+            if (result.returncode == 0 if expected_status == -1 else result.returncode != expected_status):
+                raise SystemExit(f"self-test trusted discovery body {label!r} returned {result.returncode}, "
+                                 f"expected {expected_status}: {result.stderr.strip()!r}")
             outputs = {}
             for line in Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8").splitlines():
                 key, separator, value = line.partition("=")
                 if not separator or key in outputs:
                     raise SystemExit(f"self-test trusted discovery body {label!r} wrote malformed outputs")
                 outputs[key] = value
+            gh_calls = Path(env["WINDOW_CONTROL_GH_LOG"]).read_text(encoding="utf-8").splitlines()
+            expected_list_call = (f"pr list --repo control/repo --head {VERSION_PR_BRANCH} --base main --state open "
+                                  "--limit 100 --json number,headRefName,baseRefName,isCrossRepository")
+            if body == WINDOW_DISCOVERY_RUN and gh_calls[:1] != [expected_list_call]:
+                raise SystemExit(f"self-test canonical discovery argv changed: {gh_calls!r}")
             return env, outputs
 
         def judge(label: str, env: dict[str, str], outputs: dict[str, str]):
@@ -2966,35 +3008,54 @@ esac
             calls = calls_path.read_text(encoding="utf-8").splitlines() if calls_path.exists() else []
             return result, calls
 
+        def row(number: int, *, branch: str = VERSION_PR_BRANCH, base: str = "main",
+                cross_repository: bool = False) -> dict[str, object]:
+            return {"number": number, "headRefName": branch, "baseRefName": base,
+                    "isCrossRepository": cross_repository}
+
+        canonical = [row(131)]
+        decoys_and_canonical = [row(132, cross_repository=True), row(133, base="develop"), row(131)]
         positive = 0
         negative = 0
-        for label, state, pr_present, expected_present, expected_status, expected_verdict, expected_calls in (
-            ("absent", "active-stale", False, "false", 0, "", []),
-            ("inactive", "inactive", True, "true", 0, "version-window inactive pass controlled", ["inactive"]),
-            ("active-valid", "active-valid", True, "true", 0, "version-window active pass controlled", ["active-valid"]),
-            ("active-stale", "active-stale", True, "true", 47, "REJECT window-stale controlled", ["active-stale"]),
+        for label, state, response_rows, expected_present, expected_status, expected_verdict, expected_calls in (
+            ("absent", "active-stale", [], "false", 0, "", []),
+            ("inactive", "inactive", canonical, "true", 0, "version-window inactive pass controlled", ["inactive:control-pr-head"]),
+            ("active-valid", "active-valid", canonical, "true", 0, "version-window active pass controlled", ["active-valid:control-pr-head"]),
+            ("active-valid-after-decoys", "active-valid", decoys_and_canonical, "true", 0,
+             "version-window active pass controlled", ["active-valid:control-pr-head"]),
+            ("active-stale", "active-stale", canonical, "true", 47, "REJECT window-stale controlled",
+             ["active-stale:control-pr-head"]),
         ):
-            env, outputs = discover(label, state, pr_present=pr_present)
-            if outputs.get("present") != expected_present or (pr_present and outputs.get("head") != "control-pr-head"):
+            env, outputs = discover(label, state, json.dumps(response_rows))
+            if outputs.get("present") != expected_present or (expected_present == "true" and outputs.get("head") != "control-pr-head"):
                 raise SystemExit(f"self-test discovery output {label!r} differs: {outputs!r}")
             result, calls = judge(label, env, outputs)
             observed_verdict = result.stdout.strip() if expected_status == 0 and calls else result.stderr.strip()
             if result.returncode != expected_status or calls != expected_calls or observed_verdict != expected_verdict:
                 raise SystemExit(f"self-test shell route {label!r} failed: exit={result.returncode}, calls={calls!r}, "
                                  f"stdout={result.stdout.strip()!r}, stderr={result.stderr.strip()!r}")
+            api_path = Path(env["WINDOW_CONTROL_API_LOG"])
+            api_calls = api_path.read_text(encoding="utf-8").splitlines() if api_path.exists() else []
+            expected_api_calls = ([] if label == "absent" else [
+                "api repos/control/repo/pulls/131 --jq .head.sha",
+                'api repos/control/repo/pulls/131 --jq .body // ""',
+            ])
+            if api_calls != expected_api_calls:
+                raise SystemExit(f"self-test route {label!r} fetched the wrong PR identity: {api_calls!r}")
             if label == "active-stale":
                 negative += 1
             else:
                 positive += 1
 
-        env, legacy_outputs = discover("legacy-query", "active-stale", pr_present=True,
-                                       body=WINDOW_DISCOVERY_RUN.replace(VERSION_PR_BRANCH, legacy_branch))
+        legacy_body = WINDOW_DISCOVERY_RUN.replace(WINDOW_DISCOVERY_BRANCH,
+                                                   f"branch={legacy_branch}")
+        env, legacy_outputs = discover("legacy-query", "active-stale", json.dumps(canonical), body=legacy_body)
         legacy_result, legacy_calls = judge("legacy-query", env, legacy_outputs)
         if (legacy_outputs.get("present") != "false" or legacy_result.returncode != 0
                 or legacy_calls or legacy_result.stderr):
             raise SystemExit("self-test legacy shell query did not reproduce its successful skipped-checker route")
         try:
-            _check_window_discovery_contract(WINDOW_DISCOVERY_RUN.replace(VERSION_PR_BRANCH, legacy_branch))
+            _check_window_discovery_contract(legacy_body)
         except Reject as exc:
             if exc.code != "window-discovery":
                 raise SystemExit(f"self-test legacy discovery mutant refused with the wrong code: {exc.code}") from exc
@@ -3002,8 +3063,26 @@ esac
         else:
             raise SystemExit("self-test legacy shell query was not rejected by the static discovery contract")
 
-    print("PASS: canonical shell routing covers absent, inactive, active-valid and stale-active records; "
-          "legacy query skips the checker and fails the static contract")
+        invalid_cases = (
+            ("ambiguous", json.dumps([row(131), row(134)])),
+            ("malformed-json", "{"),
+            ("malformed-row", json.dumps([{"number": "131", "headRefName": VERSION_PR_BRANCH,
+                                            "baseRefName": "main", "isCrossRepository": False}])),
+            ("full-page", json.dumps([row(131, base="develop"), *[row(number + 200, base="develop")
+                                                                      for number in range(WINDOW_PR_LIST_LIMIT - 1)]])),
+        )
+        for label, response in invalid_cases:
+            env, outputs = discover(label, "active-valid", response, expected_status=-1)
+            if outputs:
+                raise SystemExit(f"self-test invalid discovery {label!r} exposed a successful output: {outputs!r}")
+            api_path = Path(env["WINDOW_CONTROL_API_LOG"])
+            checker_path = Path(env["WINDOW_CONTROL_CHECKER_LOG"])
+            if api_path.exists() or checker_path.exists():
+                raise SystemExit(f"self-test invalid discovery {label!r} reached the PR API or window checker")
+            negative += 1
+
+    print("PASS: canonical Bash/jq routing covers absent, inactive, active-valid, fork/non-main decoys and stale-active; "
+          "ambiguous, malformed and full-page discovery fail closed; legacy query skips the checker and fails its contract")
     return negative, positive
 
 
@@ -4293,14 +4372,24 @@ def _window_mutations():
         _m("W17-20 changelog path moved", "config", "", '"changelog-path": "CHANGELOG.md"', '"changelog-path": "docs/CHANGELOG.md"',
            "window-config"),
         _m("W17-21 legacy release-please branch misses the component PR", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
-           WINDOW_DISCOVERY_CALL, WINDOW_DISCOVERY_CALL.replace(VERSION_PR_BRANCH, "release-please--branches--main"),
+           WINDOW_DISCOVERY_BRANCH, WINDOW_DISCOVERY_BRANCH.replace(VERSION_PR_BRANCH, "release-please--branches--main"),
            "window-discovery"),
         _m("W17-22 component PR discovery omits its head filter", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
-           WINDOW_DISCOVERY_CALL, WINDOW_DISCOVERY_CALL.replace("--head " + VERSION_PR_BRANCH, ""), "window-discovery"),
+           WINDOW_DISCOVERY_CALL, WINDOW_DISCOVERY_CALL.replace('--head "$branch"', ""), "window-discovery"),
         _m("W17-23 component PR discovery output step is renamed", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
            "id: discover\n", "id: find-version-pr\n", "window-discovery"),
         _m("W17-24 discovered PR is not marked present", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
            WINDOW_DISCOVERY_PRESENT_TRUE, ": # present output omitted", "window-discovery"),
+        _m("W17-25 component PR discovery omits its main-base filter", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           WINDOW_DISCOVERY_CALL, WINDOW_DISCOVERY_CALL.replace("--base main", ""), "window-discovery"),
+        _m("W17-26 component PR discovery admits fork candidates", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           '.isCrossRepository == false', '.isCrossRepository == true', "window-discovery"),
+        _m("W17-27 duplicate canonical component PRs select the first", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           'if length > 1 then error("multiple canonical component PRs")',
+           'if length > 1 then empty', "window-discovery"),
+        _m("W17-28 full component PR page is treated as complete", rp, f"name: {WINDOW_DISCOVERY_STEP}\n",
+           'elif length >= $page_limit then error("PR list reached its limit")',
+           'elif false then error("PR list reached its limit")', "window-discovery"),
     ]
 
 

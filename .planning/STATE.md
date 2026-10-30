@@ -33,7 +33,7 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 Phase: 19 (Qualified v0.3.0 Release) — EXECUTING
 Plan: 7 of 7
 Status: Release window held while the approved component-PR discovery repair is implemented and qualified. No tag exists.
-Last activity: 2026-10-30 — D-124 partitions and their local registration/coverage checks passed in the existing corrective PR. Independent review and fresh exact-head CI remain.
+Last activity: 2026-10-30 — D-125 same-repository component-PR discovery and fatal routing controls pass locally. Fresh exact-head evidence and independent review confirmation remain.
 
 Completed stage: **Phase 19 execution through Plan 19-06**. PR #133 merged after exact-head protected CI, coherent local/hosted preflight, unchanged performance gate and guarded squash. Release-please regeneration was verified. Detailed identities and evidence remain in the phase continuation and facts file; the frozen 19-06 SUMMARY is not rewritten.
 
