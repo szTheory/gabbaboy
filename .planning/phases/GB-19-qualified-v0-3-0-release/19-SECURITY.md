@@ -18,6 +18,10 @@ The second focused audit at `0fec185016ae4d3578b641ffc694aafdd1d8795c` verified 
 **Owner-approved rescope audit:** D-121 permits the one bounded additional fix/review; D-122 resolves D-09 acknowledgment. The independent ASVS L1 delta audit at `8f4deeddd07ddf06f9927a1c6c571b717732b06e` found no implementation blocker: bundled Windows Bash selection rejects missing, unsupported, system-root and escaping candidates; all three real guard assertions remain; production guards and limits are unchanged. Resolver controls passed five negative/four positive cases, and an isolated selected-executable invocation exercised the guard scenarios. The executor's revision-bound targeted suite passed 5/5 with the 453 POSIX/426 Windows floors and unchanged 180-second policy timeout. Actual hosted Windows CI and renewed final-source preflight remain mandatory; E0 qualification is historical, so T-19-25 is open for the new source. Current register: 26/35 closed, nine operational items open, four blocking. No new risk acceptance.
 
 
+## D-121 validation continuation
+
+Actual b33 Windows CI located Git at `Git/ucrt64/bin/git.EXE`; the first resolver candidate mapped that equivalent layout one directory too deep. Commit `dedeb22a5528b0ec6bb3cb4845a535303f66ccd4` adds the observed architecture layout and a persistent positive fixture selecting top-level `Git/bin/bash.exe`. The independent focused audit preserved T-19-14, T-19-22 and AR-19-01: all five refusal controls, three real guard scenarios, timeout limits, negative-count floors and production guards are unchanged. Resolver controls are five negative/five positive; overall policy controls are 453 negative/nine positive. A valid uppercase `git.EXE` fixture fails on immutable `8f4deed` and selects the correct Bash on the new source. The revision-bound local CTest passed 1/1 in 56.18 seconds. Actual Windows CI and the final-source preflight remain mandatory. Superseded b33 runs were canceled, their partial/canceled results are not passes, the transient branch was deleted, the tag is absent and main remains unchanged.
+
 ## Trust Boundaries
 
 | Boundary | Data crossing |
@@ -98,6 +102,7 @@ The code review additionally found WR-01: changed-path closure accepted internal
 | 2026-10-30 |0fec185016ae4d3578b641ffc694aafdd1d8795c|26|9|4|Independent focused round 2 audit preserves T-19-14/T-19-22 and AR-19-01; tag scenarios executed; executor targeted controls subsequently pass 3/3; Windows CI pending |
 | 2026-10-30 |e0ca6463c3b6379fe65f28bb1fa0673be79ee071|27|8|4|Orchestrator records completed E0 preflight and actual Windows WSL-launcher failure; T-19-26 remains blocking; owner rescope pending |
 | 2026-10-30 |8f4deeddd07ddf06f9927a1c6c571b717732b06e|26|9|4|Independent approved-rescope audit preserves mitigations; targeted suite 5/5; actual Windows and renewed preflight pending; D-121/D-122 approved |
+| 2026-10-30 |dedeb22a5528b0ec6bb3cb4845a535303f66ccd4|26|9|4|Focused D-121 continuation covers observed ucrt64 layout; old-resolver refusal/new-selection proof and actual guard cases pass locally; Windows/preflight pending |
 
 No missing subject-ancestry dependency was established: ancestry/object checks use full-history trusted-judge; subject derivation reads CMake/manifest; fuzz exact-tree/blob validation follows fetching the subject commit. The local differential uses full-history worktrees and does not exercise a shallow subject checkout; this is a coverage limitation, not a verified defect. The five completed summaries have no explicit Threat Flags sections; that is not proof of an exhaustive attack-surface inventory.
 

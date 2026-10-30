@@ -32,3 +32,7 @@ This exception would be limited to the identified test-harness process-resolutio
 - PR #133 remains unmergeable at E0 because both exact-head CI runs failed the Windows harness; preview smoke failed downstream. Continue plan 19-06 at the approved fixed source, then merge only after fresh required evidence and branch protection pass. Plan 19-07 starts only after the guarded PR A merge and #131 regeneration.
 
 The resolver scope itself makes no main/tag/publication change. The original guarded Phase 19 merge and release sequence remains authorized after its required evidence and branch protection pass; stop at the Phase 19 execution boundary.
+
+## In-scope platform-validation evidence
+
+The first candidate's actual b33 Windows check revealed `Git/ucrt64/bin/git.EXE`, an equivalent bundled layout covered by this approved scope. Its correction is `dedeb22a5528b0ec6bb3cb4845a535303f66ccd4`: the existing root mapping includes ucrt64 and one positive fixture proves top-level `Git/bin/bash.exe` selection. The old immutable resolver rejects that valid layout; the correction passes. Negative controls, floors, production guards and timeouts are unchanged. This is completion of the same resolver validation, not a fourth round or a budget reset. Actual fresh Windows CI remains required; canceled b33 runs supply no completion evidence.
