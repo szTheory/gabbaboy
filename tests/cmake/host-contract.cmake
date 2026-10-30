@@ -195,12 +195,35 @@ add_test(NAME doc_no_interop_claims
 set_tests_properties(doc_no_interop_claims PROPERTIES TIMEOUT 60 LABELS planning
   PASS_REGULAR_EXPRESSION "no-interop-claims pass files=6 controls=10")
 
+# D-25: release documentation is checked from the configured immutable revision.
+add_test(NAME changelog_first_heading
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-changelog-heading.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(changelog_first_heading PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "changelog-heading pass first=.* controls=0")
+add_test(NAME changelog_first_heading_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-changelog-heading.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}" --self-test)
+set_tests_properties(changelog_first_heading_controls PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "changelog-heading pass first=.* controls=([2-9]|[1-9][0-9]+)")
+add_test(NAME doc_links_versions
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-doc-links.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}")
+set_tests_properties(doc_links_versions PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "doc-links pass files=[0-9]+ links=[0-9]+ controls=0")
+add_test(NAME doc_links_versions_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-doc-links.py"
+    --rev "${GBB_HOST_CONTRACT_REV}" --repo "${PROJECT_SOURCE_DIR}" --self-test)
+set_tests_properties(doc_links_versions_controls PROPERTIES TIMEOUT 60
+  PASS_REGULAR_EXPRESSION "doc-links pass files=[0-9]+ links=[0-9]+ controls=([6-9]|[1-9][0-9]+)")
+
 # ---- WR-04: the checkers name HEAD, never a configure-time SHA ---------------------------------------------------
 # The registered commands are read back from the generated CTestTestfile.cmake. The control hands the same script a
 # file whose save_format_files line carries a 40-digit SHA (the pre-fix wiring) and a file with a test missing; each
 # must be rejected for its own reason, so the wiring check cannot pass by reading nothing.
 set(GBB_REV_WIRING_TESTS save_format_completeness save_format_freeze host_contract_json host_contract_controls
-  host_contract_docs host_contract_docs_control host_contract_docs_missing_control doc_no_interop_claims)
+  host_contract_docs host_contract_docs_control host_contract_docs_missing_control doc_no_interop_claims
+  changelog_first_heading changelog_first_heading_controls doc_links_versions doc_links_versions_controls)
 if(NOT WIN32)
   list(APPEND GBB_REV_WIRING_TESTS save_format_files save_format_controls)
 endif()
