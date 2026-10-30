@@ -88,13 +88,14 @@ gbb_add_ci_lane_test(workflow_policy_check 0 "PASS: workflow privilege and trust
   "${GBB_WORKFLOW_POLICY}" --check --root "${PROJECT_SOURCE_DIR}")
 # Phase 19-06 added two aggregate host-smoke mutants. The Windows Bash resolver adds five further negative
 # controls; the version-window discovery repair adds eight workflow mutants on every platform. D-126 adds four
-# additional macOS runner-pin mutants and one release-receipt runner-drift mutant. Canonical Bash/jq routing controls
-# run on POSIX only because the production gate is Ubuntu-only.
+# additional macOS runner-pin mutants and one release-receipt runner-drift mutant. D-126 also rejects whitespace,
+# list and expression runner values plus receipt comment-decoy, duplicate-key, and JSON-encoder-rebinding overrides.
+# Canonical Bash/jq routing controls run on POSIX only because the production gate is Ubuntu-only.
 # Keep the platform floors at the measured prior values plus the registered new controls.
 if(WIN32)
-  set(gbb_workflow_policy_floor 439)
+  set(gbb_workflow_policy_floor 445)
 else()
-  set(gbb_workflow_policy_floor 472)
+  set(gbb_workflow_policy_floor 478)
 endif()
 set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=negative_controls -DGBB_EXPECT_MIN_VALUE=${gbb_workflow_policy_floor})
 gbb_add_ci_lane_test(workflow_policy_controls 0 "PASS: workflow policy self-test negative_controls=[0-9]+ positive_controls=[0-9]+" 180 ""

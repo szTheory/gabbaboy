@@ -19,6 +19,7 @@ a trusted checkout and pass the subject tree as --root (data only).
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import math
 import os
@@ -1334,9 +1335,15 @@ MACOS_QUALIFICATION_JOBS = {
     ("release.yml", "candidate-macos"): MACOS_QUALIFICATION_RUNNER,
 }
 RELEASE_MACOS_BUILD_STEP = "Build and package macOS arm64 core once"
-RELEASE_MACOS_RECEIPT_RUNNER_PIN = (
-    '"schema_version": 1, "platform": "macos-arm64", "runner": "macos-15",'
-)
+RELEASE_MACOS_RECEIPT_PATH = "build/gabbaboy-build-receipt-macos-arm64.json"
+RELEASE_MACOS_RECEIPT_PRODUCER = r'''import json, os, pathlib, platform, subprocess
+cc = subprocess.run(["cc", "--version"], check=True, text=True, capture_output=True).stdout.splitlines()[0]
+cmake = subprocess.run(["cmake", "--version"], check=True, text=True, capture_output=True).stdout.splitlines()[0]
+pathlib.Path("build/gabbaboy-build-receipt-macos-arm64.json").write_text(json.dumps({
+    "schema_version": 1, "platform": "macos-arm64", "runner": "macos-15",
+    "os": platform.platform(), "architecture": platform.machine(), "compiler": cc,
+    "cmake": cmake, "configuration": "Release", "source_sha": os.environ["SOURCE_SHA"]
+}, indent=2) + "\n")'''
 # Hosted runner images of the native downloaded-archive lanes; a silently different image changes what was qualified.
 RELEASE_RUNNERS = {"candidate-macos": MACOS_QUALIFICATION_RUNNER, "candidate-windows": "windows-2022"}
 # The only events that may start release.yml: it is a reusable workflow, so a privileged event of its own
@@ -2092,14 +2099,14 @@ def _check_release_presence(workflow: str, tree: dict) -> None:
         if _normalise_if(actual) != _normalise_if(expected):
             raise Reject("release-presence", f"{_where(workflow, key[0])} {subject} is not exactly the pinned guard {expected!r}")
     for job_id, runner in RELEASE_RUNNERS.items():
-        actual = str(_require_job(workflow, tree, job_id).get("runs-on", "")).strip()
+        actual = _require_job(workflow, tree, job_id).get("runs-on")
         if actual != runner:
             raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {runner}, not {actual or 'an unset image'}")
 
 
 def _check_macos_runner_pin(root: Path, workflow: str, job_id: str, expected: str) -> None:
     tree = read_workflow(root / ".github/workflows" / workflow)
-    actual = str(_require_job(workflow, tree, job_id).get("runs-on", "")).strip()
+    actual = _require_job(workflow, tree, job_id).get("runs-on")
     if actual != expected:
         raise Reject("runner-image", f"{_where(workflow, job_id)} must run on {expected}, not {actual or 'an unset image'}")
 
@@ -2110,8 +2117,55 @@ def _check_release_macos_receipt_runner(root: Path) -> None:
     job = _require_job(workflow, tree, "candidate-macos")
     steps = [step for step in job.get("steps", []) if step.get("name") == RELEASE_MACOS_BUILD_STEP]
     run = str(steps[0].get("run", "")) if len(steps) == 1 else ""
-    if len(steps) != 1 or run.count(RELEASE_MACOS_RECEIPT_RUNNER_PIN) != 1:
-        raise Reject("runner-image", "release.candidate-macos build receipt must record the pinned macos-15 runner")
+    commands = [index for index, line in enumerate(run.splitlines()) if line == "python3 - <<'PY'"]
+    lines = run.splitlines()
+    endings = [index for index, line in enumerate(lines) if line == "PY"]
+    if len(steps) != 1 or len(commands) != 1 or len(endings) != 1 or endings[0] <= commands[0] \
+            or any(line.strip() for line in lines[endings[0] + 1:]):
+        raise Reject("runner-image", "release.candidate-macos must have one terminal receipt-producing Python heredoc")
+    try:
+        producer = ast.parse("\n".join(lines[commands[0] + 1:endings[0]]))
+        canonical_producer = ast.parse(RELEASE_MACOS_RECEIPT_PRODUCER)
+    except SyntaxError as exc:
+        raise Reject("runner-image", "release.candidate-macos receipt producer is not valid Python") from exc
+    if ast.dump(producer, include_attributes=False) != ast.dump(canonical_producer, include_attributes=False):
+        raise Reject("runner-image", "release.candidate-macos receipt producer differs from the trusted canonical producer")
+
+    def is_path_call(node) -> bool:
+        return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "Path"
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == "pathlib"
+                and len(node.args) == 1 and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value == RELEASE_MACOS_RECEIPT_PATH)
+
+    writers = [node for node in ast.walk(producer)
+               if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "write_text"
+               and is_path_call(node.func.value)]
+    top_level_writers = [node.value for node in producer.body if isinstance(node, ast.Expr)
+                         and isinstance(node.value, ast.Call) and node.value in writers]
+    if len(writers) != 1 or len(top_level_writers) != 1 or top_level_writers[0] is not writers[0] or not writers[0].args:
+        raise Reject("runner-image", "release.candidate-macos must write one macOS build receipt to its pinned path")
+    payload = writers[0].args[0]
+    if not (isinstance(payload, ast.BinOp) and isinstance(payload.op, ast.Add)
+            and isinstance(payload.right, ast.Constant) and payload.right.value == "\n"):
+        raise Reject("runner-image", "release.candidate-macos receipt writer must append one newline to its JSON payload")
+    dump = payload.left
+    if not (isinstance(dump, ast.Call) and isinstance(dump.func, ast.Attribute) and dump.func.attr == "dumps"
+            and isinstance(dump.func.value, ast.Name) and dump.func.value.id == "json" and dump.args
+            and isinstance(dump.args[0], ast.Dict)):
+        raise Reject("runner-image", "release.candidate-macos receipt writer must serialize a literal JSON object")
+    receipt = dump.args[0]
+    if any(not isinstance(key, ast.Constant) or not isinstance(key.value, str) for key in receipt.keys):
+        raise Reject("runner-image", "release.candidate-macos receipt object must not use computed or expanded keys")
+
+    def field_values(name: str):
+        return [value for key, value in zip(receipt.keys, receipt.values) if key.value == name]
+
+    runner = field_values("runner")
+    platform = field_values("platform")
+    if (len(runner) != 1 or not isinstance(runner[0], ast.Constant)
+            or runner[0].value != MACOS_QUALIFICATION_RUNNER or len(platform) != 1
+            or not isinstance(platform[0], ast.Constant) or platform[0].value != "macos-arm64"):
+        raise Reject("runner-image", "release.candidate-macos build receipt must bind its macos-arm64 runner to macos-15")
 
 
 def _check_macos_qualification_runners(root: Path) -> None:
@@ -4203,9 +4257,28 @@ def _mutations():
            "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
         _m("D126 preview player-package Mac runner pin changed", "preview.yml", "  player-package-smoke-macos:\n",
            "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
+        _m("D126 macOS runner pin contains surrounding whitespace", "ci.yml", "  native-macos:\n",
+           "runs-on: macos-15", "runs-on: ' macos-15 '", "runner-image"),
+        _m("D126 macOS runner pin is a list instead of one scalar", "ci.yml", "  native-macos:\n",
+           "runs-on: macos-15", "runs-on: [macos-15]", "runner-image"),
+        _m("D126 macOS runner pin is an expression instead of one scalar", "ci.yml", "  native-macos:\n",
+           "runs-on: macos-15", "runs-on: ${{ vars.MACOS_RUNNER }}", "runner-image"),
         _m("W6-05a candidate-macos runner changed", rel, "  candidate-macos:\n", "runs-on: macos-15", "runs-on: macos-14", "runner-image"),
         _m("D126 release macOS build receipt runner drifted", rel, f"name: {RELEASE_MACOS_BUILD_STEP}\n",
            '"runner": "macos-15"', '"runner": "macos-14"', "runner-image"),
+        ("D126 stale receipt runner is not hidden by an expected-value comment decoy", rel, [
+            (f"name: {RELEASE_MACOS_BUILD_STEP}\n", '"runner": "macos-15"', '"runner": "macos-14"'),
+            (f"name: {RELEASE_MACOS_BUILD_STEP}\n", "import json, os, pathlib, platform, subprocess\n",
+             'import json, os, pathlib, platform, subprocess\n{I}# decoy: "schema_version": 1, "platform": "macos-arm64", "runner": "macos-15",\n'),
+        ], "runner-image"),
+        ("D126 duplicate receipt runner key cannot override the pinned value", rel, [
+            (f"name: {RELEASE_MACOS_BUILD_STEP}\n", '"runner": "macos-15",',
+             '"runner": "macos-15",\n{I}"runner": "macos-14",'),
+        ], "runner-image"),
+        ("D126 receipt producer cannot rebind json.dumps before writing", rel, [
+            (f"name: {RELEASE_MACOS_BUILD_STEP}\n", "import json, os, pathlib, platform, subprocess\n",
+             "import json, os, pathlib, platform, subprocess\n{I}json.dumps = lambda *_args, **_kwargs: '{\"schema_version\":1,\"platform\":\"macos-arm64\",\"runner\":\"macos-14\"}'\n"),
+        ], "runner-image"),
         _m("W6-05b candidate-windows runner changed", rel, "  candidate-windows:\n", "runs-on: windows-2022", "runs-on: windows-latest", "runner-image"),
         _m("W6-06 windows archive name changed in the extract call", rel, "  candidate-windows:\n",
            "bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz",
