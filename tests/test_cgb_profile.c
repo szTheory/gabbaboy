@@ -413,6 +413,8 @@ static int probe_pgb(void) {
     return 0;
 }
 
+#define ARRAY_COUNT(a) (sizeof(a) / sizeof((a)[0]))
+
 static const uint8_t rom_codes[] = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 0x09u, 0x52u, 0x53u,
                                     0x54u, 0xFFu};
 static const uint8_t ram_codes[] = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 0xFFu};
@@ -420,65 +422,189 @@ static const uint8_t parity_types[] = {0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u,
                                        0x0Fu, 0x10u, 0x11u, 0x12u, 0x13u, 0x19u, 0x1Au, 0x1Bu,
                                        0x1Cu, 0x1Du, 0x1Eu, 0x1Fu, 0x20u, 0xFCu, 0xFFu};
 
-/* Exhaustively compare probe and real-loader results across both profiles and the header matrix.
- * The independent CGB oracle remains a third check; *runs counts every matrix entry. */
-static unsigned long parity_sweep(gbb_instance *scratch_dmg, gbb_instance *scratch_cgb,
+/* Frozen axis IDs retain the original parity domain independently of the loops below. */
+static const uint8_t parity_manifest_types[] = {
+    0x00u, 0x01u, 0x02u, 0x03u, 0x04u, 0x05u, 0x06u, 0x07u, 0x0Fu, 0x10u, 0x11u, 0x12u,
+    0x13u, 0x19u, 0x1Au, 0x1Bu, 0x1Cu, 0x1Du, 0x1Eu, 0x1Fu, 0x20u, 0xFCu, 0xFFu,
+};
+static const uint8_t parity_manifest_rom_codes[] = {
+    0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 0x09u, 0x52u, 0x53u, 0x54u, 0xFFu,
+};
+static const uint8_t parity_manifest_ram_codes[] = {0u, 1u, 2u, 3u, 4u, 5u, 6u, 0xFFu};
+static const int8_t parity_length_deltas[] = {0, -1, 1};
+static const int8_t parity_manifest_length_deltas[] = {0, -1, 1};
+static const uint8_t parity_checksum_results[] = {0u, 1u};
+static const uint8_t parity_manifest_checksum_results[] = {0u, 1u};
+static const uint8_t parity_manifest_support_flags[] = {
+    0x00u, 0x80u, 0xC0u, 0x81u, 0x84u, 0x88u, 0xFFu,
+};
+#define PARITY_LENGTH_VARIANTS ARRAY_COUNT(parity_manifest_length_deltas)
+#define PARITY_CHECKSUM_VARIANTS ARRAY_COUNT(parity_manifest_checksum_results)
+#define PARITY_MATRIX_CASES                                                                            \
+    (ARRAY_COUNT(parity_manifest_types) * ARRAY_COUNT(parity_manifest_rom_codes) *                    \
+     ARRAY_COUNT(parity_manifest_ram_codes) * PARITY_LENGTH_VARIANTS *                                \
+     PARITY_CHECKSUM_VARIANTS * ARRAY_COUNT(parity_manifest_support_flags))
+
+typedef enum { PARITY_DOMAIN_DMG_CPU_B, PARITY_DOMAIN_CGB_CPU_E, PARITY_DOMAIN_COUNT } parity_domain;
+
+static int parity_axis_matches(const uint8_t *actual, size_t actual_count,
+                               const uint8_t *manifest, size_t manifest_count) {
+    if (actual_count != manifest_count) return 0;
+    return memcmp(actual, manifest, actual_count * sizeof(*actual)) == 0;
+}
+
+static int parity_length_axis_matches(const int8_t *actual, size_t actual_count,
+                                      const int8_t *manifest, size_t manifest_count) {
+    if (actual_count != manifest_count) return 0;
+    return memcmp(actual, manifest, actual_count * sizeof(*actual)) == 0;
+}
+
+static int parity_manifest_valid(void) {
+    if (!parity_axis_matches(parity_types, ARRAY_COUNT(parity_types), parity_manifest_types,
+                             ARRAY_COUNT(parity_manifest_types)) ||
+        !parity_axis_matches(rom_codes, ARRAY_COUNT(rom_codes), parity_manifest_rom_codes,
+                             ARRAY_COUNT(parity_manifest_rom_codes)) ||
+        !parity_axis_matches(ram_codes, ARRAY_COUNT(ram_codes), parity_manifest_ram_codes,
+                             ARRAY_COUNT(parity_manifest_ram_codes)) ||
+        !parity_axis_matches(parity_checksum_results, ARRAY_COUNT(parity_checksum_results),
+                             parity_manifest_checksum_results,
+                             ARRAY_COUNT(parity_manifest_checksum_results)) ||
+        !parity_length_axis_matches(parity_length_deltas, ARRAY_COUNT(parity_length_deltas),
+                                    parity_manifest_length_deltas,
+                                    ARRAY_COUNT(parity_manifest_length_deltas)) ||
+        SUPPORT_ROWS != ARRAY_COUNT(parity_manifest_support_flags))
+        return 0;
+
+    for (size_t i = 0u; i < SUPPORT_ROWS; ++i)
+        if (support_rows[i].flag != parity_manifest_support_flags[i]) return 0;
+    return 1;
+}
+
+/* The identity of a matrix case is its full Cartesian coordinate:
+ * (cartridge type, ROM code, RAM code, length variant, checksum result, $143 value).
+ * The ordinal is only a compact bitmap slot for that tuple, not the identity itself. */
+static size_t parity_case_slot(size_t type, size_t rom, size_t ram, size_t length_variant,
+                               size_t checksum_variant, size_t support_variant) {
+    size_t slot = type;
+    slot = slot * ARRAY_COUNT(rom_codes) + rom;
+    slot = slot * ARRAY_COUNT(ram_codes) + ram;
+    slot = slot * PARITY_LENGTH_VARIANTS + length_variant;
+    slot = slot * PARITY_CHECKSUM_VARIANTS + checksum_variant;
+    return slot * SUPPORT_ROWS + support_variant;
+}
+
+static int mark_parity_case(uint8_t *seen, size_t slot, size_t capacity) {
+    if (slot >= capacity || seen[slot] != 0u) return 0;
+    seen[slot] = 1u;
+    return 1;
+}
+
+static int parity_coverage_complete(const uint8_t *seen, size_t count, size_t expected_count) {
+    if (count != expected_count) return 0;
+    for (size_t i = 0u; i < count; ++i)
+        if (seen[i] != 1u) return 0;
+    return 1;
+}
+
+static void report_missing_parity_cases(const uint8_t *seen) {
+    for (size_t slot = 0u; slot < PARITY_MATRIX_CASES; ++slot) {
+        if (seen[slot] != 0u) continue;
+        size_t n = slot;
+        const size_t support = n % SUPPORT_ROWS;
+        n /= SUPPORT_ROWS;
+        const size_t checksum = n % PARITY_CHECKSUM_VARIANTS;
+        n /= PARITY_CHECKSUM_VARIANTS;
+        const size_t length = n % PARITY_LENGTH_VARIANTS;
+        n /= PARITY_LENGTH_VARIANTS;
+        const size_t ram = n % ARRAY_COUNT(ram_codes);
+        n /= ARRAY_COUNT(ram_codes);
+        const size_t rom = n % ARRAY_COUNT(rom_codes);
+        n /= ARRAY_COUNT(rom_codes);
+        const size_t type = n;
+        fprintf(stderr,
+                "parity coverage: missing tuple id=%zu type=%02X rom=%02X ram=%02X "
+                "length_delta=%d checksum_ok=%d flag=%02X\n",
+                slot, parity_types[type], rom_codes[rom], ram_codes[ram],
+                (int)parity_length_deltas[length],
+                (int)checksum, support_rows[support].flag);
+    }
+}
+
+/* Exhaustively compare one model's probe to its real loader for every header tuple. The CGB
+ * partition also checks the independent oracle; both partitions prove exact tuple coverage. */
+static unsigned long parity_sweep(gbb_profile profile, gbb_instance *scratch,
                                   unsigned long *runs) {
     unsigned long mismatches = 0u;
-    for (int p = 0; p < 2; ++p) {
-        const gbb_profile profile = p == 0 ? GBB_PROFILE_DMG_CPU_B : GBB_PROFILE_CGB_CPU_E;
-        for (size_t t = 0u; t < sizeof(parity_types); ++t)
-            for (size_t r = 0u; r < sizeof(rom_codes); ++r)
-                for (size_t m = 0u; m < sizeof(ram_codes); ++m) {
-                    const size_t base = declared_length(rom_codes[r]);
-                    const size_t lengths[3] = {base, base - 1u, base + 1u};
-                    for (int l = 0; l < 3; ++l)
-                        for (int ck = 0; ck < 2; ++ck)
-                            for (size_t f = 0u; f < SUPPORT_ROWS; ++f) {
-                                const uint8_t flag = support_rows[f].flag;
-                                set_header(parity_types[t], rom_codes[r], ram_codes[m], ck, flag);
-                                gbb_info info;
-                                fill_info(&info, GBB_INFO_SIZE_V1);
-                                const gbb_error probe =
-                                    gbb_probe_rom(profile, image, lengths[l], &info);
-                                const gbb_error ref = gbb_load_rom(
-                                    profile == GBB_PROFILE_DMG_CPU_B ? scratch_dmg : scratch_cgb,
-                                    image, lengths[l]);
-                                if (profile == GBB_PROFILE_CGB_CPU_E &&
-                                    ref != expected_result(profile, parity_types[t], rom_codes[r],
-                                                           ram_codes[m], lengths[l], ck, flag, 0)) {
-                                    ++mismatches;
-                                    fprintf(stderr, "oracle: type=%02X rom=%02X ram=%02X "
-                                            "len=%zu ck=%d flag=%02X load=%d\n",
-                                            parity_types[t], rom_codes[r], ram_codes[m],
-                                            lengths[l], ck, flag, (int)ref);
-                                }
-                                ++*runs;
-                                if (probe != ref) {
-                                    ++mismatches;
-                                    fprintf(stderr,
-                                            "parity: profile=%d type=%02X rom=%02X ram=%02X "
-                                            "len=%zu ck=%d flag=%02X probe=%d ref=%d\n",
-                                            (int)profile, parity_types[t], rom_codes[r],
-                                            ram_codes[m], lengths[l], ck, flag, (int)probe,
-                                            (int)ref);
-                                }
-                                if (probe != GBB_OK &&
-                                    !info_untouched(&info, GBB_INFO_SIZE_V1))
-                                    ++mismatches;
-                            }
-                }
+    uint8_t *seen = calloc(PARITY_MATRIX_CASES, sizeof(*seen));
+    if (seen == NULL) {
+        fprintf(stderr, "parity coverage: could not allocate tuple bitmap\n");
+        return 1u;
     }
+
+    for (size_t t = 0u; t < ARRAY_COUNT(parity_types); ++t)
+        for (size_t r = 0u; r < ARRAY_COUNT(rom_codes); ++r)
+            for (size_t m = 0u; m < ARRAY_COUNT(ram_codes); ++m) {
+                const size_t base = declared_length(rom_codes[r]);
+                size_t lengths[PARITY_LENGTH_VARIANTS];
+                for (size_t l = 0u; l < PARITY_LENGTH_VARIANTS; ++l) {
+                    const int delta = (int)parity_length_deltas[l];
+                    lengths[l] = delta < 0 ? base - (size_t)(-delta) : base + (size_t)delta;
+                }
+                for (size_t l = 0u; l < PARITY_LENGTH_VARIANTS; ++l)
+                    for (size_t ck = 0u; ck < PARITY_CHECKSUM_VARIANTS; ++ck)
+                        for (size_t f = 0u; f < SUPPORT_ROWS; ++f) {
+                            const size_t slot = parity_case_slot(t, r, m, l, ck, f);
+                            if (!mark_parity_case(seen, slot, PARITY_MATRIX_CASES)) {
+                                ++mismatches;
+                                fprintf(stderr,
+                                        "parity coverage: duplicate or invalid tuple id=%zu "
+                                        "profile=%d\n",
+                                        slot, (int)profile);
+                            }
+                            const uint8_t flag = support_rows[f].flag;
+                            const int checksum_ok = parity_checksum_results[ck];
+                            set_header(parity_types[t], rom_codes[r], ram_codes[m], checksum_ok,
+                                       flag);
+                            gbb_info info;
+                            fill_info(&info, GBB_INFO_SIZE_V1);
+                            const gbb_error probe =
+                                gbb_probe_rom(profile, image, lengths[l], &info);
+                            const gbb_error ref = gbb_load_rom(scratch, image, lengths[l]);
+                            if (profile == GBB_PROFILE_CGB_CPU_E &&
+                                ref != expected_result(profile, parity_types[t], rom_codes[r],
+                                                       ram_codes[m], lengths[l], checksum_ok, flag,
+                                                       0)) {
+                                ++mismatches;
+                                fprintf(stderr, "oracle: type=%02X rom=%02X ram=%02X "
+                                        "len=%zu ck=%d flag=%02X load=%d\n",
+                                        parity_types[t], rom_codes[r], ram_codes[m], lengths[l],
+                                        checksum_ok, flag, (int)ref);
+                            }
+                            ++*runs;
+                            if (probe != ref) {
+                                ++mismatches;
+                                fprintf(stderr,
+                                        "parity: profile=%d type=%02X rom=%02X ram=%02X "
+                                        "len=%zu ck=%d flag=%02X probe=%d ref=%d\n",
+                                        (int)profile, parity_types[t], rom_codes[r],
+                                        ram_codes[m], lengths[l], checksum_ok, flag, (int)probe,
+                                        (int)ref);
+                            }
+                            if (probe != GBB_OK &&
+                                !info_untouched(&info, GBB_INFO_SIZE_V1))
+                                ++mismatches;
+                        }
+            }
+
+    if (!parity_coverage_complete(seen, PARITY_MATRIX_CASES, PARITY_MATRIX_CASES)) {
+        ++mismatches;
+        report_missing_parity_cases(seen);
+    }
+    free(seen);
     return mismatches;
 }
 
-static int probe_parity(void) {
-    gbb_instance *scratch = new_instance();
-    gbb_instance *scratch_cgb = new_cgb_instance();
-    REQUIRE(scratch != NULL && scratch_cgb != NULL);
-    unsigned long runs = 0u;
-    REQUIRE(parity_sweep(scratch, scratch_cgb, &runs) == 0u);
-    REQUIRE(runs > 100000u);
+static int probe_parity_cgb_negative_control(gbb_instance *scratch_cgb) {
     /* Negative control: PGB-before-checksum changes this valid PGB header with a bad checksum. */
     set_header(0x00u, 0u, 0u, 0, 0x84u);
     const size_t len = 32u * KIB;
@@ -493,10 +619,45 @@ static int probe_parity(void) {
     REQUIRE(skewed == GBB_UNSUPPORTED_EXECUTION_MODE);
     REQUIRE(skewed != probe);
     REQUIRE(info_untouched(&info, GBB_INFO_SIZE_V1));
-    gbb_destroy(scratch);
-    gbb_destroy(scratch_cgb);
     return 0;
 }
+
+static int run_parity_partition(gbb_profile profile) {
+    const char *model;
+    gbb_instance *scratch;
+    if (profile == GBB_PROFILE_DMG_CPU_B) {
+        model = "DMG-CPU-B";
+        scratch = new_instance();
+    } else if (profile == GBB_PROFILE_CGB_CPU_E) {
+        model = "CGB-CPU-E";
+        scratch = new_cgb_instance();
+    } else {
+        fprintf(stderr, "parity partition: unsupported profile=%d\n", (int)profile);
+        return 1;
+    }
+    REQUIRE(scratch != NULL);
+    REQUIRE(parity_manifest_valid());
+    unsigned long runs = 0u;
+    REQUIRE(parity_sweep(profile, scratch, &runs) == 0u);
+    REQUIRE(runs == PARITY_MATRIX_CASES);
+    if (profile == GBB_PROFILE_CGB_CPU_E)
+        REQUIRE(probe_parity_cgb_negative_control(scratch) == 0);
+    gbb_destroy(scratch);
+    printf("parity partition pass model=%s\n", model);
+    return 0;
+}
+
+static int probe_parity_dmg(void) { return run_parity_partition(GBB_PROFILE_DMG_CPU_B); }
+
+static int probe_parity_cgb(void) { return run_parity_partition(GBB_PROFILE_CGB_CPU_E); }
+
+static int probe_parity(void) {
+    REQUIRE(probe_parity_dmg() == 0);
+    REQUIRE(probe_parity_cgb() == 0);
+    return 0;
+}
+
+static int probe_parity_partition_contract(void);
 
 static int profile_unknown(void) {
     static const uint32_t bad[] = {0u, 3u, 255u};
@@ -612,11 +773,120 @@ static const test_case cases[] = {
     {"probe_matrix", probe_matrix},
     {"probe_pgb", probe_pgb},
     {"probe_parity", probe_parity},
+    {"probe_parity_dmg", probe_parity_dmg},
+    {"probe_parity_cgb", probe_parity_cgb},
+    {"probe_parity_partition_contract", probe_parity_partition_contract},
     {"profile_unknown", profile_unknown},
     {"profile_create", profile_create},
     {"copy_frame_cgb", copy_frame_cgb},
     {"probe_args", probe_args},
 };
+
+typedef struct {
+    parity_domain domain;
+    gbb_profile profile;
+    const char *entrypoint;
+    int (*run)(void);
+} parity_registration;
+
+static const parity_registration parity_registrations[] = {
+    {PARITY_DOMAIN_DMG_CPU_B, GBB_PROFILE_DMG_CPU_B, "probe_parity_dmg", probe_parity_dmg},
+    {PARITY_DOMAIN_CGB_CPU_E, GBB_PROFILE_CGB_CPU_E, "probe_parity_cgb", probe_parity_cgb},
+};
+
+static int parity_registrations_valid(const parity_registration *registrations, size_t count) {
+    static const gbb_profile expected_profiles[] = {
+        GBB_PROFILE_DMG_CPU_B, GBB_PROFILE_CGB_CPU_E,
+    };
+    static const char *const expected_names[] = {"probe_parity_dmg", "probe_parity_cgb"};
+    static int (*const expected_runs[])(void) = {probe_parity_dmg, probe_parity_cgb};
+    size_t domain_counts[PARITY_DOMAIN_COUNT] = {0u, 0u};
+
+    if (count != (size_t)PARITY_DOMAIN_COUNT) return 0;
+    for (size_t i = 0u; i < count; ++i) {
+        const size_t domain = (size_t)registrations[i].domain;
+        if (domain >= (size_t)PARITY_DOMAIN_COUNT) return 0;
+        ++domain_counts[domain];
+        if (registrations[i].profile != expected_profiles[domain] ||
+            strcmp(registrations[i].entrypoint, expected_names[domain]) != 0 ||
+            registrations[i].run != expected_runs[domain])
+            return 0;
+    }
+    for (size_t domain = 0u; domain < (size_t)PARITY_DOMAIN_COUNT; ++domain) {
+        if (domain_counts[domain] != 1u) return 0;
+        size_t entrypoint_matches = 0u;
+        for (size_t i = 0u; i < ARRAY_COUNT(cases); ++i) {
+            if (strcmp(cases[i].name, expected_names[domain]) == 0) {
+                ++entrypoint_matches;
+                if (cases[i].run != expected_runs[domain]) return 0;
+            }
+        }
+        if (entrypoint_matches != 1u) return 0;
+    }
+    return 1;
+}
+
+static int parity_matrix_slots_valid(void) {
+    uint8_t *seen = calloc(PARITY_MATRIX_CASES, sizeof(*seen));
+    if (seen == NULL) return 0;
+
+    int valid = 1;
+    for (size_t t = 0u; t < ARRAY_COUNT(parity_types) && valid; ++t)
+        for (size_t r = 0u; r < ARRAY_COUNT(rom_codes) && valid; ++r)
+            for (size_t m = 0u; m < ARRAY_COUNT(ram_codes) && valid; ++m)
+                for (size_t l = 0u; l < PARITY_LENGTH_VARIANTS && valid; ++l)
+                    for (size_t ck = 0u; ck < PARITY_CHECKSUM_VARIANTS && valid; ++ck)
+                        for (size_t f = 0u; f < SUPPORT_ROWS; ++f)
+                            if (!mark_parity_case(seen, parity_case_slot(t, r, m, l, ck, f),
+                                                  PARITY_MATRIX_CASES)) {
+                                valid = 0;
+                                break;
+                            }
+    valid = valid && parity_coverage_complete(seen, PARITY_MATRIX_CASES, PARITY_MATRIX_CASES);
+    free(seen);
+    return valid;
+}
+
+static int probe_parity_partition_contract(void) {
+    static const parity_registration omitted[] = {
+        {PARITY_DOMAIN_DMG_CPU_B, GBB_PROFILE_DMG_CPU_B, "probe_parity_dmg", probe_parity_dmg},
+    };
+    static const parity_registration duplicated[] = {
+        {PARITY_DOMAIN_DMG_CPU_B, GBB_PROFILE_DMG_CPU_B, "probe_parity_dmg", probe_parity_dmg},
+        {PARITY_DOMAIN_DMG_CPU_B, GBB_PROFILE_DMG_CPU_B, "probe_parity_dmg", probe_parity_dmg},
+    };
+    static const parity_registration wrong_model[] = {
+        {PARITY_DOMAIN_DMG_CPU_B, GBB_PROFILE_CGB_CPU_E, "probe_parity_dmg", probe_parity_dmg},
+        {PARITY_DOMAIN_CGB_CPU_E, GBB_PROFILE_CGB_CPU_E, "probe_parity_cgb", probe_parity_cgb},
+    };
+    uint8_t complete[3] = {0u, 0u, 0u};
+    uint8_t missing[3] = {0u, 0u, 0u};
+    uint8_t duplicate[3] = {0u, 0u, 0u};
+    uint8_t wrong_type = parity_manifest_types[0] ^ 1u;
+
+    REQUIRE(parity_registrations_valid(parity_registrations, ARRAY_COUNT(parity_registrations)));
+    REQUIRE(parity_manifest_valid());
+    REQUIRE(!parity_axis_matches(parity_types, ARRAY_COUNT(parity_types) - 1u,
+                                 parity_manifest_types, ARRAY_COUNT(parity_manifest_types)));
+    REQUIRE(!parity_axis_matches(&wrong_type, 1u, parity_manifest_types, 1u));
+    REQUIRE(parity_matrix_slots_valid());
+    REQUIRE(mark_parity_case(complete, 0u, ARRAY_COUNT(complete)));
+    REQUIRE(mark_parity_case(complete, 1u, ARRAY_COUNT(complete)));
+    REQUIRE(mark_parity_case(complete, 2u, ARRAY_COUNT(complete)));
+    REQUIRE(parity_coverage_complete(complete, ARRAY_COUNT(complete), ARRAY_COUNT(complete)));
+    REQUIRE(mark_parity_case(missing, 0u, ARRAY_COUNT(missing)));
+    REQUIRE(mark_parity_case(missing, 2u, ARRAY_COUNT(missing)));
+    REQUIRE(!parity_coverage_complete(missing, ARRAY_COUNT(missing), ARRAY_COUNT(missing)));
+    REQUIRE(mark_parity_case(duplicate, 1u, ARRAY_COUNT(duplicate)));
+    REQUIRE(!mark_parity_case(duplicate, 1u, ARRAY_COUNT(duplicate)));
+    REQUIRE(!mark_parity_case(duplicate, 3u, ARRAY_COUNT(duplicate)));
+    REQUIRE(!parity_registrations_valid(omitted, ARRAY_COUNT(omitted)));
+    REQUIRE(!parity_registrations_valid(duplicated, ARRAY_COUNT(duplicated)));
+    REQUIRE(!parity_registrations_valid(wrong_model, ARRAY_COUNT(wrong_model)));
+    printf("parity partition contract pass models=2 matrix=complete omitted=refused "
+           "duplicate=refused wrong_model=refused\n");
+    return 0;
+}
 
 int main(int argc, char **argv) {
     if (argc != 2) {

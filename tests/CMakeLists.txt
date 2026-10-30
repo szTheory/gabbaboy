@@ -649,10 +649,25 @@ target_link_libraries(test_cgb_profile PRIVATE gabbaboy_core_probe_parity)
 target_compile_features(test_cgb_profile PRIVATE c_std_17)
 set_target_properties(test_cgb_profile PROPERTIES C_EXTENSIONS OFF)
 foreach(case probe_tracer info_no_rom info_after_load info_reset_constant info_failed_load_unchanged
-             info_struct_size cgb_only_on_dmg probe_matrix probe_pgb probe_parity profile_unknown
-             probe_args profile_create copy_frame_cgb)
+             info_struct_size cgb_only_on_dmg probe_matrix probe_pgb profile_unknown probe_args
+             profile_create copy_frame_cgb)
   add_test(NAME cgb_${case} COMMAND test_cgb_profile ${case})
 endforeach()
+foreach(gbb_parity_case IN ITEMS
+    "probe_parity_dmg|parity partition pass model=DMG-CPU-B"
+    "probe_parity_cgb|parity partition pass model=CGB-CPU-E"
+    "probe_parity_partition_contract|parity partition contract pass models=2 matrix=complete omitted=refused duplicate=refused wrong_model=refused")
+  string(REPLACE "|" ";" gbb_parity_fields "${gbb_parity_case}")
+  list(GET gbb_parity_fields 0 gbb_parity_name)
+  list(GET gbb_parity_fields 1 gbb_parity_regex)
+  add_test(NAME cgb_${gbb_parity_name}
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=$<TARGET_FILE:test_cgb_profile>;${gbb_parity_name}"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=${gbb_parity_regex}"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+endforeach()
+set_tests_properties(cgb_probe_parity_dmg cgb_probe_parity_cgb PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(test_timer test_timer.c)
 target_link_libraries(test_timer PRIVATE GabbaBoy::core)
@@ -5558,8 +5573,7 @@ if(NOT WIN32)
   # Each case: name | checker mode | output regex | key whose value must reach a minimum | minimum.
   foreach(gbb_lifecycle_case IN ITEMS
       "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0|uploads|7"
-      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95"
-      "release_lifecycle_post_tag_controls|--self-test-post-tag|release-lifecycle post-tag controls pass positives=[1-9][0-9]* controls=[1-9][0-9]* endpoints=[1-9][0-9]*|controls|80")
+      "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95")
     string(REPLACE "|" ";" gbb_lifecycle_fields "${gbb_lifecycle_case}")
     list(GET gbb_lifecycle_fields 0 gbb_lifecycle_name)
     list(GET gbb_lifecycle_fields 1 gbb_lifecycle_mode)
@@ -5575,10 +5589,37 @@ if(NOT WIN32)
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
   endforeach()
-  # These control suites launch many short subprocesses. Run them alone so
-  # parallel test load cannot push either fixed 60-second budget over its cap.
-  set_tests_properties(release_lifecycle_controls release_lifecycle_post_tag_controls
-    PROPERTIES RUN_SERIAL TRUE)
+  # Keep each post-tag semantic family independently runnable at the existing fixed budget.
+  # The immutable manifest checker proves exact registration and execution across all six groups.
+  set(gbb_post_tag_groups trust capture_source draft_assets recovery_sums consumer publication)
+  foreach(gbb_post_tag_group IN LISTS gbb_post_tag_groups)
+    set(gbb_post_tag_test "release_lifecycle_post_tag_${gbb_post_tag_group}_controls")
+    if(gbb_post_tag_group STREQUAL "trust")
+      set(gbb_post_tag_endpoint_inventory "pass")
+    else()
+      set(gbb_post_tag_endpoint_inventory "not-in-group")
+    endif()
+    add_test(NAME "${gbb_post_tag_test}"
+      COMMAND ${CMAKE_COMMAND}
+        "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};--self-test-post-tag-group;${gbb_post_tag_group}"
+        -DGBB_EXPECT_CODE=0
+        "-DGBB_EXPECT_REGEX=release-lifecycle post-tag group=${gbb_post_tag_group} controls=[1-9][0-9]* positives=[0-9]+ endpoint_inventory=${gbb_post_tag_endpoint_inventory} ids_sha256=[0-9a-f]+"
+        -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+    set_tests_properties("${gbb_post_tag_test}" PROPERTIES TIMEOUT 60 LABELS "v02" RUN_SERIAL TRUE)
+  endforeach()
+
+  add_test(NAME release_lifecycle_post_tag_coverage_controls
+    COMMAND ${CMAKE_COMMAND}
+      "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};--self-test-post-tag-coverage"
+      -DGBB_EXPECT_CODE=0
+      "-DGBB_EXPECT_REGEX=release-lifecycle post-tag coverage controls pass baseline_ids=[1-9][0-9]* registrations=[1-9][0-9]* omitted=refused duplicate=refused wrong_group=refused expect_exit=pass"
+      -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+  set_tests_properties(release_lifecycle_post_tag_coverage_controls
+    PROPERTIES TIMEOUT 60 LABELS "v02" RUN_SERIAL TRUE)
+
+  # These control suites launch many short subprocesses. Run each alone so parallel test load
+  # cannot push existing fixed 60-second budgets over their caps.
+  set_tests_properties(release_lifecycle_controls PROPERTIES RUN_SERIAL TRUE)
 endif()
 
 # Phase 17 RM-030 / D-22 (17-11): release gates. The owner-approval gate (a deterministic Ir exception bound to the
