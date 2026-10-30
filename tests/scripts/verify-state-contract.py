@@ -1071,12 +1071,18 @@ def version_component_self_test(cmake: str, module: Path, root: Path, rev: str) 
                           f"-DGBB_VERSION_UNDER_TEST={version}"])
             if result.returncode == 0 or "GabbaBoy state release version" not in result.stdout + result.stderr:
                 raise ContractError(f"invalid state version control survived for {version}: {result.stdout}{result.stderr}")
+        immutable_cmake = git_show(root, rev, "CMakeLists.txt")
+        immutable_version = re.search(r"^project\(GabbaBoy VERSION ([^\s)]+)", immutable_cmake, re.M)
+        if immutable_version is None or len(immutable_version.group(1).split(".")) != 3:
+            raise ContractError("immutable CMakeLists.txt has no three-part GabbaBoy project version")
+        release_version = immutable_version.group(1)
         cache = control_root / "project" / "CMakeCache.txt"
         cache.parent.mkdir()
-        cache.write_text("CMAKE_PROJECT_VERSION:STATIC=0.2.1\n")
-        if state_release_from_cmake_cache(cache, module, cmake, root, rev) != ("0", "2", "1"):
+        cache.write_text(f"CMAKE_PROJECT_VERSION:STATIC={release_version}\n")
+        expected_triplet = tuple(release_version.split("."))
+        if state_release_from_cmake_cache(cache, module, cmake, root, rev) != expected_triplet:
             raise ContractError("CMake cache release triplet control returned the wrong version")
-        cache.write_text("CMAKE_PROJECT_VERSION:STATIC=0.2.1.4\n")
+        cache.write_text(f"CMAKE_PROJECT_VERSION:STATIC={release_version}.4\n")
         try:
             state_release_from_cmake_cache(cache, module, cmake, root, rev)
         except ContractError:
