@@ -1167,6 +1167,7 @@ support_claims
 support_claims_controls
 release_window_contract
 release_window_controls
+judge_outcome_controls
 release_lifecycle_replay
 release_lifecycle_controls
 release_lifecycle_post_tag_controls

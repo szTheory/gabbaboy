@@ -1490,6 +1490,16 @@ gbb_add_v02_contract(release_window_contract 60
 gbb_add_v02_contract(release_window_controls 60
   [=[version-window controls pass positives=[1-9][0-9]* controls=([2-9][0-9]|[1-9][0-9][0-9]+)]=]
   verify-version-window.py --self-test)
+# Phase 19 D-19: local and hosted rehearsal outcomes share this message-key rule. The checker
+# refuses empty, ambiguous and cross-job log evidence instead of manufacturing a comparable result.
+add_test(NAME judge_outcome_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-judge-outcome.py;--self-test"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=judge-outcome controls pass controls=[0-9]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=18
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(judge_outcome_controls PROPERTIES TIMEOUT 60)
 # Phase 16 D-19: the consumer controls run as two halves (static controls plus half of the relocated builds each)
 # so a parallel lane runs them side by side; the partition is checked in verify-v02-consumers.py.
 gbb_add_v02_contract(v02_consumer_controls_c 600
