@@ -29,6 +29,7 @@ import sys
 import tempfile
 from fractions import Fraction
 from pathlib import Path
+from unittest.mock import call, patch
 
 
 class Reject(Exception):
@@ -4505,6 +4506,213 @@ def _route_lifecycle(workflow: str, edits, workflow_text: str, script_text: str)
     return ("lifecycle", routed) if routed else (workflow, edits)
 
 
+def _path_is_within(path: Path, parent: Path) -> bool:
+    """Return whether a resolved path is the parent itself or one of its descendants."""
+    try:
+        common = os.path.commonpath((str(path), str(parent)))
+    except ValueError:
+        return False
+    return os.path.normcase(common) == os.path.normcase(str(parent))
+
+
+def _resolve_git_for_windows_bash(git_executable: str | None, system_root: str | None) -> str:
+    """Select Git for Windows Bash from the same verified installation as git.exe."""
+    if not system_root:
+        raise ValueError("Windows SystemRoot/WINDIR is unset")
+    if not git_executable:
+        raise ValueError("git lookup returned no executable")
+
+    try:
+        git_path = Path(git_executable).resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Git executable path is unavailable: {git_executable!r}: {type(exc).__name__}") from exc
+    if git_path.name.casefold() != "git.exe" or not git_path.is_file():
+        raise ValueError(f"Git executable path is not a git.exe file: {git_path}")
+
+    try:
+        windows_root = Path(system_root).resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Windows system root is invalid: {system_root!r}: {type(exc).__name__}") from exc
+    if _path_is_within(git_path, windows_root):
+        raise ValueError(f"Git executable is under the Windows system root: {git_path}")
+
+    git_parent = git_path.parent
+    parent_name = git_parent.name.casefold()
+    grandparent_name = git_parent.parent.name.casefold()
+    if parent_name == "cmd":
+        git_root = git_parent.parent
+    elif parent_name == "bin" and grandparent_name in ("mingw64", "usr"):
+        git_root = git_parent.parent.parent
+    elif parent_name == "bin":
+        git_root = git_parent.parent
+    else:
+        raise ValueError(f"unsupported Git executable layout: {git_path}; expected Git/cmd, Git/bin, "
+                         "Git/mingw64/bin, or Git/usr/bin")
+
+    try:
+        git_root = git_root.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"Git installation root is unavailable: {git_root}: {type(exc).__name__}") from exc
+    if _path_is_within(git_root, windows_root):
+        raise ValueError(f"Git installation root is under the Windows system root: {git_root}")
+
+    candidates = (
+        git_root / "bin" / "bash.exe",
+        git_root / "usr" / "bin" / "bash.exe",
+        git_root / "mingw64" / "bin" / "bash.exe",
+    )
+    rejected_candidates: list[str] = []
+    for candidate in candidates:
+        if not candidate.is_file():
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            rejected_candidates.append(f"{candidate} ({type(exc).__name__})")
+            continue
+        if not _path_is_within(resolved, git_root):
+            rejected_candidates.append(f"{candidate} (resolves outside Git root to {resolved})")
+            continue
+        if _path_is_within(resolved, windows_root):
+            rejected_candidates.append(f"{candidate} (resolves under Windows system root to {resolved})")
+            continue
+        return str(resolved)
+
+    suffix = f"; rejected candidates={rejected_candidates!r}" if rejected_candidates else ""
+    raise ValueError("no bundled Bash executable in the recognized Git installation; checked "
+                     f"{[str(candidate) for candidate in candidates]!r}{suffix}")
+
+
+def _rehearsal_bash_executable(*, windows: bool | None = None, system_root: str | None = None) -> str:
+    """Use Git's bundled Bash on Windows; preserve the existing POSIX lookup elsewhere."""
+    if windows is None:
+        windows = os.name == "nt"
+    if not windows:
+        return "bash"
+
+    if system_root is None:
+        system_root = os.environ.get("SystemRoot") or os.environ.get("WINDIR")
+    git_executable = shutil.which("git")
+    try:
+        return _resolve_git_for_windows_bash(git_executable, system_root)
+    except ValueError as exc:
+        raise RuntimeError(f"Git for Windows Bash resolution failed: git_lookup={git_executable!r} "
+                           f"system_root={system_root!r}: {exc}") from exc
+
+
+def rehearsal_bash_resolver_controls() -> tuple[int, int]:
+    """Exercise supported Git install layouts and fail-closed Windows shell lookup."""
+    rejected = 0
+    accepted = 0
+    with tempfile.TemporaryDirectory(prefix="gbb-git-bash-resolver.") as directory:
+        fixture = Path(directory)
+        system_root = fixture / "Windows"
+        wsl_bash = system_root / "System32" / "bash.exe"
+
+        def seed(path: Path) -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"fixture executable\n")
+
+        seed(wsl_bash)
+
+        for label, git_relative in (
+            ("cmd", Path("cmd") / "git.exe"),
+            ("bin", Path("bin") / "git.exe"),
+            ("mingw64", Path("mingw64") / "bin" / "git.exe"),
+        ):
+            install = fixture / ("Git-" + label)
+            git_executable = install / git_relative
+            bundled_bash = install / "bin" / "bash.exe"
+            seed(git_executable)
+            seed(bundled_bash)
+            with patch.object(shutil, "which", return_value=str(git_executable)) as lookup:
+                selected = _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            if (Path(selected) != bundled_bash.resolve() or lookup.call_args_list != [call("git")]):
+                raise SystemExit(f"self-test Git Bash resolver supported {label} layout failed: "
+                                 f"selected={selected!r} lookup_calls={lookup.call_args_list!r}")
+            accepted += 1
+
+        with patch.object(shutil, "which", return_value=None) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "git lookup returned no executable" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver missing Git diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver accepted a missing Git executable")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver missing Git lookup was not explicit: {lookup.call_args_list!r}")
+        rejected += 1
+
+        absent_git = fixture / "Git-missing-file" / "cmd" / "git.exe"
+        with patch.object(shutil, "which", return_value=str(absent_git)) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "Git executable path is unavailable" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver missing file diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver accepted a missing git.exe file")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver missing-file lookup was not explicit: {lookup.call_args_list!r}")
+        rejected += 1
+
+        unsupported_git = fixture / "Git-unrecognized-layout" / "Tools" / "git.exe"
+        seed(unsupported_git)
+        seed(unsupported_git.parent.parent / "bin" / "bash.exe")
+        with patch.object(shutil, "which", return_value=str(unsupported_git)) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "unsupported Git executable layout" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver unsupported layout diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver accepted an unsupported Git layout")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver unsupported-layout lookup was not explicit: {lookup.call_args_list!r}")
+        rejected += 1
+
+        system_git = system_root / "System32" / "git.exe"
+        seed(system_git)
+        with patch.object(shutil, "which", return_value=str(system_git)) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "Git executable is under the Windows system root" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver system alias diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver accepted a Windows system-directory alias")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver system-alias lookup was not explicit: {lookup.call_args_list!r}")
+        rejected += 1
+
+        git_without_bash = fixture / "Git-no-bash" / "cmd" / "git.exe"
+        seed(git_without_bash)
+        with patch.object(shutil, "which", side_effect=lambda name: {
+            "git": str(git_without_bash), "bash": str(wsl_bash),
+        }.get(name)) as lookup:
+            try:
+                _rehearsal_bash_executable(windows=True, system_root=str(system_root))
+            except RuntimeError as exc:
+                if "no bundled Bash executable in the recognized Git installation" not in str(exc):
+                    raise SystemExit(f"self-test Git Bash resolver WSL alias refusal diagnostic failed: {exc}")
+            else:
+                raise SystemExit("self-test Git Bash resolver fell back to the WSL System32 alias")
+            if lookup.call_args_list != [call("git")]:
+                raise SystemExit(f"self-test Git Bash resolver consulted an ambient shell lookup: {lookup.call_args_list!r}")
+        rejected += 1
+
+        with patch.object(shutil, "which") as lookup:
+            selected = _rehearsal_bash_executable(windows=False)
+        if selected != "bash" or lookup.called:
+            raise SystemExit(f"self-test Git Bash resolver changed non-Windows behavior: "
+                             f"selected={selected!r} lookup_calls={lookup.call_args_list!r}")
+        accepted += 1
+
+    print(f"PASS: Git for Windows Bash resolver controls negative={rejected} positive={accepted}")
+    return rejected, accepted
+
+
 def rehearsal_tag_guard_controls(root: Path) -> int:
     tree = read_workflow(root / ".github/workflows/release-rehearsal.yml")
     step = tree["jobs"]["judge"]["steps"][0]
@@ -4517,6 +4725,10 @@ git() {
   fi
 }
 '''
+    try:
+        bash_executable = _rehearsal_bash_executable()
+    except RuntimeError as exc:
+        raise SystemExit("self-test release tag guard could not resolve its Bash executable: " + str(exc)) from exc
     with tempfile.TemporaryDirectory(prefix="gbb-release-tag-guard.") as directory:
         log = Path(directory) / "git.log"
 
@@ -4524,7 +4736,7 @@ git() {
             log.write_text("", encoding="utf-8")
             env = {**os.environ, "GITHUB_REF_NAME": ref_name, "GITHUB_REPOSITORY": "szTheory/gabbaboy",
                    "TAG_EXISTS": "true" if tag_exists else "false", "TAG_GIT_LOG": log.name}
-            return subprocess.run(["bash", "-c", harness + shell], capture_output=True, text=True,
+            return subprocess.run([bash_executable, "-c", harness + shell], capture_output=True, text=True,
                                   check=False, cwd=directory, env=env, timeout=10)
 
         def log_state() -> tuple[list[str], str | None]:
@@ -4536,7 +4748,8 @@ git() {
         def details(result: subprocess.CompletedProcess[str], lines: list[str], read_error: str | None) -> str:
             stderr = result.stderr.strip().replace(str(directory), "<tempdir>")[:400]
             stdout = result.stdout.strip().replace(str(directory), "<tempdir>")[:400]
-            return (f"exit={result.returncode} git_calls={len(lines)} log_read_error={read_error or 'none'} "
+            return (f"bash={bash_executable!r} exit={result.returncode} git_calls={len(lines)} "
+                    f"log_read_error={read_error or 'none'} "
                     f"stdout={stdout!r} stderr={stderr!r}")
 
         absent = run("rehearsal/v0.3.0", False)
@@ -4569,6 +4782,8 @@ def self_test(root: Path) -> None:
         positive = _run_cli(fixture, work)
         if positive.returncode != 0 or "PASS: workflow privilege and trust wiring" not in positive.stdout:
             raise SystemExit(f"self-test positive control failed: exit={positive.returncode} stderr={positive.stderr.strip()!r}")
+        resolver_rejected, resolver_accepted = rehearsal_bash_resolver_controls()
+        rejected += resolver_rejected
         rejected += rehearsal_tag_guard_controls(fixture)
         baselines = {item: (fixture / ".github/workflows" / item).read_text(encoding="utf-8") for item in WORKFLOWS}
         baselines["script"] = (fixture / PRODUCER_SCRIPT).read_text(encoding="utf-8")
@@ -4709,7 +4924,8 @@ def self_test(root: Path) -> None:
             else:
                 raise SystemExit(f"self-test negative {label!r} failed: accepted")
     rejected += report_red_replay_controls(root)
-    print(f"PASS: workflow policy self-test negative_controls={rejected} positive_controls={1 + accepted}")
+    print(f"PASS: workflow policy self-test negative_controls={rejected} "
+          f"positive_controls={1 + resolver_accepted + accepted}")
 
 
 def main() -> int:
