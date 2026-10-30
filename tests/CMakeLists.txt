@@ -5575,6 +5575,10 @@ if(NOT WIN32)
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
   endforeach()
+  # These control suites launch many short subprocesses. Run them alone so
+  # parallel test load cannot push either fixed 60-second budget over its cap.
+  set_tests_properties(release_lifecycle_controls release_lifecycle_post_tag_controls
+    PROPERTIES RUN_SERIAL TRUE)
 endif()
 
 # Phase 17 RM-030 / D-22 (17-11): release gates. The owner-approval gate (a deterministic Ir exception bound to the

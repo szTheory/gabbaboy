@@ -4523,20 +4523,38 @@ git() {
         def run(ref_name: str, tag_exists: bool) -> subprocess.CompletedProcess[str]:
             log.write_text("", encoding="utf-8")
             env = {**os.environ, "GITHUB_REF_NAME": ref_name, "GITHUB_REPOSITORY": "szTheory/gabbaboy",
-                   "TAG_EXISTS": "true" if tag_exists else "false", "TAG_GIT_LOG": str(log)}
+                   "TAG_EXISTS": "true" if tag_exists else "false", "TAG_GIT_LOG": log.name}
             return subprocess.run(["bash", "-c", harness + shell], capture_output=True, text=True,
-                                  check=False, env=env, timeout=10)
+                                  check=False, cwd=directory, env=env, timeout=10)
+
+        def log_state() -> tuple[list[str], str | None]:
+            try:
+                return log.read_text(encoding="utf-8").splitlines(), None
+            except OSError as exc:
+                return [], type(exc).__name__
+
+        def details(result: subprocess.CompletedProcess[str], lines: list[str], read_error: str | None) -> str:
+            stderr = result.stderr.strip().replace(str(directory), "<tempdir>")[:400]
+            stdout = result.stdout.strip().replace(str(directory), "<tempdir>")[:400]
+            return (f"exit={result.returncode} git_calls={len(lines)} log_read_error={read_error or 'none'} "
+                    f"stdout={stdout!r} stderr={stderr!r}")
 
         absent = run("rehearsal/v0.3.0", False)
-        if absent.returncode != 0 or len(log.read_text(encoding="utf-8").splitlines()) != 1:
-            raise SystemExit("self-test release tag guard failed to allow an untagged release rehearsal")
+        absent_lines, absent_read_error = log_state()
+        if absent.returncode != 0 or absent_read_error is not None or len(absent_lines) != 1:
+            raise SystemExit("self-test release tag guard failed to allow an untagged release rehearsal: "
+                             + details(absent, absent_lines, absent_read_error))
         present = run("rehearsal/v0.3.0", True)
+        present_lines, present_read_error = log_state()
         if (present.returncode == 0 or "Tag v0.3.0 already exists; a rehearsal after the tag cannot bind a release." not in present.stderr
-                or len(log.read_text(encoding="utf-8").splitlines()) != 1):
-            raise SystemExit("self-test release tag guard did not refuse an existing release tag")
+                or present_read_error is not None or len(present_lines) != 1):
+            raise SystemExit("self-test release tag guard did not refuse an existing release tag: "
+                             + details(present, present_lines, present_read_error))
         other = run("rehearsal/phase-15.1-demo", True)
-        if other.returncode != 0 or log.read_text(encoding="utf-8").strip():
-            raise SystemExit("self-test release tag guard did not skip a non-release rehearsal branch")
+        other_lines, other_read_error = log_state()
+        if other.returncode != 0 or other_read_error is not None or other_lines:
+            raise SystemExit("self-test release tag guard did not skip a non-release rehearsal branch: "
+                             + details(other, other_lines, other_read_error))
     print("PASS: rehearsal tag guard allows an untagged release rehearsal and refuses an existing tag; non-release branch skips")
     return 1
 
