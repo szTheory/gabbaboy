@@ -17,6 +17,7 @@ EVIDENCE_REF = "phase:GB-17-native-save-state-core/17-05-SUMMARY.md"
 PLANNING_COMPONENT = "." + "planning"
 PHASES_COMPONENT = "ph" + "ases"
 OWNER_RULES_FILE = "AGENTS" + ".md"
+DECISIONS_FILE = PLANNING_COMPONENT + "/context/DECISIONS.md"
 SOURCE_INPUTS = (
     "CMakeLists.txt",
     "src/core/gabbaboy.c",
@@ -94,6 +95,8 @@ def resolve_immutable_reference(repo, revision, reference, allow_unanchored=Fals
         reject("immutable-reference", "decision reference must name an immutable file and anchor")
     if logical_path == OWNER_RULES_FILE:
         path = OWNER_RULES_FILE
+    elif logical_path == "DECISIONS.md":
+        path = DECISIONS_FILE
     elif logical_path.startswith("phase:"):
         suffix = logical_path[len("phase:"):]
         parts = suffix.split("/")
@@ -551,8 +554,19 @@ set_tests_properties(state_portable_pins PROPERTIES FIXTURES_REQUIRED gbb_state_
         write_git_file(repo, "CMakeLists.txt", valid_wiring)
         write_git_file(repo, os.path.join("tests", "CMakeLists.txt"), valid_wiring)
         write_git_file(repo, OWNER_RULES_FILE, "# Workflow contract\n")
+        write_git_file(repo, DECISIONS_FILE, "| D-113 | State compatibility contract |\n| D-120 | Release version contract |\n")
         write_git_file(repo, "src/core/gabbaboy.c", "/* no state support declared at this base */\n")
         base_revision = commit_fixture(repo, "synthetic pre-state base")
+        resolve_immutable_reference(repo, base_revision, "DECISIONS.md#D-113")
+        controls += 1
+        try:
+            resolve_immutable_reference(repo, base_revision, "DECISIONS.md#D-999")
+        except Rejected as error:
+            if error.code != "immutable-reference":
+                reject("self-test-failed", "missing decision anchor produced the wrong rejection")
+        else:
+            reject("self-test-failed", "missing decision anchor was accepted")
+        controls += 1
         write_git_file(repo, "src/core/gabbaboy.c",
                        "#define GBB_STATE_FORMAT_VERSION 1u\n#define GBB_STATE_BEHAVIOR_VERSION 1u\n")
         summary = "---\nstatus: complete\n---\nSnapshot forks cover 198 serialized fields and 14 in-flight categories.\n"
