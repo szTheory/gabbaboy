@@ -11,11 +11,11 @@ provides:
   - Review-fix controls for publication inventory, closure paths and judge CLI
 affects: [GB-19-qualified-v0-3-0-release/19-06-final-preflight, GB-19-qualified-v0-3-0-release/19-07]
 actuals:
-  tokens: 35230
+  tokens: 56316
   tasks: 3
-  commits: 13
+  commits: 24
 plan_head_before: a3b5f8c88dfe5c0e3aa22867e75e38ed4cc4b438
-plan_head_after: 33d3d63d1a079e6c4ce72b863e25033cc80c43de
+plan_head_after: cf07284e9e82ea9d2dd22aa984696664ba1ea6d7
 tech-stack:
   added: []
   patterns: [immutable-source release checks, synthetic release-tree qualification, production-shaped negative controls]
@@ -41,11 +41,14 @@ key-files:
     - tests/scripts/verify-v02-adoption.py
     - tests/scripts/verify-v03-dispositions.py
     - tests/scripts/verify-release-lifecycle.py
+    - .github/scripts/verify-workflow-policy.py
     - tests/expected-tests.txt
+    - tests/cmake/ci-lanes.cmake
     - .planning/phases/GB-19-qualified-v0-3-0-release/19-REVIEW.md
     - .planning/phases/GB-19-qualified-v0-3-0-release/19-SECURITY.md
 key-decisions:
-  - "D-09 / 19-02-D1 remains an unadopted amendment candidate pending owner acknowledgment."
+  - "D-121 owner-approved one bounded Windows resolver fix/review after the two recorded rounds; no count reset or further fix without a new rescope."
+  - "D-122 adopts the GBB_MAYBE_UNUSED amendment to D-09 / 19-02-D1; owner acknowledgment is complete."
   - "REL-01 remains pending until exact-tag publication and readback."
   - "The initial hosted rehearsal and local qualification are historical evidence; final exact-head pre-flight is still required."
 patterns-established:
@@ -91,6 +94,17 @@ coverage:
         ref: "Source b0beb4fd: post-tag lifecycle controls passed 3 positives, 84 controls and 23 endpoints; four wired controls passed 4/4. Evidence in build/preflight/runs/b0beb4fd8d1c2290d89b707860bf23c899e12fac/review/round1-evidence.md."
         status: pass
     human_judgment: false
+  - id: D5
+    description: Owner-approved Windows workflow-policy resolver selects bundled Git Bash from recognized Git layouts, rejects missing or ambient aliases, retains tag-guard behavior, and preserves POSIX shell selection.
+    requirement: REL-01
+    verification:
+      - kind: unit
+        ref: "Source 8f4deeddd07ddf06f9927a1c6c571b717732b06e: resolver controls passed 5 negative and 4 positive cases; all three tag-guard scenarios remained asserted; full self-test reported negative_controls=453 positive_controls=8."
+        status: pass
+      - kind: integration
+        ref: "Revision-bound configure and CTest at source 8f4deeddd07ddf06f9927a1c6c571b717732b06e passed 5/5: v03_dispositions_controls, test_budget_controls, test_budget, workflow_policy_check and workflow_policy_controls. Windows/POSIX floors are 426/453; the CTest timeout remains 180 seconds. Python 3.10 grammar parsing of the changed script passed using Python 3.11 feature_version=(3, 10). Logs: build/preflight/review/windows-rescope-configure-8f4deedd.log and build/preflight/review/windows-rescope-ctest-8f4deedd.log."
+        status: pass
+    human_judgment: false
 duration: "not recorded; work continued across sessions"
 completed: 2026-10-30
 status: halted
@@ -98,7 +112,7 @@ status: halted
 
 # Phase 19 Plan 06: Synthetic 0.3.0 Pre-flight and Documentation Summary
 
-**The initial synthetic release tree, documentation contracts, and first review-fix controls have passing evidence; the final settled-source pre-flight and PR A readiness remain pending.**
+**The initial synthetic release tree, documentation contracts, and reviewed Windows resolver fix have passing local evidence; final settled-source pre-flight and PR A readiness remain pending.**
 
 ## Performance
 
@@ -106,8 +120,8 @@ status: halted
 - **Started:** Not recorded.
 - **Prepared:** 2026-10-30.
 - **Tasks:** 3 of 4 complete; Task 4 remains in progress.
-- **Files modified:** 30 tracked files in the measured plan interval, before this summary and STATE update.
-- **Plan interval:** 13 committed changes from `a3b5f8c88dfe5c0e3aa22867e75e38ed4cc4b438` through `33d3d63d1a079e6c4ce72b863e25033cc80c43de`.
+- **Files modified:** 37 tracked files in the measured plan interval through `cf07284e9e82ea9d2dd22aa984696664ba1ea6d7`, before this snapshot update.
+- **Plan interval:** 24 committed changes from `a3b5f8c88dfe5c0e3aa22867e75e38ed4cc4b438` through `cf07284e9e82ea9d2dd22aa984696664ba1ea6d7`.
 
 ## Accomplishments
 
@@ -232,7 +246,17 @@ This snapshot supersedes the preceding EC56-only stage description. The fresh E0
 - Exact-head CI remains red only at Windows `workflow_policy_controls` in both event instances: push [41033231735](https://github.com/szTheory/gabbaboy/actions/runs/41033231735), job [123987812944](https://github.com/szTheory/gabbaboy/actions/runs/41033231735/job/123987812944), and PR [41033238701](https://github.com/szTheory/gabbaboy/actions/runs/41033238701), job [123987817960](https://github.com/szTheory/gabbaboy/actions/runs/41033238701/job/123987817960). The control's bare `bash` resolves to the Windows WSL launcher, whose output says no distributions are installed; the fake-Git guard never runs. The production workflow-policy check and all other applicable jobs passed. Preview smoke [41033238657](https://github.com/szTheory/gabbaboy/actions/runs/41033238657) failed downstream after its three jobs observed the exact-head CI failure; package artifact smoke was not reached.
 - Review-fix rounds 1 and 2 have both been used. The ignored review note `build/preflight/review/19-WINDOWS-RESCOPE.md` documents the bounded resolver-only proposal. The owner rescope request is pending; no further code fix, source commit, or source push is authorized before that response. Handoff documentation may still be committed separately. D-09 acknowledgment is a separate pending owner decision. PR #133 exists at E0 and remains unmergeable.
 
-The current operational stage is **awaiting the explicit Windows-harness rescope decision and the separate D-09 acknowledgment**. This plan remains `status: halted`, Task 4 incomplete, and `requirements-completed: []`; REL-01 remains pending. If the owner approves the bounded rescope, continue Plan 19-06 with the authorized resolver fix, independent review, a new frozen source head, fresh coherent local/hosted pre-flight and exact-head CI. Stop before merge until both owner gates and required evidence are satisfied. Do not start Plan 19-07, merge, tag, publish, or claim Phase 19 complete.
+At the E0 snapshot, the operational stage was **awaiting the Windows-harness rescope decision and D-09 acknowledgment**. That point-in-time status is superseded by the owner approvals and reviewed resolver fix below. E0's source, H0/H1/H-prime/W identities, case classifications and failed CI remain historical evidence for their exact revisions.
+
+### Owner-approved resolver rescope — local evidence and remaining gates
+
+- Owner approval D-121 authorizes one additional consolidated resolver fix and independent review after the two recorded rounds, without resetting the count. D-122 adopts the GBB_MAYBE_UNUSED amendment to D-09 / 19-02-D1. Both decisions are recorded in [DECISIONS.md](../../context/DECISIONS.md) and commit `41cf7cdce42b4dc6dc1dbda8cda7c3215868d3c2`; the approved amendment and rescope are reflected in [19-02-PLAN.md](19-02-PLAN.md) and [19-WINDOWS-RESCOPE.md](19-WINDOWS-RESCOPE.md).
+- The bounded implementation is source commit `8f4deeddd07ddf06f9927a1c6c571b717732b06e`, changing only `.github/scripts/verify-workflow-policy.py` and `tests/cmake/ci-lanes.cmake`. It derives Bash from recognized Git installation layouts, refuses missing/unsupported/system-root paths and ambient WSL fallback, keeps all three real tag-guard scenarios, and preserves POSIX `bash`. The production release guard, assertions and 180-second timeout are unchanged.
+- Independent review at commit `cf07284e9e82ea9d2dd22aa984696664ba1ea6d7` is clean with zero findings. The reconciled security report records 26/35 threats closed, nine operationally pending and four blocking. Actual Windows CI and renewed final-source preflight remain mandatory; no platform pass or security sign-off is inferred.
+- Revision-bound local evidence at code commit `8f4deeddd07ddf06f9927a1c6c571b717732b06e`: resolver controls passed 5 negative / 4 positive cases; the full workflow-policy self-test reported 453 negative / 8 positive controls; all three tag-guard scenarios remained asserted and passed. Fresh root configure and CTest passed 5/5 (`v03_dispositions_controls`, `test_budget_controls`, `test_budget`, `workflow_policy_check`, `workflow_policy_controls`) in 69.29 seconds. The configured floors are 426 on Windows and 453 on POSIX, with the 180-second timeout unchanged. Python 3.10 grammar parsing of the changed script passed using Python 3.11's `feature_version=(3, 10)`. Logs are under `build/preflight/review/windows-rescope-*`.
+- PR #133 remains remotely at E0; source commit `8f4deeddd07ddf06f9927a1c6c571b717732b06e` has not been pushed. No exact-head CI or new H0/H-prime preflight has run for this source. Fresh final-source construction, installed-prefix/player qualification, six hosted producers, judge comparison, transient-branch deletion, actual Windows CI, exact-head checks and the unchanged performance gate remain outstanding. E0 receipts do not qualify the new source.
+
+Plan 19-06 remains `status: halted`, Task 4 incomplete, and `requirements-completed: []`; REL-01 remains pending. The D-121 additional fix/review allowance is consumed. Continue with the final source freeze and qualification; any further correctness or security finding requires a new owner rescope. Stop before merge until all required evidence and branch-protection checks pass. Do not start Plan 19-07, tag, publish, or claim Phase 19 complete.
 
 ## Issues Encountered and Limitations
 
@@ -245,7 +269,7 @@ The bullets below record the earlier interim snapshot. The subsequent qualificat
 
 ## Next Phase Readiness
 
-Continue **Plan 19-06 — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A readiness** after the owner responds to the bounded Windows-harness rescope request; D-09 acknowledgment remains a separate pending decision. Resume with `/gsd-execute-phase 19` to continue the same plan. If the rescope is approved, perform only its bounded test-harness fix, independent review and fresh coherent qualification; then stop before any merge until the owner gates and required exact-head evidence are satisfied. Plan 19-06 and Phase 19 remain incomplete; do not start Plan 19-07.
+Continue **Plan 19-06 — Synthetic 0.3.0 pre-flight, docs and doc checks, PR A readiness** at final-source qualification. Resume with `/gsd-execute-phase 19`; the approved resolver fix at `8f4deeddd07ddf06f9927a1c6c571b717732b06e` is independently reviewed, and owner decisions D-121/D-122 are complete. After this documentation snapshot is committed, freeze and pin the new source head, push it once to existing PR #133, and run fresh exact-head CI plus the coherent H0-to-H-prime pre-flight. Then require source-bound performance evidence and branch protection before the authorized guarded merge. Any further finding requires a new rescope. Plan 19-06 and Phase 19 remain incomplete; do not start Plan 19-07.
 
 ## Self-Check: PASSED
 
