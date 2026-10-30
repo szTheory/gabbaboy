@@ -4541,13 +4541,13 @@ def _resolve_git_for_windows_bash(git_executable: str | None, system_root: str |
     grandparent_name = git_parent.parent.name.casefold()
     if parent_name == "cmd":
         git_root = git_parent.parent
-    elif parent_name == "bin" and grandparent_name in ("mingw64", "usr"):
+    elif parent_name == "bin" and grandparent_name in ("mingw64", "ucrt64", "usr"):
         git_root = git_parent.parent.parent
     elif parent_name == "bin":
         git_root = git_parent.parent
     else:
         raise ValueError(f"unsupported Git executable layout: {git_path}; expected Git/cmd, Git/bin, "
-                         "Git/mingw64/bin, or Git/usr/bin")
+                         "Git/mingw64/bin, Git/ucrt64/bin, or Git/usr/bin")
 
     try:
         git_root = git_root.resolve(strict=True)
@@ -4619,6 +4619,7 @@ def rehearsal_bash_resolver_controls() -> tuple[int, int]:
             ("cmd", Path("cmd") / "git.exe"),
             ("bin", Path("bin") / "git.exe"),
             ("mingw64", Path("mingw64") / "bin" / "git.exe"),
+            ("ucrt64", Path("ucrt64") / "bin" / "git.exe"),
         ):
             install = fixture / ("Git-" + label)
             git_executable = install / git_relative
