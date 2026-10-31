@@ -1601,7 +1601,7 @@ add_test(NAME v03_readback_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test-readback"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=v03-readback controls pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=48
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=90
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_readback_controls PROPERTIES TIMEOUT 60 LABELS planning)
 # The v0.2 checker asserts owner_accepted=0 for the archived 15.1-17 record only. Pointed at the new record it must reject on its plan
@@ -2975,7 +2975,7 @@ set(GBB_UAT_EXTRA_ARGS)
 add_test(NAME expect_exit_min_count_rejects_lower
   COMMAND ${CMAKE_COMMAND} -DGBB_CMD=${CMAKE_COMMAND}$<SEMICOLON>-E$<SEMICOLON>echo$<SEMICOLON>controls=19
     -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=controls
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=20
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=39
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(expect_exit_min_count_rejects_lower PROPERTIES
   PASS_REGULAR_EXPRESSION "controls=19 is below the minimum 20" TIMEOUT 60)
