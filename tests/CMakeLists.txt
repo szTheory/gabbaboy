@@ -5634,9 +5634,13 @@ add_test(NAME release_lifecycle_post_tag_recovery_controls
 set_tests_properties(release_lifecycle_post_tag_recovery_controls PROPERTIES TIMEOUT 60 LABELS "v03;release")
 
 # D-23 (19-07 Task 4): validate the actual published receipt from PR B's immutable source revision.
+# The checker resolves this argument as a Git path, so derive it from the configurable phase root
+# instead of passing the host's absolute filesystem path (which is not a valid Git path on Windows).
+file(RELATIVE_PATH GBB_V03_READBACK_GIT_PATH "${PROJECT_SOURCE_DIR}"
+  "${GBB_LIVE_PHASES_DIR}/GB-19-qualified-v0-3-0-release/19-release-readback.json")
 add_test(NAME v03_readback
   COMMAND ${CMAKE_COMMAND}
-    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--check-readback;${GBB_LIVE_PHASES_DIR}/GB-19-qualified-v0-3-0-release/19-release-readback.json;--rev;${GBB_STATE_SOURCE_REV};--tag;v0.3.0"
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--check-readback;${GBB_V03_READBACK_GIT_PATH};--rev;${GBB_STATE_SOURCE_REV};--tag;v0.3.0"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=v03-readback pass tag=v0.3.0 assets=[1-9][0-9]*"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)

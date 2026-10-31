@@ -5,8 +5,8 @@ milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
 status: executing
-stopped_at: D134 code/security rechecks clear; final local and hosted PR B qualification active
-last_updated: "2026-10-31T14:32:50Z"
+stopped_at: D135 Windows wiring repair approved and applied; qualifying before fresh independent rechecks
+last_updated: "2026-10-31T16:15:41Z"
 last_activity: 2026-10-31
 last_activity_desc: "Published release readback and bounded schema rechecks pass; final phase qualification active"
 state_head: d61a25ea54364e0e26ef89bb7467c72089361d49
@@ -30,13 +30,15 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 ## Current Position
 
-Phase: **19 — Qualified v0.3.0 Release, final execution qualification**. The sole approved retry published v0.3.0; strict actual readback reconciles all22 assets. Product/tag S is immutable and actual publication workflow G is independently bound. No further live release action is needed or authorized.
+Phase: **19 — Qualified v0.3.0 Release, PR B qualification hold**. v0.3.0 remains published with valid22-asset readback, unchanged tag/product S and actual workflow G. No additional live release action is needed or proposed.
 
-Plans19-01..19-08 are implemented, including the single used reserved gap. D134's exact bounded schema repair passes its revision-bound controls and fresh independent code/security rechecks. Both original review findings are fixed, no current finding remains, and all41 declared threats are closed. The frozen19-06 summary remains its historical pre-merge snapshot; actual operational closure is in19-07/19-08.
+D134's exact schema repair passed affected tests and fresh independent code/security rechecks. Settled-source full local core/installed and player-package qualification passed. The goal verifier confirmed all three roadmap success criteria; only the original Task4 hosted/merge/handoff boundary remains open. The planned PR137 is open at reviewed head524ba3f7; it has not merged.
 
-The agent acts next: complete settled-source full local/player/consumer qualification, final phase-goal verification, exact-head protected CI and the one planned guarded PR B squash. Those final gates are not claimed complete in this candidate snapshot. No user action or approval is pending. This candidate becomes the execution boundary only after those gates and the guarded merge succeed; actual boundary facts and SHA are recorded only in local continuation.
+Actual Windows push and PR CI both failed two test-wiring cases: v03_readback passes a Windows absolute filesystem path where the immutable reader needs a Git path, and the new exact-byte helper check encounters an unpinned CRLF checkout. The guards fail closed; no product defect or published-asset change was found. Keep these failed runs as failures and do not rerun unchanged CI or merge.
 
-The next owner-selected stage is **Phase 19 — Qualified v0.3.0 Release, verification**, exact command `/gsd-verify-work 19`. Do not execute it, audit the milestone or start another phase automatically. Both automatic-advance flags remain false. Preserve the authority branch and both cited rehearsal branches; no pruning is included. Local continuation while qualification is active remains `/gsd-execute-phase 19`.
+The isolated two-file prototype is tested and ready in [19-WINDOWS-READBACK-WIRING-RESCOPE.md](phases/GB-19-qualified-v0-3-0-release/19-WINDOWS-READBACK-WIRING-RESCOPE.md): derive the readback's repository-relative path in its existing CTest and add a path-specific LF attribute for the byte-verified helper. This adds .gitattributes outside D134's exact seven-file patch, so the exhausted review-fix scope requires a concrete owner decision before applying the repair. The original failed remote head remains historical; only a new reviewed and tested revision will be pushed. The owner approved D135. The exact two-file patch is applied on the same PR137 branch; affected checks and fresh independent rechecks are next.
+
+The agent acts next to complete the authorized checks, fresh review, new-head CI and guarded closure. No user action or approval is pending. Continue the same Phase19 with `/gsd-execute-phase 19` after approval. The eventual execution handoff remains `/gsd-verify-work 19`, not automatic. Do not run verification, audit the milestone or start another phase. Both automatic-advance flags remain false; preserve frozen19-06 summary and authority/rehearsal branches.
 
 Prior stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
 
