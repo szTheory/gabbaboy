@@ -352,8 +352,29 @@ def check_retry_publication_source(source: Source, readback: dict, release_run: 
             reject("readback-receipt-mismatch", "embedded perf receipt carries an invalid tool build identity")
     raw_assets = raw_receipt.get("assets")
     expected_raw_assets = receipt.get("assets")
-    if not isinstance(raw_assets, list) or raw_assets != expected_raw_assets:
-        reject("readback-receipt-mismatch", "raw release receipt asset digests differ from the checked projection")
+    if not isinstance(raw_assets, list) or not isinstance(expected_raw_assets, list):
+        reject("readback-receipt-mismatch", "raw and projected release receipt assets must be arrays")
+    raw_by_name = {}
+    raw_ids = set()
+    inventory_ids = {item["name"]: item["id"] for item in readback["pre_publish_inventory"]}
+    for item in raw_assets:
+        if not isinstance(item, dict) or set(item) != {"name", "id", "sha256"} \
+                or not isinstance(item.get("name"), str) or not item["name"] \
+                or type(item.get("id")) is not int or item["id"] < 1 \
+                or not isinstance(item.get("sha256"), str) or not HEX64.fullmatch(item["sha256"]) \
+                or item["name"] in raw_by_name or item["id"] in raw_ids:
+            reject("readback-receipt-mismatch", "raw release receipt assets must have unique name/id and exact digest fields")
+        raw_by_name[item["name"]] = item
+        raw_ids.add(item["id"])
+    projected_by_name = {}
+    for item in expected_raw_assets:
+        if not isinstance(item, dict) or set(item) != {"name", "sha256"}:
+            reject("readback-receipt-mismatch", "projected release receipt assets must omit only the API id")
+        projected_by_name[item["name"]] = item["sha256"]
+    if set(raw_by_name) != set(projected_by_name) or not set(raw_by_name) <= set(inventory_ids) \
+            or any(raw_by_name[name]["sha256"] != projected_by_name[name]
+                   or raw_by_name[name]["id"] != inventory_ids[name] for name in raw_by_name):
+        reject("readback-receipt-mismatch", "raw receipt asset IDs/digests differ from the full inventory and projected receipt")
     return f"v03-readback retry pass workflow={workflow_sha} source={source_sha} attempt={attempt}"
 
 
@@ -910,7 +931,7 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
         "schema_version": 1, "version": "0.3.0", "tag": "v0.3.0", "source_sha": tag_sha,
         "release_id": "7001", "draft": True, "signed": False, "notarized": False,
         "hardware_qualified": False, "sha256sums_sha256": sums_sha,
-        "assets": [{"name": payload_name, "sha256": original_digest}], "perf_gate": perf,
+        "assets": [{"name": payload_name, "id": 901, "sha256": original_digest}], "perf_gate": perf,
     }
     receipt_asset_bytes = (json.dumps(receipt_document, sort_keys=True, indent=2) + "\n").encode("utf-8")
     receipt_asset_digest = hashlib.sha256(receipt_asset_bytes).hexdigest()
@@ -1381,6 +1402,13 @@ def self_test_readback() -> int:
             bind_retry_receipt_bytes(value, json.dumps(raw, sort_keys=True, indent=2) + "\n")
 
         retry_case("embedded perf source drift", "readback-receipt-mismatch", wrong_perf_source)
+
+        def wrong_raw_asset_id(value):
+            raw = json.loads(value["publication_source"]["release_receipt_raw"])
+            raw["assets"][0]["id"] += 1
+            bind_retry_receipt_bytes(value, json.dumps(raw, sort_keys=True, indent=2) + "\n")
+
+        retry_case("raw receipt asset ID mismatch", "readback-receipt-mismatch", wrong_raw_asset_id)
 
         def duplicate_raw_key(value):
             raw = value["publication_source"]["release_receipt_raw"]
