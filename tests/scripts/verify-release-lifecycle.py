@@ -845,26 +845,39 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         privacy_doc["reviewed_body"]["text"] += " /Users/private"
         controls += _recovery_expect_reject("local path leak", "recovery-sanitize",
             lambda: _recovery_privacy(json.dumps(privacy_doc).encode("utf-8")))
+
+        def validate_mutated_fixture(value: dict) -> dict:
+            raw = (json.dumps(value, sort_keys=True) + "\n").encode("utf-8")
+            sources_text = sources.decode("utf-8", errors="strict")
+            section_match = RECOVERY_SOURCES_SECTION.search(sources_text)
+            if section_match is None:
+                raise Reject("recovery-control", "recovery fixture provenance section disappeared from the positive")
+            section = section_match.group(1)
+            size_match = RECOVERY_SOURCES_SIZE.search(section)
+            if size_match is None:
+                raise Reject("recovery-control", "recovery fixture byte-count row disappeared from the positive")
+            size_row = f"- bytes: {len(raw)} (bound: {MAX_RECOVERY_FIXTURE_BYTES})"
+            section = section[:size_match.start()] + size_row + section[size_match.end():]
+            amended_sources = (sources_text[:section_match.start(1)] + section
+                               + sources_text[section_match.end(1):]).encode("utf-8")
+            return validate_recovery_fixture(raw, amended_sources, verify_digest=False)
+
         wrong_source = json.loads(json.dumps(fixture))
         wrong_source["failure_snapshot"]["source_sha"] = "0" * 40
         controls += _recovery_expect_reject("wrong failed source", "recovery-identity",
-            lambda: validate_recovery_fixture((json.dumps(wrong_source, sort_keys=True) + "\n").encode(), sources,
-                                              verify_digest=False))
+            lambda: validate_mutated_fixture(wrong_source))
         wrong_release = json.loads(json.dumps(fixture))
         wrong_release["failure_snapshot"]["draft_detail"]["id"] += 1
         controls += _recovery_expect_reject("wrong draft identity", "recovery-draft",
-            lambda: validate_recovery_fixture((json.dumps(wrong_release, sort_keys=True) + "\n").encode(), sources,
-                                              verify_digest=False))
+            lambda: validate_mutated_fixture(wrong_release))
         nonzero_assets = json.loads(json.dumps(fixture))
         nonzero_assets["failure_snapshot"]["draft_assets"] = [{"id": 1}]
         controls += _recovery_expect_reject("unexpected starting asset", "recovery-assets",
-            lambda: validate_recovery_fixture((json.dumps(nonzero_assets, sort_keys=True) + "\n").encode(), sources,
-                                              verify_digest=False))
+            lambda: validate_mutated_fixture(nonzero_assets))
         wrong_time = json.loads(json.dumps(fixture))
         wrong_time["failure_snapshot"]["draft_detail"]["published_at"] = "2026-10-31T00:00:00Z"
         controls += _recovery_expect_reject("published draft state", "recovery-draft",
-            lambda: validate_recovery_fixture((json.dumps(wrong_time, sort_keys=True) + "\n").encode(), sources,
-                                              verify_digest=False))
+            lambda: validate_mutated_fixture(wrong_time))
 
         failed_body = fixture["failed_notes"]["text"].encode("utf-8")
         transport = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
