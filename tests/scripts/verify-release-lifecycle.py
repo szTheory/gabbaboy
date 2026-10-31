@@ -45,7 +45,6 @@ import itertools
 import tempfile
 import threading
 import time
-import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,6 +58,9 @@ DELIVERY = "tests/scripts/verify-v02-delivery.py"
 CAPTURE = "tests/data/release-api/captured.json"
 RECOVERY_FIXTURE = "tests/data/release-api/v030-notes-failure.json"
 SOURCES = "tests/data/release-api/SOURCES.md"
+RECOVERY_ADOPTION = "tests/scripts/verify-v02-adoption.py"
+RECOVERY_CLAIMS = "tests/scripts/verify-cgb-corpus-claims.py"
+RECOVERY_RELEASE_DOC = "docs/release.md"
 POST_TAG_COVERAGE = "tests/data/release-lifecycle-post-tag-coverage.json"
 # Production files the replay materializes from --rev into the judge checkout (the `trusted/` tree of every job).
 JUDGE_FILES = (
@@ -90,6 +92,7 @@ RELEASE_ID = 900000001
 FIRST_ASSET_ID = 900100001
 RUN_ID = 50000000001
 MAX_CAPTURE_BYTES = 256 * 1024
+MAX_RECOVERY_FIXTURE_BYTES = 256 * 1024
 RESPONSE_KEYS = ("release", "release_assets", "workflow_runs", "workflow_run", "jobs", "artifacts", "check_runs",
                  "pull_request", "pull_requests", "attempt_jobs", "ci_run", "commit")
 PARALLEL = max(2, min(8, os.cpu_count() or 2))
@@ -278,6 +281,22 @@ USER_KEYS = {"login", "node_id", "avatar_url"}
 TRUNCATE_ARRAYS = {"assets": 2, "workflow_runs": 2, "jobs": 8, "artifacts": 2, "files": 1, "steps": 2}
 OMITTED = "[omitted by the capture sanitizer]"
 SOURCES_DIGEST = re.compile(r"(?m)^- captured\.json sha256: ([0-9a-f]{64})$")
+RECOVERY_SOURCES_DIGEST = re.compile(r"(?m)^- `v030-notes-failure\.json` sha256: ([0-9a-f]{64})$")
+RECOVERY_TAG = "v0.3.0"
+RECOVERY_SOURCE_SHA = "a3f3390451f9a893aa47475f15a722ada86daaa6"
+RECOVERY_RELEASE_ID = 429606490
+RECOVERY_RUN_ID = 41148606886
+RECOVERY_JOB_ID = 124379552103
+RECOVERY_RELATIVE_LINK = b"[support ledger](docs/support/v0.3.0.md)"
+RECOVERY_PINNED_LINK = (
+    b"[support ledger](https://github.com/szTheory/gabbaboy/blob/v0.3.0/docs/support/v0.3.0.md)"
+)
+RECOVERY_DISPATCH = {
+    "workflow": "release-please.yml",
+    "ref": "main",
+    "inputs": {"retry": True, "tag_name": RECOVERY_TAG, "source_sha": RECOVERY_SOURCE_SHA,
+               "release_id": str(RECOVERY_RELEASE_ID)},
+}
 
 
 def dig(value, path: str):
@@ -378,13 +397,11 @@ def capture_text(capture: dict) -> str:
     return json.dumps(capture, indent=2, sort_keys=True) + "\n"
 
 
-RECOVERY_TEST_REV: str | None = None
-
-
 def v030_changelog_section(changelog: bytes) -> bytes:
     """Return the exact v0.3.0 heading and section bytes, including original LF endings."""
     lines = changelog.splitlines(keepends=True)
-    starts = [index for index, line in enumerate(lines) if line.startswith(b"## [0.3.0]")]
+    starts = [index for index, line in enumerate(lines)
+              if re.match(br"^## \[0\.3\.0\](?:\(|\s|$)", line)]
     if len(starts) != 1:
         raise Reject("recovery-source-section", "tagged CHANGELOG must contain exactly one v0.3.0 section")
     start = starts[0]
@@ -393,25 +410,461 @@ def v030_changelog_section(changelog: bytes) -> bytes:
 
 
 def repair_support_ledger_link(section: bytes, relative_link: bytes, pinned_link: bytes) -> bytes:
-    """TDD RED scaffold: the reviewed one-link repair is implemented in the following GREEN commit."""
-    return section
+    """Apply the one allowlisted URL replacement, accepting the identical repair as a no-op."""
+    if relative_link != RECOVERY_RELATIVE_LINK or pinned_link != RECOVERY_PINNED_LINK:
+        raise Reject("recovery-link-target", "the only allowed repair is the v0.3.0 support-ledger link")
+    relative_count = section.count(RECOVERY_RELATIVE_LINK)
+    pinned_count = section.count(RECOVERY_PINNED_LINK)
+    link_count = section.count(b"[support ledger](")
+    if relative_count == 0 and pinned_count == 1 and link_count == 1:
+        return section
+    if relative_count != 1:
+        raise Reject("recovery-link-count", "the tagged section must contain one relative support-ledger link")
+    if pinned_count != 0 or link_count != 1:
+        raise Reject("recovery-link-duplicate", "the tagged section contains an unexpected or duplicate support link")
+    return section.replace(RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK, 1)
 
 
-class PostTagRecoveryContract(unittest.TestCase):
-    def test_repaired_body_changes_only_the_single_tag_pinned_support_link(self) -> None:
-        if RECOVERY_TEST_REV is None:
-            self.fail("recovery test revision was not resolved")
-        fixture_raw = git_show(RECOVERY_TEST_REV, RECOVERY_FIXTURE)
-        fixture = json.loads(fixture_raw.decode("utf-8"))
-        repair = fixture["tagged_repair"]
-        source = git_show(repair["source_sha"], "CHANGELOG.md")
-        section = v030_changelog_section(source)
-        relative_link = repair["relative_link"].encode("utf-8")
-        pinned_link = repair["tag_pinned_link"].encode("utf-8")
-        actual = repair_support_ledger_link(section, relative_link, pinned_link)
-        expected = section.replace(relative_link, pinned_link, 1)
-        self.assertEqual(actual, expected)
-        self.assertEqual(hashlib.sha256(actual).hexdigest(), repair["repaired_body_sha256"])
+def _strict_recovery_json(raw: bytes, label: str) -> object:
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"duplicate JSON member {key!r}")
+            result[key] = value
+        return result
+
+    try:
+        return json.loads(raw.decode("utf-8", errors="strict"), object_pairs_hook=unique)
+    except (UnicodeError, json.JSONDecodeError, ValueError) as error:
+        raise Reject("recovery-json", f"{label} is not unambiguous UTF-8 JSON: {error}") from error
+
+
+def _recovery_privacy(raw: bytes) -> None:
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError as error:
+        raise Reject("recovery-sanitize", "recovery fixture is not valid UTF-8") from error
+    if FORBIDDEN_TEXT.search(text):
+        raise Reject("recovery-sanitize", "recovery fixture contains a local path or credential marker")
+    if any(email != REDACTED_EMAIL for email in EMAIL.findall(text)):
+        raise Reject("recovery-sanitize", "recovery fixture contains an unredacted email address")
+
+
+def _require_recovery_keys(value: object, keys: set[str], label: str) -> dict:
+    if not isinstance(value, dict) or set(value) != keys:
+        raise Reject("recovery-schema", f"{label} members differ from the exact recovery schema")
+    return value
+
+
+def validate_recovery_fixture(raw: bytes, sources: bytes, *, verify_digest: bool = True) -> dict:
+    if len(raw) > MAX_RECOVERY_FIXTURE_BYTES:
+        raise Reject("recovery-bound", f"recovery fixture exceeds {MAX_RECOVERY_FIXTURE_BYTES} bytes")
+    if b"\r" in raw or not raw.endswith(b"\n"):
+        raise Reject("recovery-eol", "recovery fixture must be LF-terminated UTF-8 JSON")
+    _recovery_privacy(raw)
+    sources_text = sources.decode("utf-8", errors="strict")
+    recorded = RECOVERY_SOURCES_DIGEST.findall(sources_text)
+    if verify_digest and (len(recorded) != 1 or recorded[0] != sha256_bytes(raw)):
+        raise Reject("recovery-digest", "SOURCES.md does not pin exactly the recovery fixture SHA-256")
+    fixture = _strict_recovery_json(raw, "recovery fixture")
+    fixture = _require_recovery_keys(fixture, {
+        "schema_version", "kind", "repository", "api_version", "failure_snapshot", "releases_list_capture",
+        "failed_notes", "reviewed_body", "tagged_repair",
+    }, "recovery fixture")
+    if (fixture.get("schema_version") != 1 or fixture.get("kind") != "v030-post-tag-notes-failure"
+            or fixture.get("repository") != REPO or fixture.get("api_version") != "2022-11-28"):
+        raise Reject("recovery-schema", "recovery fixture header differs from the v0.3.0 capture")
+
+    snapshot = _require_recovery_keys(fixture["failure_snapshot"], {
+        "tag", "source_sha", "release_id", "workflow_run_id", "workflow_run_attempt", "candidate_job_id",
+        "workflow_path", "event", "head_branch", "head_sha", "status", "conclusion",
+        "failed_step", "adoption_reason", "draft_detail", "draft_detail_capture_file_sha256", "draft_assets",
+        "draft_assets_capture_file_sha256", "workflow_run", "workflow_run_capture_file_sha256", "candidate_job",
+        "candidate_job_capture_file_sha256", "capture_sanitizer",
+    }, "failure_snapshot")
+    if (snapshot["tag"], snapshot["source_sha"], snapshot["release_id"], snapshot["workflow_run_id"],
+            snapshot["workflow_run_attempt"], snapshot["candidate_job_id"], snapshot["workflow_path"],
+            snapshot["event"], snapshot["head_branch"], snapshot["head_sha"],
+            snapshot["status"], snapshot["conclusion"], snapshot["adoption_reason"]) != (
+            RECOVERY_TAG, RECOVERY_SOURCE_SHA, RECOVERY_RELEASE_ID, RECOVERY_RUN_ID, 1, RECOVERY_JOB_ID,
+            ".github/workflows/release-please.yml", "push", "main", RECOVERY_SOURCE_SHA,
+            "completed", "failure", "release-notes-absence-missing"):
+        raise Reject("recovery-identity", "the captured first-failure run, job, release, tag or source identity changed")
+    hashes = ("draft_detail_capture_file_sha256", "draft_assets_capture_file_sha256",
+              "workflow_run_capture_file_sha256", "candidate_job_capture_file_sha256")
+    if any(not isinstance(snapshot[key], str) or not re.fullmatch(r"[0-9a-f]{64}", snapshot[key]) for key in hashes):
+        raise Reject("recovery-provenance", "first-failure API capture digests are malformed")
+    failed_step = _require_recovery_keys(snapshot["failed_step"], {"name", "number", "status", "conclusion"}, "failed_step")
+    if (failed_step["name"] != "Require final release notes to satisfy the v0.2 adoption contract"
+            or type(failed_step["number"]) is not int or failed_step["number"] != 6
+            or failed_step["status"] != "completed" or failed_step["conclusion"] != "failure"):
+        raise Reject("recovery-failure", "the actual candidate adoption step identity or result changed")
+
+    draft = snapshot["draft_detail"]
+    if not isinstance(draft, dict) or (draft.get("id"), draft.get("tag_name"), draft.get("target_commitish"),
+            draft.get("draft"), draft.get("prerelease"), draft.get("published_at"), draft.get("body"), draft.get("assets")) != (
+            RECOVERY_RELEASE_ID, RECOVERY_TAG, RECOVERY_SOURCE_SHA, True, False, None, OMITTED, []):
+        raise Reject("recovery-draft", "captured draft detail is not the original unpublished empty-asset draft")
+    if snapshot["draft_assets"] != []:
+        raise Reject("recovery-assets", "the captured first-failure draft must have no assets")
+    run = snapshot["workflow_run"]
+    if not isinstance(run, dict) or any(run.get(key) != value for key, value in {
+            "id": RECOVERY_RUN_ID, "run_attempt": 1, "path": ".github/workflows/release-please.yml",
+            "event": "push", "head_branch": "main", "head_sha": RECOVERY_SOURCE_SHA,
+            "status": "completed", "conclusion": "failure"}.items()):
+        raise Reject("recovery-run", "captured release-please workflow run identity or failure changed")
+    job = snapshot["candidate_job"]
+    if not isinstance(job, dict) or any(job.get(key) != value for key, value in {
+            "id": RECOVERY_JOB_ID, "run_id": RECOVERY_RUN_ID, "run_attempt": 1,
+            "name": "release-candidate / downloaded-linux-x64-candidate", "head_sha": RECOVERY_SOURCE_SHA,
+            "status": "completed", "conclusion": "failure"}.items()):
+        raise Reject("recovery-job", "captured Linux candidate job identity or failure changed")
+    if job.get("head_branch") != "main" or "body" in job or "runner_id" not in job:
+        raise Reject("recovery-sanitize", "candidate job capture does not preserve or sanitize its API shape")
+
+    list_capture = _require_recovery_keys(fixture["releases_list_capture"], {
+        "endpoint", "captured_at", "capture_kind", "raw_response_sha256", "entry_count", "response", "sanitizer",
+    }, "releases_list_capture")
+    if (list_capture["endpoint"] != "repos/szTheory/gabbaboy/releases?per_page=100"
+            or list_capture["captured_at"] != "2026-10-31T00:48:23Z"
+            or list_capture["capture_kind"] != "bounded read-only GET after the failed run; not the failure-snapshot timestamp"
+            or type(list_capture["entry_count"]) is not int or not isinstance(list_capture["response"], list)
+            or len(list_capture["response"]) != list_capture["entry_count"]
+            or not isinstance(list_capture["raw_response_sha256"], str)
+            or not re.fullmatch(r"[0-9a-f]{64}", list_capture["raw_response_sha256"])):
+        raise Reject("recovery-list", "bounded release-list response provenance or shape is malformed")
+    targets = [row for row in list_capture["response"] if isinstance(row, dict) and row.get("id") == RECOVERY_RELEASE_ID]
+    if len(targets) != 1 or not same_shape(targets[0], draft):
+        raise Reject("recovery-list", "release-list capture does not contain one same-shaped target draft")
+    if any(targets[0].get(key) != draft.get(key) for key in ("id", "tag_name", "target_commitish", "draft", "prerelease", "published_at", "assets")):
+        raise Reject("recovery-list", "release-list capture target identity differs from the failure snapshot")
+    if "body" in targets[0] and targets[0]["body"] != OMITTED:
+        raise Reject("recovery-sanitize", "release-list target body was not removed by the capture sanitizer")
+
+    notes = _require_recovery_keys(fixture["failed_notes"], {
+        "text", "utf8_sha256", "response_body_sha256", "response_body_digest_kind", "release_detail_capture_file_sha256",
+    }, "failed_notes")
+    if (not isinstance(notes["text"], str) or not notes["text"] or
+            hashlib.sha256(notes["text"].encode("utf-8")).hexdigest() != notes["utf8_sha256"]
+            or notes["response_body_sha256"] != notes["utf8_sha256"]
+            or notes["response_body_digest_kind"] != "SHA-256 of the decoded GitHub release body encoded as UTF-8"
+            or notes["release_detail_capture_file_sha256"] != snapshot["draft_detail_capture_file_sha256"]):
+        raise Reject("recovery-notes", "separately retained failed notes and response provenance are inconsistent")
+    reviewed = _require_recovery_keys(fixture["reviewed_body"], {"text", "utf8_sha256", "pinned_support_link_occurrences"},
+                                      "reviewed_body")
+    if (not isinstance(reviewed["text"], str)
+            or hashlib.sha256(reviewed["text"].encode("utf-8")).hexdigest() != reviewed["utf8_sha256"]
+            or reviewed["pinned_support_link_occurrences"] != 1
+            or reviewed["text"].encode("utf-8").count(RECOVERY_PINNED_LINK) != 1):
+        raise Reject("recovery-reviewed-body", "frozen reviewed body does not bind the exact pinned ledger URL once")
+    repair = _require_recovery_keys(fixture["tagged_repair"], {
+        "tag", "source_sha", "section_heading", "support_ledger_path", "relative_link", "tag_pinned_link",
+        "original_section_sha256", "repaired_body_sha256", "transformation",
+    }, "tagged_repair")
+    if (repair["tag"], repair["source_sha"], repair["section_heading"], repair["support_ledger_path"],
+            repair["relative_link"], repair["tag_pinned_link"]) != (
+            RECOVERY_TAG, RECOVERY_SOURCE_SHA, "## [0.3.0]", "docs/support/v0.3.0.md",
+            RECOVERY_RELATIVE_LINK.decode(), RECOVERY_PINNED_LINK.decode()):
+        raise Reject("recovery-repair", "repair fixture permits a different tag, source, path or link transformation")
+    if any(not isinstance(repair[key], str) or not re.fullmatch(r"[0-9a-f]{64}", repair[key])
+           for key in ("original_section_sha256", "repaired_body_sha256")):
+        raise Reject("recovery-repair", "tagged source and repaired body SHA-256 values are malformed")
+    if repair["transformation"] != (
+            "replace exactly one relative support-ledger link with the v0.3.0 tag-pinned GitHub blob link; "
+            "preserve all other UTF-8 bytes"):
+        raise Reject("recovery-repair", "repair transformation description changed")
+    return fixture
+
+
+def _recovery_tag_source(tag: str, expected_source: str) -> tuple[str, bytes, bytes]:
+    if tag != RECOVERY_TAG or expected_source != RECOVERY_SOURCE_SHA:
+        raise Reject("recovery-tag", "recovery must remain bound to v0.3.0 at immutable source S")
+    commit = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"],
+                            capture_output=True, text=True, timeout=60)
+    if commit.returncode != 0 or commit.stdout.strip() != expected_source:
+        raise Reject("recovery-tag", "local v0.3.0 tag no longer resolves to the captured source S")
+    blob = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--verify", f"{tag}:docs/support/v0.3.0.md"],
+                          capture_output=True, text=True, timeout=60)
+    if blob.returncode != 0 or subprocess.run(["git", "-C", str(ROOT), "cat-file", "-t", blob.stdout.strip()],
+                                              capture_output=True, text=True, timeout=60).stdout.strip() != "blob":
+        raise Reject("recovery-ledger", "tagged support-ledger blob is missing")
+    changelog = git_show(expected_source, "CHANGELOG.md")
+    ledger = git_show(expected_source, "docs/support/v0.3.0.md")
+    return commit.stdout.strip(), changelog, ledger
+
+
+def _recovery_v030_root(source: str, temporary: Path) -> Path:
+    root = temporary / "v030-source-root"
+    for relative in ("CMakeLists.txt", ".release-please-manifest.json", "tests/baseline/perf-attribution-v1.json"):
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(git_show(source, relative))
+    tree = subprocess.run(["git", "-C", str(ROOT), "ls-tree", "-r", "--name-only", source, "docs/support"],
+                          capture_output=True, text=True, timeout=60)
+    if tree.returncode != 0:
+        raise Reject("recovery-source-root", "cannot enumerate the immutable support-ledger paths")
+    ledgers = [path for path in tree.stdout.splitlines() if path.startswith("docs/support/") and path.endswith(".md")]
+    if "docs/support/v0.3.0.md" not in ledgers:
+        raise Reject("recovery-source-root", "immutable source root lacks the v0.3.0 support ledger")
+    for relative in ledgers:
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(git_show(source, relative))
+    return root
+
+
+def _run_adoption(notes: bytes, label: str, source: str, root: Path) -> tuple[int, str]:
+    note_path = root.parent / f"{label}.md"
+    note_path.write_bytes(notes)
+    result = subprocess.run([sys.executable, "-I", str(ROOT / RECOVERY_ADOPTION), "--release-notes", str(note_path),
+                             "--root", str(root), "--repo", str(ROOT), "--rev", source],
+                            cwd=ROOT, capture_output=True, text=True, timeout=30)
+    return result.returncode, result.stdout + result.stderr
+
+
+def _expect_adoption_pass(notes: bytes, label: str, source: str, root: Path) -> int:
+    code, output = _run_adoption(notes, label, source, root)
+    if code != 0:
+        raise Reject("recovery-adoption", f"production adoption checker refused {label}: {output[:240]}")
+    try:
+        summary = json.loads(output)
+    except json.JSONDecodeError as error:
+        raise Reject("recovery-adoption", f"production adoption checker output for {label} is not JSON") from error
+    if summary.get("mode") != "release-notes" or summary.get("target") != "0.3.0" \
+            or summary.get("positive_success") is not True or summary.get("checks") != 22:
+        raise Reject("recovery-adoption", f"production adoption checker positive for {label} is incomplete")
+    return summary["checks"]
+
+
+def _expect_adoption_failure(notes: bytes, expected_reason: str, source: str, root: Path) -> int:
+    code, output = _run_adoption(notes, "captured-failed-notes", source, root)
+    if code != 1 or f"verify-v02-adoption fail: {expected_reason}" not in output:
+        raise Reject("recovery-adoption", f"captured failed notes did not refuse for {expected_reason}: {output[:240]}")
+    return 1
+
+
+def _check_repaired_digest(body: bytes, expected: str) -> None:
+    if hashlib.sha256(body).hexdigest() != expected:
+        raise Reject("recovery-repaired-digest", "transformed release body differs from the bound SHA-256")
+
+
+class RecoveryTransport:
+    """A refusing in-memory model of the one body-only PATCH and one exact main retry dispatch."""
+
+    def __init__(self, snapshot: dict, failed_body: bytes, repaired_body: bytes, repaired_sha: str):
+        self.release_id = snapshot["release_id"]
+        self.tag = snapshot["tag"]
+        self.source_sha = snapshot["source_sha"]
+        self.draft = True
+        self.prerelease = False
+        self.published_at = None
+        self.assets = []
+        self.body = failed_body
+        self.failed_sha = hashlib.sha256(failed_body).hexdigest()
+        self.repaired_body = repaired_body
+        self.repaired_sha = repaired_sha
+        self.patch_count = 0
+        self.dispatch_count = 0
+
+    def patch(self, release_id: int, payload: dict) -> str:
+        if release_id != RECOVERY_RELEASE_ID or release_id != self.release_id:
+            raise Reject("recovery-release-id", "metadata repair targets only the captured draft ID")
+        if not isinstance(payload, dict) or set(payload) != {"body"} or not isinstance(payload.get("body"), str):
+            raise Reject("recovery-patch-shape", "metadata repair request may contain only a UTF-8 body")
+        if (self.tag != RECOVERY_TAG or self.source_sha != RECOVERY_SOURCE_SHA or not self.draft
+                or self.prerelease or self.published_at is not None or self.assets != []):
+            raise Reject("recovery-publication-race", "draft/tag/source/assets changed before metadata repair")
+        requested = payload["body"].encode("utf-8")
+        if requested != self.repaired_body or hashlib.sha256(requested).hexdigest() != self.repaired_sha:
+            raise Reject("recovery-repaired-digest", "metadata repair body differs from the exact qualified bytes")
+        current_sha = hashlib.sha256(self.body).hexdigest()
+        if self.body == requested:
+            return "no-op"
+        if current_sha != self.failed_sha:
+            raise Reject("recovery-publication-race", "draft body changed from the captured failure before repair")
+        self.body = requested
+        self.patch_count += 1
+        return "patched"
+
+    def dispatch(self, request: dict) -> str:
+        if self.tag != RECOVERY_TAG or self.source_sha != RECOVERY_SOURCE_SHA or self.draft is False \
+                or self.published_at is not None or self.body != self.repaired_body:
+            raise Reject("recovery-dispatch-state", "retry dispatch requires the same unpublished repaired draft at S")
+        if self.dispatch_count:
+            raise Reject("recovery-dispatch-duplicate", "only one explicit retry dispatch is allowed")
+        if not isinstance(request, dict) or set(request) != {"workflow", "ref", "inputs"}:
+            raise Reject("recovery-dispatch-shape", "retry request must be the exact workflow/ref/inputs projection")
+        inputs = request.get("inputs")
+        if not isinstance(inputs, dict) or set(inputs) != {"retry", "tag_name", "source_sha", "release_id"} \
+                or type(inputs.get("retry")) is not bool:
+            raise Reject("recovery-dispatch-shape", "retry request inputs are incomplete or incorrectly typed")
+        if request != RECOVERY_DISPATCH:
+            raise Reject("recovery-dispatch-identity", "retry request differs from the exact mainG/tagS release inputs")
+        self.dispatch_count += 1
+        return "dispatched"
+
+
+def _recovery_expect_reject(label: str, code: str, action: Callable[[], object]) -> int:
+    try:
+        action()
+    except Reject as error:
+        if error.code != code:
+            raise Reject("recovery-control", f"{label} refused as {error.code}, expected {code}") from error
+        return 1
+    raise Reject("recovery-control", f"negative control accepted: {label}")
+
+
+def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
+    fixture_raw = git_show(rev, RECOVERY_FIXTURE)
+    sources = git_show(rev, SOURCES)
+    release_doc = git_show(rev, RECOVERY_RELEASE_DOC)
+    adoption_source = git_show(rev, RECOVERY_ADOPTION)
+    claims_source = git_show(rev, RECOVERY_CLAIMS)
+    if b"\r" in release_doc or not release_doc:
+        raise Reject("recovery-document", "release documentation must be readable immutable UTF-8 with LF endings")
+    if adoption_source != git_show(RECOVERY_SOURCE_SHA, RECOVERY_ADOPTION) \
+            or (ROOT / RECOVERY_ADOPTION).read_bytes() != adoption_source:
+        raise Reject("recovery-adoption-source", "the production adoption checker differs from immutable tagged S")
+    if claims_source != git_show(RECOVERY_SOURCE_SHA, RECOVERY_CLAIMS) \
+            or (ROOT / RECOVERY_CLAIMS).read_bytes() != claims_source:
+        raise Reject("recovery-adoption-source", "the production claim rules differ from immutable tagged S")
+    fixture = validate_recovery_fixture(fixture_raw, sources)
+    snapshot = fixture["failure_snapshot"]
+    repair_spec = fixture["tagged_repair"]
+    tag_commit, changelog, ledger = _recovery_tag_source(repair_spec["tag"], repair_spec["source_sha"])
+    if tag_commit != RECOVERY_SOURCE_SHA or not ledger:
+        raise Reject("recovery-ledger", "tagged source or support ledger bytes are unavailable")
+    section = v030_changelog_section(changelog)
+    if b"\r" in section or not section.endswith(b"\n"):
+        raise Reject("recovery-source-section", "tagged v0.3.0 section must preserve LF-terminated UTF-8 bytes")
+    original_hash = sha256_bytes(section)
+    if original_hash != repair_spec["original_section_sha256"]:
+        raise Reject("recovery-source-digest", "tagged CHANGELOG section differs from the recorded source SHA-256")
+    if section.count(RECOVERY_RELATIVE_LINK) != 1 or section.count(RECOVERY_PINNED_LINK) != 0:
+        raise Reject("recovery-link-count", "tagged source section does not have exactly one allowed relative ledger link")
+    repaired = repair_support_ledger_link(section, RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK)
+    repaired_hash = sha256_bytes(repaired)
+    _check_repaired_digest(repaired, repair_spec["repaired_body_sha256"])
+    if repaired != section.replace(RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK, 1):
+        raise Reject("recovery-byte-integrity", "repair changed bytes beyond the one approved URL replacement")
+    if repair_support_ledger_link(repaired, RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK) != repaired:
+        raise Reject("recovery-idempotency", "repeating the exact repair changed the body")
+
+    with tempfile.TemporaryDirectory(prefix="gb-post-tag-recovery.") as temporary:
+        temp = Path(temporary)
+        v030_root = _recovery_v030_root(RECOVERY_SOURCE_SHA, temp)
+        adoption_checks = 0
+        adoption_checks += _expect_adoption_failure(fixture["failed_notes"]["text"].encode("utf-8"),
+                                                    "release-notes-absence-missing", RECOVERY_SOURCE_SHA, v030_root)
+        adoption_checks += _expect_adoption_pass(section, "tagged-original-section", RECOVERY_SOURCE_SHA, v030_root)
+        adoption_checks += _expect_adoption_pass(repaired, "tagged-repaired-section", RECOVERY_SOURCE_SHA, v030_root)
+        positives = 3
+
+        controls = 0
+        controls += _recovery_expect_reject("missing relative ledger link", "recovery-link-count",
+            lambda: repair_support_ledger_link(section.replace(RECOVERY_RELATIVE_LINK, b""),
+                                              RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK))
+        controls += _recovery_expect_reject("duplicate relative ledger link", "recovery-link-count",
+            lambda: repair_support_ledger_link(section + b"\n" + RECOVERY_RELATIVE_LINK,
+                                              RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK))
+        controls += _recovery_expect_reject("main-branch link target", "recovery-link-target",
+            lambda: repair_support_ledger_link(section, RECOVERY_RELATIVE_LINK,
+                                              b"[support ledger](https://github.com/szTheory/gabbaboy/blob/main/docs/support/v0.3.0.md)"))
+        controls += _recovery_expect_reject("wrong-tag link target", "recovery-link-target",
+            lambda: repair_support_ledger_link(section.replace(RECOVERY_RELATIVE_LINK,
+                b"[support ledger](https://github.com/szTheory/gabbaboy/blob/v0.2.1/docs/support/v0.3.0.md)"),
+                RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK))
+        controls += _recovery_expect_reject("wrong ledger path", "recovery-link-target",
+            lambda: repair_support_ledger_link(section, b"[support ledger](docs/support/unreleased.md)", RECOVERY_PINNED_LINK))
+        controls += _recovery_expect_reject("mixed second replacement", "recovery-link-duplicate",
+            lambda: repair_support_ledger_link(section + RECOVERY_PINNED_LINK, RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK))
+        controls += _recovery_expect_reject("tampered repaired byte", "recovery-repaired-digest",
+            lambda: _check_repaired_digest(repaired + b" ", repair_spec["repaired_body_sha256"]))
+        controls += _recovery_expect_reject("duplicate fixture JSON key", "recovery-json",
+            lambda: _strict_recovery_json(b'{"schema_version":1,"schema_version":1}', "control fixture"))
+        controls += _recovery_expect_reject("fixture digest drift", "recovery-digest",
+            lambda: validate_recovery_fixture(fixture_raw, sources.replace(b"8b19bb", b"9b19bb", 1)))
+        privacy_doc = json.loads(json.dumps(fixture))
+        privacy_doc["reviewed_body"]["text"] += " /Users/private"
+        controls += _recovery_expect_reject("local path leak", "recovery-sanitize",
+            lambda: _recovery_privacy(json.dumps(privacy_doc).encode("utf-8")))
+        wrong_source = json.loads(json.dumps(fixture))
+        wrong_source["failure_snapshot"]["source_sha"] = "0" * 40
+        controls += _recovery_expect_reject("wrong failed source", "recovery-identity",
+            lambda: validate_recovery_fixture((json.dumps(wrong_source, sort_keys=True) + "\n").encode(), sources,
+                                              verify_digest=False))
+        wrong_release = json.loads(json.dumps(fixture))
+        wrong_release["failure_snapshot"]["draft_detail"]["id"] += 1
+        controls += _recovery_expect_reject("wrong draft identity", "recovery-draft",
+            lambda: validate_recovery_fixture((json.dumps(wrong_release, sort_keys=True) + "\n").encode(), sources,
+                                              verify_digest=False))
+        nonzero_assets = json.loads(json.dumps(fixture))
+        nonzero_assets["failure_snapshot"]["draft_assets"] = [{"id": 1}]
+        controls += _recovery_expect_reject("unexpected starting asset", "recovery-assets",
+            lambda: validate_recovery_fixture((json.dumps(nonzero_assets, sort_keys=True) + "\n").encode(), sources,
+                                              verify_digest=False))
+        wrong_time = json.loads(json.dumps(fixture))
+        wrong_time["failure_snapshot"]["draft_detail"]["published_at"] = "2026-10-31T00:00:00Z"
+        controls += _recovery_expect_reject("published draft state", "recovery-draft",
+            lambda: validate_recovery_fixture((json.dumps(wrong_time, sort_keys=True) + "\n").encode(), sources,
+                                              verify_digest=False))
+
+        failed_body = fixture["failed_notes"]["text"].encode("utf-8")
+        transport = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
+        if transport.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")}) != "patched":
+            raise Reject("recovery-patch", "qualified body was not applied by the in-memory patch model")
+        positives += 1
+        if transport.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")}) != "no-op" or transport.patch_count != 1:
+            raise Reject("recovery-idempotency", "identical body retry was not a safe no-op")
+        positives += 1
+        if transport.dispatch(dict(RECOVERY_DISPATCH)) != "dispatched" or transport.dispatch_count != 1:
+            raise Reject("recovery-dispatch", "exact retry request was not accepted once")
+        positives += 1
+        if (transport.release_id, transport.tag, transport.source_sha, transport.draft, transport.prerelease,
+                transport.published_at, transport.assets) != (
+                RECOVERY_RELEASE_ID, RECOVERY_TAG, RECOVERY_SOURCE_SHA, True, False, None, []):
+            raise Reject("recovery-patch", "body-only request changed draft or product identity")
+
+        controls += _recovery_expect_reject("patch request with a state mutation", "recovery-patch-shape",
+            lambda: RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"]).patch(
+                RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8"), "draft": False}))
+        controls += _recovery_expect_reject("wrong release id", "recovery-release-id",
+            lambda: RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"]).patch(
+                RECOVERY_RELEASE_ID + 1, {"body": repaired.decode("utf-8")}))
+        changed = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
+        changed.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")})
+        controls += _recovery_expect_reject("conflicting second body", "recovery-publication-race",
+            lambda: changed.patch(RECOVERY_RELEASE_ID, {"body": (repaired + b" ").decode("utf-8")}))
+        published = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
+        published.published_at = "2026-10-31T00:00:00Z"
+        controls += _recovery_expect_reject("publication raced before repair", "recovery-publication-race",
+            lambda: published.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")}))
+        raced = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
+        raced.body = b"competing body"
+        controls += _recovery_expect_reject("body changed concurrently", "recovery-publication-race",
+            lambda: raced.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")}))
+        wrong_request = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
+        wrong_request.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")})
+        for label, mutate in (
+            ("wrong workflow", lambda request: request.update(workflow="release.yml")),
+            ("wrong ref", lambda request: request.update(ref=RECOVERY_TAG)),
+            ("retry false", lambda request: request["inputs"].update(retry=False)),
+            ("wrong tag input", lambda request: request["inputs"].update(tag_name="v0.2.1")),
+            ("wrong source input", lambda request: request["inputs"].update(source_sha="0" * 40)),
+            ("wrong release input", lambda request: request["inputs"].update(release_id="1")),
+        ):
+            invalid = json.loads(json.dumps(RECOVERY_DISPATCH))
+            mutate(invalid)
+            controls += _recovery_expect_reject(label, "recovery-dispatch-identity",
+                lambda invalid=invalid: RecoveryTransport(snapshot, failed_body, repaired,
+                    repair_spec["repaired_body_sha256"]).dispatch(invalid))
+        controls += _recovery_expect_reject("duplicate retry dispatch", "recovery-dispatch-duplicate",
+            lambda: wrong_request.dispatch(dict(RECOVERY_DISPATCH)))
+
+    if controls < 20 or positives < 5 or adoption_checks != 45:
+        raise Reject("recovery-controls", "recovery controls lack the required negative and production-adoption positives")
+    return controls, positives, original_hash, repaired_hash
 
 
 def check_capture(text: bytes, sources: str) -> dict:
@@ -2761,12 +3214,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--rev")
     parser.add_argument("--replay", action="store_true")
     parser.add_argument("--self-test", action="store_true")
-    parser.add_argument("--unittest-post-tag-recovery", action="store_true",
-                        help=argparse.SUPPRESS)
     post_tag_mode = parser.add_mutually_exclusive_group()
     post_tag_mode.add_argument("--self-test-post-tag", action="store_true")
     post_tag_mode.add_argument("--self-test-post-tag-group", choices=POST_TAG_GROUP_NAMES)
     post_tag_mode.add_argument("--self-test-post-tag-coverage", action="store_true")
+    post_tag_mode.add_argument("--self-test-post-tag-recovery", action="store_true")
     parser.add_argument("--check-capture", action="store_true")
     parser.add_argument("--sanitize-capture", nargs=2, metavar=("RAW_DIR", "OUTPUT"))
     args = parser.parse_args(argv)
@@ -2787,12 +3239,6 @@ def main(argv: list[str]) -> int:
         if not args.rev and (head.returncode != 0 or not SHA1.fullmatch(head.stdout.strip())):
             parser.error("--rev is required when HEAD does not resolve to a commit")
         rev = resolve_rev(args.rev or head.stdout.strip())
-        if args.unittest_post_tag_recovery:
-            global RECOVERY_TEST_REV
-            RECOVERY_TEST_REV = rev
-            suite = unittest.defaultTestLoader.loadTestsFromTestCase(PostTagRecoveryContract)
-            result = unittest.TextTestRunner(verbosity=2).run(suite)
-            return 0 if result.wasSuccessful() else 1
         if args.check_capture:
             files = {path: git_show(rev, path) for path in (CAPTURE, SOURCES)}
             capture = check_capture(files[CAPTURE], files[SOURCES].decode("utf-8"))
@@ -2803,10 +3249,16 @@ def main(argv: list[str]) -> int:
             print(f"release-lifecycle post-tag coverage controls pass baseline_ids={baseline_ids} registrations={registrations} "
                   "omitted=refused duplicate=refused wrong_group=refused expect_exit=pass")
             return 0
+        if args.self_test_post_tag_recovery:
+            controls_count, positives, original_hash, repaired_hash = self_test_post_tag_recovery(rev)
+            print(f"release-lifecycle post-tag recovery controls pass controls={controls_count} positives={positives} "
+                  f"original_section_sha256={original_hash} repaired_body_sha256={repaired_hash}")
+            return 0
         if not (args.replay or args.self_test or args.self_test_post_tag or args.self_test_post_tag_group
-                or args.unittest_post_tag_recovery):
+                or args.self_test_post_tag_recovery):
             parser.error("choose --replay, --self-test, --self-test-post-tag, --self-test-post-tag-group, "
-                         "--self-test-post-tag-coverage, --check-capture or --sanitize-capture")
+                         "--self-test-post-tag-coverage, --self-test-post-tag-recovery, --check-capture "
+                         "or --sanitize-capture")
         try:
             script = git_show(rev, LIFECYCLE)
         except Reject:

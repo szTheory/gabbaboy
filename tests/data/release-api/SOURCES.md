@@ -63,7 +63,7 @@ production verifiers pin and derive from the check-run `url` and `html_url` pref
 
 ## v0.3.0 first post-tag failure (additive fixture)
 
-- `v030-notes-failure.json` sha256: 8b19bbdea5a03e6cdf69f277cefc3b96c104aac3415ca5bb22cba65ea8843cff
+- `v030-notes-failure.json` sha256: 4c1bd56c9fdf07103f72e71560287cf8c01d9c5b1519eaab35545a0e499ee148
 - bytes: 53899 (bound: 262144)
 - format: UTF-8 JSON, sorted keys, two-space indent, LF line endings
 - API version: `X-GitHub-Api-Version: 2022-11-28`

@@ -127,7 +127,6 @@
     "status": "completed",
     "tag": "v0.3.0",
     "workflow_path": ".github/workflows/release-please.yml",
-    "workflow_ref": "refs/tags/v0.3.0",
     "workflow_run": {
       "actor": {
         "avatar_url": "https://avatars.githubusercontent.com/u/28652?v=4",
