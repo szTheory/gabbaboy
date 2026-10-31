@@ -45,6 +45,10 @@ Status: observed / reproduced / adopted / superseded
 | XFER-015 | Decide the closeout and freshness policy before work starts, not after verification goes stale (muhtari `GSD-HANDOFF.md`, cogmaster `GSD-HANDOFF.md`) | D-103: re-verify at the exact final head and aim for a verified closeout | Adopted, with GabbaBoy's stricter variant |
 | XFER-016 | Duplicate lesson ids go unnoticed without a check (schwaystation `policy.lessons_unique`). GabbaBoy had GB-FIXTURE-001 three times and GB-TEST-001 twice (renumbered in Phase 16: the later duplicates are now GB-FIXTURE-003, GB-FIXTURE-004 and GB-TEST-007) | Phase 16: renumber the duplicates and add a uniqueness test | Imported; implemented in Phase 16 (`lessons_unique_ids`) |
 | XFER-017 | A rolling product roadmap with stable ids, statuses, promotion triggers and a snapshot at each close keeps milestones scoped (nesturbator `v3-PRODUCT-ROADMAP.md`, muhtari `v1.0-PRODUCT-ROADMAP.md`) | FUTURE-MILESTONES.md revision 3 | Adopted |
+| XFER-018 | Muhtari MU-GSD-014 at `7b83b3b` distinguishes summarized slots, accepted outcomes and historical task counts; an aggregate can miscount completion | Audit actual requirements/outcomes and immutable source evidence; preserve the halted 19-06 snapshot and reconcile it through later accepted records | Observed sibling mechanism; applied in the v0.3 audit |
+| XFER-019 | Playstead Phase 16 lessons at `bcd93b6` require a failure-path remedy and tests of the real default I/O provider, not only injected providers | Preserve real host filesystem, signal, rollback and installed-package continuation checks; a software remedy is implementable work, not an external prerequisite | Source-inspected; GabbaBoy host/slot controls provide local evidence |
+| XFER-020 | Cogmaster XFER-078 at `1336d3f` records configure-time revision staleness; the current audit reproduced it in state_fuzz_controls after a documentation commit | Reconfigure/build/install before final-head verification; retain the original failure instead of weakening the immutable revision check | Reproduced locally; final suite evidence in v0.3 milestone audit |
+| XFER-021 | Glueyneo methodology at `b96c78d`, Nesturbator active-core lessons at `89a042b` and Genewhip seam analysis at `18df6d7` separate retained records, fresh execution and product/model claims | Reuse adequate unchanged evidence, distinguish oracle/gate failures from core defects, and scope future game observations to model/scene/source | Observed; confirms D-069/D-103 and existing evidence classes |
 
 The implementation and planning lessons follow; retain their distinct evidence classes.
 
@@ -668,6 +672,7 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** Every verify-work handoff, future phase planning and SUMMARY authoring. Only true perceptual, physical-hardware, credential and owner-decision limits may require the smallest necessary owner action. A qualified unsupported behavior outside the adopted scope is a recorded limit, not invented manual UAT.
 - **Verification:** `12-UAT.md` records 73 automated passes, zero human checkpoints and no gaps. `verify-uat-contract.py --self-test` rejects nine missing/weaker/misrouted closure mutations; `summary_coverage` and its twelve schema mutants remain recurring CI gates. All 19 bounded commit windows reconcile after the SHA correction.
 - **Phase 13 reuse (2026-10-15):** 45/45 deliverables close automatically; `13-UAT.md` retains the exact mapping and `verify-uat-contract.py --self-test` rejects 17 weaker records, including unparsed human checkpoints. Canonical completed-stage parsing rejects contradictory or stale handoffs. Preserve the next command `/gsd-discuss-phase 14`, and reopen only changed covered behavior or evidence. Existing recurring CI stays in place; local GSD closure adds no duplicate hosted lane.
+- **Phase 19 reuse (2026-10-31):** 39/39 deliverables close automatically after 184 focused tests, installed-host smoke, immutable requirement positive/original-base negative and live release identity reconciliation; the shared closure rejects 21 weakened records. Preserve the historical halted 19-06 SUMMARY and use its later 19-07/08/final-audit outcomes. Original task counts reconcile through recorded squash merges. CI/CD efficiency is now an explicit active/finished-run and release-handoff procedure in WORKFLOW.md, reached from AGENTS.md and INDEX.md; the UAT records measured timing and a bounded duplicate-self-test candidate. Reopen only changed covered evidence or concrete failures, and stop before `/gsd-audit-milestone`.
 - **Source:** Phase 12 verify-work and renewed owner automation directive; DECISIONS D-069, GB-GSD-014 and GB-GSD-015.
 - **Status:** Adopted. Reopen only for a concrete new regression, changed covered behavior, stale/unavailable evidence, or an owner scope change.
 
@@ -1025,3 +1030,37 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** D134 source d2c0dc95 passes eight existing affected CTests, preserves all baseline assertions/timeouts and receives fresh independent code/security rechecks. Production probes reject malformed versions and incorrect workload digests; the unsupported legacy hardening finding was withdrawn with evidence.
 - **Source:**19-SCHEMA-VALIDATION-RESCOPE.md,19-REVIEW.md and19-REVIEW-DISPOSITION.md.
 - **Status:** Adopted.
+
+### GB-CI-016 / 2026-10-31 / Keep immutable Git paths and checkout byte identity explicit
+
+- **Cause and evidence:** Final release readback passed a filesystem-absolute path to an immutable Git reader. Native Windows correctly refused its drive-prefixed path. A separate helper byte guard refused an unpinned CRLF checkout although the helper source blob was unchanged.
+- **Remedy:** Derive the Git path relative to the repository from the configured phase root, retaining the immutable revision and path refusals. Pin only the exact byte-compared helper to LF; preserve the byte guard and an unpinned line-ending negative rather than normalizing away the mismatch.
+- **Applies when:** CMake passes configurable paths into Git-tree readers, or tests execute helpers whose working-tree bytes must equal their immutable blobs across platforms.
+- **Verification:** Forced-autocrlf baseline/fixed controls distinguish the defect; wrong paths and changed helper bytes still reject. Both native Windows jobs at the reviewed PR137 source pass the readback, recovery and independent APU EOL negative. The guarded squash retains that source tree.
+- **Source:**19-WINDOWS-READBACK-WIRING-RESCOPE.md; PR137 qualification and ignored posttag-recovery/d136-hosted-native evidence.
+- **Status:** Adopted.
+
+### GB-CI-017 / 2026-10-31 / Publish readiness files only after their contents are complete
+
+- **Cause and evidence:** The installed-consumer interruption test treated marker existence as readiness while its child wrote JSON directly to that name. Linux sanitizer CI caught the creation-to-write window and raised JSONDecodeError on an empty marker; the checker was unchanged from the release source.
+- **Remedy:** Write the complete marker to a unique sibling temporary, then replace the ready name atomically and clean up any remaining temporary. Preserve the real interruption, lock, cleanup and retry assertions and every deadline. Use deterministic empty/partial-write scheduling points instead of hoping repeated runs hit the race.
+- **Applies when:** A parent process polls for a child-produced readiness file and immediately parses its payload. Atomic publication makes name visibility the completion signal without sleeps or weaker assertions.
+- **Verification:** The controlled probe reproduces the exact empty-JSON failure; the regression rejects the exact original writer and passes the atomic writer. Both complete consumer halves, both native Windows jobs and both native Linux sanitizer test shards pass at the reviewed source. PR137 merged only after every protected check and downloaded-package gate passed.
+- **Source:**19-CONSUMER-MARKER-RESCOPE.md;19-REVIEW.md; ignored consumer-marker-prep, consumer-marker-local and d136-hosted-native evidence.
+- **Status:** Adopted.
+
+
+## v0.3 milestone-boundary exchange / 2026-10-31
+
+The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSONS.md) records committed revisions, applicability, limits and a concise outgoing transfer. All six sibling cores plus Playstead were checked; Earthbound was an additional recent CI/history check. No sibling was modified or executed. Reuse the original kickoff hardware/state design research; these additions concern evidence accounting, real-provider failures and build freshness. No imported lesson establishes another console's behavior or live Playstead compatibility.
+
+## v0.3 archival input correction / 2026-10-31
+
+- **Cause and evidence:** Archival inspection found two existing CTest inputs still under the live phase-root variable: the Phase 16 disposition ledger and Phase 19 readback. A pure phase move would leave the first missing at runtime and the second missing at the configured Git revision.
+- **Remedy:** Point both existing inputs and the disposition ledger's receipt paths at the named v0.3 archive root; retain repository-relative Git path derivation, immutable-revision reads, existing assertions and negative controls. Keep the future live SUMMARY sweep.
+- **Applicability:** Milestone archives that move test-consumed records; historical boundary checks continue reading their original commits.
+- **Verification contract:** Pre/post archive manifests preserve every SUMMARY/VERIFICATION byte; removed-summary and mutated-report controls fail. The existing disposition/readback checks and their controls must pass after committing the archive and reconfiguring at that exact revision.
+
+- **Additional archival evidence:** The plan-cap gate rejected a deliberately collapsed roadmap, and the deferral omission control removed only one copy of a now-repeated marker. Read the matching archive only at an explicit completed boundary in the same commit with no active requirements/plans; reject missing archives and over-cap fixtures. Remove all marker copies for the omission mutant, with a repeated-marker positive twin. These changes extend the existing CTest checks rather than creating a new workflow.
+
+- **Clean-checkout correction:** The first push CMake-floor run failed only `summary_coverage_live`: the local empty phase directory survived the move, but Git does not preserve empty directories. Track a `.gitkeep` placeholder, treat only that exact marker as empty in the immutable plan-cap reader, and exercise the clean archive checkout before retrying CI. No missing-directory or live-plan refusal is weakened.

@@ -1,5 +1,30 @@
 # Milestones
 
+## v0.3 Save States & Host Contract (Shipped: 2026-10-31)
+
+**Delivered:** Exact-continuation native save states, numbered player slots, a safe POSIX host-process contract, v0.2 delivery-debt closure, and the qualified v0.3.0 release.
+
+**Phases completed:** 4 phases (16–19), 35 plans, 105 recorded actual tasks.
+**Closeout type:** override_closeout, explicitly selected by the owner on 2026-10-31. All 17 requirements are satisfied; audit `tech_debt`, integration 9/9 and flows 8/8. Phases 16–18 retain their original passed boundary reports despite the runtime projecting stale covered-file digests. Final implementation-head qualification and all four automated UAT closures are retained.
+**Known verification overrides:** 1 newly acknowledged, 1 carried forward. The newly acknowledged standalone closeout-scan self-test still fails two cases outside CTest; the carried-forward Phase 14 clean-review acknowledgment remains disclosed.
+**Known deferred items:** nine nonblocking audit debts plus the standalone helper failure (ten items); prior clean-review suppression is scanner bookkeeping, not additional product debt. [Exact dispositions](milestones/v0.3-CLOSEOUT.md).
+
+**Key accomplishments:**
+- Closed v0.2 release debt, archived its phase records, wired dormant checks, and added cumulative performance and CI/planning-budget gates; published v0.2.1.
+- Added bounded portable native state APIs with transactional rejection and exact DMG/CGB continuation, including in-flight devices, RTC and cartridge RAM.
+- Proved state completeness and continuation with corpus forks, field-omission mutants, hostile-load fuzzing and cross-platform canonical pins.
+- Added numbered player slots, undo, failure-safe loading and input re-anchoring through the public API.
+- Added atomic raw saves, bounded imports, periodic flush, frame-boundary SIGTERM save-and-exit, exit codes and machine-readable save formats to the host runner.
+- Published v0.3.0 with scoped model/corpus/platform claims, exact-source receipts and a reconciled 22-asset readback; preserved the failed initial release and separately approved recovery.
+
+**Stats:** 2026-10-24 → 2026-10-31 (8 calendar days), 32 commits through the audit head; 993 changed files, +290,082/−1,833 lines, dominated by evidence and fixtures. C source/headers under src/ and include/: 18,631 lines. Git range: v0.2 → 18a487a3. Task total comes from all 35 SUMMARY actuals records; the runtime reports 93 from body-text heuristics. Historical summaries, including frozen 19-06, are unchanged and task counts are not acceptance evidence.
+
+**Archive:** [roadmap](milestones/v0.3-ROADMAP.md) · [requirements](milestones/v0.3-REQUIREMENTS.md) · [audit](milestones/v0.3-MILESTONE-AUDIT.md) · [integration audit](milestones/v0.3-INTEGRATION-AUDIT.md) · [phases](milestones/v0.3-phases/) · [state history](milestones/v0.3-STATE-ARCHIVE.md).
+
+**Next:** proposed v0.4 Evidence Floor, not started. Owner-selected command: `/gsd-new-milestone`; fresh requirements and phases are defined there.
+
+---
+
 ## v0.2 Color & Cartridge Breadth (Shipped: 2026-10-24)
 
 **Delivered:** One rights-clear DMG game (Libbet) proven end to end, both headless and in the packaged player, against a frozen DMG-CPU-B regression baseline. MBC5, MBC2 and MBC3 cartridges were added, with a deterministic emulated-time RTC and a versioned battery block. One CGB silicon revision (CGB-CPU-E) runs in CGB and DMG-compatibility modes, with colour rendering, double speed and HDMA. All of it was published as the corpus- and model-qualified `v0.2.0` release.

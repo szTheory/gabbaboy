@@ -12,6 +12,8 @@ error-code prefixes, so a control can pin the failure class instead of "some err
       most four phases (D-24, D-102, WR-05). One slot of every cap is reserved for the single gap round: plans that
       do not declare `gap_closure: true` may number at most cap - 1. With --rev the ROADMAP and the plan names
       are read from that full commit id with git, never from the working tree (a symbolic revision is refused).
+      At an explicitly completed milestone with no active requirements or phase records, the matching
+      archived roadmap and plan tree are read from the same commit; incomplete live roadmaps still fail.
       The phases directory is an argument: no default path. Prints "plan-cap pass phases=N plans=M".
   --check lessons-ids --lessons PATH
       "### ID / ..." is the only lesson heading form and ids compare as exact tokens; an id may appear once.
@@ -143,18 +145,43 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree]:
     found = git_run(repo, "cat-file", "-t", rev)
     if found.returncode != 0 or found.stdout.strip() != b"commit":
         raise SystemExit(f"plan-cap-rev: {rev} is not a commit in {repo}")
-    roadmap = git_run(repo, "show", f"{rev}:.planning/ROADMAP.md")
+    roadmap_path = ".planning/ROADMAP.md"
+    phases_path = PHASES_AT_REV
+    roadmap = git_run(repo, "show", f"{rev}:{roadmap_path}")
     if roadmap.returncode != 0:
-        raise SystemExit(f"plan-cap-rev: .planning/ROADMAP.md cannot be read at {rev}")
-    listing = git_run(repo, "ls-tree", "-r", "--name-only", "-z", rev, "--", PHASES_AT_REV)
+        raise SystemExit(f"plan-cap-rev: {roadmap_path} cannot be read at {rev}")
+    listing = git_run(repo, "ls-tree", "-r", "--name-only", "-z", rev, "--", phases_path)
     if listing.returncode != 0:
-        raise SystemExit(f"plan-cap-rev: {PHASES_AT_REV} cannot be listed at {rev}")
+        raise SystemExit(f"plan-cap-rev: {phases_path} cannot be listed at {rev}")
+    # A collapsed roadmap is legitimate only at the recorded milestone boundary. Never
+    # hide an incomplete active roadmap by falling back to a previous archive.
+    active_paths = [path for path in listing.stdout.split(b"\0") if path]
+    placeholder = (PHASES_AT_REV + "/.gitkeep").encode("utf-8")
+    if phase_details(roadmap.stdout.decode("utf-8")) is None and active_paths in ([], [placeholder]):
+        state = git_run(repo, "show", f"{rev}:.planning/STATE.md")
+        requirements = git_run(repo, "ls-tree", "--name-only", rev, "--", ".planning/REQUIREMENTS.md")
+        state_text = state.stdout.decode("utf-8", errors="strict") if state.returncode == 0 else ""
+        frontmatter = GAP_FRONTMATTER.match(state_text)
+        fields = frontmatter.group(1) if frontmatter else ""
+        versions = re.findall(r"^milestone: (v[0-9]+\.[0-9]+)$", fields, re.MULTILINE)
+        statuses = re.findall(r"^status: (.+)$", fields, re.MULTILINE)
+        if statuses == ["milestone_completed"] and len(versions) == 1 and requirements.returncode == 0 and not requirements.stdout:
+            base = f".planning/milestones/{versions[0]}"
+            roadmap_path = base + "-ROADMAP.md"
+            phases_path = base + "-phases"
+            roadmap = git_run(repo, "show", f"{rev}:{roadmap_path}")
+            if roadmap.returncode != 0:
+                raise SystemExit(f"plan-cap-rev: archived roadmap {roadmap_path} cannot be read at {rev}")
+            listing = git_run(repo, "ls-tree", "-r", "--name-only", "-z", rev, "--", phases_path)
+            if listing.returncode != 0:
+                raise SystemExit(f"plan-cap-rev: {phases_path} cannot be listed at {rev}")
+    prefix = phases_path.split("/")
     tree: PlanTree = {}
     for raw in listing.stdout.split(b"\0"):
         parts = raw.decode("utf-8", errors="replace").split("/")
-        if len(parts) != 4 or parts[:2] != PHASES_AT_REV.split("/"):
+        if len(parts) != len(prefix) + 2 or parts[:len(prefix)] != prefix:
             continue
-        directory, name = parts[2], parts[3]
+        directory, name = parts[-2], parts[-1]
         files = tree.setdefault(directory, {})
         if PLAN_FILE.match(name):
             def reader(path: str = "/".join(parts)) -> str:
@@ -492,7 +519,7 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
 
         normalized = " ".join(live_text.split())
         for pin in DEFERRAL_PINS:
-            mutant = normalized.replace(pin, "", 1)
+            mutant = normalized.replace(pin, "")
             if mutant == normalized:
                 raise SystemExit(f"planning-hygiene self-test FAIL: deferral pin mutant was not seeded: {pin}")
             _, errors = check_deferrals(mutant)
@@ -500,6 +527,15 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
             if errors != [expected]:
                 raise SystemExit(f"planning-hygiene self-test FAIL: omission of {pin!r} gave {errors}")
             controls += 1
+
+        duplicated = normalized + " RM-032"
+        _, errors = check_deferrals(duplicated)
+        if errors:
+            raise SystemExit(f"planning-hygiene self-test FAIL: duplicate identifier rejected: {errors}")
+        _, errors = check_deferrals(duplicated.replace("RM-032", ""))
+        if errors != ["deferral-unrecorded: RM-032"]:
+            raise SystemExit(f"planning-hygiene self-test FAIL: duplicate identifier omission: {errors}")
+        controls += 2
 
         unrelated = normalized + " unrelated roadmap note for a positive twin"
         positive_twin = unrelated.replace(" unrelated roadmap note for a positive twin", "", 1)
@@ -597,6 +633,39 @@ def self_test_plan_cap_rev(base: Path) -> int:
             or "plan-cap-exceeded" not in outputs[1].getvalue():
         raise SystemExit(f"planning-hygiene self-test FAIL: --rev through the CLI: {ok_exit} {bad_exit} {outputs[0].getvalue()} {outputs[1].getvalue()}")
     controls += 2
+
+    # The same immutable reader must follow a completed archive, while a missing
+    # archive, an active requirement or leftover live plan cannot mask an invalid roadmap.
+    git("checkout", "-q", good_rev)
+    archive_root = ".planning/milestones/v0.3"
+    archive_files = {archive_root + "-ROADMAP.md": good[".planning/ROADMAP.md"],
+                     PHASES_AT_REV + "/.gitkeep": "",
+                     ".planning/ROADMAP.md": "# Roadmap\n\n## Milestones\n\nv0.3 shipped.\n",
+                     ".planning/STATE.md": "---\nmilestone: v0.3\nstatus: milestone_completed\n---\n"}
+    for name, content in good.items():
+        if name.startswith(PHASES_AT_REV + "/"):
+            archive_files[archive_root + "-phases/" + name[len(PHASES_AT_REV) + 1:]] = content
+    git("rm", "-q", "-r", PHASES_AT_REV)
+    archived_rev = commit(archive_files, "archive completed milestone")
+    expect_rev("completed archive", archived_rev, None)
+    # Dirty live files and the current checkout must never replace committed boundary facts.
+    (repo / ".planning/ROADMAP.md").write_text("broken working tree", encoding="utf-8")
+    expect_rev("archive ignores working-tree roadmap", archived_rev, None)
+    git("checkout", "-q", "--", ".planning/ROADMAP.md")
+    active_req_rev = commit({".planning/REQUIREMENTS.md": "active requirement\n"}, "active requirements cannot use archive")
+    expect_rev("active requirements cannot fall back to archive", active_req_rev, "plan-cap-vacuous")
+    git("checkout", "-q", archived_rev)
+    live_plan_rev = commit({dir17 + "17-01-PLAN.md": PRIMARY_FRONTMATTER_TEXT}, "leftover live plan")
+    expect_rev("live phase records cannot fall back to archive", live_plan_rev, "plan-cap-vacuous")
+    git("checkout", "-q", archived_rev)
+    git("rm", "-q", archive_root + "-ROADMAP.md")
+    git("commit", "-q", "-m", "missing archive roadmap")
+    refused("missing archive roadmap", git("rev-parse", "HEAD"), "archived roadmap")
+    git("checkout", "-q", archived_rev)
+    over_cap_archive_rev = commit({archive_root + "-ROADMAP.md": roadmap_text([("16", "8"), ("17", "2")])},
+                                  "archived plans exceed cap")
+    expect_rev("archive still enforces plan cap", over_cap_archive_rev, "plan-cap-exceeded")
+    expect_rev("earlier archive stays valid", archived_rev, None)
     return controls
 
 

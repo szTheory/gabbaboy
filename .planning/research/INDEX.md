@@ -6,6 +6,8 @@ Updated: 2026-10-26. Target: original C Game Boy / Game Boy Color core. These do
 
 Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initial DMG proposal, reconciled conflicts and open evidence gaps. [PROJECT.md](../PROJECT.md) defines product intent; [BRIEF.md](../context/BRIEF.md) preserves owner priorities; [WORKFLOW.md](../context/WORKFLOW.md) defines authorization and mandatory phase pauses. [DECISIONS.md](../context/DECISIONS.md) distinguishes adopted constraints from recommendations. [ROADMAP.md](../ROADMAP.md) is active milestone scope and [FUTURE-MILESTONES.md](../context/FUTURE-MILESTONES.md) is revisable direction; research proposals do not automatically add work.
 
+CI runs, workflow changes and release/CD handoffs must apply [CI/CD efficiency](../context/WORKFLOW.md#cicd-efficiency). D-069 remains the standing zero-routine-human-UAT policy; completed unchanged closures are reused.
+
 ## v0.3 Save States & Host Contract research (2026-10-24)
 
 Milestone research lives in [v0.3/](v0.3/). Start with [v0.3/SUMMARY.md](v0.3/SUMMARY.md), which covers the reconciled scope, the conflicts and the adopted process caps. The supporting reports are:
@@ -16,12 +18,13 @@ Milestone research lives in [v0.3/](v0.3/). Start with [v0.3/SUMMARY.md](v0.3/SU
 - [delivery velocity and carry-over](v0.3/DELIVERY-VELOCITY.md);
 - [long-term horizons](v0.3/ROADMAP-HORIZONS.md);
 - the [adversarial review](v0.3/ADVERSARIAL-REVIEW.md).
+- the [milestone-boundary sibling/Playstead scan](v0.3/MILESTONE-BOUNDARY-LESSONS.md) (2026-10-31), with immutable observations and a prepared local outgoing transfer.
 
 Sibling observations stay evidence about other projects until a GabbaBoy check reproduces them.
 
-Phase 17 discussion adopted the reconciled [Native Save State Core context](../phases/GB-17-native-save-state-core/17-CONTEXT.md), recorded as D-113. It supersedes the old state proposal's advisory behavior revision, CRC-only ROM identity, palette exclusion, section framing and earlier phase split. It also resolves host-counter comparison and time-horizon closure contradictions, and names the inherited RM-026/028/029/030 release-tooling work. Reuse the research above; planning researches only the concrete gates in that context. This is a completed discussion, not implemented save-state evidence.
+Phase 17 discussion adopted the reconciled [Native Save State Core context](../milestones/v0.3-phases/GB-17-native-save-state-core/17-CONTEXT.md), recorded as D-113. It supersedes the old state proposal's advisory behavior revision, CRC-only ROM identity, palette exclusion, section framing and earlier phase split. It also resolves host-counter comparison and time-horizon closure contradictions, and names the inherited RM-026/028/029/030 release-tooling work. Reuse the research above; planning researches only the concrete gates in that context. This is a completed discussion, not implemented save-state evidence.
 
-Phase 17 planning is complete: [source-grounded research](../phases/GB-17-native-save-state-core/17-RESEARCH.md), [pattern map](../phases/GB-17-native-save-state-core/17-PATTERNS.md), [source audit and wave graph](../phases/GB-17-native-save-state-core/17-SOURCE-AUDIT.md), [validation contract](../phases/GB-17-native-save-state-core/17-VALIDATION.md) and [independent plan check](../phases/GB-17-native-save-state-core/17-PLAN-CHECK.md) define 11 plans / 32 tasks / 11 waves. Research pins the 64-byte header and prototypes the time horizon; permanent size/audio/closure proofs precede codec acceptance. All six STATE requirements and RM-026/028/029/030 are planned; RM-027 remains a Phase 19 entry blocker. This is planning evidence only. Next stage: **Phase 17 — Native Save State Core, execution**, `/gsd-execute-phase 17`; both auto flags remain false.
+Phase 17 planning is complete: [source-grounded research](../milestones/v0.3-phases/GB-17-native-save-state-core/17-RESEARCH.md), [pattern map](../milestones/v0.3-phases/GB-17-native-save-state-core/17-PATTERNS.md), [source audit and wave graph](../milestones/v0.3-phases/GB-17-native-save-state-core/17-SOURCE-AUDIT.md), [validation contract](../milestones/v0.3-phases/GB-17-native-save-state-core/17-VALIDATION.md) and [independent plan check](../milestones/v0.3-phases/GB-17-native-save-state-core/17-PLAN-CHECK.md) define 11 plans / 32 tasks / 11 waves. Research pins the 64-byte header and prototypes the time horizon; permanent size/audio/closure proofs precede codec acceptance. All six STATE requirements and RM-026/028/029/030 are planned; RM-027 remains a Phase 19 entry blocker. This is planning evidence only. Next stage: **Phase 17 — Native Save State Core, execution**, `/gsd-execute-phase 17`; both auto flags remain false.
 
 ## v0.2 Color & Cartridge Breadth research (2026-10-10)
 
@@ -41,6 +44,8 @@ Milestone delta research lives in [v0.2/](v0.2/): start with [v0.2/SUMMARY.md](v
 | How do CI, release, safety, performance and adoption evidence work? | [QUALITY-AND-DELIVERY.md](QUALITY-AND-DELIVERY.md) | [ASan](https://clang.llvm.org/docs/AddressSanitizer.html), [UBSan](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html), [GitHub tokens](https://docs.github.com/en/actions/concepts/security/github_token), [required checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks), [Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow) |
 
 ## Current phase evidence
+
+- **v0.3 milestone complete and archived (2026-10-31):** [closeout](../milestones/v0.3-CLOSEOUT.md) records the owner-approved freshness override and retained debt; [audit](../milestones/v0.3-MILESTONE-AUDIT.md), [integration](../milestones/v0.3-INTEGRATION-AUDIT.md) and [boundary lessons](v0.3/MILESTONE-BOUNDARY-LESSONS.md) retain evidence. Next owner-selected command: `/gsd-new-milestone` for proposed v0.4 Evidence Floor. No new phase or milestone has started.
 
 - **Phase 13 verification refresh (2026-10-20):** [goal verification](../phases/GB-13-cgb-hdma/13-VERIFICATION.md) passes 37/37; [gate supplement](../phases/GB-13-cgb-hdma/13-REFRESH-GATES.md) records current evidence and retained debt; [canonical UAT](../phases/GB-13-cgb-hdma/13-UAT.md) closes 45 automated rows with 19 controls. Core 1,144/1,144 and player 98/98 pass; no new hosted/hardware claim. Next owner-selected command: `/gsd-execute-phase 14` for Phase 14 — CGB-E Model Qualification and Corpus, verification refresh only. Historical phase entries below retain their original scope.
 

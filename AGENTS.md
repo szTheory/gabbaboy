@@ -19,6 +19,7 @@ GabbaBoy targets **Game Boy and Game Boy Color**. Copied NES/Neo Geo/Elixir exam
   - Checkers live in `tests/scripts/`, read an immutable commit and are wired into CTest when created.
   - Re-verify once at the final head rather than refreshing each phase.
 - At every milestone boundary, scan the sibling emulator cores and Playstead for transferable lessons (LESSONS.md XFER rows), then refresh the rolling roadmap in `.planning/context/FUTURE-MILESTONES.md`.
+- During CI runs and CI/release handoffs, follow [CI/CD efficiency](.planning/context/WORKFLOW.md#cicd-efficiency): assess measured bottlenecks and recurring automation value while preserving required coverage and release gates.
 - Use phase branches and PRs when a remote exists. Merge only the reviewed/tested revision with required checks satisfied; never treat skipped checks, stale runs, or a local pass as proof that a remote revision is green. Do not bypass branch protection.
 - Keep main releasable; update source, API docs, examples, tests, and limitation notes together. Triage open issues/PRs at phase and release boundaries; record access failures honestly.
 - Before marking work complete, inspect its current verification evidence, release/consumer evidence where relevant, and requirement traceability. An earlier agent's completion claim is not sufficient evidence.

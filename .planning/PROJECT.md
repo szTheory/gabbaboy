@@ -2,22 +2,28 @@
 
 ## What This Is
 
-GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game Boy Color (CGB), with an integration path for Playstead and other frontends. It runs a bootless DMG preview and model-qualified CGB software with colour, double-speed switching and general/HBlank VRAM DMA through the same bounded public API that external consumers use. MBC1/2/3/5 cartridges, deterministic RTC, scoped four-channel audio and safe battery continuation are implemented. An optional SDL3 macOS player ships with it. Broad game compatibility, physical hardware qualification, further timing qualification and save states remain future work.
+GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game Boy Color (CGB), with an integration path for Playstead and other frontends. It runs a bootless DMG preview and model-qualified CGB software with colour, double-speed switching and general/HBlank VRAM DMA through the same bounded public API that external consumers use. MBC1/2/3/5 cartridges, deterministic RTC, scoped four-channel audio and safe battery continuation are implemented. An optional SDL3 macOS player ships with it. Exact-continuation native save states, player save slots and the POSIX host-process runner contract ship in v0.3.0. Broad game compatibility, physical hardware qualification, further timing qualification and live Playstead integration remain future work.
 
 ## Current State
 
-**Shipped: v0.2 Color & Cartridge Breadth** (milestone closed 2026-10-24; release [`v0.2.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.2.0) published from tag source `ab301aa`, unsigned and not notarized). 10 phases (7–15 plus inserted 15.1), 170 plans, 28/28 requirements. The audit is `tech_debt` with no blockers: integration 14/15, flows 6/6, all phases Nyquist-compliant. Closeout type is `override_closeout`, because the runtime reports Phase 7–15 verification files as stale after later phases changed covered files; the re-audit at `5356d38` re-ran that evidence. Record: [MILESTONES.md](MILESTONES.md); archive: [roadmap](milestones/v0.2-ROADMAP.md), [requirements](milestones/v0.2-REQUIREMENTS.md), [audit](milestones/v0.2-MILESTONE-AUDIT.md).
+**Shipped and archived: [v0.3.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.3.0), Save States & Host Contract.** Four phases and 35 plans satisfy all 17 requirements. The [milestone audit](milestones/v0.3-MILESTONE-AUDIT.md) remains `tech_debt`; the owner accepted a documented closeout override for three stale historical phase projections and retained nonblocking debt, including the standalone closeout helper failure. See [closeout](milestones/v0.3-CLOSEOUT.md).
 
-- **Supported (software model, tested corpus only):** bootless DMG-CPU-B and CGB-CPU-E in CGB and DMG-compatibility modes; ROM-only, MBC1, MBC2, MBC3 (with emulated-time RTC and explicit host catch-up) and MBC5; RGB555 colour, KEY1 double speed, general/HBlank HDMA; scoped four-channel audio; safe battery continuation; optional SDL3 macOS player with `--model`.
-- **Evidence scope:** one rights-clear DMG game (Libbet v0.08) at game level; no CGB game-level evidence exists, and the release says so. CGB corpus: 107 cases, 25 guest passes and 82 matched expected failures. Physical DMG-B and CGB-E hardware, perceptual output, signing and notarization, and live Playstead integration are not claimed. The hosted DMG paired benchmark is slower than v0.1.0 (+14.86% ±1.62% at the v0.2.0 release; the Phase 15.1 provenance-bound comparison confirms a disclosed 23.96% median slowdown).
-- **Code:** 14,644 lines of C in `src/` + `include/` (54,384 lines of tracked C/C++ in total); 1,183 registered CTest cases plus 5 install-gated; required CI on Linux, macOS and Windows (MinGW-w64).
-- **Open at close:** 0 open issues. 16 untriaged PRs: #75 (release-please 0.2.1) and #78–92. The twelve LIM rows need owner decisions (none accepted), and the hosted release rehearsal is still `not_verified`. Phase 16 moved the Phase 7–15.1 records to `.planning/milestones/v0.2-phases/`; tests read them there.
+The release adds bounded transactional native save/load with exact continuation, numbered player slots and the POSIX raw-save/SIGTERM/exit-code host contract. It remains a bootless software preview for tested DMG-CPU-B and CGB-CPU-E modes/corpus. Physical hardware, perceptual output, general compatibility, cross-emulator save interoperability and live Playstead integration are unqualified; packages are unsigned and not notarized.
 
-## Current Milestone: v0.3 Save States & Host Contract
+The final implementation-head audit passed its full suite without failures/skips; boundary main CI and all 22 published asset identities/digests reconciled. These are source-bound observations, not a claim that archival itself reran hosted release producers. Original failed release attempts and boundary verification reports remain unchanged.
+
+## Next Milestone Goals
+
+**Proposed v0.4 — Evidence Floor**, not started: first CGB game-level evidence or a justified absence, rights-cleared font-substituted acid2 derivatives, and gbmicrotest admission. Fixture rights and game selection remain kickoff decisions. Use `/gsd-new-milestone` when the owner chooses; fresh requirements and numbered phases will be defined there. No Phase 20 exists yet. Both automatic-advance flags remain false.
+
+<details>
+<summary>Completed v0.3 scope and kickoff context</summary>
+
+## Completed Milestone: v0.3 Save States & Host Contract
 
 **Goal:** Add exact-continuation native save states to the core and player, and make the runner safe to drive as a host process, after first paying down the v0.2 delivery debt.
 
-**Target features:**
+**Delivered features:**
 - **Tune-up (first):** move test-consumed helpers out of phase directories, then archive the v0.2 phase records; wire the Phase 8 verifiers; close superseded PRs #78–92; attribute the DMG slowdown and gate it cumulatively against `v0.2.0`; CI hygiene; ship v0.2.1 from PR #75 once its blockers clear.
 - **STATE-01 save states:** transactional, versioned (same-version only before 1.0), explicit portable serialization of the complete DMG+CGB machine, including in-flight state, with exact continuation equivalence.
 - **Player save slots** over the public state API.
@@ -28,6 +34,8 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 - Scope came from a seven-lens fan-out (five sibling cores, Playstead, save-state primary sources, GabbaBoy's own delivery data) plus an adversarial review. The evidence is in [research/v0.3/](research/v0.3/).
 - The Playstead pin and continuation protocol (INT-01b), mGBA/BGB RTC footer interop and libretro are parked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md), each with a promotion trigger.
 - Process caps adopted at kickoff (D-102–D-106): at most 4 phases and about 40 plans per milestone; at most 12 plans per phase; at most 2 review-fix rounds and 1 gap round per phase.
+
+</details>
 
 <details>
 <summary>v0.2 phase-by-phase state history (superseded)</summary>
@@ -102,16 +110,16 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 - ✓ Release hardening and milestone debt closure without republishing v0.2.0: closeout scan and disposition ledgers, point-in-time boundary verifiers, automated UAT closure and Nyquist validation 82/82 (EVID-02, SHIP-09..11 re-verified) — Phase 15.1; the twelve LIM rows remain owner decisions. All 28 v0.2 requirements validated — v0.2.
 
-- ✓ Tune-up and v0.2 debt closure: v0.2 phase records archived behind a phase-path lint, Phase 8 verifiers in CTest, a cumulative DMG Ir performance gate against v0.2.0, CI budget and planning-hygiene checks, and the v0.2.1 patch release (TUNE-01..06). Phase 16: goal verification 5/5, automated UAT 51/51, security 0 open threats. Two release gates that 16-07 planned were replaced by one-time checks under D-112; building them is an RM-030 item that must be done before the next release.
+- ✓ Tune-up and v0.2 debt closure: v0.2 phase records archived behind a phase-path lint, Phase 8 verifiers in CTest, a cumulative DMG Ir performance gate against v0.2.0, CI budget and planning-hygiene checks, and the v0.2.1 patch release (TUNE-01..06). Phase 16: goal verification 5/5, automated UAT 51/51, security 0 open threats. The D-112 one-time gate substitutions were followed by production gate implementation in Phases 17–19; RM-030 is delivered.
+
+- ✓ Transactional native save states and exact-continuation/portability/completeness controls (STATE-01..06) — v0.3, Phases 17–19.
+- ✓ Player save slots through the public state API (PLAY-01) — v0.3, Phase 18.
+- ✓ POSIX host runner with atomic raw saves, SIGTERM save-and-exit, exit-code table and declared formats (HOST-01..03 / INT-01a) — v0.3, Phases 18–19.
+- ✓ Qualified tag-bound v0.3.0 publication, scoped claims and reconciled release receipts (REL-01) — v0.3, Phase 19.
 
 ### Active
 
-v0.3 Save States & Host Contract. The full list with REQ-IDs is in [REQUIREMENTS.md](REQUIREMENTS.md).
-
-- [ ] STATE-01: transactional, versioned native save states with exact continuation equivalence
-- [ ] Player save slots over the public state API
-- [ ] INT-01a: a host-process runner contract (raw `.sav`, SIGTERM save-and-exit, exit codes)
-- [ ] A qualified v0.3.0 release
+None selected. All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). The next milestone will define fresh requirements after the owner invokes `/gsd-new-milestone`.
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
@@ -175,6 +183,11 @@ Ongoing project principles: dependency-light C API with explicit contracts; head
 | Keep v0.2 phase records in place at milestone close | CTest and closeout verifiers read helper scripts and records in `.planning/phases/`; moving them would break main | ⚠️ Superseded by Phase 16 archive — the records moved to `.planning/milestones/v0.2-phases/`, readers were retargeted and a phase-path lint guards the tree |
 | Second debt-closure phase (15.1) before v0.2 archival | The post-release audit found actionable closeout debt; owner-only LIM decisions stayed explicit rather than silently accepted | ✓ Good — re-audit `tech_debt` with no blockers; 12 LIM rows still need owner decisions |
 
+| Exact native continuation with transactional state validation | Serialized bytes include in-flight machine state; refused loads must not partially apply | ✓ Good — v0.3 fork matrix, omission mutants, canonical pins and hostile-load controls |
+| Preserve phase-boundary evidence and use one final implementation-head suite | Later phases change shared files and invalidate runtime fingerprints | ✓ Good — v0.3 evidence retained; owner explicitly accepted the runtime closeout override |
+| Bound release recovery and retain failed attempts | Successful retries cannot erase the original failure or change product/tag provenance | ✓ Good — v0.3.0 published with separately attributed failed and successful attempts |
+| Keep reusable checks independent of phase storage | Milestone archival must preserve executable check inputs | ✓ Good — v0.3 CTest disposition/readback paths follow archived records; negative controls retained |
+
 ## Evolution
 
 At each phase boundary, update delivered requirements, evidence, limitations, decisions, docs, performance/correctness baseline changes, open issue/PR triage, and the next recommended action. Stop before the next phase.
@@ -182,4 +195,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-26 after Phase 16.
+Last updated: 2026-10-31 after v0.3 milestone completion; next milestone not started.

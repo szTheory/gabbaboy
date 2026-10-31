@@ -23,11 +23,11 @@
    "conclusion": "success"
   },
   "release_readback": {
-   "path": ".planning/phases/GB-16-tune-up-and-v0-2-debt-closure/16-release-readback.json",
+   "path": ".planning/milestones/v0.3-phases/GB-16-tune-up-and-v0-2-debt-closure/16-release-readback.json",
    "sha256": "7ef2214f3b5df5118fb3793374767868b20dc174535dd071f98e3684bc0826e3"
   },
   "pr_closures": {
-   "path": ".planning/phases/GB-16-tune-up-and-v0-2-debt-closure/16-pr-closures.json",
+   "path": ".planning/milestones/v0.3-phases/GB-16-tune-up-and-v0-2-debt-closure/16-pr-closures.json",
    "sha256": "b89ef62b806bb4c9b1c1e5cc6e6ec1de2d9174de5c013a59f9b553d5b7853ab5"
   }
  },

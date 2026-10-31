@@ -88,6 +88,33 @@
 
 ---
 
+## Milestone: v0.3 — Save States & Host Contract
+
+**Shipped:** 2026-10-31 | **Phases:** 4 | **Plans:** 35 | **Recorded actual tasks:** 105
+
+### What Was Built
+Native transactional states and exact continuation; player slots/undo; the POSIX raw-save/SIGTERM host runner; cumulative performance and CI/planning gates; v0.2.1 debt closure and qualified v0.3.0 publication.
+
+### What Worked
+The four-phase/plan caps kept scope bounded. Corpus forks and field omissions tested continuation through public APIs. Real filesystem/signal providers and shipped-archive consumers exercised integration failures. Automated UAT closed all four phases without human checkpoints, and failed release attempts stayed separate from recovery receipts.
+
+### What Was Inefficient
+Repeated release-policy and Windows path/EOL repairs required explicit bounded rescopes. The installed runtime still marks earlier boundary reports stale after shared-file changes, requiring an owner override despite final-head proof. Two CTest inputs still depended on live phase storage and needed retargeting during archival. The standalone scanner helper retains two failing cases outside CTest.
+
+### Patterns Established
+One shared non-failing state conversion after validation; atomic readiness-marker publication; Git paths kept separate from host filesystem paths; boundary evidence preserved across later changes; archive manifests prove SUMMARY/VERIFICATION bytes unchanged.
+
+### Key Lessons
+1. Exercise actual release entrypoints and captured API shapes before a version window, with exact immutable source binding.
+2. Keep reusable check inputs independent of live phase storage and test archival before deleting originals.
+3. Distinguish accepted nonblocking debt from repaired defects; never rewrite old fingerprints to manufacture readiness.
+4. Reconfigure when generated tests embed source revisions, then verify once at the final implementation head.
+
+### Cost Observations
+Model mix and session counts were not recorded. The audit measured sanitizer CTest at 2,071 seconds, native Linux CTest at 868 seconds and CMake-floor install/relocation at 1,388 seconds. A separate 20-second support-ledger self-test duplicates CTest; consolidate only after proving equivalent environment, assertions and required-lane coverage. No scheduling change is justified by archival alone.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -96,6 +123,7 @@
 |-----------|--------|-------|------------|
 | v0.1 | 7 | 64 | Exact-head CI gate, freshness-checked verification, debt-closure phase before close |
 | v0.2 | 10 | 170 | Frozen DMG baseline gate, exact-tag release rehearsal, boundary-commit verifiers, zero-checkpoint automated UAT |
+| v0.3 | 4 | 35 | Bounded phases, state-fork/omission evidence, final-head audit, explicit override closeout |
 
 ### Cumulative Quality
 
@@ -103,6 +131,7 @@
 |-----------|-------------|--------------|--------------------------|
 | v0.1 | 184/184 (06.1 regression) | loader, battery, API (bounded) | 0 (SDL only in the optional player) |
 | v0.2 | 1183/1183 (15.1 verify) | v0.1 set plus hosted 60 s libFuzzer ASan/UBSan campaign | 0 |
+| v0.3 | 1707/1707 (implementation-head audit; zero skips) | Hosted state-load semantics added to existing campaigns | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 
