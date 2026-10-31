@@ -1,6 +1,6 @@
 # Phase 19 bounded schema-validation repair proposal
 
-Status: proposed and ready for owner decision; offline prototype qualification passed. This file grants no implementation, review-budget or live-release authority. No owner decision is recorded yet.
+Status: approved under D-134. The owner answered “yes approve” to this concrete tested proposal. The bounded implementation and qualification below are authorized; no new live release action or general review/gap reset is granted.
 
 ## Concrete problem and consequence
 

@@ -335,10 +335,13 @@ def unique_pairs(pairs):
 
 
 def validate_data(data: dict, expected_version: str) -> None:
-    if isinstance(data, dict) and data.get("schema_version") == 2:
+    schema_version = data.get("schema_version") if isinstance(data, dict) else None
+    if type(schema_version) is not int:
+        fail("unsupported ledger schema")
+    if schema_version == 2:
         validate_data_v2(data, expected_version)
         return
-    if not isinstance(data, dict) or data.get("schema_version") != 1:
+    if not isinstance(data, dict) or schema_version != 1:
         fail("unsupported ledger schema")
     if data.get("version") != expected_version or data.get("boot") != "skipped":
         fail("ledger version/profile identity is missing or unstable")
@@ -580,7 +583,7 @@ def _count_receipt_cases(observations: list[dict]) -> dict:
 
 
 def validate_data_v2(data: dict, expected_version: str, expected_case_count: int = V2_REQUIRED_CASES) -> None:
-    if type(data) is not dict or data.get("schema_version") != 2:
+    if type(data) is not dict or type(data.get("schema_version")) is not int or data["schema_version"] != 2:
         fail("unsupported ledger schema")
     if not re.fullmatch(r"0\.[23]\.[0-9]+", expected_version) or data.get("version") != expected_version:
         fail("v0.2/v0.3 ledger version/profile identity is missing or unstable")
@@ -1810,6 +1813,23 @@ def self_test_v2() -> None:
     controls = []
     positive_checks = ["complete-schema2-fixture"]
 
+    def check_schema_rejections(value: object, *, dispatch: bool) -> None:
+        for label, schema_version in (("boolean true", True), ("boolean false", False), ("float", 2.0),
+                                      ("string", "2"), ("null", None), ("array", [])):
+            altered = copy.deepcopy(data)
+            altered["schema_version"] = schema_version
+            try:
+                (validate_data if dispatch else validate_data_v2)(altered, "0.2.0")
+            except ValueError as error:
+                if "unsupported ledger schema" not in str(error):
+                    fail(f"{label} schema version produced the wrong diagnostic: {error}")
+                controls.append(("dispatch-" if dispatch else "direct-") + label)
+            else:
+                fail(f"schema-2 validator accepted {label} schema version")
+
+    check_schema_rejections(data, dispatch=True)
+    check_schema_rejections(data, dispatch=False)
+
     def below_selected_total(value: dict) -> None:
         value["receipt"]["run"]["ctest_total_cases"] = 2
 
@@ -2065,6 +2085,24 @@ def self_test() -> None:
     current = ledger_version(ledger)
     raw = (ROOT / ledger).read_bytes()
     data = parse_ledger(raw, current)
+    validate_data(data, current)
+    legacy_raw = (ROOT / "docs/support/v0.2.0.md").read_bytes()
+    legacy_data = parse_ledger(legacy_raw, "0.2.0")
+    validate_data(legacy_data, "0.2.0")
+    for schema_label, source_data, expected_version, schema_versions in (
+        ("schema-1", legacy_data, "0.2.0", (True, False, 1.0, "1", None, [])),
+        ("schema-2", data, current, (True, False, 2.0, "2", None, [])),
+    ):
+        for schema_version in schema_versions:
+            altered = copy.deepcopy(source_data)
+            altered["schema_version"] = schema_version
+            try:
+                validate_data(altered, expected_version)
+            except ValueError as error:
+                if "unsupported ledger schema" not in str(error):
+                    fail(f"{schema_label} malformed schema version produced the wrong diagnostic: {error}")
+            else:
+                fail(f"{schema_label} dispatch accepted malformed schema version {schema_version!r}")
     manifests = {path: (ROOT / path).read_bytes() for path in data["manifest_paths"]}
     validate_manifest_set(data, manifests)
     mutations = [

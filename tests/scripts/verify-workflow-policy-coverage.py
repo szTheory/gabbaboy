@@ -497,8 +497,10 @@ def verify_source_identity(root: Path, candidate: bytes) -> None:
     _compare_baseline_source_identity(baseline_source(root), candidate)
 
 
-def validate_manifest(manifest: dict, expected: dict) -> None:
-    if manifest.get("schema_version") != 1:
+def validate_manifest(manifest: object, expected: dict) -> None:
+    if type(manifest) is not dict:
+        reject("workflow-policy registry must be a JSON object")
+    if type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1:
         reject("workflow-policy registry schema version is unsupported")
     if manifest.get("baseline_commit") != BASELINE_COMMIT or manifest.get("baseline_script_sha256") != POLICY_SHA256:
         reject("workflow-policy registry is not anchored to the reviewed baseline")
@@ -746,7 +748,7 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
             expected_definitions = {
                 "GBB_CMD": definitions["GBB_CMD"],
                 "GBB_EXPECT_CODE": "0",
-                "GBB_EXPECT_REGEX": "PASS: workflow policy coverage self-test controls=62",
+                "GBB_EXPECT_REGEX": "PASS: workflow policy coverage self-test controls=72",
             }
         else:
             cli_values, cli_booleans = _parse_python_cli(
@@ -785,6 +787,17 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"negative control {label} was accepted")
+
+    validate_manifest(expected, expected)
+    for label, version in (("schema-boolean-true", True), ("schema-boolean-false", False),
+                           ("schema-float", 1.0), ("schema-string", "1"),
+                           ("schema-null", None), ("schema-array", [])):
+        mutant = copy.deepcopy(expected)
+        mutant["schema_version"] = version
+        rejected(label, lambda mutant=mutant: validate_manifest(mutant, expected))
+    for label, malformed in (("root-array", []), ("root-null", None), ("root-string", "registry"),
+                             ("root-number", 1)):
+        rejected(label, lambda malformed=malformed: validate_manifest(malformed, expected))
 
     def test_entry(name: str, argv: list[str], marker: str, timeout: int,
                    completion: Path | None = None) -> dict:
@@ -835,7 +848,7 @@ def _self_test(root: Path, revision: str) -> int:
                    "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)", 60),
         test_entry("workflow_policy_coverage_controls",
                    [python_executable, "-I", str(coverage_script), "--self-test", "--root", str(root), "--rev", candidate],
-                   "PASS: workflow policy coverage self-test controls=62", 30),
+                   "PASS: workflow policy coverage self-test controls=72", 30),
         test_entry("workflow_policy_check",
                    [python_executable, "-I", str(root / POLICY_PATH), "--check", "--root", str(root)],
                    "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+", 60),
@@ -1121,7 +1134,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 62:
+    if controls != 72:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 

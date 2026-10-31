@@ -68,7 +68,8 @@ def verify_pre_publish(after_json: str, inventory_doc: Any, tag: str, source_sha
     }
     if not isinstance(inventory_doc, dict) or set(inventory_doc) != {
             "schema_version", "kind", "tag", "source_sha", "release_id", "run_id", "run_attempt", "assets"} \
-            or inventory_doc.get("schema_version") != 1 or inventory_doc.get("kind") != "pre-publish-inventory":
+            or type(inventory_doc.get("schema_version")) is not int or inventory_doc["schema_version"] != 1 \
+            or inventory_doc.get("kind") != "pre-publish-inventory":
         raise ValueError("frozen pre-publish inventory has an unknown schema")
     for field, expected in expected_identity.items():
         actual = inventory_doc.get(field)
@@ -270,6 +271,35 @@ def self_test() -> None:
     legacy_cli_self_test(after)
     print("PASS: published asset verifier parses JSON responses directly and rejects changed/malformed inventory")
     recovery_self_test()
+    pre_publish_schema_self_test()
+
+
+def pre_publish_schema_self_test() -> None:
+    source_sha = "c" * 40
+    rows = [
+        {"name": "SHA256SUMS", "id": 1, "digest": "sha256:" + "a" * 64},
+        {"name": "release-receipt.json", "id": 2, "digest": "sha256:" + "b" * 64},
+    ]
+    after = json.dumps(rows)
+    inventory_doc = {
+        "schema_version": 1, "kind": "pre-publish-inventory", "tag": "v0.3.0",
+        "source_sha": source_sha, "release_id": 3, "run_id": 4, "run_attempt": 1,
+        "assets": rows,
+    }
+    verify_pre_publish(after, inventory_doc, "v0.3.0", source_sha, "3", "4", "1")
+    controls = 0
+    for label, version in (("boolean true", True), ("boolean false", False), ("float", 1.0),
+                           ("string", "1"), ("null", None), ("array", [])):
+        malformed = dict(inventory_doc, schema_version=version)
+        try:
+            verify_pre_publish(after, malformed, "v0.3.0", source_sha, "3", "4", "1")
+        except ValueError as error:
+            if "unknown schema" not in str(error):
+                raise SystemExit(f"pre-publish inventory rejected {label} schema version for the wrong reason: {error}")
+            controls += 1
+        else:
+            raise SystemExit(f"pre-publish inventory accepted {label} schema version")
+    print(f"PASS: pre-publish inventory schema positive=1 rejected_controls={controls}")
 
 
 def legacy_cli_self_test(after: str) -> None:

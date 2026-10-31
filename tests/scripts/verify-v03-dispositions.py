@@ -592,7 +592,8 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
             raise
         reject("readback-inventory-unsourced", error.message)
     if not isinstance(inventory, dict) or set(inventory) != PRE_PUBLISH_KEYS \
-            or inventory.get("schema_version") != 1 or inventory.get("kind") != "pre-publish-inventory" \
+            or type(inventory.get("schema_version")) is not int or inventory["schema_version"] != 1 \
+            or inventory.get("kind") != "pre-publish-inventory" \
             or inventory.get("tag") != tag or inventory.get("source_sha") != readback["tag_sha"] \
             or inventory.get("release_id") != release_id or inventory.get("run_id") != source_row["run_id"] \
             or inventory.get("run_attempt") != source_row["run_attempt"] \
@@ -782,7 +783,9 @@ def check_receipts(receipts, rows: dict, source: Source) -> None:
 def check(record_path: str, repo: pathlib.Path, rev: str | None) -> str:
     source = Source(repo, rev)
     record = parse_json(source.read(record_path, "record-missing"), "the disposition record")
-    if not isinstance(record, dict) or set(record) != TOP_KEYS or record["schema_version"] != 1 or record["plan"] != "16-06":
+    if not isinstance(record, dict) or set(record) != TOP_KEYS \
+            or type(record.get("schema_version")) is not int or record["schema_version"] != 1 \
+            or record["plan"] != "16-06":
         reject("schema-malformed", f"the record must be a version 1 plan 16-06 record with exactly {sorted(TOP_KEYS)}")
     text(record["scope"], "scope")
     text(record["audit_source"], "audit_source")
@@ -1285,6 +1288,11 @@ def self_test() -> int:
                 if row["id"] == "LIM-HIST-AUDIO-RED":
                     row["status"] = "closed"
 
+        for label, schema_version in (("boolean true", True), ("boolean false", False), ("float", 1.0),
+                                      ("string", "1"), ("null", None), ("array", [])):
+            case(f"{label} record schema version", "schema-malformed",
+                 lambda variant, files, schema_version=schema_version: variant.update(schema_version=schema_version))
+
         case("closure without receipts", "closure-without-receipts", without_receipts)
         case("tampered readback digest", "receipt-digest-mismatch", tampered_readback)
         case("tampered pr-closures digest", "receipt-digest-mismatch", tampered_closures)
@@ -1355,6 +1363,13 @@ def self_test_readback() -> int:
             head = git(repo, "rev-parse", "HEAD")
             expect_reject(label, invoke(), code)
             expect_reject(label + " at rev", invoke(head), code)
+
+        def inventory_schema_version(value: dict, schema_version: object) -> None:
+            source = value["pre_publish_inventory_source"]
+            inventory = json.loads(source["raw"])
+            inventory["schema_version"] = schema_version
+            raw = json.dumps(inventory, sort_keys=True, indent=2) + "\n"
+            source.update(raw=raw, file_sha256=hashlib.sha256(raw.encode("utf-8")).hexdigest())
 
         positive = invoke()
         expect_pass("working tree", positive)
@@ -1524,6 +1539,10 @@ def self_test_readback() -> int:
         case("inventory raw run id mismatch", "readback-inventory-unsourced",
              lambda value: value["pre_publish_inventory_source"].update(
                  raw=json.dumps(dict(json.loads(value["pre_publish_inventory_source"]["raw"]), run_id=9))))
+        for label, schema_version in (("boolean true", True), ("boolean false", False), ("float", 1.0),
+                                      ("string", "1"), ("null", None), ("array", [])):
+            case(f"inventory {label} schema version", "readback-inventory-unsourced",
+                 lambda value, schema_version=schema_version: inventory_schema_version(value, schema_version))
         case("missing inventory source", "readback-inventory-unsourced",
              lambda value: value.pop("pre_publish_inventory_source"))
         case("wrong inventory artifact source", "readback-inventory-unsourced",

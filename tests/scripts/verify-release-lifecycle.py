@@ -555,7 +555,8 @@ def validate_recovery_fixture(raw: bytes, sources: bytes, *, verify_digest: bool
         "schema_version", "kind", "repository", "api_version", "failure_snapshot", "releases_list_capture",
         "failed_notes", "reviewed_body", "tagged_repair",
     }, "recovery fixture")
-    if (fixture.get("schema_version") != 1 or fixture.get("kind") != "v030-post-tag-notes-failure"
+    if (type(fixture.get("schema_version")) is not int or fixture["schema_version"] != 1
+            or fixture.get("kind") != "v030-post-tag-notes-failure"
             or fixture.get("repository") != REPO or fixture.get("api_version") != "2022-11-28"):
         raise Reject("recovery-schema", "recovery fixture header differs from the v0.3.0 capture")
 
@@ -1179,6 +1180,13 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
                                + sources_text[section_match.end(1):]).encode("utf-8")
             return validate_recovery_fixture(raw, amended_sources, verify_digest=False)
 
+        for label, schema_version in (("boolean true", True), ("boolean false", False), ("float", 1.0),
+                                      ("string", "1"), ("null", None), ("array", [])):
+            malformed_fixture = json.loads(json.dumps(fixture))
+            malformed_fixture["schema_version"] = schema_version
+            controls += _recovery_expect_reject(f"{label} failure-fixture schema version", "recovery-schema",
+                lambda malformed_fixture=malformed_fixture: validate_mutated_fixture(malformed_fixture))
+
         def validate_mutated_association_fixture(value: dict) -> dict:
             raw = (json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
             sources_text = sources.decode("utf-8", errors="strict")
@@ -1417,7 +1425,20 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         controls += _recovery_expect_reject("duplicate retry dispatch", "recovery-dispatch-duplicate",
             lambda: wrong_request.dispatch(dict(RECOVERY_DISPATCH)))
 
-    if controls < 20 or positives < 5 or adoption_checks != 89:
+    publisher_path = ".github/scripts/verify-published-release-assets.py"
+    publisher = ROOT / publisher_path
+    publisher_source = git_show(rev, publisher_path)
+    if not publisher.is_file() or publisher.read_bytes() != publisher_source:
+        raise Reject("recovery-controls", "published-asset validator differs from the immutable revision under test")
+    publisher_result = subprocess.run([sys.executable, "-I", str(publisher), "--self-test"], cwd=ROOT,
+                                      capture_output=True, text=True, timeout=20)
+    if (publisher_result.returncode != 0
+            or "PASS: pre-publish inventory schema positive=1 rejected_controls=6" not in publisher_result.stdout
+            or "Traceback" in publisher_result.stderr):
+        raise Reject("recovery-controls", "published-asset schema self-test failed: "
+                     + (publisher_result.stderr.strip() or publisher_result.stdout.strip())[-500:])
+
+    if controls < 26 or positives < 5 or adoption_checks != 89:
         raise Reject("recovery-controls", "recovery controls lack the required negative and production-adoption positives")
     return controls, positives, original_hash, repaired_hash
 
@@ -1444,7 +1465,8 @@ def check_capture(text: bytes, sources: str) -> dict:
     for match in EMAIL.findall(body):
         if match != REDACTED_EMAIL:
             raise Reject("capture-sanitization", "captured.json carries an unredacted email address")
-    if (capture.get("schema_version") != 1 or capture.get("kind") != "github-api-capture"
+    if (type(capture) is not dict or type(capture.get("schema_version")) is not int
+            or capture["schema_version"] != 1 or capture.get("kind") != "github-api-capture"
             or capture.get("repository") != REPO or capture.get("api_version") != "2022-11-28"):
         raise Reject("capture-schema", "captured.json header is not the schema-1 capture of this repository")
     responses = capture.get("responses")
@@ -2923,6 +2945,16 @@ def c_capture_contract(ctx: Context) -> str:
     mutated("another API version", "capture-schema", lambda v: v.update(api_version="2024-01-01"))
     mutated("another repository", "capture-schema", lambda v: v.update(repository="other/repository"))
     mutated("a capture without its source identity", "capture-schema", lambda v: v["identity"].update(source_sha="x"))
+    for label, schema_version in (("boolean true schema version", True), ("boolean false schema version", False),
+                                  ("floating schema version", 1.0), ("string schema version", "1"),
+                                  ("null schema version", None), ("array schema version", [])):
+        mutated(label, "capture-schema", lambda value, schema_version=schema_version:
+                value.update(schema_version=schema_version))
+    for label, malformed in (("array root", []), ("null root", None), ("string root", "capture"),
+                             ("number root", 1)):
+        malformed_bytes = json.dumps(malformed).encode("utf-8")
+        expect_capture_reject(label, malformed_bytes, sources_with_digest(sources, malformed_bytes), "capture-schema")
+        count += 1
     crlf = text.replace(b"\n", b"\r\n")
     expect_capture_reject("CRLF line endings", crlf, sources_with_digest(sources, crlf), "capture-eol")
     oversize = text + b" " * MAX_CAPTURE_BYTES
@@ -3524,9 +3556,10 @@ def _post_tag_registrations() -> tuple[PostTagRegistration, ...]:
     return (*trust, *capture_source, *draft_assets, *recovery_sums, *consumer, *publication)
 
 
-def _manifest_controls(manifest: dict) -> tuple[dict, ...]:
-    if (not isinstance(manifest, dict) or set(manifest) != {"schema_version", "baseline_revision", "controls"}
-            or manifest.get("schema_version") != 1 or manifest.get("baseline_revision") != "dcb2c92668a47bc04f88fd3c57bc0d2e978473e1"
+def _manifest_controls(manifest: object) -> tuple[dict, ...]:
+    if (type(manifest) is not dict or set(manifest) != {"schema_version", "baseline_revision", "controls"}
+            or type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1
+            or manifest.get("baseline_revision") != "dcb2c92668a47bc04f88fd3c57bc0d2e978473e1"
             or not isinstance(manifest.get("controls"), list)):
         raise Reject("post-tag-coverage", "the immutable expected-control manifest has an unsupported schema")
     expected = []
@@ -3593,16 +3626,40 @@ def _expect_coverage_rejection(registrations: tuple[PostTagRegistration, ...], e
     raise Reject("coverage-self-test", f"{label}: an invalid registration was accepted")
 
 
-def post_tag_coverage_controls(rev: str) -> tuple[int, int]:
+def post_tag_coverage_controls(rev: str) -> tuple[int, int, int]:
     expected = _load_post_tag_expected(rev)
     registrations = _post_tag_registrations()
     _validate_post_tag_registration(registrations, expected)
+    raw_manifest = json.loads(git_show(rev, POST_TAG_COVERAGE).decode("utf-8"))
+    schema_controls = 0
+    malformed_versions = (("boolean true", True), ("boolean false", False), ("float", 1.0),
+                          ("string", "1"), ("null", None), ("array", []))
+    for label, schema_version in malformed_versions:
+        mutant = copy.deepcopy(raw_manifest)
+        mutant["schema_version"] = schema_version
+        try:
+            _manifest_controls(mutant)
+        except Reject as error:
+            if error.code != "post-tag-coverage":
+                raise Reject("coverage-self-test", f"{label} manifest schema version used wrong rejection {error}") from error
+            schema_controls += 1
+        else:
+            raise Reject("coverage-self-test", f"{label} manifest schema version was accepted")
+    for label, malformed in (("array", []), ("null", None), ("string", "manifest"), ("number", 1)):
+        try:
+            _manifest_controls(malformed)
+        except Reject as error:
+            if error.code != "post-tag-coverage":
+                raise Reject("coverage-self-test", f"non-object {label} manifest used wrong rejection {error}") from error
+            schema_controls += 1
+        else:
+            raise Reject("coverage-self-test", f"non-object {label} manifest was accepted")
     _expect_coverage_rejection(registrations[1:], expected, "omitted registration")
     _expect_coverage_rejection((registrations[0], registrations[0], *registrations[1:]), expected, "duplicated registration")
     wrong_group = PostTagRegistration("publication", registrations[0].control_ids, registrations[0].run)
     _expect_coverage_rejection((wrong_group, *registrations[1:]), expected, "wrong-group registration")
     _expect_exit_contract_control(rev)
-    return len(expected), len(registrations)
+    return len(expected), len(registrations), schema_controls
 
 
 def _expect_exit_contract_control(rev: str) -> None:
@@ -3800,9 +3857,9 @@ def main(argv: list[str]) -> int:
             print(f"release-lifecycle capture pass responses={len(capture['responses'])} bytes={len(files[CAPTURE])}")
             return 0
         if args.self_test_post_tag_coverage:
-            baseline_ids, registrations = post_tag_coverage_controls(rev)
+            baseline_ids, registrations, schema_controls = post_tag_coverage_controls(rev)
             print(f"release-lifecycle post-tag coverage controls pass baseline_ids={baseline_ids} registrations={registrations} "
-                  "omitted=refused duplicate=refused wrong_group=refused expect_exit=pass")
+                  f"schema_rejects={schema_controls} omitted=refused duplicate=refused wrong_group=refused expect_exit=pass")
             return 0
         if args.self_test_post_tag_recovery:
             controls_count, positives, original_hash, repaired_hash = self_test_post_tag_recovery(rev)

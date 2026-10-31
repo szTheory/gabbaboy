@@ -1591,7 +1591,7 @@ add_test(NAME v03_dispositions_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=v03-dispositions self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=39
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=51
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_dispositions_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 # D-23 (19-05): the v0.3 readback is checked against tag objects and its embedded pre-publish artifact;
@@ -1601,7 +1601,7 @@ add_test(NAME v03_readback_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test-readback"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=v03-readback controls pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=108
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=120
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_readback_controls PROPERTIES TIMEOUT 60 LABELS planning)
 # The v0.2 checker asserts owner_accepted=0 for the archived 15.1-17 record only. Pointed at the new record it must reject on its plan
@@ -5612,7 +5612,7 @@ if(NOT WIN32)
     COMMAND ${CMAKE_COMMAND}
       "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};--self-test-post-tag-coverage"
       -DGBB_EXPECT_CODE=0
-      "-DGBB_EXPECT_REGEX=release-lifecycle post-tag coverage controls pass baseline_ids=[1-9][0-9]* registrations=[1-9][0-9]* omitted=refused duplicate=refused wrong_group=refused expect_exit=pass"
+      "-DGBB_EXPECT_REGEX=release-lifecycle post-tag coverage controls pass baseline_ids=[1-9][0-9]* registrations=[1-9][0-9]* schema_rejects=10 omitted=refused duplicate=refused wrong_group=refused expect_exit=pass"
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   set_tests_properties(release_lifecycle_post_tag_coverage_controls
     PROPERTIES TIMEOUT 60 LABELS "v02" RUN_SERIAL TRUE)
@@ -5629,7 +5629,7 @@ add_test(NAME release_lifecycle_post_tag_recovery_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};--self-test-post-tag-recovery"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=release-lifecycle post-tag recovery controls pass controls=[1-9][0-9]* positives=[0-9]+ original_section_sha256=[0-9a-f]+ repaired_body_sha256=[0-9a-f]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=93
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=99
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(release_lifecycle_post_tag_recovery_controls PROPERTIES TIMEOUT 60 LABELS "v03;release")
 
