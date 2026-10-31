@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.3 — Save States & Host Contract",
+  "milestone": "v0.3 \u2014 Save States & Host Contract",
   "phases": [
     {
       "number": "16",
@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 4 of 4 · 75% · executing"
+    "command": "/gsd-execute-phase 19",
+    "label": "Finish Phase 19 post-release closure",
+    "reason": "Published release readback passed; final PR B phase gates are active"
   },
-  "updated_at": "2026-10-29T17:03:30.208Z"
+  "updated_at": "2026-10-31T14:06:21Z"
 }

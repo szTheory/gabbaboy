@@ -2,10 +2,10 @@
 phase: "19"
 slug: "qualified-v0-3-0-release"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
-# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
-status: draft
+# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: true) (#2117)
+status: validated
 nyquist_compliant: false
-wave_0_complete: false
+wave_0_complete: true
 created: "2026-10-29"
 ---
 
@@ -50,25 +50,25 @@ created: "2026-10-29"
 
 | Req / SC | Plan | Behavior | Test Type | Automated Command (`ctest -R`) | Negative control | Status |
 |----------|------|----------|-----------|--------------------------------|------------------|--------|
-| SC1 / V1 | 19-04 | R2 at W is the binding rehearsal; a run that names another revision, or postdates the merge, is rejected | unit + replay | `^(release_lifecycle_(replay\|controls)\|release_nightly_(gate\|controls)\|workflow_policy_(check\|group_[a-z_]+\|coverage(_controls)?))$` | postdated run, late attempt 2, non-PR-head tree-equal, missing `merged_at`, other run id, PR event/fork/path, inactive record, R2 red while R1 green; `--merged-at` without `--attempt-jobs` (and the reverse); candidate bind call without `--pr-head`, `--merged-at` or `--attempt-jobs` (policy mutants) | ⬜ pending |
-| SC1 / V2 | 19-04 | Window record is legal only when `release_version` equals the tree version | unit | `^release_window_(contract\|controls)$` | stale active record after a bump | ⬜ pending |
-| SC1 / V3 | 19-04 | Pre-tag gate workflow is pinned and fatal | policy | `^workflow_policy_(check\|group_[a-z_]+\|coverage(_controls)?)$` | masked gate, subject code run, `pull_request_target`, wrong base | ⬜ pending |
-| SC1 / V4 | 19-01 | Tree-equal citations proved against the revision under test (`--main-ref` default `HEAD`); scratch 0.3.0 passes `--check --release-head` against a heads-plus-tags remote clone | unit | `^workflow_policy_(check\|group_[a-z_]+\|coverage(_controls)?)$` | tree mismatch, anchor off main, absent job name, ceil(2×p50) over timeout, a pruned tree-equal citation or a main-only clone (refused) while a plain row citing an absent merged-PR head passes; a fake git refusing `origin/` still passes default `--check` | ⬜ pending |
-| D-01 disclosure | 19-01 (rule), 19-06 (applied) | Every ledger row whose job body PR A changed carries the body-change disclosure | policy | `^workflow_policy_(group_[a-z_]+\|coverage(_controls)?)$`; 19-06 Task 4 `--check --disclosure-base f80bdf54…` | changed body without the phrase (scratch-git control); one disclosure stripped from a scratch copy of the PR A head | ⬜ pending |
-| SC2 / V5 | 19-03 | Claims are validated and rendered; ledger is a generator fixed point | unit | `^(support_claims(_controls)?\|release_disclosure_(generator\|controls)\|v02_support_ledger(_controls)?\|support_ledger_binding(_controls)?)$` | D-14 controls 1–9, incl. a seeded unscoped claim | ⬜ pending |
-| SC2 / V6 | 19-03 | Release-notes rules and adoption patterns | unit | `^(v02_adoption_docs(_controls)?\|v02_game_claims(_controls)?)$` | D-14 control 10 | ⬜ pending |
-| SC2 / V7 | 19-03 | No interop claim names SameBoy, BGB, BESS or mGBA | unit | `^doc_no_interop_claims$` | D-14 control 11 | ⬜ pending |
-| SC3 / V8 | 19-05 | Perf-gate receipt is emitted, uploaded (also from a red gate run, `if: always()` directly after the gate step) and verified; the documented one realtime retry stays reachable and the kept receipt is the deciding attempt's | unit + policy | `^(perf_gate_receipt_controls\|perf_gate_retry_controls\|v02_delivery_controls\|workflow_policy_(group_[a-z_]+\|coverage(_controls)?))$` | ratio over limit, other SHA, PR event, wrong limits blob; upload without `if: always()` and upload moved after the seeded-regression step (policy mutants, artifact-flow); attempt 1 below the floor then attempt 2 passing must exit 0 with attempt 2's `realtime_min` (not attempt 1's, and no `perf-receipt-output` collision); both attempts below the floor exit 1 keeping attempt 2's receipt; an Ir refusal is not retried and still leaves its receipt | ⬜ pending |
-| SC3 / V9 | 19-05 | Consumer receipt carries `host_smoke` | unit | `^(v02_delivery_controls\|v02_consumer_controls_(c\|cpp)\|installed_host_smoke)$` | `host_smoke` missing or not passed | ⬜ pending |
-| SC3 / V10 | 19-05 | Published-asset readback reconciles against the pre-publish inventory persisted as a workflow artifact before publish | unit + replay + policy | `^(v03_dispositions(_controls)?\|v03_readback(_controls)?\|release_lifecycle_post_tag_(trust\|capture_source\|draft_assets\|recovery_sums\|consumer\|publication\|coverage)_controls\|workflow_policy_(group_[a-z_]+\|coverage(_controls)?))$` | asset set or id drift, digest vs `SHA256SUMS`, sidecar blob, draft, tag SHA or tree, another revision's receipt, an unsourced or altered inventory; final-gate without the inventory write; upload step deleted or moved after publish-draft | ⬜ pending |
-| D-07 | 19-01 | Player build linkage is clean | integration | `ctest --test-dir build-player -R '^core_linkage_'` | `mutant` name restored; double link restored | ⬜ pending |
-| D-08 | 19-01, 19-02, 19-06 | WR-C04, IN-08 (19-01); IN-05, IN-02 (19-02); IN-07 (19-06) | policy + unit | `^(workflow_policy_(check\|group_[a-z_]+\|coverage(_controls)?)\|v02_fuzz_controls\|test_budget(_controls)?\|state_format_contract\|v02_adoption_docs_controls)$` | head-copy mutant; missing `persist-credentials: false`; header-edit fuzz control; IN-02 sentence omission; IN-07 phrase omission and a retry tamper-overclaim | ⬜ pending |
-| D-09 | 19-02 | WR-A05 and IN-01 | unit | `^(state_refusal.*\|state_canonical\|state_semantic_bounds\|state_codec_mutant_controls\|state_portable_pins\|state_pin_controls\|state_continuation.*)$` | range-check removal mutant; byte-identical goldens and pins | ⬜ pending |
-| D-21 | 19-04 (inventory, captures incl. `ci_run`), 19-05 (its own forms) | `POST_TAG_ENDPOINTS` covers every gh form in the lifecycle, judges and release.yml, each replayed with REQUIRED_PATHS or policy-pinned | replay + policy | `^(release_lifecycle_(replay\|controls\|post_tag_(trust\|capture_source\|draft_assets\|recovery_sums\|consumer\|publication\|coverage)_controls)\|workflow_policy_(group_[a-z_]+\|coverage(_controls)?))$` | unrouted lifecycle endpoint; new release.yml form not in the table; replayed entry without REQUIRED_PATHS; perf receipt over the release-please run shape; renamed perf-gate download | ⬜ pending |
-| D-25 | 19-06 (19-03 for the retired host entries) | Docs are coherent, the CHANGELOG first heading is a version, the D-16/D-25/OQ-5 release.md prose and the unreleased.md stub are pinned, and the retired `unreleased_host_entries` coverage lives in the claim validator | unit | `^(changelog_first_heading(_controls)?\|doc_links_versions(_controls)?\|v02_adoption_docs(_controls)?\|support_claims_controls\|doc_contract_.*\|cgb_corpus_claims\|cgb_hdma_claims_contract)$` | `## Unreleased` above a version; stale ledger link; each pinned phrase omitted; the stub phrase dropped or a pending v0.3.0 section re-added; a host CTest or PLAY-01 dropped from the claims (control 8b) | ⬜ pending |
-| D-10 / D-16 | 19-02 | RM-024 deferrals and the RM-032 v0.4 row are recorded | unit | `^planning_hygiene_controls$` | each of the eight deferral pins removed from FUTURE-MILESTONES.md text | ⬜ pending |
-| REL-01 trace | 19-07 | REL-01 checked and its traceability row Complete on main after PR B | point-in-time | 19-07 Task 4 second `<automated>` block (`git show origin/main:.planning/REQUIREMENTS.md`) | the same predicate is false at `f80bdf54` | ⬜ pending |
-| D-19 | 19-06 | Pre-flight 0.3.0 tree is green locally; the hosted pre-flight on the transient `rehearsal/v0.3.0` runs all six producer lanes green, past their derive steps, then the branch is deleted (19-06-D2) | integration | scratch tree: full suite, player tree, lifecycle replay, `--release-notes`, `--check --release-head --git-root <remote clone>`, derive and verify-subject for `rehearsal/v0.3.0`, judge differential (phase-branch judge passes every step; f80bdf54 judge under its own argv recorded per step as exit code plus message key, with no usage key; f80bdf54 judge under H' argv predicts one outcome line `success` or `failure\|<step>\|<exit>\|<key>`; each judge work directory holds `git worktree add` checkouts, `subject` at H' and `trusted-judge` at the judge revision; `uses:` steps not emulated, so a hosted failure there fails closed); key rule: committed `tests/scripts/verify-judge-outcome.py`, CTest `judge_outcome_controls` (19-06 Task 1 first `<automated>` block); hosted: 19-06 Task 1 third `<automated>` block | bump-only tree fails; `rehearsal/preflight-v0.3.0` derive refused; `judge_outcome_controls` refuses an empty failed-step log and a failure without an exit-code line as undecidable, and over prefixed `--log-failed` fixtures never lets another job's lines (corpus `full_ctest`, continue-on-error) or a non-failed judge step decide the key; the hosted judge outcome line (step, exit code and key) must equal the predicted line, so a usage or receipt refusal never reads as a REJECT set or a pass; branch absent afterwards | ⬜ pending |
+| SC1 / V1 | 19-04 | R2 at W is the binding rehearsal; a run that names another revision, or postdates the merge, is rejected | unit + replay | `^(release_lifecycle_(replay\|controls)\|release_nightly_(gate\|controls)\|workflow_policy_(check\|group_[a-z_]+\|coverage(_controls)?))$` | postdated run, late attempt 2, non-PR-head tree-equal, missing `merged_at`, other run id, PR event/fork/path, inactive record, R2 red while R1 green; `--merged-at` without `--attempt-jobs` (and the reverse); candidate bind call without `--pr-head`, `--merged-at` or `--attempt-jobs` (policy mutants) | ✅ covered |
+| SC1 / V2 | 19-04 | Window record is legal only when `release_version` equals the tree version | unit | `^release_window_(contract\|controls)$` | stale active record after a bump | ✅ covered |
+| SC1 / V3 | 19-04 | Pre-tag gate workflow is pinned and fatal | policy | `^workflow_policy_(check\|group_[a-z_]+\|coverage(_controls)?)$` | masked gate, subject code run, `pull_request_target`, wrong base | ✅ covered |
+| SC1 / V4 | 19-01 | Tree-equal citations proved against the revision under test (`--main-ref` default `HEAD`); scratch 0.3.0 passes `--check --release-head` against a heads-plus-tags remote clone | unit | `^workflow_policy_(check\|group_[a-z_]+\|coverage(_controls)?)$` | tree mismatch, anchor off main, absent job name, ceil(2×p50) over timeout, a pruned tree-equal citation or a main-only clone (refused) while a plain row citing an absent merged-PR head passes; a fake git refusing `origin/` still passes default `--check` | ✅ covered |
+| D-01 disclosure | 19-01 (rule), 19-06 (applied) | Every ledger row whose job body PR A changed carries the body-change disclosure | policy | `^workflow_policy_(group_[a-z_]+\|coverage(_controls)?)$`; 19-06 Task 4 `--check --disclosure-base f80bdf54…` | changed body without the phrase (scratch-git control); one disclosure stripped from a scratch copy of the PR A head | ✅ covered |
+| SC2 / V5 | 19-03 | Claims are validated and rendered; ledger is a generator fixed point | unit | `^(support_claims(_controls)?\|release_disclosure_(generator\|controls)\|v02_support_ledger(_controls)?\|support_ledger_binding(_controls)?)$` | D-14 controls 1–9, incl. a seeded unscoped claim | ✅ covered |
+| SC2 / V6 | 19-03 | Release-notes rules and adoption patterns | unit | `^(v02_adoption_docs(_controls)?\|v02_game_claims(_controls)?)$` | D-14 control 10 | ✅ covered |
+| SC2 / V7 | 19-03 | No interop claim names SameBoy, BGB, BESS or mGBA | unit | `^doc_no_interop_claims$` | D-14 control 11 | ✅ covered |
+| SC3 / V8 | 19-05 | Perf-gate receipt is emitted, uploaded (also from a red gate run, `if: always()` directly after the gate step) and verified; the documented one realtime retry stays reachable and the kept receipt is the deciding attempt's | unit + policy | `^(perf_gate_receipt_controls\|perf_gate_retry_controls\|v02_delivery_controls\|workflow_policy_(group_[a-z_]+\|coverage(_controls)?))$` | ratio over limit, other SHA, PR event, wrong limits blob; upload without `if: always()` and upload moved after the seeded-regression step (policy mutants, artifact-flow); attempt 1 below the floor then attempt 2 passing must exit 0 with attempt 2's `realtime_min` (not attempt 1's, and no `perf-receipt-output` collision); both attempts below the floor exit 1 keeping attempt 2's receipt; an Ir refusal is not retried and still leaves its receipt | ✅ covered |
+| SC3 / V9 | 19-05 | Consumer receipt carries `host_smoke` | unit | `^(v02_delivery_controls\|v02_consumer_controls_(c\|cpp)\|installed_host_smoke)$` | `host_smoke` missing or not passed | ✅ covered |
+| SC3 / V10 | 19-05 | Published-asset readback reconciles against the pre-publish inventory persisted as a workflow artifact before publish | unit + replay + policy | `^(v03_dispositions(_controls)?\|v03_readback(_controls)?\|release_lifecycle_post_tag_(trust\|capture_source\|draft_assets\|recovery_sums\|consumer\|publication\|coverage)_controls\|workflow_policy_(group_[a-z_]+\|coverage(_controls)?))$` | asset set or id drift, digest vs `SHA256SUMS`, sidecar blob, draft, tag SHA or tree, another revision's receipt, an unsourced or altered inventory; final-gate without the inventory write; upload step deleted or moved after publish-draft | ✅ covered |
+| D-07 | 19-01 | Player build linkage is clean | integration | `ctest --test-dir build-player -R '^core_linkage_'` | `mutant` name restored; double link restored | ✅ covered |
+| D-08 | 19-01, 19-02, 19-06 | WR-C04, IN-08 (19-01); IN-05, IN-02 (19-02); IN-07 (19-06) | policy + unit | `^(workflow_policy_(check\|group_[a-z_]+\|coverage(_controls)?)\|v02_fuzz_controls\|test_budget(_controls)?\|state_format_contract\|v02_adoption_docs_controls)$` | head-copy mutant; missing `persist-credentials: false`; header-edit fuzz control; IN-02 sentence omission; IN-07 phrase omission and a retry tamper-overclaim | ✅ covered |
+| D-09 | 19-02 | WR-A05 and IN-01 | unit | `^(state_refusal.*\|state_canonical\|state_semantic_bounds\|state_codec_mutant_controls\|state_portable_pins\|state_pin_controls\|state_continuation.*)$` | range-check removal mutant; byte-identical goldens and pins | ✅ covered |
+| D-21 | 19-04 (inventory, captures incl. `ci_run`), 19-05 (its own forms) | `POST_TAG_ENDPOINTS` covers every gh form in the lifecycle, judges and release.yml, each replayed with REQUIRED_PATHS or policy-pinned | replay + policy | `^(release_lifecycle_(replay\|controls\|post_tag_(trust\|capture_source\|draft_assets\|recovery_sums\|consumer\|publication\|coverage)_controls)\|workflow_policy_(group_[a-z_]+\|coverage(_controls)?))$` | unrouted lifecycle endpoint; new release.yml form not in the table; replayed entry without REQUIRED_PATHS; perf receipt over the release-please run shape; renamed perf-gate download | ✅ covered |
+| D-25 | 19-06 (19-03 for the retired host entries) | Docs are coherent, the CHANGELOG first heading is a version, the D-16/D-25/OQ-5 release.md prose and the unreleased.md stub are pinned, and the retired `unreleased_host_entries` coverage lives in the claim validator | unit | `^(changelog_first_heading(_controls)?\|doc_links_versions(_controls)?\|v02_adoption_docs(_controls)?\|support_claims_controls\|doc_contract_.*\|cgb_corpus_claims\|cgb_hdma_claims_contract)$` | `## Unreleased` above a version; stale ledger link; each pinned phrase omitted; the stub phrase dropped or a pending v0.3.0 section re-added; a host CTest or PLAY-01 dropped from the claims (control 8b) | ✅ covered |
+| D-10 / D-16 | 19-02 | RM-024 deferrals and the RM-032 v0.4 row are recorded | unit | `^planning_hygiene_controls$` | each of the eight deferral pins removed from FUTURE-MILESTONES.md text | ✅ covered |
+| REL-01 trace | 19-07 | REL-01 checked and its traceability row Complete on main after PR B | point-in-time | 19-07 Task 4 second `<automated>` block (`git show origin/main:.planning/REQUIREMENTS.md`) | the same predicate is false at `f80bdf54` | ✅ covered |
+| D-19 | 19-06 | Pre-flight 0.3.0 tree is green locally; the hosted pre-flight on the transient `rehearsal/v0.3.0` runs all six producer lanes green, past their derive steps, then the branch is deleted (19-06-D2) | integration | scratch tree: full suite, player tree, lifecycle replay, `--release-notes`, `--check --release-head --git-root <remote clone>`, derive and verify-subject for `rehearsal/v0.3.0`, judge differential (phase-branch judge passes every step; f80bdf54 judge under its own argv recorded per step as exit code plus message key, with no usage key; f80bdf54 judge under H' argv predicts one outcome line `success` or `failure\|<step>\|<exit>\|<key>`; each judge work directory holds `git worktree add` checkouts, `subject` at H' and `trusted-judge` at the judge revision; `uses:` steps not emulated, so a hosted failure there fails closed); key rule: committed `tests/scripts/verify-judge-outcome.py`, CTest `judge_outcome_controls` (19-06 Task 1 first `<automated>` block); hosted: 19-06 Task 1 third `<automated>` block | bump-only tree fails; `rehearsal/preflight-v0.3.0` derive refused; `judge_outcome_controls` refuses an empty failed-step log and a failure without an exit-code line as undecidable, and over prefixed `--log-failed` fixtures never lets another job's lines (corpus `full_ctest`, continue-on-error) or a non-failed judge step decide the key; the hosted judge outcome line (step, exit code and key) must equal the predicted line, so a usage or receipt refusal never reads as a REJECT set or a pass; branch absent afterwards | ✅ covered |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -76,12 +76,12 @@ created: "2026-10-29"
 
 ## Wave 0 Requirements
 
-- [ ] New CTests: `support_claims`, `support_claims_controls`, `perf_gate_receipt_controls`, `perf_gate_retry_controls`, `judge_outcome_controls`, `v03_readback`, `v03_readback_controls`, `changelog_first_heading`, `changelog_first_heading_controls`, and `doc_links_versions` with its controls.
+- [x] New CTests: `support_claims`, `support_claims_controls`, `perf_gate_receipt_controls`, `perf_gate_retry_controls`, `judge_outcome_controls`, `v03_readback`, `v03_readback_controls`, `changelog_first_heading`, `changelog_first_heading_controls`, and `doc_links_versions` with its controls.
   - Register each in `tests/CMakeLists.txt` and append it to `tests/expected-tests.txt`.
   - Give `LABELS planning` to each one that reads `.planning/`.
   - Set an explicit TIMEOUT ≤ 60 on each.
-- [ ] Split `release_lifecycle_controls`: it already takes 51 s of its 60 s budget.
-- [ ] No framework install is needed.
+- [x] Split `release_lifecycle_controls`: it already takes 51 s of its 60 s budget.
+- [x] No framework install is needed.
 
 ---
 
@@ -93,14 +93,14 @@ None. Every phase behavior has automated verification (D-069). The owner-only de
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Validation:** Automated coverage is present for all eight executed plans. Owner scope decisions are recorded separately and are not test passes.
 
 ## Wave 1 Integration Evidence
 
@@ -123,3 +123,24 @@ At `2be716eb`, configure/build passed. The 1,685-test integration run recorded 1
 The failed-case rerun, including fixture dependencies, passed 139/140 without source changes; only the known label defect remained (`build/phase19-wave3-rerun.xml`). All timed-out cases passed in that rerun. Commit `1b9540f6` adds the planning label to the shared-module readback test. The affected selection passed 5/5: readback controls, test budget and controls, planning labels and controls (`build/phase19-wave3-label-fix.xml`). The timeout-generated dense-input fixture was preserved under `build/phase19-wave3-timeout-artifacts/`.
 
 These checks resolve the failures from the integration run without changing limits or omitting cases. Schema/UI gates were non-blocking; codebase drift skipped because no structure map exists. Phase 19 remains active at plan 19-06; REL-01 remains pending.
+
+
+## Final execution validation map
+
+All 29 tasks across 19-01..19-08 declare automated commands (35 automated blocks), and the authored map above names their refusing controls. Plans 19-01..19-05 remain backed by their implementation and integration records. The frozen 19-06 halted summary is a historical pre-merge snapshot; its operational closure is independently recorded in 19-07 through the qualified PR A, renewed preflight and actual protected merges. The reserved 19-08 was used, with approved D-130..D-133 continuations; no second gap or automatic next phase is introduced.
+
+At committed source 8a561c58, the focused release/readback/recovery/disclosure/window/policy selection passed 19/19, including the actual published readback, wrong G/S identity controls, tagged-ledger byte-flip refusal, active-window refusals and complete/disjoint policy coverage. The recovery suite retains all original controls and now proves 93 refusals plus 12 positives. Live summary-coverage, planning-label and documentation-link checks with controls passed after the final summaries were authored. The original first failure, HTTP200 association drift and no-write UTF-8 entrypoint failure remain recorded; they are not reclassified as passes.
+
+L-4 measured semantic-group times at 8a561c58: CI15.71s, release jobs28.85s, release support6.80s, rehearsal17.24s, ledger5.08s, helpers5.84s. Coverage0.95s and coverage controls1.95s. Existing group TIMEOUT180 remains unchanged; the old49.9s aggregate is historical. Raw-log observer verification accepts the actual timestamped W verdict/R2 binding and refuses wrong-run and inactive substitutions; echoed shell patterns are excluded (`build/phase19-window/prb-observer-check.json`).
+
+D-132/D-133 entrypoint qualification exercised the actual main operator against intercepted transport, including the old str/bytes failure, the two-call UTF-8 correction, pre/post body negatives and no real mutation. The actual separately marked same-ID association restoration and sole retry then passed. Public captures contain bounded sanitized projections and raw-byte digests; actual publication is proven independently in 19-release-readback.json.
+
+The final local full-suite/player-package qualification, canonical security/code reviews and exact-head hosted protected checks remain mandatory before PR B merge. The REL-01 main-boundary predicate is replayed against the immutable actual squash and must refuse the pending f80bdf54 base; its final evidence and boundary SHA belong only in local continue.md. This validation map specifies that automated gate without claiming a future merge. No manual-only verification or human UAT is added. Final owner route is `/gsd-verify-work 19`, never an automatic milestone audit.
+
+## Validation Audit 2026-10-31
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |

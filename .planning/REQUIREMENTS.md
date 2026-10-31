@@ -90,7 +90,7 @@ Each requirement names the automated check that proves it (D-105). Every check c
 
 ### Release
 
-- [ ] **REL-01**: `v0.3.0` is published from its exact tag.
+- [x] **REL-01**: `v0.3.0` is published from its exact tag.
   - The exact-tag producer rehearsal ran green on the version PR before tagging.
   - A v0.3.0 support ledger scopes the save-state and host-contract claims by model, corpus and platform.
   - Consumer, package, fuzz and perf-gate receipts are bound to the tag.
@@ -148,7 +148,7 @@ These are deferred and tracked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTON
 | HOST-01 | Phase 18 | Complete |
 | HOST-02 | Phase 18 | Complete |
 | HOST-03 | Phase 18 | Complete |
-| REL-01 | Phase 19 | Pending |
+| REL-01 | Phase 19 | Complete |
 
 **Coverage:**
 - v0.3 requirements: 17 total
@@ -157,4 +157,4 @@ These are deferred and tracked in [FUTURE-MILESTONES.md](context/FUTURE-MILESTON
 
 ---
 *Requirements defined: 2026-10-24*
-*Last updated: 2026-10-24 after the v0.3 roadmap (Phases 16–19)*
+*Last updated: 2026-10-31 after Phase 19 publication and readback*

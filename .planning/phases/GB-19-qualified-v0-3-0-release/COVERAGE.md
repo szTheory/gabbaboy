@@ -1,6 +1,6 @@
 # API Coverage — bounded GitHub release lifecycle
 
-This phase integrates the existing GabbaBoy release lifecycle, not a general GitHub client. The capability surface is the23 post-tag endpoint/CLI forms inventoried by POST_TAG_ENDPOINTS in tests/scripts/verify-release-lifecycle.py, plus the two explicit operator recovery actions required by D-27. Every form is integrated; there are no silent opt-outs or new services. Existing declared replay routes and named workflow-policy rules remain authoritative. Fixture data proves deterministic logic and response shapes; actual authenticated runs prove permissions.
+This phase integrates the existing GabbaBoy release lifecycle, not a general GitHub client. The capability surface is the23 post-tag endpoint/CLI forms inventoried by POST_TAG_ENDPOINTS in tests/scripts/verify-release-lifecycle.py, plus the three explicit operator recovery actions bounded by D-27 and the owner-approved D-130..D-133 recovery decisions. Every form is integrated; there are no silent opt-outs or new services. Existing declared replay routes and named workflow-policy rules remain authoritative. Fixture data proves deterministic logic and response shapes; actual authenticated runs prove permissions.
 
 | capability | decision | reason |
 |---|---|---|
@@ -27,9 +27,10 @@ This phase integrates the existing GabbaBoy release lifecycle, not a general Git
 | gh run download --name perf-gate-{run}-{attempt} | INTEGRATE | Existing perf_gate_artifact_name policy; exact-source performance receipt. |
 | gh run list | INTEGRATE | Existing workflow_runs replay; nightly selection plus actual competing-run observation. |
 | gh run view | INTEGRATE | Existing workflow_runs replay; actual conclusion/head/event and nightly results. |
-| PATCH releases/429606490 with body only | INTEGRATE |19-08 proves one tag-pinned ledger-link replacement, both hashes, identity/concurrency/refusal/no-op cases and unchanged draft/tag. |
+| PATCH releases/429606490 with body only (historical) | INTEGRATE | The single actual request repaired the notes but changed the draft association. Preserve its request/response, unchanged real Git tag and exact body digests; the drift is a refusing regression and this action must not be repeated. |
+| PATCH releases/429606490 with tag_name only | INTEGRATE | D-132/D-133 authorize one separately marked same-ID association restoration after full-entrypoint UTF-8 replay, fresh independent review and actual read-only preflight. Captured response/readbacks prove unchanged repaired body, target, flags and empty unpublished assets before the sole dispatch. Existing-marker, ambiguous-state, wrong-body/ID/tag/flag/count and conflict controls refuse. |
 | POST actions/workflows/release-please.yml/dispatches | INTEGRATE | Main ref and explicit retry inputs;19-08 controls forbid duplicate/foreign requests, actual API run/job and candidate logs bind mainG to productS. |
 
 For actual readback, paginated APIs retain all pages and validate their total/unique identities; bounded historical fixture samples never substitute for full live inventories. Auth tokens, headers and private machine data are excluded from committed captures.
 
-Plan19-08 extends the existing checker and preserves every frozen baseline/ID/policy pin. It creates no new release endpoint, product job, package dependency, service account, permission or general-purpose API abstraction. Generic GitHub issue/project/organization administration is outside this release capability boundary; the already authorized boundary triage remains in19-07.
+Plan19-08 extends the existing checker and preserves every frozen baseline/ID/policy pin. The association restoration adds one explicitly bounded payload form on the existing release-ID endpoint; it adds no product job, package dependency, service account, permission or general-purpose API abstraction. The actual successful sole retry and committed readback close the recovery; no further live release action is included. Generic GitHub issue/project/organization administration is outside this release capability boundary; the already authorized boundary triage remains in19-07.
