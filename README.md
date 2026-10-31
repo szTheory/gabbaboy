@@ -36,7 +36,7 @@ The install exports `GabbaBoy::core` for C17 consumers. The
 [native integration guide](docs/native-integration.md) walks through the
 relocated C example, bounded stepping, timestamped input, caller-owned frame
 and audio buffers, and host-owned battery persistence. The
-[versioned support ledger](docs/support/v0.2.1.md) defines the DMG-CPU-B and
+[versioned support ledger](docs/support/v0.3.0.md) defines the DMG-CPU-B and
 CGB-CPU-E software-model scope, the cartridge and save matrix, and the corpus
 evidence, with its known limits; the earlier [v0.1.0 ledger](docs/support/v0.1.0.md)
 remains the record for that release. A release attaches a separate
@@ -228,7 +228,11 @@ candidate byte comparison. Ordinary core tests remain offline.
 Pull requests run `native-linux-x64` on Ubuntu 22.04, `native-macos-arm64` on
 macOS 15 ARM64, and `native-windows-x64` on Windows Server 2022. Each lane installs
 the package and checks the exact required CTest inventory, including the
-installed runner and external C/C++ consumers of the timestamped API.
+installed runner and external C/C++ consumers of the timestamped API. The inspected
+hosted macOS ARM64 core archive, installed runner, player and bundled SDL declare macOS
+15.0 as their minimum deployment target and were built with the macOS 15.5 SDK. These are
+build facts for the inspected artifacts; broader OS compatibility remains untested. This
+describes those qualified artifacts; it does not promise support on older macOS releases.
 `linux-asan-ubsan-tests` runs the core suite with AddressSanitizer and
 UndefinedBehaviorSanitizer, and `linux-asan-ubsan` runs the bounded fuzz
 campaign in the same configuration. `cmake-floor-3.25.3`

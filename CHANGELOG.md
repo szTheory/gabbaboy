@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.3.0](https://github.com/szTheory/gabbaboy/compare/v0.2.1...v0.3.0) (2026-10-30)
+
+GabbaBoy v0.3.0 adds the selected CGB-CPU-E software model beside DMG-CPU-B.
+
+- Save states load only in the exact GabbaBoy release that wrote them. Battery saves remain the cross-version persistence path.
+- Host mode is POSIX-only; Windows refuses `--save-dir`.
+- No CGB game-level evidence exists. The CGB test-ROM corpus is software-model evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY.
+- The macOS player archive is unsigned and not notarized.
+- The inspected hosted macOS ARM64 core archive, installed runner, player and bundled
+  SDL declare macOS 15.0 as their minimum deployment target and were built with the
+  macOS 15.5 SDK. These are build facts for the inspected artifacts; broader OS
+  compatibility remains untested. This describes those qualified artifacts; it does
+  not promise support on older macOS releases.
+- Support scope and known limits: [support ledger](docs/support/v0.3.0.md).
+- Instruction count: +9.6% versus v0.2.0 (receipt: tests/baseline/perf-attribution-v1.json; measured at f80bdf54c6c7).
+- The Ir attribution figure was measured at f80bdf54c6c7 on main before the release commit; the release-binding Ir check is the perf-gate receipt verified at the tagged source.
+
+### Features
+
+* add player save slots and host contract (Phase 18) ([#132](https://github.com/szTheory/gabbaboy/issues/132)) ([f80bdf5](https://github.com/szTheory/gabbaboy/commit/f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4))
+* **phase-17:** native save state core ([#130](https://github.com/szTheory/gabbaboy/issues/130)) ([f4082a6](https://github.com/szTheory/gabbaboy/commit/f4082a657bffad80c5b5d487a55ee748ce00d8f6))
+
 ## [0.2.1](https://github.com/szTheory/gabbaboy/compare/v0.2.0...v0.2.1) (2026-10-25)
 
 

@@ -8,7 +8,7 @@ For a relocated installed C consumer, including bounded stepping, timestamped
 input, caller-owned video/audio, and host battery import/export, see the
 [native integration guide](native-integration.md). Its Playstead section
 describes a possible future adapter seam; no live Game Boy integration exists.
-The tracked [v0.2.1 support ledger](support/v0.2.1.md) states the model and
+The tracked [v0.3.0 support ledger](support/v0.3.0.md) states the model and
 corpus limits; the [v0.1.0 ledger](support/v0.1.0.md) remains the record for
 that release. A release's separate `support-ledger.json` attachment binds the
 applicable ledger to the exact tagged source revision. No CGB game-level
@@ -35,7 +35,18 @@ receipt and PCM bytes under `build/phase3-player/audio-measurement/`.
 
 Every pull request runs the hosted macOS package lane. It checks out the exact pull-request head, builds with the pinned SDL source, runs the nonempty player test inventory, packages the executable with SDL, both original fixtures, and license notices, then uploads a short-lived candidate. The player smoke injects SDL Z-down and Z-up events, samples the rendered demo tile while held and after release, and checks the matching guest results. A separate macOS consumer job downloads that exact candidate, checks its digest and source/SDL/fixture/license metadata, extracts it, and reruns the same SDL event, guest-response, rendered-pixel, and MBC1 battery-continuation smoke before uploading the qualified preview artifact. The continuation smoke runs the packaged ROM in one process to write progress and a fresh process to resume it. The candidate is retained for one day; the qualified preview and receipt are retained for 14 days.
 
-The macOS package contains `bin/gabbaboy-player`, its bundled `lib/libSDL3.0.dylib`, the demo fixture and the reproducible MBC1 continuation source/ROM/manifest under `share/gabbaboy`, license notices, preview documentation, and provenance metadata. Package metadata records the standard MBC1 type `$03`/8 KiB battery fixture digests and the implemented scoped DMG audio model. The package is unsigned and not notarized. The verification smoke uses an offscreen software renderer and isolated temporary preferences; it verifies software file-backed continuation and the SDL dummy audio path, not physical hardware behavior, native-window appearance, or audible quality.
+The macOS package contains `bin/gabbaboy-player`, its bundled `lib/libSDL3.0.dylib`, the
+demo fixture and the reproducible MBC1 continuation source/ROM/manifest under
+`share/gabbaboy`, license notices, preview documentation, and provenance metadata. Package
+metadata records the standard MBC1 type `$03`/8 KiB battery fixture digests and the
+implemented scoped DMG audio model. The package is unsigned and not notarized. The inspected
+hosted macOS ARM64 core archive, installed runner, player and bundled SDL declare macOS 15.0
+as their minimum deployment target and were built with the macOS 15.5 SDK. These are build
+facts for the inspected artifacts; broader OS compatibility remains untested. This describes
+those qualified artifacts; it does not promise support on older macOS releases. The
+verification smoke uses an offscreen software renderer and isolated temporary
+preferences; it verifies software file-backed continuation and the SDL dummy audio path, not
+physical hardware behavior, native-window appearance, or audible quality.
 
 After a local build succeeds, launch `build/phase3-player/gabbaboy/gabbaboy-player` on a desktop. For a qualified hosted artifact, download and extract the `.tar.gz` package, then launch `installed-prefix/bin/gabbaboy-player`; the player locates its bundled demo relative to its executable.
 
