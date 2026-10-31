@@ -168,6 +168,24 @@ def _require_file_bytes(root: Path, revision: str, path: str, size: int, digest:
     return pinned
 
 
+def tree_files(root: Path, revision: str, prefix: str) -> set[str]:
+    raw = git(root, "ls-tree", "-r", "-z", revision, "--", prefix)
+    result: set[str] = set()
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
+        try:
+            metadata, path_raw = record.split(b"\t", 1)
+            mode, kind, _oid = metadata.decode("ascii").split(" ", 2)
+            path = path_raw.decode("utf-8", errors="strict")
+        except (ValueError, UnicodeDecodeError):
+            raise Reject("git-tree-invalid", prefix) from None
+        if kind != "blob" or mode not in ("100644", "100755"):
+            raise Reject("fixture-link-or-special-file", path)
+        result.add(path)
+    return result
+
+
 def check_manifest(root: Path, manifest_path: str) -> dict:
     """Check one candidate manifest. The admission commit is independent of mutable record fields."""
     manifest_path = relative_path(manifest_path, "manifest path")
@@ -290,26 +308,57 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
         raise Reject("notice-record-invalid", "local notice identity differs from files")
     if local_notice.rsplit("/", 1)[0] != fixture_dir:
         raise Reject("notice-record-invalid", "local notice must be in the fixture directory")
+    notice_component = components["notices"]
+    if notice_component.get("presence") != "present" or local_notice not in notice_component.get("covered_paths", []):
+        raise Reject("notice-record-invalid", "the notices component must cover the local notice")
 
     pin_path = f"{fixture_dir}/admission.commit"
     pin_raw = read_regular(root, pin_path)
     try:
-        pin_text = pin_raw.decode("ascii").strip()
+        pin_text = pin_raw.decode("ascii")
     except UnicodeDecodeError:
         raise Reject("admission-pin-invalid", pin_path) from None
+    if not re.fullmatch(r"[0-9a-f]{40}\n?", pin_text):
+        raise Reject("admission-pin-invalid", "must contain exactly one full commit id")
+    pin_text = pin_text.rstrip("\n")
     pin = check_commit(root, pin_text, "admission-pin-invalid")
+    current_head = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
+    ancestry = subprocess.run(["git", "merge-base", "--is-ancestor", pin, current_head], cwd=root,
+                              capture_output=True, check=False, timeout=30)
+    if ancestry.returncode != 0:
+        raise Reject("admission-pin-not-in-history", pin)
 
-    # RED-stage implementation validates the mutable manifest and its record fields, but does not yet bind
-    # those bytes back to `pin`. The coordinated rewrite control must expose that missing invariant.
+    pinned_manifest = blob(root, pin, manifest_path)
+    if pinned_manifest != manifest_raw:
+        raise Reject("admission-pin-mismatch", manifest_path)
+    expected_files = {manifest_path, *files}
+    pinned_files = tree_files(root, pin, fixture_dir)
+    if pinned_files != expected_files:
+        extra = sorted(pinned_files ^ expected_files)
+        raise Reject("fixture-file-inventory-mismatch", extra[0] if extra else fixture_dir)
+    current_files: set[str] = set()
+    for path in root.joinpath(*PurePosixPath(fixture_dir).parts).rglob("*"):
+        if path.is_symlink():
+            raise Reject("path-link", path.relative_to(root).as_posix())
+        if path.is_file():
+            current_files.add(path.relative_to(root).as_posix())
+    if current_files != expected_files | {pin_path}:
+        extra = sorted(current_files ^ (expected_files | {pin_path}))
+        raise Reject("fixture-file-inventory-mismatch", extra[0] if extra else fixture_dir)
     for path, (size, digest) in files.items():
-        current = read_regular(root, path)
-        if len(current) != size or sha256(current) != digest:
-            raise Reject("record-identity-mismatch", path)
+        if not path.startswith(fixture_dir + "/") or path in (manifest_path, pin_path):
+            raise Reject("record-files-invalid", f"files must stay inside {fixture_dir}: {path}")
+        _require_file_bytes(root, pin, path, size, digest)
     for path, (size, digest) in inputs.items():
-        current = read_regular(root, path)
-        if len(current) != size or sha256(current) != digest:
+        if not path.startswith(fixture_dir + "/") or path not in files:
+            raise Reject("input-not-fixture-file", path)
+        pinned = blob(root, pin, path)
+        if len(pinned) != size or sha256(pinned) != digest:
             raise Reject("input-identity-mismatch", path)
-    notice_index = read_regular(root, index_path)
+    current_notice_index = read_regular(root, index_path)
+    notice_index = blob(root, pin, index_path)
+    if current_notice_index != notice_index:
+        raise Reject("admission-pin-mismatch", index_path)
     manifest_digest = sha256(manifest_raw).encode("ascii")
     license_digest = notices["sha256"].encode("ascii")
     if manifest_digest not in notice_index or license_digest not in notice_index or local_notice.encode() not in notice_index:
