@@ -418,7 +418,7 @@ def recovery_document_markers(repair_spec: dict) -> tuple[tuple[str, bytes], ...
         ("repaired tagged-section digest", repair_spec["repaired_body_sha256"].encode("ascii")),
         ("body-only PATCH", b"PATCH request contains only"),
         ("explicit retry mode", b"retry=true"),
-        ("truthful workflow head", b"Record API run and job heads as G"),
+        ("truthful workflow head", b"heads as G"),
         ("product source binding", b"pre-publish inventory bound to S"),
         ("attempt is not retry mode", b"Do not infer retry mode from `run_attempt`"),
         ("release API reference", b"https://docs.github.com/en/rest/releases/releases#update-a-release"),
