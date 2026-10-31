@@ -1,20 +1,16 @@
 ---
 gsd_state_version: "1.0"
-milestone: v0.3
-milestone_name: Save States & Host Contract
-current_phase: 19
-current_phase_name: Qualified v0.3.0 Release
-status: milestone_completed
-stopped_at: v0.3 archived with owner-approved overrides; next milestone not started
-last_updated: "2026-10-31T19:01:44.469697+00:00"
-progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 35
-  completed_plans: 35
-  percent: 100
+milestone: v0.4
+milestone_name: Evidence Floor
+status: planning
+last_updated: "2026-10-31T20:44:45.296Z"
 last_activity: 2026-10-31
-last_activity_desc: "v0.3 milestone completion and archival; owner-approved override_closeout"
+progress:
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,11 +24,10 @@ See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 ## Current Position
 
-Completed stage: **v0.3 — Save States & Host Contract, milestone completion and archival**. Final completed numbered phase: **19 — Qualified v0.3.0 Release**. All four phases, 35 plans and 17 requirements are delivered. Release v0.3.0 is published. See [MILESTONES.md](MILESTONES.md), [audit](milestones/v0.3-MILESTONE-AUDIT.md) and [closeout](milestones/v0.3-CLOSEOUT.md).
-
-The owner selected **override_closeout** after disclosure: three stale runtime verification projections, nine nonblocking audit debts and the standalone closeout-scan helper failure. Original phase SUMMARY/VERIFICATION records and their fingerprints remain unchanged. The audit's final implementation-head suite passed without failures/skips; all four automated UAT closures and their weakening controls pass. No physical/perceptual or live Playstead qualification is inferred.
-
-**Next stage: proposed v0.4 — Evidence Floor, milestone initialization**, not started. Exact command: `/gsd-new-milestone`. The owner acts next when ready. No next phase number/title or Phase 20 exists; define those with fresh requirements at kickoff. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. No human product UAT or release repair is pending.
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-10-31 — Milestone v0.4 started
 
 ## Accumulated Context
 

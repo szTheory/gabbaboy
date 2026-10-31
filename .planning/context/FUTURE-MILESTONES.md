@@ -1,8 +1,8 @@
 # Rolling product roadmap
 
-Reviewed: 2026-10-31 · Direction revision: 5 · Last completed milestone: **v0.3 Save States & Host Contract** (Phases 16–19)
+Reviewed: 2026-10-31 · Direction revision: 6 · Last completed milestone: **v0.3 Save States & Host Contract** (Phases 16–19); v0.4 kickoff is owner-approved.
 
-This is revisable direction, not authorization to advance. [ROADMAP.md](../ROADMAP.md) is the execution contract and has detailed phases for the active milestone only. Planning milestone numbers are not package versions. The kickoff evidence is [research/v0.3/SUMMARY.md](../research/v0.3/SUMMARY.md); the boundary refresh is [MILESTONE-BOUNDARY-LESSONS.md](../research/v0.3/MILESTONE-BOUNDARY-LESSONS.md). v0.3.0 is published and v0.3 archived with owner-approved overrides and nonblocking deferrals; `/gsd-new-milestone` is the next owner-selected command. No next milestone or Phase 20 is authorized.
+This is revisable direction, not authorization to advance. [ROADMAP.md](../ROADMAP.md) is the execution contract and has detailed phases for the active milestone only. Planning milestone numbers are not package versions. The kickoff evidence is [research/v0.3/SUMMARY.md](../research/v0.3/SUMMARY.md); the boundary refresh is [MILESTONE-BOUNDARY-LESSONS.md](../research/v0.3/MILESTONE-BOUNDARY-LESSONS.md). v0.3.0 is published and v0.3 archived with owner-approved overrides and nonblocking deferrals. v0.4 Evidence Floor is now selected for planning; only its approved roadmap authorizes later phase work.
 
 ## Horizons and planning depth
 
@@ -60,17 +60,24 @@ Ids `RM-NNN` are stable and never reused.
 
 | ID | Status | Milestone | Outcome | Promotion trigger | Alternative considered |
 |---|---|---|---|---|---|
-| RM-004 | proposed | **v0.4 Evidence Floor** | <ul><li>The first CGB game-level evidence, or a re-justified absence.</li><li>Font-substituted dmg/cgb-acid2 derivatives.</li><li>gbmicrotest admission.</li></ul> | v0.3 shipped. The owner decides on copyleft fixtures and the acid2/Mealybug font strategy at kickoff | Doing PPU timing first was rejected, because the timing work needs these oracles in place first |
+| RM-004 | proposed | **v0.4 Evidence Floor** | <ul><li>The first CGB game-level evidence, or a re-justified absence.</li><li>A CGB RGB555-aware progress path in the existing acceptance harness, with a guest predicate and negative controls.</li><li>Font-substituted dmg/cgb-acid2 derivatives and gbmicrotest admission.</li><li>A scene-first, agent-owned feedback-to-regression loop.</li></ul> | v0.3 shipped; owner approved the bounded candidate/fallback and fixture-rights gates at kickoff | Doing PPU timing first was rejected because the timing work needs these oracles in place first |
 | RM-032 | proposed | v0.4 | **Release-tooling candidates deferred by Phase 19:**<ul><li>GitHub immutable releases with `gh release verify` (enable only before a window opens).</li><li>An optional ruleset protecting `v*` tags.</li><li>SLSA build provenance (needs a new action; weigh it against copy-over-dependency).</li><li>Rename the `v02-*` evidence names to version-agnostic names (D-16).</li><li>`bump-minor-pre-major` in release-please-config.json (D-03).</li><li>Move the paired-timing baseline off v0.1.0.</li></ul> | v0.4 kickoff, before its release window | Doing them in v0.3.0 was rejected: each is an unrehearsed change to the publish path or to the evidence names (19-CONTEXT Deferred Ideas) |
 | RM-005 | proposed | **v0.5 DMG PPU Timing** | DMG raster effects render correctly within a declared corpus: pixel FIFO and fetcher, mode-3 length, Mealybug DMG, Mooneye `ppu/` | RM-004 oracles admitted. Perf stays within the RM-003 budget | Landing behind a profile flag, with the old renderer kept as a reference, is the fallback if over budget |
+| RM-009 | proposed | **Near-term libretro core candidate; milestone slot undecided** | A libretro adapter with globals confined to the adapter and states via STATE-01, followed by a real Steam Deck/RetroArch path check | The owner has concrete Steam Deck interest. Keep it out of v0.4; if the owner later schedules it earlier, explicitly trade away acid2/gbmicrotest admission and delay PPU-timing readiness. The v0.4 default is optional direct SSH/native exploration with no support claim | A desktop build or another emulator on the Deck does not qualify GabbaBoy there |
 
 **RM-004 detail.**
 - **Candidate games:**
-  - Potion Panic (MIT, RGBDS) first;
-  - µCity (GPL-3.0+, CC BY-SA), only if copyleft fixtures are admitted;
-  - Rebound is not retried unless the owner reopens D-101.
-- **The time-box** is one plan per candidate, with a fallback decided in advance.
-- **Acid2:** the derivative replaces the glyph tiles and masks the text region. Label it as such and keep the original runner local-only as a cross-check.
+  - [Potion Panic (GB Compo 2025 demo)](https://github.com/gbcompo25/potion-panic) first, only if the exact source/build/ROM and all notices are verified and the creator's [CC BY-NC-SA 4.0 asset terms](https://deved.itch.io/potion-panic) cover repository and public-CI use. The creator lists MIT code separately from those assets.
+  - [µCity 1.3](https://github.com/AntonioND/ucity)'s preferred `ucity.gbc` as the sole fallback, only after pinning the exact release/source/ROM, CGB-only header, save configuration, GPLv3+ code and per-file exceptions, and CC BY-SA 4.0 media notices.
+  - No third candidate; if neither passes its bounded admission gate, preserve the failure reason and report justified absence. Private observations from the owner's own collection do not become redistributable fixtures.
+- **The time-box** is one bounded admission/build/predicate attempt per candidate, in that order. A failed rights or feasibility gate is not an emulation failure.
+- **CGB acceptance:** extend the shared runner's existing RGB555 observation path rather than adding a second harness. Use the CGB-CPU-E software profile, verify the admitted ROM actually selects CGB mode, and require a meaningful guest-progress predicate plus no-input/wrong-input or deliberately broken-predicate controls. Frame and PCM digests are reproducibility evidence, not independent visual/audio correctness or hardware evidence.
+- **Acid2:** derivatives replace glyph tiles and mask the text region. Label the substitution, retain source/build/provenance checks, and claim controlled composition only—not mode-3 timing. Admit gbmicrotest separately with its own rights and model applicability.
+- **Feedback:** short scene reports guide agent-owned reproduction, classification, and minimal automated regressions with independent expectations and fault controls. Human play is optional and not a release gate. Personal ROMs, saves, and captures remain private.
+- **Steam Deck:** the owner has already used SSH to transfer personal ROMs and test Nesturbator on the Deck. A direct GabbaBoy Linux/SDL attempt may be used for exploratory feedback if practical, but the current player is not a qualified Linux/Deck product path. Full libretro is deferred from v0.4 and reconsidered as RM-009.
+- **Licensing:** retain GabbaBoy's root MIT license. Fixture rights stay separate and exact; no broad license rewrite or fixture relabeling.
+
+**libfuturo coordination:** the owner reports its initial direction as a core/host specification, a small SDK, and conformance against real consumers. Treat this as architecture context only. Keep GabbaBoy independently usable; add or change an adapter only for a concrete consumer gap. Do not add a dependency, wait on libfuturo, or freeze GabbaBoy's API/state format early.
 
 ## Mid
 
@@ -79,7 +86,6 @@ Ids `RM-NNN` are stable and never reused.
 | RM-006 | proposed | **v0.6 CGB Timing & Colour** | <ul><li>Expected failures cut to an owner-chosen target, each one reason-coded.</li><li>A second CGB game.</li><li>An optional user-supplied boot ROM.</li></ul> | RM-005 shipped. A CGB-D profile spike is adopted only if its delta list is small and source-backed |
 | RM-007 | proposed | **v0.7 Audio Qualification** | APU edge behaviour; SameSuite APU denominators; PCM digests. No perceptual claim | RM-006 shipped. Swap with RM-006 if game evidence shows audio defects first |
 | RM-008 | proposed | **v0.8 Reach (Wasm)** | An Emscripten/Wasm CI leg with a realtime receipt | RM-007 shipped |
-| RM-009 | parked | **libretro core** | A libretro adapter with globals confined to the adapter and states via STATE-01 | A named libretro adopter, or Playstead selecting libretro |
 
 ## Long
 
@@ -117,7 +123,7 @@ RM-024 remains parked: parity/canonical-value sweep, installed-tracer hash reche
 
 RM-025 remains a measured follow-up. The completed main run at the Phase 19 boundary spent 2,071 seconds in the sanitizer test stream, 868 seconds in native Linux CTest, and 1,388 seconds in the CMake-floor original/relocated checks. The separate Linux support-ledger self-test took 20 seconds and is repeated by CTest; at the next authorized CI change, prove equivalent environment/assertions/lane membership before consolidating it. Preserve both CMake install configurations and all sanitizer/platform coverage. No pipeline rewrite is part of this audit.
 
-RM-032 remains proposed for v0.4 kickoff. The v0.4 Evidence Floor direction is unchanged; rights and game selection are owner decisions at kickoff, not resolved by a v0.3 release. The live Playstead process/state work reinforces the need to re-read the current pin/protocol when RM-020 is triggered; no live adapter acceptance is inferred here.
+RM-032 remains a set of proposed release-tooling candidates, not automatic v0.4 scope. The owner selected the v0.4 Evidence Floor and its conditional two-candidate fixture gate; exact artifact admission remains contingent on its source, model, build, digest, and rights checks. The live Playstead process/state work reinforces the need to re-read the current pin/protocol when RM-020 is triggered; no live adapter acceptance is inferred here.
 
 ## Cross-project learning (every milestone)
 
@@ -144,6 +150,7 @@ Sibling observations stay evidence about other projects until a GabbaBoy check r
 | 2026-10-24 | 3 | <ul><li>Restructured into horizons with RM ids.</li><li>v0.3 became Save States & Host Contract; INT-01b and RTC footer interop were parked.</li><li>Added the Evidence Floor (v0.4) before PPU timing.</li><li>Adopted sizing caps.</li></ul> | Seven-lens fan-out plus adversarial review ([research/v0.3](../research/v0.3/SUMMARY.md)) |
 
 | 2026-10-31 | 4 | v0.3.0 published; RM-026..031 reconciled to implementation evidence; RM-024/025/032 retained; sibling/Playstead boundary scan refreshed | Milestone audit, with acceptance and the next milestone still owner-selected |
+| 2026-10-31 | 6 | Reconciled v0.4 with the CGB acceptance-harness gap, conditional Potion Panic/µCity rights gate, scene-first feedback loop, direct SSH exploration, a near-term libretro candidate, retained MIT, and independent libfuturo coordination | Owner-approved recommendations and read-only technical/rights reviews |
 
 ## Deferred-item ledger (where each deferred item went)
 
@@ -180,4 +187,8 @@ The phase-level deferrals below are revisable direction, not authorization. Prom
 
 ### Closeout revision 5 — 2026-10-31
 
-v0.3 is archived with the owner-selected overrides and deferrals in [closeout](../milestones/v0.3-CLOSEOUT.md). The standalone closeout-scan helper still fails two self-test cases under OpenGSD 1.19.0; review its assumptions against the current scanner contract before reuse, then repair or retire it with meaningful controls. It is not a product defect and is outside CTest. RM-024/025 and optional published-state verification retain their triggers; their deferral is now owner accepted. No next milestone, fixture-rights decision or Phase 20 is authorized.
+v0.3 is archived with the owner-selected overrides and deferrals in [closeout](../milestones/v0.3-CLOSEOUT.md). The standalone closeout-scan helper still fails two self-test cases under OpenGSD 1.19.0; review its assumptions against the current scanner contract before reuse, then repair or retire it with meaningful controls. It is not a product defect and is outside CTest. RM-024/025 and optional published-state verification retain their triggers; their deferral is now owner accepted.
+
+### Kickoff revision 6 — 2026-10-31
+
+The owner started v0.4 Evidence Floor planning with a bounded CGB acceptance-harness repair, a two-candidate conditional rights gate, acid2/gbmicrotest admission, and scene-first agent-owned regressions. Retain root MIT, defer full libretro while promoting it to a near-term candidate, and treat direct Steam Deck/SSH use as exploratory. libfuturo remains independent coordination context. No game fixture is admitted yet; no phase execution has started.

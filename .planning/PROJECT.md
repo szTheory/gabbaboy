@@ -12,9 +12,17 @@ The release adds bounded transactional native save/load with exact continuation,
 
 The final implementation-head audit passed its full suite without failures/skips; boundary main CI and all 22 published asset identities/digests reconciled. These are source-bound observations, not a claim that archival itself reran hosted release producers. Original failed release attempts and boundary verification reports remain unchanged.
 
-## Next Milestone Goals
+## Current Milestone: v0.4 Evidence Floor
 
-**Proposed v0.4 — Evidence Floor**, not started: first CGB game-level evidence or a justified absence, rights-cleared font-substituted acid2 derivatives, and gbmicrotest admission. Fixture rights and game selection remain kickoff decisions. Use `/gsd-new-milestone` when the owner chooses; fresh requirements and numbered phases will be defined there. No Phase 20 exists yet. Both automatic-advance flags remain false.
+**Goal:** Establish a bounded, reproducible floor for CGB game progress and rendering evidence before deeper timing work, or record a specific reason game evidence could not be admitted.
+
+**Target features:**
+- Extend the existing acceptance path to observe CGB RGB555 frames and input-driven guest progress on the CGB-CPU-E software profile, with positive and negative controls.
+- Try at most two game candidates: Potion Panic (GB Compo 2025 demo) first, then µCity 1.3 as the sole fallback. Admit either only after exact ROM/source/build, CGB mode, asset and audio rights, notices, and digest checks; otherwise record a justified absence.
+- Admit the font-substituted acid2 derivatives and gbmicrotest with explicit provenance, model applicability, rights, and scope limits.
+- Turn concise title/scene/symptom feedback into agent-owned reproduction and automated regressions with independent expectations and negative controls.
+
+The root project license remains MIT. Full libretro work is deferred from v0.4; a direct Steam Deck development build over the owner's existing SSH workflow is exploratory only and does not establish Linux-player or Deck support. libfuturo informs future consumer-contract thinking but adds no dependency and does not freeze GabbaBoy's API or state format.
 
 <details>
 <summary>Completed v0.3 scope and kickoff context</summary>
@@ -119,7 +127,7 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 ### Active
 
-None selected. All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). The next milestone will define fresh requirements after the owner invokes `/gsd-new-milestone`.
+All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). v0.4 requirements are being defined in [REQUIREMENTS.md](REQUIREMENTS.md) from the selected targets above.
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
@@ -137,6 +145,8 @@ Ongoing project principles: dependency-light C API with explicit contracts; head
 - The founding brief is [BRIEF.md](context/BRIEF.md). Detailed evidence and tradeoffs live in [research/](research).
 - Sibling emulators are developing concurrently. Recent fixes and experiments in GlueyNeo, Nesturbator, and Playstead are useful precedent, with evidence strength recorded separately from intentions.
 - Playstead is an intended consumer, not a prerequisite for first gameplay. An optional SDL player allows direct macOS use and exercises the same public API as external consumers.
+- The owner has already used SSH to put personally owned ROMs on a Steam Deck and give play feedback while working on Nesturbator. This is a low-friction exploratory workflow, not evidence that GabbaBoy's currently macOS-qualified SDL player runs on Linux or the Deck. Personal ROMs, saves, and captures stay outside the repository.
+- The owner reports libfuturo is beginning with a core/host specification, small SDK, and conformance against real consumers. Reuse relevant contract lessons if a concrete consumer gap appears; do not make it a dependency, wait for its release, or freeze GabbaBoy's API early.
 - Mature OSS delivery practices from lattice_stripe and ExifCleaner inform CI and release design when still relevant to this C library.
 - SameBoy, mGBA, hardware research, and test authors are comparison and evidence sources. Oracle agreement alone does not establish hardware correctness.
 - Prefer small vertical demonstrations over completing entire subsystems in isolation. Each demonstration must preserve a path to correct timing.
@@ -187,6 +197,8 @@ Ongoing project principles: dependency-light C API with explicit contracts; head
 | Preserve phase-boundary evidence and use one final implementation-head suite | Later phases change shared files and invalidate runtime fingerprints | ✓ Good — v0.3 evidence retained; owner explicitly accepted the runtime closeout override |
 | Bound release recovery and retain failed attempts | Successful retries cannot erase the original failure or change product/tag provenance | ✓ Good — v0.3.0 published with separately attributed failed and successful attempts |
 | Keep reusable checks independent of phase storage | Milestone archival must preserve executable check inputs | ✓ Good — v0.3 CTest disposition/readback paths follow archived records; negative controls retained |
+| Gate CGB game fixtures on exact artifact, model, and per-asset rights | A title-level license label does not establish the terms of its ROM, art, audio driver, or build inputs | Adopted for v0.4; Potion Panic then µCity, with no third candidate |
+| Treat Steam Deck play as feedback input until a GabbaBoy host path is qualified | The owner's Nesturbator SSH workflow reduces setup effort but does not qualify GabbaBoy's Linux player or RetroArch adapter | Adopted for v0.4; full libretro remains a near-term candidate |
 
 ## Evolution
 
@@ -195,4 +207,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-31 after v0.3 milestone completion; next milestone not started.
+Last updated: 2026-10-31 after v0.4 milestone kickoff.
