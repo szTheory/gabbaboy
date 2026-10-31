@@ -1,0 +1,451 @@
+{
+  "assets": [
+    {
+      "digest": "sha256:242d81e5b24c87d43e204aa280d11ad7c51feed9d571ec43dbda0ca4cb7e313e",
+      "id": 695503228,
+      "name": "SHA256SUMS",
+      "size": 1926
+    },
+    {
+      "digest": "sha256:8ffe5ed4f10fa7aef15da5067f8840194833621de90460f2bbed489c913a74f7",
+      "id": 695443440,
+      "name": "build-receipt.json",
+      "size": 1008
+    },
+    {
+      "digest": "sha256:742bbc3e0b65bb0383325fbd0be8d8f7be227f07a83d83340c8cc9b8da707366",
+      "id": 695502019,
+      "name": "candidate-platform-manifest.json",
+      "size": 4678
+    },
+    {
+      "digest": "sha256:7791759910349bb9f077a52daa2a32381f5a83090caa2d56f0ed658447b9fc94",
+      "id": 695444305,
+      "name": "candidate-receipt.json",
+      "size": 3604
+    },
+    {
+      "digest": "sha256:dc44692292febf56edb36098767189f730b68ea5b265c8ff45c79749d217a8e1",
+      "id": 695500840,
+      "name": "cgb-corpus-receipt.json",
+      "size": 1469831
+    },
+    {
+      "digest": "sha256:d2212acc35babcbce07c9832eee1fc3992cb7cab038789d016be23d7c2ff7303",
+      "id": 695456740,
+      "name": "gabbaboy-build-receipt-macos-arm64.json",
+      "size": 341
+    },
+    {
+      "digest": "sha256:272b8861d70c58a290a9cb3e527e6bd85c292b6555a2fd247496be90282d3e1d",
+      "id": 695459481,
+      "name": "gabbaboy-build-receipt-windows-x64.json",
+      "size": 427
+    },
+    {
+      "digest": "sha256:473f08fd8ad7adf070019d27cd20b797d80523100719ca5144262baff7827392",
+      "id": 695443513,
+      "name": "gabbaboy-core-linux-x64.tar.gz",
+      "size": 192533
+    },
+    {
+      "digest": "sha256:f7daa68d580f6a393720e603b2cb334767c4e5d9d7971836020b4e988dd229d2",
+      "id": 695456648,
+      "name": "gabbaboy-core-macos-arm64.tar.gz",
+      "size": 176479
+    },
+    {
+      "digest": "sha256:f56d90fd54e6b2e0d4e6e736e575eef37ef7c45e1edca694ab6048798903cb12",
+      "id": 695456703,
+      "name": "gabbaboy-core-macos-arm64.tar.gz.sha256",
+      "size": 65
+    },
+    {
+      "digest": "sha256:4239af53a0f094a53c0624db313e5177574aed2ff804841c42aaf8179ae41731",
+      "id": 695459410,
+      "name": "gabbaboy-core-windows-x64.tar.gz",
+      "size": 191767
+    },
+    {
+      "digest": "sha256:88855171c1529cd0be46613c8f705cc37226d6cd8bd2c605e9801a3b8992beeb",
+      "id": 695459458,
+      "name": "gabbaboy-core-windows-x64.tar.gz.sha256",
+      "size": 65
+    },
+    {
+      "digest": "sha256:9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9",
+      "id": 695443558,
+      "name": "gabbaboy-notices.txt",
+      "size": 1078
+    },
+    {
+      "digest": "sha256:51c1e298a2bd71190157a0186609740b748766abc220f307c46aaf5999fce6e7",
+      "id": 695456858,
+      "name": "gabbaboy-preview-macos-arm64-build-receipt.json",
+      "size": 1061
+    },
+    {
+      "digest": "sha256:8fd5ad8e802045edaf731d5c42e49ff0768646552b16da56104ad1ac6c064e5e",
+      "id": 695456813,
+      "name": "gabbaboy-preview-macos-arm64.tar.gz",
+      "size": 1186633
+    },
+    {
+      "digest": "sha256:b238c7279274e0359e1d2fd5c2e4bd39727c1490ea84f2a52753fb6504ef9514",
+      "id": 695503270,
+      "name": "release-receipt.json",
+      "size": 7746
+    },
+    {
+      "digest": "sha256:640992af3004ae7cab9a693af02e1b70988550752919fb8e82165707c2a86fb5",
+      "id": 695444111,
+      "name": "source-archive-receipt.json",
+      "size": 5574
+    },
+    {
+      "digest": "sha256:cd934d4c4fdded495886e19910722a72678b1987f8b82fac48fd221253fdd9bb",
+      "id": 695443038,
+      "name": "source-receipt.json",
+      "size": 2414
+    },
+    {
+      "digest": "sha256:5486ece7015944acf39eb619867a0d8058d0bfa67afd3481a207456ed478da75",
+      "id": 695500785,
+      "name": "support-ledger.json",
+      "size": 32607
+    },
+    {
+      "digest": "sha256:18f3e6cb8a4e027363eef7de245875704267b9c1195e8590dc2c706c6f516a2f",
+      "id": 695443947,
+      "name": "v02-consumer-receipt.json",
+      "size": 2164
+    },
+    {
+      "digest": "sha256:595b003756c24038204e3ab736198242280eb93e2b38dc8377c131dcaf740ccf",
+      "id": 695500936,
+      "name": "v02-fuzz-receipt.json",
+      "size": 10105
+    },
+    {
+      "digest": "sha256:160b49e817908f7c72ac76a76266f1f0b92673d13b5fcaef26e2eaafbcfc33b8",
+      "id": 695501067,
+      "name": "v02-performance-receipt.json",
+      "size": 14138
+    }
+  ],
+  "attach_v02_evidence": {
+    "completed_at": "2026-10-31T13:46:11Z",
+    "conclusion": "success",
+    "duration_seconds": 25,
+    "head_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49",
+    "job_id": 124554088145,
+    "run_id": 41205021983,
+    "started_at": "2026-10-31T13:45:46Z"
+  },
+  "is_draft": false,
+  "is_prerelease": false,
+  "pre_publish_inventory": [
+    {
+      "digest": "sha256:242d81e5b24c87d43e204aa280d11ad7c51feed9d571ec43dbda0ca4cb7e313e",
+      "id": 695503228,
+      "name": "SHA256SUMS"
+    },
+    {
+      "digest": "sha256:8ffe5ed4f10fa7aef15da5067f8840194833621de90460f2bbed489c913a74f7",
+      "id": 695443440,
+      "name": "build-receipt.json"
+    },
+    {
+      "digest": "sha256:742bbc3e0b65bb0383325fbd0be8d8f7be227f07a83d83340c8cc9b8da707366",
+      "id": 695502019,
+      "name": "candidate-platform-manifest.json"
+    },
+    {
+      "digest": "sha256:7791759910349bb9f077a52daa2a32381f5a83090caa2d56f0ed658447b9fc94",
+      "id": 695444305,
+      "name": "candidate-receipt.json"
+    },
+    {
+      "digest": "sha256:dc44692292febf56edb36098767189f730b68ea5b265c8ff45c79749d217a8e1",
+      "id": 695500840,
+      "name": "cgb-corpus-receipt.json"
+    },
+    {
+      "digest": "sha256:d2212acc35babcbce07c9832eee1fc3992cb7cab038789d016be23d7c2ff7303",
+      "id": 695456740,
+      "name": "gabbaboy-build-receipt-macos-arm64.json"
+    },
+    {
+      "digest": "sha256:272b8861d70c58a290a9cb3e527e6bd85c292b6555a2fd247496be90282d3e1d",
+      "id": 695459481,
+      "name": "gabbaboy-build-receipt-windows-x64.json"
+    },
+    {
+      "digest": "sha256:473f08fd8ad7adf070019d27cd20b797d80523100719ca5144262baff7827392",
+      "id": 695443513,
+      "name": "gabbaboy-core-linux-x64.tar.gz"
+    },
+    {
+      "digest": "sha256:f7daa68d580f6a393720e603b2cb334767c4e5d9d7971836020b4e988dd229d2",
+      "id": 695456648,
+      "name": "gabbaboy-core-macos-arm64.tar.gz"
+    },
+    {
+      "digest": "sha256:f56d90fd54e6b2e0d4e6e736e575eef37ef7c45e1edca694ab6048798903cb12",
+      "id": 695456703,
+      "name": "gabbaboy-core-macos-arm64.tar.gz.sha256"
+    },
+    {
+      "digest": "sha256:4239af53a0f094a53c0624db313e5177574aed2ff804841c42aaf8179ae41731",
+      "id": 695459410,
+      "name": "gabbaboy-core-windows-x64.tar.gz"
+    },
+    {
+      "digest": "sha256:88855171c1529cd0be46613c8f705cc37226d6cd8bd2c605e9801a3b8992beeb",
+      "id": 695459458,
+      "name": "gabbaboy-core-windows-x64.tar.gz.sha256"
+    },
+    {
+      "digest": "sha256:9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9",
+      "id": 695443558,
+      "name": "gabbaboy-notices.txt"
+    },
+    {
+      "digest": "sha256:51c1e298a2bd71190157a0186609740b748766abc220f307c46aaf5999fce6e7",
+      "id": 695456858,
+      "name": "gabbaboy-preview-macos-arm64-build-receipt.json"
+    },
+    {
+      "digest": "sha256:8fd5ad8e802045edaf731d5c42e49ff0768646552b16da56104ad1ac6c064e5e",
+      "id": 695456813,
+      "name": "gabbaboy-preview-macos-arm64.tar.gz"
+    },
+    {
+      "digest": "sha256:b238c7279274e0359e1d2fd5c2e4bd39727c1490ea84f2a52753fb6504ef9514",
+      "id": 695503270,
+      "name": "release-receipt.json"
+    },
+    {
+      "digest": "sha256:640992af3004ae7cab9a693af02e1b70988550752919fb8e82165707c2a86fb5",
+      "id": 695444111,
+      "name": "source-archive-receipt.json"
+    },
+    {
+      "digest": "sha256:cd934d4c4fdded495886e19910722a72678b1987f8b82fac48fd221253fdd9bb",
+      "id": 695443038,
+      "name": "source-receipt.json"
+    },
+    {
+      "digest": "sha256:5486ece7015944acf39eb619867a0d8058d0bfa67afd3481a207456ed478da75",
+      "id": 695500785,
+      "name": "support-ledger.json"
+    },
+    {
+      "digest": "sha256:18f3e6cb8a4e027363eef7de245875704267b9c1195e8590dc2c706c6f516a2f",
+      "id": 695443947,
+      "name": "v02-consumer-receipt.json"
+    },
+    {
+      "digest": "sha256:595b003756c24038204e3ab736198242280eb93e2b38dc8377c131dcaf740ccf",
+      "id": 695500936,
+      "name": "v02-fuzz-receipt.json"
+    },
+    {
+      "digest": "sha256:160b49e817908f7c72ac76a76266f1f0b92673d13b5fcaef26e2eaafbcfc33b8",
+      "id": 695501067,
+      "name": "v02-performance-receipt.json"
+    }
+  ],
+  "pre_publish_inventory_source": {
+    "artifact_id": 13044831387,
+    "artifact_name": "release-pre-publish-inventory-41205021983-1",
+    "file_sha256": "6f7671b3596a49a1203c128166b73707cb651a9b679d3ed1f4ba3f011bac6911",
+    "raw": "{\n  \"assets\": [\n    {\n      \"digest\": \"sha256:242d81e5b24c87d43e204aa280d11ad7c51feed9d571ec43dbda0ca4cb7e313e\",\n      \"id\": 695503228,\n      \"name\": \"SHA256SUMS\"\n    },\n    {\n      \"digest\": \"sha256:8ffe5ed4f10fa7aef15da5067f8840194833621de90460f2bbed489c913a74f7\",\n      \"id\": 695443440,\n      \"name\": \"build-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:742bbc3e0b65bb0383325fbd0be8d8f7be227f07a83d83340c8cc9b8da707366\",\n      \"id\": 695502019,\n      \"name\": \"candidate-platform-manifest.json\"\n    },\n    {\n      \"digest\": \"sha256:7791759910349bb9f077a52daa2a32381f5a83090caa2d56f0ed658447b9fc94\",\n      \"id\": 695444305,\n      \"name\": \"candidate-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:dc44692292febf56edb36098767189f730b68ea5b265c8ff45c79749d217a8e1\",\n      \"id\": 695500840,\n      \"name\": \"cgb-corpus-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:d2212acc35babcbce07c9832eee1fc3992cb7cab038789d016be23d7c2ff7303\",\n      \"id\": 695456740,\n      \"name\": \"gabbaboy-build-receipt-macos-arm64.json\"\n    },\n    {\n      \"digest\": \"sha256:272b8861d70c58a290a9cb3e527e6bd85c292b6555a2fd247496be90282d3e1d\",\n      \"id\": 695459481,\n      \"name\": \"gabbaboy-build-receipt-windows-x64.json\"\n    },\n    {\n      \"digest\": \"sha256:473f08fd8ad7adf070019d27cd20b797d80523100719ca5144262baff7827392\",\n      \"id\": 695443513,\n      \"name\": \"gabbaboy-core-linux-x64.tar.gz\"\n    },\n    {\n      \"digest\": \"sha256:f7daa68d580f6a393720e603b2cb334767c4e5d9d7971836020b4e988dd229d2\",\n      \"id\": 695456648,\n      \"name\": \"gabbaboy-core-macos-arm64.tar.gz\"\n    },\n    {\n      \"digest\": \"sha256:f56d90fd54e6b2e0d4e6e736e575eef37ef7c45e1edca694ab6048798903cb12\",\n      \"id\": 695456703,\n      \"name\": \"gabbaboy-core-macos-arm64.tar.gz.sha256\"\n    },\n    {\n      \"digest\": \"sha256:4239af53a0f094a53c0624db313e5177574aed2ff804841c42aaf8179ae41731\",\n      \"id\": 695459410,\n      \"name\": \"gabbaboy-core-windows-x64.tar.gz\"\n    },\n    {\n      \"digest\": \"sha256:88855171c1529cd0be46613c8f705cc37226d6cd8bd2c605e9801a3b8992beeb\",\n      \"id\": 695459458,\n      \"name\": \"gabbaboy-core-windows-x64.tar.gz.sha256\"\n    },\n    {\n      \"digest\": \"sha256:9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9\",\n      \"id\": 695443558,\n      \"name\": \"gabbaboy-notices.txt\"\n    },\n    {\n      \"digest\": \"sha256:51c1e298a2bd71190157a0186609740b748766abc220f307c46aaf5999fce6e7\",\n      \"id\": 695456858,\n      \"name\": \"gabbaboy-preview-macos-arm64-build-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:8fd5ad8e802045edaf731d5c42e49ff0768646552b16da56104ad1ac6c064e5e\",\n      \"id\": 695456813,\n      \"name\": \"gabbaboy-preview-macos-arm64.tar.gz\"\n    },\n    {\n      \"digest\": \"sha256:b238c7279274e0359e1d2fd5c2e4bd39727c1490ea84f2a52753fb6504ef9514\",\n      \"id\": 695503270,\n      \"name\": \"release-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:640992af3004ae7cab9a693af02e1b70988550752919fb8e82165707c2a86fb5\",\n      \"id\": 695444111,\n      \"name\": \"source-archive-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:cd934d4c4fdded495886e19910722a72678b1987f8b82fac48fd221253fdd9bb\",\n      \"id\": 695443038,\n      \"name\": \"source-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:5486ece7015944acf39eb619867a0d8058d0bfa67afd3481a207456ed478da75\",\n      \"id\": 695500785,\n      \"name\": \"support-ledger.json\"\n    },\n    {\n      \"digest\": \"sha256:18f3e6cb8a4e027363eef7de245875704267b9c1195e8590dc2c706c6f516a2f\",\n      \"id\": 695443947,\n      \"name\": \"v02-consumer-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:595b003756c24038204e3ab736198242280eb93e2b38dc8377c131dcaf740ccf\",\n      \"id\": 695500936,\n      \"name\": \"v02-fuzz-receipt.json\"\n    },\n    {\n      \"digest\": \"sha256:160b49e817908f7c72ac76a76266f1f0b92673d13b5fcaef26e2eaafbcfc33b8\",\n      \"id\": 695501067,\n      \"name\": \"v02-performance-receipt.json\"\n    }\n  ],\n  \"kind\": \"pre-publish-inventory\",\n  \"release_id\": 429606490,\n  \"run_attempt\": 1,\n  \"run_id\": 41205021983,\n  \"schema_version\": 1,\n  \"source_sha\": \"a3f3390451f9a893aa47475f15a722ada86daaa6\",\n  \"tag\": \"v0.3.0\"\n}\n",
+    "run_attempt": 1,
+    "run_id": 41205021983
+  },
+  "publication_source": {
+    "attach_job_api": {
+      "completed_at": "2026-10-31T13:46:11Z",
+      "conclusion": "success",
+      "head_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49",
+      "id": 124554088145,
+      "name": "release-candidate / attach-qualified-v02-evidence",
+      "run_id": 41205021983,
+      "started_at": "2026-10-31T13:45:46Z",
+      "status": "completed"
+    },
+    "dispatch": {
+      "inputs": {
+        "release_id": "429606490",
+        "retry": true,
+        "source_sha": "a3f3390451f9a893aa47475f15a722ada86daaa6",
+        "tag_name": "v0.3.0"
+      },
+      "ref": "main",
+      "workflow": "release-please.yml"
+    },
+    "final_job_api": {
+      "completed_at": "2026-10-31T13:47:16Z",
+      "conclusion": "success",
+      "head_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49",
+      "id": 124554273561,
+      "name": "release-candidate / final-downloaded-byte-gate-and-publish",
+      "run_id": 41205021983,
+      "started_at": "2026-10-31T13:46:37Z",
+      "status": "completed"
+    },
+    "release_receipt_raw": "{\n  \"assets\": [\n    {\n      \"id\": 695443440,\n      \"name\": \"build-receipt.json\",\n      \"sha256\": \"8ffe5ed4f10fa7aef15da5067f8840194833621de90460f2bbed489c913a74f7\"\n    },\n    {\n      \"id\": 695502019,\n      \"name\": \"candidate-platform-manifest.json\",\n      \"sha256\": \"742bbc3e0b65bb0383325fbd0be8d8f7be227f07a83d83340c8cc9b8da707366\"\n    },\n    {\n      \"id\": 695444305,\n      \"name\": \"candidate-receipt.json\",\n      \"sha256\": \"7791759910349bb9f077a52daa2a32381f5a83090caa2d56f0ed658447b9fc94\"\n    },\n    {\n      \"id\": 695500840,\n      \"name\": \"cgb-corpus-receipt.json\",\n      \"sha256\": \"dc44692292febf56edb36098767189f730b68ea5b265c8ff45c79749d217a8e1\"\n    },\n    {\n      \"id\": 695456740,\n      \"name\": \"gabbaboy-build-receipt-macos-arm64.json\",\n      \"sha256\": \"d2212acc35babcbce07c9832eee1fc3992cb7cab038789d016be23d7c2ff7303\"\n    },\n    {\n      \"id\": 695459481,\n      \"name\": \"gabbaboy-build-receipt-windows-x64.json\",\n      \"sha256\": \"272b8861d70c58a290a9cb3e527e6bd85c292b6555a2fd247496be90282d3e1d\"\n    },\n    {\n      \"id\": 695443513,\n      \"name\": \"gabbaboy-core-linux-x64.tar.gz\",\n      \"sha256\": \"473f08fd8ad7adf070019d27cd20b797d80523100719ca5144262baff7827392\"\n    },\n    {\n      \"id\": 695456648,\n      \"name\": \"gabbaboy-core-macos-arm64.tar.gz\",\n      \"sha256\": \"f7daa68d580f6a393720e603b2cb334767c4e5d9d7971836020b4e988dd229d2\"\n    },\n    {\n      \"id\": 695456703,\n      \"name\": \"gabbaboy-core-macos-arm64.tar.gz.sha256\",\n      \"sha256\": \"f56d90fd54e6b2e0d4e6e736e575eef37ef7c45e1edca694ab6048798903cb12\"\n    },\n    {\n      \"id\": 695459410,\n      \"name\": \"gabbaboy-core-windows-x64.tar.gz\",\n      \"sha256\": \"4239af53a0f094a53c0624db313e5177574aed2ff804841c42aaf8179ae41731\"\n    },\n    {\n      \"id\": 695459458,\n      \"name\": \"gabbaboy-core-windows-x64.tar.gz.sha256\",\n      \"sha256\": \"88855171c1529cd0be46613c8f705cc37226d6cd8bd2c605e9801a3b8992beeb\"\n    },\n    {\n      \"id\": 695443558,\n      \"name\": \"gabbaboy-notices.txt\",\n      \"sha256\": \"9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9\"\n    },\n    {\n      \"id\": 695456858,\n      \"name\": \"gabbaboy-preview-macos-arm64-build-receipt.json\",\n      \"sha256\": \"51c1e298a2bd71190157a0186609740b748766abc220f307c46aaf5999fce6e7\"\n    },\n    {\n      \"id\": 695456813,\n      \"name\": \"gabbaboy-preview-macos-arm64.tar.gz\",\n      \"sha256\": \"8fd5ad8e802045edaf731d5c42e49ff0768646552b16da56104ad1ac6c064e5e\"\n    },\n    {\n      \"id\": 695444111,\n      \"name\": \"source-archive-receipt.json\",\n      \"sha256\": \"640992af3004ae7cab9a693af02e1b70988550752919fb8e82165707c2a86fb5\"\n    },\n    {\n      \"id\": 695443038,\n      \"name\": \"source-receipt.json\",\n      \"sha256\": \"cd934d4c4fdded495886e19910722a72678b1987f8b82fac48fd221253fdd9bb\"\n    },\n    {\n      \"id\": 695500785,\n      \"name\": \"support-ledger.json\",\n      \"sha256\": \"5486ece7015944acf39eb619867a0d8058d0bfa67afd3481a207456ed478da75\"\n    },\n    {\n      \"id\": 695443947,\n      \"name\": \"v02-consumer-receipt.json\",\n      \"sha256\": \"18f3e6cb8a4e027363eef7de245875704267b9c1195e8590dc2c706c6f516a2f\"\n    },\n    {\n      \"id\": 695500936,\n      \"name\": \"v02-fuzz-receipt.json\",\n      \"sha256\": \"595b003756c24038204e3ab736198242280eb93e2b38dc8377c131dcaf740ccf\"\n    },\n    {\n      \"id\": 695501067,\n      \"name\": \"v02-performance-receipt.json\",\n      \"sha256\": \"160b49e817908f7c72ac76a76266f1f0b92673d13b5fcaef26e2eaafbcfc33b8\"\n    }\n  ],\n  \"builds\": {\n    \"linux-x64\": {\n      \"cmake\": \"cmake version 3.31.6\",\n      \"compiler\": \"cc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0\",\n      \"configuration\": \"Release\",\n      \"corpus_manifest_sha256\": \"1c25c570be98ece42ff9069635fb07cf4559b578817373ec3bd4d3552e8809d1\",\n      \"fixture_manifest_sha256\": \"59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c\",\n      \"runner\": \"ubuntu-22.04/ubuntu22/20261026.341.1\"\n    },\n    \"macos-arm64\": {\n      \"architecture\": \"arm64\",\n      \"cmake\": \"cmake version 4.4.4\",\n      \"compiler\": \"Apple clang version 17.0.0 (clang-1700.0.13.5)\",\n      \"configuration\": \"Release\",\n      \"os\": \"macOS-15.8.2-arm64-arm-64bit-Mach-O\",\n      \"platform\": \"macos-arm64\",\n      \"runner\": \"macos-15\",\n      \"schema_version\": 1,\n      \"source_sha\": \"a3f3390451f9a893aa47475f15a722ada86daaa6\"\n    },\n    \"windows-x64\": {\n      \"architecture\": \"AMD64\",\n      \"c_compiler_id\": \"MSVC\",\n      \"c_compiler_version\": \"19.44.35229.0\",\n      \"cmake\": \"cmake version 3.31.6\",\n      \"compiler\": \"MSVC 19.44.35229.0 via Visual Studio 17 2022 x64\",\n      \"configuration\": \"Release\",\n      \"os\": \"Windows-2022Server-10.0.20348-SP0\",\n      \"platform\": \"windows-x64\",\n      \"runner\": \"windows-2022\",\n      \"schema_version\": 1,\n      \"source_sha\": \"a3f3390451f9a893aa47475f15a722ada86daaa6\"\n    }\n  },\n  \"candidate_manifest_sha256\": \"742bbc3e0b65bb0383325fbd0be8d8f7be227f07a83d83340c8cc9b8da707366\",\n  \"downloaded_smoke\": \"Linux, macOS, and Windows core consumers plus macOS player passed on exact draft bytes\",\n  \"draft\": true,\n  \"evidence_sha256\": {\n    \"cgb-corpus-receipt.json\": \"dc44692292febf56edb36098767189f730b68ea5b265c8ff45c79749d217a8e1\",\n    \"source-archive-receipt.json\": \"640992af3004ae7cab9a693af02e1b70988550752919fb8e82165707c2a86fb5\",\n    \"v02-consumer-receipt.json\": \"18f3e6cb8a4e027363eef7de245875704267b9c1195e8590dc2c706c6f516a2f\",\n    \"v02-fuzz-receipt.json\": \"595b003756c24038204e3ab736198242280eb93e2b38dc8377c131dcaf740ccf\",\n    \"v02-performance-receipt.json\": \"160b49e817908f7c72ac76a76266f1f0b92673d13b5fcaef26e2eaafbcfc33b8\"\n  },\n  \"hardware_qualified\": false,\n  \"limits\": [\n    \"v0.3.0 deterministic software profiles DMG-CPU-B and CGB-CPU-E as scoped by docs/support/v0.3.0.md\",\n    \"no physical DMG observation\",\n    \"no Developer ID signature or notarization\"\n  ],\n  \"notarized\": false,\n  \"perf_gate\": {\n    \"base_sha\": \"ab301aa69b1f085050fd66bf7b1378863a0821f2\",\n    \"digests\": {\n      \"libbet\": {\n        \"base\": \"7d992ad8eee13c40\",\n        \"head\": [\n          \"7d992ad8eee13c40\",\n          \"7d992ad8eee13c40\"\n        ]\n      },\n      \"tracer\": {\n        \"base\": \"4c7a57ff3d50d228\",\n        \"head\": [\n          \"4c7a57ff3d50d228\",\n          \"4c7a57ff3d50d228\"\n        ]\n      },\n      \"visible-demo\": {\n        \"base\": \"3c5797f6525df9c7\",\n        \"head\": [\n          \"3c5797f6525df9c7\",\n          \"3c5797f6525df9c7\"\n        ]\n      }\n    },\n    \"ir\": {\n      \"libbet\": {\n        \"base\": 239287537,\n        \"head\": [\n          262017211,\n          262017211\n        ]\n      },\n      \"tracer\": {\n        \"base\": 233590054,\n        \"head\": [\n          255901403,\n          255901403\n        ]\n      },\n      \"visible-demo\": {\n        \"base\": 240007926,\n        \"head\": [\n          262724206,\n          262724206\n        ]\n      }\n    },\n    \"kind\": \"perf-gate-receipt\",\n    \"limits_blob\": \"d32967a96b834a2ea6e95953bdaa6107093d7fed\",\n    \"realtime_min\": \"244138671875/27914573824\",\n    \"run_attempt\": 1,\n    \"run_id\": 41148606861,\n    \"schema_version\": 1,\n    \"source_sha\": \"a3f3390451f9a893aa47475f15a722ada86daaa6\",\n    \"tool\": {\n      \"base_build_identity\": \"00ab5ac891ee6b9ce6c80ad1fa30d303199f6c9cf026656e070688f4a55d66c3\",\n      \"head_build_identity\": \"b7dbf3ed5b613562690f15f0caea464c83c1a28ff72e5ff838251de174d37a65\"\n    }\n  },\n  \"prior_pr_proof\": {\n    \"head_sha\": \"c4c0258bcdd65cf026e1497dd2585b634d807bd5\",\n    \"merge_commit_sha\": \"a3f3390451f9a893aa47475f15a722ada86daaa6\",\n    \"pr_number\": 131,\n    \"required_checks\": \"passed\"\n  },\n  \"release_id\": \"429606490\",\n  \"schema_version\": 1,\n  \"sha256sums_sha256\": \"242d81e5b24c87d43e204aa280d11ad7c51feed9d571ec43dbda0ca4cb7e313e\",\n  \"signed\": false,\n  \"source_sha\": \"a3f3390451f9a893aa47475f15a722ada86daaa6\",\n  \"support_sidecar\": \"support-ledger.json\",\n  \"support_sidecar_sha256\": \"5486ece7015944acf39eb619867a0d8058d0bfa67afd3481a207456ed478da75\",\n  \"tag\": \"v0.3.0\",\n  \"version\": \"0.3.0\"\n}\n",
+    "run_api": {
+      "conclusion": "success",
+      "event": "workflow_dispatch",
+      "head_branch": "main",
+      "head_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49",
+      "id": 41205021983,
+      "path": ".github/workflows/release-please.yml",
+      "repository_full_name": "szTheory/gabbaboy",
+      "run_attempt": 1,
+      "status": "completed"
+    },
+    "schema_version": 1,
+    "source_sha": "a3f3390451f9a893aa47475f15a722ada86daaa6",
+    "workflow_ref": "refs/heads/main",
+    "workflow_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49"
+  },
+  "published_at": "2026-10-31T13:47:13Z",
+  "reconciliation": {
+    "asset_count": 22,
+    "compared_with": "Actions artifact release-pre-publish-inventory-41205021983-1 (artifact id 13044831387)",
+    "result": "PASS: published API asset IDs, names, and SHA-256 digests match the sourced pre-publish inventory",
+    "verifier": ".github/scripts/verify-published-release-assets.py --verify-pre-publish"
+  },
+  "release_id": 429606490,
+  "release_receipt": {
+    "asset_id": 695503270,
+    "assets": [
+      {
+        "name": "build-receipt.json",
+        "sha256": "8ffe5ed4f10fa7aef15da5067f8840194833621de90460f2bbed489c913a74f7"
+      },
+      {
+        "name": "candidate-platform-manifest.json",
+        "sha256": "742bbc3e0b65bb0383325fbd0be8d8f7be227f07a83d83340c8cc9b8da707366"
+      },
+      {
+        "name": "candidate-receipt.json",
+        "sha256": "7791759910349bb9f077a52daa2a32381f5a83090caa2d56f0ed658447b9fc94"
+      },
+      {
+        "name": "cgb-corpus-receipt.json",
+        "sha256": "dc44692292febf56edb36098767189f730b68ea5b265c8ff45c79749d217a8e1"
+      },
+      {
+        "name": "gabbaboy-build-receipt-macos-arm64.json",
+        "sha256": "d2212acc35babcbce07c9832eee1fc3992cb7cab038789d016be23d7c2ff7303"
+      },
+      {
+        "name": "gabbaboy-build-receipt-windows-x64.json",
+        "sha256": "272b8861d70c58a290a9cb3e527e6bd85c292b6555a2fd247496be90282d3e1d"
+      },
+      {
+        "name": "gabbaboy-core-linux-x64.tar.gz",
+        "sha256": "473f08fd8ad7adf070019d27cd20b797d80523100719ca5144262baff7827392"
+      },
+      {
+        "name": "gabbaboy-core-macos-arm64.tar.gz",
+        "sha256": "f7daa68d580f6a393720e603b2cb334767c4e5d9d7971836020b4e988dd229d2"
+      },
+      {
+        "name": "gabbaboy-core-macos-arm64.tar.gz.sha256",
+        "sha256": "f56d90fd54e6b2e0d4e6e736e575eef37ef7c45e1edca694ab6048798903cb12"
+      },
+      {
+        "name": "gabbaboy-core-windows-x64.tar.gz",
+        "sha256": "4239af53a0f094a53c0624db313e5177574aed2ff804841c42aaf8179ae41731"
+      },
+      {
+        "name": "gabbaboy-core-windows-x64.tar.gz.sha256",
+        "sha256": "88855171c1529cd0be46613c8f705cc37226d6cd8bd2c605e9801a3b8992beeb"
+      },
+      {
+        "name": "gabbaboy-notices.txt",
+        "sha256": "9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9"
+      },
+      {
+        "name": "gabbaboy-preview-macos-arm64-build-receipt.json",
+        "sha256": "51c1e298a2bd71190157a0186609740b748766abc220f307c46aaf5999fce6e7"
+      },
+      {
+        "name": "gabbaboy-preview-macos-arm64.tar.gz",
+        "sha256": "8fd5ad8e802045edaf731d5c42e49ff0768646552b16da56104ad1ac6c064e5e"
+      },
+      {
+        "name": "source-archive-receipt.json",
+        "sha256": "640992af3004ae7cab9a693af02e1b70988550752919fb8e82165707c2a86fb5"
+      },
+      {
+        "name": "source-receipt.json",
+        "sha256": "cd934d4c4fdded495886e19910722a72678b1987f8b82fac48fd221253fdd9bb"
+      },
+      {
+        "name": "support-ledger.json",
+        "sha256": "5486ece7015944acf39eb619867a0d8058d0bfa67afd3481a207456ed478da75"
+      },
+      {
+        "name": "v02-consumer-receipt.json",
+        "sha256": "18f3e6cb8a4e027363eef7de245875704267b9c1195e8590dc2c706c6f516a2f"
+      },
+      {
+        "name": "v02-fuzz-receipt.json",
+        "sha256": "595b003756c24038204e3ab736198242280eb93e2b38dc8377c131dcaf740ccf"
+      },
+      {
+        "name": "v02-performance-receipt.json",
+        "sha256": "160b49e817908f7c72ac76a76266f1f0b92673d13b5fcaef26e2eaafbcfc33b8"
+      }
+    ],
+    "sha256": "b238c7279274e0359e1d2fd5c2e4bd39727c1490ea84f2a52753fb6504ef9514"
+  },
+  "release_run": {
+    "conclusion": "success",
+    "event": "workflow_dispatch",
+    "final_publish_job_id": 124554273561,
+    "head_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49",
+    "retry": true,
+    "run_id": 41205021983,
+    "workflow": ".github/workflows/release-please.yml"
+  },
+  "sha256sums": {
+    "asset_id": 695503228,
+    "lines": [
+      "8ffe5ed4f10fa7aef15da5067f8840194833621de90460f2bbed489c913a74f7  build-receipt.json",
+      "742bbc3e0b65bb0383325fbd0be8d8f7be227f07a83d83340c8cc9b8da707366  candidate-platform-manifest.json",
+      "7791759910349bb9f077a52daa2a32381f5a83090caa2d56f0ed658447b9fc94  candidate-receipt.json",
+      "dc44692292febf56edb36098767189f730b68ea5b265c8ff45c79749d217a8e1  cgb-corpus-receipt.json",
+      "d2212acc35babcbce07c9832eee1fc3992cb7cab038789d016be23d7c2ff7303  gabbaboy-build-receipt-macos-arm64.json",
+      "272b8861d70c58a290a9cb3e527e6bd85c292b6555a2fd247496be90282d3e1d  gabbaboy-build-receipt-windows-x64.json",
+      "473f08fd8ad7adf070019d27cd20b797d80523100719ca5144262baff7827392  gabbaboy-core-linux-x64.tar.gz",
+      "f7daa68d580f6a393720e603b2cb334767c4e5d9d7971836020b4e988dd229d2  gabbaboy-core-macos-arm64.tar.gz",
+      "f56d90fd54e6b2e0d4e6e736e575eef37ef7c45e1edca694ab6048798903cb12  gabbaboy-core-macos-arm64.tar.gz.sha256",
+      "4239af53a0f094a53c0624db313e5177574aed2ff804841c42aaf8179ae41731  gabbaboy-core-windows-x64.tar.gz",
+      "88855171c1529cd0be46613c8f705cc37226d6cd8bd2c605e9801a3b8992beeb  gabbaboy-core-windows-x64.tar.gz.sha256",
+      "9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9  gabbaboy-notices.txt",
+      "51c1e298a2bd71190157a0186609740b748766abc220f307c46aaf5999fce6e7  gabbaboy-preview-macos-arm64-build-receipt.json",
+      "8fd5ad8e802045edaf731d5c42e49ff0768646552b16da56104ad1ac6c064e5e  gabbaboy-preview-macos-arm64.tar.gz",
+      "640992af3004ae7cab9a693af02e1b70988550752919fb8e82165707c2a86fb5  source-archive-receipt.json",
+      "cd934d4c4fdded495886e19910722a72678b1987f8b82fac48fd221253fdd9bb  source-receipt.json",
+      "5486ece7015944acf39eb619867a0d8058d0bfa67afd3481a207456ed478da75  support-ledger.json",
+      "18f3e6cb8a4e027363eef7de245875704267b9c1195e8590dc2c706c6f516a2f  v02-consumer-receipt.json",
+      "595b003756c24038204e3ab736198242280eb93e2b38dc8377c131dcaf740ccf  v02-fuzz-receipt.json",
+      "160b49e817908f7c72ac76a76266f1f0b92673d13b5fcaef26e2eaafbcfc33b8  v02-performance-receipt.json"
+    ]
+  },
+  "sidecar_ledger": {
+    "git_blob_oid": "a7da4e5f9f3ac51e1bac163d8cbc0b1596d93ad1",
+    "path": "docs/support/v0.3.0.md"
+  },
+  "tag": "v0.3.0",
+  "tag_sha": "a3f3390451f9a893aa47475f15a722ada86daaa6",
+  "tag_tree": "c796da0d870b1ed60fecd8b34de6af1bdd1d2e6a",
+  "url": "https://github.com/szTheory/gabbaboy/releases/tag/v0.3.0"
+}

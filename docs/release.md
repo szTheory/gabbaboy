@@ -558,14 +558,58 @@ on the failed body, original tagged section, and repaired section. The failed
 body must refuse for its missing disclosures; both tagged-section forms must
 pass.
 
-Before the metadata-only API update, confirm that the existing release ID,
-tag, target source S, draft and prerelease flags, publication time, and empty
-asset list still match the captured failure. The PATCH request contains only
-the `body` field with the repaired bytes. Read the draft and its assets again;
-the body digest must match the repaired-section digest, and the release ID,
-tag, target source, state, and assets must remain unchanged. See GitHub's
+### Historical first body-only attempt
+
+This is the original attempted body-only repair for this draft; it is historical guidance only.
+Do not repeat it for this release ID. At the time, the operator confirmed that the
+existing release ID, tag, target source S, draft and prerelease flags, publication
+time, and empty asset list matched the captured failure. The attempted PATCH request contains only the `body` field with the repaired bytes. The planned
+readback required the body digest to match the repaired-section digest while the
+release ID, tag, target source, state, and assets remained unchanged. The
+following incident records the actual HTTP 200 response, which did not preserve
+the tag association. See GitHub's
 [Update a release API](https://docs.github.com/en/rest/releases/releases#update-a-release)
-for the endpoint contract.
+for the endpoint contract used in that historical attempt.
+
+If any post-PATCH tag or state differs, hold and use a separately approved restoration procedure before retrying.
+Do not dispatch while state differs. For this draft, use only the separately
+approved tag-only restoration recorded in the incident below; do not repeat the
+body-only request.
+
+### Captured tag-association incident
+
+The first body-only PATCH for this draft returned HTTP 200 and installed the
+repaired notes, but its response changed `tag_name` from `v0.3.0` to
+`untagged-bff38b7645da850c79be`. The existing lifecycle guard refused before dispatch
+because the same unpublished draft no longer had its expected tag association.
+The sanitized actual request and response digests and the refused outcome are
+pinned by `v030-draft-association-restoration.json` and its `SOURCES.md` section.
+
+A D132 read-only preflight then stopped with a `TypeError` before any PATCH.
+GitHub returns release `body` as a JSON string. The private recovery operator
+must convert that decoded string to bytes with
+`release.body.encode("utf-8")` before calling the byte-based production adoption
+checker, both before mutation and after readback. The public `verify-v02-adoption.py` CLI continues to read a UTF-8 file as bytes.
+Both bridge checks bind to the same repaired-body digest, so the tag repair
+cannot silently change the release notes.
+
+For this captured incident only, the owner-approved restoration used the same
+release ID and the exact one-field request `{"tag_name":"v0.3.0"}`. The actual
+PATCH returned HTTP 200. The independent readback confirmed main G, Git tag S,
+one release-list association for the same ID, an empty asset list, and the CLI's
+draft/non-prerelease state. The nine-field release projection is
+`id`, `tag_name`, `target_commitish`, `name`, `body`, `draft`, `prerelease`,
+`published_at`, and `assets`: only the expected `tag_name` changed; the other
+eight guarded fields, including the exact UTF-8 body, stayed unchanged.
+
+The existing offline lifecycle controls reproduce the body-only drift and
+refuse dispatch until same-ID tag restoration succeeds. They then model the
+original exact retry request once. Those in-memory transport controls are
+separate from the actual GitHub observations and do not simulate a successful
+hosted workflow. The actual restoration operator recorded no dispatch and
+does not claim a successful release publication or phase completion. Complete
+the separately authorized retry and its normal downloaded-byte/readback gates
+before claiming the release is complete.
 
 The corrective workflow revision **G** is the actual main commit that contains
 the reviewed fix; it must be a non-empty, allowlisted descendant of S. Record

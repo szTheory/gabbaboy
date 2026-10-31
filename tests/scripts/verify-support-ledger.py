@@ -3121,6 +3121,7 @@ DISCLOSED_LEDGERS = (
     # (tracked path, immutable tag whose blob must equal the tracked bytes, or None when a freeze check owns it)
     ("docs/support/v0.2.0.md", None),
     ("docs/support/v0.2.1.md", "v0.2.1"),
+    ("docs/support/v0.3.0.md", "v0.3.0"),
 )
 
 
@@ -3571,6 +3572,16 @@ def self_test_disclosure(root: pathlib.Path = ROOT) -> tuple[int, int]:
     flipped[100] ^= 1
     expect_rejected("tagged-ledger-byte-flip",
                     lambda: require_tagged(root, ledger_rel, "v0.2.1", bytes(flipped)), "tagged-ledger-changed")
+
+    v03_ledger_rel = "docs/support/v0.3.0.md"
+    v03_raw = bounded_file(root / v03_ledger_rel, MAX_LEDGER_BYTES, "ledger")
+    if len(v03_raw) <= 100:
+        fail("the v0.3.0 ledger is too short for the fixed byte-flip control")
+    v03_flipped = bytearray(v03_raw)
+    v03_flipped[100] ^= 1
+    expect_rejected("tagged-v0.3.0-ledger-byte-flip",
+                    lambda: require_tagged(root, v03_ledger_rel, "v0.3.0", bytes(v03_flipped)),
+                    "tagged-ledger-changed")
 
     # --write-current may not rewrite the tracked ledger of a tagged release, but a disposable output and an
     # untagged version are accepted.

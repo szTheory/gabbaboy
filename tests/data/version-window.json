@@ -1,34 +1,11 @@
 {
   "schema_version": 1,
   "kind": "release-version-window",
-  "state": "active",
-  "release_version": "0.3.0",
-  "intended": {
-    "head": "5948b0c32c0887323777d143b867b13d4feb0716",
-    "base": "9c405b01fa40e177f9efc52752d835fee5a3c7c1"
-  },
-  "managed_inputs": {
-    "release-please-config.json": "3c8306dbb75da6bf41f801e3e2c01495d3de069f2cedb079da3a6d7453c073d0",
-    "tests/data/release-disclosure.json": "a0e89969b1254de467477190da16adf5b8dc725433df0d4ebbd75c5d6a954285",
-    "tests/data/support-claims-v0.3.json": "0815d8c04eea8dcac522311bd84d3202c2c91bad9dfe146905cc6df7d2051d0c",
-    "tests/scripts/verify-support-ledger.py": "9fbd6ea8ffbf516deb958d8987fe6c1ed4935e18ce7dd21eacdcee7c35ba3360"
-  },
-  "generated": {
-    "files": {
-      ".release-please-manifest.json": "1c565d961ba3c4994d0febd549d766f013e85181d5b65278f7c8a6d42adaebe5",
-      "CHANGELOG.md": "0db80149bf5ac1f35f7c8c6647cf703336b1417922610a60bee74074c111a6a8",
-      "docs/support/v0.3.0.md": "e66d82247df61da897775be40b1fdfa0df30868cb889c438a22cf88958c078f8"
-    },
-    "pr_body_sha256": "6389d62171a7a01f20df860665e1a42972c1b9359e10b16a82089a0a0013e6a8"
-  },
-  "review": {
-    "head": "5948b0c32c0887323777d143b867b13d4feb0716",
-    "pull_request": 131,
-    "ci_run_id": 41135926710
-  },
-  "rehearsal": {
-    "head": "5948b0c32c0887323777d143b867b13d4feb0716",
-    "ref": "rehearsal/v0.3.0",
-    "run_id": 41135937384
-  }
+  "state": "inactive",
+  "release_version": null,
+  "intended": null,
+  "managed_inputs": null,
+  "generated": null,
+  "review": null,
+  "rehearsal": null
 }

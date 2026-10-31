@@ -1485,11 +1485,11 @@ unset(GBB_LEDGER_MIN)
 # source-bound tests/data/release-disclosure.json. The generator test requires the tagged ledgers to be unchanged tag
 # bytes, exact generator fixed points and accepted by the adoption verifier; the controls reject input omission, a
 # rewritten historical value, unbound sources, a handwritten-success bypass and rewriting a tagged ledger (both read
-# the v0.2.0/v0.2.1 tags the full-suite jobs fetch).
+# the v0.2.0/v0.2.1/v0.3.0 tags the full-suite jobs fetch).
 gbb_add_ledger_contract(release_disclosure_generator
-  [=[release-disclosure generator pass ledgers=[2-9] tagged=[1-9]]=]
+  [=[release-disclosure generator pass ledgers=3 tagged=2]=]
   --check-disclosure)
-set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=15)
+set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=20)
 gbb_add_ledger_contract(release_disclosure_controls
   [=[release-disclosure controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-disclosure)
@@ -5629,9 +5629,18 @@ add_test(NAME release_lifecycle_post_tag_recovery_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};--self-test-post-tag-recovery"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=release-lifecycle post-tag recovery controls pass controls=[1-9][0-9]* positives=[0-9]+ original_section_sha256=[0-9a-f]+ repaired_body_sha256=[0-9a-f]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=48
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=93
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(release_lifecycle_post_tag_recovery_controls PROPERTIES TIMEOUT 60 LABELS "v03;release")
+
+# D-23 (19-07 Task 4): validate the actual published receipt from PR B's immutable source revision.
+add_test(NAME v03_readback
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--check-readback;${GBB_LIVE_PHASES_DIR}/GB-19-qualified-v0-3-0-release/19-release-readback.json;--rev;${GBB_STATE_SOURCE_REV};--tag;v0.3.0"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=v03-readback pass tag=v0.3.0 assets=[1-9][0-9]*"
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(v03_readback PROPERTIES TIMEOUT 60 LABELS planning)
 
 # Phase 17 RM-030 / D-22 (17-11): release gates. The owner-approval gate (a deterministic Ir exception bound to the
 # exact measurement digest, cause, band and approved limit) and the exact-head nightly gate run on captured GitHub
