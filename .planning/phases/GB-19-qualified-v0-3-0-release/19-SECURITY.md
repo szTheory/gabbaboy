@@ -1,15 +1,15 @@
 ---
 phase: "19"
 slug: qualified-v0-3-0-release
-status: draft
-threats_open: 4
+status: verified
+threats_open: 0
 asvs_level: 1
 created: "2026-10-30"
 ---
 
 # Phase 19 — Security
 
-This interim audit covers the authored threat register in plans 19-01..19-07. The independent ASVS L1 audit at `29f6ae2b818fdc4dac8b73b3107b5a9722e10578` found two implementation gaps under T-19-22. The focused re-audit of the complete six-file correction diff at `b0beb4fd8d1c2290d89b707860bf23c899e12fac` closed both gaps. With the existing acceptance recorded as AR-19-01, 26/35 unique threats are closed and nine operational verifications remain pending; four meet the high blocking threshold. This report does not certify publication or phase completion.
+The final independent ASVS L1 audit at `3edf4021bbe05a200b456dbaf51a94adcd27b012` verifies all 41 authored threats across plans19-01..19-08: 40 mitigations are present and the existing AR-19-01 acceptance is documented. No blocking or non-blocking threats remain open. The original 35-threat interim audit and subsequent failures remain below as history. The actual published release and strict readback are verified; PR B's final local qualification, exact-head hosted checks and guarded squash remain separate downstream gates, not security-audit claims.
 
 The second focused audit at `0fec185016ae4d3578b641ffc694aafdd1d8795c` verified that CI integration fixes preserve the registered mitigations: production tag and publication guards are unchanged; the tag-guard fixture uses a relative log path with an explicit temporary working directory; and the two lifecycle control suites run serially with unchanged 60-second limits, minimum counts and semantic assertions. The independent auditor executed all three tag-guard scenarios successfully. Subsequent local targeted CTests passed 3/3; actual final-head Windows CI and renewed preflight remain pending. This adds no risk acceptance and changes no threat status.
 
@@ -64,17 +64,24 @@ Evidence paths below are relative to `tests/scripts/` unless otherwise qualified
 | T-19-22 | Tampering | Publication inventory/readback | high | mitigate | Full API inventory includes final metadata; checksum/receipt coverage uses payload names; shared verifier binds complete name/ID/digest maps and release/run/source identity before publication. Independent post-gate removal refuses with draft=true and zero publication decisions; omitted-guard mutant publishes then refuses. | closed |
 | T-19-23 | Information disclosure | Readback | medium | mitigate | verify-v03-dispositions.py privacy scan and immutable lifecycle pattern parity | closed |
 | T-19-24 | Repudiation | Release profiles | low | mitigate | Lifecycle derives profiles/ledger from tag; profile control | closed |
-| T-19-25 | Denial of service | Final synthetic preflight | medium | mitigate | E0 qualification remains recorded. The approved resolver changes the source; the new frozen head requires a fresh coherent preflight, six producers, judge comparison and branch deletion. | open — below high threshold |
-| T-19-26 | Tampering | PR A merge | high | mitigate | Exact-head required checks and guarded squash with match-head pending | open |
-| T-19-27 | Tampering | PR titles/file set | medium | mitigate | Observed PR A title and regenerated #131 title/file set pending | open — below high threshold |
+| T-19-25 | Denial of service | Final synthetic preflight | medium | mitigate | Final source preflight records six successful producers, matching trusted-judge outcome, fixed-point ledger and transient-ref deletion; later source corrections separately qualified. Actual preflight evidence retained under build/preflight/runs/8f5da5203e7cb525d4ed4f4ddb1182369ab750a7-final-20261030-8f5da520/. | closed |
+| T-19-26 | Tampering | PR A merge | high | mitigate | Actual PR A branch-protection/check-run/PR snapshots show all required instances successful at reviewed head; immutable squash tree equals that head. Guarded PR133 squash cb3055c9 retained. | closed |
+| T-19-27 | Tampering | PR titles/file set | medium | mitigate | Immutable PR133 squash subject and regenerated PR131 snapshots preserve required titles and bounded version bump file set; task1 input/prepush records and task3-go-no-go snapshots retained. | closed |
 | T-19-28 | Repudiation | Documentation | low | mitigate | Doc links and first CHANGELOG heading contract checks with refusing controls | closed |
-| T-19-29 | Tampering | Version PR merge | high | mitigate | W go/no-go, guarded #131 merge and observed tree(S)==tree(W) pending | open |
-| T-19-30 | Tampering | Main during window | high | mitigate | Main equals PR A squash before each step, single post-merge commit pending | open |
-| T-19-31 | Tampering | Tag/draft lifecycle | high | mitigate | Actual immutable tag/draft operations and failure routing pending | open |
-| T-19-32 | Spoofing | Post-merge rehearsal | medium | mitigate | Actual no-push/no-rerun observation against merge timestamp pending | open — below high threshold |
-| T-19-33 | Repudiation | Release body | medium | mitigate | Live body validation before merge and W body digest equality pending | open — below high threshold |
-| T-19-34 | Information disclosure | Committed readback | medium | mitigate | Actual readback privacy and registered v03_readback check pending | open — below high threshold |
+| T-19-29 | Tampering | Version PR merge | high | mitigate | Actual W checks and active gate bind R2 before merge; immutable tree(S)==tree(W), S parent is recorded window base, guarded PR131 merge retained in task3-go-no-go evidence. | closed |
+| T-19-30 | Tampering | Main during window | high | mitigate | Actual Task1 prepush and Task3 main snapshots pin historical WINDOW_BASE9c405b01; immutable S has that parent and exactly one window-range commit. Current HEAD is never substituted for the historical boundary. | closed |
+| T-19-31 | Tampering | Tag/draft lifecycle | high | mitigate | Actual Git tag stays at S and release429606490 keeps its identity. Body-only association drift stopped dispatch; owner D132/D133 authorized the single separately marked same-ID restoration before the sole successful retry. | closed |
+| T-19-32 | Spoofing | Post-merge rehearsal | medium | mitigate | Existing-tag guard and merge-time source proof remain enforced. Actual selected R2 attempt completed before S merge; retained run list/no-postmerge-rehearsal assertion and successful publication preserve the premerge binding. | closed |
+| T-19-33 | Repudiation | Release body | medium | mitigate | task3-go-no-go/body-final.md equals captured live PR body and its canonical digest matches W. Historical window check and adoption check pass; changed-body control refuses. | closed |
+| T-19-34 | Information disclosure | Committed readback | medium | mitigate | tests/CMakeLists.txt registers actual v03_readback with immutable source, planning label and exit/regex checks; verify-v03-dispositions.py privacy parity and private-path refusal hold. Actual 22-asset readback passes. | closed |
 | T-19-SC | Tampering | Package installations | high | accept | Existing plan-time acceptance recorded as AR-19-01 | closed |
+
+| T-19-35 | Tampering | draft notes | high | mitigate | Lifecycle checker491-503/1093-1103 pins exact single-link transformation and body hashes; actual failing notes and association captures validate. D132/D133 tag-only request and independent unchanged repaired-body readback are retained. | closed |
+| T-19-36 | Spoofing | retry workflow/product binding | high | mitigate | Disposition checker203-337 binds actual main/G dispatch/run/jobs separately from product/tag/receipts S; normal run equality remains strict at568. Actual raw projections match and false G/S substitution refuses. | closed |
+| T-19-37 | Repudiation | failed/retried run history | medium | mitigate | Original failed S push41148606886 remains distinct from successful G dispatch41205021983 attempt1. Actual request/run/job/log captures and both final summaries preserve the sequence. | closed |
+| T-19-38 | Information disclosure | new capture/readback | medium | mitigate | Lifecycle checker521-548/680-695 enforces additive fixture privacy, bounds and pinned provenance; both actual fixtures validate and private path/token/email negatives refuse. Public-body exception is narrowly scoped. | closed |
+| T-19-39 | Denial of service | repeated/concurrent recovery | high | mitigate | Existing release serialization remains; separate exclusive permanent markers preserve original body PATCH, single association restoration and sole dispatch. Actual captures show no concurrent release work and one successful retry; no limits changed. | closed |
+| T-19-40 | Elevation of privilege | alternate ref or weakened judge | high | mitigate | Main-only workflow guards and disposition checker203-253 restrict exact seven-path G/S correction and protected blobs. Independent immutable comparison proves reviewed/squash tree equality, unchanged product/workflow/policy and successful actual-G remaining-stage checks before retry. | closed |
 
 ## Implementation Findings and Round 1 Closure
 
@@ -107,3 +114,20 @@ The code review additionally found WR-01: changed-path closure accepted internal
 No missing subject-ancestry dependency was established: ancestry/object checks use full-history trusted-judge; subject derivation reads CMake/manifest; fuzz exact-tree/blob validation follows fetching the subject commit. The local differential uses full-history worktrees and does not exercise a shallow subject checkout; this is a coverage limitation, not a verified defect. The five completed summaries have no explicit Threat Flags sections; that is not proof of an exhaustive attack-surface inventory.
 
 Audit-time linkage, managed claims, interop scan, CHANGELOG heading and doc link checks passed. Reproductions were isolated. The subsequent E0 rehearsal used a transient remote branch, deleted after its terminal run. T-19-25 was closed for E0 only and is reopened for the resolver source; actual Windows CI and the guarded merge remain unperformed. Publication operations and REL-01 remain pending. No security or phase-completion sign-off is claimed.
+
+
+## Final operational audit evidence
+
+The independent `gsd-security-auditor` verified the current source and all eight authored registers, actual release429606490 publication at2026-10-31T13:47:13Z, successful sole retry41205021983 attempt1, workflow G/product S distinction, original pre-publish artifact and downloaded raw receipt/inventory bytes. Every capture-manifest hash and actual job projection matched. Immutable Git comparisons verified S/W, corrective reviewed/squash trees, exact correction paths and unchanged critical blobs. Historical window/body checks passed; in-memory negatives refused false workflow identity, inventory changes and private text. Existing no-interop and documentation checks with controls passed.
+
+Operational evidence resides in ignored build/phase19-window task1-live/task2-live/task3-go-no-go, posttag-recovery/tag-drift-replan, retry-dispatch-D133 and release-S/published-41205021983 captures; committed readback is19-release-readback.json. D131 diagnosis approval, D132 separately marked conditional restoration, D133 two-call UTF-8 fix/full actual-entrypoint replay/review and the original one retry remain separate authorizations. The actual no-write preflight TypeError is preserved as a failure, not a live mutation or successful preflight. No second retry or extra corrective main merge occurred.
+
+The auditor wrote no project files, project Git metadata or remote state. An existing interop validator internally created and removed its isolated temporary fixture repository; the auditor reported that procedural detail. No new risk acceptance was granted. All41 threats are closed; this does not stand in for final PR B local/hosted qualification or its guarded merge.
+
+## Security Audit 2026-10-31
+
+| Metric | Count |
+|---|---|
+| Threats found | 41 |
+| Closed | 41 |
+| Open | 0 |
