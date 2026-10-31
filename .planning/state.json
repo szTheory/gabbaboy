@@ -26,8 +26,8 @@
   ],
   "next": {
     "command": "/gsd-execute-phase 19",
-    "label": "Finish Phase 19 post-release closure",
-    "reason": "Published release readback passed; final PR B phase gates are active"
+    "label": "Resolve Phase 19 bounded schema-repair scope",
+    "reason": "Published release readback passes; exhausted review-fix allowance requires owner scope before final PR B repair"
   },
-  "updated_at": "2026-10-31T14:06:21Z"
+  "updated_at": "2026-10-31T14:32:50Z"
 }

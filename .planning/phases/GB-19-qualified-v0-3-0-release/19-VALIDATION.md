@@ -2,7 +2,7 @@
 phase: "19"
 slug: "qualified-v0-3-0-release"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
-# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: true) (#2117)
+# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
 status: validated
 nyquist_compliant: false
 wave_0_complete: true
@@ -98,7 +98,7 @@ None. Every phase behavior has automated verification (D-069). The owner-only de
 - [x] Wave 0 covers all MISSING references
 - [x] No watch-mode flags
 - [x] Feedback latency < 60s
-- [x] `nyquist_compliant: true` set in frontmatter
+- [ ] `nyquist_compliant: true` set in frontmatter — reopened by post-review schema gap
 
 **Validation:** Automated coverage is present for all eight executed plans. Owner scope decisions are recorded separately and are not test passes.
 
@@ -144,3 +144,8 @@ The final local full-suite/player-package qualification, canonical security/code
 | Gaps found | 0 |
 | Resolved | 0 |
 | Escalated | 0 |
+
+
+## Post-review schema gap hold
+
+Final code review found an uncovered malformed-schema acceptance at pre-publish/readback/fixture/ledger boundaries and a registry root-type diagnostic gap. Current-source reproduction accepts JSON true and1.0 inventory versions and true registry version; array registry raises AttributeError. Existing successful checks and actual integer-schema release evidence remain valid, but the missing refusal controls prevent final validation closure. A private isolated bounded repair is being prepared for the required owner scope decision. No active implementation change, new test target, timeout/policy relaxation or live release action is authorized by this note. Re-run affected controls and independent review after scope approval; final qualification remains pending.

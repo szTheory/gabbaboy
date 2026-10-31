@@ -5,8 +5,8 @@ milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
 status: executing
-stopped_at: Published v0.3.0; PR B final phase audit and qualification active
-last_updated: "2026-10-31T14:06:21Z"
+stopped_at: Published release valid; final code review schema gap requires bounded owner scope decision
+last_updated: "2026-10-31T14:32:50Z"
 last_activity: 2026-10-31
 last_activity_desc: "Sole approved retry published v0.3.0; strict actual readback and focused PR B checks pass"
 state_head: d61a25ea54364e0e26ef89bb7467c72089361d49
@@ -30,11 +30,13 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 ## Current Position
 
-Phase: **19 — Qualified v0.3.0 Release, execution**. The sole approved retry published v0.3.0; actual strict readback reconciles all 22 assets with the original pre-publish inventory. Product/tag S remains immutable; publication ran from the independently qualified corrective main G. The first failed run and approved D-130..D-133 recovery history remain in the phase artifacts. No further live release edits, reruns or dispatches are authorized or needed.
+Phase: **19 — Qualified v0.3.0 Release, execution**. The sole approved retry successfully published v0.3.0 and strict actual readback reconciles all22 assets. The product/tag remains immutable. No additional live release action is needed or proposed.
 
-Current stage: **19-07 Task 4 — PR B phase closure**. Applied checks freeze the tagged ledger, reset the window to inactive and preserve the actual recovery captures. Focused immutable-revision checks pass. The agent is completing phase validation, independent security/code review, final local qualification and exact-head protected CI before the guarded PR B merge. No final phase-completion claim is made while those gates remain pending.
+Current stage: **PR B final code-review scope hold**. The independent security audit initially verified all41 authored threats. The subsequent full code review found that malformed JSON true/1.0 schema versions pass several integer-version checks, plus an uncontrolled error for a non-object policy registry. Current-source reproductions confirm these gaps; the published inventory uses the correct integer schema. T-19-22 and final validation are reopened. No unresolved correctness finding is deferred or accepted.
 
-The agent acts next; **no user action is needed** for this authorized closure. The next owner-selected stage is **Phase 19 — Qualified v0.3.0 Release, verification**, exact command `/gsd-verify-work 19`. Do not run it, audit the milestone or start another phase automatically. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. The frozen historical 19-06 SUMMARY remains unchanged; current operational closure is recorded in 19-07/19-08. Keep the authority branch `gsd/phase-19-window-discovery-repair` and both cited rehearsal branches; no branch cleanup is included.
+The project's exhausted two-review-fix allowance requires an owner scope decision before this repair can enter PR B. The agent is preparing an isolated bounded patch and negative controls so that decision is concrete. This preparation grants no active-branch fix, new gap/review budget, CI retry or live release mutation. Final full local qualification, phase goal verification and exact-head hosted PR B/guarded merge remain pending.
+
+The agent acts next to finish the reviewable proposal; the owner then decides its bounded scope. Resume within the same Phase19 with `/gsd-execute-phase 19` after that decision. The eventual execution handoff remains `/gsd-verify-work 19`; do not run it, audit the milestone or start another phase automatically. Both automatic advance flags remain false. Preserve frozen19-06 SUMMARY, retained policy authority and rehearsal branches.
 
 Prior stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
 

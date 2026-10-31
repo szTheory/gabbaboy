@@ -1,15 +1,15 @@
 ---
 phase: "19"
 slug: qualified-v0-3-0-release
-status: verified
-threats_open: 0
+status: review_hold
+threats_open: 1
 asvs_level: 1
 created: "2026-10-30"
 ---
 
 # Phase 19 — Security
 
-The final independent ASVS L1 audit at `3edf4021bbe05a200b456dbaf51a94adcd27b012` verifies all 41 authored threats across plans19-01..19-08: 40 mitigations are present and the existing AR-19-01 acceptance is documented. No blocking or non-blocking threats remain open. The original 35-threat interim audit and subsequent failures remain below as history. The actual published release and strict readback are verified; PR B's final local qualification, exact-head hosted checks and guarded squash remain separate downstream gates, not security-audit claims.
+The independent ASVS L1 audit at `3edf4021bbe05a200b456dbaf51a94adcd27b012` verified all41 authored threats, including the existing AR-19-01 acceptance. Subsequent full code review and current-source reproduction exposed a strict-schema correctness gap and reopened T-19-22: current disposition is40 closed, one open blocking threat. The historical audit and successful actual publication/readback remain recorded; final phase closure and PR B qualification/merge are held for the bounded owner scope decision below. No malformed actual release evidence or need for a new release mutation was found.
 
 The second focused audit at `0fec185016ae4d3578b641ffc694aafdd1d8795c` verified that CI integration fixes preserve the registered mitigations: production tag and publication guards are unchanged; the tag-guard fixture uses a relative log path with an explicit temporary working directory; and the two lifecycle control suites run serially with unchanged 60-second limits, minimum counts and semantic assertions. The independent auditor executed all three tag-guard scenarios successfully. Subsequent local targeted CTests passed 3/3; actual final-head Windows CI and renewed preflight remain pending. This adds no risk acceptance and changes no threat status.
 
@@ -61,7 +61,7 @@ Evidence paths below are relative to `tests/scripts/` unless otherwise qualified
 | T-19-19 | Spoofing | Perf receipt handoff | high | mitigate | Release selects named artifact at run/attempt; verifier binds source/event/workflow/run/attempt/limits | closed |
 | T-19-20 | Tampering | Performance policy | high | mitigate | Shared exact predicate and immutable limits checks; frozen limits unchanged | closed |
 | T-19-21 | Repudiation | Consumer host smoke | medium | mitigate | Policy orders host smoke and platform-bound receipts for every writer; consumer verifier checks results | closed |
-| T-19-22 | Tampering | Publication inventory/readback | high | mitigate | Full API inventory includes final metadata; checksum/receipt coverage uses payload names; shared verifier binds complete name/ID/digest maps and release/run/source identity before publication. Independent post-gate removal refuses with draft=true and zero publication decisions; omitted-guard mutant publishes then refuses. | closed |
+| T-19-22 | Tampering | Publication inventory/readback | high | mitigate | Existing full inventory/asset protections remain. Post-review reproduction confirms boolean/float schema values bypass the integer-version boundary; bounded exact-type repair, refusal controls and independent recheck pending owner scope. | open |
 | T-19-23 | Information disclosure | Readback | medium | mitigate | verify-v03-dispositions.py privacy scan and immutable lifecycle pattern parity | closed |
 | T-19-24 | Repudiation | Release profiles | low | mitigate | Lifecycle derives profiles/ledger from tag; profile control | closed |
 | T-19-25 | Denial of service | Final synthetic preflight | medium | mitigate | Final source preflight records six successful producers, matching trusted-judge outcome, fixed-point ledger and transient-ref deletion; later source corrections separately qualified. Actual preflight evidence retained under build/preflight/runs/8f5da5203e7cb525d4ed4f4ddb1182369ab750a7-final-20261030-8f5da520/. | closed |
@@ -74,14 +74,14 @@ Evidence paths below are relative to `tests/scripts/` unless otherwise qualified
 | T-19-32 | Spoofing | Post-merge rehearsal | medium | mitigate | Existing-tag guard and merge-time source proof remain enforced. Actual selected R2 attempt completed before S merge; retained run list/no-postmerge-rehearsal assertion and successful publication preserve the premerge binding. | closed |
 | T-19-33 | Repudiation | Release body | medium | mitigate | task3-go-no-go/body-final.md equals captured live PR body and its canonical digest matches W. Historical window check and adoption check pass; changed-body control refuses. | closed |
 | T-19-34 | Information disclosure | Committed readback | medium | mitigate | tests/CMakeLists.txt registers actual v03_readback with immutable source, planning label and exit/regex checks; verify-v03-dispositions.py privacy parity and private-path refusal hold. Actual 22-asset readback passes. | closed |
-| T-19-SC | Tampering | Package installations | high | accept | Existing plan-time acceptance recorded as AR-19-01 | closed |
-
 | T-19-35 | Tampering | draft notes | high | mitigate | Lifecycle checker491-503/1093-1103 pins exact single-link transformation and body hashes; actual failing notes and association captures validate. D132/D133 tag-only request and independent unchanged repaired-body readback are retained. | closed |
 | T-19-36 | Spoofing | retry workflow/product binding | high | mitigate | Disposition checker203-337 binds actual main/G dispatch/run/jobs separately from product/tag/receipts S; normal run equality remains strict at568. Actual raw projections match and false G/S substitution refuses. | closed |
 | T-19-37 | Repudiation | failed/retried run history | medium | mitigate | Original failed S push41148606886 remains distinct from successful G dispatch41205021983 attempt1. Actual request/run/job/log captures and both final summaries preserve the sequence. | closed |
 | T-19-38 | Information disclosure | new capture/readback | medium | mitigate | Lifecycle checker521-548/680-695 enforces additive fixture privacy, bounds and pinned provenance; both actual fixtures validate and private path/token/email negatives refuse. Public-body exception is narrowly scoped. | closed |
 | T-19-39 | Denial of service | repeated/concurrent recovery | high | mitigate | Existing release serialization remains; separate exclusive permanent markers preserve original body PATCH, single association restoration and sole dispatch. Actual captures show no concurrent release work and one successful retry; no limits changed. | closed |
 | T-19-40 | Elevation of privilege | alternate ref or weakened judge | high | mitigate | Main-only workflow guards and disposition checker203-253 restrict exact seven-path G/S correction and protected blobs. Independent immutable comparison proves reviewed/squash tree equality, unchanged product/workflow/policy and successful actual-G remaining-stage checks before retry. | closed |
+| T-19-SC | Tampering | Package installations | high | accept | Existing plan-time acceptance recorded as AR-19-01 | closed |
+
 
 ## Implementation Findings and Round 1 Closure
 
@@ -122,7 +122,7 @@ The independent `gsd-security-auditor` verified the current source and all eight
 
 Operational evidence resides in ignored build/phase19-window task1-live/task2-live/task3-go-no-go, posttag-recovery/tag-drift-replan, retry-dispatch-D133 and release-S/published-41205021983 captures; committed readback is19-release-readback.json. D131 diagnosis approval, D132 separately marked conditional restoration, D133 two-call UTF-8 fix/full actual-entrypoint replay/review and the original one retry remain separate authorizations. The actual no-write preflight TypeError is preserved as a failure, not a live mutation or successful preflight. No second retry or extra corrective main merge occurred.
 
-The auditor wrote no project files, project Git metadata or remote state. An existing interop validator internally created and removed its isolated temporary fixture repository; the auditor reported that procedural detail. No new risk acceptance was granted. All41 threats are closed; this does not stand in for final PR B local/hosted qualification or its guarded merge.
+The auditor wrote no project files, project Git metadata or remote state. An existing interop validator internally created and removed its isolated temporary fixture repository; the auditor reported that procedural detail. No new risk acceptance was granted. At that audit snapshot all41 threats were closed; the subsequent schema finding below reopens T-19-22. Neither snapshot stands in for final PR B qualification or its guarded merge.
 
 ## Security Audit 2026-10-31
 
@@ -131,3 +131,8 @@ The auditor wrote no project files, project Git metadata or remote state. An exi
 | Threats found | 41 |
 | Closed | 41 |
 | Open | 0 |
+
+
+## Post-review T-19-22 reopening
+
+After the independent L1 audit, code review and a current-source reproduction established that the final publication-inventory validator accepts JSON true or1.0 as schema version1. This contradicts its strict-schema contract, although the actual published inventory has the correct integer schema and all retained release bytes remain reconciled. T-19-22 is reopened for this bounded schema-correctness gap; no existing acceptance covers it. The original41/41 audit remains historical evidence of what was checked, not approval to ignore this finding. Final phase closure and PR B merge are held. An isolated repair and negative controls will support the required owner scope decision; no further release mutation is proposed.
