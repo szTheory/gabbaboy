@@ -32,7 +32,12 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 **Success Criteria** (what must be TRUE):
   1. A fixture can enter the repository and public CI only when exact bytes, source/build inputs, and terms for its code, art, audio driver, and notices are recorded; incomplete rights or changed identities are rejected by automated controls.
   2. An installed or product-release package containing a controlled game-ROM insertion is rejected, while a valid package retains the required component notices and GabbaBoy's MIT declaration.
-**Plans**: TBD — capped at 3 plans; this is a tune-up, not a general debt-closure phase.
+**Plans**: 3 plans — capped at 3; this is a tune-up, not a general debt-closure phase.
+
+Plans:
+- [ ] 20-01-PLAN.md — Versioned admission records, independent identity pins and shared exact product policy.
+- [ ] 20-02-PLAN.md — Actual core install, archive and release notice boundary with mutation controls.
+- [ ] 20-03-PLAN.md — Actual macOS player package and notice boundary with mutation controls.
 
 Use existing checks to assess CI headroom, current documentation, and carry-over dispositions while establishing this boundary. Preserve the accepted v0.3 audit debts and standalone closeout-helper failure unless a documented trigger actually applies. The admission contract remains mandatory when later phases add fixtures; RIGHTS-01 has this single owner phase.
 
@@ -98,7 +103,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Fixture Admission Tune-up | 0/TBD | Not started | - |
+| 20. Fixture Admission Tune-up | 0/3 | Planned | - |
 | 21. CGB Game Progress and Scene Regressions | 0/TBD | Not started | - |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |

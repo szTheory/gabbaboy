@@ -1,7 +1,7 @@
 ---
 phase: "20"
 slug: "fixture-admission-tune-up"
-status: draft
+status: planned
 nyquist_compliant: false
 wave_0_complete: false
 created: "2026-10-31"
@@ -38,10 +38,24 @@ created: "2026-10-31"
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 20-01-01 | 20-01 | 1 | RIGHTS-01 | T-20-01 | A complete synthetic admission record passes; missing/ambiguous component terms, unresolved scope, stale identities, malformed/duplicate keys, and coordinated fixture+manifest+notice replacement against the unchanged immutable baseline fail. This validates record structure and identity, not legal coverage. | unit | `python3 -I tests/scripts/verify-fixture-admission.py --self-test` | ❌ Wave 0 | ⬜ pending |
-| 20-02-01 | 20-02 | 2 | RIGHTS-01 | T-20-02, T-20-03 | The actual staged install and extracted core product match the exact path/digest inventory and retain package-specific fixture notices, the core notice sidecar, and root MIT bytes. Renamed, suffixless, and in-directory controlled payloads plus missing/changed notices or MIT bytes fail. | integration | `ctest --preset phase1 --output-on-failure -R '^preview_package_smoke$'` | ⚠️ Existing target; coverage partial | ⬜ pending |
-| 20-02-02 | 20-02 | 2 | RIGHTS-01 | T-20-02, T-20-03 | The actual core release archive matches the exact product inventory; source archives retain their separate fixture policy. | integration | `python3 -I tests/scripts/verify-v02-source-archive.py --check-product-archive build/gabbaboy-core-linux-x64.tar.gz --repo-root .` (release-rehearsal artifact) | ⚠️ Existing checker; exact inventory partial | ⬜ pending |
-| 20-03-01 | 20-03 | 2 | RIGHTS-01 | T-20-04 | The actual macOS player package contains only the approved smoke-fixture identities and required GabbaBoy/SDL notices; renamed, suffixless, or in-subtree controlled payloads and missing/changed notices fail. | integration | `bash tests/scripts/verify-phase3-player.sh --build-package` | ⚠️ Existing check; exact inventory partial | ⬜ pending |
+| 20-01-01 | 20-01 | 1 | RIGHTS-01 | T-20-01, T-20-03, T-20-04 | Real CLI accepts a complete synthetic manifest/notice/pinned-blob path and rejects a coordinated rewrite, missing pin or absent blob. | integration | `python3 -I tests/scripts/verify-fixture-admission.py --self-test` | New, created in this task | ⬜ pending |
+| 20-01-02 | 20-01 | 1 | RIGHTS-01 | T-20-01, T-20-03, T-20-04 | Existing approvals pass; incomplete component/use records, new unregistered evidence including additions in legacy subtrees, bad input and changed identity fail before consumption. | integration | `python3 -I tests/scripts/verify-fixture-admission.py --self-test && python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . && python3 -I .github/scripts/verify-workflow-policy.py --self-test --group ci` | New, Task 1 dependency | ⬜ pending |
+| 20-01-03 | 20-01 | 1 | RIGHTS-01 | T-20-02, T-20-03, T-20-04 | Both exact product policies accept clean synthetic trees and reject insertion, identity, notice/MIT/SDL/sidecar and documentation mutations. | unit | `python3 -I tests/scripts/verify-fixture-admission.py --self-test && python3 -I tests/scripts/verify-fixture-admission.py --self-test-packages --layout core && python3 -I tests/scripts/verify-fixture-admission.py --self-test-packages --layout player` | New, Task 1 dependency | ⬜ pending |
+| 20-02-01 | 20-02 | 2 | RIGHTS-01 | T-20-05, T-20-06, T-20-07 | Real install/archive/extraction and consumers pass exact policy; a renamed planted ROM fails before execution. | integration | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` | Existing target, extended | ⬜ pending |
+| 20-02-02 | 20-02 | 2 | RIGHTS-01 | T-20-05, T-20-06, T-20-07, T-20-08 | Every approved core subtree, renamed/suffixless insertion and missing/changed notice/MIT control fails in actual trees and parsed archives; source contract remains distinct. | integration | `python3 -I tests/scripts/verify-v02-source-archive.py --self-test && ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` | Existing, extended | ⬜ pending |
+| 20-02-03 | 20-02 | 2 | RIGHTS-01 | T-20-06, T-20-07, T-20-08 | Core new/reused/downloaded production paths apply actual-byte policy; missing/changed gabbaboy-notices.txt fails; separate source evidence retained. | integration | `bash tests/scripts/verify-release-candidate.sh --self-test && python3 -I tests/scripts/verify-v02-source-archive.py --self-test && python3 -I .github/scripts/verify-workflow-policy.py --self-test --group release_jobs` | Existing, extended | ⬜ pending |
+| 20-03-01 | 20-03 | 2 | RIGHTS-01 | T-20-09, T-20-10, T-20-11 | Real macOS stage/extracted player inventory and lifecycle pass; planted renamed payload fails before execution. | integration | `bash tests/scripts/verify-phase3-player.sh --build-package` | Existing, extended | ⬜ pending |
+| 20-03-02 | 20-03 | 2 | RIGHTS-01 | T-20-09, T-20-10, T-20-11 | Real valid player prefix passes shell wrapper; suffixless/renamed/subtree and every missing/changed fixture/GabbaBoy/SDL notice case fail with intended reasons, without altering positive bytes. | integration | `python3 -I tests/scripts/verify-fixture-admission.py --self-test-packages --layout player && bash tests/scripts/verify-phase3-player.sh --self-test-package-policy build/phase3-player/package-stage/installed-prefix` | New mode; Task 1 produces prefix | ⬜ pending |
+
+Each PLAN task carries its concrete `<fails_when>` signal. No implementation check has run during planning; all task rows remain pending. The first tracer creates its own synthetic verification path. No separate Wave 0 plan is added: missing scaffolds are part of Plan 20-01, before the two dependent package plans.
+
+### Actual package producer/check stages
+
+- `preview_package_smoke` produces `build/preview-package-smoke/installed-prefix`, `installed-prefix.tar.gz` and `extracted/installed-prefix`; the stage policy/inventory is checked before archive creation, then compared to extracted actual bytes before consumers.
+- `release.yml` Linux core producer builds `build/release-stage` and `build/gabbaboy-core-linux-x64.tar.gz`; macOS core producer uses `build/release-stage` and `build/gabbaboy-core-macos-arm64.tar.gz`. Policy runs before archiving and against actual archive/extraction at existing qualification stages. The focused archive CLI is `python3 -I tests/scripts/verify-v02-source-archive.py --check-product-archive build/gabbaboy-core-linux-x64.tar.gz --repo-root .` only after its real producer has created that artifact.
+- Core `gabbaboy-notices.txt` is the separately produced/copied root MIT asset. Existing release candidate and downloaded-byte paths check its actual bytes; do not expect source-only `THIRD_PARTY_NOTICES.md` inside binary archives.
+- Player `--build-package` produces `build/phase3-player/package-stage/installed-prefix`, `preview-candidate/gabbaboy-preview-macos-arm64.tar.gz` and `build-receipt.json`; `--verify-package` safe-extracts before policy and lifecycle checks. The existing release download stage creates `build/downloaded-player` before `bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player` can consume it.
+- Source archives retain their separate immutable source-tree/fixture/notices contract and are never passed as binary positives.
 
 ---
 
@@ -71,3 +85,5 @@ There is no manual UAT for Phase 20. A future candidate's rights scope still req
 - [ ] `nyquist_compliant: true` set in frontmatter after validation.
 
 **Approval:** pending
+
+The supplied spec-less edge remains explicitly unresolved/unclassified (RIGHTS-01; verification null) in Plan 20-01 must_haves. The two precision-filtered prohibition assumptions remain descriptor-less flagged-unverified. They do not invent manual UAT or legal clearance; see `20-SOURCE-AUDIT.md`.
