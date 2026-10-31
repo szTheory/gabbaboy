@@ -2,22 +2,21 @@
 
 ## What This Is
 
-GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game Boy Color (CGB), with an integration path for Playstead and other frontends. It runs a bootless DMG preview and model-qualified CGB software with colour, double-speed switching and general/HBlank VRAM DMA through the same bounded public API that external consumers use. MBC1/2/3/5 cartridges, deterministic RTC, scoped four-channel audio and safe battery continuation are implemented. An optional SDL3 macOS player ships with it. Broad game compatibility, physical hardware qualification, further timing qualification and save states remain future work.
+GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game Boy Color (CGB), with an integration path for Playstead and other frontends. It runs a bootless DMG preview and model-qualified CGB software with colour, double-speed switching and general/HBlank VRAM DMA through the same bounded public API that external consumers use. MBC1/2/3/5 cartridges, deterministic RTC, scoped four-channel audio and safe battery continuation are implemented. An optional SDL3 macOS player ships with it. Exact-continuation native save states, player save slots and the POSIX host-process runner contract ship in v0.3.0. Broad game compatibility, physical hardware qualification, further timing qualification and live Playstead integration remain future work.
 
 ## Current State
 
-**Shipped: v0.2 Color & Cartridge Breadth** (milestone closed 2026-10-24; release [`v0.2.0`](https://github.com/szTheory/gabbaboy/releases/tag/v0.2.0) published from tag source `ab301aa`, unsigned and not notarized). 10 phases (7–15 plus inserted 15.1), 170 plans, 28/28 requirements. The audit is `tech_debt` with no blockers: integration 14/15, flows 6/6, all phases Nyquist-compliant. Closeout type is `override_closeout`, because the runtime reports Phase 7–15 verification files as stale after later phases changed covered files; the re-audit at `5356d38` re-ran that evidence. Record: [MILESTONES.md](MILESTONES.md); archive: [roadmap](milestones/v0.2-ROADMAP.md), [requirements](milestones/v0.2-REQUIREMENTS.md), [audit](milestones/v0.2-MILESTONE-AUDIT.md).
+**Published: [v0.3.0](https://github.com/szTheory/gabbaboy/releases/tag/v0.3.0), Save States & Host Contract.** Phase 19 execution and automated verification are complete; [19-UAT.md](phases/GB-19-qualified-v0-3-0-release/19-UAT.md) preserves all 39 criteria/evidence mappings with zero human checkpoints. [Goal verification](phases/GB-19-qualified-v0-3-0-release/19-VERIFICATION.md) passes all three release criteria. The v0.3 milestone audit and closeout have not started. Exact next owner-selected command: `/gsd-audit-milestone`; no Phase 20 is defined.
 
-- **Supported (software model, tested corpus only):** bootless DMG-CPU-B and CGB-CPU-E in CGB and DMG-compatibility modes; ROM-only, MBC1, MBC2, MBC3 (with emulated-time RTC and explicit host catch-up) and MBC5; RGB555 colour, KEY1 double speed, general/HBlank HDMA; scoped four-channel audio; safe battery continuation; optional SDL3 macOS player with `--model`.
-- **Evidence scope:** one rights-clear DMG game (Libbet v0.08) at game level; no CGB game-level evidence exists, and the release says so. CGB corpus: 107 cases, 25 guest passes and 82 matched expected failures. Physical DMG-B and CGB-E hardware, perceptual output, signing and notarization, and live Playstead integration are not claimed. The hosted DMG paired benchmark is slower than v0.1.0 (+14.86% ±1.62% at the v0.2.0 release; the Phase 15.1 provenance-bound comparison confirms a disclosed 23.96% median slowdown).
-- **Code:** 14,644 lines of C in `src/` + `include/` (54,384 lines of tracked C/C++ in total); 1,183 registered CTest cases plus 5 install-gated; required CI on Linux, macOS and Windows (MinGW-w64).
-- **Open at close:** 0 open issues. 16 untriaged PRs: #75 (release-please 0.2.1) and #78–92. The twelve LIM rows need owner decisions (none accepted), and the hosted release rehearsal is still `not_verified`. Phase 16 moved the Phase 7–15.1 records to `.planning/milestones/v0.2-phases/`; tests read them there.
+The release adds bounded transactional native save/load with exact continuation, numbered player slots and the POSIX raw-save/SIGTERM/exit-code host contract. It remains a bootless software preview for the tested DMG-CPU-B and CGB-CPU-E modes/corpus. Physical hardware, perceptual output, general compatibility, cross-emulator save interoperability and live Playstead integration are unqualified; packages are unsigned and not notarized. Performance limits and original failures remain disclosed in the tagged support ledger and receipts.
+
+All 22 published asset identities/digests match the tag-bound readback. Reviewed-source native/sanitizer/CMake/fixture/downloaded-package qualification is successful; the independent post-merge main run was still in progress at the UAT observation, so no overall post-merge pass is claimed. No open issue or PR was found at verification triage. Historical v0.2 closeout evidence remains in [MILESTONES.md](MILESTONES.md) and [its audit](milestones/v0.2-MILESTONE-AUDIT.md).
 
 ## Current Milestone: v0.3 Save States & Host Contract
 
 **Goal:** Add exact-continuation native save states to the core and player, and make the runner safe to drive as a host process, after first paying down the v0.2 delivery debt.
 
-**Target features:**
+**Delivered features (milestone audit pending):**
 - **Tune-up (first):** move test-consumed helpers out of phase directories, then archive the v0.2 phase records; wire the Phase 8 verifiers; close superseded PRs #78–92; attribute the DMG slowdown and gate it cumulatively against `v0.2.0`; CI hygiene; ship v0.2.1 from PR #75 once its blockers clear.
 - **STATE-01 save states:** transactional, versioned (same-version only before 1.0), explicit portable serialization of the complete DMG+CGB machine, including in-flight state, with exact continuation equivalence.
 - **Player save slots** over the public state API.
@@ -104,14 +103,14 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 - ✓ Tune-up and v0.2 debt closure: v0.2 phase records archived behind a phase-path lint, Phase 8 verifiers in CTest, a cumulative DMG Ir performance gate against v0.2.0, CI budget and planning-hygiene checks, and the v0.2.1 patch release (TUNE-01..06). Phase 16: goal verification 5/5, automated UAT 51/51, security 0 open threats. Two release gates that 16-07 planned were replaced by one-time checks under D-112; building them is an RM-030 item that must be done before the next release.
 
+- ✓ Transactional native save states and exact-continuation/portability/completeness controls (STATE-01..06) — Phases 17–19.
+- ✓ Player save slots through the public state API (PLAY-01) — Phase 18.
+- ✓ POSIX host runner with atomic raw saves, SIGTERM save-and-exit, exit-code table and declared formats (HOST-01..03 / INT-01a) — Phases 18–19.
+- ✓ Qualified tag-bound v0.3.0 publication, scoped claims and reconciled release receipts (REL-01) — Phase 19.
+
 ### Active
 
-v0.3 Save States & Host Contract. The full list with REQ-IDs is in [REQUIREMENTS.md](REQUIREMENTS.md).
-
-- [ ] STATE-01: transactional, versioned native save states with exact continuation equivalence
-- [ ] Player save slots over the public state API
-- [ ] INT-01a: a host-process runner contract (raw `.sav`, SIGTERM save-and-exit, exit codes)
-- [ ] A qualified v0.3.0 release
+All selected v0.3 requirements are implemented and phase-verified in [REQUIREMENTS.md](REQUIREMENTS.md). The owner-selected milestone audit is next; no new requirement or milestone is started here.
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
@@ -182,4 +181,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-26 after Phase 16.
+Last updated: 2026-10-31 after Phase 19 verification; milestone audit pending.

@@ -6,6 +6,8 @@ Updated: 2026-10-26. Target: original C Game Boy / Game Boy Color core. These do
 
 Read [SUMMARY.md](SUMMARY.md) for the integrated recommendation, six-phase initial DMG proposal, reconciled conflicts and open evidence gaps. [PROJECT.md](../PROJECT.md) defines product intent; [BRIEF.md](../context/BRIEF.md) preserves owner priorities; [WORKFLOW.md](../context/WORKFLOW.md) defines authorization and mandatory phase pauses. [DECISIONS.md](../context/DECISIONS.md) distinguishes adopted constraints from recommendations. [ROADMAP.md](../ROADMAP.md) is active milestone scope and [FUTURE-MILESTONES.md](../context/FUTURE-MILESTONES.md) is revisable direction; research proposals do not automatically add work.
 
+CI runs, workflow changes and release/CD handoffs must apply [CI/CD efficiency](../context/WORKFLOW.md#cicd-efficiency). D-069 remains the standing zero-routine-human-UAT policy; completed unchanged closures are reused.
+
 ## v0.3 Save States & Host Contract research (2026-10-24)
 
 Milestone research lives in [v0.3/](v0.3/). Start with [v0.3/SUMMARY.md](v0.3/SUMMARY.md), which covers the reconciled scope, the conflicts and the adopted process caps. The supporting reports are:
@@ -41,6 +43,8 @@ Milestone delta research lives in [v0.2/](v0.2/): start with [v0.2/SUMMARY.md](v
 | How do CI, release, safety, performance and adoption evidence work? | [QUALITY-AND-DELIVERY.md](QUALITY-AND-DELIVERY.md) | [ASan](https://clang.llvm.org/docs/AddressSanitizer.html), [UBSan](https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html), [GitHub tokens](https://docs.github.com/en/actions/concepts/security/github_token), [required checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks), [Apple notarization](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow) |
 
 ## Current phase evidence
+
+- **Phase 19 verification complete (2026-10-31):** [UAT](../phases/GB-19-qualified-v0-3-0-release/19-UAT.md) closes 39 automated deliverables with zero human checkpoints; fresh release/host/state/documentation controls and canonical goal verification pass. Reuse this closure unless covered evidence changes. Next owner-selected stage: **v0.3 milestone audit**, `/gsd-audit-milestone`; no Phase 20 is defined or started. The measured CI/CD efficiency assessment is in the UAT and the standing procedure is [WORKFLOW.md](../context/WORKFLOW.md#cicd-efficiency).
 
 - **Phase 13 verification refresh (2026-10-20):** [goal verification](../phases/GB-13-cgb-hdma/13-VERIFICATION.md) passes 37/37; [gate supplement](../phases/GB-13-cgb-hdma/13-REFRESH-GATES.md) records current evidence and retained debt; [canonical UAT](../phases/GB-13-cgb-hdma/13-UAT.md) closes 45 automated rows with 19 controls. Core 1,144/1,144 and player 98/98 pass; no new hosted/hardware claim. Next owner-selected command: `/gsd-execute-phase 14` for Phase 14 — CGB-E Model Qualification and Corpus, verification refresh only. Historical phase entries below retain their original scope.
 

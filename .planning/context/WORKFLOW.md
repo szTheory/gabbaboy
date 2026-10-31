@@ -28,6 +28,16 @@ The configuration uses `model_profile: inherit` so a new session's model choice 
 
 `workflow.human_verify_mode: end-of-phase` is the runtime's supported setting. No fictional `none` value is introduced. Planning instructions instead suppress unnecessary human-check tasks and reserve them for genuinely irreducible work.
 
+## CI/CD efficiency
+
+Owner directive renewed at Phase 19 verification (2026-10-31); D-069 remains the standing automation-first policy. Apply this section whenever observing an active or finished CI run, changing workflows, preparing a PR, or qualifying a release/CD handoff.
+
+1. Inspect available job/step durations, queue/dependency waits and timeout headroom. Identify cheap, evidence-supported improvements: repeated setup/build/download work, serial independent checks, redundant full streams, oversized fetches/artifacts and unnecessary polling. Record the relevant run/revision and finding once in the phase evidence; an active run supports only provisional timing conclusions.
+2. Prefer existing unit, integration, seam, e2e and smoke checks with meaningful negative controls. Move a check into existing CI when it prevents a recurring regression; keep one-off closure bookkeeping local. Reuse completed, unchanged UAT and source-bound receipts. Reopen only changed covered behavior, concrete failures or newly discovered evidence gaps.
+3. Implement a small improvement within authorized scope when measured benefit is clear, then run its affected contracts and negative controls. Preserve test membership, platform/configuration coverage, sanitizer/fuzz policy, source/artifact binding, required checks and release authority. Assess cache correctness and all downstream waiter deadlines before changing scheduling or reuse.
+4. When an improvement needs broader scope or lacks evidence, record a bounded follow-up with its trigger and expected benefit. A finding of no justified safe change is a valid outcome. Never retry an unchanged timed-out run as a substitute for diagnosis or inflate deadlines merely to hide wasted work.
+5. At handoff, report material bottlenecks or the absence of an actionable change in one sentence; retain detailed timings in linked evidence. Human work is limited to irreducible perception/hardware/credential constraints and owner decisions. Required phase/milestone pauses remain in force.
+
 ## Git, PRs, and releases
 
 - Initial local planning is committed with a generic project author. Future public commits should retain privacy-safe metadata; never copy a local identity into documentation.
