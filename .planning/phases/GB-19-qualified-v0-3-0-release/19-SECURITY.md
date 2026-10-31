@@ -136,3 +136,11 @@ The auditor wrote no project files, project Git metadata or remote state. An exi
 ## Post-review T-19-22 reopening
 
 After the independent L1 audit, code review and a current-source reproduction established that the final publication-inventory validator accepts JSON true or1.0 as schema version1. This contradicts its strict-schema contract, although the actual published inventory has the correct integer schema and all retained release bytes remain reconciled. T-19-22 is reopened for this bounded schema-correctness gap; no existing acceptance covers it. The original41/41 audit remains historical evidence of what was checked, not approval to ignore this finding. Final phase closure and PR B merge are held. An isolated repair and negative controls will support the required owner scope decision; no further release mutation is proposed.
+
+## Security Audit 2026-10-31
+
+| Metric | Count |
+|---|---|
+| Threats found | 41 |
+| Closed | 40 |
+| Open | 1 |

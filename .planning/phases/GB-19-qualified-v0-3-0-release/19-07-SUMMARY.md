@@ -106,7 +106,7 @@ coverage:
     human_judgment: false
 duration: not recorded across sessions
 completed: 2026-10-31
-status: complete
+status: halted
 ---
 
 # Phase 19 Plan 07: Exact-Tag Window, Publication and Readback Summary
@@ -166,3 +166,8 @@ Phase 19 execution has all eight plans complete, with the one planned gap slot u
 ---
 *Phase: GB-19-qualified-v0-3-0-release*
 *Completed: 2026-10-31*
+
+
+## Final PR B review checkpoint
+
+After the factual release/readback summary was authored, the final standard-depth code review reproduced malformed schema-version acceptance and a registry-root diagnostic gap. The actual published inventory uses integer version1 and the release still reconciles, but unresolved validator correctness prevents final PR B closure. T-19-22 and validation are reopened. Under the exhausted review-fix limit, an isolated bounded prototype is preparation for an owner scope decision only; no implementation fix has entered PR B. Full final-head local qualification, goal verification and exact-head hosted PR B/merge remain pending. This summary is halted at Task4 rather than claiming a completed phase boundary. Continue the same Phase19 with `/gsd-execute-phase 19` after the bounded scope decision; eventual owner handoff remains `/gsd-verify-work 19`.

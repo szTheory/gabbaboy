@@ -27,7 +27,7 @@
   "next": {
     "command": "/gsd-execute-phase 19",
     "label": "Resolve Phase 19 bounded schema-repair scope",
-    "reason": "Published release readback passes; exhausted review-fix allowance requires owner scope before final PR B repair"
+    "reason": "Tested seven-path isolated schema repair is ready; owner scope approval required before application and final PR B gates"
   },
   "updated_at": "2026-10-31T14:32:50Z"
 }

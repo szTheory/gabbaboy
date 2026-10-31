@@ -149,3 +149,11 @@ The final local full-suite/player-package qualification, canonical security/code
 ## Post-review schema gap hold
 
 Final code review found an uncovered malformed-schema acceptance at pre-publish/readback/fixture/ledger boundaries and a registry root-type diagnostic gap. Current-source reproduction accepts JSON true and1.0 inventory versions and true registry version; array registry raises AttributeError. Existing successful checks and actual integer-schema release evidence remain valid, but the missing refusal controls prevent final validation closure. A private isolated bounded repair is being prepared for the required owner scope decision. No active implementation change, new test target, timeout/policy relaxation or live release action is authorized by this note. Re-run affected controls and independent review after scope approval; final qualification remains pending.
+
+## Validation Audit 2026-10-31
+
+| Metric | Count |
+|---|---|
+| Gaps found | 2 |
+| Resolved | 0 |
+| Escalated | 2 |
