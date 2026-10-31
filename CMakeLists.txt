@@ -31,6 +31,26 @@ include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+# New fixture evidence must pass the immutable admission check before any target or test can
+# consume fixture bytes. Non-testing source-library builds intentionally avoid a Git dependency.
+if(BUILD_TESTING)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -I
+      "${PROJECT_SOURCE_DIR}/tests/scripts/verify-fixture-admission.py"
+      --check-repository --repo-root "${PROJECT_SOURCE_DIR}"
+    RESULT_VARIABLE GBB_FIXTURE_ADMISSION_RESULT
+    OUTPUT_VARIABLE GBB_FIXTURE_ADMISSION_OUTPUT
+    ERROR_VARIABLE GBB_FIXTURE_ADMISSION_ERROR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_STRIP_TRAILING_WHITESPACE)
+  if(NOT GBB_FIXTURE_ADMISSION_RESULT EQUAL 0)
+    message(FATAL_ERROR
+      "Fixture admission rejected the repository before test configuration: ${GBB_FIXTURE_ADMISSION_ERROR}${GBB_FIXTURE_ADMISSION_OUTPUT}")
+  endif()
+  message(STATUS "${GBB_FIXTURE_ADMISSION_OUTPUT}")
+endif()
+
 add_library(gabbaboy_core STATIC src/core/gabbaboy.c)
 add_library(GabbaBoy::core ALIAS gabbaboy_core)
 target_include_directories(gabbaboy_core PUBLIC
@@ -170,6 +190,7 @@ install(DIRECTORY include/gabbaboy DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(TARGETS gabbaboy-runner RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 # D-16: the machine-readable host contract (exit codes, cadence, save-format ids and sizes) ships with the runner.
 install(FILES docs/host-contract.json DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy")
+install(FILES LICENSE DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy" RENAME LICENSE.txt)
 install(FILES
   fixtures/tracer/tracer.gb
   fixtures/tracer/manifest.json

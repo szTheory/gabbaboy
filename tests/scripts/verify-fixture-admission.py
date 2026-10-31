@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -82,7 +83,10 @@ def git(root: Path, *args: str, input_bytes: bytes | None = None) -> bytes:
 def check_commit(root: Path, revision: object, token: str) -> str:
     if not isinstance(revision, str) or not HEX40.fullmatch(revision):
         raise Reject(token, "expected one full lowercase commit id")
-    git(root, "cat-file", "-e", f"{revision}^{{commit}}")
+    try:
+        git(root, "cat-file", "-e", f"{revision}^{{commit}}")
+    except Reject:
+        raise Reject(token, "commit object is unavailable") from None
     return revision
 
 
@@ -186,6 +190,28 @@ def tree_files(root: Path, revision: str, prefix: str) -> set[str]:
     return result
 
 
+def current_fixture_files(root: Path) -> set[str]:
+    fixture_root = root / "fixtures"
+    if not fixture_root.is_dir() or fixture_root.is_symlink():
+        raise Reject("fixture-tree-unavailable", "fixtures/ is missing or linked")
+    found: set[str] = set()
+    for path in fixture_root.rglob("*"):
+        relative = path.relative_to(root).as_posix()
+        try:
+            mode = path.lstat().st_mode
+        except OSError:
+            raise Reject("fixture-tree-unavailable", relative) from None
+        if stat.S_ISLNK(mode):
+            raise Reject("path-link", relative)
+        if stat.S_ISREG(mode):
+            found.add(relative)
+        elif not stat.S_ISDIR(mode):
+            raise Reject("fixture-special-file", relative)
+        if len(found) > MAX_FILES:
+            raise Reject("fixture-file-count-limit", "too many files")
+    return found
+
+
 def check_manifest(root: Path, manifest_path: str) -> dict:
     """Check one candidate manifest. The admission commit is independent of mutable record fields."""
     manifest_path = relative_path(manifest_path, "manifest path")
@@ -203,11 +229,18 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
     decision = manifest["decision"]
     if not isinstance(decision, dict):
         raise Reject("record-decision-invalid", "decision must be an object")
-    require_keys(decision, {"status", "reviewer_role", "rationale"}, "decision")
+    require_keys(decision, {"status", "reviewer_role", "rationale", "component_rationale"}, "decision")
     if decision["status"] != "approved":
         raise Reject("fixture-no-go", "only a reviewed approved record can be admitted")
     nonempty(decision["reviewer_role"], "decision.reviewer_role")
     nonempty(decision["rationale"], "decision.rationale")
+    component_rationale = decision["component_rationale"]
+    if not isinstance(component_rationale, dict):
+        raise Reject("decision-component-rationale-invalid", "must map each present component to its scope rationale")
+    for name, rationale in component_rationale.items():
+        if name not in COMPONENTS:
+            raise Reject("decision-component-rationale-invalid", name)
+        nonempty(rationale, f"decision.component_rationale.{name}")
 
     permissions = manifest["permissions"]
     if not isinstance(permissions, dict):
@@ -223,6 +256,7 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
     nonempty(source["repository"], "source.repository")
     if not isinstance(source["revision"], str) or not HEX40.fullmatch(source["revision"]):
         raise Reject("source-revision-invalid", "source.revision must be a full commit id")
+    check_commit(root, source["revision"], "source-revision-unavailable")
 
     inputs = file_records(manifest["inputs"], "inputs")
     files = file_records(manifest["files"], "files")
@@ -241,19 +275,34 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
         label = f"build.tools[{index}]"
         if not isinstance(tool, dict):
             raise Reject("build-tools-invalid", label)
-        require_keys(tool, {"name", "version", "terms", "source_repository", "revision", "disposition"}, label)
+        require_keys(tool, {"name", "version", "terms", "source_repository", "revision", "disposition",
+                            "component", "covered_paths"}, label)
         for key in ("name", "version", "terms", "source_repository"):
             nonempty(tool[key], f"{label}.{key}")
         if not isinstance(tool["revision"], str) or not HEX40.fullmatch(tool["revision"]):
             raise Reject("build-tool-revision-invalid", label)
+        check_commit(root, tool["revision"], "build-tool-revision-unavailable")
         if tool["disposition"] not in ("build_only", "copied", "linked", "shipped"):
             raise Reject("build-tool-disposition-invalid", label)
+        if tool["disposition"] == "build_only":
+            if tool["component"] is not None or tool["covered_paths"] != []:
+                raise Reject("build-tool-coverage-invalid", label)
+        else:
+            component_name = tool["component"]
+            paths = tool["covered_paths"]
+            if component_name not in COMPONENTS or not isinstance(paths, list) or not paths:
+                raise Reject("build-tool-coverage-invalid", label)
+            for path in paths:
+                path = relative_path(path, f"{label}.covered_paths")
+                if path not in files:
+                    raise Reject("build-tool-coverage-invalid", f"{label}: {path}")
 
     components = manifest["components"]
     if not isinstance(components, dict):
         raise Reject("component-record-invalid", "components must be an object")
     require_keys(components, set(COMPONENTS), "components")
     covered: set[str] = set()
+    component_paths: dict[str, set[str]] = {}
     any_present = False
     for component_name in COMPONENTS:
         component = components[component_name]
@@ -286,16 +335,25 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
             if path not in files:
                 raise Reject("component-scope-incomplete", f"{label}: {path}")
             covered.add(path)
+        component_paths[component_name] = set(paths)
         scope = component["scope"]
         if not isinstance(scope, dict):
             raise Reject("component-scope-incomplete", label)
         require_keys(scope, {"repository", "public_ci"}, f"{label}.scope")
         if scope != {"repository": True, "public_ci": True}:
             raise Reject("component-scope-incomplete", label)
+    if set(component_rationale) != {
+            name for name, component in components.items()
+            if isinstance(component, dict) and component.get("presence") == "present"}:
+        raise Reject("decision-component-rationale-invalid", "each present component needs one scope rationale")
     if not any_present:
         raise Reject("component-record-invalid", "at least one component must be present")
     if set(files) != covered:
         raise Reject("component-scope-incomplete", "every fixture file must be covered exactly by a present component")
+    for tool in tools:
+        if tool["disposition"] != "build_only" and any(
+                path not in component_paths.get(tool["component"], set()) for path in tool["covered_paths"]):
+            raise Reject("build-tool-coverage-invalid", f"tool {tool['name']} paths are not covered by its component")
 
     notices = manifest["notices"]
     if not isinstance(notices, dict):
@@ -313,6 +371,8 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
         raise Reject("notice-record-invalid", "the notices component must cover the local notice")
 
     pin_path = f"{fixture_dir}/admission.commit"
+    if not (root / pin_path).is_file():
+        raise Reject("admission-pin-missing", pin_path)
     pin_raw = read_regular(root, pin_path)
     try:
         pin_text = pin_raw.decode("ascii")
@@ -359,11 +419,48 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
     notice_index = blob(root, pin, index_path)
     if current_notice_index != notice_index:
         raise Reject("admission-pin-mismatch", index_path)
-    manifest_digest = sha256(manifest_raw).encode("ascii")
-    license_digest = notices["sha256"].encode("ascii")
-    if manifest_digest not in notice_index or license_digest not in notice_index or local_notice.encode() not in notice_index:
+    manifest_digest = sha256(manifest_raw)
+    license_digest = notices["sha256"]
+    matching_rows = [line for line in notice_index.decode("utf-8", errors="strict").splitlines()
+                     if manifest_path.encode("utf-8") in line.encode("utf-8")
+                     and manifest_digest.encode("ascii") in line.encode("utf-8")
+                     and local_notice.encode("utf-8") in line.encode("utf-8")
+                     and license_digest.encode("ascii") in line.encode("utf-8")]
+    if len(matching_rows) != 1:
         raise Reject("notice-index-mismatch", index_path)
     return {"fixture": fixture_dir, "pin": pin, "files": len(files)}
+
+
+def check_repository(root: Path, baseline: str) -> dict:
+    baseline = check_commit(root, baseline, "baseline-object-unavailable")
+    baseline_files = tree_files(root, baseline, "fixtures")
+    current_files = current_fixture_files(root)
+    all_ids = {path.split("/", 2)[1] for path in baseline_files | current_files if path.startswith("fixtures/")}
+    changed = 0
+    for fixture_id in sorted(all_ids):
+        prefix = f"fixtures/{fixture_id}/"
+        old = {path for path in baseline_files if path.startswith(prefix)}
+        new = {path for path in current_files if path.startswith(prefix)}
+        identical = old == new
+        if identical:
+            for path in sorted(old):
+                if read_regular(root, path) != blob(root, baseline, path):
+                    identical = False
+                    break
+        if identical:
+            continue
+        manifest_path = prefix + "manifest.json"
+        if manifest_path not in new:
+            raise Reject("fixture-admission-required", f"changed fixture {fixture_id} has no manifest")
+        changed += 1
+        check_manifest(root, manifest_path)
+
+    baseline_license = blob(root, baseline, "LICENSE")
+    if read_regular(root, "LICENSE") != baseline_license:
+        raise Reject("root-license-mismatch", "LICENSE differs from the immutable project baseline")
+    if not baseline_files:
+        raise Reject("baseline-fixtures-empty", "the fixed baseline contains no fixture files")
+    return {"legacy_files": len(baseline_files), "admitted_changes": changed, "baseline": baseline}
 
 
 def _write_synthetic(root: Path) -> str:
@@ -408,14 +505,17 @@ def _write_synthetic(root: Path) -> str:
     record = {
         "schema_version": 1,
         "fixture_kind": "synthetic-game",
-        "decision": {"status": "approved", "reviewer_role": "synthetic-test", "rationale": "Synthetic control only."},
+        "decision": {"status": "approved", "reviewer_role": "synthetic-test", "rationale": "Synthetic control only.",
+                     "component_rationale": {"code": "Synthetic code scope only.",
+                                             "build_inputs": "Synthetic input scope only.",
+                                             "notices": "Synthetic notice scope only."}},
         "permissions": {"repository": True, "public_ci": True},
         "source": {"repository": "https://example.invalid/fixture", "revision": BASELINE_COMMIT},
         "inputs": [input_record],
         "files": files,
         "build": {"recipe": "synthetic build", "tools": [{"name": "test-tool", "version": "1.0",
                    "terms": "MIT", "source_repository": "https://example.invalid/tool", "revision": BASELINE_COMMIT,
-                   "disposition": "build_only"}]},
+                   "disposition": "build_only", "component": None, "covered_paths": []}]},
         "components": components,
         "notices": {"local_path": "fixtures/synthetic/LICENSE.txt", "sha256": sha256(license_bytes),
                     "index_path": "THIRD_PARTY_NOTICES.md"},
@@ -439,41 +539,69 @@ def _run_manifest_cli(root: Path) -> subprocess.CompletedProcess[str]:
                           capture_output=True, text=True, check=False, timeout=30)
 
 
+def _prepare_synthetic(root: Path) -> None:
+    (root / ".git/objects/info").mkdir(parents=True, exist_ok=True)
+    object_dir = subprocess.run(["git", "rev-parse", "--absolute-git-dir"], cwd=Path(__file__).resolve().parents[2],
+                                capture_output=True, check=True, text=True).stdout.strip() + "/objects"
+    (root / ".git/objects/info/alternates").write_text(object_dir + "\n", encoding="utf-8")
+    _write_synthetic(root)
+
+
 def self_test() -> None:
-    with tempfile.TemporaryDirectory(prefix="gbb-fixture-admission-") as directory:
+    with tempfile.TemporaryDirectory(prefix="gbb-fixture-admission-positive-") as directory:
         root = Path(directory)
-        (root / ".git/objects/info").mkdir(parents=True, exist_ok=True)
-        object_dir = subprocess.run(["git", "rev-parse", "--absolute-git-dir"], cwd=Path(__file__).resolve().parents[2],
-                                    capture_output=True, check=True, text=True).stdout.strip() + "/objects"
-        (root / ".git/objects/info/alternates").write_text(object_dir + "\n", encoding="utf-8")
-        _write_synthetic(root)
+        _prepare_synthetic(root)
         positive = _run_manifest_cli(root)
         if positive.returncode != 0 or "PASS: fixture admission" not in positive.stdout:
             raise Reject("self-test-positive", positive.stderr.strip() or positive.stdout.strip())
 
-        manifest_path = root / "fixtures/synthetic/manifest.json"
+    def reject_case(label: str, mutate, expected: str) -> None:
+        with tempfile.TemporaryDirectory(prefix=f"gbb-fixture-admission-{label}-") as directory:
+            case_root = Path(directory)
+            _prepare_synthetic(case_root)
+            mutate(case_root)
+            result = _run_manifest_cli(case_root)
+            if result.returncode == 0:
+                raise Reject(f"self-test-{label}-bypass", f"{label} mutation was accepted")
+            if expected not in result.stderr:
+                raise Reject(f"self-test-{label}-reason", result.stderr.strip())
+
+    def coordinated_rewrite(case_root: Path) -> None:
+        manifest_path = case_root / "fixtures/synthetic/manifest.json"
         record = parse_json(manifest_path.read_bytes(), "synthetic manifest")
-        payload_path = root / "fixtures/synthetic/demo.gb"
         payload = b"coordinated replacement bytes\n"
-        payload_path.write_bytes(payload)
+        (case_root / "fixtures/synthetic/demo.gb").write_bytes(payload)
         for entry in record["files"]:
             if entry["path"] == "fixtures/synthetic/demo.gb":
                 entry["size_bytes"] = len(payload)
                 entry["sha256"] = sha256(payload)
         manifest_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        notice = root / "fixtures/synthetic/LICENSE.txt"
-        notice_bytes = notice.read_bytes()
-        manifest_hash = sha256(manifest_path.read_bytes())
-        notice_row = root / "THIRD_PARTY_NOTICES.md"
-        notice_row.write_text(
-            f"| synthetic | fixtures/synthetic/manifest.json {manifest_hash} | "
-            f"fixtures/synthetic/LICENSE.txt {sha256(notice_bytes)} |\n", encoding="utf-8")
-        negative = _run_manifest_cli(root)
-        if negative.returncode == 0:
-            raise Reject("self-test-baseline-bypass", "coordinated fixture, manifest and notice rewrite was accepted")
-        if "REJECT admission-pin-mismatch:" not in negative.stderr:
-            raise Reject("self-test-negative-reason", negative.stderr.strip())
-    print("PASS: fixture admission self-test positives=1 negative_controls=1")
+        notice = case_root / "fixtures/synthetic/LICENSE.txt"
+        (case_root / "THIRD_PARTY_NOTICES.md").write_text(
+            f"| synthetic | fixtures/synthetic/manifest.json {sha256(manifest_path.read_bytes())} | "
+            f"fixtures/synthetic/LICENSE.txt {sha256(notice.read_bytes())} |\n", encoding="utf-8")
+
+    def missing_component(case_root: Path) -> None:
+        path = case_root / "fixtures/synthetic/manifest.json"
+        record = parse_json(path.read_bytes(), "synthetic manifest")
+        del record["components"]["art"]
+        path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    def missing_pin(case_root: Path) -> None:
+        (case_root / "fixtures/synthetic/admission.commit").unlink()
+
+    def missing_pin_object(case_root: Path) -> None:
+        (case_root / "fixtures/synthetic/admission.commit").write_text("0" * 40 + "\n", encoding="ascii")
+
+    cases = (
+        ("coordinated-rewrite", coordinated_rewrite, "REJECT admission-pin-mismatch:"),
+        ("missing-component", missing_component, "REJECT record-field-missing:"),
+        ("missing-pin", missing_pin, "REJECT admission-pin-missing:"),
+        ("missing-object", missing_pin_object, "REJECT admission-pin-invalid:"),
+    )
+    for label, mutate, expected in cases:
+        reject_case(label, mutate, expected)
+    print(f"PASS: fixture admission self-test positives=1 negative_controls={len(cases)}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -495,7 +623,12 @@ def main(argv: list[str] | None = None) -> int:
             result = check_manifest(root, args.check_manifest)
             print(f"PASS: fixture admission fixture={result['fixture']} pinned={result['pin']} files={result['files']}")
         else:
-            raise Reject("repository-check-unimplemented", "repository mode is implemented in the next task")
+            baseline = policy.get("baseline_commit")
+            if not isinstance(baseline, str) or baseline != BASELINE_COMMIT:
+                raise Reject("policy-invalid", "baseline_commit must be the reviewed full commit id")
+            result = check_repository(root, baseline)
+            print(f"PASS: fixture admission repository legacy_files={result['legacy_files']} "
+                  f"admitted_changes={result['admitted_changes']} baseline={result['baseline']}")
         return 0
     except (Reject, OSError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
