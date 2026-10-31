@@ -161,3 +161,12 @@ The committed eight-target affected selection passed without skips in build/prb-
 | Threats found | 41 |
 | Closed | 41 |
 | Open | 0 |
+
+
+## D-135 independent Windows wiring recheck
+
+At e46023c53bdff9e7ac44fcfb33a9e237ceec0430, the fresh independent ASVS1 recheck confirms all41 mitigations preserved and threats_open0. The implementation diff is exactly .gitattributes and tests/CMakeLists.txt, byte-identical to the approved fa768f81 patch. No validator, workflow, policy, product or fixture source changed.
+
+CMake5637-5648 derives the configurable phase-root readback as a repository-relative Git path while preserving the immutable revision, expected exit/output, label and timeout. Disposition reader148-184 still uses bounded immutable git-show reads; missing/wrong-root/drive paths refuse and traversal/external paths reject. The exact helper LF rule does not match the existing unpinned APU EOL negative. Helper bytes remain identical to its27635-byte Git blob, SHA25693a81e523eb1fd1d42e2c5172b28400475b6fc89c5bb7f1ec92abadb8fbf93ce. Lifecycle1428-1438 retains the raw byte comparison before executing the helper self-test; no normalization or relaxation was added to that check.
+
+Independent actual readback passes22 assets. Recomputed-hash schema mutations, false workflow-G substitution, private-text, missing/traversal/drive-path and tampered-helper negatives refuse. Existing G/S dispatch/source/allowlist/protected-blob, exact transformation/hash/body, capture/privacy and policy authority checks remain unchanged. Current-head qualification contains23 passing affected tests with no skips; command-log hashes match. Forced-autocrlf baseline/fixed replay proves the checkout difference without claiming new native Windows qualification. Existing AR-19-01 remains the only acceptance. The auditor wrote no file, project Git metadata or API state. Fresh actual new-head native/protected CI and the guarded PR B boundary remain downstream gates.

@@ -1,6 +1,6 @@
 ---
 phase: GB-19-qualified-v0-3-0-release
-reviewed: 2026-10-31T15:01:32Z
+reviewed: 2026-10-31T16:24:24Z
 depth: standard
 files_reviewed: 73
 files_reviewed_list:
@@ -84,29 +84,35 @@ findings:
   total: 0
 status: clean
 review_base: f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4
-review_head: d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc
-prior_review_head: 535cdf796cccaf22520fa7b1f85c6d69c31af00c
+review_head: e46023c53bdff9e7ac44fcfb33a9e237ceec0430
+prior_review_head: d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc
 prior_review_report_commit: acc4049f
 post_tag_diff_base: d61a25ea54364e0e26ef89bb7467c72089361d49
 scope_resolution: degraded
 bounded_rescope_base: 0953f61951732951dcc655527655e0a5ec2d6d36
 bounded_rescope_head: d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc
+d135_rescope_base: 524ba3f7bf0614c26e00443ac6eafe162ad021ba
+d135_rescope_head: e46023c53bdff9e7ac44fcfb33a9e237ceec0430
 ---
 
 # Phase GB-19: Code Review Report
 
-**Reviewed:** 2026-10-31T15:01:32Z
+**Reviewed:** 2026-10-31T16:24:24Z
 **Depth:** standard
 **Files Reviewed:** 73
 **Status:** clean
 
 ## Summary
 
-The phase-scope resolver reported `degraded` because the original task commits were not reachable after the phase changes were squashed. The initial standard-depth audit therefore used the recorded 72-file fallback union from `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4`; that full file list is retained above. At the current head, I independently rechecked all seven implementation and CTest-registration paths in the approved D-134 diff (`0953f61951732951dcc655527655e0a5ec2d6d36..d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc`) and traced their CLI error paths. I also adjudicated an adjacent performance-receipt numeric-representation concern against the existing contract and a production-path probe; it is withdrawn as unsubstantiated.
+The phase-scope resolver reported `degraded` because the original task commits were not reachable after the phase changes were squashed. The initial standard-depth audit therefore used the recorded 72-file fallback union from `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4`; that full file list and the D-134 recheck remain preserved above. This bounded D-135 recheck covers only the two implementation paths changed from `524ba3f7bf0614c26e00443ac6eafe162ad021ba` to the current head `e46023c53bdff9e7ac44fcfb33a9e237ceec0430`; both files were in the earlier audit. I did not repeat the 73-file audit or start an unrelated scan.
 
 The approved patch digest matches `build/prb-approved-schema.diff` (`33c3646e59618a4f68f99fed16674f5240744d4493a534f79fb53ae7d5b4325b`). The exact-integer guards now reject non-integer JSON schema values at the previously affected inventory, disposition, registry, recovery fixture, API capture, coverage manifest, and support-ledger boundaries. The policy registry validates its root type before reading fields and the production CLI emits a controlled rejection. Existing integer-schema positives remain; the new negative controls exercise booleans, floats, strings, null, arrays, and non-object roots. The recovery CTest verifies the published-asset helper's bytes against the immutable revision before invoking its self-test. The parent-provided focused CTest log records the eight affected tests passing; source inspection, rather than the test result alone, supports closure of the original findings.
 
-The earlier stale CTest marker failure (expected 62 controls while the corrected self-test measures 72) remains recorded in `build/phase19-window/posttag-recovery/schema-rescope-prep/initial-ctest-marker-mismatch.md`; it was corrected by raising the existing exact marker. The initial review's erroneous inclusion of `verify-v03-dispositions.py:328` is expressly excluded: that embedded performance receipt check already required `type(perf.get("schema_version")) is int`, and this recheck confirmed it remains strict. The original reproduction is retained at `build/prb-review-reproduction.json`. No implementation file was modified during this review.
+The earlier stale CTest marker failure (expected 62 controls while the corrected self-test measures 72) remains recorded in `build/phase19-window/posttag-recovery/schema-rescope-prep/initial-ctest-marker-mismatch.md`; it was corrected by raising the existing exact marker. The initial review's erroneous inclusion of `verify-v03-dispositions.py:328` is expressly excluded: that embedded performance receipt check already required `type(perf.get("schema_version")) is int`, and this recheck confirmed it remains strict. The original reproduction is retained at `build/prb-review-reproduction.json`.
+
+The D-135 patch contains exactly the approved `.gitattributes` and `tests/CMakeLists.txt` changes; its computed two-path diff digest matches `fa768f81a6cb57157b9815f91cec689d4a03c33048b5123f13f1c1306b64aa66`. The readback CTest now derives a repository-relative path from `PROJECT_SOURCE_DIR` and `GBB_LIVE_PHASES_DIR`; the unchanged `Source.read` path validates it as a clean Git path and reads from the supplied immutable `--rev`. The call preserves the same `--rev`, `--tag`, exit/output contract, label and timeout. The single root-anchored `.gitattributes` entry pins only the helper compared against its immutable Git blob. Its exact-byte guard and helper source are unchanged; `git check-attr` reports `text` and `eol=lf` for that helper, while the rule does not overlap the APU `.src` negative fixture. The fixed line-ending attribute preserves the blob comparison instead of weakening it.
+
+The parent-provided local evidence records 23 affected readback, recovery, EOL-negative, contract and installed-consumer tests passing without skips. The forced-autocrlf reproducer and its true/false checkout controls are documented in `build/phase19-window/posttag-recovery/windows-wiring-prep/README.md`. The original hosted Windows failures remain retained; no new-head native Windows or other protected CI result is claimed here. The parent-provided focused checks and source inspection found no defect introduced by this two-file wiring patch. No implementation file was modified during this review.
 
 ## Closed Review Findings
 
@@ -117,6 +123,8 @@ The earlier stale CTest marker failure (expected 62 controls while the corrected
 
 The original release failure evidence and actual published-release readback remain historical facts; this code review does not rewrite them or claim the remaining local, player, consumer, phase-goal, hosted-CI, PR B, or merge gates complete. The initial full audit and its source scope remain preserved in the previous report commit and the 72-file list above.
 
+The approved D-135 change addresses the test wiring and Windows checkout representation only. Actual new-head hosted Windows and all other required protected CI instances still need to pass before the existing guarded PR B squash; the earlier red Windows jobs are not treated as qualified evidence for the new head.
+
 ## WR-03 Adjudication
 
 The concern was that `tests/scripts/verify-v02-performance.py:219` accepts `schema_version` by membership in `(1, 2, 3)`, so JSON `2.0` and `3.0` compare equal to those values in Python. The existing Phase 19 plan and receipt contract identify supported version values but do not require a lexical integer token or exact Python `int` at this separate legacy performance-receipt boundary. The existing exact-`int` pattern is scoped to named managed-input validators and the five D-134 boundaries; it is not a blanket wire-format rule.
@@ -125,10 +133,10 @@ JSON and JSON Schema define `3` and `3.0` as the same integral numeric value; JS
 
 ## Narrative Findings (AI reviewer)
 
-All current findings from this review are closed or withdrawn as unsubstantiated. The D-134 recheck does not complete the remaining phase qualification or merge gates.
+No current findings remain from the D-134 or D-135 bounded rechecks. These reviews do not complete the remaining phase qualification or merge gates.
 
 ---
 
-_Reviewed: 2026-10-31T15:01:32Z_
+_Reviewed: 2026-10-31T16:24:24Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_

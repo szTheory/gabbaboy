@@ -170,3 +170,10 @@ The owner approved the pinned seven-path repair. At committed d2c0dc95, all eigh
 | Gaps found | 2 |
 | Resolved | 2 |
 | Escalated | 0 |
+
+
+## D-135 Windows wiring validation
+
+Actual Windows jobs at524ba3f7 correctly refused a drive-absolute immutable Git path and CRLF helper bytes. The approved exact two-file repair derives the repository-relative record from the configurable phase root and pins only the byte-compared helper to LF; validators/guards, inventory, floors, labels and timeouts remain unchanged. Forced-autocrlf baseline replay reproduces the refusal; fixed true/false clones retain exact helper bytes while the unpinned sibling converts. Missing/drive/traversal and tampered-helper negatives remain refusing. Existing affected tests and the APU EOL negative are automated checks; no new target or manual-only item was created.
+
+At e46023c5, reconfigure/rebuild/install and23 affected wiring/readback/recovery/EOL/contracts/installed tests pass without skips (windows-wiring-local-e46023c53bdf/commands.json andctest.xml in ignored evidence). All compiled and validator sources remain byte-identical to the prior fully qualified17920163 implementation, whose complete1707 core/installed and player/package qualification passed; only the caller/checkout configuration changes. Fresh independent code review is clean and security preserves all41 mitigations. These local checks are not a native Windows pass. Fresh exact-head hosted Windows/all required checks and the planned guarded merge remain mandatory; the old failed runs are not reused as qualification.

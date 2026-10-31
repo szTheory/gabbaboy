@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 19",
-    "label": "Finish approved Phase 19 Windows wiring and closure",
-    "reason": "D135 approved; qualify exact two-file patch, fresh review and new-head CI before existing PR137 merge"
+    "command": "/gsd-verify-work 19",
+    "label": "Verify Phase 19 after qualified execution boundary",
+    "reason": "D135 candidate locally qualified/reviewed; run only after new-head protected CI, guarded PR137 merge and boundary handoff"
   },
   "updated_at": "2026-10-31T16:15:41Z"
 }

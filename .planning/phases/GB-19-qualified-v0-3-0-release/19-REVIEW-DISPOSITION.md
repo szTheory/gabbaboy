@@ -28,3 +28,8 @@ The original independent standard-depth review covered the wider72-file fallback
 During adjacent-consumer tracing, WR-03 suggested that the unchanged legacy performance parser should reject integral numeric3.0. The reviewer withdrew it after contract adjudication: no existing protocol requires a lexical integer token there, JSON regards3/3.0 as the same integral numeric value, and actual production probes reject boolean/fractional/string versions and an incorrect workload digest. This is an unsubstantiated hardening suggestion, not an accepted or deferred correctness risk. The adjudication and original observation remain in19-REVIEW.md and build/prb-performance-schema-adjudication.json. No implementation change was made outside the approved seven paths.
 
 No open review finding remains. Full final local/player/consumer qualification, phase-goal verification and exact-head protected hosted PR B/merge remain downstream gates. No further live release action or owner approval is needed.
+
+
+## D-135 portability recheck
+
+The owner approved the exact two-file repair for the actual Windows CI failures. At e46023c5 the fresh independent recheck is clean: the CTest supplies a repository-relative Git path to the unchanged immutable reader; the exact helper LF rule preserves byte identity without matching the APU unpinned negative. No new finding or change outside the approved implementation diff was found. Existing WR-01/WR-02 fixes and WR-03 withdrawal remain unchanged. Current-head affected/EOL/installed checks pass; fresh actual Windows and all protected checks remain required before the same PR137 squash. No source guard or assertion is waived, no further approval is pending.
