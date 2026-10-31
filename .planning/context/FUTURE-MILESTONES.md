@@ -1,6 +1,6 @@
 # Rolling product roadmap
 
-Reviewed: 2026-10-31 · Direction revision: 6 · Last completed milestone: **v0.3 Save States & Host Contract** (Phases 16–19); v0.4 kickoff is owner-approved.
+Reviewed: 2026-10-31 · Direction revision: 7 · Last completed milestone: **v0.3 Save States & Host Contract** (Phases 16–19); v0.4 roadmap is owner-approved.
 
 This is revisable direction, not authorization to advance. [ROADMAP.md](../ROADMAP.md) is the execution contract and has detailed phases for the active milestone only. Planning milestone numbers are not package versions. The kickoff evidence is [research/v0.3/SUMMARY.md](../research/v0.3/SUMMARY.md); the boundary refresh is [MILESTONE-BOUNDARY-LESSONS.md](../research/v0.3/MILESTONE-BOUNDARY-LESSONS.md). v0.3.0 is published and v0.3 archived with owner-approved overrides and nonblocking deferrals. v0.4 Evidence Floor is now selected for planning; only its approved roadmap authorizes later phase work.
 
@@ -8,7 +8,7 @@ This is revisable direction, not authorization to advance. [ROADMAP.md](../ROADM
 
 | Horizon | Planning depth | Milestones |
 |---|---|---|
-| Immediate | Owner-selected kickoff; fresh requirements and phases not yet defined | proposed v0.4 |
+| Immediate | Active milestone initialized; roadmap approved; Phase 20 not yet planned | committed v0.4 |
 | Near | Outcome, scope direction, acceptance direction, triggers | v0.4–v0.5 |
 | Mid | Outcome and promotion trigger | v0.6–v0.8 |
 | Long | Outcome and the evidence that would schedule it | v1.0 and later |
@@ -60,7 +60,7 @@ Ids `RM-NNN` are stable and never reused.
 
 | ID | Status | Milestone | Outcome | Promotion trigger | Alternative considered |
 |---|---|---|---|---|---|
-| RM-004 | proposed | **v0.4 Evidence Floor** | <ul><li>The first CGB game-level evidence, or a re-justified absence.</li><li>A CGB RGB555-aware progress path in the existing acceptance harness, with a guest predicate and negative controls.</li><li>Font-substituted dmg/cgb-acid2 derivatives and gbmicrotest admission.</li><li>A scene-first, agent-owned feedback-to-regression loop.</li></ul> | v0.3 shipped; owner approved the bounded candidate/fallback and fixture-rights gates at kickoff | Doing PPU timing first was rejected because the timing work needs these oracles in place first |
+| RM-004 | committed | **v0.4 Evidence Floor** | <ul><li>The first CGB game-level evidence, or a re-justified absence.</li><li>A CGB RGB555-aware progress path in the existing acceptance harness, with a guest predicate and negative controls.</li><li>Font-substituted dmg/cgb-acid2 derivatives and gbmicrotest admission.</li><li>A scene-first, agent-owned feedback-to-regression loop.</li></ul> | Roadmap approved; delivery and exit evidence are tracked in active ROADMAP.md | Doing PPU timing first was rejected because the timing work needs these oracles in place first |
 | RM-032 | proposed | v0.4 | **Release-tooling candidates deferred by Phase 19:**<ul><li>GitHub immutable releases with `gh release verify` (enable only before a window opens).</li><li>An optional ruleset protecting `v*` tags.</li><li>SLSA build provenance (needs a new action; weigh it against copy-over-dependency).</li><li>Rename the `v02-*` evidence names to version-agnostic names (D-16).</li><li>`bump-minor-pre-major` in release-please-config.json (D-03).</li><li>Move the paired-timing baseline off v0.1.0.</li></ul> | v0.4 kickoff, before its release window | Doing them in v0.3.0 was rejected: each is an unrehearsed change to the publish path or to the evidence names (19-CONTEXT Deferred Ideas) |
 | RM-005 | proposed | **v0.5 DMG PPU Timing** | DMG raster effects render correctly within a declared corpus: pixel FIFO and fetcher, mode-3 length, Mealybug DMG, Mooneye `ppu/` | RM-004 oracles admitted. Perf stays within the RM-003 budget | Landing behind a profile flag, with the old renderer kept as a reference, is the fallback if over budget |
 | RM-009 | proposed | **Near-term libretro core candidate; milestone slot undecided** | A libretro adapter with globals confined to the adapter and states via STATE-01, followed by a real Steam Deck/RetroArch path check | The owner has concrete Steam Deck interest. Keep it out of v0.4; if the owner later schedules it earlier, explicitly trade away acid2/gbmicrotest admission and delay PPU-timing readiness. The v0.4 default is optional direct SSH/native exploration with no support claim | A desktop build or another emulator on the Deck does not qualify GabbaBoy there |
@@ -192,3 +192,7 @@ v0.3 is archived with the owner-selected overrides and deferrals in [closeout](.
 ### Kickoff revision 6 — 2026-10-31
 
 The owner started v0.4 Evidence Floor planning with a bounded CGB acceptance-harness repair, a two-candidate conditional rights gate, acid2/gbmicrotest admission, and scene-first agent-owned regressions. Retain root MIT, defer full libretro while promoting it to a near-term candidate, and treat direct Steam Deck/SSH use as exploratory. libfuturo remains independent coordination context. No game fixture is admitted yet; no phase execution has started.
+
+### Roadmap approval revision 7 — 2026-10-31
+
+The owner approved the four-phase v0.4 roadmap. RM-004 is committed in active ROADMAP.md; Phase 20 remains unplanned and unstarted. The owner chooses when to begin it with `/gsd-plan-phase 20`.

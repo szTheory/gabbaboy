@@ -55,20 +55,20 @@ Deferred to a later owner-approved milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GAME-01 | Pending roadmap | Pending |
-| GAME-02 | Pending roadmap | Pending |
-| FIXT-01 | Pending roadmap | Pending |
-| RIGHTS-01 | Pending roadmap | Pending |
-| DIAG-01 | Pending roadmap | Pending |
-| DIAG-02 | Pending roadmap | Pending |
-| FEED-01 | Pending roadmap | Pending |
-| REL-01 | Pending roadmap | Pending |
+| GAME-01 | Phase 21 | Pending |
+| GAME-02 | Phase 21 | Pending |
+| FIXT-01 | Phase 21 | Pending |
+| RIGHTS-01 | Phase 20 | Pending |
+| DIAG-01 | Phase 22 | Pending |
+| DIAG-02 | Phase 22 | Pending |
+| FEED-01 | Phase 21 | Pending |
+| REL-01 | Phase 23 | Pending |
 
 **Coverage:**
 - v1 requirements: 8 total
-- Mapped to phases: 0
-- Unmapped: 8 (roadmap pending)
+- Mapped to phases: 8
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-31*  
-*Last updated: 2026-10-31 after owner approval of v0.4 scope*
+*Last updated: 2026-10-31 after v0.4 roadmap approval*

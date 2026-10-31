@@ -2,11 +2,15 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
+current_phase: 20
+current_phase_name: Fixture Admission Tune-up
 status: planning
-last_updated: "2026-10-31T20:44:45.296Z"
+stopped_at: v0.4 milestone initialization complete; awaiting owner choice to plan Phase 20
+last_updated: "2026-10-31T21:24:33Z"
 last_activity: 2026-10-31
+last_activity_desc: v0.4 four-phase roadmap approved; Phase 20 remains unplanned and unstarted
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,20 +24,32 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.3 milestone boundary; planning the next milestone is owner-selected.
+**Current focus:** v0.4 Evidence Floor initialized; next phase is 20 — Fixture Admission Tune-up.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 20 — Fixture Admission Tune-up (first of four v0.4 phases)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-10-31 — Milestone v0.4 started
+Status: Roadmap approved; no phase planned or executed
+Last activity: 2026-10-31 — Owner approved the four-phase v0.4 roadmap
+
+Completed stage: **v0.4 milestone initialization**. The eight requirements are mapped to the approved four-phase roadmap. Previous completed implementation phase remains **19 — Qualified v0.3.0 Release**.
+
+Next phase: **20 — Fixture Admission Tune-up**. Exact next command: **/gsd-plan-phase 20**. Both workflow.auto_advance and workflow._auto_chain_active remain false. Stop before Phase 20 planning or execution until the owner chooses that command.
+
+## Performance Metrics
+
+No v0.4 plans have executed and no new performance measurements are claimed. Preserve the existing deterministic cost budget and state-continuation evidence; final qualification runs once at the final implementation head.
 
 ## Accumulated Context
 
-Adopted decisions: [DECISIONS.md](context/DECISIONS.md), including owner closeout choice D-137. Detailed prior state: [v0.3-STATE-ARCHIVE.md](milestones/v0.3-STATE-ARCHIVE.md). Boundary sibling/Playstead lessons and the rolling roadmap are refreshed; no sibling was modified.
+Adopted decisions: [DECISIONS.md](context/DECISIONS.md), including v0.4 scope D-138 and the retained v0.3 closeout choice D-137. Detailed prior state: [v0.3-STATE-ARCHIVE.md](milestones/v0.3-STATE-ARCHIVE.md). The recent boundary sibling/Playstead scan is retained; no sibling was modified.
 
-No product correctness/security blocker remains. RM-024 test quality, RM-025 measured CI duplication and optional release-tooling candidates retain their triggers in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md). Existing accepted release authority and platform exclusions remain scoped by the audit.
+v0.4 has two substantive tracks: shared CGB progress/game evidence and acid2/gbmicrotest admission. Potion Panic is the first bounded candidate; µCity 1.3 is the only fallback. Exact source/build/model/rights gates remain pending; no game fixture is admitted. A justified absence after both attempts is permitted, but a newly reproduced unresolved correctness/security defect requires a rescope.
+
+Retain root MIT and separate fixture terms. Full libretro is a near-term candidate outside v0.4; direct Steam Deck/SSH exploration is optional and does not qualify a Linux player. libfuturo is independent coordination context with no dependency or early API/state freeze.
+
+RM-024 test quality, RM-025 measured CI duplication, the standalone closeout-helper failure, and optional release-tooling candidates retain their accepted dispositions and triggers in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md). Do not reopen them without a concrete trigger. Existing release authority and platform exclusions remain scoped by the audit.
 
 ## Deferred Items
 
@@ -48,10 +64,10 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-10-31T19:01:44.469697+00:00
-**Stopped at:** v0.3 milestone completion and archival; next milestone not started.
+**Last session:** 2026-10-31T21:24:33Z
+**Stopped at:** v0.4 milestone initialization complete; owner-approved roadmap. Phase 20 has not started.
 **Resume file:** [.continue-here.md](.continue-here.md).
 
 ## Operator Next Steps
 
-The owner may run `/gsd-new-milestone` to define v0.4 Evidence Floor. Reuse existing research and recorded debt dispositions; do not restart Phase 19, refresh historical verification fingerprints, or begin another phase automatically.
+The owner acts next only when ready to plan **20 — Fixture Admission Tune-up**, using **/gsd-plan-phase 20**. Reuse the existing research and debt dispositions; do not restart Phase 19 or automatically begin Phase 20.
