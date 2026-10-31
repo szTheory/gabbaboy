@@ -771,7 +771,7 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         controls += _recovery_expect_reject("main-branch link target", "recovery-link-target",
             lambda: repair_support_ledger_link(section, RECOVERY_RELATIVE_LINK,
                                               b"[support ledger](https://github.com/szTheory/gabbaboy/blob/main/docs/support/v0.3.0.md)"))
-        controls += _recovery_expect_reject("wrong-tag link target", "recovery-link-target",
+        controls += _recovery_expect_reject("wrong-tag link target", "recovery-link-count",
             lambda: repair_support_ledger_link(section.replace(RECOVERY_RELATIVE_LINK,
                 b"[support ledger](https://github.com/szTheory/gabbaboy/blob/v0.2.1/docs/support/v0.3.0.md)"),
                 RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK))
@@ -784,7 +784,8 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         controls += _recovery_expect_reject("duplicate fixture JSON key", "recovery-json",
             lambda: _strict_recovery_json(b'{"schema_version":1,"schema_version":1}', "control fixture"))
         controls += _recovery_expect_reject("fixture digest drift", "recovery-digest",
-            lambda: validate_recovery_fixture(fixture_raw, sources.replace(b"8b19bb", b"9b19bb", 1)))
+            lambda: validate_recovery_fixture(fixture_raw,
+                sources.replace(sha256_bytes(fixture_raw).encode("ascii"), b"0" * 64, 1)))
         privacy_doc = json.loads(json.dumps(fixture))
         privacy_doc["reviewed_body"]["text"] += " /Users/private"
         controls += _recovery_expect_reject("local path leak", "recovery-sanitize",
@@ -834,7 +835,7 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
                 RECOVERY_RELEASE_ID + 1, {"body": repaired.decode("utf-8")}))
         changed = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
         changed.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")})
-        controls += _recovery_expect_reject("conflicting second body", "recovery-publication-race",
+        controls += _recovery_expect_reject("conflicting second body", "recovery-repaired-digest",
             lambda: changed.patch(RECOVERY_RELEASE_ID, {"body": (repaired + b" ").decode("utf-8")}))
         published = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
         published.published_at = "2026-10-31T00:00:00Z"
@@ -846,6 +847,7 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
             lambda: raced.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")}))
         wrong_request = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
         wrong_request.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")})
+        wrong_request.dispatch(dict(RECOVERY_DISPATCH))
         for label, mutate in (
             ("wrong workflow", lambda request: request.update(workflow="release.yml")),
             ("wrong ref", lambda request: request.update(ref=RECOVERY_TAG)),
@@ -856,9 +858,11 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         ):
             invalid = json.loads(json.dumps(RECOVERY_DISPATCH))
             mutate(invalid)
+            invalid_transport = RecoveryTransport(snapshot, failed_body, repaired,
+                repair_spec["repaired_body_sha256"])
+            invalid_transport.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")})
             controls += _recovery_expect_reject(label, "recovery-dispatch-identity",
-                lambda invalid=invalid: RecoveryTransport(snapshot, failed_body, repaired,
-                    repair_spec["repaired_body_sha256"]).dispatch(invalid))
+                lambda invalid=invalid, invalid_transport=invalid_transport: invalid_transport.dispatch(invalid))
         controls += _recovery_expect_reject("duplicate retry dispatch", "recovery-dispatch-duplicate",
             lambda: wrong_request.dispatch(dict(RECOVERY_DISPATCH)))
 
