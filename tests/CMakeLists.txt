@@ -1601,7 +1601,7 @@ add_test(NAME v03_readback_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--self-test-readback"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=v03-readback controls pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=48
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=108
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_readback_controls PROPERTIES TIMEOUT 60 LABELS planning)
 # The v0.2 checker asserts owner_accepted=0 for the archived 15.1-17 record only. Pointed at the new record it must reject on its plan
@@ -5621,6 +5621,17 @@ if(NOT WIN32)
   # cannot push existing fixed 60-second budgets over their caps.
   set_tests_properties(release_lifecycle_controls PROPERTIES RUN_SERIAL TRUE)
 endif()
+
+# D-27 (19-08): the Python-stdlib recovery controls run on every host, after the immutable
+# configure-time source revision above has been resolved.
+add_test(NAME release_lifecycle_post_tag_recovery_controls
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-release-lifecycle.py;--rev;${GBB_STATE_SOURCE_REV};--self-test-post-tag-recovery"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=release-lifecycle post-tag recovery controls pass controls=[1-9][0-9]* positives=[0-9]+ original_section_sha256=[0-9a-f]+ repaired_body_sha256=[0-9a-f]+"
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=48
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(release_lifecycle_post_tag_recovery_controls PROPERTIES TIMEOUT 60 LABELS "v03;release")
 
 # Phase 17 RM-030 / D-22 (17-11): release gates. The owner-approval gate (a deterministic Ir exception bound to the
 # exact measurement digest, cause, band and approved limit) and the exact-head nightly gate run on captured GitHub

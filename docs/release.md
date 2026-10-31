@@ -532,3 +532,53 @@ tag bytes are built, attached, downloaded, and smoked. Publication is a single
 gated transition after all required checks and downloaded-byte tests pass.
 Retries can reuse only that same draft, tag, source SHA, and previously
 qualified byte-identical assets.
+
+## Recovering lost v0.3.0 draft notes
+
+If release-please creates a draft whose generated notes omit required
+disclosures, keep the release on hold and carry the correction in one reviewed,
+non-releasable corrective main pull request before touching the draft. Run the
+full offline release-lifecycle replay and retry readback controls against that
+exact corrective revision first. Do not change release workflows, product
+source, version-window data, policy pins, or performance limits as part of the
+notes correction.
+
+For the captured v0.3.0 failure, product source **S** is
+`a3f3390451f9a893aa47475f15a722ada86daaa6`. Build the repair from the exact
+`## [0.3.0]` section in `S:CHANGELOG.md`, preserving its UTF-8 bytes and
+replacing only the URL `docs/support/v0.3.0.md` in the single `support ledger`
+link with `https://github.com/szTheory/gabbaboy/blob/v0.3.0/docs/support/v0.3.0.md`.
+Keep the link label and every other byte unchanged.
+The original section SHA-256 is
+`187fb676dc1717e6582aa16f27a26f3932c29f29b5049aa3d59ecebdb934a4be`; the
+repaired section SHA-256 is
+`ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784`. Check
+both values against the recovery fixture and run the unchanged adoption checker
+on the failed body, original tagged section, and repaired section. The failed
+body must refuse for its missing disclosures; both tagged-section forms must
+pass.
+
+Before the metadata-only API update, confirm that the existing release ID,
+tag, target source S, draft and prerelease flags, publication time, and empty
+asset list still match the captured failure. The PATCH request contains only
+the `body` field with the repaired bytes. Read the draft and its assets again;
+the body digest must match the repaired-section digest, and the release ID,
+tag, target source, state, and assets must remain unchanged. See GitHub's
+[Update a release API](https://docs.github.com/en/rest/releases/releases#update-a-release)
+for the endpoint contract.
+
+The corrective workflow revision **G** is the actual main commit that contains
+the reviewed fix; it must be a non-empty, allowlisted descendant of S. Record
+API run and job heads as G, and keep the tag, downloaded receipt, evidence, and
+pre-publish inventory bound to S. This control-plane/product-source split is
+valid only with the explicit captured request and actual run, jobs, artifact,
+receipt, and tag-object proof. Do not infer retry mode from `run_attempt`.
+
+After confirming main is still G, the same draft remains unpublished, and no
+competing release run is active, dispatch `release-please.yml` on `main` once
+with `retry=true`, `tag_name=v0.3.0`, `source_sha=S`, and the existing release
+ID. Keep the dispatch request and actual API response with private recovery
+evidence. See GitHub's
+[Create a workflow dispatch event API](https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event)
+for the endpoint contract. If the retry fails again or any precondition has
+moved, stop and preserve the hold; do not edit the notes or dispatch again.
