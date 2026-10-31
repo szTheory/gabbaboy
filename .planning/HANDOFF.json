@@ -1,33 +1,13 @@
 {
   "version": "1.0",
-  "timestamp": "2026-10-26T16:33:50.877Z",
-  "phase": "16",
-  "phase_name": "Tune-up and v0.2 Debt Closure",
-  "phase_dir": ".planning/phases/GB-16-tune-up-and-v0-2-debt-closure",
-  "plan": 7,
-  "task": 0,
-  "total_tasks": 0,
-  "status": "paused",
-  "completed_tasks": [
-    {"id": 1, "name": "Phase 16 verify-work: automated UAT 51/51, zero human checkpoints", "status": "done", "commit": "792c334"},
-    {"id": 2, "name": "Phase 16 goal re-verification at final head (passed 5/5)", "status": "done", "commit": "792c334"},
-    {"id": 3, "name": "Phase 16 secure-phase: 32 threats, threats_open 0", "status": "done", "commit": "792c334"},
-    {"id": 4, "name": "Transition: PROJECT/STATE/state.json/continue.md routed to /gsd-discuss-phase 17; PR #128 squash-merged", "status": "done", "commit": "792c334"}
-  ],
-  "remaining_tasks": [
-    {"id": 5, "name": "Phase 17 Native Save State Core: discuss (owner chooses when)", "status": "not_started"}
-  ],
+  "timestamp": "2026-10-31T19:01:44.469697+00:00",
+  "phase": "19",
+  "phase_name": "Qualified v0.3.0 Release",
+  "phase_dir": ".planning/milestones/v0.3-phases/GB-19-qualified-v0-3-0-release",
+  "status": "milestone_completed",
+  "completed_stage": "v0.3 Save States & Host Contract milestone completion and archival",
   "blockers": [],
   "async_jobs": [],
-  "human_actions_pending": [
-    {"action": "Optionally veto AR-16-01/AR-16-02 (T-16-22/T-16-25 accepted under D-112 for v0.2.1 only) in 16-SECURITY.md", "context": "Owner approved the one-time-check substitution in D-112; the gate code is now an RM-030 item that must be done before the next release", "blocking": false},
-    {"action": "Decide whether to commit or discard the local .planning/config.json edit (effort tiers light/standard to xhigh; codex opus model gpt-6.1-sol)", "context": "Owner's own uncommitted edit; deliberately left out of every commit this session", "blocking": false}
-  ],
-  "decisions": [
-    {"decision": "T-16-22 and T-16-25 closed as owner-accepted risks (AR-16-01/02) rather than reopened", "rationale": "D-112 amendment 1 records owner approval of the one-time gh api / gh run view substitution for v0.2.1; auditor re-confirmed both checks; gate code added to RM-030 as an item that must be done before the next release", "phase": "16"},
-    {"decision": "No new record of the shift-left automation directive", "rationale": "Already recorded in D-069, AGENTS.md and memory, and enforced by the summary_coverage CTest and verify-uat-closure.py; only the new toil was recorded (LESSONS GB-GSD-027)", "phase": "16"}
-  ],
-  "uncommitted_files": [" M .planning/config.json"],
-  "next_action": "Run /gsd-discuss-phase 17 when the owner chooses; enter with RM-026..RM-030 (RM-030 WR-01 and the D-112 release-gate code in scope)",
-  "context_notes": "Phase boundary pause. Phase 16 is fully closed on main 792c334. Phase 17 has no directory yet. Both auto flags are false; nothing auto-advances."
+  "next_action": "Owner may run /gsd-new-milestone to initialize proposed v0.4 Evidence Floor; no next phase number/title exists.",
+  "context_notes": "Owner approved override closeout; no next milestone started; both automatic-advance flags false. Owner config/AGENTS working edits remain uncommitted."
 }

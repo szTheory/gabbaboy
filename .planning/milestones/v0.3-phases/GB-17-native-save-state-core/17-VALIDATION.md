@@ -103,7 +103,7 @@ All in-scope deterministic contracts are automated; no human UAT checkpoint is p
 - [x] Every deliverable has positive and intended negative controls.
 - [x] Test ordering, CTest inventory/timeouts and phase-unique threat links are complete.
 - [x] SUMMARY coverage uses block schema: id, description, human_judgment:false; verification block items kind/ref/status:pass, no flow maps/ctest kind/inline comments.
-- [ ] At verify-work use tests/scripts/verify-uat-closure.py with --write evidence and --self-test; no handwritten UAT/local copy.
+- [x] Missing automated closure reconciled at the 2026-10-31 milestone audit with tests/scripts/verify-uat-closure.py --write evidence and --self-test: 57 deliverables, zero humans, 21 rejecting controls; no handwritten UAT/local copy.
 - [x] Final source-head suite and required exact-revision hosted checks pass (1496/1496 at `e9e2d57`; PR130 hosted green at `2eb492f`).
 - [x] Validated/Nyquist flags change only after real execution evidence.
 
@@ -116,3 +116,5 @@ Nyquist audit 2026-10-28: 0 gaps, 0 escalated. Open: the exact-revision hosted c
 | Gaps found | 0 |
 | Resolved | 0 |
 | Escalated | 0 |
+
+Milestone audit reconciliation (2026-10-31): the historical open note above is superseded by the completed 17-UAT.md and its shared-checker self-test. The final-head suite passed 1707/1707 without failures/skips; this does not refresh the original phase-boundary VERIFICATION fingerprint or repeat Phase 17.

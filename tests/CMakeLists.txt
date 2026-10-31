@@ -1576,8 +1576,9 @@ add_test(NAME closeout_dispositions_controls
 set_tests_properties(closeout_dispositions_controls PROPERTIES TIMEOUT 120 LABELS "planning"
   PASS_REGULAR_EXPRESSION "closeout-dispositions self-test pass positives=3 rejected_controls=[1-9][0-9]*")
 # Phase 16 D-33 (16-06): the v0.3 carry-over record. Release-linked rows sit in pending-release until the post-release planning
-# commit closes them with tag-bound receipts; the checker reads the record by the live-phases path, so it needs no build.
-set(GBB_V03_DISPOSITIONS "${GBB_LIVE_PHASES_DIR}/GB-16-tune-up-and-v0-2-debt-closure/16-DISPOSITIONS.json")
+# commit closes them with tag-bound receipts; the checker reads the archived record, so it needs no build.
+set(GBB_V03_PHASES_DIR "${PROJECT_SOURCE_DIR}/.planning/milestones/v0.3-phases")
+set(GBB_V03_DISPOSITIONS "${GBB_V03_PHASES_DIR}/GB-16-tune-up-and-v0-2-debt-closure/16-DISPOSITIONS.json")
 add_test(NAME v03_dispositions
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--check;${GBB_V03_DISPOSITIONS}"
@@ -5637,7 +5638,7 @@ set_tests_properties(release_lifecycle_post_tag_recovery_controls PROPERTIES TIM
 # The checker resolves this argument as a Git path, so derive it from the configurable phase root
 # instead of passing the host's absolute filesystem path (which is not a valid Git path on Windows).
 file(RELATIVE_PATH GBB_V03_READBACK_GIT_PATH "${PROJECT_SOURCE_DIR}"
-  "${GBB_LIVE_PHASES_DIR}/GB-19-qualified-v0-3-0-release/19-release-readback.json")
+  "${GBB_V03_PHASES_DIR}/GB-19-qualified-v0-3-0-release/19-release-readback.json")
 add_test(NAME v03_readback
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-v03-dispositions.py;--check-readback;${GBB_V03_READBACK_GIT_PATH};--rev;${GBB_STATE_SOURCE_REV};--tag;v0.3.0"
