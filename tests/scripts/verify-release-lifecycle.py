@@ -409,6 +409,38 @@ def v030_changelog_section(changelog: bytes) -> bytes:
     return b"".join(lines[start:end])
 
 
+def recovery_document_markers(repair_spec: dict) -> tuple[tuple[str, bytes], ...]:
+    return (
+        ("corrective main PR", b"non-releasable corrective main pull request"),
+        ("offline full replay", b"full offline release-lifecycle replay"),
+        ("immutable source identity", repair_spec["source_sha"].encode("ascii")),
+        ("original tagged-section digest", repair_spec["original_section_sha256"].encode("ascii")),
+        ("repaired tagged-section digest", repair_spec["repaired_body_sha256"].encode("ascii")),
+        ("body-only PATCH", b"PATCH request contains only"),
+        ("explicit retry mode", b"retry=true"),
+        ("truthful workflow head", b"Record API run and job heads as G"),
+        ("product source binding", b"pre-publish inventory bound to S"),
+        ("attempt is not retry mode", b"Do not infer retry mode from `run_attempt`"),
+        ("release API reference", b"https://docs.github.com/en/rest/releases/releases#update-a-release"),
+        ("dispatch API reference", b"https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event"),
+        ("second failure hold", b"If the retry fails again or any precondition has"),
+    )
+
+
+def recovery_document_section(raw: bytes, repair_spec: dict) -> bytes:
+    heading = b"## Recovering lost v0.3.0 draft notes\n"
+    if b"\r" in raw or raw.count(heading) != 1:
+        raise Reject("recovery-document", "release documentation must have one LF-terminated recovery procedure")
+    start = raw.index(heading) + len(heading)
+    next_heading = re.search(rb"(?m)^## ", raw[start:])
+    section = raw[start:start + next_heading.start()] if next_heading else raw[start:]
+    spec_markers = recovery_document_markers(repair_spec)
+    missing = [name for name, marker in spec_markers if marker not in section]
+    if missing:
+        raise Reject("recovery-document", f"release recovery procedure omits safeguards: {', '.join(missing)}")
+    return section
+
+
 def repair_support_ledger_link(section: bytes, relative_link: bytes, pinned_link: bytes) -> bytes:
     """Apply the one allowlisted URL replacement, accepting the identical repair as a no-op."""
     if relative_link != RECOVERY_RELATIVE_LINK or pinned_link != RECOVERY_PINNED_LINK:
@@ -732,6 +764,14 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
     fixture = validate_recovery_fixture(fixture_raw, sources)
     snapshot = fixture["failure_snapshot"]
     repair_spec = fixture["tagged_repair"]
+    recovery_doc = recovery_document_section(release_doc, repair_spec)
+    document_controls = 0
+    for label, marker in recovery_document_markers(repair_spec):
+        if recovery_doc.count(marker) != 1:
+            raise Reject("recovery-document", f"procedure safeguard marker is not unique: {label}")
+        omitted = release_doc.replace(marker, b"", 1)
+        document_controls += _recovery_expect_reject(f"omitted procedure safeguard: {label}", "recovery-document",
+            lambda omitted=omitted: recovery_document_section(omitted, repair_spec))
     tag_commit, changelog, ledger = _recovery_tag_source(repair_spec["tag"], repair_spec["source_sha"])
     if tag_commit != RECOVERY_SOURCE_SHA or not ledger:
         raise Reject("recovery-ledger", "tagged source or support ledger bytes are unavailable")
@@ -761,7 +801,7 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         adoption_checks += _expect_adoption_pass(repaired, "tagged-repaired-section", RECOVERY_SOURCE_SHA, v030_root)
         positives = 3
 
-        controls = 0
+        controls = document_controls
         controls += _recovery_expect_reject("missing relative ledger link", "recovery-link-count",
             lambda: repair_support_ledger_link(section.replace(RECOVERY_RELATIVE_LINK, b""),
                                               RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK))

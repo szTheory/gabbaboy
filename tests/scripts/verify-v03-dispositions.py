@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import datetime as dt
 import hashlib
 import io
 import json
@@ -58,6 +59,41 @@ READBACK_V2_KEYS = {
     "assets", "reconciliation", "release_run", "attach_v02_evidence", "pre_publish_inventory",
     "pre_publish_inventory_source", "sha256sums", "release_receipt", "sidecar_ledger",
 }
+PUBLICATION_SOURCE_KEYS = {
+    "schema_version", "source_sha", "workflow_sha", "workflow_ref", "dispatch", "run_api",
+    "attach_job_api", "final_job_api", "release_receipt_raw",
+}
+RETRY_DISPATCH_KEYS = {"workflow", "ref", "inputs"}
+RETRY_INPUT_KEYS = {"retry", "tag_name", "source_sha", "release_id"}
+RETRY_RUN_API_KEYS = {
+    "id", "run_attempt", "path", "event", "head_branch", "head_sha", "status", "conclusion",
+    "repository_full_name",
+}
+RETRY_JOB_API_KEYS = {
+    "id", "run_id", "head_sha", "name", "status", "conclusion", "started_at", "completed_at",
+}
+RECOVERY_ALLOWED_PATHS = {
+    "tests/scripts/verify-release-lifecycle.py",
+    "tests/data/release-api/v030-notes-failure.json",
+    "tests/data/release-api/SOURCES.md",
+    "tests/CMakeLists.txt",
+    "tests/expected-tests.txt",
+    "tests/scripts/verify-v03-dispositions.py",
+    "docs/release.md",
+    ".planning/phases/GB-19-qualified-v0-3-0-release/19-08-PLAN.md",
+    ".planning/phases/GB-19-qualified-v0-3-0-release/19-POST-TAG-FAILURE.md",
+    ".planning/phases/GB-19-qualified-v0-3-0-release/COVERAGE.md",
+}
+RECOVERY_CRITICAL_PATHS = (
+    ".github/workflows/release.yml", ".github/workflows/release-please.yml",
+    ".github/scripts/release-evidence-lifecycle.sh", ".github/scripts/verify-release-gates.sh",
+    ".github/scripts/verify-release-source-proof.py", "tests/scripts/verify-v02-adoption.py",
+    ".github/scripts/verify-workflow-policy.py", "tests/scripts/verify-workflow-policy-coverage.py",
+    "tests/data/workflow-policy-controls.json", "tests/baseline/perf-gate-v1.txt",
+    "tests/data/support-claims-v0.3.json", "tests/data/release-disclosure.json",
+    "tests/data/state-compatibility.json", "tests/data/version-window.json", "docs/support/v0.3.0.md",
+)
+RECOVERY_CRITICAL_PREFIXES = ("src/", "include/")
 PRE_PUBLISH_KEYS = {"schema_version", "kind", "tag", "source_sha", "release_id", "run_id", "run_attempt", "assets"}
 PRE_PUBLISH_SOURCE_KEYS = {"run_id", "run_attempt", "artifact_name", "artifact_id", "file_sha256", "raw"}
 FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY")
@@ -153,6 +189,172 @@ def git_tree(repo: pathlib.Path, commit: str) -> str | None:
     done = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{commit}^{{tree}}"],
                           capture_output=True, text=True, check=False)
     return done.stdout.strip() if done.returncode == 0 and HEX40.match(done.stdout.strip()) else None
+
+
+def check_retry_publication_source(source: Source, readback: dict, release_run: dict, attach: dict,
+                                   source_row: dict, sums_bytes: bytes, receipt: dict) -> str:
+    """Prove a workflow-dispatch retry ran trusted main G while every product byte stays bound to tag S."""
+    publication = readback.get("publication_source")
+    if not isinstance(publication, dict) or set(publication) != PUBLICATION_SOURCE_KEYS \
+            or type(publication.get("schema_version")) is not int or publication["schema_version"] != 1:
+        reject("readback-publication-source", "retry publication_source must have the exact version-1 schema")
+    source_sha = publication.get("source_sha")
+    workflow_sha = publication.get("workflow_sha")
+    workflow_ref = publication.get("workflow_ref")
+    if source_sha != readback["tag_sha"] or not isinstance(workflow_sha, str) or not HEX40.fullmatch(workflow_sha) \
+            or workflow_sha == source_sha or workflow_ref != "refs/heads/main":
+        reject("readback-publication-source", "retry must distinguish immutable tag S from main workflow G")
+    repo = source.repo
+    commit_check = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{workflow_sha}^{{commit}}"],
+                                  capture_output=True, check=False)
+    if commit_check.returncode != 0:
+        reject("readback-publication-source", "retry workflow G is not an immutable commit object")
+    ancestry = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", source_sha, workflow_sha],
+                             capture_output=True, check=False)
+    if ancestry.returncode != 0:
+        reject("readback-publication-source", "tag source S is not an ancestor of retry workflow G")
+    changed = subprocess.run(["git", "-C", str(repo), "diff", "--name-only", "-z", source_sha, workflow_sha],
+                             capture_output=True, check=False)
+    if changed.returncode != 0:
+        reject("readback-publication-source", "the exact S-to-G recovery diff cannot be read")
+    changed_paths = {item.decode("utf-8", errors="strict") for item in changed.stdout.split(b"\0") if item}
+    if not changed_paths or changed_paths - RECOVERY_ALLOWED_PATHS:
+        reject("readback-publication-source", "G must contain a non-empty diff limited to the approved recovery allowlist")
+
+    source_paths = subprocess.run(["git", "-C", str(repo), "ls-tree", "-r", "-z", "--name-only", source_sha],
+                                  capture_output=True, check=False)
+    if source_paths.returncode != 0:
+        reject("readback-publication-source", "tag source S tree cannot be enumerated")
+    source_path_set = {item.decode("utf-8", errors="strict") for item in source_paths.stdout.split(b"\0") if item}
+    missing_critical = set(RECOVERY_CRITICAL_PATHS) - source_path_set
+    if missing_critical or any(not any(path.startswith(prefix) for path in source_path_set)
+                               for prefix in RECOVERY_CRITICAL_PREFIXES):
+        reject("readback-publication-source", f"tag source S lacks required protected files: {sorted(missing_critical)}")
+    protected_diff = subprocess.run(["git", "-C", str(repo), "diff", "--quiet", source_sha, workflow_sha,
+                                     "--", *RECOVERY_CRITICAL_PATHS, *RECOVERY_CRITICAL_PREFIXES],
+                                    capture_output=True, check=False)
+    if protected_diff.returncode != 0:
+        reject("readback-publication-source", "a protected product or policy blob changed between S and G")
+
+    dispatch = publication.get("dispatch")
+    if not isinstance(dispatch, dict) or set(dispatch) != RETRY_DISPATCH_KEYS \
+            or dispatch.get("workflow") != "release-please.yml" or dispatch.get("ref") != "main":
+        reject("readback-publication-source", "retry dispatch must explicitly name release-please.yml on main")
+    inputs = dispatch.get("inputs")
+    if not isinstance(inputs, dict) or set(inputs) != RETRY_INPUT_KEYS or inputs.get("retry") is not True \
+            or inputs.get("tag_name") != readback["tag"] or inputs.get("source_sha") != source_sha \
+            or inputs.get("release_id") != str(readback["release_id"]):
+        reject("readback-publication-source", "retry dispatch inputs do not bind true retry, tag S and this draft ID")
+
+    run_api = publication.get("run_api")
+    if not isinstance(run_api, dict) or set(run_api) != RETRY_RUN_API_KEYS:
+        reject("readback-publication-source", "retry run API projection has the wrong exact fields")
+    run_id = run_api.get("id")
+    attempt = run_api.get("run_attempt")
+    if type(run_id) is not int or run_id < 1 or type(attempt) is not int or attempt < 1 \
+            or run_api.get("path") != ".github/workflows/release-please.yml" \
+            or run_api.get("event") != "workflow_dispatch" or run_api.get("head_branch") != "main" \
+            or run_api.get("head_sha") != workflow_sha or run_api.get("status") != "completed" \
+            or run_api.get("conclusion") != "success" \
+            or run_api.get("repository_full_name") != "szTheory/gabbaboy":
+        reject("readback-publication-source", "actual retry run must be a successful main workflow_dispatch at G")
+    if release_run.get("workflow") != run_api["path"] or release_run.get("event") != run_api["event"] \
+            or release_run.get("run_id") != run_id or release_run.get("head_sha") != workflow_sha \
+            or release_run.get("conclusion") != "success":
+        reject("readback-publication-source", "legacy release_run projection disagrees with the actual retry API run")
+    if source_row.get("run_id") != run_id or source_row.get("run_attempt") != attempt:
+        reject("readback-publication-source", "downloaded pre-publish inventory run/attempt differs from actual retry")
+
+    jobs = []
+    for key, tail in (("attach_job_api", "attach-qualified-v02-evidence"),
+                      ("final_job_api", "final-downloaded-byte-gate-and-publish")):
+        job = publication.get(key)
+        if not isinstance(job, dict) or set(job) != RETRY_JOB_API_KEYS:
+            reject("readback-publication-source", f"{key} must contain the exact job API projection")
+        name = job.get("name")
+        if type(job.get("id")) is not int or job["id"] < 1 or job.get("run_id") != run_id \
+                or job.get("head_sha") != workflow_sha or not isinstance(name, str) or not name.endswith(tail) \
+                or job.get("status") != "completed" or job.get("conclusion") != "success":
+            reject("readback-publication-source", f"{key} is not the successful expected job from retry G")
+        parsed = []
+        for field in ("started_at", "completed_at"):
+            value = job.get(field)
+            if not isinstance(value, str):
+                reject("readback-publication-source", f"{key}.{field} must be the actual API timestamp")
+            try:
+                stamp = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                reject("readback-publication-source", f"{key}.{field} is not an ISO timestamp")
+            if stamp.tzinfo is None:
+                reject("readback-publication-source", f"{key}.{field} must include a timezone")
+            parsed.append(stamp)
+        if parsed[1] < parsed[0]:
+            reject("readback-publication-source", f"{key} completion precedes its start")
+        jobs.append((job, int((parsed[1] - parsed[0]).total_seconds())))
+    attach_job, attach_duration = jobs[0]
+    final_job, _ = jobs[1]
+    if attach.get("run_id") != run_id or attach.get("job_id") != attach_job["id"] \
+            or attach.get("head_sha") != workflow_sha or attach.get("conclusion") != "success" \
+            or attach.get("started_at") != attach_job["started_at"] \
+            or attach.get("completed_at") != attach_job["completed_at"] \
+            or attach.get("duration_seconds") != attach_duration \
+            or release_run.get("final_publish_job_id") != final_job["id"]:
+        reject("readback-publication-source", "legacy attach/final job fields differ from actual API job projections")
+
+    raw_text = publication.get("release_receipt_raw")
+    if not isinstance(raw_text, str):
+        reject("readback-receipt-mismatch", "retry must retain the exact downloaded release-receipt UTF-8 bytes")
+    raw_bytes = raw_text.encode("utf-8")
+    if not raw_bytes or len(raw_bytes) > MAX_BYTES or b"\r" in raw_bytes \
+            or hashlib.sha256(raw_bytes).hexdigest() != receipt.get("sha256"):
+        reject("readback-receipt-mismatch", "downloaded raw release receipt bytes differ from the readback digest")
+    raw_receipt = parse_json(raw_bytes, "downloaded release receipt", "readback-receipt-mismatch")
+    if not isinstance(raw_receipt, dict) or raw_receipt.get("tag") != readback["tag"] \
+            or raw_receipt.get("source_sha") != source_sha \
+            or raw_receipt.get("release_id") != str(readback["release_id"]) \
+            or raw_receipt.get("sha256sums_sha256") != hashlib.sha256(sums_bytes).hexdigest():
+        reject("readback-receipt-mismatch", "raw release receipt tag/source/release or SHA256SUMS binding differs")
+    perf = raw_receipt.get("perf_gate")
+    perf_roms = {"libbet", "tracer", "visible-demo"}
+    perf_keys = {"schema_version", "kind", "source_sha", "base_sha", "limits_blob", "ir", "digests",
+                 "realtime_min", "tool", "run_id", "run_attempt"}
+    if not isinstance(perf, dict) or set(perf) != perf_keys or type(perf.get("schema_version")) is not int \
+            or perf.get("schema_version") != 1 or perf.get("kind") != "perf-gate-receipt" \
+            or perf.get("source_sha") != source_sha or perf.get("base_sha") != "ab301aa69b1f085050fd66bf7b1378863a0821f2" \
+            or not isinstance(perf.get("limits_blob"), str) or not HEX40.fullmatch(perf["limits_blob"]) \
+            or not isinstance(perf.get("ir"), dict) or set(perf["ir"]) != perf_roms \
+            or not isinstance(perf.get("digests"), dict) or set(perf["digests"]) != perf_roms \
+            or not isinstance(perf.get("tool"), dict) \
+            or set(perf["tool"]) != {"base_build_identity", "head_build_identity"} \
+            or type(perf.get("run_id")) is not int or perf["run_id"] < 1 \
+            or type(perf.get("run_attempt")) is not int or perf["run_attempt"] < 1 \
+            or not isinstance(perf.get("realtime_min"), str) \
+            or not re.fullmatch(r"[1-9][0-9]*/[1-9][0-9]*", perf["realtime_min"]):
+        reject("readback-receipt-mismatch", "embedded perf receipt is not bound to exact product source S")
+    limits_blob = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet",
+                                  f"{source_sha}:tests/baseline/perf-gate-v1.txt"],
+                                 capture_output=True, text=True, check=False)
+    if limits_blob.returncode != 0 or limits_blob.stdout.strip() != perf["limits_blob"]:
+        reject("readback-receipt-mismatch", "embedded perf receipt policy pin differs from source S")
+    for rom in perf_roms:
+        ir = perf["ir"][rom]
+        digests = perf["digests"][rom]
+        if not isinstance(ir, dict) or set(ir) != {"base", "head"} or type(ir.get("base")) is not int \
+                or ir["base"] < 1 or not isinstance(ir.get("head"), list) or len(ir["head"]) != 2 \
+                or any(type(item) is not int or item < 1 for item in ir["head"]) \
+                or not isinstance(digests, dict) or set(digests) != {"base", "head"} \
+                or not isinstance(digests.get("base"), str) or not HEX64.fullmatch(digests["base"]) \
+                or not isinstance(digests.get("head"), list) or len(digests["head"]) != 2 \
+                or any(not isinstance(item, str) or not HEX64.fullmatch(item) for item in digests["head"]):
+            reject("readback-receipt-mismatch", f"embedded perf receipt has a malformed {rom} binding")
+    for identity in perf["tool"].values():
+        if identity is not None and (not isinstance(identity, str) or not HEX64.fullmatch(identity)):
+            reject("readback-receipt-mismatch", "embedded perf receipt carries an invalid tool build identity")
+    raw_assets = raw_receipt.get("assets")
+    expected_raw_assets = receipt.get("assets")
+    if not isinstance(raw_assets, list) or raw_assets != expected_raw_assets:
+        reject("readback-receipt-mismatch", "raw release receipt asset digests differ from the checked projection")
+    return f"v03-readback retry pass workflow={workflow_sha} source={source_sha} attempt={attempt}"
 
 
 def parse_json(raw: bytes, what: str, code: str = "schema-malformed"):
@@ -276,10 +478,15 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
     """Reconcile the post-publication record to tag objects and its pre-publication artifact."""
     if not isinstance(readback, dict):
         reject("receipt-invalid", "readback must be a JSON object")
+    release_run = readback.get("release_run")
+    if not isinstance(release_run, dict) or type(release_run.get("retry")) is not bool:
+        reject("receipt-invalid", "release_run must explicitly state whether this is a retry")
+    is_retry = release_run["retry"] is True
     if "pre_publish_inventory_source" not in readback:
         reject("readback-inventory-unsourced", "pre-publish inventory source is required")
-    if set(readback) != READBACK_V2_KEYS:
-        reject("receipt-invalid", f"readback must contain exactly {sorted(READBACK_V2_KEYS)}")
+    expected_keys = READBACK_V2_KEYS | ({"publication_source"} if is_retry else set())
+    if set(readback) != expected_keys:
+        reject("receipt-invalid", f"readback must contain exactly {sorted(expected_keys)}")
     if not TAG.fullmatch(tag) or readback.get("tag") != tag or not isinstance(readback.get("tag_sha"), str) \
             or not HEX40.fullmatch(readback["tag_sha"]) or not isinstance(readback.get("tag_tree"), str) \
             or not HEX40.fullmatch(readback["tag_tree"]):
@@ -304,26 +511,28 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
                    for key in ("verifier", "result", "compared_with")) \
             or type(reconciliation.get("asset_count")) is not int or reconciliation["asset_count"] < 1:
         reject("receipt-invalid", "reconciliation must be a complete legacy-schema result")
-    release_run = readback.get("release_run")
     if not isinstance(release_run, dict) or set(release_run) != {
             "workflow", "run_id", "event", "retry", "head_sha", "conclusion", "final_publish_job_id"} \
             or not isinstance(release_run.get("workflow"), str) or not release_run["workflow"].strip() \
             or type(release_run.get("run_id")) is not int or release_run["run_id"] < 1 \
             or not isinstance(release_run.get("event"), str) or not release_run["event"].strip() \
-            or type(release_run.get("retry")) is not bool or release_run.get("head_sha") != readback["tag_sha"] \
+            or type(release_run.get("retry")) is not bool \
             or release_run.get("conclusion") != "success" or type(release_run.get("final_publish_job_id")) is not int \
             or release_run["final_publish_job_id"] < 1:
-        reject("receipt-invalid", "release_run must identify a successful publication of the tag commit")
+        reject("receipt-invalid", "release_run must identify a successful candidate run with a positive final job id")
     attach = readback.get("attach_v02_evidence")
     if not isinstance(attach, dict) or set(attach) != {
             "run_id", "job_id", "head_sha", "conclusion", "started_at", "completed_at", "duration_seconds"} \
             or type(attach.get("run_id")) is not int or attach["run_id"] < 1 \
             or type(attach.get("job_id")) is not int or attach["job_id"] < 1 \
-            or attach.get("head_sha") != readback["tag_sha"] or attach.get("conclusion") != "success" \
+            or attach.get("conclusion") != "success" \
             or not isinstance(attach.get("started_at"), str) or not attach["started_at"].strip() \
             or not isinstance(attach.get("completed_at"), str) or not attach["completed_at"].strip() \
             or type(attach.get("duration_seconds")) is not int or attach["duration_seconds"] < 0:
-        reject("receipt-invalid", "attach_v02_evidence must identify a successful tag-bound job")
+        reject("receipt-invalid", "attach_v02_evidence must identify a successful attacher job")
+    if not is_retry and (release_run.get("head_sha") != readback["tag_sha"]
+                         or attach.get("head_sha") != readback["tag_sha"]):
+        reject("readback-workflow-head-mismatch", "normal push runs must remain bound to the exact tag source")
 
     source_row = readback.get("pre_publish_inventory_source")
     if not isinstance(source_row, dict) or set(source_row) != PRE_PUBLISH_SOURCE_KEYS \
@@ -442,6 +651,10 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
     if set(receipt_by_name) != payload_names or any(
             receipt_by_name[name] != inventory_by_name[name]["digest"][7:] for name in payload_names):
         reject("readback-receipt-mismatch", "release receipt asset digests differ from the sourced API inventory")
+
+    if is_retry:
+        check_retry_publication_source(source, readback, release_run, attach, source_row,
+                                       sums_bytes, receipt)
 
     ledger = readback.get("sidecar_ledger")
     expected_ledger_path = f"docs/support/{tag}.md"
@@ -643,11 +856,20 @@ def serialise(value: dict) -> bytes:
 
 def build_readback_fixture(base: pathlib.Path) -> dict:
     repo = base / "readback-repo"
-    (repo / ".github/scripts").mkdir(parents=True)
-    (repo / "docs/support").mkdir(parents=True)
+    for path in RECOVERY_CRITICAL_PATHS:
+        target = repo / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"protected fixture {path}\n", encoding="utf-8")
+    lifecycle_pattern = repo / READBACK_LIFECYCLE_REL
+    lifecycle_pattern.parent.mkdir(parents=True, exist_ok=True)
+    lifecycle_pattern.write_text(FORBIDDEN_TEXT_ASSIGNMENT + "\n", encoding="utf-8")
+    (repo / "src/core.c").parent.mkdir(parents=True)
+    (repo / "src/core.c").write_text("protected core fixture\n", encoding="utf-8")
+    (repo / "include/gabbaboy.h").parent.mkdir(parents=True)
+    (repo / "include/gabbaboy.h").write_text("protected public API fixture\n", encoding="utf-8")
+    (repo / "docs/support").mkdir(parents=True, exist_ok=True)
     (repo / "fixture").mkdir()
     (repo / READBACK_LEDGER_REL).write_text("# v0.3.0 fixture ledger\n", encoding="utf-8")
-    (repo / READBACK_LIFECYCLE_REL).write_text(FORBIDDEN_TEXT_ASSIGNMENT + "\n", encoding="utf-8")
     git(repo.parent, "init", "-q", "readback-repo")
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", "fixture: tagged support ledger")
@@ -655,13 +877,42 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
     tag_tree = git(repo, "rev-parse", "HEAD^{tree}")
     blob_oid = git(repo, "rev-parse", f"HEAD:{READBACK_LEDGER_REL}")
     git(repo, "tag", "v0.3.0")
+    (repo / "docs/release.md").write_text("approved recovery procedure fixture\n", encoding="utf-8")
+    (repo / "tests/scripts/verify-v03-dispositions.py").write_text("approved readback checker fixture\n", encoding="utf-8")
+    git(repo, "add", "docs/release.md", "tests/scripts/verify-v03-dispositions.py")
+    git(repo, "commit", "-q", "-m", "fixture: allowlisted corrective revision")
+    workflow_sha = git(repo, "rev-parse", "HEAD")
+    base_branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    git(repo, "checkout", "-q", "-b", "fixture-forbidden")
+    (repo / "src/core.c").write_text("mutated protected core fixture\n", encoding="utf-8")
+    git(repo, "add", "src/core.c")
+    git(repo, "commit", "-q", "-m", "fixture: forbidden product source change")
+    forbidden_sha = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "-q", base_branch)
 
     payload_name = "gabbaboy-core-linux-x64.tar.gz"
     payload_bytes = b"qualified fixture archive\n"
     original_digest = hashlib.sha256(payload_bytes).hexdigest()
     sums_lines = [f"{original_digest}  {payload_name}"]
     sums_asset_bytes = (sums_lines[0] + "\n").encode("utf-8")
-    receipt_asset_bytes = b"release receipt fixture bytes\n"
+    sums_sha = hashlib.sha256(sums_asset_bytes).hexdigest()
+    perf_roms = {"libbet", "tracer", "visible-demo"}
+    perf_limits_blob = git(repo, "rev-parse", f"{tag_sha}:tests/baseline/perf-gate-v1.txt")
+    perf = {
+        "schema_version": 1, "kind": "perf-gate-receipt", "source_sha": tag_sha,
+        "base_sha": "ab301aa69b1f085050fd66bf7b1378863a0821f2", "limits_blob": perf_limits_blob,
+        "ir": {name: {"base": 100, "head": [110, 110]} for name in perf_roms},
+        "digests": {name: {"base": "b" * 64, "head": ["c" * 64, "c" * 64]} for name in perf_roms},
+        "realtime_min": "201/50", "tool": {"base_build_identity": None, "head_build_identity": None},
+        "run_id": 8100, "run_attempt": 1,
+    }
+    receipt_document = {
+        "schema_version": 1, "version": "0.3.0", "tag": "v0.3.0", "source_sha": tag_sha,
+        "release_id": "7001", "draft": True, "signed": False, "notarized": False,
+        "hardware_qualified": False, "sha256sums_sha256": sums_sha,
+        "assets": [{"name": payload_name, "sha256": original_digest}], "perf_gate": perf,
+    }
+    receipt_asset_bytes = (json.dumps(receipt_document, sort_keys=True, indent=2) + "\n").encode("utf-8")
     receipt_asset_digest = hashlib.sha256(receipt_asset_bytes).hexdigest()
     inventory_assets = [
         {"name": payload_name, "id": 901, "digest": f"sha256:{original_digest}"},
@@ -684,8 +935,8 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
         "reconciliation": {"verifier": ".github/scripts/verify-published-release-assets.py",
                             "result": "PASS: published assets match", "compared_with": "pre-publish inventory",
                             "asset_count": len(api_assets)},
-        "release_run": {"workflow": ".github/workflows/release.yml", "run_id": 8001, "event": "workflow_dispatch",
-                        "retry": True, "head_sha": tag_sha, "conclusion": "success", "final_publish_job_id": 8101},
+        "release_run": {"workflow": ".github/workflows/release-please.yml", "run_id": 8001, "event": "push",
+                        "retry": False, "head_sha": tag_sha, "conclusion": "success", "final_publish_job_id": 8101},
         "attach_v02_evidence": {"run_id": 8001, "job_id": 8102, "head_sha": tag_sha, "conclusion": "success",
                                  "started_at": "2026-10-29T11:00:00Z", "completed_at": "2026-10-29T11:01:00Z",
                                  "duration_seconds": 60},
@@ -702,12 +953,95 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
     (repo / READBACK_V2_REL).write_bytes(serialise(readback))
     git(repo, "add", READBACK_V2_REL)
     git(repo, "commit", "-q", "-m", "fixture: committed published readback")
-    return {"repo": repo, "readback": readback, "head": git(repo, "rev-parse", "HEAD"), "tag_sha": tag_sha}
+    return {"repo": repo, "readback": readback, "head": git(repo, "rev-parse", "HEAD"), "tag_sha": tag_sha,
+            "workflow_sha": workflow_sha, "forbidden_sha": forbidden_sha,
+            "release_receipt_raw": receipt_asset_bytes.decode("utf-8"),
+            "workflow_ref": "refs/heads/main"}
+
+
+def retry_readback_fixture(facts: dict) -> dict:
+    """Build a retry attempt-one projection with API heads at G and downloaded product evidence at S."""
+    readback = json.loads(json.dumps(facts["readback"]))
+    repo = facts["repo"]
+    run_id, attempt = 8002, 1
+    inventory_source = readback["pre_publish_inventory_source"]
+    inventory = json.loads(inventory_source["raw"])
+    inventory.update(run_id=run_id, run_attempt=attempt)
+    inventory_raw = json.dumps(inventory, sort_keys=True, indent=2) + "\n"
+    inventory_source.update(run_id=run_id, run_attempt=attempt,
+                           artifact_name=f"release-pre-publish-inventory-{run_id}-{attempt}",
+                           artifact_id=8202, file_sha256=hashlib.sha256(inventory_raw.encode("utf-8")).hexdigest(),
+                           raw=inventory_raw)
+    attach_started, attach_completed = "2026-10-29T11:00:00Z", "2026-10-29T11:01:00Z"
+    final_started, final_completed = "2026-10-29T11:01:00Z", "2026-10-29T11:02:00Z"
+    workflow_sha = facts["workflow_sha"]
+    run_path = ".github/workflows/release-please.yml"
+    readback["release_run"] = {
+        "workflow": run_path, "run_id": run_id, "event": "workflow_dispatch", "retry": True,
+        "head_sha": workflow_sha, "conclusion": "success", "final_publish_job_id": 8113,
+    }
+    readback["attach_v02_evidence"] = {
+        "run_id": run_id, "job_id": 8112, "head_sha": workflow_sha, "conclusion": "success",
+        "started_at": attach_started, "completed_at": attach_completed, "duration_seconds": 60,
+    }
+    readback["publication_source"] = {
+        "schema_version": 1, "source_sha": facts["tag_sha"], "workflow_sha": workflow_sha,
+        "workflow_ref": facts["workflow_ref"],
+        "dispatch": {"workflow": "release-please.yml", "ref": "main", "inputs": {
+            "retry": True, "tag_name": "v0.3.0", "source_sha": facts["tag_sha"], "release_id": "7001",
+        }},
+        "run_api": {
+            "id": run_id, "run_attempt": attempt, "path": run_path, "event": "workflow_dispatch",
+            "head_branch": "main", "head_sha": workflow_sha, "status": "completed", "conclusion": "success",
+            "repository_full_name": "szTheory/gabbaboy",
+        },
+        "attach_job_api": {
+            "id": 8112, "run_id": run_id, "head_sha": workflow_sha,
+            "name": "attach-qualified-v02-evidence", "status": "completed", "conclusion": "success",
+            "started_at": attach_started, "completed_at": attach_completed,
+        },
+        "final_job_api": {
+            "id": 8113, "run_id": run_id, "head_sha": workflow_sha,
+            "name": "final-downloaded-byte-gate-and-publish", "status": "completed", "conclusion": "success",
+            "started_at": final_started, "completed_at": final_completed,
+        },
+        "release_receipt_raw": facts["release_receipt_raw"],
+    }
+    return readback
 
 
 def run_cli(repo: pathlib.Path, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, "-I", str(SCRIPT), "--repo", str(repo), *args], capture_output=True, text=True,
                           timeout=120, check=False)
+
+
+def bind_retry_receipt_bytes(readback: dict, raw_text: str) -> None:
+    """Keep API, downloaded receipt, and pre-publish inventory digests consistent in a semantic negative."""
+    raw = raw_text.encode("utf-8")
+    digest = hashlib.sha256(raw).hexdigest()
+    readback["publication_source"]["release_receipt_raw"] = raw_text
+    readback["release_receipt"]["sha256"] = digest
+    receipt_asset = next(item for item in readback["assets"] if item["name"] == "release-receipt.json")
+    receipt_asset.update(size=len(raw), digest=f"sha256:{digest}")
+    inventory_assets = readback["pre_publish_inventory"]
+    inventory_receipt = next(item for item in inventory_assets if item["name"] == "release-receipt.json")
+    inventory_receipt["digest"] = f"sha256:{digest}"
+    source_row = readback["pre_publish_inventory_source"]
+    inventory = json.loads(source_row["raw"])
+    inventory["assets"] = inventory_assets
+    inventory_raw = json.dumps(inventory, sort_keys=True, indent=2) + "\n"
+    source_row["raw"] = inventory_raw
+    source_row["file_sha256"] = hashlib.sha256(inventory_raw.encode("utf-8")).hexdigest()
+
+
+def set_retry_heads(readback: dict, head: str) -> None:
+    """Bind all API and legacy control-plane head projections to one candidate head."""
+    readback["publication_source"]["workflow_sha"] = head
+    readback["release_run"]["head_sha"] = head
+    readback["attach_v02_evidence"]["head_sha"] = head
+    readback["publication_source"]["run_api"]["head_sha"] = head
+    readback["publication_source"]["attach_job_api"]["head_sha"] = head
+    readback["publication_source"]["final_job_api"]["head_sha"] = head
 
 
 def require_python_310_grammar(source: str) -> None:
@@ -973,10 +1307,94 @@ def self_test_readback() -> int:
         if committed_positive.stdout != repeated_positive.stdout:
             raise SystemExit("self-test positive output is not byte-identical across repeated runs")
 
+        retry_original = retry_readback_fixture(facts)
+        (repo / READBACK_V2_REL).write_bytes(serialise(retry_original))
+        git(repo, "add", READBACK_V2_REL)
+        git(repo, "commit", "-q", "-m", "fixture: successful main retry at attempt one")
+        retry_head = git(repo, "rev-parse", "HEAD")
+        retry_positive = invoke(retry_head)
+        expect_pass("explicit main retry", retry_positive)
+        repeated_retry = invoke(retry_head)
+        expect_pass("repeated explicit main retry", repeated_retry)
+        if retry_positive.stdout != repeated_retry.stdout:
+            raise SystemExit("retry self-test output is not byte-identical across repeated runs")
+
+        def retry_case(label: str, code: str, mutate) -> None:
+            nonlocal controls
+            variant = json.loads(json.dumps(retry_original))
+            mutate(variant)
+            (repo / READBACK_V2_REL).write_bytes(serialise(variant))
+            git(repo, "add", READBACK_V2_REL)
+            git(repo, "commit", "-q", "--allow-empty", "-m", f"fixture: reject retry {label}")
+            head = git(repo, "rev-parse", "HEAD")
+            expect_reject(label, invoke(), code)
+            expect_reject(label + " at rev", invoke(head), code)
+
+        retry_case("missing publication source", "receipt-invalid",
+                   lambda value: value.pop("publication_source"))
+        retry_case("wrong run head", "readback-publication-source",
+                   lambda value: value["publication_source"]["run_api"].update(head_sha=facts["tag_sha"]))
+        retry_case("all workflow heads substituted with S", "readback-publication-source",
+                   lambda value: set_retry_heads(value, facts["tag_sha"]))
+        retry_case("workflow G contains forbidden product change", "readback-publication-source",
+                   lambda value: set_retry_heads(value, facts["forbidden_sha"]))
+        retry_case("wrong retry source", "readback-publication-source",
+                   lambda value: value["publication_source"].update(source_sha="0" * 40))
+        retry_case("missing explicit dispatch inputs", "readback-publication-source",
+                   lambda value: value["publication_source"].update(dispatch={"workflow": "release-please.yml", "ref": "main"}))
+        retry_case("false dispatch retry", "readback-publication-source",
+                   lambda value: value["publication_source"]["dispatch"]["inputs"].update(retry=False))
+        retry_case("wrong dispatch tag", "readback-publication-source",
+                   lambda value: value["publication_source"]["dispatch"]["inputs"].update(tag_name="v0.2.1"))
+        retry_case("wrong dispatch ref", "readback-publication-source",
+                   lambda value: value["publication_source"]["dispatch"].update(ref="v0.3.0"))
+        retry_case("wrong workflow ref", "readback-publication-source",
+                   lambda value: value["publication_source"].update(workflow_ref="refs/tags/v0.3.0"))
+        retry_case("pull request retry event", "readback-publication-source",
+                   lambda value: value["publication_source"]["run_api"].update(event="pull_request"))
+        retry_case("foreign repository", "readback-publication-source",
+                   lambda value: value["publication_source"]["run_api"].update(repository_full_name="attacker/gabbaboy"))
+        retry_case("failed final job", "readback-publication-source",
+                   lambda value: value["publication_source"]["final_job_api"].update(conclusion="failure"))
+        retry_case("skipped attacher job", "readback-publication-source",
+                   lambda value: value["publication_source"]["attach_job_api"].update(conclusion="skipped"))
+        retry_case("wrong attempt binding", "readback-publication-source",
+                   lambda value: value["publication_source"]["run_api"].update(run_attempt=2))
+        retry_case("wrong job run id", "readback-publication-source",
+                   lambda value: value["publication_source"]["attach_job_api"].update(run_id=9999))
+        retry_case("wrong attacher duration", "readback-publication-source",
+                   lambda value: value["attach_v02_evidence"].update(duration_seconds=61))
+        retry_case("raw receipt byte drift", "readback-receipt-mismatch",
+                   lambda value: value["publication_source"].update(
+                       release_receipt_raw=value["publication_source"]["release_receipt_raw"] + " "))
+
+        def wrong_raw_source(value):
+            raw = json.loads(value["publication_source"]["release_receipt_raw"])
+            raw["source_sha"] = "0" * 40
+            bind_retry_receipt_bytes(value, json.dumps(raw, sort_keys=True, indent=2) + "\n")
+
+        retry_case("raw receipt wrong source", "readback-receipt-mismatch", wrong_raw_source)
+
+        def wrong_perf_source(value):
+            raw = json.loads(value["publication_source"]["release_receipt_raw"])
+            raw["perf_gate"]["source_sha"] = "0" * 40
+            bind_retry_receipt_bytes(value, json.dumps(raw, sort_keys=True, indent=2) + "\n")
+
+        retry_case("embedded perf source drift", "readback-receipt-mismatch", wrong_perf_source)
+
+        def duplicate_raw_key(value):
+            raw = value["publication_source"]["release_receipt_raw"]
+            duplicated = raw.replace('"tag": "v0.3.0",', '"tag": "v0.3.0",\n  "tag": "v0.3.0",', 1)
+            bind_retry_receipt_bytes(value, duplicated)
+
+        retry_case("duplicate raw receipt key", "readback-receipt-mismatch", duplicate_raw_key)
+
         case("tag sha mismatch", "readback-tag-mismatch", lambda value: value.update(tag_sha="0" * 40))
         case("tag tree mismatch", "readback-tag-mismatch", lambda value: value.update(tag_tree="0" * 40))
         case("another tag", "readback-tag-mismatch", lambda value: value.update(tag="v0.3.9"))
         case("draft release", "receipt-invalid", lambda value: value.update(is_draft=True))
+        case("normal push alternate workflow head", "readback-workflow-head-mismatch",
+             lambda value: value["release_run"].update(head_sha=facts["workflow_sha"]))
         case("added asset", "readback-assets-mismatch",
              lambda value: value["assets"].append({"name": "unexpected.bin", "id": 999, "size": 1,
                                                    "digest": "sha256:" + "1" * 64}))
