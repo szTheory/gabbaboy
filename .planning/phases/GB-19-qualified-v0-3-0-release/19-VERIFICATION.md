@@ -1,9 +1,10 @@
 ---
 phase: GB-19-qualified-v0-3-0-release
-verified: 2026-10-31T15:31:30Z
+verified: 2026-10-31T16:33:10Z
 status: gaps_found
 score: "87/88 must-haves verified"
 covered_files:
+  - .gitattributes
   - .github/ci-timeouts.json
   - .github/scripts/release-evidence-lifecycle.sh
   - .github/scripts/verify-published-release-assets.py
@@ -43,6 +44,7 @@ covered_files:
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-SCHEMA-VALIDATION-RESCOPE.md
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-SECURITY.md
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-VALIDATION.md
+  - .planning/phases/GB-19-qualified-v0-3-0-release/19-WINDOWS-READBACK-WIRING-RESCOPE.md
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-release-change-row.json
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-release-readback.json
   - .release-please-manifest.json
@@ -105,29 +107,38 @@ covered_files:
   - tests/test_cgb_profile.c
   - tests/test_state_codec.c
   - tests/test_state_fork.c
-covered_digest: "v4:sha256:2c8fceb5aa64811da04cdc5a3587e22caeefa706f75c3bb4cf18a58af87799a5"
+covered_digest: "v4:sha256:84313e24fd43a093dc64800bb5c0e997d4145c49dd8cb18598561e54432ccb31"
 behavior_unverified: 0
 overrides_applied: 0
+re_verification:
+  previous_status: gaps_found
+  previous_score: "87/88 must-haves verified"
+  gaps_closed: []
+  gaps_remaining:
+    - "D-28 PR B publication/readback closure is merged and the post-squash phase-boundary handoff is complete."
+  regressions: []
 gaps:
   - truth: "D-28 PR B publication/readback closure is merged and the post-squash phase-boundary handoff is complete."
     status: failed
-    reason: "The local candidate contains the readback and closure changes, but PR B has not been pushed, opened, exact-head qualified, or guarded-squashed; the post-squash boundary SHA and owner-workspace adoption therefore do not exist yet."
+    reason: "PR137 exists, but no fresh exact-head native Windows/all protected CI result for the D135 candidate is recorded. The earlier red Windows jobs at 524ba3f7 are preserved and are not qualification; guarded squash, actual main-boundary checks and owner-workspace adoption remain pending."
     artifacts:
       - path: .planning/phases/GB-19-qualified-v0-3-0-release/19-07-PLAN.md
         issue: "The D-28 terminal PR B and post-squash boundary steps are still pending."
       - path: .planning/phases/GB-19-qualified-v0-3-0-release/19-07-SUMMARY.md
         issue: "The recorded route to phase verification follows PR B completion."
+      - path: .planning/phases/GB-19-qualified-v0-3-0-release/19-WINDOWS-READBACK-WIRING-RESCOPE.md
+        issue: "The local D135 correction is qualified, but fresh exact-head native Windows and protected CI remain required before the planned guarded merge."
     missing:
-      - "Push and open PR B for the exact candidate, require all exact-head protected checks under the production duplicate-check guard, perform only the guarded squash of the reviewed revision, verify the actual main boundary and negative-base predicate, then adopt the owner workspace and record the continuation boundary SHA before stopping at /gsd-verify-work 19."
+      - "Refresh PR137 to the approved D135 candidate and obtain fresh exact-head Windows and all required protected CI checks under the production duplicate-check guard; then perform only the planned guarded squash, verify the actual main boundary and negative-base predicate, adopt the owner workspace, and record the continuation boundary SHA before stopping at /gsd-verify-work 19."
 ---
 
 # Phase 19: Qualified v0.3.0 Release Verification Report
 
 **Phase Goal:** v0.3.0 is published from its exact tag with save-state and host-contract claims scoped by model, corpus and platform, and every receipt bound to that tag; release hardening happens before the tag, not after.
-**Verified:** 2026-10-31T15:31:30Z
+**Verified:** 2026-10-31T16:33:10Z
 **Status:** gaps_found
-**Re-verification:** No — initial verification.
-**Candidate:** implementation HEAD 17920163182d4af453c3255b20913be0c08a9e54; the verification report is the only untracked file.
+**Re-verification:** Yes — same audit refreshed after D135; the original PR B boundary gap remains.
+**Candidate:** implementation HEAD c47059959d54402ad3f327a023aa9e6e2eba9a6f; c470 records the D135 independent checks and phase evidence updates.
 
 ## Goal Achievement
 
@@ -141,7 +152,7 @@ gaps:
 
 **Roadmap score:** 3/3. **Combined score:** 87/88 truths verified (85 plan truths plus 3 roadmap truths; no plan truth was dropped for restating a broader criterion).
 
-The required artifacts query passed all 25 artifacts. The full captured final-head qualification is for this exact clean candidate: 1,707 CTest cases, zero failures and zero skips; installed test inventory, release player package, separate Debug linkage, extracted package bytes and no-input negative check all passed. We inspected the recorded run and logs rather than rerunning the full suite.
+The original required-artifact query passed all 25 declared artifacts. Full core/player/package qualification at implementation HEAD 17920163182d4af453c3255b20913be0c08a9e54 recorded 1,707 CTest cases with zero failures or skips, plus the installed inventory, player package, separate Debug linkage, extracted package bytes and no-input negative check. D135 changes only tests/CMakeLists.txt and .gitattributes; compiled core, validator and fixture sources remain byte-identical through c470. At e46023c53bdff9e7ac44fcfb33a9e237ceec0430, the focused D135 configure/build/install and 23 affected CTests passed without skips. c470 only records fresh rechecks and phase evidence. The full suite was not rerun.
 
 ### Plan-Level Truths
 
@@ -153,7 +164,7 @@ The required artifacts query passed all 25 artifacts. The full captured final-he
 | 19-04 | 10/10 | Candidate and nightly gates call the trusted rehearsal-source checker with the PR head, merge time and attempt jobs; version-PR gate calls the immutable version-window checker. Actual H/W/R1/R2 captures satisfy the release sequence. |
 | 19-05 | 12/12 | Same-source performance artifact upload/download and receipt validation are wired; retry, exact ratio, host smoke, published readback, sourced pre-publish inventory and privacy controls pass. Actual receipt source is S. |
 | 19-06 | 12/12 | Reviewed release content, notes/adoption controls and operational preflight are evidenced. The frozen 19-06 SUMMARY remains its historical pre-merge halt as required; actual PR A #133 closure, renewed preflight, exact CI/performance evidence and regeneration are recorded in 19-07 and captured facts, so the frozen status was not treated as current operational evidence. |
-| 19-07 | 12/13 | The tag, readback, ledger freeze, boundary snapshots and REL-01 trace are present and verified. The remaining D-28 PR B exact-head/guarded-squash/boundary handoff is the single failed truth below. |
+| 19-07 | 12/13 | The tag, readback, ledger freeze, boundary snapshots and REL-01 trace are present and verified. The D135 Windows caller/EOL correction passes its local affected checks; new-head native Windows/all protected CI and the D-28 guarded-squash/boundary handoff remain pending as the single failed truth below. |
 | 19-08 | 6/6 | The original missing-notes failure is preserved; approved recovery kept the same tag and release identity; the one retry and actual G/S distinction are recorded. No retry renewal, tag move, new release or additional corrective merge occurred. |
 
 All 13 plan prohibitions were checked separately: 12 test-tier negative requirements are exercised by the final passing suite; the single judgment-tier stop instruction was preserved (this verifier did not run verify-work, a milestone audit or another phase). The non-inferable retry backstop is supported by observed API/Git facts: the sole retry published the same release ID and exact existing tag without moving either.
@@ -162,7 +173,15 @@ All 13 plan prohibitions were checked separately: 12 test-tier negative requirem
 
 The goal's general rule that release hardening happens before tagging was not literally true for the bounded recovery and readback/schema repairs. The first post-tag release run 41148606886 failed because the generated notes were absent. Owner approvals D130-D134 then authorized specific readback/run-link corrections, diagnosis of the same-draft association drift, one conditional tag-only restoration and the already-authorized retry, two UTF-8 entrypoint conversions, and the exact seven-path schema validation repair with fresh tests and independent reviews. The actual read-only preflight TypeError happened before any write and is preserved as a failure, not represented as a successful preflight.
 
-The captured history shows one tag-only restoration of the existing draft association with the body unchanged, then one original retry on workflow G; release 429606490 was published from S with 22 reconciled assets. The phase candidate's diff from S changes no core, public API, state format/pins, release workflow, timeouts, policy authority or performance limits. D134 changes are limited to the approved validators/tests. This is the recorded narrow owner-approved exception path; it is not evidence that no post-tag work occurred or a general risk waiver.
+The captured history shows one tag-only restoration of the existing draft association with the body unchanged, then one original retry on workflow G; release 429606490 was published from S with 22 reconciled assets. The phase candidate's diff from S changes no core, public API, state format/pins, release workflow, timeouts, policy authority or performance limits. D134 changes are limited to the approved validators/tests. D135 is a separate owner-approved repair to the final readback test caller and the exact helper checkout representation; it changes no validator, release workflow, product behavior, release asset or release state. No release action or retry was performed for D135. These are recorded narrow exceptions, not evidence that no post-tag work occurred or a general risk waiver.
+
+### D135 Windows Readback Wiring
+
+PR137's earlier exact-head Windows jobs at 524ba3f7 exposed two strict-gate failures: the readback CTest supplied a drive-absolute filesystem path to an immutable Git reader, and Windows CRLF checkout bytes failed the recovery helper's exact Git-blob guard. Those original failures remain preserved and were not rerun unchanged.
+
+The owner-approved D135 patch changes exactly .gitattributes and tests/CMakeLists.txt from the reviewed PR head. The CTest now derives a repository-relative Git path from PROJECT_SOURCE_DIR and GBB_LIVE_PHASES_DIR while retaining the same immutable --rev, tag, exit/output contract, planning label and timeout. The root-anchored EOL rule applies only to the byte-compared published-asset helper. The immutable reader still refuses missing, wrong-root, drive-absolute and traversal paths; the helper and raw-byte guard are unchanged, and the APU unpinned EOL negative stays outside the rule. The forced-autocrlf baseline/fixed true/false controls show the conversion is handled without weakening byte identity.
+
+The approved patch matches the isolated prototype and digest recorded in the D135 rescope. Captured configure/build/install and focused CTest evidence at e46023c53bdff9e7ac44fcfb33a9e237ceec0430 records 23 affected tests passing with no skips. Four current documentation, summary-coverage and planning-label checks also pass after the D135 evidence documents were appended. All compiled and validator sources remain byte-identical to the prior fully qualified implementation; c470 contains only recheck and phase-evidence updates. This is local portability evidence, not a new native Windows result. Fresh exact-head Windows and other required protected checks still have to pass before the existing guarded PR B squash.
 
 ### Required Artifacts
 
@@ -193,6 +212,8 @@ The captured history shows one tag-only restoration of the existing draft associ
 | tests/scripts/verify-release-lifecycle.py | Post-tag lifecycle replay | ✓ VERIFIED | Present; lifecycle and post-tag endpoint controls pass. |
 | tests/data/release-api/v030-draft-association-restoration.json | Same-draft tag restoration case | ✓ VERIFIED | Present; restoration and refusal controls pass. |
 | docs/release.md | Operator release/host contract instructions | ✓ VERIFIED | Present; required phrases and scoped claims pass. |
+| tests/CMakeLists.txt | Windows-safe immutable readback test path | ✓ VERIFIED | D135 derives a repository-relative Git path from the configured phase root while preserving revision, tag, result contract, label and timeout. |
+| .gitattributes | Exact helper bytes across Windows checkout | ✓ VERIFIED | D135 pins only the byte-checked published-asset helper to LF; the APU unpinned EOL negative remains outside the rule. |
 
 ### Key Link Verification
 
@@ -217,6 +238,8 @@ The link-query utility mechanically verified four direct links. The other source
 | actual release notes body | tagged S changelog/support text | Adoption checker and tag-pinned ledger link | ✓ WIRED | Actual recovery evidence and unchanged adoption checker validate the published copy. |
 | retry workflow G | product source S | Explicit dispatch and raw receipts/readback | ✓ WIRED | Current readback distinguishes G from S and validates both. |
 | corrective PR G | 19-07 publication/readback continuation | Same draft, sole retry and readback | PARTIAL | Retry and readback are complete; PR B's guarded close and boundary handoff remain pending. |
+| v03_readback CTest | verify-v03-dispositions.py immutable Source.read path | Repository-relative Git path derived from PROJECT_SOURCE_DIR and configured phase root | ✓ WIRED | D135 keeps --rev, --tag, exit/output, label and timeout intact; local affected CTest passes. |
+| Exact LF attribute for published-asset helper | Recovery test byte comparison against immutable Git blob | Root-anchored one-file EOL rule | ✓ WIRED | The helper and byte guard are unchanged; forced-autocrlf baseline/fixed controls and local recovery tests pass. |
 
 ### Data-Flow Trace
 
@@ -230,14 +253,15 @@ The link-query utility mechanically verified four direct links. The other source
 
 | Behavior | Command or evidence | Result | Status |
 |---|---|---|---|
-| Full final local/player qualification at exact candidate | Captured final-head qualification proof, CTest XML/logs, installed inventory and player package logs | 1,707 executed tests; zero failure/skip; package checks pass | ✓ PASS |
+| Full core/player qualification of unchanged implementation | Captured qualification at HEAD 17920163182d4af453c3255b20913be0c08a9e54 | 1,707 executed tests; zero failure/skip; installed/player/package checks pass; implementation bytes are unchanged by D135 | ✓ PASS |
+| D135 Windows readback wiring and checkout representation | Captured configure/build/install and focused CTest at e46023c53bdff9e7ac44fcfb33a9e237ceec0430 | 23 affected readback, recovery, EOL-negative, contract and installed tests passed; no skips | ✓ PASS |
 | Committed readback reflects actual publication | verify-v03-dispositions.py --check-readback at candidate with tag v0.3.0 | v03-readback pass, 22 assets | ✓ PASS |
 | Scoped claims and ledger are bound to S | verify-support-ledger.py --check-claims and --check-ledger at S | 9 claims/10 non-claims; 107 static cases, 132 source inputs | ✓ PASS |
 | Version window is closed after release | verify-version-window.py --check-tracked | Inactive at exact candidate; four managed inputs checked | ✓ PASS |
 | D-134 malformed inventory/schema controls refuse bad input | verify-published-release-assets.py --self-test | Five positives; 18 recovery refusals; six schema refusals | ✓ PASS |
 | Tag/release and asset inventory remain unchanged in latest saved capture | Read-only API capture at 2026-10-31T15:13:37Z | Main G and tag S match; all 22 assets unchanged; zero open PRs/issues | ✓ PASS |
 
-No full suite was rerun during this verification; the cited run is already recorded for the exact candidate. No live release mutation was performed.
+No full suite was rerun. The unchanged implementation is covered by the prior complete run; D135 is covered by the focused e460 run and c470 recheck records. No fresh native Windows result is claimed. No live release mutation was performed.
 
 ### Probe Execution
 
@@ -264,9 +288,9 @@ None. This is a release/infrastructure phase with no visual or hardware claim to
 
 ### Gaps Summary
 
-The release outcome itself meets all three roadmap success criteria: exact-tag rehearsal, appropriately scoped support claims, and source-bound published receipts/readback. The bounded D130-D134 post-tag exceptions are documented above and preserve the tag and product tree. Phase 19 is not ready to route to verify-work yet because the local PR B candidate has not passed exact-head protected checks, been guarded-squashed, or completed its post-merge boundary/workspace handoff. The latest saved remote snapshot confirms no PR had been opened at capture time. No user decision is needed; the parent agent owns the next operational step and must not claim that PR B or its hosted checks are complete before they actually are.
+The release outcome itself meets all three roadmap success criteria: exact-tag rehearsal, appropriately scoped support claims, and source-bound published receipts/readback. The bounded D130-D135 post-tag exceptions are documented above and preserve the tag and product tree. PR137 is open from the earlier candidate, but no fresh exact-head native Windows/all protected CI result for the D135 candidate is provided. The earlier Windows failures remain preserved and are not reused as qualification. The guarded squash, actual main boundary and owner-workspace handoff remain pending. No user decision is needed; the parent agent owns the next operational step and must not claim future CI or merge completion.
 
 ---
 
-_Verified: 2026-10-31T15:31:30Z_  
+_Verified: 2026-10-31T16:33:10Z_
 _Verifier: the agent (gsd-verifier)_
