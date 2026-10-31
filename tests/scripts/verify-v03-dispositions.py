@@ -99,6 +99,7 @@ PRE_PUBLISH_SOURCE_KEYS = {"run_id", "run_attempt", "artifact_name", "artifact_i
 FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY")
 FORBIDDEN_TEXT_ASSIGNMENT = r'''FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY")'''
 SHA256_LINE = re.compile(r"^([0-9a-f]{64})  ([^/\\\s]+)$")
+PERF_DIGEST_PIN = re.compile(rb"(?m)^rom\.([a-z0-9-]+)\.digest=([0-9a-f]{16})$")
 READBACK_V2_REL = "fixture/19-release-readback.json"
 READBACK_LIFECYCLE_REL = "tests/scripts/verify-release-lifecycle.py"
 READBACK_LEDGER_REL = "docs/support/v0.3.0.md"
@@ -189,6 +190,14 @@ def git_tree(repo: pathlib.Path, commit: str) -> str | None:
     done = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", f"{commit}^{{tree}}"],
                           capture_output=True, text=True, check=False)
     return done.stdout.strip() if done.returncode == 0 and HEX40.match(done.stdout.strip()) else None
+
+
+def perf_digest_pins(raw: bytes) -> dict[str, str]:
+    rows = PERF_DIGEST_PIN.findall(raw)
+    pins = {name.decode("ascii"): digest.decode("ascii") for name, digest in rows}
+    if len(pins) != len(rows) or set(pins) != {"libbet", "tracer", "visible-demo"}:
+        reject("readback-receipt-mismatch", "source S performance limits must pin each gated ROM digest exactly once")
+    return pins
 
 
 def check_retry_publication_source(source: Source, readback: dict, release_run: dict, attach: dict,
@@ -336,6 +345,12 @@ def check_retry_publication_source(source: Source, readback: dict, release_run: 
                                  capture_output=True, text=True, check=False)
     if limits_blob.returncode != 0 or limits_blob.stdout.strip() != perf["limits_blob"]:
         reject("readback-receipt-mismatch", "embedded perf receipt policy pin differs from source S")
+    limits_bytes = subprocess.run(["git", "-C", str(repo), "show",
+                                   f"{source_sha}:tests/baseline/perf-gate-v1.txt"],
+                                  capture_output=True, check=False)
+    if limits_bytes.returncode != 0:
+        reject("readback-receipt-mismatch", "source S performance limits bytes are unavailable")
+    digest_pins = perf_digest_pins(limits_bytes.stdout)
     for rom in perf_roms:
         ir = perf["ir"][rom]
         digests = perf["digests"][rom]
@@ -343,10 +358,11 @@ def check_retry_publication_source(source: Source, readback: dict, release_run: 
                 or ir["base"] < 1 or not isinstance(ir.get("head"), list) or len(ir["head"]) != 2 \
                 or any(type(item) is not int or item < 1 for item in ir["head"]) \
                 or not isinstance(digests, dict) or set(digests) != {"base", "head"} \
-                or not isinstance(digests.get("base"), str) or not HEX64.fullmatch(digests["base"]) \
+                or not isinstance(digests.get("base"), str) or not re.fullmatch(r"[0-9a-f]{16}", digests["base"]) \
                 or not isinstance(digests.get("head"), list) or len(digests["head"]) != 2 \
-                or any(not isinstance(item, str) or not HEX64.fullmatch(item) for item in digests["head"]):
-            reject("readback-receipt-mismatch", f"embedded perf receipt has a malformed {rom} binding")
+                or any(not isinstance(item, str) or not re.fullmatch(r"[0-9a-f]{16}", item) for item in digests["head"]) \
+                or digests["base"] != digest_pins[rom] or digests["head"] != [digest_pins[rom]] * 2:
+            reject("readback-receipt-mismatch", f"embedded perf receipt {rom} digest differs from the pinned workload")
     for identity in perf["tool"].values():
         if identity is not None and (not isinstance(identity, str) or not HEX64.fullmatch(identity)):
             reject("readback-receipt-mismatch", "embedded perf receipt carries an invalid tool build identity")
@@ -884,6 +900,12 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
         target = repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(f"protected fixture {path}\n", encoding="utf-8")
+    limits_path = "tests/baseline/perf-gate-v1.txt"
+    limits = subprocess.run(["git", "-C", str(ROOT), "show", f"a3f3390451f9a893aa47475f15a722ada86daaa6:{limits_path}"],
+                            capture_output=True, check=False)
+    if limits.returncode != 0:
+        raise SystemExit("self-test cannot read the immutable S performance limits")
+    (repo / limits_path).write_bytes(limits.stdout)
     lifecycle_pattern = repo / READBACK_LIFECYCLE_REL
     lifecycle_pattern.parent.mkdir(parents=True, exist_ok=True)
     production_lifecycle = ROOT / READBACK_LIFECYCLE_REL
@@ -925,13 +947,24 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
     sums_sha = hashlib.sha256(sums_asset_bytes).hexdigest()
     perf_roms = {"libbet", "tracer", "visible-demo"}
     perf_limits_blob = git(repo, "rev-parse", f"{tag_sha}:tests/baseline/perf-gate-v1.txt")
+    fixture_digest_pins = perf_digest_pins(limits.stdout)
+    perf_ir = {
+        "libbet": {"base": 239287537, "head": [262017211, 262017211]},
+        "tracer": {"base": 233590054, "head": [255901403, 255901403]},
+        "visible-demo": {"base": 240007926, "head": [262724206, 262724206]},
+    }
     perf = {
         "schema_version": 1, "kind": "perf-gate-receipt", "source_sha": tag_sha,
         "base_sha": "ab301aa69b1f085050fd66bf7b1378863a0821f2", "limits_blob": perf_limits_blob,
-        "ir": {name: {"base": 100, "head": [110, 110]} for name in perf_roms},
-        "digests": {name: {"base": "b" * 64, "head": ["c" * 64, "c" * 64]} for name in perf_roms},
-        "realtime_min": "201/50", "tool": {"base_build_identity": None, "head_build_identity": None},
-        "run_id": 8100, "run_attempt": 1,
+        "ir": perf_ir,
+        "digests": {name: {"base": fixture_digest_pins[name], "head": [fixture_digest_pins[name]] * 2}
+                    for name in perf_roms},
+        "realtime_min": "244138671875/27914573824",
+        "tool": {
+            "base_build_identity": "00ab5ac891ee6b9ce6c80ad1fa30d303199f6c9cf026656e070688f4a55d66c3",
+            "head_build_identity": "b7dbf3ed5b613562690f15f0caea464c83c1a28ff72e5ff838251de174d37a65",
+        },
+        "run_id": 41148606861, "run_attempt": 1,
     }
     receipt_document = {
         "schema_version": 1, "version": "0.3.0", "tag": "v0.3.0", "source_sha": tag_sha,
@@ -1408,6 +1441,27 @@ def self_test_readback() -> int:
             bind_retry_receipt_bytes(value, json.dumps(raw, sort_keys=True, indent=2) + "\n")
 
         retry_case("embedded perf source drift", "readback-receipt-mismatch", wrong_perf_source)
+
+        def wrong_perf_digest_width(value):
+            raw = json.loads(value["publication_source"]["release_receipt_raw"])
+            raw["perf_gate"]["digests"]["tracer"]["base"] = "4c7a57ff3d50d22"
+            bind_retry_receipt_bytes(value, json.dumps(raw, sort_keys=True, indent=2) + "\n")
+
+        retry_case("producer FNV digest width", "readback-receipt-mismatch", wrong_perf_digest_width)
+
+        def wrong_perf_digest_pin(value):
+            raw = json.loads(value["publication_source"]["release_receipt_raw"])
+            raw["perf_gate"]["digests"]["tracer"]["base"] = "0000000000000000"
+            bind_retry_receipt_bytes(value, json.dumps(raw, sort_keys=True, indent=2) + "\n")
+
+        retry_case("producer digest differs from pinned workload", "readback-receipt-mismatch", wrong_perf_digest_pin)
+
+        def wrong_perf_repeat(value):
+            raw = json.loads(value["publication_source"]["release_receipt_raw"])
+            raw["perf_gate"]["digests"]["tracer"]["head"][1] = "0000000000000000"
+            bind_retry_receipt_bytes(value, json.dumps(raw, sort_keys=True, indent=2) + "\n")
+
+        retry_case("producer head digests differ", "readback-receipt-mismatch", wrong_perf_repeat)
 
         def wrong_raw_asset_id(value):
             raw = json.loads(value["publication_source"]["release_receipt_raw"])
