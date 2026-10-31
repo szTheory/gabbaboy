@@ -282,6 +282,10 @@ TRUNCATE_ARRAYS = {"assets": 2, "workflow_runs": 2, "jobs": 8, "artifacts": 2, "
 OMITTED = "[omitted by the capture sanitizer]"
 SOURCES_DIGEST = re.compile(r"(?m)^- captured\.json sha256: ([0-9a-f]{64})$")
 RECOVERY_SOURCES_DIGEST = re.compile(r"(?m)^- `v030-notes-failure\.json` sha256: ([0-9a-f]{64})$")
+RECOVERY_SOURCES_SIZE = re.compile(r"(?m)^- bytes: ([0-9]+) \(bound: ([0-9]+)\)$")
+RECOVERY_SOURCES_SECTION = re.compile(
+    r"(?ms)^## v0\.3\.0 first post-tag failure \(additive fixture\)\n(.*?)(?=^## |\Z)"
+)
 RECOVERY_TAG = "v0.3.0"
 RECOVERY_SOURCE_SHA = "a3f3390451f9a893aa47475f15a722ada86daaa6"
 RECOVERY_RELEASE_ID = 429606490
@@ -496,7 +500,12 @@ def validate_recovery_fixture(raw: bytes, sources: bytes, *, verify_digest: bool
         raise Reject("recovery-eol", "recovery fixture must be LF-terminated UTF-8 JSON")
     _recovery_privacy(raw)
     sources_text = sources.decode("utf-8", errors="strict")
-    recorded = RECOVERY_SOURCES_DIGEST.findall(sources_text)
+    sections = RECOVERY_SOURCES_SECTION.findall(sources_text)
+    size_rows = RECOVERY_SOURCES_SIZE.findall(sections[0]) if len(sections) == 1 else []
+    if (len(size_rows) != 1 or int(size_rows[0][0]) != len(raw)
+            or int(size_rows[0][1]) != MAX_RECOVERY_FIXTURE_BYTES):
+        raise Reject("recovery-size", "SOURCES.md recovery fixture byte count or bound differs from the captured bytes")
+    recorded = RECOVERY_SOURCES_DIGEST.findall(sections[0])
     if verify_digest and (len(recorded) != 1 or recorded[0] != sha256_bytes(raw)):
         raise Reject("recovery-digest", "SOURCES.md does not pin exactly the recovery fixture SHA-256")
     fixture = _strict_recovery_json(raw, "recovery fixture")
@@ -720,8 +729,10 @@ class RecoveryTransport:
         return "patched"
 
     def dispatch(self, request: dict) -> str:
-        if self.tag != RECOVERY_TAG or self.source_sha != RECOVERY_SOURCE_SHA or self.draft is False \
-                or self.published_at is not None or self.body != self.repaired_body:
+        if (self.release_id != RECOVERY_RELEASE_ID or self.tag != RECOVERY_TAG
+                or self.source_sha != RECOVERY_SOURCE_SHA or self.draft is not True
+                or self.prerelease is not False or self.published_at is not None or self.assets != []
+                or self.body != self.repaired_body):
             raise Reject("recovery-dispatch-state", "retry dispatch requires the same unpublished repaired draft at S")
         if self.dispatch_count:
             raise Reject("recovery-dispatch-duplicate", "only one explicit retry dispatch is allowed")
@@ -826,6 +837,10 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         controls += _recovery_expect_reject("fixture digest drift", "recovery-digest",
             lambda: validate_recovery_fixture(fixture_raw,
                 sources.replace(sha256_bytes(fixture_raw).encode("ascii"), b"0" * 64, 1)))
+        size_line = f"- bytes: {len(fixture_raw)} (bound: {MAX_RECOVERY_FIXTURE_BYTES})".encode("ascii")
+        wrong_size_line = f"- bytes: {len(fixture_raw) + 1} (bound: {MAX_RECOVERY_FIXTURE_BYTES})".encode("ascii")
+        controls += _recovery_expect_reject("fixture byte-count drift", "recovery-size",
+            lambda: validate_recovery_fixture(fixture_raw, sources.replace(size_line, wrong_size_line, 1)))
         privacy_doc = json.loads(json.dumps(fixture))
         privacy_doc["reviewed_body"]["text"] += " /Users/private"
         controls += _recovery_expect_reject("local path leak", "recovery-sanitize",
@@ -888,6 +903,22 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         wrong_request = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
         wrong_request.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")})
         wrong_request.dispatch(dict(RECOVERY_DISPATCH))
+        for label, mutate in (
+            ("release id changed after repair", lambda state: setattr(state, "release_id", RECOVERY_RELEASE_ID + 1)),
+            ("tag changed after repair", lambda state: setattr(state, "tag", "v0.2.1")),
+            ("source changed after repair", lambda state: setattr(state, "source_sha", "0" * 40)),
+            ("draft cleared after repair", lambda state: setattr(state, "draft", False)),
+            ("prerelease enabled after repair", lambda state: setattr(state, "prerelease", True)),
+            ("publication time changed after repair",
+             lambda state: setattr(state, "published_at", "2026-10-31T00:00:00Z")),
+            ("asset added after repair", lambda state: setattr(state, "assets", [{"id": 1}])),
+            ("body changed after repair", lambda state: setattr(state, "body", b"competing body")),
+        ):
+            drifted = RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"])
+            drifted.patch(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")})
+            mutate(drifted)
+            controls += _recovery_expect_reject(label, "recovery-dispatch-state",
+                lambda drifted=drifted: drifted.dispatch(dict(RECOVERY_DISPATCH)))
         for label, mutate in (
             ("wrong workflow", lambda request: request.update(workflow="release.yml")),
             ("wrong ref", lambda request: request.update(ref=RECOVERY_TAG)),

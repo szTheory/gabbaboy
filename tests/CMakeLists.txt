@@ -2975,7 +2975,7 @@ set(GBB_UAT_EXTRA_ARGS)
 add_test(NAME expect_exit_min_count_rejects_lower
   COMMAND ${CMAKE_COMMAND} -DGBB_CMD=${CMAKE_COMMAND}$<SEMICOLON>-E$<SEMICOLON>echo$<SEMICOLON>controls=19
     -DGBB_EXPECT_CODE=0 -DGBB_EXPECT_REGEX=controls
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=39
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=20
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(expect_exit_min_count_rejects_lower PROPERTIES
   PASS_REGULAR_EXPRESSION "controls=19 is below the minimum 20" TIMEOUT 60)

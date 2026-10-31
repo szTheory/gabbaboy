@@ -100,7 +100,7 @@ FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Z
 FORBIDDEN_TEXT_ASSIGNMENT = r'''FORBIDDEN_TEXT = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\Users|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_|BEGIN [A-Z ]*PRIVATE KEY")'''
 SHA256_LINE = re.compile(r"^([0-9a-f]{64})  ([^/\\\s]+)$")
 READBACK_V2_REL = "fixture/19-release-readback.json"
-READBACK_LIFECYCLE_REL = ".github/scripts/verify-release-lifecycle.py"
+READBACK_LIFECYCLE_REL = "tests/scripts/verify-release-lifecycle.py"
 READBACK_LEDGER_REL = "docs/support/v0.3.0.md"
 FINAL_ASSET_NAMES = {"SHA256SUMS", "release-receipt.json"}
 VALIDATION_ROWS = ("34-1", "34-2", "35-2", "35-3", "36-1", "36-2", "36-3")
@@ -554,6 +554,9 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
     if not is_retry and (release_run.get("head_sha") != readback["tag_sha"]
                          or attach.get("head_sha") != readback["tag_sha"]):
         reject("readback-workflow-head-mismatch", "normal push runs must remain bound to the exact tag source")
+    if not is_retry and (release_run.get("workflow") != ".github/workflows/release-please.yml"
+                         or release_run.get("event") != "push"):
+        reject("readback-workflow-identity", "normal readback must come from the release-please push workflow")
 
     source_row = readback.get("pre_publish_inventory_source")
     if not isinstance(source_row, dict) or set(source_row) != PRE_PUBLISH_SOURCE_KEYS \
@@ -883,7 +886,10 @@ def build_readback_fixture(base: pathlib.Path) -> dict:
         target.write_text(f"protected fixture {path}\n", encoding="utf-8")
     lifecycle_pattern = repo / READBACK_LIFECYCLE_REL
     lifecycle_pattern.parent.mkdir(parents=True, exist_ok=True)
-    lifecycle_pattern.write_text(FORBIDDEN_TEXT_ASSIGNMENT + "\n", encoding="utf-8")
+    production_lifecycle = ROOT / READBACK_LIFECYCLE_REL
+    if not production_lifecycle.is_file():
+        raise SystemExit(f"self-test cannot find production lifecycle checker at {READBACK_LIFECYCLE_REL}")
+    lifecycle_pattern.write_bytes(production_lifecycle.read_bytes())
     (repo / "src/core.c").parent.mkdir(parents=True)
     (repo / "src/core.c").write_text("protected core fixture\n", encoding="utf-8")
     (repo / "include/gabbaboy.h").parent.mkdir(parents=True)
@@ -1423,6 +1429,12 @@ def self_test_readback() -> int:
         case("draft release", "receipt-invalid", lambda value: value.update(is_draft=True))
         case("normal push alternate workflow head", "readback-workflow-head-mismatch",
              lambda value: value["release_run"].update(head_sha=facts["workflow_sha"]))
+        case("normal push arbitrary workflow", "readback-workflow-identity",
+             lambda value: value["release_run"].update(workflow=".github/workflows/arbitrary.yml"))
+        case("normal pull request event", "readback-workflow-identity",
+             lambda value: value["release_run"].update(event="pull_request"))
+        case("normal dispatch with retry false", "readback-workflow-identity",
+             lambda value: value["release_run"].update(event="workflow_dispatch"))
         case("added asset", "readback-assets-mismatch",
              lambda value: value["assets"].append({"name": "unexpected.bin", "id": 999, "size": 1,
                                                    "digest": "sha256:" + "1" * 64}))
