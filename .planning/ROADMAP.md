@@ -5,7 +5,7 @@
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1, shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
 - ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1, shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
 - ✅ **v0.3 Save States & Host Contract** — Phases 16–19, 35 plans, shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
-- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; no phase started.
+- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 is planned but execution has not started.
 
 ## v0.4 — Evidence Floor
 
@@ -35,7 +35,10 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 **Plans**: 3 plans — capped at 3; this is a tune-up, not a general debt-closure phase.
 
 Plans:
+**Wave 1**
 - [ ] 20-01-PLAN.md — Versioned admission records, independent identity pins and shared exact product policy.
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 20-02-PLAN.md — Actual core install, archive and release notice boundary with mutation controls.
 - [ ] 20-03-PLAN.md — Actual macOS player package and notice boundary with mutation controls.
 
@@ -113,6 +116,6 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 - At most four phases and about 40 plans; at most 12 plans in any phase. Phase 20 is capped at three plans. These are scope caps, not acceptance evidence.
 - Every deliverable has an automated check and a meaningful negative control. New reusable checkers live in tests/scripts/, use immutable commit facts where appropriate, and enter CTest when created. Automated UAT closure uses the existing shared closure tool; voluntary play is not a release gate.
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
-- Both automatic-advance flags remain false. The owner approved this roadmap on 2026-10-31. No phase plan or execution has started.
+- Both automatic-advance flags remain false. The owner approved this roadmap on 2026-10-31; Phase 20 planning is complete and no phase execution has started.
 
-Milestone initialization is complete. The next phase is **20 — Fixture Admission Tune-up**. Exact next command: **/gsd-plan-phase 20**, only when the owner chooses to begin planning. Stop at the milestone-initialization handoff; do not start Phase 20 automatically.
+Phase 20 planning and independent plan verification are complete. The next workflow stage is **Phase 20 execution — Fixture Admission Tune-up**. Exact next command: **/gsd-execute-phase 20**, only when the owner chooses to begin execution. Stop at this phase boundary; do not start Phase 20 or advance to Phase 21 automatically.

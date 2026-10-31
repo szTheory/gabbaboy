@@ -241,24 +241,21 @@ Extend this pattern with a focused Phase 20 synthetic self-test and register the
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
 | A1 | [ASSUMED] A synthetic self-test for schema completeness, coordinated baseline mutation, and package path/digest inventories can be kept below 30 seconds without invoking a build, installer, network, or external package. | Validation Architecture | A longer checker would not serve as a fast task-level check; split the pure synthetic control from actual staged/extracted package validation. |
-| A2 | [ASSUMED] The planning/execution branch can provide a stable phase-base commit identity independently of the admission records being tested. The exact pin location is left to the plan. | Immutable identity pin | A pin that is recomputed from current `HEAD` or mutable manifest fields would accept coordinated changes and fail the primary adversarial requirement. |
+| A2 | [RESOLVED] Plan 20-01 fixes the legacy base commit in cmake/FixtureAdmissionPolicy.json and uses a separate literal full reviewed admission.commit for each later candidate. | Immutable identity pin | Checks reject missing/unreachable commits or blobs; pins are never refreshed from current HEAD or mutable manifest/notices. This is identity evidence, not legal clearance. |
 
 ## Open Questions
 
-1. **Where should the independent phase-base pin live and how should the checker receive it?**
+1. **RESOLVED — Where should the independent phase-base pin live and how should the checker receive it?**
    - What we know: Existing CMake and Python checks resolve/read immutable commit objects; a current-head-at-check-time lookup alone would not anchor expectations independently. [VERIFIED: cmake/ResolveContractRevision.cmake:1-23; tests/scripts/state_boundary.py:1-9,103-115]
-   - What's unclear: Whether the phase will pin a baseline commit in checker code, a checked policy file, or a CTest/CI-supplied immutable revision.
-   - Recommendation: Use one explicit, full immutable baseline identity captured before fixture edits and outside the manifest/notice values under test; fail closed on missing/unresolvable pin. The plan should specify its update/review rule and add the coordinated-mutation control.
+   - Decision (20-01 Tasks 1–2): Pin the legacy original identities to literal full base commit 7cc6495e64f3645caa120e7458f754585b788985 in cmake/FixtureAdmissionPolicy.json. Each later candidate has a separate admission.commit containing one literal full reviewed admission commit outside its mutable manifest/notices. Read immutable blobs and reject missing/unreachable pins or blobs. Pin updates require reviewed exact identity/evidence changes; coordinated byte/manifest/notice rewrites against the unchanged pin fail. These checks establish identity, not legal permission.
 
-2. **Should the small product inventory be derived or stored?**
+2. **RESOLVED — Should the small product inventory be derived or stored?**
    - What we know: The manifest stays the rights/provenance source of truth; the context permits an exact product inventory if checked against manifests and actual bytes. [VERIFIED: 20-CONTEXT.md:26-28]
-   - What's unclear: Whether current CMake install rules and Python archive checks can consume one derivation directly without obscuring package-specific destination paths.
-   - Recommendation: Derive source digest values from each manifest and the independent baseline; keep only destination-path mapping in one compact package policy. Reject missing, extra, duplicate, or stale entries.
+   - Decision (20-01 Task 3; 20-02/20-03 consumers): Use one cmake/FixtureAdmissionPolicy.json for package destination mappings and the independent baseline pin. Derive fixture hashes from the existing per-fixture manifests plus immutable baseline blobs; do not duplicate rights metadata. Compare exact actual staged/extracted paths/digests, rejecting missing, extra, duplicate or stale members. Temporary full stage inventories verify extraction identity and cannot authorize new allowed fixture content.
 
-3. **How to phrase the existing notice's product claim?**
+3. **RESOLVED — How to phrase the existing notice's product claim?**
    - What we know: `THIRD_PARTY_NOTICES.md` says product packages “remain fixture-free” and then lists the three original project-authored fixtures they carry. [VERIFIED: THIRD_PARTY_NOTICES.md:13-15; exact phrase quoted here]
-   - What's unclear: Whether the phase wants to revise that paragraph along with the checks.
-   - Recommendation: Clarify it to say binary products contain only the exact original smoke fixtures and notices, while controlled game/diagnostic fixture bytes remain excluded. Keep the table and root MIT terms unchanged.
+   - Decision (20-02 Task 2): Update the source notice claim to state that binary products include only the exact original smoke fixtures and their notices, while controlled game/diagnostic fixture bytes stay excluded. Keep source-archive rules distinct and preserve historical digest rows, accepted fixture dispositions and root MIT terms. The wording does not claim that machine validation legally clears any component grant.
 
 ## Environment Availability
 
