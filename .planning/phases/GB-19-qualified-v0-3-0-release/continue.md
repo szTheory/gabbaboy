@@ -1,3 +1,9 @@
+# Current approved continuation — D136 consumer-test marker repair
+
+The owner approved the exact one-file repair in [19-CONSUMER-MARKER-RESCOPE.md](19-CONSUMER-MARKER-RESCOPE.md), answering “Yeah, I give you approval. Follow your recommendations.” The patch is applied on the same PR137 branch; affected source-bound checks and fresh independent code/security rechecks are next. Keep current6c99ff0b Linux sanitizer failure historical, preserve/triage remaining current CI outcomes before pushing, then require fresh exact-head Linux sanitizer/Windows/all protected CI and the production guarded merge gate. No owner action is pending for this scope.
+
+The agent acts next within Phase19 execution. Exact continuation if interrupted: `/gsd-execute-phase 19`. After the original single guarded PR B squash, immutable actual boundary proof and preservation/adoption of owner workspace, stop at `/gsd-verify-work 19` without running it, auditing the milestone or starting another phase. No release/tag/body/asset action or retry renewal; preserve SUMMARIES, authority/rehearsal refs and both false auto flags. Earlier entries below are historical.
+
 # Phase 19 continuation
 
 Current stage: **Phase 19 execution, plan 19-06 — final qualification after the approved ucrt64 resolver continuation**. D-121 and D-122 are approved; D-121's bounded correction and review allowance is now consumed. Code commit `dedeb22a5528b0ec6bb3cb4845a535303f66ccd4` has passing local controls, and focused review/security reconciliation at `28aee3d570b0f3b233b413880611d5fe27f567e2` found no new defect. Actual Windows CI and final preflight remain pending.

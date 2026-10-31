@@ -5,8 +5,8 @@ milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
 status: executing
-stopped_at: D135 local/code/security rechecks clear; refresh final audit and require new-head protected CI
-last_updated: "2026-10-31T16:15:41Z"
+stopped_at: D136 marker repair approved and applied; affected tests and fresh independent rechecks next
+last_updated: "2026-10-31T17:07:25.203648+00:00"
 last_activity: 2026-10-31
 last_activity_desc: "D135 preserves strict guards; current-head affected checks and independent reviews pass; new-head hosted qualification next"
 state_head: d61a25ea54364e0e26ef89bb7467c72089361d49
@@ -30,13 +30,13 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 ## Current Position
 
-Phase: **19 — Qualified v0.3.0 Release, final PR B qualification**. v0.3.0 is published with valid22-asset readback, immutable tag/product S and actual workflow G. No additional live release action is needed or authorized.
+Phase: **19 — Qualified v0.3.0 Release, approved final PR B repair**. v0.3.0 remains published with reconciled22-asset readback; immutable tag/product S and workflow G remain unchanged. PR137 is still OPEN and unmerged at the earlier6c99ff0b candidate.
 
-D135's exact two-file Windows repair is applied. It preserves the byte guard and every assertion/budget while passing a repository-relative readback Git path and pinning only the helper's checkout to LF. Current-head affected/EOL/installed checks pass; fresh independent code review is clean and security preserves all41 mitigations. Original524ba3f7 Windows and dependent failures remain recorded and are not reused as qualification. The compiled/validator implementation remains identical to the fully qualified17920163 core/player source; only checkout/test-caller configuration changed.
+D135 passed both native Windows jobs, native Linux/macOS and the macOS player package. The PR Linux sanitizer shard then exposed an existing readiness race in the private consumer interruption-test marker. Its failed run is preserved and is not qualification. Remaining current jobs must be captured and triaged before a new push.
 
-The agent acts next: refresh the same final goal audit/fingerprint for the approved source change, push the new reviewed revision to PR137, require fresh actual Windows/all protected checks, then perform the single planned guarded squash and immutable actual boundary/handoff. Those hosted and merge gates are not claimed complete in this candidate snapshot. No user action or approval is pending. All SUMMARIES, especially frozen19-06, remain unchanged after fingerprinting.
+The owner approved D136's exact one-file repair in [19-CONSUMER-MARKER-RESCOPE.md](phases/GB-19-qualified-v0-3-0-release/19-CONSUMER-MARKER-RESCOPE.md). The pinned patch is applied on the same PR branch. It atomically publishes complete marker JSON and adds a deterministic regression without changing assertions or deadlines. The isolated prototype passes both full consumer halves and rejects the exact old writer; affected current-source checks and fresh independent code/security rechecks are next. Native Linux sanitizer qualification still requires fresh hosted CI.
 
-After qualified CI/merge and the post-squash handoff, the next owner-selected stage is **Phase 19 — Qualified v0.3.0 Release, verification**, exact command `/gsd-verify-work 19`. Do not run it, audit the milestone or start another phase automatically. Both automatic-advance flags remain false. Preserve authority and cited rehearsal branches. Local continuation while qualification is active remains `/gsd-execute-phase 19`.
+The agent acts next to qualify/review the approved repair, refresh the same goal audit, push the reviewed revision, require every exact-head protected check, and complete the original guarded PR B merge and immutable actual boundary/workspace handoff. No owner action or approval is pending. Continue the same Phase19 with `/gsd-execute-phase 19` if interrupted. Stop after execution at `/gsd-verify-work 19`; do not run verification, a milestone audit or another phase automatically. Both automatic-advance flags stay false; all SUMMARIES and authority/rehearsal refs remain preserved.
 
 Prior stage: **Phase 18 verification (verify-work)**. [18-UAT.md](phases/GB-18-player-save-slots-and-host-contract/18-UAT.md) closes 73/73 deliverables automatically: zero human checkpoints, `verify-uat-closure.py` with 21 controls. [18-VERIFICATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VERIFICATION.md) re-verified `passed` 4/4 at the final code head `abd8ceed`. [18-SECURITY.md](phases/GB-18-player-save-slots-and-host-contract/18-SECURITY.md) has `threats_open: 0` (33/33 closed, AR-18-01). [18-VALIDATION.md](phases/GB-18-player-save-slots-and-host-contract/18-VALIDATION.md) is Nyquist-compliant. Review-fix round 2 of 2 fixed IN-01..IN-09, so all 15 findings are `fixed`. Verification also found and fixed `test_budget` (`135c6cc5`), `planning_labels` (`70a29b29`) and the hosted-only `contract_rev_wiring` CMake 3.x format gap (`abd8ceed`; LESSONS GB-GSD-030, GB-CI-013). Full suite 1678/1678 at `abd8ceed`. Exact-head CI on PR #132 at `abd8ceed`: 41 pass, 0 fail, 3 skips confirmed covered (`planning-checks` runs only on planning-only changes; `macos-player-package` passed on the PR run). Pre-existing player-build linkage debt is RM-031, a Phase 19 entry item. Next stage: **Phase 19 — Qualified v0.3.0 Release, discussion**. Command: `/gsd-discuss-phase 19`, run only when the owner chooses. Phase 19 entry blockers: RM-027, WR-C03, the `candidate-performance` re-citation, and RM-031. Both automatic advance flags stay false.
 
