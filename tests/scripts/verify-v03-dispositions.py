@@ -80,9 +80,6 @@ RECOVERY_ALLOWED_PATHS = {
     "tests/expected-tests.txt",
     "tests/scripts/verify-v03-dispositions.py",
     "docs/release.md",
-    ".planning/phases/GB-19-qualified-v0-3-0-release/19-08-PLAN.md",
-    ".planning/phases/GB-19-qualified-v0-3-0-release/19-POST-TAG-FAILURE.md",
-    ".planning/phases/GB-19-qualified-v0-3-0-release/COVERAGE.md",
 }
 RECOVERY_CRITICAL_PATHS = (
     ".github/workflows/release.yml", ".github/workflows/release-please.yml",
@@ -567,6 +564,8 @@ def check_readback_v2(source: Source, readback, tag: str, repo: pathlib.Path, re
             or not isinstance(attach.get("completed_at"), str) or not attach["completed_at"].strip() \
             or type(attach.get("duration_seconds")) is not int or attach["duration_seconds"] < 0:
         reject("receipt-invalid", "attach_v02_evidence must identify a successful attacher job")
+    if not is_retry and attach["run_id"] != release_run["run_id"]:
+        reject("readback-attacher-run-mismatch", "normal attacher must belong to the selected release run")
     if not is_retry and (release_run.get("head_sha") != readback["tag_sha"]
                          or attach.get("head_sha") != readback["tag_sha"]):
         reject("readback-workflow-head-mismatch", "normal push runs must remain bound to the exact tag source")
@@ -1483,6 +1482,8 @@ def self_test_readback() -> int:
         case("draft release", "receipt-invalid", lambda value: value.update(is_draft=True))
         case("normal push alternate workflow head", "readback-workflow-head-mismatch",
              lambda value: value["release_run"].update(head_sha=facts["workflow_sha"]))
+        case("normal attacher belongs to another run", "readback-attacher-run-mismatch",
+             lambda value: value["attach_v02_evidence"].update(run_id=value["release_run"]["run_id"] + 1))
         case("normal push arbitrary workflow", "readback-workflow-identity",
              lambda value: value["release_run"].update(workflow=".github/workflows/arbitrary.yml"))
         case("normal pull request event", "readback-workflow-identity",

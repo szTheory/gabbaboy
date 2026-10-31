@@ -546,8 +546,9 @@ notes correction.
 For the captured v0.3.0 failure, product source **S** is
 `a3f3390451f9a893aa47475f15a722ada86daaa6`. Build the repair from the exact
 `## [0.3.0]` section in `S:CHANGELOG.md`, preserving its UTF-8 bytes and
-replacing only `[support ledger](docs/support/v0.3.0.md)` with
-`[support ledger](https://github.com/szTheory/gabbaboy/blob/v0.3.0/docs/support/v0.3.0.md)`.
+replacing only the URL `docs/support/v0.3.0.md` in the single `support ledger`
+link with `https://github.com/szTheory/gabbaboy/blob/v0.3.0/docs/support/v0.3.0.md`.
+Keep the link label and every other byte unchanged.
 The original section SHA-256 is
 `187fb676dc1717e6582aa16f27a26f3932c29f29b5049aa3d59ecebdb934a4be`; the
 repaired section SHA-256 is
