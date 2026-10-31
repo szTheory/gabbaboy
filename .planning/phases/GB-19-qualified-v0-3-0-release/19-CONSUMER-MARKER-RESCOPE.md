@@ -47,3 +47,8 @@ Stop after Phase19 execution at `/gsd-verify-work 19`. Do not run verification, 
 D135 explicitly authorized only .gitattributes and tests/CMakeLists.txt. This existing consumer checker is outside that scope. AGENTS.md requires: “At most 2 review-fix rounds and 1 gap round per phase. An unresolved correctness or security finding forces a rescope, never a seed.” The allowance is exhausted; this proposal requests only the one-file remedy and its required requalification.
 
 Recommendation: approve this bounded one-file repair on PR137. The alternative is to leave closure stopped with the published release unchanged. No risk acceptance, new plan/gap slot or additional live release operation is requested.
+
+
+## Original candidate terminal triage
+
+All six current6c99ff0b runs finished at attempt1. Push CI and both fixture runs succeeded; PR CI failed only the reproduced consumer-marker race and its required-native aggregate. Three preview producer gates explicitly refused that same failed PR CI; the preview aggregate failed accordingly. The non-version gate was intentionally skipped. No unrelated failure was identified, no unchanged run was retried and no merge was attempted. Full all-page run/job snapshot is in hosted-monitor/prb/20261031T171431Z; the concise record is prb-current-failure/terminal-triage.json under ignored posttag-recovery evidence. These old outcomes are preserved, not qualification of the repaired revision.

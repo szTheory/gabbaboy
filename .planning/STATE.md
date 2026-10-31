@@ -5,7 +5,7 @@ milestone_name: Save States & Host Contract
 current_phase: 19
 current_phase_name: Qualified v0.3.0 Release
 status: executing
-stopped_at: D136 marker repair approved and applied; affected tests and fresh independent rechecks next
+stopped_at: D136 local tests and independent code/security rechecks clear; final audit refresh then new-head CI
 last_updated: "2026-10-31T17:07:25.203648+00:00"
 last_activity: 2026-10-31
 last_activity_desc: "D135 preserves strict guards; current-head affected checks and independent reviews pass; new-head hosted qualification next"
@@ -32,9 +32,9 @@ See: [PROJECT.md](PROJECT.md) (updated 2026-10-24)
 
 Phase: **19 — Qualified v0.3.0 Release, approved final PR B repair**. v0.3.0 remains published with reconciled22-asset readback; immutable tag/product S and workflow G remain unchanged. PR137 is still OPEN and unmerged at the earlier6c99ff0b candidate.
 
-D135 passed both native Windows jobs, native Linux/macOS and the macOS player package. The PR Linux sanitizer shard then exposed an existing readiness race in the private consumer interruption-test marker. Its failed run is preserved and is not qualification. Remaining current jobs must be captured and triaged before a new push.
+D135 passed both native Windows jobs, native Linux/macOS and the macOS player package. The PR Linux sanitizer shard then exposed an existing readiness race in the private consumer interruption-test marker. Its failed run is preserved and is not qualification. All six old-head runs are terminal and triaged: push CI/fixtures pass, PR sanitizer marker error fails with dependent aggregates/preview refusal; no unrelated failure was found. No unchanged rerun or merge occurred.
 
-The owner approved D136's exact one-file repair in [19-CONSUMER-MARKER-RESCOPE.md](phases/GB-19-qualified-v0-3-0-release/19-CONSUMER-MARKER-RESCOPE.md). The pinned patch is applied on the same PR branch. It atomically publishes complete marker JSON and adds a deterministic regression without changing assertions or deadlines. The isolated prototype passes both full consumer halves and rejects the exact old writer; affected current-source checks and fresh independent code/security rechecks are next. Native Linux sanitizer qualification still requires fresh hosted CI.
+The owner approved D136's exact one-file repair in [19-CONSUMER-MARKER-RESCOPE.md](phases/GB-19-qualified-v0-3-0-release/19-CONSUMER-MARKER-RESCOPE.md). The pinned patch is applied on the same PR branch. It atomically publishes complete marker JSON and adds a deterministic regression without changing assertions or deadlines. The isolated prototype passes both full consumer halves and rejects the exact old writer; all25 affected current-source tests and fresh independent code/security rechecks are clean. Native Linux sanitizer qualification still requires fresh hosted CI.
 
 The agent acts next to qualify/review the approved repair, refresh the same goal audit, push the reviewed revision, require every exact-head protected check, and complete the original guarded PR B merge and immutable actual boundary/workspace handoff. No owner action or approval is pending. Continue the same Phase19 with `/gsd-execute-phase 19` if interrupted. Stop after execution at `/gsd-verify-work 19`; do not run verification, a milestone audit or another phase automatically. Both automatic-advance flags stay false; all SUMMARIES and authority/rehearsal refs remain preserved.
 

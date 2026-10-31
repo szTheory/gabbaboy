@@ -33,3 +33,8 @@ No open review finding remains. Full final local/player/consumer qualification, 
 ## D-135 portability recheck
 
 The owner approved the exact two-file repair for the actual Windows CI failures. At e46023c5 the fresh independent recheck is clean: the CTest supplies a repository-relative Git path to the unchanged immutable reader; the exact helper LF rule preserves byte identity without matching the APU unpinned negative. No new finding or change outside the approved implementation diff was found. Existing WR-01/WR-02 fixes and WR-03 withdrawal remain unchanged. Current-head affected/EOL/installed checks pass; fresh actual Windows and all protected checks remain required before the same PR137 squash. No source guard or assertion is waived, no further approval is pending.
+
+
+## D-136 readiness-marker recheck
+
+The owner approved the pinned one-file repair. At e292db8c the fresh independent code recheck is clean: completed private JSON is atomically published, both original readers and interruption/cleanup/retry assertions remain intact, and the new deterministic regression runs in both existing static partitions. No new correctness/security/quality issue was found. The25 selected CTests pass without skips after revision-bound rebuild/install. Existing WR-01/02 closure, WR-03 withdrawal and D135 evidence remain historical and unchanged. Fresh native Linux sanitizer/Windows/all protected CI and the original guarded PR137 boundary are still pending; no owner approval is pending for this scope.
