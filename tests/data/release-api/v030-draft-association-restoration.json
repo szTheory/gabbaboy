@@ -1,0 +1,168 @@
+{
+  "api_version": "2022-11-28",
+  "body_only_patch": {
+    "dispatch_attempted": false,
+    "endpoint": "repos/szTheory/gabbaboy/releases/429606490",
+    "method": "PATCH",
+    "operator_run_outcome": "stopped",
+    "operator_run_sha256": "f61e586e70b9caeb8e2255674b0c7a765d5bfb7e0e6129f587a3016bd639c31e",
+    "operator_stop_reason": "release is not the same unpublished empty v0.3.0 draft",
+    "patch_exit_code": 0,
+    "patch_http_status": 200,
+    "patch_process_outcome": "success",
+    "patch_response_bytes": 3644,
+    "patch_response_release": {
+      "assets_count": 0,
+      "body_sha256": "ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784",
+      "draft": true,
+      "id": 429606490,
+      "name": "v0.3.0",
+      "prerelease": false,
+      "published_at": null,
+      "tag_name": "untagged-bff38b7645da850c79be",
+      "target_commitish": "a3f3390451f9a893aa47475f15a722ada86daaa6"
+    },
+    "patch_response_sha256": "4697bcc10c59a576d4f3bd959579ccd132fad323363ada6b848ac6e346867d84",
+    "pre_patch_release": {
+      "assets_count": 0,
+      "body_sha256": "87bb38ad38a971b08db6936e6400ac859d77b0cd9f3eff3da63ae0fb47b54b06",
+      "draft": true,
+      "id": 429606490,
+      "name": "v0.3.0",
+      "prerelease": false,
+      "published_at": null,
+      "tag_name": "v0.3.0",
+      "target_commitish": "a3f3390451f9a893aa47475f15a722ada86daaa6"
+    },
+    "pre_patch_release_response_sha256": "67dd8e89c156b026b078e53a2b424698787737184db484abb85ab3385025d93d",
+    "request_bytes": 1813,
+    "request_member_names": [
+      "body"
+    ],
+    "request_sha256": "d9c7505dcc68b1e4d05b21a6870140f026dfcdecf13c44389e38c7cd2eb84967"
+  },
+  "d132_utf8_preflight": {
+    "get_count": 11,
+    "git_tag_sha": "a3f3390451f9a893aa47475f15a722ada86daaa6",
+    "main_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49",
+    "operator_outcome": "hold-no-retry",
+    "operator_reason_type": "TypeError",
+    "operator_run_sha256": "ed1df67d702b1ce6128efa920b25870a2899cda4cf9ef347cced48ef0b7c9934",
+    "patch_count": 0,
+    "release": {
+      "assets_count": 0,
+      "body_sha256": "ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784",
+      "draft": true,
+      "id": 429606490,
+      "name": "v0.3.0",
+      "prerelease": false,
+      "published_at": null,
+      "tag_name": "untagged-bff38b7645da850c79be",
+      "target_commitish": "a3f3390451f9a893aa47475f15a722ada86daaa6"
+    },
+    "release_response_sha256": "4697bcc10c59a576d4f3bd959579ccd132fad323363ada6b848ac6e346867d84"
+  },
+  "kind": "v030-draft-association-restoration",
+  "release_id": 429606490,
+  "release_projection_fields": [
+    "id",
+    "tag_name",
+    "target_commitish",
+    "name",
+    "body",
+    "draft",
+    "prerelease",
+    "published_at",
+    "assets"
+  ],
+  "repository": "szTheory/gabbaboy",
+  "schema_version": 1,
+  "source_sha": "a3f3390451f9a893aa47475f15a722ada86daaa6",
+  "tag": "v0.3.0",
+  "tag_only_restoration": {
+    "capture_hashes": {
+      "post_assets": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "post_release_list": "aa51f9a29c6ec539ca46f0b6370e0cee5cbdbe650db7ad9229c8d764741a1a6d",
+      "post_tag": "88e47d37756a481843c663e84f2d0c68c3af08fdbe905a9b49f131e10fc422b7",
+      "pre_assets": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "pre_release_list": "34203f9d011f8a4c3ef66fe30ba318aef77250114918faf93eecc60b6022f7c5",
+      "pre_tag": "88e47d37756a481843c663e84f2d0c68c3af08fdbe905a9b49f131e10fc422b7"
+    },
+    "method": "PATCH",
+    "patch_endpoint": "repos/szTheory/gabbaboy/releases/429606490",
+    "patch_exit_code": 0,
+    "patch_http_status": 200,
+    "patch_process_outcome": "success",
+    "patch_response_bytes": 3621,
+    "patch_response_release": {
+      "assets_count": 0,
+      "body_sha256": "ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784",
+      "draft": true,
+      "id": 429606490,
+      "name": "v0.3.0",
+      "prerelease": false,
+      "published_at": null,
+      "tag_name": "v0.3.0",
+      "target_commitish": "a3f3390451f9a893aa47475f15a722ada86daaa6"
+    },
+    "patch_response_sha256": "9d3f3be4a52be94c4e47848f11e67fc3a831441f1a075ea7e74b5b4fe0d8b71b",
+    "post_patch_release": {
+      "assets_count": 0,
+      "body_sha256": "ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784",
+      "draft": true,
+      "id": 429606490,
+      "name": "v0.3.0",
+      "prerelease": false,
+      "published_at": null,
+      "tag_name": "v0.3.0",
+      "target_commitish": "a3f3390451f9a893aa47475f15a722ada86daaa6"
+    },
+    "post_patch_release_response_sha256": "9d3f3be4a52be94c4e47848f11e67fc3a831441f1a075ea7e74b5b4fe0d8b71b",
+    "pre_patch_release": {
+      "assets_count": 0,
+      "body_sha256": "ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784",
+      "draft": true,
+      "id": 429606490,
+      "name": "v0.3.0",
+      "prerelease": false,
+      "published_at": null,
+      "tag_name": "untagged-bff38b7645da850c79be",
+      "target_commitish": "a3f3390451f9a893aa47475f15a722ada86daaa6"
+    },
+    "pre_patch_release_response_sha256": "4697bcc10c59a576d4f3bd959579ccd132fad323363ada6b848ac6e346867d84",
+    "readback": {
+      "assets_count": 0,
+      "assets_response_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "cli_is_draft": true,
+      "cli_is_prerelease": false,
+      "cli_release_view_sha256": "03e05fe95268f089b63283af7cc0fb1c7c6250b70f5e0a0efa6ebaa2b5ebb416",
+      "cli_tag_name": "v0.3.0",
+      "git_tag_sha": "a3f3390451f9a893aa47475f15a722ada86daaa6",
+      "main_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49",
+      "matching_release_ids": [
+        429606490
+      ],
+      "operator_adoption": "pass",
+      "operator_dispatch": "none",
+      "operator_outcome": "restored-readback-verified-no-dispatch",
+      "operator_run_sha256": "a3ea51a8f773060a80950de5337ba0f86169b00101631115e9f43914137e5867",
+      "release_list_count": 5,
+      "release_list_response_sha256": "aa51f9a29c6ec539ca46f0b6370e0cee5cbdbe650db7ad9229c8d764741a1a6d",
+      "tag_response_sha256": "88e47d37756a481843c663e84f2d0c68c3af08fdbe905a9b49f131e10fc422b7"
+    },
+    "request": {
+      "tag_name": "v0.3.0"
+    },
+    "request_bytes": 22,
+    "request_sha256": "9369228a1035720e68125af98e7758717f315c6b1124d073cb5e2abc814af72e"
+  },
+  "utf8_adoption_boundary": {
+    "api_body_json_type": "string",
+    "fixed_operator_post_readback_adoption": "pass",
+    "fixed_operator_pre_readback_adoption": "pass",
+    "pre_and_post_body_bytes_equal": true,
+    "pre_fix_operator_reason_type": "TypeError",
+    "repaired_body_utf8_sha256": "ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784"
+  },
+  "workflow_sha": "d61a25ea54364e0e26ef89bb7467c72089361d49"
+}

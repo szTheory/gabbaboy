@@ -105,6 +105,75 @@ only `[support ledger](docs/support/v0.3.0.md)` with
 produces SHA-256
 `ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784`.
 
+## v0.3.0 draft tag-association restoration (additive fixture)
+
+- `v030-draft-association-restoration.json` sha256: db51ac4f33395dac233520f78d8a2b91c680594ceafd3f5df296adf1f7689f05
+- bytes: 6774 (bound: 262144)
+- format: UTF-8 JSON, sorted keys, two-space indent, LF line endings
+- API version: `X-GitHub-Api-Version: 2022-11-28`
+
+This is a bounded projection of actual GitHub API observations for the existing
+unpublished release ID `429606490`; it is not a response-shape mock. The fixture
+stores the nine release fields read by the restoration guard (`id`, `tag_name`,
+`target_commitish`, `name`, `body`, `draft`, `prerelease`, `published_at`, and
+`assets`). It replaces body text with its UTF-8 SHA-256 and the empty asset array
+with its count. No raw release body, request body, user object, response envelope,
+local file name, credential or personal identifier is copied into this fixture.
+
+The first observation comes from the retained body-only metadata update. Its
+request had only the `body` member (1813 bytes; SHA-256
+`d9c7505dcc68b1e4d05b21a6870140f026dfcdecf13c44389e38c7cd2eb84967`). The
+pre-PATCH release response SHA-256 was
+`67dd8e89c156b026b078e53a2b424698787737184db484abb85ab3385025d93d`. The actual
+PATCH returned HTTP 200 with response SHA-256
+`4697bcc10c59a576d4f3bd959579ccd132fad323363ada6b848ac6e346867d84`; its tag
+changed from `v0.3.0` to `untagged-bff38b7645da850c79be` as the repaired body
+was installed. The recorded operator stopped with
+`release is not the same unpublished empty v0.3.0 draft` before dispatch.
+
+The D132 read-only follow-up made eleven GETs and no PATCH, then stopped with a
+`TypeError` at the UTF-8 adoption boundary. Its sanitized release-response
+digest is the same actual drift state above; its run-record SHA-256 is
+`ed1df67d702b1ce6128efa920b25870a2899cda4cf9ef347cced48ef0b7c9934`.
+
+The D133 restoration request was exactly `{"tag_name":"v0.3.0"}` with final LF
+(22 bytes; SHA-256
+`9369228a1035720e68125af98e7758717f315c6b1124d073cb5e2abc814af72e`). The
+same-ID PATCH returned HTTP 200 with response SHA-256
+`9d3f3be4a52be94c4e47848f11e67fc3a831441f1a075ea7e74b5b4fe0d8b71b`. The
+independent GET returned the same release-response digest; the Git tag remained
+at S, the asset endpoint remained empty, the release list had one `v0.3.0` row
+for the same release ID, and the actual CLI detail view reported a draft, not a
+prerelease. The pre-restoration release-list capture SHA-256 was
+`34203f9d011f8a4c3ef66fe30ba318aef77250114918faf93eecc60b6022f7c5`; the
+post-restoration release-list capture SHA-256 was
+`aa51f9a29c6ec539ca46f0b6370e0cee5cbdbe650db7ad9229c8d764741a1a6d`. Of the
+nine guarded release fields, `tag_name` was the only field that changed; the other eight, including the repaired body digest
+`ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784`, were
+identical before and after. The operator recorded
+`restored-readback-verified-no-dispatch`, adoption pass, and dispatch `none`.
+The fixture records only this restoration readback; it contains no retry result,
+publication result, or phase-completion claim.
+
+The API exposes `body` as a JSON string while the production adoption checker
+accepts UTF-8 bytes. The captured D132 `TypeError` is retained as the regression
+case. The fixed operator's private full-main replay used the actual G/S Git
+objects and production checker with `gh` intercepted and a temporary marker;
+its report SHA-256 is
+`a9b99aec1b633fae4fd6d53d4eecfd9904937b0ab60649186ba92bd378e07bb1`. That
+private replay's simulated PATCH is not used as fixture data or counted as a
+live observation. The actual D133 operator result separately records successful
+adoption before and after restoration against the same body bytes.
+
+The fixture is an explicit allowlist projection generated from the retained
+`body-patch-G/`, `association-preflight-D132/`, and
+`association-restoration-D133/` captures. Each included response digest is the
+digest of its retained raw response bytes; other response members are omitted.
+The sanitized capture can prove the recorded one-field requests, HTTP statuses,
+same-ID state transition, nine-field comparison, empty assets, and refusal/no-
+dispatch boundaries. It cannot prove successful publication or completion of
+the separately handled retry.
+
 ## Provenance
 
 Captured 2026-10-29 by the repository's Phase 19 release-lifecycle work from the repository's own public history with

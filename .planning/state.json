@@ -1,7 +1,7 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.3 — Save States & Host Contract",
+  "milestone": "v0.3 \u2014 Save States & Host Contract",
   "phases": [
     {
       "number": "16",
@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 4 of 4 · 75% · executing"
+    "command": "/gsd-verify-work 19",
+    "label": "Verify Phase 19 after qualified execution boundary",
+    "reason": "D136 repair approved; agent completes current-source tests/reviews, fresh protected CI, guarded merge and handoff before owner-selected verification"
   },
-  "updated_at": "2026-10-29T17:03:30.208Z"
+  "updated_at": "2026-10-31T16:15:41Z"
 }

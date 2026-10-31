@@ -146,10 +146,18 @@ def maybe_test_pause(marker_path: Path, temp_root: Path, staged_prefix: Path) ->
     """A bounded, private self-test pause lets the harness interrupt a real --run."""
     marker_path.parent.mkdir(parents=True, exist_ok=True)
     staged_file_count = sum(1 for path in staged_prefix.rglob("*") if path.is_file())
-    marker_path.write_text(
-        json.dumps({"temp_root": str(temp_root), "staged_file_count": staged_file_count}) + "\n",
-        encoding="utf-8",
-    )
+    # Existence is the parent harness's ready signal; publish only complete JSON.
+    descriptor, name = tempfile.mkstemp(prefix=f".{marker_path.name}.", suffix=".tmp", dir=marker_path.parent)
+    os.close(descriptor)
+    temporary = Path(name)
+    try:
+        temporary.write_text(
+            json.dumps({"temp_root": str(temp_root), "staged_file_count": staged_file_count}) + "\n",
+            encoding="utf-8",
+        )
+        temporary.replace(marker_path)
+    finally:
+        temporary.unlink(missing_ok=True)
     deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         time.sleep(0.05)
@@ -1129,6 +1137,40 @@ class ConsumerContractTests(unittest.TestCase):
             self.assertEqual(set(results), set(LANGUAGES))
             self.assertTrue(all(item.get("build_isolated") for item in results.values()))
 
+    def test_pause_marker_is_published_only_after_complete_write(self) -> None:
+        from unittest.mock import patch
+
+        work = self.test_root / "atomic-pause-marker"
+        work.mkdir()
+        marker = work / "ready.json"
+        staged = work / "staged"
+        staged.mkdir()
+        (staged / "file.txt").write_bytes(b"staged bytes")
+        observations: list[str] = []
+
+        def split_write(path: Path, data: str, *, encoding: str) -> int:
+            # Force the scheduling points that exposed empty/partial JSON in CI.
+            with path.open("w", encoding=encoding) as stream:
+                observations.append("opened")
+                self.assertFalse(marker.exists(), "ready marker appeared before any JSON was written")
+                stream.write(data[:1])
+                stream.flush()
+                observations.append("partial")
+                self.assertFalse(marker.exists(), "ready marker appeared with partial JSON")
+                stream.write(data[1:])
+            return len(data)
+
+        def check_published(_seconds: float) -> None:
+            self.assertEqual(json.loads(marker.read_text(encoding="utf-8")),
+                             {"temp_root": str(work), "staged_file_count": 1})
+            self.assertEqual(sorted(path.name for path in work.iterdir()), ["ready.json", "staged"])
+            raise InterruptedRun("controlled-marker-check")
+
+        with patch.object(Path, "write_text", split_write), patch.object(time, "sleep", check_published):
+            with self.assertRaisesRegex(InterruptedRun, "controlled-marker-check"):
+                maybe_test_pause(marker, work, staged)
+        self.assertEqual(observations, ["opened", "partial"])
+
     def test_active_output_collision_is_rejected(self) -> None:
         output = self.test_root / "owned" / "receipt.json"
         output.parent.mkdir()
@@ -1290,6 +1332,7 @@ SELF_TEST_STATIC = frozenset({
     "test_changed_archive_does_not_match_stale_candidate_manifest",
     "test_empty_archive_with_matching_manifest_is_rejected",
     "test_active_output_collision_is_rejected",
+    "test_pause_marker_is_published_only_after_complete_write",
     "test_extract_rejects_windows_unsafe_members",
     "test_extract_accepts_nested_directories",
     "test_extract_rejects_existing_destination",

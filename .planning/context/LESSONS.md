@@ -997,3 +997,31 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** At integrated revision `d609c98fe8dfb42cccbf0d8bebe29fab6a8f34e6`, the focused CTest selection passed 15/15, including all parity and lifecycle partitions, immutable 87-ID coverage, legacy lifecycle controls/replay, `summary_coverage` and `test_budget`. Inventory/platform-filter controls passed; wrong-model/group CTest metadata mutants were refused by the emitted-marker wrapper; a pre-manifest revision was refused without worktree fallback. Independent review and exact-head Windows/macOS hosted CI remain required.
 - **Source:** Phase 19 D-123 logs and approved D-124 scope in `19-CI-PARTITION-RESCOPE.md`.
 - **Status:** Approved; local implementation and integration checks pass. Independent final review and hosted qualification pending.
+
+### GB-RELEASE-004 / 2026-10-31 / Preflight generated notes and read back every draft field before retrying publication
+
+- **Cause and evidence:** The first v0.3.0 release run at tagged source S failed before build or attachment because the generated release body omitted the required reviewed preface. After corrective source qualification, a body-only release API update returned HTTP 200 with the repaired body but also changed the same draft's tag association. The guard stopped before retry dispatch. An explicitly approved tag-only restoration kept the same release ID and body bytes; one main-head workflow retry then published the existing tag's source. This phase used its one reserved D-27 gap slot. The original failed run and the later successful retry remain separate records.
+- **Remedy:** Before a tag, exercise generated release notes through the production adoption check and a pre-tag gate. For any post-tag repair, preserve the original API response and verify the exact field-level request. Immediately reread the complete release identity, body, publication state and assets after every mutation; any unexpected field drift is a stop requiring explicit owner scope. Bind retry execution to actual workflow head G while independently binding tag, assets and receipts to product source S. Dispatch at most once and keep the failed run immutable.
+- **Applies when:** A release uses generated notes, mutates a pre-existing draft or retries an already tagged source. A successful HTTP status alone does not prove that untouched release metadata stayed unchanged.
+- **Verification:** The original notes fixture reproduces `release-notes-absence-missing`; the original tagged changelog section and exact single-link repair pass the production adoption check. `release_lifecycle_post_tag_recovery_controls`, `v03_readback_controls` and `v03_readback` pass with wrong-state, drift, duplicate-dispatch and G/S substitution negatives. Actual retry run 41205021983 completed on G, published release 429606490 from S, and its captured 22-asset readback passed. Evidence is in the 19-08 SUMMARY, `19-release-readback.json`, and ignored `build/phase19-window/release-S/published-41205021983/` captures.
+- **Source:** Phase 19 plans 19-07/19-08; original release run 41148606886 and retry run 41205021983.
+- **Status:** Adopted.
+
+### GB-GSD-031 / 2026-10-31 / Retain branches that hold immutable review authorities
+
+- **Cause and evidence:** Phase 19's frozen workflow-policy review authorities `70d3e42225c14e636876aad6697672ec08d861b3` and `2c4a66ad50b979bbfcf3bff6cf9f4e644a56d9b7` remain reachable through the retained `gsd/phase-19-window-discovery-repair` branch and full-history fetches. Deleting that branch during routine cleanup would remove the durable route to those exact reviewed objects unless they were re-anchored elsewhere.
+- **Remedy:** Keep the authority branch and full-history references through phase and milestone cleanup. Before pruning, obtain an explicit reviewed authority rebaseline, verify the replacement objects and references, and record the new route in the continuation note.
+- **Applies when:** A plan pins earlier source objects for policy, security, or regression review and those objects are not reachable from the release branch.
+- **Verification:** At the Phase 19 boundary, both full object IDs were retained and remained reachable through the repair branch; branch cleanup is deferred until an authority rebaseline is reviewed.
+- **Source:** Phase 19 D-125..D-129; `build/phase19-window/PR-B-RECOVERY-NOTES.md`.
+- **Status:** Adopted.
+
+
+### GB-RELEASE-005 / 2026-10-31 / Test schema type boundaries and adjudicate against the actual protocol
+
+- **Cause and evidence:** Python equates True and1, allowing boolean schema fields through several version1 comparisons. A non-object registry also escaped as AttributeError. Actual v0.3.0 inventories used the correct integer schema, but final review exposed missing refusal controls. An adjacent legacy performance parser accepted numeric3.0 without bypassing any source/measurement check; no exact-token contract existed there.
+- **Remedy:** At boundaries that declare exact integer representations, test booleans, floating forms, strings, nulls and arrays alongside valid integer positives. Verify error paths through the actual CLI and recompute dependent hashes in negative controls so an unrelated hash refusal cannot hide a missing type guard. Validate a review finding against the protocol before broadening a repair: equivalent integral JSON numbers alone do not establish a defect ([JSON Schema numeric semantics](https://json-schema.org/understanding-json-schema/reference/numeric)).
+- **Applies when:** Python validates versioned evidence or configuration, especially when shared helpers have distinct legacy wire contracts.
+- **Verification:** D134 source d2c0dc95 passes eight existing affected CTests, preserves all baseline assertions/timeouts and receives fresh independent code/security rechecks. Production probes reject malformed versions and incorrect workload digests; the unsupported legacy hardening finding was withdrawn with evidence.
+- **Source:**19-SCHEMA-VALIDATION-RESCOPE.md,19-REVIEW.md and19-REVIEW-DISPOSITION.md.
+- **Status:** Adopted.

@@ -1,8 +1,8 @@
 ---
 phase: GB-19-qualified-v0-3-0-release
-reviewed: 2026-10-30T13:02:21Z
+reviewed: 2026-10-31T17:11:32Z
 depth: standard
-files_reviewed: 56
+files_reviewed: 73
 files_reviewed_list:
   - .github/ci-timeouts.json
   - .github/scripts/release-evidence-lifecycle.sh
@@ -12,20 +12,29 @@ files_reviewed_list:
   - .github/scripts/verify-workflow-policy.py
   - .github/workflows/ci.yml
   - .github/workflows/libbet-repro.yml
+  - .github/workflows/preview.yml
+  - .github/workflows/release-please.yml
   - .github/workflows/release-rehearsal.yml
   - .github/workflows/release.yml
   - .github/workflows/version-pr-gate.yml
+  - .release-please-manifest.json
   - CHANGELOG.md
+  - CMakeLists.txt
+  - README.md
   - cmake/CheckContractRevWiring.cmake
   - cmake/ExpectedTests.cmake
   - cmake/ResolveContractRevision.cmake
   - docs/native-integration.md
+  - docs/preview.md
   - docs/release.md
   - docs/state-format.md
   - docs/support/unreleased.md
+  - docs/support/v0.3.0.md
   - src/core/gabbaboy.c
   - tests/CMakeLists.txt
   - tests/baseline/perf-attribution-v1.json
+  - tests/baseline/state-goldens-v1.json
+  - tests/ci/test-budget-allowlist
   - tests/cmake/ci-lanes.cmake
   - tests/cmake/host-contract.cmake
   - tests/cmake/hygiene.cmake
@@ -33,8 +42,13 @@ files_reviewed_list:
   - tests/cmake/save-formats.cmake
   - tests/data/release-api/SOURCES.md
   - tests/data/release-api/captured.json
+  - tests/data/release-api/v030-draft-association-restoration.json
+  - tests/data/release-api/v030-notes-failure.json
+  - tests/data/release-lifecycle-post-tag-coverage.json
+  - tests/data/state-compatibility.json
   - tests/data/state-forks.json
   - tests/data/support-claims-v0.3.json
+  - tests/data/workflow-policy-controls.json
   - tests/expected-tests.txt
   - tests/player/CMakeLists.txt
   - tests/scripts/run-perf-gate.sh
@@ -56,8 +70,11 @@ files_reviewed_list:
   - tests/scripts/verify-v02-consumers.py
   - tests/scripts/verify-v02-delivery.py
   - tests/scripts/verify-v02-fuzz.py
+  - tests/scripts/verify-v02-performance.py
   - tests/scripts/verify-v03-dispositions.py
   - tests/scripts/verify-version-window.py
+  - tests/scripts/verify-workflow-policy-coverage.py
+  - tests/test_cgb_profile.c
   - tests/test_state_codec.c
   - tests/test_state_fork.c
 findings:
@@ -67,63 +84,71 @@ findings:
   total: 0
 status: clean
 review_base: f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4
-review_head: dedeb22a5528b0ec6bb3cb4845a535303f66ccd4
-fix_round_delta: b33fa6bab36fc675cafd7d0cce7a874d501af88d..dedeb22a5528b0ec6bb3cb4845a535303f66ccd4
+review_head: e292db8c651e6f297ba6eb77049d2ca6f021304f
+prior_review_head: e46023c53bdff9e7ac44fcfb33a9e237ceec0430
+prior_review_report_commit: acc4049f
+post_tag_diff_base: d61a25ea54364e0e26ef89bb7467c72089361d49
+scope_resolution: degraded
+bounded_rescope_base: 0953f61951732951dcc655527655e0a5ec2d6d36
+bounded_rescope_head: d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc
+d135_rescope_base: 524ba3f7bf0614c26e00443ac6eafe162ad021ba
+d135_rescope_head: e46023c53bdff9e7ac44fcfb33a9e237ceec0430
+d136_rescope_base: 6c99ff0b908de282343a16a96aeebc9a176537e4
+d136_rescope_head: e292db8c651e6f297ba6eb77049d2ca6f021304f
 ---
 
-# Phase 19: Code Review Report — Approved Rescope Review
+# Phase GB-19: Code Review Report
 
-**Reviewed:** 2026-10-30T13:02:21Z
+**Reviewed:** 2026-10-31T17:11:32Z
 **Depth:** standard
-**Files Reviewed:** 56
+**Files Reviewed:** 73
 **Status:** clean
 
 ## Summary
 
-This continues the single bounded resolver fix/review authorized by D-121; actual Windows validation exposed an equivalent Git installation layout before that scope was complete. The original two rounds remain recorded and no counter is reset. D-122 resolves the D-09 acknowledgment. No unrelated change, limit waiver or branch-protection bypass is authorized.
+The phase-scope resolver reported `degraded` because the original task commits were not reachable after the phase changes were squashed. The initial standard-depth audit therefore used the recorded 72-file fallback union from `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4`; that full file list and the D-134/D-135 rechecks remain preserved above. This bounded D-136 recheck covers only `tests/scripts/verify-v02-consumers.py`, the single implementation path changed from `6c99ff0b908de282343a16a96aeebc9a176537e4` to current head `e292db8c651e6f297ba6eb77049d2ca6f021304f`. The file is already in the prior 73-file list. I did not repeat that audit or start an unrelated scan.
 
-This report preserves the original 56-file Phase 19 scope and prior finding dispositions. The first approved rescope review covered `41cf7cdce42b4dc6dc1dbda8cda7c3215868d3c2..8f4deeddd07ddf06f9927a1c6c571b717732b06e`; this continuation reviews the single-file follow-up `b33fa6bab36fc675cafd7d0cce7a874d501af88d..dedeb22a5528b0ec6bb3cb4845a535303f66ccd4`. It adds the `ucrt64/bin/git.exe` Git for Windows layout to the same-root Bash resolver and one positive fixture for selecting the top-level `Git/bin/bash.exe`. No unrelated source or test contract changed, and no new correctness or security defect was verified.
+The approved patch digest matches `build/prb-approved-schema.diff` (`33c3646e59618a4f68f99fed16674f5240744d4493a534f79fb53ae7d5b4325b`). The exact-integer guards now reject non-integer JSON schema values at the previously affected inventory, disposition, registry, recovery fixture, API capture, coverage manifest, and support-ledger boundaries. The policy registry validates its root type before reading fields and the production CLI emits a controlled rejection. Existing integer-schema positives remain; the new negative controls exercise booleans, floats, strings, null, arrays, and non-object roots. The recovery CTest verifies the published-asset helper's bytes against the immutable revision before invoking its self-test. The parent-provided focused CTest log records the eight affected tests passing; source inspection, rather than the test result alone, supports closure of the original findings.
 
-This review does not claim Windows CI success. The actual hosted `windows-2022` `workflow_policy_controls` run remains required to prove the native path handling and process launch.
+The earlier stale CTest marker failure (expected 62 controls while the corrected self-test measures 72) remains recorded in `build/phase19-window/posttag-recovery/schema-rescope-prep/initial-ctest-marker-mismatch.md`; it was corrected by raising the existing exact marker. The initial review's erroneous inclusion of `verify-v03-dispositions.py:328` is expressly excluded: that embedded performance receipt check already required `type(perf.get("schema_version")) is int`, and this recheck confirmed it remains strict. The original reproduction is retained at `build/prb-review-reproduction.json`.
 
-## Prior Findings and Dispositions
+The D-135 patch contains exactly the approved `.gitattributes` and `tests/CMakeLists.txt` changes; its computed two-path diff digest matches `fa768f81a6cb57157b9815f91cec689d4a03c33048b5123f13f1c1306b64aa66`. The readback CTest now derives a repository-relative path from `PROJECT_SOURCE_DIR` and `GBB_LIVE_PHASES_DIR`; the unchanged `Source.read` path validates it as a clean Git path and reads from the supplied immutable `--rev`. The call preserves the same `--rev`, `--tag`, exit/output contract, label and timeout. The single root-anchored `.gitattributes` entry pins only the helper compared against its immutable Git blob. Its exact-byte guard and helper source are unchanged; `git check-attr` reports `text` and `eol=lf` for that helper, while the rule does not overlap the APU `.src` negative fixture. The fixed line-ending attribute preserves the blob comparison instead of weakening it.
 
-The prior findings remain resolved as documented in [Review-Fix Round 1](https://github.com/szTheory/gabbaboy/blob/33d3d63d1a079e6c4ce72b863e25033cc80c43de/.planning/phases/GB-19-qualified-v0-3-0-release/19-REVIEW.md) and [Review-Fix Round 2](https://github.com/szTheory/gabbaboy/blob/634a4c4ffa8ae0a6e4646628faf241ebd616ea0a/.planning/phases/GB-19-qualified-v0-3-0-release/19-REVIEW.md): CR-01 production release readback inventory compatibility, CR-02 prepublish frozen-inventory comparison, WR-01 path traversal in changed-path exclusion, and IR-01 judge CLI argument parsing. The API pagination concern remains unreachable through the bounded 22-asset qualification path. The shallow subject checkout versus full-history local differential remains a coverage limitation, with no subject-side ancestry query verified.
+The parent-provided local evidence records 23 affected readback, recovery, EOL-negative, contract and installed-consumer tests passing without skips. The forced-autocrlf reproducer and its true/false checkout controls are documented in `build/phase19-window/posttag-recovery/windows-wiring-prep/README.md`. The original Windows failures remain retained; the actual D-135 Windows jobs subsequently passed at their then-current head. That evidence does not qualify the later D-136 head. The parent-provided focused checks and source inspection found no defect introduced by this two-file wiring patch.
 
-The earlier lifecycle serialization change is execution-verified on the local macOS run at `0fec185`: `release_lifecycle_controls` passed in 18.30 seconds and `release_lifecycle_post_tag_controls` passed in 23.87 seconds, with their original 60-second limits and control floors intact. That CMake content is unchanged at this rescope head.
+## D-136 Bounded Recheck
 
-## Initial Rescope Review at `8f4deed`
+The exact D-136 source diff is limited to `tests/scripts/verify-v02-consumers.py`; the current file bytes match the approved prototype `8fdc1e633435109fa9b06c3e76657369e3b72843`, and the pinned patch digest matches `6f8455b70e8e3f5d988d27d8ef39ec454a03ee5b62876642e0875ee70e24870b`. The retained baseline probe reproduces the CI `JSONDecodeError` deterministically: the direct `write_text` opens and truncates the readiness path before its contents are complete, while the polling reader treats path existence as readiness. The fixed probe confirms the final name remains absent during empty and partial writes and exposes the full expected JSON only after publication. The old-writer regression control fails at the intended assertion; the prototype passes it.
 
-### Windows Bash resolver — no finding
+The repair writes to a unique temporary beside the marker, then replaces the readiness path and removes any remaining temporary in `finally`. Since the temporary and final path share a parent, the replace stays on the same filesystem. Both callers still use this helper only behind the existing private opt-in environment variables: the extraction path pauses after its first extracted file, and the install path pauses after staging completes. Their readers still poll for the final marker and consume the same JSON schema. `safe_extract_archive` still removes the partial extraction on `InterruptedRun`; the normal run still unwinds its `TemporaryDirectory`, and the existing output reservation releases the lock. Existing no-receipt, lock-cleanup, temporary-tree cleanup and successful-retry assertions are unchanged.
 
-**Files:** `.github/scripts/verify-workflow-policy.py:4509-4773`; `tests/cmake/ci-lanes.cmake:89-99`
-**Assessment:** At `8f4deed`, the resolver obtained `git.exe` through `shutil.which`, canonicalized it, rejected an executable or installation root under `SystemRoot`/`WINDIR`, and accepted the recognized `cmd`, `bin`, `mingw64/bin`, and `usr/bin` parent layouts. It derived Bash candidates from that same root, resolved each candidate, rejected targets outside the Git root or under the Windows system root, and failed closed when Git or a bundled Bash candidate was unavailable. The normal Windows Git for Windows wrapper location, `C:\Program Files\Git\bin\bash.exe`, was the first candidate for the standard `cmd\git.exe` layout. GitHub's Windows Server 2022 runner image lists Git Bash at that location, and Git for Windows documents `bin\bash.exe` as the wrapper that sets `MSYSTEM`/`PATH` before launching `usr\bin\bash.exe` ([Windows 2022 runner image](https://github.com/actions/runner-images/blob/main/images/windows/Windows2022-Readme.md), [Git for Windows wrapper documentation](https://gitforwindows.org/git-wrapper.html)).
+The deterministic marker regression is in `SELF_TEST_STATIC`. `select_self_tests` continues to require every test method be classified exactly once, so both existing C and C++ consumer CTests run this regression alongside their respective heavy half. It checks that the final marker is readable with the exact expected fields and that no sibling temporary remains. No assertion, marker schema, normal receipt publication, signal behavior, deadline, CTest timeout, floor, target, or product/source-identity condition was weakened or changed. No security boundary or product code changed.
 
-The new isolated resolver controls exercise three accepted Git layouts, non-Windows behavior, missing Git, missing `git.exe`, unsupported layout, a system-directory Git executable, and refusal to fall back to a WSL `System32\bash.exe`. A separate disposable symlink reproduction on this host also confirmed that a Bash candidate resolving outside the Git root is rejected. The embedded controls do not include a dedicated symlink-escape case, so that path is not protected by a persistent regression control.
+The parent-provided local evidence records configure, build, install and all25 selected CTests passing without skips at `e292db8c`; both consumer halves passed. The local sanitizer configure was refused by the existing Linux-only guard on this macOS host, so there is no local Linux sanitizer pass. The original Linux sanitizer failure remains a failure record. Fresh exact-head hosted Linux sanitizer, Windows and all other protected checks are still required; this review does not claim them green. I ran no tests and made no implementation changes.
 
-The guard's three existing behavior cases remain intact and run through the selected executable: allow an untagged release rehearsal, refuse an existing release tag, and skip the tag lookup for a non-release rehearsal branch. The prior relative `git.log` plus temporary working-directory correction remains in place. No production workflow guard logic changed.
+## Closed Review Findings
 
-### Control-count floors — no finding
+| ID | Original title | Recheck disposition | Evidence |
+|----|----------------|---------------------|----------|
+| WR-01 | Boolean schema versions are accepted as integer version 1 | Closed in the D-134 source recheck at `d2c0dc95`; the originally reproduced pre-publish inventory and registry paths now require exact integer types, as do the other previously listed unchecked schema boundaries. | Previous report at commit `acc4049f`; reproduction at `build/prb-review-reproduction.json`; exact approved patch at `build/prb-approved-schema.diff`. The strict `verify-v03-dispositions.py:328` site was already guarded and is excluded. |
+| WR-02 | A non-object workflow-policy registry escapes as an uncaught exception | Closed in the D-134 source recheck at `d2c0dc95`; a non-dictionary root is rejected before `.get`, and the CLI converts `CoverageError` to `REJECT workflow-policy-coverage` with exit 1. | Previous report at commit `acc4049f`; current guard in `tests/scripts/verify-workflow-policy-coverage.py:500-504`. |
 
-**File:** `tests/cmake/ci-lanes.cmake:89-99`
-**Assessment:** At `8f4deed`, the Windows minimum increased from 421 to 426 and the POSIX minimum from 448 to 453, exactly accounting for five added negative controls on either platform. The resolver then contributed four positive controls (three supported Windows layouts plus the unchanged POSIX selection check), and the final positive count added those to the existing accepted cases. The CTest timeout remained 180 seconds; the success regex and parsed minimum-count contract remained unchanged.
+The original release failure evidence and actual published-release readback remain historical facts; this code review does not rewrite them or claim the remaining local, player, consumer, phase-goal, hosted-CI, PR B, or merge gates complete. The initial full audit and its source scope remain preserved in the previous report commit and the 72-file list above.
 
-The global `unittest.mock` import adds only a standard-library import to normal `--check` invocations; its patch helpers are used by the bounded self-test controls. No package dependency or unbounded work was introduced, and no performance defect is supported by the evidence.
+The D-135 Windows jobs passed at their tested head, before D-136. Actual hosted Windows, Linux sanitizer and all other required protected CI instances for D-136 head `e292db8c651e6f297ba6eb77049d2ca6f021304f` still need to pass before the existing guarded PR B squash; neither the earlier red Linux sanitizer job nor prior-head green jobs qualify this head.
 
-## Validation and Limits
+## WR-03 Adjudication
 
-- At `8f4deed`, the bounded resolver controls were run directly on this POSIX host: `negative=5 positive=4`. The disposable symlink escape reproduction also failed closed.
-- The executor's revision-bound local CTest log for `8f4deed` shows all five selected tests passing; `workflow_policy_controls` completed in 61.85 seconds. The configure log identifies the local environment as AppleClang/macOS. This is not Windows validation.
-- The hosted Windows `workflow_policy_controls` job must still pass before the Windows path can be considered verified. The local path tests use POSIX filesystem semantics and cannot prove Windows junction, case-folding, or `CreateProcess` behavior.
+The concern was that `tests/scripts/verify-v02-performance.py:219` accepts `schema_version` by membership in `(1, 2, 3)`, so JSON `2.0` and `3.0` compare equal to those values in Python. The existing Phase 19 plan and receipt contract identify supported version values but do not require a lexical integer token or exact Python `int` at this separate legacy performance-receipt boundary. The existing exact-`int` pattern is scoped to named managed-input validators and the five D-134 boundaries; it is not a blanket wire-format rule.
 
-## Follow-up: `ucrt64` Layout
+JSON and JSON Schema define `3` and `3.0` as the same integral numeric value; JSON Schema treats a number with a zero fractional part as an integer ([JSON Schema numeric types](https://json-schema.org/understanding-json-schema/reference/numeric)). The parent's production-path probe confirms integer `3` and numeric `3.0` both pass with the same verified summary; `true` is rejected by `--verify` as legacy, while `false`, `3.1`, and string `"3"` are rejected as unsupported. A wrong workload digest still fails its specific check. No unsupported-version or source/measurement-validation bypass was demonstrated. WR-03 is therefore withdrawn as an unsubstantiated hardening suggestion, not deferred or accepted as a risk. Probe evidence is retained at `build/prb-performance-schema-adjudication.json`.
 
-The red case at the prior head was a valid `Git/ucrt64/bin/git.EXE` installation. The follow-up adds `ucrt64` alongside `mingw64` and `usr` in the architecture-root recognition branch (`.github/scripts/verify-workflow-policy.py:4544-4550`), updates the unsupported-layout diagnostic, and adds a fixture whose executable is `Git/ucrt64/bin/git.exe` while the selected Bash remains `Git/bin/bash.exe` (`.github/scripts/verify-workflow-policy.py:4618-4634`). The case-insensitive executable-name check already accepts `.EXE`; `git_parent.name` and `grandparent_name` are also case-folded before layout matching. Root resolution and both Git-root/SystemRoot containment checks are unchanged, so the added layout uses the same fail-closed path checks.
+## Narrative Findings (AI reviewer)
 
-The prior negative and positive controls, count floors, three tag-guard cases, 180-second CTest timeout, and output/count assertions are unchanged. The current bounded resolver controls report five negatives and five positives; the self-test also passed all three tag-guard scenarios. The targeted local revision-bound `workflow_policy_controls` CTest passed in 56.18 seconds. The old resolver's rejected `ucrt64` fixture was retained as red evidence. These are not physical Windows validation: the current CTest log and configure tree are on macOS, and the earlier Windows runs at the superseded revision were canceled. Require a fresh hosted Windows run at `dedeb22` before claiming the native `ucrt64` behavior is proven. No canceled or prior-revision result is counted as green.
+No current findings remain from the D-134, D-135 or D-136 bounded rechecks. These reviews do not complete the remaining phase qualification or merge gates.
 
 ---
 
-_Reviewed: 2026-10-30T13:02:21Z_
+_Reviewed: 2026-10-31T17:11:32Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_

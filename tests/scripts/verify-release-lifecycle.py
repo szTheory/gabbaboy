@@ -57,6 +57,7 @@ WORKFLOW = ".github/workflows/release.yml"
 DELIVERY = "tests/scripts/verify-v02-delivery.py"
 CAPTURE = "tests/data/release-api/captured.json"
 RECOVERY_FIXTURE = "tests/data/release-api/v030-notes-failure.json"
+ASSOCIATION_FIXTURE = "tests/data/release-api/v030-draft-association-restoration.json"
 SOURCES = "tests/data/release-api/SOURCES.md"
 RECOVERY_ADOPTION = "tests/scripts/verify-v02-adoption.py"
 RECOVERY_CLAIMS = "tests/scripts/verify-cgb-corpus-claims.py"
@@ -286,8 +287,16 @@ RECOVERY_SOURCES_SIZE = re.compile(r"(?m)^- bytes: ([0-9]+) \(bound: ([0-9]+)\)$
 RECOVERY_SOURCES_SECTION = re.compile(
     r"(?ms)^## v0\.3\.0 first post-tag failure \(additive fixture\)\n(.*?)(?=^## |\Z)"
 )
+ASSOCIATION_SOURCES_DIGEST = re.compile(
+    r"(?m)^- `v030-draft-association-restoration\.json` sha256: ([0-9a-f]{64})$"
+)
+ASSOCIATION_SOURCES_SIZE = re.compile(r"(?m)^- bytes: ([0-9]+) \(bound: ([0-9]+)\)$")
+ASSOCIATION_SOURCES_SECTION = re.compile(
+    r"(?ms)^## v0\.3\.0 draft tag-association restoration \(additive fixture\)\n(.*?)(?=^## |\Z)"
+)
 RECOVERY_TAG = "v0.3.0"
 RECOVERY_SOURCE_SHA = "a3f3390451f9a893aa47475f15a722ada86daaa6"
+RECOVERY_WORKFLOW_SHA = "d61a25ea54364e0e26ef89bb7467c72089361d49"
 RECOVERY_RELEASE_ID = 429606490
 RECOVERY_RUN_ID = 41148606886
 RECOVERY_JOB_ID = 124379552103
@@ -300,6 +309,30 @@ RECOVERY_DISPATCH = {
     "ref": "main",
     "inputs": {"retry": True, "tag_name": RECOVERY_TAG, "source_sha": RECOVERY_SOURCE_SHA,
                "release_id": str(RECOVERY_RELEASE_ID)},
+}
+ASSOCIATION_DRIFT_TAG = "untagged-bff38b7645da850c79be"
+ASSOCIATION_RELEASE_FIELDS = (
+    "id", "tag_name", "target_commitish", "name", "body_sha256", "draft", "prerelease", "published_at",
+    "assets_count",
+)
+ASSOCIATION_UNCHANGED_FIELDS = tuple(key for key in ASSOCIATION_RELEASE_FIELDS if key != "tag_name")
+ASSOCIATION_CAPTURE_PINS = {
+    "body_request": "d9c7505dcc68b1e4d05b21a6870140f026dfcdecf13c44389e38c7cd2eb84967",
+    "body_before_release": "67dd8e89c156b026b078e53a2b424698787737184db484abb85ab3385025d93d",
+    "body_patch_response": "4697bcc10c59a576d4f3bd959579ccd132fad323363ada6b848ac6e346867d84",
+    "body_run": "f61e586e70b9caeb8e2255674b0c7a765d5bfb7e0e6129f587a3016bd639c31e",
+    "d132_release": "4697bcc10c59a576d4f3bd959579ccd132fad323363ada6b848ac6e346867d84",
+    "d132_run": "ed1df67d702b1ce6128efa920b25870a2899cda4cf9ef347cced48ef0b7c9934",
+    "tag_request": "9369228a1035720e68125af98e7758717f315c6b1124d073cb5e2abc814af72e",
+    "tag_patch_response": "9d3f3be4a52be94c4e47848f11e67fc3a831441f1a075ea7e74b5b4fe0d8b71b",
+    "restore_before_release": "4697bcc10c59a576d4f3bd959579ccd132fad323363ada6b848ac6e346867d84",
+    "restore_after_release": "9d3f3be4a52be94c4e47848f11e67fc3a831441f1a075ea7e74b5b4fe0d8b71b",
+    "tag_readback": "88e47d37756a481843c663e84f2d0c68c3af08fdbe905a9b49f131e10fc422b7",
+    "assets_readback": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "pre_release_list_readback": "34203f9d011f8a4c3ef66fe30ba318aef77250114918faf93eecc60b6022f7c5",
+    "release_list_readback": "aa51f9a29c6ec539ca46f0b6370e0cee5cbdbe650db7ad9229c8d764741a1a6d",
+    "cli_release_view": "03e05fe95268f089b63283af7cc0fb1c7c6250b70f5e0a0efa6ebaa2b5ebb416",
+    "d133_run": "a3ea51a8f773060a80950de5337ba0f86169b00101631115e9f43914137e5867",
 }
 
 
@@ -428,6 +461,15 @@ def recovery_document_markers(repair_spec: dict) -> tuple[tuple[str, bytes], ...
         ("release API reference", b"https://docs.github.com/en/rest/releases/releases#update-a-release"),
         ("dispatch API reference", b"https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event"),
         ("second failure hold", b"If the retry fails again or any precondition has"),
+        ("captured tag-association drift", b"untagged-bff38b7645da850c79be"),
+        ("refuse drifted dispatch", b"refused before dispatch"),
+        ("exact tag-only request", b'{"tag_name":"v0.3.0"}'),
+        ("nine-field guarded projection", b"nine-field release projection"),
+        ("UTF-8 adoption boundary", b'.encode("utf-8")'),
+        ("publication completion boundary", b"does not claim a successful release publication"),
+        ("historical first body-only attempt", b"This is the original attempted body-only repair for this draft; it is historical guidance only"),
+        ("hold after any post-update drift", b"If any post-PATCH tag or state differs, hold and use a separately approved restoration procedure before retrying"),
+        ("public adoption CLI byte contract", b"The public `verify-v02-adoption.py` CLI continues to read a UTF-8 file as bytes."),
     )
 
 
@@ -513,7 +555,8 @@ def validate_recovery_fixture(raw: bytes, sources: bytes, *, verify_digest: bool
         "schema_version", "kind", "repository", "api_version", "failure_snapshot", "releases_list_capture",
         "failed_notes", "reviewed_body", "tagged_repair",
     }, "recovery fixture")
-    if (fixture.get("schema_version") != 1 or fixture.get("kind") != "v030-post-tag-notes-failure"
+    if (type(fixture.get("schema_version")) is not int or fixture["schema_version"] != 1
+            or fixture.get("kind") != "v030-post-tag-notes-failure"
             or fixture.get("repository") != REPO or fixture.get("api_version") != "2022-11-28"):
         raise Reject("recovery-schema", "recovery fixture header differs from the v0.3.0 capture")
 
@@ -618,6 +661,189 @@ def validate_recovery_fixture(raw: bytes, sources: bytes, *, verify_digest: bool
     return fixture
 
 
+def _association_projection(value: object, label: str) -> dict:
+    projection = _require_recovery_keys(value, set(ASSOCIATION_RELEASE_FIELDS), label)
+    if (type(projection["id"]) is not int or projection["id"] != RECOVERY_RELEASE_ID
+            or not isinstance(projection["tag_name"], str)
+            or projection["tag_name"] not in {RECOVERY_TAG, ASSOCIATION_DRIFT_TAG}
+            or projection["target_commitish"] != RECOVERY_SOURCE_SHA
+            or projection["name"] != RECOVERY_TAG
+            or not isinstance(projection["body_sha256"], str)
+            or not SHA256.fullmatch(projection["body_sha256"])
+            or type(projection["draft"]) is not bool or projection["draft"] is not True
+            or type(projection["prerelease"]) is not bool or projection["prerelease"] is not False
+            or projection["published_at"] is not None
+            or type(projection["assets_count"]) is not int or projection["assets_count"] != 0):
+        raise Reject("association-projection", f"{label} does not preserve the same unpublished empty draft")
+    return projection
+
+
+def validate_association_fixture(raw: bytes, sources: bytes, failure_fixture: dict,
+                                 *, verify_digest: bool = True) -> dict:
+    if len(raw) > MAX_RECOVERY_FIXTURE_BYTES:
+        raise Reject("association-bound", f"association fixture exceeds {MAX_RECOVERY_FIXTURE_BYTES} bytes")
+    if b"\r" in raw or not raw.endswith(b"\n"):
+        raise Reject("association-eol", "association fixture must be LF-terminated UTF-8 JSON")
+    _recovery_privacy(raw)
+    sources_text = sources.decode("utf-8", errors="strict")
+    sections = ASSOCIATION_SOURCES_SECTION.findall(sources_text)
+    size_rows = ASSOCIATION_SOURCES_SIZE.findall(sections[0]) if len(sections) == 1 else []
+    if (len(size_rows) != 1 or int(size_rows[0][0]) != len(raw)
+            or int(size_rows[0][1]) != MAX_RECOVERY_FIXTURE_BYTES):
+        raise Reject("association-size", "SOURCES.md association fixture byte count or bound differs from captured bytes")
+    recorded = ASSOCIATION_SOURCES_DIGEST.findall(sections[0])
+    if verify_digest and (len(recorded) != 1 or recorded[0] != sha256_bytes(raw)):
+        raise Reject("association-digest", "SOURCES.md does not pin exactly the association fixture SHA-256")
+    fixture = _strict_recovery_json(raw, "association fixture")
+    fixture = _require_recovery_keys(fixture, {
+        "schema_version", "kind", "repository", "api_version", "tag", "source_sha", "workflow_sha", "release_id",
+        "release_projection_fields", "body_only_patch", "d132_utf8_preflight", "tag_only_restoration",
+        "utf8_adoption_boundary",
+    }, "association fixture")
+    if (type(fixture.get("schema_version")) is not int or fixture.get("schema_version") != 1
+            or fixture.get("kind") != "v030-draft-association-restoration"
+            or fixture.get("repository") != REPO or fixture.get("api_version") != "2022-11-28"
+            or fixture.get("tag") != RECOVERY_TAG or fixture.get("source_sha") != RECOVERY_SOURCE_SHA
+            or fixture.get("workflow_sha") != RECOVERY_WORKFLOW_SHA
+            or type(fixture.get("release_id")) is not int or fixture.get("release_id") != RECOVERY_RELEASE_ID
+            or fixture.get("release_projection_fields") != [
+                "id", "tag_name", "target_commitish", "name", "body", "draft", "prerelease", "published_at", "assets"]):
+        raise Reject("association-identity", "association fixture header or nine-field release projection changed")
+
+    body_patch = _require_recovery_keys(fixture["body_only_patch"], {
+        "method", "endpoint", "request_member_names", "request_bytes", "request_sha256",
+        "pre_patch_release_response_sha256", "pre_patch_release", "patch_http_status", "patch_exit_code",
+        "patch_process_outcome", "patch_response_bytes", "patch_response_sha256", "patch_response_release",
+        "operator_run_outcome", "operator_stop_reason", "dispatch_attempted", "operator_run_sha256",
+    }, "actual body-only PATCH")
+    body_before = _association_projection(body_patch["pre_patch_release"], "pre-body-PATCH release")
+    body_after = _association_projection(body_patch["patch_response_release"], "body-PATCH response release")
+    if (body_patch["method"] != "PATCH" or body_patch["endpoint"] != f"repos/{REPO}/releases/{RECOVERY_RELEASE_ID}"
+            or body_patch["request_member_names"] != ["body"]
+            or type(body_patch["request_bytes"]) is not int or body_patch["request_bytes"] < 1
+            or body_patch["request_sha256"] != ASSOCIATION_CAPTURE_PINS["body_request"]
+            or body_patch["pre_patch_release_response_sha256"] != ASSOCIATION_CAPTURE_PINS["body_before_release"]
+            or type(body_patch["patch_http_status"]) is not int or body_patch["patch_http_status"] != 200
+            or type(body_patch["patch_exit_code"]) is not int or body_patch["patch_exit_code"] != 0
+            or body_patch["patch_process_outcome"] != "success"
+            or type(body_patch["patch_response_bytes"]) is not int or body_patch["patch_response_bytes"] < 1
+            or body_patch["patch_response_sha256"] != ASSOCIATION_CAPTURE_PINS["body_patch_response"]
+            or body_patch["operator_run_outcome"] != "stopped"
+            or body_patch["operator_stop_reason"] != "release is not the same unpublished empty v0.3.0 draft"
+            or body_patch["dispatch_attempted"] is not False
+            or body_patch["operator_run_sha256"] != ASSOCIATION_CAPTURE_PINS["body_run"]):
+        raise Reject("association-body-patch", "actual body-only PATCH or refusing stop record changed")
+    if (body_before["tag_name"] != RECOVERY_TAG
+            or body_before["body_sha256"] != failure_fixture["failed_notes"]["utf8_sha256"]
+            or body_after["tag_name"] != ASSOCIATION_DRIFT_TAG
+            or body_after["body_sha256"] != failure_fixture["tagged_repair"]["repaired_body_sha256"]
+            or any(body_before[key] != body_after[key] for key in ASSOCIATION_UNCHANGED_FIELDS
+                   if key != "body_sha256")):
+        raise Reject("association-body-drift", "body-only HTTP200 response did not bind the captured tag drift and repaired notes")
+
+    preflight = _require_recovery_keys(fixture["d132_utf8_preflight"], {
+        "main_sha", "git_tag_sha", "release_response_sha256", "release", "operator_outcome", "operator_reason_type",
+        "get_count", "patch_count", "operator_run_sha256",
+    }, "D132 UTF-8 preflight")
+    preflight_release = _association_projection(preflight["release"], "D132 preflight release")
+    if (preflight["main_sha"] != RECOVERY_WORKFLOW_SHA or preflight["git_tag_sha"] != RECOVERY_SOURCE_SHA
+            or preflight_release["tag_name"] != ASSOCIATION_DRIFT_TAG
+            or preflight_release["body_sha256"] != failure_fixture["tagged_repair"]["repaired_body_sha256"]
+            or preflight["operator_outcome"] != "hold-no-retry" or preflight["operator_reason_type"] != "TypeError"
+            or type(preflight["get_count"]) is not int or preflight["get_count"] != 11
+            or type(preflight["patch_count"]) is not int or preflight["patch_count"] != 0
+            or preflight["release_response_sha256"] != ASSOCIATION_CAPTURE_PINS["d132_release"]
+            or preflight["operator_run_sha256"] != ASSOCIATION_CAPTURE_PINS["d132_run"]):
+        raise Reject("association-utf8-regression", "D132 preflight TypeError or pre-mutation hold record changed")
+
+    restoration = _require_recovery_keys(fixture["tag_only_restoration"], {
+        "request", "request_bytes", "request_sha256", "method", "patch_endpoint", "patch_http_status", "patch_exit_code",
+        "patch_process_outcome", "patch_response_bytes", "patch_response_sha256", "patch_response_release",
+        "pre_patch_release_response_sha256", "pre_patch_release", "post_patch_release_response_sha256",
+        "post_patch_release", "readback", "capture_hashes",
+    }, "actual tag-only restoration")
+    before = _association_projection(restoration["pre_patch_release"], "pre-restoration release")
+    patch_response = _association_projection(restoration["patch_response_release"], "tag-only PATCH response release")
+    after = _association_projection(restoration["post_patch_release"], "post-restoration GET release")
+    if (restoration["request"] != {"tag_name": RECOVERY_TAG} or restoration["request_bytes"] != 22
+            or restoration["request_sha256"] != "9369228a1035720e68125af98e7758717f315c6b1124d073cb5e2abc814af72e"
+            or restoration["method"] != "PATCH"
+            or restoration["patch_endpoint"] != f"repos/{REPO}/releases/{RECOVERY_RELEASE_ID}"
+            or type(restoration["request_bytes"]) is not int
+            or type(restoration["patch_http_status"]) is not int or restoration["patch_http_status"] != 200
+            or type(restoration["patch_exit_code"]) is not int or restoration["patch_exit_code"] != 0
+            or restoration["patch_process_outcome"] != "success"
+            or type(restoration["patch_response_bytes"]) is not int or restoration["patch_response_bytes"] < 1
+            or restoration["request_sha256"] != ASSOCIATION_CAPTURE_PINS["tag_request"]
+            or restoration["patch_response_sha256"] != ASSOCIATION_CAPTURE_PINS["tag_patch_response"]
+            or restoration["pre_patch_release_response_sha256"] != ASSOCIATION_CAPTURE_PINS["restore_before_release"]
+            or restoration["post_patch_release_response_sha256"] != ASSOCIATION_CAPTURE_PINS["restore_after_release"]):
+        raise Reject("association-restoration", "actual tag-only request or HTTP200 response provenance changed")
+    if (before["tag_name"] != ASSOCIATION_DRIFT_TAG or patch_response["tag_name"] != RECOVERY_TAG
+            or after["tag_name"] != RECOVERY_TAG
+            or patch_response != after
+            or any(before[key] != after[key] for key in ASSOCIATION_UNCHANGED_FIELDS)
+            or before["body_sha256"] != failure_fixture["tagged_repair"]["repaired_body_sha256"]
+            or after["body_sha256"] != before["body_sha256"]):
+        raise Reject("association-restoration", "tag-only restoration changed one of the eight other guarded fields")
+
+    readback = _require_recovery_keys(restoration["readback"], {
+        "main_sha", "git_tag_sha", "tag_response_sha256", "assets_count", "assets_response_sha256",
+        "release_list_count", "matching_release_ids", "release_list_response_sha256", "cli_release_view_sha256",
+        "cli_tag_name", "cli_is_draft", "cli_is_prerelease", "operator_outcome", "operator_adoption",
+        "operator_dispatch", "operator_run_sha256",
+    }, "actual restoration readback")
+    if (readback["main_sha"] != RECOVERY_WORKFLOW_SHA or readback["git_tag_sha"] != RECOVERY_SOURCE_SHA
+            or type(readback["assets_count"]) is not int or readback["assets_count"] != 0
+            or type(readback["release_list_count"]) is not int or readback["release_list_count"] != 5
+            or not isinstance(readback["matching_release_ids"], list)
+            or len(readback["matching_release_ids"]) != 1
+            or any(type(release_id) is not int for release_id in readback["matching_release_ids"])
+            or readback["matching_release_ids"] != [RECOVERY_RELEASE_ID]
+            or readback["cli_tag_name"] != RECOVERY_TAG or readback["cli_is_draft"] is not True
+            or readback["cli_is_prerelease"] is not False
+            or readback["operator_outcome"] != "restored-readback-verified-no-dispatch"
+            or readback["operator_adoption"] != "pass" or readback["operator_dispatch"] != "none"):
+        raise Reject("association-readback", "actual readback did not confirm G/S, empty assets, unique tag and no operator dispatch")
+    for key in ("tag_response_sha256", "assets_response_sha256", "release_list_response_sha256",
+                "cli_release_view_sha256", "operator_run_sha256"):
+        if not isinstance(readback[key], str) or not SHA256.fullmatch(readback[key]):
+            raise Reject("association-provenance", "actual readback capture digest is malformed")
+    if (readback["tag_response_sha256"] != ASSOCIATION_CAPTURE_PINS["tag_readback"]
+            or readback["assets_response_sha256"] != ASSOCIATION_CAPTURE_PINS["assets_readback"]
+            or readback["release_list_response_sha256"] != ASSOCIATION_CAPTURE_PINS["release_list_readback"]
+            or readback["cli_release_view_sha256"] != ASSOCIATION_CAPTURE_PINS["cli_release_view"]
+            or readback["operator_run_sha256"] != ASSOCIATION_CAPTURE_PINS["d133_run"]):
+        raise Reject("association-provenance", "actual readback capture digest differs from the retained D133 evidence")
+    capture_hashes = _require_recovery_keys(restoration["capture_hashes"], {
+        "pre_tag", "pre_assets", "pre_release_list", "post_tag", "post_assets", "post_release_list",
+    }, "association capture hashes")
+    if any(not isinstance(value, str) or not SHA256.fullmatch(value) for value in capture_hashes.values()):
+        raise Reject("association-provenance", "pre/post capture digest is malformed")
+    if (capture_hashes["pre_tag"] != capture_hashes["post_tag"]
+            or capture_hashes["pre_assets"] != capture_hashes["post_assets"]
+            or capture_hashes["pre_tag"] != ASSOCIATION_CAPTURE_PINS["tag_readback"]
+            or capture_hashes["post_tag"] != ASSOCIATION_CAPTURE_PINS["tag_readback"]
+            or capture_hashes["pre_assets"] != ASSOCIATION_CAPTURE_PINS["assets_readback"]
+            or capture_hashes["post_assets"] != ASSOCIATION_CAPTURE_PINS["assets_readback"]
+            or capture_hashes["pre_release_list"] != ASSOCIATION_CAPTURE_PINS["pre_release_list_readback"]
+            or capture_hashes["post_release_list"] != ASSOCIATION_CAPTURE_PINS["release_list_readback"]):
+        raise Reject("association-readback", "tag object or empty asset endpoint changed during restoration")
+
+    utf8 = _require_recovery_keys(fixture["utf8_adoption_boundary"], {
+        "api_body_json_type", "repaired_body_utf8_sha256", "pre_fix_operator_reason_type",
+        "fixed_operator_pre_readback_adoption", "fixed_operator_post_readback_adoption", "pre_and_post_body_bytes_equal",
+    }, "UTF-8 adoption boundary")
+    if (utf8["api_body_json_type"] != "string"
+            or utf8["repaired_body_utf8_sha256"] != failure_fixture["tagged_repair"]["repaired_body_sha256"]
+            or utf8["pre_fix_operator_reason_type"] != "TypeError"
+            or utf8["fixed_operator_pre_readback_adoption"] != "pass"
+            or utf8["fixed_operator_post_readback_adoption"] != "pass"
+            or utf8["pre_and_post_body_bytes_equal"] is not True):
+        raise Reject("association-utf8-regression", "pre/post adoption boundary does not preserve exact UTF-8 bytes")
+    return fixture
+
+
 def _recovery_tag_source(tag: str, expected_source: str) -> tuple[str, bytes, bytes]:
     if tag != RECOVERY_TAG or expected_source != RECOVERY_SOURCE_SHA:
         raise Reject("recovery-tag", "recovery must remain bound to v0.3.0 at immutable source S")
@@ -685,6 +911,16 @@ def _expect_adoption_failure(notes: bytes, expected_reason: str, source: str, ro
     return 1
 
 
+def api_release_body_bytes(body: object) -> bytes:
+    """Convert the JSON string returned by GitHub to the byte contract used by adoption."""
+    if not isinstance(body, str):
+        raise Reject("recovery-api-body-type", "GitHub release body must be a JSON string before UTF-8 encoding")
+    try:
+        return body.encode("utf-8", errors="strict")
+    except UnicodeError as error:
+        raise Reject("recovery-api-body-encoding", "GitHub release body cannot be encoded as UTF-8") from error
+
+
 def _check_repaired_digest(body: bytes, expected: str) -> None:
     if hashlib.sha256(body).hexdigest() != expected:
         raise Reject("recovery-repaired-digest", "transformed release body differs from the bound SHA-256")
@@ -748,6 +984,69 @@ class RecoveryTransport:
         return "dispatched"
 
 
+class DraftAssociationTransport:
+    """Offline model for the captured body-PATCH drift and later tag-only repair."""
+
+    def __init__(self, fixture: dict):
+        self.fixture = fixture
+        self.release = copy.deepcopy(fixture["body_only_patch"]["pre_patch_release"])
+        self.body_patch_count = 0
+        self.tag_patch_count = 0
+        self.dispatch_count = 0
+
+    def patch_body(self, release_id: int, payload: dict, repaired_body: bytes) -> int:
+        if release_id != RECOVERY_RELEASE_ID or release_id != self.fixture["release_id"]:
+            raise Reject("association-release-id", "body repair targets only the captured same-ID draft")
+        if not isinstance(payload, dict) or set(payload) != {"body"} or not isinstance(payload.get("body"), str):
+            raise Reject("association-request-shape", "body correction request must contain only UTF-8 body text")
+        if (self.release["tag_name"] != RECOVERY_TAG
+                or self.release["body_sha256"] != self.fixture["body_only_patch"]["pre_patch_release"]["body_sha256"]
+                or self.release["draft"] is not True or self.release["prerelease"] is not False
+                or self.release["published_at"] is not None or self.release["assets_count"] != 0):
+            raise Reject("association-state", "captured body-only PATCH preconditions changed")
+        requested = payload["body"].encode("utf-8", errors="strict")
+        expected = self.fixture["body_only_patch"]["patch_response_release"]
+        if requested != repaired_body or sha256_bytes(requested) != expected["body_sha256"]:
+            raise Reject("association-body", "body-only PATCH differs from the exact repaired UTF-8 bytes")
+        self.release["body_sha256"] = sha256_bytes(requested)
+        self.release["tag_name"] = ASSOCIATION_DRIFT_TAG
+        if self.release != expected:
+            raise Reject("association-captured-result", "modeled HTTP200 body-only result differs from captured drift")
+        self.body_patch_count += 1
+        return 200
+
+    def restore_tag(self, release_id: int, payload: dict) -> str:
+        if release_id != RECOVERY_RELEASE_ID or release_id != self.fixture["release_id"]:
+            raise Reject("association-release-id", "tag restoration targets only the captured same-ID draft")
+        if not isinstance(payload, dict) or set(payload) != {"tag_name"} or payload.get("tag_name") != RECOVERY_TAG:
+            raise Reject("association-request-shape", "tag restoration request must be exactly {tag_name: v0.3.0}")
+        expected = self.fixture["tag_only_restoration"]["pre_patch_release"]
+        if self.release != expected or self.tag_patch_count != 0:
+            raise Reject("association-state", "tag restoration requires the exact captured drifted draft and one-use state")
+        before = copy.deepcopy(self.release)
+        self.release["tag_name"] = RECOVERY_TAG
+        if self.release != self.fixture["tag_only_restoration"]["post_patch_release"]:
+            raise Reject("association-captured-result", "tag-only result differs from the actual post-PATCH projection")
+        if any(before[key] != self.release[key] for key in ASSOCIATION_UNCHANGED_FIELDS):
+            raise Reject("association-mutated-fields", "tag-only restoration changed another guarded release field")
+        self.tag_patch_count += 1
+        return "restored"
+
+    def dispatch(self, request: dict) -> str:
+        if (self.release.get("id") != RECOVERY_RELEASE_ID or self.release.get("tag_name") != RECOVERY_TAG
+                or self.release.get("target_commitish") != RECOVERY_SOURCE_SHA
+                or self.release.get("body_sha256") != self.fixture["tag_only_restoration"]["post_patch_release"]["body_sha256"]
+                or self.release.get("draft") is not True or self.release.get("prerelease") is not False
+                or self.release.get("published_at") is not None or self.release.get("assets_count") != 0):
+            raise Reject("association-dispatch-state", "dispatch requires the same restored, unpublished draft at source S")
+        if self.dispatch_count:
+            raise Reject("recovery-dispatch-duplicate", "only one exact retry dispatch is allowed")
+        if request != RECOVERY_DISPATCH:
+            raise Reject("recovery-dispatch-identity", "dispatch differs from the original retry bound to G/S and the same ID")
+        self.dispatch_count += 1
+        return "dispatched"
+
+
 def _recovery_expect_reject(label: str, code: str, action: Callable[[], object]) -> int:
     try:
         action()
@@ -773,6 +1072,8 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
             or (ROOT / RECOVERY_CLAIMS).read_bytes() != claims_source:
         raise Reject("recovery-adoption-source", "the production claim rules differ from immutable tagged S")
     fixture = validate_recovery_fixture(fixture_raw, sources)
+    association_raw = git_show(rev, ASSOCIATION_FIXTURE)
+    association_fixture = validate_association_fixture(association_raw, sources, fixture)
     snapshot = fixture["failure_snapshot"]
     repair_spec = fixture["tagged_repair"]
     recovery_doc = recovery_document_section(release_doc, repair_spec)
@@ -810,9 +1111,26 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
                                                     "release-notes-absence-missing", RECOVERY_SOURCE_SHA, v030_root)
         adoption_checks += _expect_adoption_pass(section, "tagged-original-section", RECOVERY_SOURCE_SHA, v030_root)
         adoption_checks += _expect_adoption_pass(repaired, "tagged-repaired-section", RECOVERY_SOURCE_SHA, v030_root)
-        positives = 3
+        positives = 4
+        controls = 0
+        api_body_text = repaired.decode("utf-8", errors="strict")
+        api_body_bytes = api_release_body_bytes(api_body_text)
+        if (sha256_bytes(api_body_bytes) != association_fixture["utf8_adoption_boundary"]["repaired_body_utf8_sha256"]
+                or api_body_bytes != repaired):
+            raise Reject("association-utf8-regression", "JSON body conversion changed the exact repaired body bytes")
+        adoption_checks += _expect_adoption_pass(api_body_bytes, "restoration-preflight-api-body",
+                                                  RECOVERY_SOURCE_SHA, v030_root)
+        adoption_checks += _expect_adoption_pass(api_body_bytes, "restoration-postreadback-api-body",
+                                                  RECOVERY_SOURCE_SHA, v030_root)
+        positives += 2
+        try:
+            _run_adoption(api_body_text, "unencoded-api-body-regression", RECOVERY_SOURCE_SHA, v030_root)
+        except TypeError:
+            controls += 1
+        else:
+            raise Reject("association-utf8-regression", "passing JSON text directly to the byte checker did not reproduce TypeError")
 
-        controls = document_controls
+        controls += document_controls
         controls += _recovery_expect_reject("missing relative ledger link", "recovery-link-count",
             lambda: repair_support_ledger_link(section.replace(RECOVERY_RELATIVE_LINK, b""),
                                               RECOVERY_RELATIVE_LINK, RECOVERY_PINNED_LINK))
@@ -862,6 +1180,110 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
                                + sources_text[section_match.end(1):]).encode("utf-8")
             return validate_recovery_fixture(raw, amended_sources, verify_digest=False)
 
+        for label, schema_version in (("boolean true", True), ("boolean false", False), ("float", 1.0),
+                                      ("string", "1"), ("null", None), ("array", [])):
+            malformed_fixture = json.loads(json.dumps(fixture))
+            malformed_fixture["schema_version"] = schema_version
+            controls += _recovery_expect_reject(f"{label} failure-fixture schema version", "recovery-schema",
+                lambda malformed_fixture=malformed_fixture: validate_mutated_fixture(malformed_fixture))
+
+        def validate_mutated_association_fixture(value: dict) -> dict:
+            raw = (json.dumps(value, sort_keys=True, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+            sources_text = sources.decode("utf-8", errors="strict")
+            section_match = ASSOCIATION_SOURCES_SECTION.search(sources_text)
+            if section_match is None:
+                raise Reject("recovery-control", "association provenance section disappeared from the positive")
+            section = section_match.group(1)
+            size_match = ASSOCIATION_SOURCES_SIZE.search(section)
+            if size_match is None:
+                raise Reject("recovery-control", "association fixture byte-count row disappeared from the positive")
+            digest_match = ASSOCIATION_SOURCES_DIGEST.search(section)
+            if digest_match is None:
+                raise Reject("recovery-control", "association fixture digest row disappeared from the positive")
+            size_row = f"- bytes: {len(raw)} (bound: {MAX_RECOVERY_FIXTURE_BYTES})"
+            section = section[:size_match.start()] + size_row + section[size_match.end():]
+            digest_row = f"- `v030-draft-association-restoration.json` sha256: {sha256_bytes(raw)}"
+            section = ASSOCIATION_SOURCES_DIGEST.sub(digest_row, section, count=1)
+            amended_sources = (sources_text[:section_match.start(1)] + section
+                               + sources_text[section_match.end(1):]).encode("utf-8")
+            return validate_association_fixture(raw, amended_sources, fixture)
+
+        controls += _recovery_expect_reject("association fixture digest drift", "association-digest",
+            lambda: validate_association_fixture(association_raw,
+                sources.replace(sha256_bytes(association_raw).encode("ascii"), b"0" * 64, 1), fixture))
+        association_size_line = f"- bytes: {len(association_raw)} (bound: {MAX_RECOVERY_FIXTURE_BYTES})".encode("ascii")
+        association_wrong_size_line = f"- bytes: {len(association_raw) + 1} (bound: {MAX_RECOVERY_FIXTURE_BYTES})".encode("ascii")
+        controls += _recovery_expect_reject("association fixture byte-count drift", "association-size",
+            lambda: validate_association_fixture(association_raw,
+                sources.replace(association_size_line, association_wrong_size_line, 1), fixture))
+        controls += _recovery_expect_reject("association fixture local-path leak", "recovery-sanitize",
+            lambda: validate_association_fixture(association_raw + b"\n/Users/private\n", sources, fixture))
+
+        bad_body_request = json.loads(json.dumps(association_fixture))
+        bad_body_request["body_only_patch"]["request_member_names"].append("tag_name")
+        controls += _recovery_expect_reject("body-only update contains tag field", "association-body-patch",
+            lambda: validate_mutated_association_fixture(bad_body_request))
+        bad_body_status = json.loads(json.dumps(association_fixture))
+        bad_body_status["body_only_patch"]["patch_http_status"] = 201
+        controls += _recovery_expect_reject("body-only response was not HTTP200", "association-body-patch",
+            lambda: validate_mutated_association_fixture(bad_body_status))
+        bad_tag_request = json.loads(json.dumps(association_fixture))
+        bad_tag_request["tag_only_restoration"]["request"]["body"] = "must not be sent"
+        controls += _recovery_expect_reject("tag-only restoration contains body field", "association-restoration",
+            lambda: validate_mutated_association_fixture(bad_tag_request))
+        changed_restored_body = json.loads(json.dumps(association_fixture))
+        changed_restored_body["tag_only_restoration"]["post_patch_release"]["body_sha256"] = "0" * 64
+        controls += _recovery_expect_reject("tag-only restoration changed body digest", "association-restoration",
+            lambda: validate_mutated_association_fixture(changed_restored_body))
+        wrong_preflight = json.loads(json.dumps(association_fixture))
+        wrong_preflight["d132_utf8_preflight"]["patch_count"] = 1
+        controls += _recovery_expect_reject("D132 UTF-8 regression attempted PATCH", "association-utf8-regression",
+            lambda: validate_mutated_association_fixture(wrong_preflight))
+        wrong_adoption = json.loads(json.dumps(association_fixture))
+        wrong_adoption["utf8_adoption_boundary"]["fixed_operator_pre_readback_adoption"] = "failed"
+        controls += _recovery_expect_reject("pre-readback adoption regression", "association-utf8-regression",
+            lambda: validate_mutated_association_fixture(wrong_adoption))
+        wrong_pre_release_list_hash = json.loads(json.dumps(association_fixture))
+        wrong_pre_release_list_hash["tag_only_restoration"]["capture_hashes"]["pre_release_list"] = "0" * 64
+        controls += _recovery_expect_reject("pre-restoration release-list digest drift", "association-readback",
+            lambda: validate_mutated_association_fixture(wrong_pre_release_list_hash))
+        bool_asset_count = json.loads(json.dumps(association_fixture))
+        bool_asset_count["tag_only_restoration"]["readback"]["assets_count"] = False
+        controls += _recovery_expect_reject("boolean asset count", "association-readback",
+            lambda: validate_mutated_association_fixture(bool_asset_count))
+        float_release_count = json.loads(json.dumps(association_fixture))
+        float_release_count["tag_only_restoration"]["readback"]["release_list_count"] = 5.0
+        controls += _recovery_expect_reject("floating-point release-list count", "association-readback",
+            lambda: validate_mutated_association_fixture(float_release_count))
+        float_matching_id = json.loads(json.dumps(association_fixture))
+        float_matching_id["tag_only_restoration"]["readback"]["matching_release_ids"] = [429606490.0]
+        controls += _recovery_expect_reject("floating-point matching release id", "association-readback",
+            lambda: validate_mutated_association_fixture(float_matching_id))
+        array_tag = json.loads(json.dumps(association_fixture))
+        array_tag["tag_only_restoration"]["post_patch_release"]["tag_name"] = [RECOVERY_TAG]
+        controls += _recovery_expect_reject("array-valued release tag", "association-projection",
+            lambda: validate_mutated_association_fixture(array_tag))
+        bool_schema_version = json.loads(json.dumps(association_fixture))
+        bool_schema_version["schema_version"] = True
+        controls += _recovery_expect_reject("boolean schema version", "association-identity",
+            lambda: validate_mutated_association_fixture(bool_schema_version))
+        float_preflight_get_count = json.loads(json.dumps(association_fixture))
+        float_preflight_get_count["d132_utf8_preflight"]["get_count"] = 11.0
+        controls += _recovery_expect_reject("floating-point preflight GET count", "association-utf8-regression",
+            lambda: validate_mutated_association_fixture(float_preflight_get_count))
+        float_body_status = json.loads(json.dumps(association_fixture))
+        float_body_status["body_only_patch"]["patch_http_status"] = 200.0
+        controls += _recovery_expect_reject("floating-point body PATCH status", "association-body-patch",
+            lambda: validate_mutated_association_fixture(float_body_status))
+        bool_restoration_exit = json.loads(json.dumps(association_fixture))
+        bool_restoration_exit["tag_only_restoration"]["patch_exit_code"] = False
+        controls += _recovery_expect_reject("boolean restoration exit code", "association-restoration",
+            lambda: validate_mutated_association_fixture(bool_restoration_exit))
+        float_restoration_bytes = json.loads(json.dumps(association_fixture))
+        float_restoration_bytes["tag_only_restoration"]["request_bytes"] = 22.0
+        controls += _recovery_expect_reject("floating-point restoration request byte count", "association-restoration",
+            lambda: validate_mutated_association_fixture(float_restoration_bytes))
+
         wrong_source = json.loads(json.dumps(fixture))
         wrong_source["failure_snapshot"]["source_sha"] = "0" * 40
         controls += _recovery_expect_reject("wrong failed source", "recovery-identity",
@@ -894,6 +1316,59 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
                 transport.published_at, transport.assets) != (
                 RECOVERY_RELEASE_ID, RECOVERY_TAG, RECOVERY_SOURCE_SHA, True, False, None, []):
             raise Reject("recovery-patch", "body-only request changed draft or product identity")
+
+        association_transport = DraftAssociationTransport(association_fixture)
+        body_status = association_transport.patch_body(
+            RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")}, repaired)
+        if (body_status != 200 or association_transport.body_patch_count != 1
+                or association_transport.release != association_fixture["body_only_patch"]["patch_response_release"]
+                or association_transport.dispatch_count != 0):
+            raise Reject("association-model", "captured body-only HTTP200 tag drift did not stop before dispatch")
+        positives += 1
+        controls += _recovery_expect_reject("dispatch while body-only PATCH tag is drifted",
+            "association-dispatch-state", lambda: association_transport.dispatch(dict(RECOVERY_DISPATCH)))
+        controls += _recovery_expect_reject("body PATCH with tag member", "association-request-shape",
+            lambda: DraftAssociationTransport(association_fixture).patch_body(RECOVERY_RELEASE_ID,
+                {"body": repaired.decode("utf-8"), "tag_name": RECOVERY_TAG}, repaired))
+        controls += _recovery_expect_reject("body PATCH targets wrong draft", "association-release-id",
+            lambda: DraftAssociationTransport(association_fixture).patch_body(RECOVERY_RELEASE_ID + 1,
+                {"body": repaired.decode("utf-8")}, repaired))
+
+        if association_transport.restore_tag(RECOVERY_RELEASE_ID, {"tag_name": RECOVERY_TAG}) != "restored":
+            raise Reject("association-model", "exact tag-only same-ID restoration was not accepted")
+        restored_projection = association_transport.release
+        if (restored_projection != association_fixture["tag_only_restoration"]["post_patch_release"]
+                or association_transport.tag_patch_count != 1
+                or any(association_fixture["tag_only_restoration"]["pre_patch_release"][key]
+                       != restored_projection[key] for key in ASSOCIATION_UNCHANGED_FIELDS)):
+            raise Reject("association-model", "tag-only restoration changed a guarded non-tag release field")
+        positives += 1
+        controls += _recovery_expect_reject("duplicate tag-only restoration", "association-state",
+            lambda: association_transport.restore_tag(RECOVERY_RELEASE_ID, {"tag_name": RECOVERY_TAG}))
+        controls += _recovery_expect_reject("tag restoration includes body", "association-request-shape",
+            lambda: DraftAssociationTransport(association_fixture).restore_tag(RECOVERY_RELEASE_ID,
+                {"tag_name": RECOVERY_TAG, "body": repaired.decode("utf-8")}))
+        controls += _recovery_expect_reject("tag restoration targets wrong draft", "association-release-id",
+            lambda: DraftAssociationTransport(association_fixture).restore_tag(RECOVERY_RELEASE_ID + 1,
+                {"tag_name": RECOVERY_TAG}))
+        controls += _recovery_expect_reject("tag restoration uses wrong tag", "association-request-shape",
+            lambda: DraftAssociationTransport(association_fixture).restore_tag(RECOVERY_RELEASE_ID,
+                {"tag_name": "v0.2.1"}))
+        for field, changed_value in (
+            ("id", RECOVERY_RELEASE_ID + 1), ("target_commitish", "0" * 40), ("name", "wrong release"),
+            ("body_sha256", "0" * 64), ("draft", False), ("prerelease", True),
+            ("published_at", "2026-10-31T00:00:00Z"), ("assets_count", 1),
+        ):
+            drifted = DraftAssociationTransport(association_fixture)
+            drifted.patch_body(RECOVERY_RELEASE_ID, {"body": repaired.decode("utf-8")}, repaired)
+            drifted.release[field] = changed_value
+            controls += _recovery_expect_reject("pre-restoration field drift " + field, "association-state",
+                lambda drifted=drifted: drifted.restore_tag(RECOVERY_RELEASE_ID, {"tag_name": RECOVERY_TAG}))
+        if association_transport.dispatch(dict(RECOVERY_DISPATCH)) != "dispatched" or association_transport.dispatch_count != 1:
+            raise Reject("association-model", "exact original retry was not permitted once after restoration")
+        positives += 1
+        controls += _recovery_expect_reject("duplicate retry after tag restoration", "recovery-dispatch-duplicate",
+            lambda: association_transport.dispatch(dict(RECOVERY_DISPATCH)))
 
         controls += _recovery_expect_reject("patch request with a state mutation", "recovery-patch-shape",
             lambda: RecoveryTransport(snapshot, failed_body, repaired, repair_spec["repaired_body_sha256"]).patch(
@@ -950,7 +1425,20 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         controls += _recovery_expect_reject("duplicate retry dispatch", "recovery-dispatch-duplicate",
             lambda: wrong_request.dispatch(dict(RECOVERY_DISPATCH)))
 
-    if controls < 20 or positives < 5 or adoption_checks != 45:
+    publisher_path = ".github/scripts/verify-published-release-assets.py"
+    publisher = ROOT / publisher_path
+    publisher_source = git_show(rev, publisher_path)
+    if not publisher.is_file() or publisher.read_bytes() != publisher_source:
+        raise Reject("recovery-controls", "published-asset validator differs from the immutable revision under test")
+    publisher_result = subprocess.run([sys.executable, "-I", str(publisher), "--self-test"], cwd=ROOT,
+                                      capture_output=True, text=True, timeout=20)
+    if (publisher_result.returncode != 0
+            or "PASS: pre-publish inventory schema positive=1 rejected_controls=6" not in publisher_result.stdout
+            or "Traceback" in publisher_result.stderr):
+        raise Reject("recovery-controls", "published-asset schema self-test failed: "
+                     + (publisher_result.stderr.strip() or publisher_result.stdout.strip())[-500:])
+
+    if controls < 26 or positives < 5 or adoption_checks != 89:
         raise Reject("recovery-controls", "recovery controls lack the required negative and production-adoption positives")
     return controls, positives, original_hash, repaired_hash
 
@@ -977,7 +1465,8 @@ def check_capture(text: bytes, sources: str) -> dict:
     for match in EMAIL.findall(body):
         if match != REDACTED_EMAIL:
             raise Reject("capture-sanitization", "captured.json carries an unredacted email address")
-    if (capture.get("schema_version") != 1 or capture.get("kind") != "github-api-capture"
+    if (type(capture) is not dict or type(capture.get("schema_version")) is not int
+            or capture["schema_version"] != 1 or capture.get("kind") != "github-api-capture"
             or capture.get("repository") != REPO or capture.get("api_version") != "2022-11-28"):
         raise Reject("capture-schema", "captured.json header is not the schema-1 capture of this repository")
     responses = capture.get("responses")
@@ -2456,6 +2945,16 @@ def c_capture_contract(ctx: Context) -> str:
     mutated("another API version", "capture-schema", lambda v: v.update(api_version="2024-01-01"))
     mutated("another repository", "capture-schema", lambda v: v.update(repository="other/repository"))
     mutated("a capture without its source identity", "capture-schema", lambda v: v["identity"].update(source_sha="x"))
+    for label, schema_version in (("boolean true schema version", True), ("boolean false schema version", False),
+                                  ("floating schema version", 1.0), ("string schema version", "1"),
+                                  ("null schema version", None), ("array schema version", [])):
+        mutated(label, "capture-schema", lambda value, schema_version=schema_version:
+                value.update(schema_version=schema_version))
+    for label, malformed in (("array root", []), ("null root", None), ("string root", "capture"),
+                             ("number root", 1)):
+        malformed_bytes = json.dumps(malformed).encode("utf-8")
+        expect_capture_reject(label, malformed_bytes, sources_with_digest(sources, malformed_bytes), "capture-schema")
+        count += 1
     crlf = text.replace(b"\n", b"\r\n")
     expect_capture_reject("CRLF line endings", crlf, sources_with_digest(sources, crlf), "capture-eol")
     oversize = text + b" " * MAX_CAPTURE_BYTES
@@ -3057,9 +3556,10 @@ def _post_tag_registrations() -> tuple[PostTagRegistration, ...]:
     return (*trust, *capture_source, *draft_assets, *recovery_sums, *consumer, *publication)
 
 
-def _manifest_controls(manifest: dict) -> tuple[dict, ...]:
-    if (not isinstance(manifest, dict) or set(manifest) != {"schema_version", "baseline_revision", "controls"}
-            or manifest.get("schema_version") != 1 or manifest.get("baseline_revision") != "dcb2c92668a47bc04f88fd3c57bc0d2e978473e1"
+def _manifest_controls(manifest: object) -> tuple[dict, ...]:
+    if (type(manifest) is not dict or set(manifest) != {"schema_version", "baseline_revision", "controls"}
+            or type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1
+            or manifest.get("baseline_revision") != "dcb2c92668a47bc04f88fd3c57bc0d2e978473e1"
             or not isinstance(manifest.get("controls"), list)):
         raise Reject("post-tag-coverage", "the immutable expected-control manifest has an unsupported schema")
     expected = []
@@ -3126,16 +3626,40 @@ def _expect_coverage_rejection(registrations: tuple[PostTagRegistration, ...], e
     raise Reject("coverage-self-test", f"{label}: an invalid registration was accepted")
 
 
-def post_tag_coverage_controls(rev: str) -> tuple[int, int]:
+def post_tag_coverage_controls(rev: str) -> tuple[int, int, int]:
     expected = _load_post_tag_expected(rev)
     registrations = _post_tag_registrations()
     _validate_post_tag_registration(registrations, expected)
+    raw_manifest = json.loads(git_show(rev, POST_TAG_COVERAGE).decode("utf-8"))
+    schema_controls = 0
+    malformed_versions = (("boolean true", True), ("boolean false", False), ("float", 1.0),
+                          ("string", "1"), ("null", None), ("array", []))
+    for label, schema_version in malformed_versions:
+        mutant = copy.deepcopy(raw_manifest)
+        mutant["schema_version"] = schema_version
+        try:
+            _manifest_controls(mutant)
+        except Reject as error:
+            if error.code != "post-tag-coverage":
+                raise Reject("coverage-self-test", f"{label} manifest schema version used wrong rejection {error}") from error
+            schema_controls += 1
+        else:
+            raise Reject("coverage-self-test", f"{label} manifest schema version was accepted")
+    for label, malformed in (("array", []), ("null", None), ("string", "manifest"), ("number", 1)):
+        try:
+            _manifest_controls(malformed)
+        except Reject as error:
+            if error.code != "post-tag-coverage":
+                raise Reject("coverage-self-test", f"non-object {label} manifest used wrong rejection {error}") from error
+            schema_controls += 1
+        else:
+            raise Reject("coverage-self-test", f"non-object {label} manifest was accepted")
     _expect_coverage_rejection(registrations[1:], expected, "omitted registration")
     _expect_coverage_rejection((registrations[0], registrations[0], *registrations[1:]), expected, "duplicated registration")
     wrong_group = PostTagRegistration("publication", registrations[0].control_ids, registrations[0].run)
     _expect_coverage_rejection((wrong_group, *registrations[1:]), expected, "wrong-group registration")
     _expect_exit_contract_control(rev)
-    return len(expected), len(registrations)
+    return len(expected), len(registrations), schema_controls
 
 
 def _expect_exit_contract_control(rev: str) -> None:
@@ -3333,9 +3857,9 @@ def main(argv: list[str]) -> int:
             print(f"release-lifecycle capture pass responses={len(capture['responses'])} bytes={len(files[CAPTURE])}")
             return 0
         if args.self_test_post_tag_coverage:
-            baseline_ids, registrations = post_tag_coverage_controls(rev)
+            baseline_ids, registrations, schema_controls = post_tag_coverage_controls(rev)
             print(f"release-lifecycle post-tag coverage controls pass baseline_ids={baseline_ids} registrations={registrations} "
-                  "omitted=refused duplicate=refused wrong_group=refused expect_exit=pass")
+                  f"schema_rejects={schema_controls} omitted=refused duplicate=refused wrong_group=refused expect_exit=pass")
             return 0
         if args.self_test_post_tag_recovery:
             controls_count, positives, original_hash, repaired_hash = self_test_post_tag_recovery(rev)

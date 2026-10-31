@@ -1199,6 +1199,7 @@ historical_limitations_controls
 closeout_dispositions_controls
 v03_dispositions
 v03_dispositions_controls
+v03_readback
 v03_readback_controls
 release_lifecycle_post_tag_recovery_controls
 closeout_dispositions_scope_v03
