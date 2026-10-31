@@ -155,7 +155,9 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree]:
         raise SystemExit(f"plan-cap-rev: {phases_path} cannot be listed at {rev}")
     # A collapsed roadmap is legitimate only at the recorded milestone boundary. Never
     # hide an incomplete active roadmap by falling back to a previous archive.
-    if phase_details(roadmap.stdout.decode("utf-8")) is None and not listing.stdout:
+    active_paths = [path for path in listing.stdout.split(b"\0") if path]
+    placeholder = (PHASES_AT_REV + "/.gitkeep").encode("utf-8")
+    if phase_details(roadmap.stdout.decode("utf-8")) is None and active_paths in ([], [placeholder]):
         state = git_run(repo, "show", f"{rev}:.planning/STATE.md")
         requirements = git_run(repo, "ls-tree", "--name-only", rev, "--", ".planning/REQUIREMENTS.md")
         state_text = state.stdout.decode("utf-8", errors="strict") if state.returncode == 0 else ""
@@ -637,6 +639,7 @@ def self_test_plan_cap_rev(base: Path) -> int:
     git("checkout", "-q", good_rev)
     archive_root = ".planning/milestones/v0.3"
     archive_files = {archive_root + "-ROADMAP.md": good[".planning/ROADMAP.md"],
+                     PHASES_AT_REV + "/.gitkeep": "",
                      ".planning/ROADMAP.md": "# Roadmap\n\n## Milestones\n\nv0.3 shipped.\n",
                      ".planning/STATE.md": "---\nmilestone: v0.3\nstatus: milestone_completed\n---\n"}
     for name, content in good.items():
