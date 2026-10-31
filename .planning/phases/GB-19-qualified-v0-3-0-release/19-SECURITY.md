@@ -1,15 +1,15 @@
 ---
 phase: "19"
 slug: qualified-v0-3-0-release
-status: review_hold
-threats_open: 1
+status: verified
+threats_open: 0
 asvs_level: 1
 created: "2026-10-30"
 ---
 
 # Phase 19 — Security
 
-The independent ASVS L1 audit at `3edf4021bbe05a200b456dbaf51a94adcd27b012` verified all41 authored threats, including the existing AR-19-01 acceptance. Subsequent full code review and current-source reproduction exposed a strict-schema correctness gap and reopened T-19-22: current disposition is40 closed, one open blocking threat. The historical audit and successful actual publication/readback remain recorded; final phase closure and PR B qualification/merge are held for the bounded owner scope decision below. No malformed actual release evidence or need for a new release mutation was found.
+The fresh independent D-134 ASVS L1 recheck at `d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc` verifies all41 authored threats closed, including the existing AR-19-01 acceptance. It reclosed T-19-22 after independently reproducing the baseline malformed-schema acceptance and confirming exact-type refusals with recomputed inventory hashes and valid actual evidence. The original audit, subsequent reopening and authorized correction remain recorded below. No blocking or non-blocking threat remains open; final local/hosted/goal qualification and PR B merge remain separate gates.
 
 The second focused audit at `0fec185016ae4d3578b641ffc694aafdd1d8795c` verified that CI integration fixes preserve the registered mitigations: production tag and publication guards are unchanged; the tag-guard fixture uses a relative log path with an explicit temporary working directory; and the two lifecycle control suites run serially with unchanged 60-second limits, minimum counts and semantic assertions. The independent auditor executed all three tag-guard scenarios successfully. Subsequent local targeted CTests passed 3/3; actual final-head Windows CI and renewed preflight remain pending. This adds no risk acceptance and changes no threat status.
 
@@ -61,7 +61,7 @@ Evidence paths below are relative to `tests/scripts/` unless otherwise qualified
 | T-19-19 | Spoofing | Perf receipt handoff | high | mitigate | Release selects named artifact at run/attempt; verifier binds source/event/workflow/run/attempt/limits | closed |
 | T-19-20 | Tampering | Performance policy | high | mitigate | Shared exact predicate and immutable limits checks; frozen limits unchanged | closed |
 | T-19-21 | Repudiation | Consumer host smoke | medium | mitigate | Policy orders host smoke and platform-bound receipts for every writer; consumer verifier checks results | closed |
-| T-19-22 | Tampering | Publication inventory/readback | high | mitigate | Existing full inventory/asset protections remain. Post-review reproduction confirms boolean/float schema values bypass the integer-version boundary; bounded exact-type repair, refusal controls and independent recheck pending owner scope. | open |
+| T-19-22 | Tampering | Publication inventory/readback | high | mitigate | D134 independent recheck confirms exact-integer schema guards at published-assets69-73 and dispositions592-600; actual inventory/readback positives pass and true/1.0 mutations with recomputed hashes refuse. Complete frozen asset identity/digest maps and pre-publication guard remain intact. | closed |
 | T-19-23 | Information disclosure | Readback | medium | mitigate | verify-v03-dispositions.py privacy scan and immutable lifecycle pattern parity | closed |
 | T-19-24 | Repudiation | Release profiles | low | mitigate | Lifecycle derives profiles/ledger from tag; profile control | closed |
 | T-19-25 | Denial of service | Final synthetic preflight | medium | mitigate | Final source preflight records six successful producers, matching trusted-judge outcome, fixed-point ledger and transient-ref deletion; later source corrections separately qualified. Actual preflight evidence retained under build/preflight/runs/8f5da5203e7cb525d4ed4f4ddb1182369ab750a7-final-20261030-8f5da520/. | closed |
@@ -144,3 +144,20 @@ After the independent L1 audit, code review and a current-source reproduction es
 | Threats found | 41 |
 | Closed | 40 |
 | Open | 1 |
+
+
+## D-134 independent schema recheck
+
+At d2c0dc95, all seven affected implementation/test paths match the approved900eabfd prototype. The auditor independently verified valid integer and malformed boolean/float/string/null/array cases across the five validators, including direct schema-2 ledger handling and controlled CoverageError for non-object policy registries. The readback schema negatives recomputed raw-inventory hashes, so a hash mismatch could not masquerade as the desired type refusal. Actual v0.3.0 readback passed with22 assets.
+
+T-19-22 is reclosed. T-19-08/09/17/18/23/34/35/36/38/40 remain closed: exact schema guards are at support-ledger337/585, lifecycle538/1446/3559/3629, dispositions592-600, published-assets69-73 and policy-coverage500-505. Existing privacy/bounds/provenance/source/G-S/attacher, stable-ID ordering/coverage and immutable policy-blob checks remain. The changed coverage return has one updated caller at lifecycle3860. The other audited mitigations and existing AR-19-01 remain unchanged; no new acceptance is granted.
+
+The committed eight-target affected selection passed without skips in build/prb-schema-focused.log. Existing floors/markers are strengthened to51/120/99/72 without timeout changes. The recovery test verifies the immutable helper bytes before invoking its existing self-test. The independent auditor changed no file, project Git metadata or API state. Final full local/player/consumer, goal verification, exact-head protected CI and guarded PR B squash remain downstream gates; no new owner decision or release action is needed.
+
+## Security Audit 2026-10-31
+
+| Metric | Count |
+|---|---|
+| Threats found | 41 |
+| Closed | 41 |
+| Open | 0 |

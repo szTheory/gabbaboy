@@ -2,7 +2,7 @@
 phase: "19"
 slug: "qualified-v0-3-0-release"
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
-# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
+# audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: true) (#2117)
 status: validated
 nyquist_compliant: false
 wave_0_complete: true
@@ -98,7 +98,7 @@ None. Every phase behavior has automated verification (D-069). The owner-only de
 - [x] Wave 0 covers all MISSING references
 - [x] No watch-mode flags
 - [x] Feedback latency < 60s
-- [ ] `nyquist_compliant: true` set in frontmatter — reopened by post-review schema gap
+- [x] `nyquist_compliant: true` set in frontmatter — D134 refusal controls close the reopened schema gap
 
 **Validation:** Automated coverage is present for all eight executed plans. Owner scope decisions are recorded separately and are not test passes.
 
@@ -157,3 +157,16 @@ Final code review found an uncovered malformed-schema acceptance at pre-publish/
 | Gaps found | 2 |
 | Resolved | 0 |
 | Escalated | 2 |
+
+
+## D-134 gap closure evidence
+
+The owner approved the pinned seven-path repair. At committed d2c0dc95, all eight affected existing CTests passed without skips, including actual v0.3.0 readback, inventory/readback/disposition schema negatives, valid schema-1/schema-2 ledgers, capture/fixture schemas and non-object workflow registry rejection. Existing control floors/markers are raised to the measured51/120/99/72; no timeout or baseline assertion changed and no target was added. The initial isolated marker mismatch remains historical. Fresh independent security recheck reproduced the baseline acceptance, confirmed correct rejection with recomputed raw-inventory hashes and reclosed T-19-22. Both validation gaps now have automated refusal and valid-input positive checks. The final full local/player/consumer and exact-head hosted gates remain mandatory before the existing PR B merge.
+
+## Validation Audit 2026-10-31
+
+| Metric | Count |
+|---|---|
+| Gaps found | 2 |
+| Resolved | 2 |
+| Escalated | 0 |

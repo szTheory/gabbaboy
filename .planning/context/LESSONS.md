@@ -1015,3 +1015,13 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Verification:** At the Phase 19 boundary, both full object IDs were retained and remained reachable through the repair branch; branch cleanup is deferred until an authority rebaseline is reviewed.
 - **Source:** Phase 19 D-125..D-129; `build/phase19-window/PR-B-RECOVERY-NOTES.md`.
 - **Status:** Adopted.
+
+
+### GB-RELEASE-005 / 2026-10-31 / Test schema type boundaries and adjudicate against the actual protocol
+
+- **Cause and evidence:** Python equates True and1, allowing boolean schema fields through several version1 comparisons. A non-object registry also escaped as AttributeError. Actual v0.3.0 inventories used the correct integer schema, but final review exposed missing refusal controls. An adjacent legacy performance parser accepted numeric3.0 without bypassing any source/measurement check; no exact-token contract existed there.
+- **Remedy:** At boundaries that declare exact integer representations, test booleans, floating forms, strings, nulls and arrays alongside valid integer positives. Verify error paths through the actual CLI and recompute dependent hashes in negative controls so an unrelated hash refusal cannot hide a missing type guard. Validate a review finding against the protocol before broadening a repair: equivalent integral JSON numbers alone do not establish a defect ([JSON Schema numeric semantics](https://json-schema.org/understanding-json-schema/reference/numeric)).
+- **Applies when:** Python validates versioned evidence or configuration, especially when shared helpers have distinct legacy wire contracts.
+- **Verification:** D134 source d2c0dc95 passes eight existing affected CTests, preserves all baseline assertions/timeouts and receives fresh independent code/security rechecks. Production probes reject malformed versions and incorrect workload digests; the unsupported legacy hardening finding was withdrawn with evidence.
+- **Source:**19-SCHEMA-VALIDATION-RESCOPE.md,19-REVIEW.md and19-REVIEW-DISPOSITION.md.
+- **Status:** Adopted.

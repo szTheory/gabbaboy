@@ -106,7 +106,7 @@ coverage:
     human_judgment: false
 duration: not recorded across sessions
 completed: 2026-10-31
-status: halted
+status: complete
 ---
 
 # Phase 19 Plan 07: Exact-Tag Window, Publication and Readback Summary
@@ -171,3 +171,10 @@ Phase 19 execution has all eight plans complete, with the one planned gap slot u
 ## Final PR B review checkpoint
 
 After the factual release/readback summary was authored, the final standard-depth code review reproduced malformed schema-version acceptance and a registry-root diagnostic gap. The actual published inventory uses integer version1 and the release still reconciles, but unresolved validator correctness prevents final PR B closure. T-19-22 and validation are reopened. Under the exhausted review-fix limit, an isolated bounded prototype is preparation for an owner scope decision only; no implementation fix has entered PR B. Full final-head local qualification, goal verification and exact-head hosted PR B/merge remain pending. This summary is halted at Task4 rather than claiming a completed phase boundary. Continue the same Phase19 with `/gsd-execute-phase 19` after the bounded scope decision; eventual owner handoff remains `/gsd-verify-work 19`.
+
+
+## D-134 final schema repair and rechecks
+
+The owner approved the concrete seven-path schema repair after the final code-review checkpoint. Committed d2c0dc95 exactly matches the isolated900eabfd prototype: five existing validators enforce their declared exact integer schemas and controlled registry-root errors; two existing registrations raise the measured floors/markers. No new target, timeout, policy authority, dependency, permission, product or live release action was added. Eight affected current-source CTests pass, including the actual22-asset readback and positive/negative schema controls. New measured control guards are51/120/99/72; earlier93-control and19-test results above remain historical source-specific facts.
+
+Fresh independent code recheck closes WR-01/WR-02. The adjacent legacy numeric-version observation was withdrawn after contract/probe adjudication; no invalid source/measurement or unsupported version was accepted by that path, and it establishes no new exact-token policy. Fresh independent security recheck reclosed T-19-22 and confirmed all41 threats closed with existing AR-19-01 unchanged. Validation has automated gap closure. Final local full/player/consumer qualification, final phase-goal report, exact-head protected CI and the planned guarded PR B squash remain separate qualification gates; their final facts go to local continuation, not a summary edit after fingerprinting. No further scope decision is pending.

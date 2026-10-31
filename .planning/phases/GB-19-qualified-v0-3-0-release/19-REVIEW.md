@@ -1,8 +1,8 @@
 ---
 phase: GB-19-qualified-v0-3-0-release
-reviewed: 2026-10-31T14:28:06Z
+reviewed: 2026-10-31T15:01:32Z
 depth: standard
-files_reviewed: 72
+files_reviewed: 73
 files_reviewed_list:
   - .github/ci-timeouts.json
   - .github/scripts/release-evidence-lifecycle.sh
@@ -70,6 +70,7 @@ files_reviewed_list:
   - tests/scripts/verify-v02-consumers.py
   - tests/scripts/verify-v02-delivery.py
   - tests/scripts/verify-v02-fuzz.py
+  - tests/scripts/verify-v02-performance.py
   - tests/scripts/verify-v03-dispositions.py
   - tests/scripts/verify-version-window.py
   - tests/scripts/verify-workflow-policy-coverage.py
@@ -78,63 +79,56 @@ files_reviewed_list:
   - tests/test_state_fork.c
 findings:
   critical: 0
-  warning: 2
+  warning: 0
   info: 0
-  total: 2
-status: issues_found
+  total: 0
+status: clean
 review_base: f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4
-review_head: 535cdf796cccaf22520fa7b1f85c6d69c31af00c
+review_head: d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc
+prior_review_head: 535cdf796cccaf22520fa7b1f85c6d69c31af00c
+prior_review_report_commit: acc4049f
 post_tag_diff_base: d61a25ea54364e0e26ef89bb7467c72089361d49
 scope_resolution: degraded
+bounded_rescope_base: 0953f61951732951dcc655527655e0a5ec2d6d36
+bounded_rescope_head: d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc
 ---
 
 # Phase GB-19: Code Review Report
 
-**Reviewed:** 2026-10-31T14:28:06Z
+**Reviewed:** 2026-10-31T15:01:32Z
 **Depth:** standard
-**Files Reviewed:** 72
-**Status:** issues_found
+**Files Reviewed:** 73
+**Status:** clean
 
 ## Summary
 
-The phase-scope resolver reported `degraded` because the original task commits are not reachable after the phase changes were squashed. I used its recorded 72-file fallback union from `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4`, and also inspected the final post-tag changes from `d61a25ea54364e0e26ef89bb7467c72089361d49` through this review head. The checkout's only uncommitted source-adjacent change is a security-table row move; it does not change implementation behavior.
+The phase-scope resolver reported `degraded` because the original task commits were not reachable after the phase changes were squashed. The initial standard-depth audit therefore used the recorded 72-file fallback union from `f80bdf54c6c7d81e8e21f0275b43cda6edf6c8c4`; that full file list is retained above. At the current head, I independently rechecked all seven implementation and CTest-registration paths in the approved D-134 diff (`0953f61951732951dcc655527655e0a5ec2d6d36..d2c0dc95ecc7c5eb34a85bdc541f5ac3918190dc`) and traced their CLI error paths. I also adjudicated an adjacent performance-receipt numeric-representation concern against the existing contract and a production-path probe; it is withdrawn as unsubstantiated.
 
-Two robustness defects remain in JSON validation: boolean values can satisfy integer schema-version checks, and a non-object policy registry crashes with an uncaught `AttributeError` instead of a controlled rejection. No source files were modified.
+The approved patch digest matches `build/prb-approved-schema.diff` (`33c3646e59618a4f68f99fed16674f5240744d4493a534f79fb53ae7d5b4325b`). The exact-integer guards now reject non-integer JSON schema values at the previously affected inventory, disposition, registry, recovery fixture, API capture, coverage manifest, and support-ledger boundaries. The policy registry validates its root type before reading fields and the production CLI emits a controlled rejection. Existing integer-schema positives remain; the new negative controls exercise booleans, floats, strings, null, arrays, and non-object roots. The recovery CTest verifies the published-asset helper's bytes against the immutable revision before invoking its self-test. The parent-provided focused CTest log records the eight affected tests passing; source inspection, rather than the test result alone, supports closure of the original findings.
+
+The earlier stale CTest marker failure (expected 62 controls while the corrected self-test measures 72) remains recorded in `build/phase19-window/posttag-recovery/schema-rescope-prep/initial-ctest-marker-mismatch.md`; it was corrected by raising the existing exact marker. The initial review's erroneous inclusion of `verify-v03-dispositions.py:328` is expressly excluded: that embedded performance receipt check already required `type(perf.get("schema_version")) is int`, and this recheck confirmed it remains strict. The original reproduction is retained at `build/prb-review-reproduction.json`. No implementation file was modified during this review.
+
+## Closed Review Findings
+
+| ID | Original title | Recheck disposition | Evidence |
+|----|----------------|---------------------|----------|
+| WR-01 | Boolean schema versions are accepted as integer version 1 | Closed in the D-134 source recheck at `d2c0dc95`; the originally reproduced pre-publish inventory and registry paths now require exact integer types, as do the other previously listed unchecked schema boundaries. | Previous report at commit `acc4049f`; reproduction at `build/prb-review-reproduction.json`; exact approved patch at `build/prb-approved-schema.diff`. The strict `verify-v03-dispositions.py:328` site was already guarded and is excluded. |
+| WR-02 | A non-object workflow-policy registry escapes as an uncaught exception | Closed in the D-134 source recheck at `d2c0dc95`; a non-dictionary root is rejected before `.get`, and the CLI converts `CoverageError` to `REJECT workflow-policy-coverage` with exit 1. | Previous report at commit `acc4049f`; current guard in `tests/scripts/verify-workflow-policy-coverage.py:500-504`. |
+
+The original release failure evidence and actual published-release readback remain historical facts; this code review does not rewrite them or claim the remaining local, player, consumer, phase-goal, hosted-CI, PR B, or merge gates complete. The initial full audit and its source scope remain preserved in the previous report commit and the 72-file list above.
+
+## WR-03 Adjudication
+
+The concern was that `tests/scripts/verify-v02-performance.py:219` accepts `schema_version` by membership in `(1, 2, 3)`, so JSON `2.0` and `3.0` compare equal to those values in Python. The existing Phase 19 plan and receipt contract identify supported version values but do not require a lexical integer token or exact Python `int` at this separate legacy performance-receipt boundary. The existing exact-`int` pattern is scoped to named managed-input validators and the five D-134 boundaries; it is not a blanket wire-format rule.
+
+JSON and JSON Schema define `3` and `3.0` as the same integral numeric value; JSON Schema treats a number with a zero fractional part as an integer ([JSON Schema numeric types](https://json-schema.org/understanding-json-schema/reference/numeric)). The parent's production-path probe confirms integer `3` and numeric `3.0` both pass with the same verified summary; `true` is rejected by `--verify` as legacy, while `false`, `3.1`, and string `"3"` are rejected as unsupported. A wrong workload digest still fails its specific check. No unsupported-version or source/measurement-validation bypass was demonstrated. WR-03 is therefore withdrawn as an unsubstantiated hardening suggestion, not deferred or accepted as a risk. Probe evidence is retained at `build/prb-performance-schema-adjudication.json`.
 
 ## Narrative Findings (AI reviewer)
 
-### WR-01: Boolean schema versions are accepted as integer version 1
-
-**Classification:** WARNING
-**File:** `.github/scripts/verify-published-release-assets.py:71`; `tests/scripts/verify-workflow-policy-coverage.py:501`; additional unchecked comparisons at `tests/scripts/verify-v03-dispositions.py:595, 785`, `tests/scripts/verify-release-lifecycle.py:558, 1447`, and `tests/scripts/verify-support-ledger.py:341`
-
-**Issue:** The recorded reproduction at `build/prb-review-reproduction.json` confirms that `verify-published-release-assets.py --verify-pre-publish` accepts otherwise valid inventories with `"schema_version": true` and `"schema_version": 1.0`, and that `validate_manifest` accepts a workflow-policy registry with boolean `schema_version: true`. Those checks compare against `1` without checking the JSON type; Python treats both `True` and `1.0` as equal to integer `1`. The same unchecked comparison pattern is present at the additional listed sites. `verify-v03-dispositions.py:328` is protected by `type(perf.get("schema_version")) is not int` and should not be included in this finding. The unchecked sites permit malformed evidence or registry data to be treated as schema version 1.
-
-**Fix:** Require the exact integer type before comparing at each affected site, for example:
-
-```python
-version = inventory_doc.get("schema_version")
-if type(version) is not int or version != 1:
-    raise ValueError("frozen pre-publish inventory has an unknown schema")
-```
-
-### WR-02: A non-object workflow-policy registry escapes as an uncaught exception
-
-**Classification:** WARNING
-**File:** `tests/scripts/verify-workflow-policy-coverage.py:500`
-
-**Issue:** `_check` parses the candidate registry as arbitrary JSON and passes it directly to `validate_manifest`. If the file contains valid JSON with a non-object root such as `[]`, `validate_manifest` calls `.get` and raises `AttributeError`. `main` does not catch that exception, so the checker emits a traceback instead of its normal fail-closed `REJECT workflow-policy-coverage` diagnostic. The build still fails, but the malformed input bypasses the checker's declared error path and is harder to diagnose.
-
-**Fix:** Reject a non-dictionary root before accessing fields:
-
-```python
-def validate_manifest(manifest: object, expected: dict) -> None:
-    if type(manifest) is not dict:
-        reject("workflow-policy registry must be a JSON object")
-```
+All current findings from this review are closed or withdrawn as unsubstantiated. The D-134 recheck does not complete the remaining phase qualification or merge gates.
 
 ---
 
-_Reviewed: 2026-10-31T14:28:06Z_
+_Reviewed: 2026-10-31T15:01:32Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: standard_

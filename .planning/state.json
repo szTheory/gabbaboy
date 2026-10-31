@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 19",
-    "label": "Finish approved Phase 19 schema repair and closure",
-    "reason": "D134 approved; apply exact patch, qualify and merge existing PR B before verification boundary"
+    "command": "/gsd-verify-work 19",
+    "label": "Verify Phase 19 after qualified execution boundary",
+    "reason": "Final PR B candidate; owner runs only after local/goal/hosted gates and guarded merge succeed"
   },
   "updated_at": "2026-10-31T14:32:50Z"
 }
