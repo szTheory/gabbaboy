@@ -1,6 +1,6 @@
 ---
 phase: GB-19-qualified-v0-3-0-release
-verified: 2026-10-31T16:33:10Z
+verified: 2026-10-31T17:16:01Z
 status: gaps_found
 score: "87/88 must-haves verified"
 covered_files:
@@ -34,6 +34,7 @@ covered_files:
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-07-SUMMARY.md
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-08-PLAN.md
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-08-SUMMARY.md
+  - .planning/phases/GB-19-qualified-v0-3-0-release/19-CONSUMER-MARKER-RESCOPE.md
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-DRAFT-TAG-DRIFT-RESCOPE.md
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-DRAFT-TAG-RESTORATION-RESCOPE.md
   - .planning/phases/GB-19-qualified-v0-3-0-release/19-ENTRYPOINT-UTF8-RESCOPE.md
@@ -107,7 +108,7 @@ covered_files:
   - tests/test_cgb_profile.c
   - tests/test_state_codec.c
   - tests/test_state_fork.c
-covered_digest: "v4:sha256:84313e24fd43a093dc64800bb5c0e997d4145c49dd8cb18598561e54432ccb31"
+covered_digest: "v4:sha256:3636b006229d37af9ad12bafb7843d1cbe3aaf10e5d8cca37138bc03529b44d1"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
@@ -120,25 +121,27 @@ re_verification:
 gaps:
   - truth: "D-28 PR B publication/readback closure is merged and the post-squash phase-boundary handoff is complete."
     status: failed
-    reason: "PR137 exists, but no fresh exact-head native Windows/all protected CI result for the D135 candidate is recorded. The earlier red Windows jobs at 524ba3f7 are preserved and are not qualification; guarded squash, actual main-boundary checks and owner-workspace adoption remain pending."
+    reason: "PR137 remains open at older source 6c99ff0b. D135's fresh native Windows checks passed at its then-current head, but D136 is not yet on the PR and has no fresh exact-head native Windows, Linux sanitizer or all-required protected CI result. The six old 6c99ff0b runs are terminal and triaged; their red results are preserved and are not qualification of D136. The guarded squash, actual main-boundary checks and owner-workspace adoption remain pending."
     artifacts:
       - path: .planning/phases/GB-19-qualified-v0-3-0-release/19-07-PLAN.md
         issue: "The D-28 terminal PR B and post-squash boundary steps are still pending."
       - path: .planning/phases/GB-19-qualified-v0-3-0-release/19-07-SUMMARY.md
         issue: "The recorded route to phase verification follows PR B completion."
       - path: .planning/phases/GB-19-qualified-v0-3-0-release/19-WINDOWS-READBACK-WIRING-RESCOPE.md
-        issue: "The local D135 correction is qualified, but fresh exact-head native Windows and protected CI remain required before the planned guarded merge."
+        issue: "D135's two native Windows checks passed, but fresh exact-head checks for the newer D136 candidate and all protected jobs remain required before the planned guarded merge."
+      - path: .planning/phases/GB-19-qualified-v0-3-0-release/19-CONSUMER-MARKER-RESCOPE.md
+        issue: "D136's local consumer-marker regression passes; native Linux sanitizer and all required exact-head PR checks have not yet run on this candidate."
     missing:
-      - "Refresh PR137 to the approved D135 candidate and obtain fresh exact-head Windows and all required protected CI checks under the production duplicate-check guard; then perform only the planned guarded squash, verify the actual main boundary and negative-base predicate, adopt the owner workspace, and record the continuation boundary SHA before stopping at /gsd-verify-work 19."
+      - "Update PR137 to current D136 source 87520382 and obtain fresh exact-head native Windows, Linux sanitizer and all required protected CI checks under the production duplicate-check guard; then perform only the planned guarded squash, verify the actual main boundary and negative-base predicate, adopt the owner workspace, and record the continuation boundary SHA before stopping at /gsd-verify-work 19."
 ---
 
 # Phase 19: Qualified v0.3.0 Release Verification Report
 
 **Phase Goal:** v0.3.0 is published from its exact tag with save-state and host-contract claims scoped by model, corpus and platform, and every receipt bound to that tag; release hardening happens before the tag, not after.
-**Verified:** 2026-10-31T16:33:10Z
+**Verified:** 2026-10-31T17:16:01Z
 **Status:** gaps_found
-**Re-verification:** Yes — same audit refreshed after D135; the original PR B boundary gap remains.
-**Candidate:** implementation HEAD c47059959d54402ad3f327a023aa9e6e2eba9a6f; c470 records the D135 independent checks and phase evidence updates.
+**Re-verification:** Yes — same audit refreshed after D136; the original PR B boundary gap remains.
+**Candidate:** implementation HEAD 87520382c44e55930607df6b6bb58c773c011552; it records D136 independent checks and phase evidence updates.
 
 ## Goal Achievement
 
@@ -152,7 +155,7 @@ gaps:
 
 **Roadmap score:** 3/3. **Combined score:** 87/88 truths verified (85 plan truths plus 3 roadmap truths; no plan truth was dropped for restating a broader criterion).
 
-The original required-artifact query passed all 25 declared artifacts. Full core/player/package qualification at implementation HEAD 17920163182d4af453c3255b20913be0c08a9e54 recorded 1,707 CTest cases with zero failures or skips, plus the installed inventory, player package, separate Debug linkage, extracted package bytes and no-input negative check. D135 changes only tests/CMakeLists.txt and .gitattributes; compiled core, validator and fixture sources remain byte-identical through c470. At e46023c53bdff9e7ac44fcfb33a9e237ceec0430, the focused D135 configure/build/install and 23 affected CTests passed without skips. c470 only records fresh rechecks and phase evidence. The full suite was not rerun.
+The original required-artifact query passed all 25 declared artifacts. Full core/player/package qualification at implementation HEAD 17920163182d4af453c3255b20913be0c08a9e54 recorded 1,707 CTest cases with zero failures or skips, plus the installed inventory, player package, separate Debug linkage, extracted package bytes and no-input negative check. D135 changes only tests/CMakeLists.txt and .gitattributes; D136 changes only the consumer-test marker checker. Compiled core, API, player and fixture sources remain byte-identical through 87520382. At e46023c53bdff9e7ac44fcfb33a9e237ceec0430, the focused D135 configure/build/install and 23 affected CTests passed without skips. At e292db8c651e6f297ba6eb77049d2ca6f021304f, the D136 source-bound configure/build/install and 25 selected tests passed with no skips. HEAD 87520382 records fresh rechecks and phase evidence. The full suite was not rerun.
 
 ### Plan-Level Truths
 
@@ -164,7 +167,7 @@ The original required-artifact query passed all 25 declared artifacts. Full core
 | 19-04 | 10/10 | Candidate and nightly gates call the trusted rehearsal-source checker with the PR head, merge time and attempt jobs; version-PR gate calls the immutable version-window checker. Actual H/W/R1/R2 captures satisfy the release sequence. |
 | 19-05 | 12/12 | Same-source performance artifact upload/download and receipt validation are wired; retry, exact ratio, host smoke, published readback, sourced pre-publish inventory and privacy controls pass. Actual receipt source is S. |
 | 19-06 | 12/12 | Reviewed release content, notes/adoption controls and operational preflight are evidenced. The frozen 19-06 SUMMARY remains its historical pre-merge halt as required; actual PR A #133 closure, renewed preflight, exact CI/performance evidence and regeneration are recorded in 19-07 and captured facts, so the frozen status was not treated as current operational evidence. |
-| 19-07 | 12/13 | The tag, readback, ledger freeze, boundary snapshots and REL-01 trace are present and verified. The D135 Windows caller/EOL correction passes its local affected checks; new-head native Windows/all protected CI and the D-28 guarded-squash/boundary handoff remain pending as the single failed truth below. |
+| 19-07 | 12/13 | The tag, readback, ledger freeze, boundary snapshots and REL-01 trace are present and verified. D135's Windows caller/EOL correction and D136's atomic consumer-test marker correction pass their local affected checks. New exact-head Windows/Linux sanitizer/all-protected CI and the D-28 guarded-squash/boundary handoff remain pending as the single failed truth below. |
 | 19-08 | 6/6 | The original missing-notes failure is preserved; approved recovery kept the same tag and release identity; the one retry and actual G/S distinction are recorded. No retry renewal, tag move, new release or additional corrective merge occurred. |
 
 All 13 plan prohibitions were checked separately: 12 test-tier negative requirements are exercised by the final passing suite; the single judgment-tier stop instruction was preserved (this verifier did not run verify-work, a milestone audit or another phase). The non-inferable retry backstop is supported by observed API/Git facts: the sole retry published the same release ID and exact existing tag without moving either.
@@ -173,7 +176,7 @@ All 13 plan prohibitions were checked separately: 12 test-tier negative requirem
 
 The goal's general rule that release hardening happens before tagging was not literally true for the bounded recovery and readback/schema repairs. The first post-tag release run 41148606886 failed because the generated notes were absent. Owner approvals D130-D134 then authorized specific readback/run-link corrections, diagnosis of the same-draft association drift, one conditional tag-only restoration and the already-authorized retry, two UTF-8 entrypoint conversions, and the exact seven-path schema validation repair with fresh tests and independent reviews. The actual read-only preflight TypeError happened before any write and is preserved as a failure, not represented as a successful preflight.
 
-The captured history shows one tag-only restoration of the existing draft association with the body unchanged, then one original retry on workflow G; release 429606490 was published from S with 22 reconciled assets. The phase candidate's diff from S changes no core, public API, state format/pins, release workflow, timeouts, policy authority or performance limits. D134 changes are limited to the approved validators/tests. D135 is a separate owner-approved repair to the final readback test caller and the exact helper checkout representation; it changes no validator, release workflow, product behavior, release asset or release state. No release action or retry was performed for D135. These are recorded narrow exceptions, not evidence that no post-tag work occurred or a general risk waiver.
+The captured history shows one tag-only restoration of the existing draft association with the body unchanged, then one original retry on workflow G; release 429606490 was published from S with 22 reconciled assets. The phase candidate's diff from S changes no core, public API, state format/pins, release workflow, timeouts, policy authority or performance limits. D134 changes are limited to the approved validators/tests. D135 is a separate owner-approved repair to the final readback test caller and the exact helper checkout representation; it changes no validator, release workflow, product behavior, release asset or release state. D136 is a separate owner-approved repair to the private consumer-test pause marker's publication and its regression; real interruption assertions, marker schema and deadlines are unchanged. No release action or retry was performed for D135 or D136. These are recorded narrow exceptions, not evidence that no post-tag work occurred or a general risk waiver.
 
 ### D135 Windows Readback Wiring
 
@@ -181,7 +184,15 @@ PR137's earlier exact-head Windows jobs at 524ba3f7 exposed two strict-gate fail
 
 The owner-approved D135 patch changes exactly .gitattributes and tests/CMakeLists.txt from the reviewed PR head. The CTest now derives a repository-relative Git path from PROJECT_SOURCE_DIR and GBB_LIVE_PHASES_DIR while retaining the same immutable --rev, tag, exit/output contract, planning label and timeout. The root-anchored EOL rule applies only to the byte-compared published-asset helper. The immutable reader still refuses missing, wrong-root, drive-absolute and traversal paths; the helper and raw-byte guard are unchanged, and the APU unpinned EOL negative stays outside the rule. The forced-autocrlf baseline/fixed true/false controls show the conversion is handled without weakening byte identity.
 
-The approved patch matches the isolated prototype and digest recorded in the D135 rescope. Captured configure/build/install and focused CTest evidence at e46023c53bdff9e7ac44fcfb33a9e237ceec0430 records 23 affected tests passing with no skips. Four current documentation, summary-coverage and planning-label checks also pass after the D135 evidence documents were appended. All compiled and validator sources remain byte-identical to the prior fully qualified implementation; c470 contains only recheck and phase-evidence updates. This is local portability evidence, not a new native Windows result. Fresh exact-head Windows and other required protected checks still have to pass before the existing guarded PR B squash.
+The approved patch matches the isolated prototype and digest recorded in the D135 rescope. Captured configure/build/install and focused CTest evidence at e46023c53bdff9e7ac44fcfb33a9e237ceec0430 records 23 affected tests passing with no skips. Four documentation, summary-coverage and planning-label checks also pass after the D135 evidence documents were appended. Both native Windows checks passed at the D135 PR head. Since D136 changed source afterward, current-head protected checks are still required before merge.
+
+### D136 Consumer-Test Marker Publication
+
+The existing private pause hook exposed a race in Linux sanitizer CI: the parent test harness could observe the marker file after creation but before its JSON payload was written, producing a JSONDecodeError. The original CI failure is retained. The remaining six runs for source 6c99ff0b finished and were triaged: push CI and both fixture jobs passed, PR CI failed on the marker race and required-native aggregate, and preview producer gates refused that same failed PR CI. No unchanged run was retried or merged, and no unrelated failure was found. D135's two native Windows jobs passed on that prior head, but they do not qualify this newer D136 source.
+
+The owner-approved D136 change is limited to tests/scripts/verify-v02-consumers.py. It writes complete private marker JSON to a unique sibling temporary file, atomically replaces the readiness path, and removes a leftover temporary in all cases. Its deterministic regression observes the actual writer at the empty and partial write points, requires the ready path to remain absent, checks the exact completed payload and cleanup, rejects the original writer, and accepts the fixed writer. Both real interruption tests, their cleanup/retry/lock assertions, the marker schema, signal behavior, normal receipt publication, opt-in variables and deadlines remain unchanged.
+
+The exact approved patch matches prototype 8fdc1e63 and the recorded patch SHA in 19-CONSUMER-MARKER-RESCOPE.md. Source-bound configure, build and install at e292db8c651e6f297ba6eb77049d2ca6f021304f all succeeded; 25 affected tests passed with zero skips, including both complete C and C++ consumer controls that run the regression and real interruption coverage. Compiled core, API, player and fixture inputs remain byte-identical to the prior full qualification. The fresh independent code review is clear and the independent security recheck remains 41/41. This is local evidence only: Linux sanitizer CI and all other required exact-head protected checks for D136 are pending. No new release operation was performed.
 
 ### Required Artifacts
 
@@ -208,6 +219,7 @@ The approved patch matches the isolated prototype and digest recorded in the D13
 | tests/scripts/verify-doc-links.py | Tag-aware release documentation links | ✓ VERIFIED | Present; live and negative contract tests pass. |
 | docs/support/v0.3.0.md | Scoped v0.3.0 support ledger | ✓ VERIFIED | Present; generated ledger and tag blob binding pass. |
 | .planning/phases/GB-19-qualified-v0-3-0-release/19-release-readback.json | Actual publication and pre-publish readback | ✓ VERIFIED | Present; strict readback passes at this candidate. |
+| tests/scripts/verify-v02-consumers.py | Private consumer-test pause marker and interruption checks | ✓ VERIFIED | D136 atomically publishes the complete marker; both C and C++ consumer controls pass with the deterministic partial-write regression. |
 | tests/data/release-api/v030-notes-failure.json | Original missing-notes regression | ✓ VERIFIED | Present; actual first failure is preserved as refusal evidence. |
 | tests/scripts/verify-release-lifecycle.py | Post-tag lifecycle replay | ✓ VERIFIED | Present; lifecycle and post-tag endpoint controls pass. |
 | tests/data/release-api/v030-draft-association-restoration.json | Same-draft tag restoration case | ✓ VERIFIED | Present; restoration and refusal controls pass. |
@@ -240,6 +252,7 @@ The link-query utility mechanically verified four direct links. The other source
 | corrective PR G | 19-07 publication/readback continuation | Same draft, sole retry and readback | PARTIAL | Retry and readback are complete; PR B's guarded close and boundary handoff remain pending. |
 | v03_readback CTest | verify-v03-dispositions.py immutable Source.read path | Repository-relative Git path derived from PROJECT_SOURCE_DIR and configured phase root | ✓ WIRED | D135 keeps --rev, --tag, exit/output, label and timeout intact; local affected CTest passes. |
 | Exact LF attribute for published-asset helper | Recovery test byte comparison against immutable Git blob | Root-anchored one-file EOL rule | ✓ WIRED | The helper and byte guard are unchanged; forced-autocrlf baseline/fixed controls and local recovery tests pass. |
+| C/C++ installed-consumer controls | tests/scripts/verify-v02-consumers.py | Existing static self-test and pause hook | ✓ WIRED | Both full consumer CTests execute D136's marker regression and existing interruption checks; both passed in the 25-test local run. |
 
 ### Data-Flow Trace
 
@@ -255,13 +268,14 @@ The link-query utility mechanically verified four direct links. The other source
 |---|---|---|---|
 | Full core/player qualification of unchanged implementation | Captured qualification at HEAD 17920163182d4af453c3255b20913be0c08a9e54 | 1,707 executed tests; zero failure/skip; installed/player/package checks pass; implementation bytes are unchanged by D135 | ✓ PASS |
 | D135 Windows readback wiring and checkout representation | Captured configure/build/install and focused CTest at e46023c53bdff9e7ac44fcfb33a9e237ceec0430 | 23 affected readback, recovery, EOL-negative, contract and installed tests passed; no skips | ✓ PASS |
+| D136 consumer marker publication and regression | Captured configure/build/install and affected CTest at e292db8c651e6f297ba6eb77049d2ca6f021304f | 25 affected tests passed with zero skips; C and C++ consumer controls include the exact marker regression and real interruption checks | ✓ PASS |
 | Committed readback reflects actual publication | verify-v03-dispositions.py --check-readback at candidate with tag v0.3.0 | v03-readback pass, 22 assets | ✓ PASS |
 | Scoped claims and ledger are bound to S | verify-support-ledger.py --check-claims and --check-ledger at S | 9 claims/10 non-claims; 107 static cases, 132 source inputs | ✓ PASS |
 | Version window is closed after release | verify-version-window.py --check-tracked | Inactive at exact candidate; four managed inputs checked | ✓ PASS |
 | D-134 malformed inventory/schema controls refuse bad input | verify-published-release-assets.py --self-test | Five positives; 18 recovery refusals; six schema refusals | ✓ PASS |
 | Tag/release and asset inventory remain unchanged in latest saved capture | Read-only API capture at 2026-10-31T15:13:37Z | Main G and tag S match; all 22 assets unchanged; zero open PRs/issues | ✓ PASS |
 
-No full suite was rerun. The unchanged implementation is covered by the prior complete run; D135 is covered by the focused e460 run and c470 recheck records. No fresh native Windows result is claimed. No live release mutation was performed.
+No full suite was rerun. The unchanged implementation is covered by the prior complete run; D135 is covered by its focused e460 run and hosted native Windows checks, and D136 by the focused e292 run. No native Linux sanitizer or other exact-head protected result is claimed for D136. No live release mutation was performed.
 
 ### Probe Execution
 
@@ -288,9 +302,9 @@ None. This is a release/infrastructure phase with no visual or hardware claim to
 
 ### Gaps Summary
 
-The release outcome itself meets all three roadmap success criteria: exact-tag rehearsal, appropriately scoped support claims, and source-bound published receipts/readback. The bounded D130-D135 post-tag exceptions are documented above and preserve the tag and product tree. PR137 is open from the earlier candidate, but no fresh exact-head native Windows/all protected CI result for the D135 candidate is provided. The earlier Windows failures remain preserved and are not reused as qualification. The guarded squash, actual main boundary and owner-workspace handoff remain pending. No user decision is needed; the parent agent owns the next operational step and must not claim future CI or merge completion.
+The release outcome itself meets all three roadmap success criteria: exact-tag rehearsal, appropriately scoped support claims, and source-bound published receipts/readback. The bounded D130-D136 post-tag exceptions are documented above and preserve the tag and product tree. PR137 remains open at older source 6c99ff0b. D135's native Windows checks passed at its then-current head, while D136's local marker fix passes; fresh exact-head Windows, Linux sanitizer and all required protected CI for 87520382 remain pending. The old failure runs are preserved and triaged, not reused as qualification. The guarded squash, actual main boundary and owner-workspace handoff remain pending. No user decision is needed; the parent agent owns the next operational step and must not claim future CI or merge completion.
 
 ---
 
-_Verified: 2026-10-31T16:33:10Z_
+_Verified: 2026-10-31T17:16:01Z_
 _Verifier: the agent (gsd-verifier)_
