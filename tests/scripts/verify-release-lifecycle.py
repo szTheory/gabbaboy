@@ -45,6 +45,7 @@ import itertools
 import tempfile
 import threading
 import time
+import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -56,6 +57,7 @@ LIFECYCLE = ".github/scripts/release-evidence-lifecycle.sh"
 WORKFLOW = ".github/workflows/release.yml"
 DELIVERY = "tests/scripts/verify-v02-delivery.py"
 CAPTURE = "tests/data/release-api/captured.json"
+RECOVERY_FIXTURE = "tests/data/release-api/v030-notes-failure.json"
 SOURCES = "tests/data/release-api/SOURCES.md"
 POST_TAG_COVERAGE = "tests/data/release-lifecycle-post-tag-coverage.json"
 # Production files the replay materializes from --rev into the judge checkout (the `trusted/` tree of every job).
@@ -374,6 +376,42 @@ def assemble_capture(raw: dict[str, object]) -> dict:
 
 def capture_text(capture: dict) -> str:
     return json.dumps(capture, indent=2, sort_keys=True) + "\n"
+
+
+RECOVERY_TEST_REV: str | None = None
+
+
+def v030_changelog_section(changelog: bytes) -> bytes:
+    """Return the exact v0.3.0 heading and section bytes, including original LF endings."""
+    lines = changelog.splitlines(keepends=True)
+    starts = [index for index, line in enumerate(lines) if line.startswith(b"## [0.3.0]")]
+    if len(starts) != 1:
+        raise Reject("recovery-source-section", "tagged CHANGELOG must contain exactly one v0.3.0 section")
+    start = starts[0]
+    end = next((index for index in range(start + 1, len(lines)) if lines[index].startswith(b"## ")), len(lines))
+    return b"".join(lines[start:end])
+
+
+def repair_support_ledger_link(section: bytes, relative_link: bytes, pinned_link: bytes) -> bytes:
+    """TDD RED scaffold: the reviewed one-link repair is implemented in the following GREEN commit."""
+    return section
+
+
+class PostTagRecoveryContract(unittest.TestCase):
+    def test_repaired_body_changes_only_the_single_tag_pinned_support_link(self) -> None:
+        if RECOVERY_TEST_REV is None:
+            self.fail("recovery test revision was not resolved")
+        fixture_raw = git_show(RECOVERY_TEST_REV, RECOVERY_FIXTURE)
+        fixture = json.loads(fixture_raw.decode("utf-8"))
+        repair = fixture["tagged_repair"]
+        source = git_show(repair["source_sha"], "CHANGELOG.md")
+        section = v030_changelog_section(source)
+        relative_link = repair["relative_link"].encode("utf-8")
+        pinned_link = repair["tag_pinned_link"].encode("utf-8")
+        actual = repair_support_ledger_link(section, relative_link, pinned_link)
+        expected = section.replace(relative_link, pinned_link, 1)
+        self.assertEqual(actual, expected)
+        self.assertEqual(hashlib.sha256(actual).hexdigest(), repair["repaired_body_sha256"])
 
 
 def check_capture(text: bytes, sources: str) -> dict:
@@ -2723,6 +2761,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--rev")
     parser.add_argument("--replay", action="store_true")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--unittest-post-tag-recovery", action="store_true",
+                        help=argparse.SUPPRESS)
     post_tag_mode = parser.add_mutually_exclusive_group()
     post_tag_mode.add_argument("--self-test-post-tag", action="store_true")
     post_tag_mode.add_argument("--self-test-post-tag-group", choices=POST_TAG_GROUP_NAMES)
@@ -2747,6 +2787,12 @@ def main(argv: list[str]) -> int:
         if not args.rev and (head.returncode != 0 or not SHA1.fullmatch(head.stdout.strip())):
             parser.error("--rev is required when HEAD does not resolve to a commit")
         rev = resolve_rev(args.rev or head.stdout.strip())
+        if args.unittest_post_tag_recovery:
+            global RECOVERY_TEST_REV
+            RECOVERY_TEST_REV = rev
+            suite = unittest.defaultTestLoader.loadTestsFromTestCase(PostTagRecoveryContract)
+            result = unittest.TextTestRunner(verbosity=2).run(suite)
+            return 0 if result.wasSuccessful() else 1
         if args.check_capture:
             files = {path: git_show(rev, path) for path in (CAPTURE, SOURCES)}
             capture = check_capture(files[CAPTURE], files[SOURCES].decode("utf-8"))
@@ -2757,7 +2803,8 @@ def main(argv: list[str]) -> int:
             print(f"release-lifecycle post-tag coverage controls pass baseline_ids={baseline_ids} registrations={registrations} "
                   "omitted=refused duplicate=refused wrong_group=refused expect_exit=pass")
             return 0
-        if not (args.replay or args.self_test or args.self_test_post_tag or args.self_test_post_tag_group):
+        if not (args.replay or args.self_test or args.self_test_post_tag or args.self_test_post_tag_group
+                or args.unittest_post_tag_recovery):
             parser.error("choose --replay, --self-test, --self-test-post-tag, --self-test-post-tag-group, "
                          "--self-test-post-tag-coverage, --check-capture or --sanitize-capture")
         try:

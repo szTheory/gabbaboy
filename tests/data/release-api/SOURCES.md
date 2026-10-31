@@ -61,6 +61,50 @@ has a negative control in `--self-test`). The raw responses are not stored.
 The repository owner login `szTheory` is kept because it is the repository identity (`szTheory/gabbaboy`), which the
 production verifiers pin and derive from the check-run `url` and `html_url` prefixes.
 
+## v0.3.0 first post-tag failure (additive fixture)
+
+- `v030-notes-failure.json` sha256: 8b19bbdea5a03e6cdf69f277cefc3b96c104aac3415ca5bb22cba65ea8843cff
+- bytes: 53899 (bound: 262144)
+- format: UTF-8 JSON, sorted keys, two-space indent, LF line endings
+- API version: `X-GitHub-Api-Version: 2022-11-28`
+
+The failure snapshot is the retained first-run evidence: draft detail GET
+`repos/szTheory/gabbaboy/releases/429606490`, empty asset-list GET
+`repos/szTheory/gabbaboy/releases/429606490/assets?per_page=100`, workflow-run GET
+`repos/szTheory/gabbaboy/actions/runs/41148606886`, and candidate-job GET
+`repos/szTheory/gabbaboy/actions/jobs/124379552103`. The run failed at the actual
+`Require final release notes to satisfy the v0.2 adoption contract` step with
+`release-notes-absence-missing`; the draft was unpublished and had no assets. These
+are digests of the retained sanitized-input files, not claimed wire-body digests.
+The exact UTF-8 notes body is preserved separately in the fixture because the
+existing sanitizer intentionally replaces API `body` members.
+
+The candidate-identity list response was not present in the first-run snapshot. A
+new bounded read-only GET to
+`repos/szTheory/gabbaboy/releases?per_page=100` was captured at
+`2026-10-31T00:48:23Z`, after the failure, with five entries. The fixture preserves
+that response shape after the same sanitizer and records the raw response SHA-256;
+the capture time is distinct from the failure snapshot and is not used to rewrite
+its historical state.
+
+Sanitization reuses `verify-release-lifecycle.py`'s existing `sanitize` function:
+API bodies are omitted, email-shaped strings are redacted, non-owner user objects
+are replaced with same-shape placeholders, runner identifiers are removed, and
+bounded API arrays are truncated with the actual counts recorded. The separately
+retained failed notes include the SHA-256 of their exact UTF-8 bytes and the digest
+of the saved release-detail capture from which the body was taken. The frozen
+reviewed body has SHA-256
+`71003d07287066ef740a10c62238ef25d9ef054a7e84064caf46b7467fe39202` and contains
+the exact tag-pinned support-ledger URL once; the recovery checker derives its
+repair only from the original tagged section and the one specified link change.
+
+The source section at tag `v0.3.0` / S has SHA-256
+`187fb676dc1717e6582aa16f27a26f3932c29f29b5049aa3d59ecebdb934a4be`. Replacing
+only `[support ledger](docs/support/v0.3.0.md)` with
+`[support ledger](https://github.com/szTheory/gabbaboy/blob/v0.3.0/docs/support/v0.3.0.md)`
+produces SHA-256
+`ab81ea7e6164964957a13676060f8741095635127a5afa19d8e8f90f4c2a6784`.
+
 ## Provenance
 
 Captured 2026-10-29 by the repository's Phase 19 release-lifecycle work from the repository's own public history with
