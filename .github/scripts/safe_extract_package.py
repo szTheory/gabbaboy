@@ -117,11 +117,22 @@ def checked_name(member):
         parts.pop()
     if not parts or any(part in ("", ".", "..") for part in parts):
         raise ValueError(f"unsafe archive path: {raw!r}")
-    if parts[0].endswith(":") or parts[0] != "installed-prefix":
+    if any(":" in part for part in parts):
+        raise ValueError(f"unsafe Windows drive or stream syntax in archive path: {raw!r}")
+    if parts[0] != "installed-prefix":
         raise ValueError(f"archive path is outside installed-prefix: {raw!r}")
     if member.type not in (tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE):
         raise ValueError(f"unsupported archive entry type: {raw!r}")
     return PurePosixPath(*parts)
+
+
+def require_target_inside_root(root, target, name):
+    """Reject native path joins that escape the extraction root."""
+    try:
+        target.relative_to(root)
+    except ValueError as error:
+        raise ValueError(f"archive target is outside extraction root: {name!r}") from error
+    return target
 
 
 def validate_members(members):
@@ -167,6 +178,7 @@ def extract(archive_path, destination):
     if root.exists() and any(root.iterdir()):
         raise ValueError("destination must be an empty directory")
     root.mkdir(parents=True, exist_ok=True)
+    root = root.resolve()
 
     # Validate all visible names/types before writing anything. The tar parser
     # itself is fed through a bounded gzip stream, including hidden metadata and
@@ -185,8 +197,17 @@ def extract(archive_path, destination):
             if expected is None or (member.type, member.size) != (expected.type, expected.size):
                 raise ValueError(f"archive changed between validation and extraction: {key!r}")
             seen.add(key)
-            target = root.joinpath(*PurePosixPath(key).parts)
+            parts = PurePosixPath(key).parts
+            target = root.joinpath(*parts)
+            # Windows can reinterpret a later drive-relative component during a
+            # native join. Resolve and prove containment before mkdir/open.
+            target = require_target_inside_root(root, target.resolve(strict=False), key)
             parent = target.parent
+            current = root
+            for part in parts[:-1]:
+                current = current / part
+                if os.path.lexists(current) and not stat.S_ISDIR(os.lstat(current).st_mode):
+                    raise ValueError(f"non-directory extraction parent: {current}")
             parent.mkdir(parents=True, exist_ok=True)
             # The destination is fresh/private. Still check every parent to prevent
             # extraction from following an unexpected link if that assumption fails.
@@ -234,6 +255,12 @@ def extract(archive_path, destination):
 
 
 def self_test():
+    import tempfile
+    from pathlib import PureWindowsPath
+    from unittest.mock import patch
+
+    completed_controls = []
+
     def expect_rejection(label, members):
         try:
             validate_members(members)
@@ -278,6 +305,9 @@ def self_test():
          ("installed-prefix/a", "file", "")],
         [("installed-prefix/", "dir", ""), ("installed-prefix/a", "file", ""),
          ("installed-prefix/a/b", "file", "")],
+        [("installed-prefix/", "dir", ""), ("installed-prefix/D:escape/payload", "file", "")],
+        [("installed-prefix/", "dir", ""), ("installed-prefix/share:stream/file", "file", "")],
+        [("installed-prefix/", "dir", ""), ("installed-prefix/share/file:stream", "file", "")],
     ]
     for entries in cases:
         try:
@@ -293,6 +323,80 @@ def self_test():
         except ValueError:
             continue
         raise AssertionError(f"unsafe archive accepted: {entries!r}")
+    completed_controls.append("reusable extractor drive/ADS path rejection")
+
+    windows_root = PureWindowsPath("C:/temporary/extraction")
+    normal_target = windows_root.joinpath("installed-prefix", "share", "notes.txt")
+    require_target_inside_root(windows_root, normal_target, "installed-prefix/share/notes.txt")
+    escaped_target = windows_root.joinpath("installed-prefix", "D:escape", "payload")
+    try:
+        require_target_inside_root(windows_root, escaped_target, "installed-prefix/D:escape/payload")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Windows drive-relative join escaped the extraction root")
+    completed_controls.append("reusable extractor cross-drive containment")
+
+    def expect_injected_escape_rejection(member_name, outside_name, member_kind):
+        with tempfile.TemporaryDirectory(prefix="safe-extract-self-test-") as temporary:
+            base = Path(temporary)
+            destination = base / "destination"
+            archive_path = base / "input.tar.gz"
+            outside_parent = base / "outside"
+            outside_parent.mkdir()
+            sentinel = outside_parent / "sentinel"
+            sentinel.write_bytes(b"unchanged")
+            outside_target = outside_parent / outside_name
+            archive_path.write_bytes(archive_bytes([
+                ("installed-prefix/", "dir", ""),
+                (member_name, member_kind, ""),
+            ]))
+            member_parts = PurePosixPath(member_name).parts
+            resolved_destination = destination.resolve()
+            path_type = type(destination)
+            original_joinpath = path_type.joinpath
+            original_mkdir = path_type.mkdir
+            original_open = os.open
+            attempted = []
+
+            def injected_joinpath(self, *segments):
+                if self == resolved_destination and tuple(segments) == member_parts:
+                    return outside_target
+                return original_joinpath(self, *segments)
+
+            def monitored_mkdir(self, *args, **kwargs):
+                if self in (outside_parent, outside_target):
+                    attempted.append(f"mkdir:{self}")
+                    raise AssertionError(f"outside mkdir attempted: {self}")
+                return original_mkdir(self, *args, **kwargs)
+
+            def monitored_open(path, flags, *args, **kwargs):
+                if Path(path) == outside_target:
+                    attempted.append(f"open:{path}")
+                    raise AssertionError(f"outside file open attempted: {path}")
+                return original_open(path, flags, *args, **kwargs)
+
+            with patch.object(path_type, "joinpath", new=injected_joinpath), \
+                 patch.object(path_type, "mkdir", new=monitored_mkdir), \
+                 patch.object(os, "open", new=monitored_open):
+                try:
+                    extract(archive_path, destination)
+                except ValueError as error:
+                    if "outside extraction root" not in str(error):
+                        raise AssertionError(f"wrong containment rejection: {error}") from error
+                else:
+                    raise AssertionError(f"injected outside {member_kind} target was accepted")
+
+            if attempted:
+                raise AssertionError(f"outside filesystem operation was attempted: {attempted!r}")
+            if outside_target.exists() or sentinel.read_bytes() != b"unchanged":
+                raise AssertionError("injected containment control changed outside data")
+        return True
+
+    expect_injected_escape_rejection("installed-prefix/outside-dir/", "escaped-dir", "dir")
+    completed_controls.append("reusable extractor directory containment before create")
+    expect_injected_escape_rejection("installed-prefix/outside-file", "escaped-file", "file")
+    completed_controls.append("reusable extractor regular-file containment before open")
 
     root = SimpleNamespace(name="installed-prefix/", type=tarfile.DIRTYPE, size=0)
     too_many = [root] + [
@@ -345,9 +449,10 @@ def self_test():
     else:
         raise AssertionError("decompressed-stream limit accepted excess bytes")
     print(
-        "PASS safe package extraction adversarial validation (member count, path depth, aggregate size, "
-        "and decompressed stream bounds)"
+        "PASS safe package extraction adversarial validation (drive/ADS paths, target containment, member count, "
+        "path depth, aggregate size, and decompressed stream bounds)"
     )
+    return tuple(completed_controls)
 
 
 if __name__ == "__main__":

@@ -204,6 +204,15 @@
       ]
     },
     {
+      "group": "release_jobs",
+      "id": "helper-41c69419a7b81d3302dc",
+      "kind": "helper",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
       "group": "helpers",
       "id": "helper-460a1275e230c9c41c23",
       "kind": "helper",
@@ -462,6 +471,15 @@
       ]
     },
     {
+      "group": "release_jobs",
+      "id": "helper-8541ac3d9565f02c0673",
+      "kind": "helper",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
       "group": "helpers",
       "id": "helper-86263a286abdbff0ebfc",
       "kind": "helper",
@@ -532,6 +550,15 @@
     {
       "group": "helpers",
       "id": "helper-9cd2a2c9b52d6881be06",
+      "kind": "helper",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "release_jobs",
+      "id": "helper-9f51ab2b7d2d3765f2a9",
       "kind": "helper",
       "platforms": [
         "posix",
@@ -830,6 +857,15 @@
     {
       "group": "helpers",
       "id": "helper-f8f1c0f5dd2a2a38dafc",
+      "kind": "helper",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "release_jobs",
+      "id": "helper-f987e4eab1b5e92bf0cd",
       "kind": "helper",
       "platforms": [
         "posix",

@@ -280,6 +280,9 @@ def _write_control_archive(path: Path, members: list[tuple[str, bytes, str]]) ->
 
 def _product_archive_controls(root: Path, build_dir: Path) -> None:
     """Exercise the publisher's production archive gate using real installed product bytes."""
+    for label in _SAFE_ARCHIVE.self_test():
+        _mark_policy_control("helper", "product-archive-path", label)
+
     with tempfile.TemporaryDirectory(prefix="gbb-product-archive-controls.") as directory:
         scratch = Path(directory)
         prefix = scratch / "prefix"

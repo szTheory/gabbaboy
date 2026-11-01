@@ -299,6 +299,10 @@ def baseline_controls(source: bytes) -> list[dict]:
         "NTFS alternate stream components rejected",
         "directory containment before create",
         "regular parent containment before create",
+        "reusable extractor drive/ADS path rejection",
+        "reusable extractor cross-drive containment",
+        "reusable extractor directory containment before create",
+        "reusable extractor regular-file containment before open",
     ):
         rows.append(_helper_row("product-archive-path", "_product_archive_controls", label,
                                 group="release_jobs"))
@@ -695,12 +699,12 @@ def _compare_archive_helper_ast(baseline: bytes, current: bytes) -> None:
         reject(f"bounded archive helper does not parse: {error}")
     baseline_functions = {node.name: node for node in baseline_tree.body if isinstance(node, ast.FunctionDef)}
     current_functions = {node.name: node for node in current_tree.body if isinstance(node, ast.FunctionDef)}
-    if set(current_functions) != set(baseline_functions):
+    if set(current_functions) != set(baseline_functions) | {"require_target_inside_root"}:
         reject("bounded archive helper function inventory changed")
     changed_functions = {name for name in baseline_functions
                          if ast.dump(baseline_functions[name], include_attributes=False)
                          != ast.dump(current_functions[name], include_attributes=False)}
-    if changed_functions != {"bounded_tarinfo_class", "open_bounded_tar", "self_test"}:
+    if changed_functions != {"bounded_tarinfo_class", "open_bounded_tar", "checked_name", "extract", "self_test"}:
         reject(f"bounded archive helper changed outside the reviewed functions: {sorted(changed_functions)}")
 
     baseline_classes = {node.name: node for node in baseline_tree.body if isinstance(node, ast.ClassDef)}
@@ -720,6 +724,8 @@ def _compare_archive_helper_ast(baseline: bytes, current: bytes) -> None:
     normalized: list[ast.stmt] = []
     for node in current_tree.body:
         if isinstance(node, ast.ClassDef) and node.name == "ArchiveLimitError":
+            continue
+        if isinstance(node, ast.FunctionDef) and node.name == "require_target_inside_root":
             continue
         if isinstance(node, ast.ClassDef) and node.name == "BoundedReader":
             normalized.append(copy.deepcopy(baseline_classes[node.name]))
@@ -1066,6 +1072,10 @@ def _self_test(root: Path, revision: str) -> int:
         ("path", "NTFS alternate stream components rejected"),
         ("path", "directory containment before create"),
         ("path", "regular parent containment before create"),
+        ("path", "reusable extractor drive/ADS path rejection"),
+        ("path", "reusable extractor cross-drive containment"),
+        ("path", "reusable extractor directory containment before create"),
+        ("path", "reusable extractor regular-file containment before open"),
     )
     expected_ids = {row["id"] for row in expected["controls"]}
     for family, label in required_archive_controls:
@@ -1345,6 +1355,21 @@ def _self_test(root: Path, revision: str) -> int:
     rejected("bounded archive helper source mutation", lambda: verify_archive_helper_identity(root, changed_helper))
     rejected("bounded archive helper reviewed digest",
              lambda: verify_archive_helper_identity(root, reviewed_helper + b"\n"))
+    drive_guard_mutant = candidate_helper.replace(
+        b'if any(":" in part for part in parts):', b"if False:", 1,
+    )
+    if drive_guard_mutant == candidate_helper:
+        reject("bounded archive helper drive/ADS mutation fixture did not match")
+    rejected("bounded archive helper drive/ADS guard removal",
+             lambda: verify_archive_helper_identity(root, drive_guard_mutant))
+    target_guard_mutant = candidate_helper.replace(
+        b"require_target_inside_root(root, target.resolve(strict=False), key)",
+        b"target.resolve(strict=False)", 1,
+    )
+    if target_guard_mutant == candidate_helper:
+        reject("bounded archive helper target-containment mutation fixture did not match")
+    rejected("bounded archive helper target-containment guard removal",
+             lambda: verify_archive_helper_identity(root, target_guard_mutant))
 
     def reject_source_mutant(label: str, mutant: bytes) -> None:
         if mutant == candidate_source:
@@ -1446,7 +1471,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 88:
+    if controls != 90:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
