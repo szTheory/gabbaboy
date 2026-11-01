@@ -48,6 +48,7 @@ MAX_GIT_TREE_OUTPUT_BYTES = 32 * 1024 * 1024
 MAX_GIT_TREE_STDERR_BYTES = 4096
 GIT_TREE_READ_CHUNK_BYTES = 64 * 1024
 GIT_TREE_TIMEOUT_SECONDS = 30
+GIT_BLOB_READ_CHUNK_BYTES = 64 * 1024
 MAX_PRODUCT_FILE_BYTES = 512 * 1024 * 1024
 MAX_PRODUCT_TOTAL_BYTES = 1024 * 1024 * 1024
 MAX_PRODUCT_ENTRIES = 16384
@@ -112,6 +113,20 @@ def git(root: Path, *args: str, input_bytes: bytes | None = None) -> bytes:
     return result.stdout
 
 
+def _terminate_and_reap(process, label: str) -> None:
+    try:
+        if process.poll() is None:
+            process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+    except OSError as error:
+        raise Reject("git-child-cleanup-failed", f"{label}: {error}") from None
+
+
 def check_commit(root: Path, revision: object, token: str) -> str:
     if not isinstance(revision, str) or not HEX40.fullmatch(revision):
         raise Reject(token, "expected one full lowercase commit id")
@@ -124,13 +139,43 @@ def check_commit(root: Path, revision: object, token: str) -> str:
 
 def blob(root: Path, revision: str, path: str) -> bytes:
     path = relative_path(path, "Git blob path")
-    result = subprocess.run(["git", "show", f"{revision}:{path}"], cwd=root,
-                            capture_output=True, check=False, timeout=30)
-    if result.returncode != 0:
-        raise Reject("git-blob-missing", path)
-    if len(result.stdout) > MAX_FILE_BYTES:
-        raise Reject("file-size-limit", path)
-    return result.stdout
+    try:
+        process = subprocess.Popen(["git", "show", f"{revision}:{path}"], cwd=root,
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
+    except OSError as error:
+        raise Reject("git-object-unavailable", str(error)[:240]) from None
+    stream = process.stdout
+    data = bytearray()
+    try:
+        if stream is None:
+            raise Reject("git-blob-reader-unavailable", path)
+        while len(data) <= MAX_FILE_BYTES:
+            chunk = stream.read(min(GIT_BLOB_READ_CHUNK_BYTES, MAX_FILE_BYTES + 1 - len(data)))
+            if not chunk:
+                break
+            data.extend(chunk)
+        if len(data) > MAX_FILE_BYTES:
+            if stream is not None:
+                stream.close()
+            _terminate_and_reap(process, "git show")
+            raise Reject("file-size-limit", path)
+        if stream is not None:
+            stream.close()
+        try:
+            returncode = process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            _terminate_and_reap(process, "git show")
+            raise Reject("git-blob-timeout", path) from None
+        if returncode != 0:
+            raise Reject("git-blob-missing", path)
+        return bytes(data)
+    except OSError as error:
+        raise Reject("git-blob-unavailable", f"{path}: {error.strerror}") from None
+    finally:
+        if stream is not None and not stream.closed:
+            stream.close()
+        if process.poll() is None:
+            _terminate_and_reap(process, "git show")
 
 
 def _notice_digest_table_matches(index: bytes, fixture_id: str, manifest_digest: str,
@@ -1759,6 +1804,44 @@ def _fake_tree_process_lifecycle_control() -> bool:
     return True
 
 
+def _fake_blob_process_lifecycle_control() -> bool:
+    fake = _FakeTreeProcess(b"x" * 8192, b"")
+    process_calls = 0
+    original_popen = subprocess.Popen
+    original_limit = MAX_FILE_BYTES
+
+    def fake_popen(*_args, **kwargs):
+        nonlocal process_calls
+        if kwargs.get("bufsize") != 0:
+            return original_popen(*_args, **kwargs)
+        process_calls += 1
+        return fake
+
+    subprocess.Popen = fake_popen
+    globals()["MAX_FILE_BYTES"] = 4
+    try:
+        try:
+            blob(Path("."), BASELINE_COMMIT, "fixtures/oversized.bin")
+        except Reject as error:
+            if error.code != "file-size-limit":
+                raise Reject("self-test-git-blob-lifecycle-reason", str(error)) from None
+        else:
+            return False
+    finally:
+        subprocess.Popen = original_popen
+        globals()["MAX_FILE_BYTES"] = original_limit
+
+    if process_calls == 0:
+        return False
+    if fake.stdout.bytes_read != 5:
+        raise Reject("self-test-git-blob-read-bound", f"overflow consumed {fake.stdout.bytes_read} bytes, expected 5")
+    if not fake.terminated or fake.wait_after_terminate == 0 or fake.wait_calls == 0:
+        raise Reject("self-test-git-blob-lifecycle", "overflow did not terminate and reap the git child")
+    if not fake.stdout.closed:
+        raise Reject("self-test-git-blob-lifecycle", "overflow did not close the git output stream")
+    return True
+
+
 def _run_bounded_input_controls() -> int:
     missing: list[str] = []
     project = Path(__file__).resolve().parents[2]
@@ -1827,6 +1910,8 @@ def _run_bounded_input_controls() -> int:
 
     if not _fake_tree_process_lifecycle_control():
         missing.append("git-stream-lifecycle")
+    if not _fake_blob_process_lifecycle_control():
+        missing.append("git-blob-stream-lifecycle")
 
     if missing:
         markers = {
@@ -1835,10 +1920,11 @@ def _run_bounded_input_controls() -> int:
             "git-tree-output": "self-test-git-tree-output-bypass",
             "git-tree-entry-count": "self-test-git-tree-entry-count-bypass",
             "git-stream-lifecycle": "self-test-git-stream-lifecycle-bypass",
+            "git-blob-stream-lifecycle": "self-test-git-blob-stream-lifecycle-bypass",
         }
         first = missing[0]
         raise Reject(markers[first], f"over-limit control was accepted or its stream lifecycle was not enforced: {first}")
-    return 5
+    return 6
 
 
 def self_test() -> None:
