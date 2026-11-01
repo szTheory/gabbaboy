@@ -10,16 +10,37 @@ endif()
 get_filename_component(source_dir "${GBB_SOURCE_DIR}" ABSOLUTE)
 get_filename_component(binary_dir "${GBB_BINARY_DIR}" ABSOLUTE)
 set(smoke_root "${binary_dir}/preview-package-smoke")
+set(package_build_dir "${smoke_root}/release-package-build")
 set(install_prefix "${smoke_root}/installed-prefix")
 set(extract_root "${smoke_root}/extracted")
 set(archive "${smoke_root}/installed-prefix.tar.gz")
+set(core_inventory "${smoke_root}/core-product-inventory.json")
 set(runner_workdir "${smoke_root}/unrelated-working-directory")
 
 file(REMOVE_RECURSE "${smoke_root}")
 file(MAKE_DIRECTORY "${smoke_root}" "${extract_root}" "${runner_workdir}")
 
 execute_process(
-  COMMAND "${GBB_CMAKE_COMMAND}" --install "${binary_dir}" --prefix "${install_prefix}"
+  COMMAND "${GBB_CMAKE_COMMAND}" -S "${source_dir}" -B "${package_build_dir}"
+    -G "${GBB_GENERATOR}" -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+  RESULT_VARIABLE package_configure_result
+  OUTPUT_VARIABLE package_configure_output
+  ERROR_VARIABLE package_configure_error)
+if(NOT package_configure_result EQUAL 0)
+  message(FATAL_ERROR
+    "Release package configure failed (${package_configure_result}): ${package_configure_output}${package_configure_error}")
+endif()
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}" --build "${package_build_dir}" --target gabbaboy-runner
+  RESULT_VARIABLE package_build_result
+  OUTPUT_VARIABLE package_build_output
+  ERROR_VARIABLE package_build_error)
+if(NOT package_build_result EQUAL 0)
+  message(FATAL_ERROR
+    "Release package build failed (${package_build_result}): ${package_build_output}${package_build_error}")
+endif()
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}" --install "${package_build_dir}" --prefix "${install_prefix}"
   RESULT_VARIABLE install_result OUTPUT_VARIABLE install_output ERROR_VARIABLE install_error)
 if(NOT install_result EQUAL 0)
   message(FATAL_ERROR "Clean package install failed (${install_result}): ${install_output}${install_error}")
@@ -46,6 +67,23 @@ file(GLOB package_configs LIST_DIRECTORIES false
   "${install_prefix}/*/cmake/GabbaBoy/GabbaBoyConfig.cmake")
 if(NOT package_configs)
   message(FATAL_ERROR "Installed package export metadata is missing")
+endif()
+
+# Validate the producer's actual install tree before packaging it. The inventory is a
+# temporary identity check for extraction, not an alternate product-policy source.
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}"
+    "-DGBB_SOURCE_DIR=${source_dir}"
+    "-DGBB_INSTALL_PREFIX=${install_prefix}"
+    "-DGBB_EXECUTABLE_SUFFIX=${GBB_EXECUTABLE_SUFFIX}"
+    "-DGBB_WRITE_PRODUCT_INVENTORY=${core_inventory}"
+    -P "${source_dir}/cmake/VerifyInstalledPackage.cmake"
+  RESULT_VARIABLE stage_policy_result
+  OUTPUT_VARIABLE stage_policy_output
+  ERROR_VARIABLE stage_policy_error)
+if(NOT stage_policy_result EQUAL 0)
+  message(FATAL_ERROR
+    "Installed package stage failed exact product policy (${stage_policy_result}): ${stage_policy_output}${stage_policy_error}")
 endif()
 
 execute_process(
@@ -134,10 +172,12 @@ if(NOT cgb_hdma_scan_result EQUAL 0 OR
 endif()
 execute_process(
   COMMAND "${GBB_CMAKE_COMMAND}"
+    "-DGBB_SOURCE_DIR=${source_dir}"
     "-DGBB_INSTALL_PREFIX=${extracted_prefix}"
     "-DGBB_EXECUTABLE_SUFFIX=${GBB_EXECUTABLE_SUFFIX}"
+    "-DGBB_PRODUCT_INVENTORY=${core_inventory}"
     "-DGBB_RUNNER_WORKDIR=${runner_workdir}"
-    "-DGBB_FORBIDDEN_PATHS=${source_dir};${binary_dir}"
+    "-DGBB_FORBIDDEN_PATHS=${source_dir};${binary_dir};${package_build_dir}"
     -P "${source_dir}/cmake/VerifyInstalledPackage.cmake"
   RESULT_VARIABLE runner_result OUTPUT_VARIABLE runner_output ERROR_VARIABLE runner_error)
 if(NOT runner_result EQUAL 0)
