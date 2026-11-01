@@ -35,8 +35,9 @@ requirements-pending: [RIGHTS-01]
 commits: 6
 plan_head_before: 802555ac42264561d6b3f6fbad233d9aac6db0a9
 plan_head_after: 0d2a28d3
-status: complete
-completion_scope: Original Tasks 1 and 2 plus owner-authorized Task 3; original task evidence and historical actuals are preserved.
+status: reopened
+completion_scope: Completed Tasks 1–3 only; all six task commits, original evidence and measured historical actuals are preserved.
+pending_follow_up: Task 4 — Windows drive/ADS rejection and directory/file containment before creation.
 coverage:
   - id: PLATFORM-ARCHIVE-TRUST
     description: Trusted publisher verifies macOS and Windows downloaded products before draft validation; hostile archives, altered bytes, and unsafe paths reject.
@@ -74,11 +75,17 @@ coverage:
 
 The release publisher now checks downloaded macOS and Windows product archives with a trusted local verifier before draft validation.
 
+## Reopened for Windows target-containment security rescope
+
+Plan 20-06 is incomplete until its appended Task 4 passes. [20-POST-RESCOPE-CODE-REVIEW.md](20-POST-RESCOPE-CODE-REVIEW.md) confirms the prior metadata and missing-checker defects are closed, but identifies a Windows drive-qualified directory escape and regular-parent creation before containment checks. Current production path validation also accepts NTFS alternate-stream names. Existing accomplishments, six task commits and passing coverage below remain historical evidence for completed Tasks 1–3; they do not establish the new pre-creation namespace/containment guarantees.
+
+Task 4 in [20-06-PLAN.md](20-06-PLAN.md) rejects drive/ADS syntax in every component, checks each directory/file target and its parents before creation, proves no side effects through production extraction controls, and refreshes the exact source/AST/control registry and CTest markers. The executor acts next on Task 4 under the already authorized in-place rescope; no new owner confirmation is required. Keep this status reopened until its exact targeted CTests pass at the committed implementation/coverage head, then append actual Task 4 commits and fresh block-style coverage. All earlier evidence remains intact, the nine-plan cap is unchanged, and Phase 20 closure still requires its separate final integration gates. No fixture/rights change or live publication is included.
+
 ## Reopened for owner-authorized final-review security rescope
 
 Final review reproduced a hidden PAX/GNU metadata bypass of the extractor's regular-file byte budget (CR-01) and a missing-trusted-checker path that leaves a stale destination (WR-01). The original accomplishments, completed-task metrics, three task commits and passing coverage remain historical evidence for Tasks 1 and 2; Task 3 adds the resource and cleanup guarantees.
 
-The bounded follow-up in [20-06-PLAN.md](20-06-PLAN.md) adds total decompressed-stream and pre-payload metadata size/aggregate/count limits through the existing trusted production archive gate, synthetic controls for each limit, missing-checker cleanup and same-destination retry, and the reviewed source/AST/control-registry update. This stays inside Plan 20-06 and the nine-plan Phase 20 cap. No fixture or rights-policy change and no live publication are included. The executor acts next on Task 3; no new owner confirmation is required.
+The bounded follow-up in [20-06-PLAN.md](20-06-PLAN.md) adds total decompressed-stream and pre-payload metadata size/aggregate/count limits through the existing trusted production archive gate, synthetic controls for each limit, missing-checker cleanup and same-destination retry, and the reviewed source/AST/control-registry update. This stays inside Plan 20-06 and the nine-plan Phase 20 cap. No fixture or rights-policy change and no live publication are included. Task 3 is completed; its implementation and coverage commits are listed below.
 
 At the committed implementation/coverage head, reconfigure/build passed. The release-job grouped CTest, both workflow coverage CTests, safe-extractor self-test, plan-cap, planning-hygiene and live-summary CTests passed. Final Phase 20 full-suite, hosted platform and review/security/closure evidence remain separate required gates.
 
@@ -111,7 +118,7 @@ Six Plan 20-06 task commits are listed above. Interleaved Plan 20-09 commits are
 
 The independent coverage checker required its owner-authorized snapshot, AST allowlist, registry update, and an updated CTest completion marker to recognize the new trusted workflow checker and expanded negative-control count. The gate remained enforced and its negative controls passed.
 
-## Self-Check: PASSED
+## Tasks 1–3 Self-Check: PASSED (historical)
 
 - All six Plan 20-06 task commits are ancestors of the recorded final head; interleaved Plan 20-09 commits are excluded.
 - No fixture was admitted, and RIGHTS-01 remains pending.
