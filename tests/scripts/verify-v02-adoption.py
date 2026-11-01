@@ -1078,6 +1078,14 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         test_root = Path(temp)
         copy_inputs(root, test_root)
         child_result(test_root, "docs")
+
+        component_notice = test_root / "fixtures/visible-demo/LICENSE.txt"
+        component_notice_bytes = component_notice.read_bytes()
+        component_notice.unlink()
+        child_result(test_root, "docs", "notice-license-file-missing:visible-demo")
+        component_notice.write_bytes(component_notice_bytes)
+        rejected_reasons.append("notice-license-file-missing")
+        rejected += 1
         release_copy = test_root / RELEASE
         release_bytes = release_copy.read_bytes()
         release_copy.write_bytes(b"\xff")
@@ -1300,7 +1308,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 4
+    controls = len(mutations) + 5
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
