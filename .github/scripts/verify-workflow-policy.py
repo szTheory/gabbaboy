@@ -278,13 +278,13 @@ def _write_control_archive(path: Path, members: list[tuple[str, bytes, str]]) ->
                 bundle.addfile(info, io.BytesIO(data))
 
 
-def _product_archive_controls(root: Path) -> None:
+def _product_archive_controls(root: Path, build_dir: Path) -> None:
     """Exercise the publisher's production archive gate using real installed product bytes."""
     with tempfile.TemporaryDirectory(prefix="gbb-product-archive-controls.") as directory:
         scratch = Path(directory)
         prefix = scratch / "prefix"
         try:
-            subprocess.run(["cmake", "--install", str(root / "build"), "--prefix", str(prefix)],
+            subprocess.run(["cmake", "--install", str(build_dir), "--prefix", str(prefix)],
                            cwd=root, capture_output=True, text=True, check=True, timeout=60)
         except (OSError, subprocess.SubprocessError) as error:
             detail = ""
@@ -4415,11 +4415,15 @@ def _mark_policy_control(kind: str, *parts: str) -> None:
     _record_policy_completion(_COMPLETED_POLICY_CONTROLS, control_id, control, _ACTIVE_POLICY_GROUP, platform)
 
 
-def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | None = None) -> None:
+def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | None = None,
+                         build_dir: Path | None = None) -> None:
     """Run the unchanged complete self-test, optionally selecting one frozen mutation family."""
     global _ACTIVE_POLICY_GROUP, _ACTIVE_POLICY_CONTROLS, _COMPLETED_POLICY_CONTROLS
     if group not in (*_POLICY_PARTITION_GROUPS, "all"):
         raise SystemExit(f"unknown workflow-policy control group: {group}")
+    product_build_dir = (build_dir if build_dir is not None else root / "build").resolve()
+    if group in ("all", "release_jobs") and not (product_build_dir / "cmake_install.cmake").is_file():
+        raise SystemExit(f"workflow-policy product controls require a configured build directory: {product_build_dir}")
     repository = Path(__file__).resolve().parents[2]
     manifest_path = repository / "tests/data/workflow-policy-controls.json"
     try:
@@ -4459,7 +4463,7 @@ def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | 
 
             globals()[name] = selected
     try:
-        self_test(root)
+        self_test(root, product_build_dir)
     finally:
         for name, original in original_generators.items():
             globals()[name] = original
@@ -6298,7 +6302,7 @@ git() {
     return 1
 
 
-def self_test(root: Path) -> None:
+def self_test(root: Path, build_dir: Path) -> None:
     rejected = 0
     run_helpers = _ACTIVE_POLICY_GROUP is None or _ACTIVE_POLICY_GROUP in ("all", "helpers")
     if run_helpers:
@@ -6487,7 +6491,7 @@ def self_test(root: Path) -> None:
     if run_helpers:
         rejected += report_red_replay_controls(root)
     if _ACTIVE_POLICY_GROUP in (None, "all", "release_jobs"):
-        _product_archive_controls(root)
+        _product_archive_controls(root, build_dir)
     print(f"PASS: workflow policy self-test negative_controls={rejected} "
           f"positive_controls={1 + runner_positive_controls + resolver_accepted + accepted + routing_accepted}")
 
@@ -6503,6 +6507,8 @@ def main() -> int:
                         help="limit --self-test to one registered control group; defaults to all controls")
     parser.add_argument("--completed-file", type=Path, default=None,
                         help="write completed stable control IDs after a successful --self-test")
+    parser.add_argument("--build-dir", type=Path, default=None,
+                        help="configured CMake build tree used by product archive controls")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="tree whose .github/workflows files are judged as data")
     parser.add_argument("--git-root", type=Path, default=None,
@@ -6522,7 +6528,7 @@ def main() -> int:
     root = args.root.resolve()
     try:
         if args.self_test:
-            run_policy_self_test(root, args.group, args.completed_file)
+            run_policy_self_test(root, args.group, args.completed_file, args.build_dir)
             return 0
         if args.check_product_archive is not None:
             if not args.expected_name or args.destination is None:
