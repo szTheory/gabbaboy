@@ -1043,34 +1043,39 @@ def product_tree_entries(tree: Path) -> dict[str, dict]:
         raise Reject("product-tree-unavailable", str(tree))
     entries: dict[str, dict] = {}
     folded: set[str] = set()
-    for current, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
-        current_path = Path(current)
-        retained_dirs = []
-        for dirname in dirnames:
-            path = current_path / dirname
-            relative = path.relative_to(root).as_posix()
-            relative_path(relative, "product directory")
-            if path.is_symlink():
-                raise Reject("path-link", relative)
-            try:
-                if not stat.S_ISDIR(path.lstat().st_mode):
-                    raise Reject("product-special-file", relative)
-            except OSError:
-                raise Reject("product-tree-unavailable", relative) from None
-            entries[relative] = {"kind": "directory"}
-            if len(entries) > MAX_PRODUCT_ENTRIES:
-                raise Reject("product-entry-count-limit", "too many product entries")
-            retained_dirs.append(dirname)
-        dirnames[:] = retained_dirs
-        for filename in filenames:
-            path = current_path / filename
-            relative = relative_path(path.relative_to(root).as_posix(), "product file")
-            if relative.casefold() in folded:
-                raise Reject("product-path-duplicate", relative)
-            folded.add(relative.casefold())
-            entries[relative] = _hash_product_file(path, relative)
-            if len(entries) > MAX_PRODUCT_ENTRIES:
-                raise Reject("product-entry-count-limit", "too many product entries")
+    pending = [root]
+    entry_count = 0
+    while pending:
+        current_path = pending.pop()
+        try:
+            with os.scandir(current_path) as children:
+                for child in children:
+                    entry_count += 1
+                    if entry_count > MAX_PRODUCT_ENTRIES:
+                        raise Reject("product-entry-count-limit", "too many product entries")
+                    path = Path(child.path)
+                    relative = relative_path(path.relative_to(root).as_posix(), "product entry")
+                    if relative.casefold() in folded:
+                        raise Reject("product-path-duplicate", relative)
+                    folded.add(relative.casefold())
+                    try:
+                        mode = child.stat(follow_symlinks=False).st_mode
+                    except OSError:
+                        raise Reject("product-tree-unavailable", relative) from None
+                    if stat.S_ISLNK(mode):
+                        raise Reject("path-link", relative)
+                    if stat.S_ISDIR(mode):
+                        entries[relative] = {"kind": "directory"}
+                        pending.append(path)
+                    elif stat.S_ISREG(mode):
+                        entries[relative] = _hash_product_file(path, relative)
+                    else:
+                        raise Reject("product-special-file", relative)
+        except Reject:
+            raise
+        except OSError as error:
+            directory = current_path.relative_to(root).as_posix() if current_path != root else "."
+            raise Reject("product-tree-unavailable", f"{directory}: {error.strerror}") from None
     return entries
 
 
@@ -1842,6 +1847,75 @@ def _fake_blob_process_lifecycle_control() -> bool:
     return True
 
 
+def _fake_product_scandir_limit_control() -> bool:
+    class FakeEntry:
+        def __init__(self, path: str):
+            self.path = path
+            self.name = Path(path).name
+
+        def stat(self, *, follow_symlinks: bool = True):
+            return type("FakeStat", (), {"st_mode": stat.S_IFDIR | 0o755})()
+
+        def is_dir(self, *, follow_symlinks: bool = True) -> bool:
+            return True
+
+        def is_symlink(self) -> bool:
+            return False
+
+    class FakeScandir:
+        def __init__(self, directory: Path):
+            self.directory = directory
+            self.index = 0
+            self.yielded = 0
+            self.closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.closed = True
+
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            if self.index >= 100:
+                raise StopIteration
+            self.index += 1
+            self.yielded += 1
+            return FakeEntry(str(self.directory / f"child-{self.index}"))
+
+    original_scandir = os.scandir
+    original_limit = MAX_PRODUCT_ENTRIES
+    scanners: list[FakeScandir] = []
+
+    def fake_scandir(directory):
+        scanner = FakeScandir(Path(directory))
+        scanners.append(scanner)
+        return scanner
+
+    with tempfile.TemporaryDirectory(prefix="gbb-product-entry-limit-") as directory:
+        tree = Path(directory) / "product"
+        tree.mkdir()
+        os.scandir = fake_scandir
+        globals()["MAX_PRODUCT_ENTRIES"] = 1
+        try:
+            try:
+                product_tree_entries(tree)
+            except Reject as error:
+                if error.code != "product-entry-count-limit":
+                    raise Reject("self-test-product-entry-limit-reason", str(error)) from None
+            else:
+                return False
+        finally:
+            os.scandir = original_scandir
+            globals()["MAX_PRODUCT_ENTRIES"] = original_limit
+
+    if len(scanners) != 1 or scanners[0].yielded != 2 or not scanners[0].closed:
+        raise Reject("self-test-product-entry-limit", "traversal retained or visited beyond the first over-limit entry")
+    return True
+
+
 def _run_bounded_input_controls() -> int:
     missing: list[str] = []
     project = Path(__file__).resolve().parents[2]
@@ -1912,6 +1986,8 @@ def _run_bounded_input_controls() -> int:
         missing.append("git-stream-lifecycle")
     if not _fake_blob_process_lifecycle_control():
         missing.append("git-blob-stream-lifecycle")
+    if not _fake_product_scandir_limit_control():
+        missing.append("product-entry-scandir-limit")
 
     if missing:
         markers = {
@@ -1921,10 +1997,11 @@ def _run_bounded_input_controls() -> int:
             "git-tree-entry-count": "self-test-git-tree-entry-count-bypass",
             "git-stream-lifecycle": "self-test-git-stream-lifecycle-bypass",
             "git-blob-stream-lifecycle": "self-test-git-blob-stream-lifecycle-bypass",
+            "product-entry-scandir-limit": "self-test-product-entry-scandir-limit-bypass",
         }
         first = missing[0]
         raise Reject(markers[first], f"over-limit control was accepted or its stream lifecycle was not enforced: {first}")
-    return 6
+    return 7
 
 
 def self_test() -> None:
