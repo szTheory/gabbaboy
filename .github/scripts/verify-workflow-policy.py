@@ -1765,7 +1765,8 @@ def _fixture_call(workflow: str, job_id: str, job: dict, command: str, code: str
 
 
 def _fixture_step_event(workflow: str, job_id: str, job: dict, step_name: str, command: str,
-                        code: str, *, contains: tuple[str, ...] = (), conditional: bool = False):
+                        code: str, *, contains: tuple[str, ...] = (), conditional: bool = False,
+                        exact: bool = False):
     step = _fixture_step(workflow, job_id, job, step_name)
     if not step.get("run") or not _runs_under_errexit(step):
         raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r} must run under fatal shell settings")
@@ -1775,7 +1776,8 @@ def _fixture_step_event(workflow: str, job_id: str, job: dict, step_name: str, c
     except Reject as error:
         raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r}: {error}") from None
     for event in events:
-        if (event.words[:len(words)] == words and set(assigns) <= set(event.assigns)
+        command_matches = event.words == words if exact else event.words[:len(words)] == words
+        if (command_matches and set(assigns) <= set(event.assigns)
                 and set(contains) <= set(event.words)
                 and _reachable(event, events, conditional, False)):
             return (job["steps"].index(step), event.index)
@@ -1837,11 +1839,12 @@ def check_fixture_admission_workflows(root: Path) -> None:
         if len(checkout) != 1 or str(checkout[0].get("with", {}).get("fetch-depth")) != "0":
             raise Reject("fixture-admission-history", f"release.{job_id} must check out full history for immutable policy objects")
         stage_step = _fixture_step("release", job_id, job, stage_name)
-        stage_command = f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {stage_path}'
+        stage_command = (f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {stage_path} '
+                         f'--layout core --repo-root . --write-inventory {CORE_PRODUCT_INVENTORY}')
         stage_call = _fixture_step_event("release", job_id, job, stage_name, stage_command,
                                          "fixture-product-stage",
                                          contains=("--layout", "core", "--repo-root", ".", "--write-inventory",
-                                                   CORE_PRODUCT_INVENTORY))
+                                                   CORE_PRODUCT_INVENTORY), exact=True)
         archive_call = _fixture_step_event("release", job_id, job, stage_name, archive_command,
                                            "fixture-product-stage")
         if stage_call >= archive_call:
@@ -1851,11 +1854,12 @@ def check_fixture_admission_workflows(root: Path) -> None:
         extract_call = _fixture_step_event("release", job_id, job, smoke_name,
                                            "bash tests/scripts/verify-release-candidate.sh --extract",
                                            "fixture-product-inventory-binding")
-        extracted_command = f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {extracted_path}'
+        extracted_command = (f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {extracted_path} '
+                             f'--layout core --repo-root . --inventory {CORE_PRODUCT_INVENTORY}')
         extracted_call = _fixture_step_event("release", job_id, job, smoke_name, extracted_command,
                                              "fixture-product-inventory-binding",
                                              contains=("--layout", "core", "--repo-root", ".", "--inventory",
-                                                       CORE_PRODUCT_INVENTORY))
+                                                       CORE_PRODUCT_INVENTORY), exact=True)
         consumer_call = _fixture_step_event("release", job_id, job, smoke_name, consumer_command,
                                             "fixture-product-inventory-binding")
         if not extract_call < extracted_call < consumer_call:
@@ -1865,10 +1869,11 @@ def check_fixture_admission_workflows(root: Path) -> None:
         reuse_extract = _fixture_step_event("release", job_id, job, reuse_name,
                                             f"bash tests/scripts/verify-release-candidate.sh --extract {reuse_archive}",
                                             "fixture-product-reuse", conditional=True)
-        reuse_command = f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {reuse_tree}'
+        reuse_command = (f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {reuse_tree} '
+                         f'--layout core --repo-root . --write-inventory {CORE_PRODUCT_INVENTORY}')
         reuse_call = _fixture_step_event("release", job_id, job, reuse_name, reuse_command, "fixture-product-reuse",
                                          contains=("--layout", "core", "--repo-root", ".", "--write-inventory",
-                                                   CORE_PRODUCT_INVENTORY), conditional=True)
+                                                   CORE_PRODUCT_INVENTORY), conditional=True, exact=True)
         if reuse_extract >= reuse_call:
             raise Reject("fixture-product-reuse", f"release.{job_id} must validate reused bytes after safe extraction")
 
@@ -3918,6 +3923,16 @@ def _mutations():
            "      - name: Configure and build cache-free release core\n",
            "--repo-root . --write-inventory build/core-product-inventory.json",
            "--write-inventory build/core-product-inventory.json", "fixture-product-stage"),
+        _m("P20 Linux stage gate repeats the repository root option", rel,
+           "      - name: Configure and build cache-free release core\n",
+           "--repo-root . --write-inventory build/core-product-inventory.json",
+           "--repo-root . --write-inventory build/core-product-inventory.json --repo-root /tmp/other",
+           "fixture-product-stage"),
+        _m("P20 Linux stage gate appends a second product tree", rel,
+           "      - name: Configure and build cache-free release core\n",
+           "--layout core --repo-root . --write-inventory build/core-product-inventory.json",
+           "--layout core --repo-root . --write-inventory build/core-product-inventory.json --check-product-tree /tmp/other",
+           "fixture-product-stage"),
         _m("P20 macOS reused core skips actual-byte validation", rel, "  candidate-macos:\n",
            "--check-product-tree build/reuse-extracted-core", "--skip-product-tree build/reuse-extracted-core",
            "fixture-product-reuse"),

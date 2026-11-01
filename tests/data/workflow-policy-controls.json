@@ -1889,6 +1889,15 @@
     },
     {
       "group": "release_jobs",
+      "id": "mutation-4450f240f7ffbcd33a31",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "release_jobs",
       "id": "mutation-445b17260d82f505a960",
       "kind": "mutation",
       "platforms": [
@@ -3105,6 +3114,15 @@
     {
       "group": "release_jobs",
       "id": "mutation-9050bb1d2093401aeb10",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "release_jobs",
+      "id": "mutation-90d618d33dfdcc22e5b8",
       "kind": "mutation",
       "platforms": [
         "posix",

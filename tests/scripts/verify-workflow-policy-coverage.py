@@ -66,6 +66,8 @@ ADDED_MUTATION_CONTROLS = (
     ("P20 Linux core stage policy call is removed", "release.yml", "fixture-product-stage"),
     ("P20 Linux core stage policy runs after archive creation", "release.yml", "fixture-product-stage"),
     ("P20 Linux stage gate redirects the repository policy root", "release.yml", "fixture-product-stage"),
+    ("P20 Linux stage gate repeats the repository root option", "release.yml", "fixture-product-stage"),
+    ("P20 Linux stage gate appends a second product tree", "release.yml", "fixture-product-stage"),
     ("P20 macOS reused core skips actual-byte validation", "release.yml", "fixture-product-reuse"),
     ("P20 downloaded Linux core skips stage-inventory equality", "release.yml", "fixture-product-inventory-binding"),
 )
