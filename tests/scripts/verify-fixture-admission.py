@@ -1069,9 +1069,17 @@ def _validate_product_entries(entries: Mapping | Iterable, layout: str, repo_roo
             if path not in allowed_directories:
                 raise Reject("product-path-unknown", path)
             continue
-        if path not in allowed_files:
-            if record["sha256"] in forbidden:
+        if record["sha256"] in forbidden:
+            expected_record = expected.get(path)
+            exact_pinned_file = (
+                expected_record is not None
+                and expected_record["kind"] == "file"
+                and record["size_bytes"] == expected_record["size_bytes"]
+                and record["sha256"] == expected_record["sha256"]
+            )
+            if not exact_pinned_file:
                 raise Reject("product-fixture-leak", path)
+        if path not in allowed_files:
             raise Reject("product-path-unknown", path)
         if path in expected:
             expected_record = expected[path]
@@ -1251,6 +1259,12 @@ def _synthetic_product_rules(rules: dict, layout: str) -> tuple[dict, bytes]:
     if layout == "player":
         test_rules["external_notices"]["sdl3"]["size_bytes"] = len(sdl_bytes)
         test_rules["external_notices"]["sdl3"]["sha256"] = sha256(sdl_bytes)
+        # The reviewed player policy currently has no alternatives. Exercise the validator's
+        # generic one_of behavior with a self-test-only group without changing the pinned policy.
+        test_rules["generated"]["player"]["one_of"].append([
+            "share/gabbaboy/generated/player-control-a.bin",
+            "share/gabbaboy/generated/player-control-b.bin",
+        ])
     return test_rules, sdl_bytes
 
 
@@ -1414,9 +1428,25 @@ def self_test_packages(layout: str) -> int:
         baseline = check_commit(repo_root, BASELINE_COMMIT, "baseline-object-unavailable")
         forbidden_path = next(path for path in sorted(tree_files(repo_root, baseline, "fixtures"))
                               if path not in allowed_source_paths)
-        forbidden_bytes = blob(repo_root, baseline, forbidden_path)
+        forbidden_product_bytes = blob(repo_root, baseline, forbidden_path)
+        forbidden_product_digest = sha256(forbidden_product_bytes)
+        if forbidden_product_digest not in source_contract[1]:
+            raise Reject("self-test-product-forbidden-digest", forbidden_path)
         for name in ("renamed-payload.bin", "suffixless"):
-            rejected_tree(name, lambda candidate, name=name: (candidate / "share/gabbaboy" / name).write_bytes(forbidden_bytes),
+            rejected_tree(name, lambda candidate, name=name: (candidate / "share/gabbaboy" / name).write_bytes(forbidden_product_bytes),
+                          "product-fixture-leak")
+
+        required_generated_path = next(path for path in test_rules["generated"][layout]["required"]
+                                       if path in clean_inventory["files"])
+        rejected_tree(f"forbidden-required-generated-{layout}",
+                      lambda candidate: (candidate / required_generated_path).write_bytes(forbidden_product_bytes),
+                      "product-fixture-leak")
+
+        if test_rules["generated"][layout]["one_of"]:
+            one_of_group = test_rules["generated"][layout]["one_of"][0]
+            selected_one_of = next(path for path in one_of_group if path in clean_inventory["files"])
+            rejected_tree(f"forbidden-one-of-generated-{layout}",
+                          lambda candidate: (candidate / selected_one_of).write_bytes(forbidden_product_bytes),
                           "product-fixture-leak")
 
         protected_paths = sorted(path for path in clean_inventory["files"]
