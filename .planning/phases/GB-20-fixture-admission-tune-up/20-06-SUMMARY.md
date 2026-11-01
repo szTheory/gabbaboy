@@ -24,20 +24,19 @@ key-decisions:
 metrics:
   duration: 30 min
   completed: 2026-11-01
-  tasks: 3
+  tasks: 4
   files: 5
 actuals:
-  tokens: 11757.75
-  tasks: 3
-  commits: 6
+  tokens: 26404.25
+  tasks: 4
+  commits: 8
 requirements-completed: []
 requirements-pending: [RIGHTS-01]
-commits: 6
+commits: 8
 plan_head_before: 802555ac42264561d6b3f6fbad233d9aac6db0a9
-plan_head_after: 0d2a28d3
-status: reopened
-completion_scope: Completed Tasks 1–3 only; all six task commits, original evidence and measured historical actuals are preserved.
-pending_follow_up: Task 4 — Windows drive/ADS rejection and directory/file containment before creation.
+plan_head_after: b4cdba4e
+status: complete
+completion_scope: Tasks 1–4; original task evidence is preserved and actuals cover the eight Plan 20-06 task commits.
 coverage:
   - id: PLATFORM-ARCHIVE-TRUST
     description: Trusted publisher verifies macOS and Windows downloaded products before draft validation; hostile archives, altered bytes, and unsafe paths reject.
@@ -57,7 +56,7 @@ coverage:
         ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage$' (exact reviewed checker and bounded-helper source/AST pins)"
         status: pass
       - kind: integration
-        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage_controls$' (82 negative controls, including independent resource/cleanup registry removal checks)"
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage_controls$' (86 negative controls, including independent resource/cleanup/path registry removal checks)"
         status: pass
   - id: BOUNDED-ARCHIVE-METADATA-CLEANUP
     description: Product archives are bounded before hidden metadata or payload consumption, and missing-checker/late-rejection failures leave a retryable clean destination.
@@ -69,23 +68,33 @@ coverage:
       - kind: unit
         ref: "python3 -I .github/scripts/safe_extract_package.py --self-test"
         status: pass
+  - id: WINDOWS-ARCHIVE-PATH-CONTAINMENT
+    description: Windows drive and alternate-stream archive names reject, and directory/file targets are proven inside the extraction root before any creation.
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_group_release_jobs$' (drive, ADS, injected directory/file escape controls, unchanged outside sentinels, zero outside write attempts)"
+        status: pass
+      - kind: integration
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_(coverage|coverage_controls)$' (exact source pin and independent removal checks for all four path controls)"
+        status: pass
 ---
 
 # Phase GB-20 Plan 06: Trusted Platform Archive Summary
 
 The release publisher now checks downloaded macOS and Windows product archives with a trusted local verifier before draft validation.
 
-## Reopened for Windows target-containment security rescope
+## Task 4 Windows target-containment rescope (completed)
 
-Plan 20-06 is incomplete until its appended Task 4 passes. [20-POST-RESCOPE-CODE-REVIEW.md](20-POST-RESCOPE-CODE-REVIEW.md) confirms the prior metadata and missing-checker defects are closed, but identifies a Windows drive-qualified directory escape and regular-parent creation before containment checks. Current production path validation also accepts NTFS alternate-stream names. Existing accomplishments, six task commits and passing coverage below remain historical evidence for completed Tasks 1–3; they do not establish the new pre-creation namespace/containment guarantees.
+The independent review reproduced a Windows drive-qualified directory escape and regular-parent creation before containment checks; production validation also accepted NTFS alternate-stream names. Task 4 now rejects colon syntax in every path component and validates each target and its existing ancestry before archive-controlled creation. Production controls prove drive/ADS rejection, zero outside write attempts, unchanged sentinels and destination cleanup.
 
-Task 4 in [20-06-PLAN.md](20-06-PLAN.md) rejects drive/ADS syntax in every component, checks each directory/file target and its parents before creation, proves no side effects through production extraction controls, and refreshes the exact source/AST/control registry and CTest markers. The executor acts next on Task 4 under the already authorized in-place rescope; no new owner confirmation is required. Keep this status reopened until its exact targeted CTests pass at the committed implementation/coverage head, then append actual Task 4 commits and fresh block-style coverage. All earlier evidence remains intact, the nine-plan cap is unchanged, and Phase 20 closure still requires its separate final integration gates. No fixture/rights change or live publication is included.
+The task retained Task 3's bounded stream and cleanup behavior, refreshed the immutable source/AST snapshot and four stable path controls, and passed the required final-head build and focused checks. The nine-plan cap is unchanged. No fixture/rights change or live publication is included; Phase 20 still needs the orchestrator's separate final integration gates.
 
-## Reopened for owner-authorized final-review security rescope
+## Task 3 bounded metadata and cleanup rescope (completed)
 
 Final review reproduced a hidden PAX/GNU metadata bypass of the extractor's regular-file byte budget (CR-01) and a missing-trusted-checker path that leaves a stale destination (WR-01). The original accomplishments, completed-task metrics, three task commits and passing coverage remain historical evidence for Tasks 1 and 2; Task 3 adds the resource and cleanup guarantees.
 
-The bounded follow-up in [20-06-PLAN.md](20-06-PLAN.md) adds total decompressed-stream and pre-payload metadata size/aggregate/count limits through the existing trusted production archive gate, synthetic controls for each limit, missing-checker cleanup and same-destination retry, and the reviewed source/AST/control-registry update. This stays inside Plan 20-06 and the nine-plan Phase 20 cap. No fixture or rights-policy change and no live publication are included. Task 3 is completed; its implementation and coverage commits are listed below.
+The bounded follow-up in [20-06-PLAN.md](20-06-PLAN.md) adds total decompressed-stream and pre-payload metadata size/aggregate/count limits through the existing trusted production archive gate, synthetic controls for each limit, missing-checker cleanup and same-destination retry, and the reviewed source/AST/control-registry update. This stays inside Plan 20-06 and the nine-plan Phase 20 cap. No fixture or rights-policy change and no live publication are included. Task 3 completed before Task 4; its implementation and coverage commits are listed below.
 
 At the committed implementation/coverage head, reconfigure/build passed. The release-job grouped CTest, both workflow coverage CTests, safe-extractor self-test, plan-cap, planning-hygiene and live-summary CTests passed. Final Phase 20 full-suite, hosted platform and review/security/closure evidence remain separate required gates.
 
@@ -104,21 +113,24 @@ At the committed implementation/coverage head, reconfigure/build passed. The rel
 - `886000ef`: Bound product archive metadata streams and make cleanup/retry safe.
 - `36ed25a2`: Pin the bounded helper source/AST and add resource/cleanup coverage negatives.
 - `0d2a28d3`: Align the coverage CTest marker with the expanded negative-control count.
+- `a5bf5cc8`: Reject Windows drive/ADS names and validate extraction targets before creation.
+- `b4cdba4e`: Pin Task 4 source/AST and require independent path-control removal negatives.
 
-Six Plan 20-06 task commits are listed above. Interleaved Plan 20-09 commits are excluded from this plan's count.
+Eight Plan 20-06 task commits are listed above. Interleaved Plan 20-09 commits are excluded from this plan's count.
 
 ## Verification
 
 - `cmake --preset phase1` and `cmake --build --preset phase1 -j2` passed at the final implementation/coverage head.
 - The release workflow grouped controls passed in CTest, including macOS and Windows archive positives, exact hidden-metadata limits, missing-checker retry, and partial-extraction cleanup.
-- Both workflow coverage CTests passed; the independent coverage-control CTest reports 82 passing negative controls, including helper source mutation and each new registry-row removal.
+- Both workflow coverage CTests passed; the independent coverage-control CTest reports 86 passing negative controls, including source mutation and removal of each resource, cleanup and path registry row.
+- Drive-qualified, drive-relative, nested mixed-case drive, ADS filename/component, directory escape injection and regular-parent escape injection controls all reject with `product-archive-path`; spies observed zero outside writes and sentinels stayed unchanged.
 - `python3 -I .github/scripts/safe_extract_package.py --self-test`, `plan_cap`, `planning_hygiene_controls`, and `summary_coverage_live` passed.
 
 ## Deviations from Plan
 
-The independent coverage checker required its owner-authorized snapshot, AST allowlist, registry update, and an updated CTest completion marker to recognize the new trusted workflow checker and expanded negative-control count. The gate remained enforced and its negative controls passed.
+The independent coverage checker required its owner-authorized snapshots, precise AST inventories, registry updates and dynamic CTest completion markers for the Task 3 and Task 4 controls. The gate remained enforced and all negative controls passed.
 
-## Tasks 1–3 Self-Check: PASSED (historical)
+## Self-Check: PASSED
 
-- All six Plan 20-06 task commits are ancestors of the recorded final head; interleaved Plan 20-09 commits are excluded.
+- All eight Plan 20-06 task commits are ancestors of the recorded implementation/coverage head; interleaved Plan 20-09 commits are excluded.
 - No fixture was admitted, and RIGHTS-01 remains pending.
