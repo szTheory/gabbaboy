@@ -20,9 +20,12 @@ if not __debug__ or sys.flags.optimize:
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
+ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "8dac3398"
-REVIEWED_POLICY_SHA256 = "843a09776bf49faacba8ddcda40a64c90481383295f7b0c9f644f686e1a6c3b6"
+REVIEWED_POLICY_COMMIT = "886000ef9f66ce389978190aa6c64936a729ab4e"
+REVIEWED_POLICY_SHA256 = "6618a2c1016ab9aec5441f8364617a5f9c29ff9f86ab736f0a6bff076221f585"
+REVIEWED_ARCHIVE_HELPER_COMMIT = "886000ef9f66ce389978190aa6c64936a729ab4e"
+REVIEWED_ARCHIVE_HELPER_SHA256 = "6ed3ddd188a55c20e78b8326c8821ea0b47b2530b3e56c39cb56c9c87ebaf21e"
 GROUPS = {
     "ci": "workflow_policy_group_ci",
     "release_jobs": "workflow_policy_group_release_jobs",
@@ -52,12 +55,16 @@ ADDED_POLICY_FUNCTIONS = {
     "_archive_member_path", "_extract_product_archive", "check_product_archive",
     "_write_control_archive", "_product_archive_controls",
     "_workflow_subject_inputs", "_incomplete_subject_control", "run_policy_self_test",
+    "_load_trusted_archive_helper", "_drain_product_tar_stream",
 }
 ADDED_POLICY_GLOBALS = {
     "_POLICY_PARTITION_GROUPS", "_ACTIVE_POLICY_GROUP", "_ACTIVE_POLICY_CONTROLS", "_COMPLETED_POLICY_CONTROLS",
     "FIXTURE_ADMISSION_REPOSITORY_CALL", "FIXTURE_ADMISSION_TRUSTED_SCRIPT", "CORE_PRODUCT_INVENTORY",
     "MAX_PRODUCT_ARCHIVE_BYTES", "MAX_PRODUCT_ARCHIVE_MEMBERS",
     "MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES", "MAX_PRODUCT_ARCHIVE_FILE_BYTES",
+    "MAX_PRODUCT_ARCHIVE_STREAM_BYTES", "MAX_PRODUCT_ARCHIVE_EXTENSION_BYTES",
+    "MAX_PRODUCT_ARCHIVE_TOTAL_EXTENSION_BYTES", "MAX_PRODUCT_ARCHIVE_EXTENSION_HEADERS",
+    "MAX_PRODUCT_ARCHIVE_READ_BYTES", "_SAFE_ARCHIVE",
 }
 INSTRUMENTED_POLICY_FUNCTIONS = {
     "_window_discovery_shell_controls", "report_red_replay_controls", "_ledger_boundary_controls",
@@ -77,7 +84,7 @@ ADDED_MUTATION_CONTROLS = (
     ("P20 macOS reused core skips actual-byte validation", "release.yml", "fixture-product-reuse"),
     ("P20 downloaded Linux core skips stage-inventory equality", "release.yml", "fixture-product-inventory-binding"),
     ("P20 downloaded platform archive gate is removed", "release.yml", "fixture-product-trust"),
-    ("P20 downloaded platform archive gate selects candidate checker", "release.yml", "fixture-product-trust"),
+    ("P20 downloaded platform archive gate selects candidate checker", "release.yml", "subject-judge-execution"),
     ("P20 downloaded platform validation moves after draft validation", "release.yml", "fixture-product-trust"),
     ("P20 fixture-repro admission command gets a PATH assignment", "fixture-repro.yml", "fixture-admission-gate"),
     ("P20 fixture-repro admission command gets a duplicate repository root", "fixture-repro.yml", "fixture-admission-gate"),
@@ -88,7 +95,7 @@ ADDED_MUTATION_CONTROLS = (
     ("P20 Linux stage gate redirects the repository policy root", "release.yml", "fixture-product-stage"),
     ("P20 Linux stage gate repeats the repository root option", "release.yml", "fixture-product-stage"),
     ("P20 Linux stage gate appends a second product tree", "release.yml", "fixture-product-stage"),
-    ("P20 downloaded product archive controls", "release.yml", "fixture-product-trust"),
+    ("downloaded product archive controls", "release.yml", "fixture-product-trust"),
 )
 
 
@@ -124,6 +131,17 @@ def reviewed_policy_source(root: Path) -> bytes:
     digest = hashlib.sha256(result.stdout).hexdigest()
     if digest != REVIEWED_POLICY_SHA256:
         reject(f"reviewed workflow-policy source hash changed: {digest}")
+    return result.stdout
+
+
+def reviewed_archive_helper_source(root: Path) -> bytes:
+    result = subprocess.run(["git", "show", f"{REVIEWED_ARCHIVE_HELPER_COMMIT}:{ARCHIVE_HELPER_PATH}"], cwd=root,
+                            capture_output=True, check=False, timeout=15)
+    if result.returncode != 0:
+        reject(f"reviewed bounded archive helper is unavailable: {result.stderr.decode(errors='replace').strip()}")
+    digest = hashlib.sha256(result.stdout).hexdigest()
+    if digest != REVIEWED_ARCHIVE_HELPER_SHA256:
+        reject(f"reviewed bounded archive helper hash changed: {digest}")
     return result.stdout
 
 
@@ -263,6 +281,18 @@ def baseline_controls(source: bytes) -> list[dict]:
     rows.append(_helper_row("fixture-checker-path", "release_fixture_checker_path_controls",
                             "replaced temporary checker", group="release_jobs"))
     rows.append(_helper_row("incomplete-subject", "_incomplete_subject_control", "missing verifier source"))
+    for label in (
+        "small extension accepted", "70,000-byte PAX comment", "aggregate PAX metadata",
+        "PAX extension count", "decompressed tar stream",
+    ):
+        rows.append(_helper_row("product-archive-resource", "_product_archive_controls", label,
+                                group="release_jobs"))
+    for label in (
+        "missing checker leaves destination absent", "trusted checker retry succeeds",
+        "late resource rejection removes partial extraction",
+    ):
+        rows.append(_helper_row("product-archive-cleanup", "_product_archive_controls", label,
+                                group="release_jobs"))
 
     # Each named input case is independently marked after all output, status, API and checker-call assertions pass.
     window_function = _function_node(tree, "_window_discovery_shell_controls")
@@ -579,6 +609,12 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
         "MAX_PRODUCT_ARCHIVE_MEMBERS = 16_384\n"
         "MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES = 1_073_741_824\n"
         "MAX_PRODUCT_ARCHIVE_FILE_BYTES = 536_870_912\n"
+        "MAX_PRODUCT_ARCHIVE_STREAM_BYTES = 1_207_959_552\n"
+        "MAX_PRODUCT_ARCHIVE_EXTENSION_BYTES = 65_536\n"
+        "MAX_PRODUCT_ARCHIVE_TOTAL_EXTENSION_BYTES = 4_194_304\n"
+        "MAX_PRODUCT_ARCHIVE_EXTENSION_HEADERS = 128\n"
+        "MAX_PRODUCT_ARCHIVE_READ_BYTES = 65_536\n"
+        "_SAFE_ARCHIVE = _load_trusted_archive_helper()\n"
     ).body
     expected_assignment_dumps = [ast.dump(node, include_attributes=False) for node in expected_assignments]
     if len(expected_assignment_dumps) != len(ADDED_POLICY_GLOBALS):
@@ -589,6 +625,8 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
         ast.dump(ast.parse("import io").body[0], include_attributes=False),
         ast.dump(ast.parse("import tarfile").body[0], include_attributes=False),
         ast.dump(ast.parse("from pathlib import PurePosixPath").body[0], include_attributes=False),
+        ast.dump(ast.parse("import importlib.util").body[0], include_attributes=False),
+        ast.dump(ast.parse("from contextlib import contextmanager").body[0], include_attributes=False),
     }
     consumed_archive_imports: set[str] = set()
     consumed_selector_assignments: set[int] = set()
@@ -638,6 +676,59 @@ def verify_source_identity(root: Path, candidate: bytes) -> None:
     reviewed = reviewed_policy_source(root)
     verify_reviewed_policy_identity(candidate, reviewed)
     _compare_baseline_source_identity(baseline_source(root), candidate)
+
+
+def _compare_archive_helper_ast(baseline: bytes, current: bytes) -> None:
+    try:
+        baseline_tree = ast.parse(baseline, filename=ARCHIVE_HELPER_PATH)
+        current_tree = ast.parse(current, filename=ARCHIVE_HELPER_PATH)
+    except SyntaxError as error:
+        reject(f"bounded archive helper does not parse: {error}")
+    baseline_functions = {node.name: node for node in baseline_tree.body if isinstance(node, ast.FunctionDef)}
+    current_functions = {node.name: node for node in current_tree.body if isinstance(node, ast.FunctionDef)}
+    if set(current_functions) != set(baseline_functions):
+        reject("bounded archive helper function inventory changed")
+    changed_functions = {name for name in baseline_functions
+                         if ast.dump(baseline_functions[name], include_attributes=False)
+                         != ast.dump(current_functions[name], include_attributes=False)}
+    if changed_functions != {"bounded_tarinfo_class", "open_bounded_tar", "self_test"}:
+        reject(f"bounded archive helper changed outside the reviewed functions: {sorted(changed_functions)}")
+
+    baseline_classes = {node.name: node for node in baseline_tree.body if isinstance(node, ast.ClassDef)}
+    current_classes = {node.name: node for node in current_tree.body if isinstance(node, ast.ClassDef)}
+    if set(current_classes) != set(baseline_classes) | {"ArchiveLimitError"}:
+        reject("bounded archive helper class inventory differs from the reviewed set")
+    old_reader = {node.name: node for node in baseline_classes["BoundedReader"].body if isinstance(node, ast.FunctionDef)}
+    new_reader = {node.name: node for node in current_classes["BoundedReader"].body if isinstance(node, ast.FunctionDef)}
+    if set(new_reader) != set(old_reader):
+        reject("bounded reader method inventory changed")
+    changed_reader_methods = {name for name in old_reader
+                              if ast.dump(old_reader[name], include_attributes=False)
+                              != ast.dump(new_reader[name], include_attributes=False)}
+    if changed_reader_methods != {"__init__", "read"}:
+        reject(f"bounded reader changed outside its request and byte limits: {sorted(changed_reader_methods)}")
+
+    normalized: list[ast.stmt] = []
+    for node in current_tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "ArchiveLimitError":
+            continue
+        if isinstance(node, ast.ClassDef) and node.name == "BoundedReader":
+            normalized.append(copy.deepcopy(baseline_classes[node.name]))
+        elif isinstance(node, ast.FunctionDef) and node.name in changed_functions:
+            normalized.append(copy.deepcopy(baseline_functions[node.name]))
+        else:
+            normalized.append(copy.deepcopy(node))
+    if ast.dump(ast.Module(body=normalized, type_ignores=current_tree.type_ignores), include_attributes=False) \
+            != ast.dump(baseline_tree, include_attributes=False):
+        reject("bounded archive helper module differs from the immutable AST baseline")
+
+
+def verify_archive_helper_identity(root: Path, candidate: bytes) -> None:
+    reviewed = reviewed_archive_helper_source(root)
+    if candidate != reviewed:
+        reject("candidate bounded archive helper differs from the exact reviewed snapshot")
+    baseline = git_text(root, BASELINE_COMMIT, ARCHIVE_HELPER_PATH)
+    _compare_archive_helper_ast(baseline, candidate)
 
 
 def validate_manifest(manifest: object, expected: dict) -> None:
@@ -891,7 +982,7 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
             expected_definitions = {
                 "GBB_CMD": definitions["GBB_CMD"],
                 "GBB_EXPECT_CODE": "0",
-                "GBB_EXPECT_REGEX": "PASS: workflow policy coverage self-test controls=72",
+                "GBB_EXPECT_REGEX": "PASS: workflow policy coverage self-test controls=[0-9]+",
             }
         else:
             cli_values, cli_booleans = _parse_python_cli(
@@ -915,6 +1006,7 @@ def _self_test(root: Path, revision: str) -> int:
     source = baseline_source(root)
     expected = manifest_for(source)
     candidate_source = git_text(root, candidate, POLICY_PATH)
+    candidate_helper = git_text(root, candidate, ARCHIVE_HELPER_PATH)
     build_dir = root / "build/phase19-policy-coverage-fixture"
     cmake_executable = shutil.which("cmake") or "cmake"
     python_executable = sys.executable
@@ -932,6 +1024,7 @@ def _self_test(root: Path, revision: str) -> int:
             reject(f"negative control {label} was accepted")
 
     validate_manifest(expected, expected)
+    verify_archive_helper_identity(root, candidate_helper)
     for label, version in (("schema-boolean-true", True), ("schema-boolean-false", False),
                            ("schema-float", 1.0), ("schema-string", "1"),
                            ("schema-null", None), ("schema-array", [])):
@@ -941,6 +1034,25 @@ def _self_test(root: Path, revision: str) -> int:
     for label, malformed in (("root-array", []), ("root-null", None), ("root-string", "registry"),
                              ("root-number", 1)):
         rejected(label, lambda malformed=malformed: validate_manifest(malformed, expected))
+
+    required_archive_controls = (
+        ("resource", "small extension accepted"),
+        ("resource", "70,000-byte PAX comment"),
+        ("resource", "aggregate PAX metadata"),
+        ("resource", "PAX extension count"),
+        ("resource", "decompressed tar stream"),
+        ("cleanup", "missing checker leaves destination absent"),
+        ("cleanup", "trusted checker retry succeeds"),
+        ("cleanup", "late resource rejection removes partial extraction"),
+    )
+    expected_ids = {row["id"] for row in expected["controls"]}
+    for family, label in required_archive_controls:
+        control_id = stable_id("helper", f"product-archive-{family}", label)
+        if control_id not in expected_ids:
+            reject(f"required bounded archive control is absent from the generated registry: {label}")
+        mutant = copy.deepcopy(expected)
+        mutant["controls"] = [row for row in mutant["controls"] if row["id"] != control_id]
+        rejected(f"missing bounded archive control: {label}", lambda mutant=mutant: validate_manifest(mutant, expected))
 
     def test_entry(name: str, argv: list[str], marker: str, timeout: int,
                    completion: Path | None = None) -> dict:
@@ -991,7 +1103,7 @@ def _self_test(root: Path, revision: str) -> int:
                    "PASS: workflow policy coverage controls=[0-9]+ groups=6 platform=(posix|windows)", 60),
         test_entry("workflow_policy_coverage_controls",
                    [python_executable, "-I", str(coverage_script), "--self-test", "--root", str(root), "--rev", candidate],
-                   "PASS: workflow policy coverage self-test controls=72", 30),
+                   "PASS: workflow policy coverage self-test controls=[0-9]+", 30),
         test_entry("workflow_policy_check",
                    [python_executable, "-I", str(root / POLICY_PATH), "--check", "--root", str(root)],
                    "PASS: workflow privilege and trust wiring residual_write_jobs=[0-9]+", 60),
@@ -1176,6 +1288,17 @@ def _self_test(root: Path, revision: str) -> int:
     reviewed = reviewed_policy_source(root)
     verify_reviewed_policy_identity(candidate_source, reviewed)
     verify_source_identity(root, candidate_source)
+    verify_archive_helper_identity(root, candidate_helper)
+
+    reviewed_helper = reviewed_archive_helper_source(root)
+    changed_helper = candidate_helper.replace(
+        b"request_size = min(size, self.max_request, remaining + 1)",
+        b"request_size = min(size, MAX_TAR_READ_BYTES, remaining + 1)", 1)
+    if changed_helper == candidate_helper:
+        reject("bounded archive helper mutation fixture did not match the reviewed reader")
+    rejected("bounded archive helper source mutation", lambda: verify_archive_helper_identity(root, changed_helper))
+    rejected("bounded archive helper reviewed digest",
+             lambda: verify_archive_helper_identity(root, reviewed_helper + b"\n"))
 
     def reject_source_mutant(label: str, mutant: bytes) -> None:
         if mutant == candidate_source:
@@ -1277,7 +1400,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 72:
+    if controls != 82:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
@@ -1292,6 +1415,7 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
         reject(f"workflow-policy control registry is unreadable: {error}")
     validate_manifest(manifest, expected)
     verify_source_identity(root, git_text(root, candidate, POLICY_PATH))
+    verify_archive_helper_identity(root, git_text(root, candidate, ARCHIVE_HELPER_PATH))
     expected_tests = git_text(root, candidate, "tests/expected-tests.txt").decode("utf-8").splitlines()
     result = subprocess.run(["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"], cwd=root,
                             capture_output=True, text=True, check=False, timeout=30)
