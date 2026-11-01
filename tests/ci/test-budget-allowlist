@@ -52,9 +52,9 @@ cgb_runner_profile_dmg_identity_mooneye	120	0.4	GB-CI-004	Lower when a measured 
 cgb_samesuite_apu_suite	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 cgb_speed_stall_static_assert_mutant	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 closeout_dispositions_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-fixture_admission_controls	90	0.4	20-05	Lower when measured run is under half the ceiling; remove the row once the admission self-test fits within 60 s
-fixture_product_core_controls	120	0.4	20-05	Lower when measured run is under half the ceiling; remove the row once configuration export and policy identity controls fit within 60 s
-fixture_product_player_controls	120	0.4	20-05	Lower when measured run is under half the ceiling; remove the row once product notice and policy identity controls fit within 60 s
+fixture_admission_controls	90	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once the admission self-test fits within 60 s
+fixture_product_core_controls	120	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once configuration export and policy identity controls fit within 60 s
+fixture_product_player_controls	120	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once product notice and policy identity controls fit within 60 s
 core_linkage_controls	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 dmg_baseline	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 libbet_install_tree	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
