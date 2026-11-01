@@ -1472,6 +1472,39 @@ jobs:
             "$release_version" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
             trusted/build/linux-product/gabbaboy-notices.txt trusted/build/linux-product/source-receipt.json \
             trusted/build/linux-product/build-receipt.json
+      - name: Download exact macOS and Windows product archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          for name in gabbaboy-core-macos-arm64.tar.gz gabbaboy-preview-macos-arm64.tar.gz gabbaboy-core-windows-x64.tar.gz; do
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" == 1 ]] || { echo "Expected exactly one candidate product archive named $name." >&2; exit 1; }
+          done
+          mkdir -p build/platform-products/downloaded
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern gabbaboy-core-macos-arm64.tar.gz \
+            --pattern gabbaboy-preview-macos-arm64.tar.gz \
+            --pattern gabbaboy-core-windows-x64.tar.gz \
+            --dir build/platform-products/downloaded
+      - name: Verify downloaded macOS and Windows product bytes with trusted policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I trusted/.github/scripts/verify-workflow-policy.py \
+            --check-product-archive build/platform-products/downloaded/gabbaboy-core-macos-arm64.tar.gz \
+            --expected-name gabbaboy-core-macos-arm64.tar.gz --layout core --repo-root trusted \
+            --destination build/platform-products/extracted/macos-core
+          python3 -I trusted/.github/scripts/verify-workflow-policy.py \
+            --check-product-archive build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz \
+            --expected-name gabbaboy-preview-macos-arm64.tar.gz --layout player --repo-root trusted \
+            --destination build/platform-products/extracted/macos-player
+          python3 -I trusted/.github/scripts/verify-workflow-policy.py \
+            --check-product-archive build/platform-products/downloaded/gabbaboy-core-windows-x64.tar.gz \
+            --expected-name gabbaboy-core-windows-x64.tar.gz --layout core --repo-root trusted \
+            --destination build/platform-products/extracted/windows-core
       - name: Load trusted release evidence verifiers
         shell: bash
         run: |

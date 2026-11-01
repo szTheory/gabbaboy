@@ -4625,6 +4625,30 @@
       "id": "helper-d99736d2373f5ab5df93",
       "kind": "helper",
       "platforms": ["posix", "windows"]
+    },
+    {
+      "group": "release_jobs",
+      "id": "mutation-f14b6c95d2bfa07ee97f",
+      "kind": "mutation",
+      "platforms": ["posix", "windows"]
+    },
+    {
+      "group": "release_jobs",
+      "id": "mutation-05be25a4fa1bb084f22f",
+      "kind": "mutation",
+      "platforms": ["posix", "windows"]
+    },
+    {
+      "group": "release_jobs",
+      "id": "mutation-4db8bb7938cc9b8e5c18",
+      "kind": "mutation",
+      "platforms": ["posix", "windows"]
+    },
+    {
+      "group": "release_jobs",
+      "id": "mutation-f23c24c5df77159a9e21",
+      "kind": "mutation",
+      "platforms": ["posix", "windows"]
     }
   ],
   "groups": {

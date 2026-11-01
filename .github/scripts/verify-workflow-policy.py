@@ -21,16 +21,19 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import io
 import json
 import math
 import os
 import re
 import shutil
+import tarfile
 import subprocess
 import sys
 import tempfile
 from fractions import Fraction
 from pathlib import Path
+from pathlib import PurePosixPath
 from unittest.mock import call, patch
 
 
@@ -38,6 +41,208 @@ class Reject(Exception):
     def __init__(self, code: str, message: str) -> None:
         self.code = code
         super().__init__(f"REJECT {code}: {message}")
+
+
+MAX_PRODUCT_ARCHIVE_BYTES = 1_073_741_824
+MAX_PRODUCT_ARCHIVE_MEMBERS = 16_384
+MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES = 1_073_741_824
+MAX_PRODUCT_ARCHIVE_FILE_BYTES = 536_870_912
+
+
+def _archive_member_path(name: str) -> str:
+    if not name or "\\" in name or "\x00" in name or name.startswith("/"):
+        raise Reject("product-archive-path", f"invalid archive member {name!r}")
+    is_directory = name.endswith("/")
+    candidate = name[:-1] if is_directory else name
+    path = PurePosixPath(candidate)
+    if (not candidate or str(path) != candidate or path.is_absolute()
+            or any(part in ("", ".", "..") for part in candidate.split("/"))):
+        raise Reject("product-archive-path", f"invalid archive member {name!r}")
+    return candidate
+
+
+def _extract_product_archive(archive: Path, destination: Path) -> int:
+    """Materialize a bounded tar.gz without following archive-controlled paths or links."""
+    try:
+        if archive.is_symlink() or not archive.is_file() or archive.stat().st_size > MAX_PRODUCT_ARCHIVE_BYTES:
+            raise Reject("product-archive-size", "archive is missing, linked, or exceeds its byte limit")
+    except OSError as error:
+        raise Reject("product-archive-unavailable", error.strerror or "stat failed") from None
+    if destination.exists() or destination.is_symlink():
+        raise Reject("product-archive-destination", "destination must not exist before extraction")
+    destination.mkdir(parents=True)
+    names: set[str] = set()
+    folded: set[str] = set()
+    records: list[tuple[tarfile.TarInfo, str]] = []
+    total = 0
+    try:
+        with tarfile.open(archive, mode="r:gz") as bundle:
+            for member in bundle:
+                if len(records) >= MAX_PRODUCT_ARCHIVE_MEMBERS:
+                    raise Reject("product-archive-members", "archive has too many members")
+                relative = _archive_member_path(member.name)
+                folded_name = relative.casefold()
+                if relative in names or folded_name in folded:
+                    raise Reject("product-archive-duplicate", relative)
+                names.add(relative)
+                folded.add(folded_name)
+                if member.isdir():
+                    records.append((member, relative))
+                    continue
+                if not member.isreg():
+                    raise Reject("product-archive-special", relative)
+                if member.size < 0 or member.size > MAX_PRODUCT_ARCHIVE_FILE_BYTES:
+                    raise Reject("product-archive-file-size", relative)
+                total += member.size
+                if total > MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES:
+                    raise Reject("product-archive-expanded-size", "archive expands beyond its total byte limit")
+                records.append((member, relative))
+            for member, relative in records:
+                target = destination.joinpath(*relative.split("/"))
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                # A prior regular member may not become a parent directory.
+                cursor = target.parent
+                while cursor != destination:
+                    if cursor.is_symlink() or destination not in cursor.parents:
+                        raise Reject("product-archive-path", relative)
+                    cursor = cursor.parent
+                stream = bundle.extractfile(member)
+                if stream is None:
+                    raise Reject("product-archive-member-read", relative)
+                with stream, target.open("xb") as output:
+                    shutil.copyfileobj(stream, output, length=64 * 1024)
+    except Reject:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise
+    except (OSError, tarfile.TarError, EOFError) as error:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise Reject("product-archive-invalid", str(error)[:240]) from None
+    return len(records)
+
+
+def check_product_archive(archive: Path, expected_name: str, layout: str,
+                          repo_root: Path, destination: Path) -> None:
+    if archive.name != expected_name or layout not in ("core", "player"):
+        raise Reject("product-archive-identity", "archive name or product layout is not authorized")
+    _extract_product_archive(archive, destination)
+    checker = repo_root / "tests/scripts/verify-fixture-admission.py"
+    if not checker.is_file():
+        raise Reject("product-archive-trusted-checker", "trusted fixture checker is unavailable")
+    try:
+        result = subprocess.run(
+            [sys.executable, "-I", str(checker), "--check-product-tree", str(destination),
+             "--layout", layout, "--repo-root", str(repo_root)],
+            cwd=repo_root, capture_output=True, text=True, check=False, timeout=90,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip().replace(str(repo_root), "<trusted-root>")[:500]
+            raise Reject("product-archive-policy", detail or "trusted product checker refused archive")
+    except subprocess.TimeoutExpired:
+        raise Reject("product-archive-policy-timeout", "trusted product checker exceeded its time limit") from None
+    finally:
+        shutil.rmtree(destination, ignore_errors=True)
+
+
+def _write_control_archive(path: Path, members: list[tuple[str, bytes, str]]) -> None:
+    with tarfile.open(path, "w:gz") as bundle:
+        for name, data, kind in members:
+            info = tarfile.TarInfo(name)
+            if kind == "symlink":
+                info.type = tarfile.SYMTYPE
+                info.linkname = "../../outside"
+                bundle.addfile(info)
+            elif kind == "directory":
+                info.type = tarfile.DIRTYPE
+                bundle.addfile(info)
+            else:
+                info.size = len(data)
+                bundle.addfile(info, io.BytesIO(data))
+
+
+def _product_archive_controls(root: Path) -> None:
+    """Exercise the publisher's production archive gate using real installed product bytes."""
+    install_parent = root / "build/workflow-policy-archive-controls"
+    shutil.rmtree(install_parent, ignore_errors=True)
+    try:
+        subprocess.run(["cmake", "--install", str(root / "build"), "--prefix",
+                        str(root / "build/workflow-policy-archive-controls/prefix")],
+                       cwd=root, capture_output=True, text=True, check=True, timeout=60)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise SystemExit(f"product-archive control setup failed: CMake install: {error}") from None
+    with tempfile.TemporaryDirectory(prefix="gbb-product-archive-controls.") as directory:
+        scratch = Path(directory)
+        prefix = root / "build/workflow-policy-archive-controls/prefix"
+
+        def archive_tree(source: Path, destination: Path, additions: dict[str, bytes] | None = None) -> None:
+            files = sorted(path for path in source.rglob("*") if path.is_file())
+            members = [(path.relative_to(source).as_posix(), path.read_bytes(), "file") for path in files]
+            members.extend((name, data, "file") for name, data in (additions or {}).items())
+            _write_control_archive(destination, members)
+
+        valid = scratch / "gabbaboy-core-macos-arm64.tar.gz"
+        archive_tree(prefix, valid)
+        check_product_archive(valid, valid.name, "core", root, scratch / "valid-extracted")
+        _mark_policy_control("mutation", "downloaded product archive controls", "fixture-product-trust")
+
+        altered_prefix = scratch / "altered-prefix"
+        shutil.copytree(prefix, altered_prefix)
+        (altered_prefix / "share/gabbaboy/fixtures/tracer/tracer.gb").write_bytes(b"altered controlled ROM")
+        altered = scratch / "gabbaboy-core-windows-x64.tar.gz"
+        archive_tree(altered_prefix, altered)
+        try:
+            check_product_archive(altered, altered.name, "core", root, scratch / "altered-extracted")
+        except Reject as error:
+            if error.code != "product-archive-policy" or "product-identity-mismatch" not in str(error):
+                raise SystemExit(f"altered fixture archive rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("altered controlled fixture bytes were accepted in a product archive")
+
+        forbidden = root / "fixtures/mooneye-cgb/boot_regs-cgb.gb"
+        injected = scratch / "gabbaboy-core-windows-x64.tar.gz"
+        archive_tree(prefix, injected, {"share/gabbaboy/injected.bin": forbidden.read_bytes()})
+        try:
+            check_product_archive(injected, injected.name, "core", root, scratch / "extra-extracted")
+        except Reject as error:
+            if error.code != "product-archive-policy" or "product-fixture-leak" not in str(error):
+                raise SystemExit(f"extra controlled fixture bytes rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("extra controlled fixture bytes were accepted in a product archive")
+
+        marker = scratch / "tagged-checker-ran"
+        hostile = scratch / "gabbaboy-core-macos-arm64.tar.gz"
+        archive_tree(prefix, hostile, {
+            "tests/scripts/verify-fixture-admission.py":
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n".encode(),
+            "cmake/FixtureAdmissionPolicy.json": b'{"products":{"files":{}}}\n',
+        })
+        try:
+            check_product_archive(hostile, hostile.name, "core", root, scratch / "hostile-extracted")
+        except Reject as error:
+            if error.code != "product-archive-policy" or "product-path-unknown" not in str(error):
+                raise SystemExit(f"hostile archive checker/policy rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("hostile archive checker/policy was accepted")
+        if marker.exists():
+            raise SystemExit("publisher executed a checker copied from the tagged archive")
+
+        cases = (
+            ("../escape", b"x", "file", "product-archive-path"),
+            ("link", b"", "symlink", "product-archive-special"),
+            ("one//two", b"x", "file", "product-archive-path"),
+        )
+        for index, (name, data, kind, code) in enumerate(cases):
+            hostile_path = scratch / f"hostile-{index}.tar.gz"
+            _write_control_archive(hostile_path, [(name, data, kind)])
+            try:
+                _extract_product_archive(hostile_path, scratch / f"hostile-{index}-out")
+            except Reject as error:
+                if error.code != code:
+                    raise SystemExit(f"unsafe archive member {name!r} rejected for wrong reason: {error}") from None
+            else:
+                raise SystemExit(f"unsafe archive member {name!r} was accepted")
 
 
 # --------------------------------------------------------------------------- reader
@@ -1918,8 +2123,32 @@ def check_fixture_admission_workflows(root: Path) -> None:
                              "Download uploaded Linux candidate for an isolated product check")
     verify = _fixture_step("release", "publish-qualified-release", publisher,
                            "Verify the uploaded Linux candidate with trusted checkers")
+    platform_download = _fixture_step("release", "publish-qualified-release", publisher,
+                                      "Download exact macOS and Windows product archives")
+    platform_verify = _fixture_step("release", "publish-qualified-release", publisher,
+                                    "Verify downloaded macOS and Windows product bytes with trusted policy")
     validate = _fixture_step("release", "publish-qualified-release", publisher,
                              "Validate draft candidate and all downloaded platform bytes")
+    platform_commands = (
+        ('gabbaboy-core-macos-arm64.tar.gz', 'gabbaboy-core-macos-arm64.tar.gz', 'core', 'macos-core'),
+        ('gabbaboy-preview-macos-arm64.tar.gz', 'gabbaboy-preview-macos-arm64.tar.gz', 'player', 'macos-player'),
+        ('gabbaboy-core-windows-x64.tar.gz', 'gabbaboy-core-windows-x64.tar.gz', 'core', 'windows-core'),
+    )
+    for archive_path, expected_name, product_layout, extraction_name in platform_commands:
+        command = (f'python3 -I trusted/.github/scripts/verify-workflow-policy.py --check-product-archive '
+                   f'build/platform-products/downloaded/{archive_path} --expected-name {expected_name} '
+                   f'--layout {product_layout} --repo-root trusted '
+                   f'--destination build/platform-products/extracted/{extraction_name}')
+        _fixture_step_event("release", "publish-qualified-release", publisher, platform_verify["name"],
+                            command, "fixture-product-trust", exact=True)
+    if not _runs_under_errexit(platform_download) or not _runs_under_errexit(platform_verify) \
+            or _names_token(platform_verify.get("env", {})) \
+            or not all(name in platform_download.get("run", "") for name, *_ in platform_commands):
+        raise Reject("fixture-product-trust", "downloaded macOS/Windows products must be data checked by a token-free trusted validator")
+    platform_order = [publisher["steps"].index(step) for step in
+                      (trusted_checkouts[0], platform_download, platform_verify, validate)]
+    if platform_order != sorted(platform_order):
+        raise Reject("fixture-product-trust", "macOS/Windows downloaded-byte validation must precede draft validation")
     expected_verify = ('bash trusted/tests/scripts/verify-release-candidate.sh --verify '
                        'trusted/build/linux-product/candidate-receipt.json '
                        'trusted/build/linux-product/gabbaboy-core-linux-x64.tar.gz '
@@ -4044,6 +4273,50 @@ def _mutations():
         _m("P20 macOS package admission gate is removed", "ci.yml", "  macos-player-package:\n",
            "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
            "echo admission gate removed", "fixture-admission-gate"),
+        _m("P20 downloaded platform archive gate is removed", rel, "  publish-qualified-release:\n",
+           "--check-product-archive build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz",
+           "--check-product-tree build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz",
+           "fixture-product-trust"),
+        _m("P20 downloaded platform archive gate selects candidate checker", rel,
+           "      - name: Verify downloaded macOS and Windows product bytes with trusted policy\n",
+           "python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n            --check-product-archive",
+           "python3 -I .github/scripts/verify-workflow-policy.py \\\n            --check-product-archive",
+           "subject-judge-execution"),
+        ("P20 downloaded platform validation moves after draft validation", rel, [
+            ("  publish-qualified-release:\n", "      - name: Verify downloaded macOS and Windows product bytes with trusted policy\n"
+             "        shell: bash\n        run: |\n          set -euo pipefail\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-core-macos-arm64.tar.gz \\\n"
+             "            --expected-name gabbaboy-core-macos-arm64.tar.gz --layout core --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/macos-core\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz \\\n"
+             "            --expected-name gabbaboy-preview-macos-arm64.tar.gz --layout player --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/macos-player\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-core-windows-x64.tar.gz \\\n"
+             "            --expected-name gabbaboy-core-windows-x64.tar.gz --layout core --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/windows-core\n", ""),
+            ("  publish-qualified-release:\n", "      - name: Validate draft candidate and all downloaded platform bytes\n"
+             "        env:\n          GH_TOKEN: ${{ github.token }}\n        shell: bash\n"
+             "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh validate-draft\n",
+             "      - name: Validate draft candidate and all downloaded platform bytes\n"
+             "        env:\n          GH_TOKEN: ${{ github.token }}\n        shell: bash\n"
+             "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh validate-draft\n"
+             "      - name: Verify downloaded macOS and Windows product bytes with trusted policy\n"
+             "        shell: bash\n        run: |\n          set -euo pipefail\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-core-macos-arm64.tar.gz \\\n"
+             "            --expected-name gabbaboy-core-macos-arm64.tar.gz --layout core --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/macos-core\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz \\\n"
+             "            --expected-name gabbaboy-preview-macos-arm64.tar.gz --layout player --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/macos-player\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-core-windows-x64.tar.gz \\\n"
+             "            --expected-name gabbaboy-core-windows-x64.tar.gz --layout core --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/windows-core\n")], "fixture-product-trust"),
         _m("P20 fixture-repro admission command gets a PATH assignment", "fixture-repro.yml", "  fixture-repro:\n",
            "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
            "PATH=/tmp/attacker python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
@@ -5865,6 +6138,8 @@ def self_test(root: Path) -> None:
                     raise SystemExit(f"self-test negative {label!r} failed: accepted")
     if run_helpers:
         rejected += report_red_replay_controls(root)
+    if _ACTIVE_POLICY_GROUP in (None, "all", "release_jobs"):
+        _product_archive_controls(root)
     print(f"PASS: workflow policy self-test negative_controls={rejected} "
           f"positive_controls={1 + runner_positive_controls + resolver_accepted + accepted + routing_accepted}")
 
@@ -5874,6 +6149,8 @@ def main() -> int:
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument("--check", action="store_true", help="judge the workflow files under --root")
     modes.add_argument("--self-test", action="store_true", help="run positive and intended-defect controls through the CLI")
+    modes.add_argument("--check-product-archive", type=Path, metavar="ARCHIVE",
+                       help="safely extract and validate one downloaded product archive")
     parser.add_argument("--group", choices=(*_POLICY_PARTITION_GROUPS, "all"), default="all",
                         help="limit --self-test to one registered control group; defaults to all controls")
     parser.add_argument("--completed-file", type=Path, default=None,
@@ -5890,11 +6167,21 @@ def main() -> int:
                         help="judge as the release head: provisional rows and unreadable tree-equal citation objects are rejected")
     parser.add_argument("--verify-cited", action="store_true",
                         help="online and advisory (never in CTest): confirm each ledger citation through gh")
+    parser.add_argument("--expected-name", default="", help="exact authorized archive basename")
+    parser.add_argument("--layout", choices=("core", "player"), default="core")
+    parser.add_argument("--destination", type=Path, default=None)
     args = parser.parse_args()
     root = args.root.resolve()
     try:
         if args.self_test:
             run_policy_self_test(root, args.group, args.completed_file)
+            return 0
+        if args.check_product_archive is not None:
+            if not args.expected_name or args.destination is None:
+                raise Reject("product-archive-identity", "--expected-name and --destination are required")
+            check_product_archive(args.check_product_archive.resolve(), args.expected_name, args.layout,
+                                  root, args.destination.resolve())
+            print(f"PASS: trusted product archive layout={args.layout} name={args.expected_name}")
             return 0
         if args.verify_cited:
             return verify_cited(root)
