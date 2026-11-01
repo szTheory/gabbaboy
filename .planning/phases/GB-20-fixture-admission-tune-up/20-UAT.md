@@ -2,13 +2,13 @@
 status: complete
 phase: GB-20-fixture-admission-tune-up
 source: 20-01-SUMMARY.md, 20-02-SUMMARY.md, 20-03-SUMMARY.md, 20-04-SUMMARY.md, 20-05-SUMMARY.md, 20-06-SUMMARY.md, 20-07-SUMMARY.md, 20-08-SUMMARY.md, 20-09-SUMMARY.md
-started: 2026-11-01T14:14:52.665526+00:00
-updated: 2026-11-01T14:14:52.665526+00:00
+started: 2026-11-01T14:24:46.242884+00:00
+updated: 2026-11-01T14:24:46.242884+00:00
 ---
 
 ## Automated Evidence
 
-Final local implementation checks at 7293eb47a6c799b6455dd854533aca932f4529ad: configure/build passed, CTest passed 1711/1711, and `bash tests/scripts/verify-release-candidate.sh --self-test` passed with positive product/archive checks and receipt, fixture-leak, source-archive, and substitution negatives. Security audit: 29/29 authored entries closed. Final archive/path review is clean; the TAR counter-reset warning is closed. Exact-head hosted macOS package qualification is still pending on the Phase 20 PR. RIGHTS-01 remains pending because no fixture was admitted and automation does not decide legal grant scope.
+Final local implementation checks at 7293eb47a6c799b6455dd854533aca932f4529ad: configure/build passed, CTest passed 1711/1711, and `bash tests/scripts/verify-release-candidate.sh --self-test` passed with product/archive positives and receipt, fixture-leak, source-archive, and substitution negatives. Security audit: 29/29 authored entries closed. Final archive/path review is clean; the TAR counter-reset warning is closed. The CI workflow self-test passes 111 negative controls. A Windows-style temporary clone reproduces the initial `core.autocrlf=true` manifest rejection and passes after the workflow's pre-checkout settings. Exact-head hosted Windows retry and macOS package qualification remain pending on PR #139. RIGHTS-01 remains pending because no fixture was admitted and automation does not determine legal grant scope.
 
 ## Current Test
 

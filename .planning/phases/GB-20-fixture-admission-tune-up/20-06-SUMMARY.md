@@ -17,7 +17,7 @@ tech-stack:
   patterns: [Bounded standard-library tar extraction, trusted checker source and policy authority]
 key-files:
   created: [.planning/phases/GB-20-fixture-admission-tune-up/20-06-SUMMARY.md]
-  modified: [.github/workflows/release.yml, .github/scripts/release-evidence-lifecycle.sh, .github/scripts/verify-workflow-policy.py, tests/scripts/verify-workflow-policy-coverage.py, tests/data/workflow-policy-controls.json]
+  modified: [.github/workflows/release.yml, .github/workflows/ci.yml, .github/scripts/release-evidence-lifecycle.sh, .github/scripts/verify-workflow-policy.py, tests/scripts/verify-workflow-policy-coverage.py, tests/data/workflow-policy-controls.json]
 key-decisions:
   - Validate downloaded platform bytes using only the trusted publisher checkout before draft validation.
   - Preserve source-only and fixture rights boundaries; archive checks do not establish legal permission.
@@ -127,6 +127,10 @@ Eight Plan 20-06 task commits are listed above. Interleaved Plan 20-09 commits a
 ## Final lifecycle replay integration follow-up
 
 Commit `7163002d` extended the existing release-lifecycle replay to carry the trusted downloaded-byte product gate through its successful publication path and reject each required macOS-core, macOS-player, and Windows-core archive when omitted or altered. It also pins the evolving adoption checker separately from the historical v0.3 source. The final `bash tests/scripts/verify-release-candidate.sh --self-test` passed at source head `7293eb47a6c799b6455dd854533aca932f4529ad`, including receipt identity, digest tampering, draft/proof, fixture-leak, source-archive, and substitution negatives. This phase-orchestration follow-up does not change rights policy or publish a release.
+
+## Windows native checkout exact-byte follow-up
+
+The first hosted PR run found that the Windows runner's default `core.autocrlf=true` converted fixture manifests before CMake ran, causing the exact-byte admission check to treat unchanged legacy manifests as mutations. This was reproduced in a temporary clone with the precise `record-field-missing: manifest` rejection. The `native-windows` CI job now sets `core.autocrlf=false` and `core.eol=lf` before `actions/checkout`; a temporary clone with that setup passes the same repository-admission check, while the unconfigured clone fails. The exact-head Windows CI rerun remains required before phase closeout.
 - Drive-qualified, drive-relative, nested mixed-case drive, ADS filename/component, directory escape injection and regular-parent escape injection controls all reject with `product-archive-path`; spies observed zero outside writes and sentinels stayed unchanged.
 - `python3 -I .github/scripts/safe_extract_package.py --self-test`, `plan_cap`, `planning_hygiene_controls`, and `summary_coverage_live` passed.
 

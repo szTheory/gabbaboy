@@ -120,6 +120,7 @@ The earlier audit above records the first execution head and is retained as hist
 | Security audit | PASS | `20-SECURITY.md` records 29/29 authored threat entries closed across all nine plan registers; `threats_open: 0`. |
 | Code reviews | PASS | Trusted publisher and Windows-path findings were fixed; the final archive/path review is clean; WR-01's exact-cap counter-reset proof is closed at `7293eb47`. |
 | Plan/summary coverage and plan cap | PASS locally | The full CTest includes `plan_cap`, planning hygiene, live-summary coverage, workflow-policy coverage, and negative controls. The phase has 9 plans under its cap of 9. |
+| Windows byte-exact repository configure | RETEST PENDING | The first hosted run reproduced Windows `core.autocrlf` conversion before fixture admission. CI now disables conversion before checkout; the next exact-head `native-windows-x64` run must pass. A local paired clone control proves configured checkout passes and `autocrlf=true` rejects with the same cause. |
 | Exact-head hosted macOS player package | PENDING | The `macos-player-package` pull-request job must pass on the final pushed revision. Local Cocoa UI tests cannot substitute for this hosted lane. |
 
 No fixture was admitted. `RIGHTS-01` remains pending because no candidate was admitted and automated identity/notice checks do not determine legal grant scope. No manual UAT is required; `20-UAT.md` is generated and checked by the shared closure helper from the plan-summary deliverables.

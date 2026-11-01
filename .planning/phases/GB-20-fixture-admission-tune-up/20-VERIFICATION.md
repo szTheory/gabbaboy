@@ -2,7 +2,7 @@
 phase: GB-20-fixture-admission-tune-up
 verified: 2026-11-01T14:12:14Z
 status: pending_external_gate
-score: 8/9
+score: 7/9
 implementation_head: 7293eb47a6c799b6455dd854533aca932f4529ad
 covered_files:
   - .github/scripts/release-evidence-lifecycle.sh
@@ -22,13 +22,13 @@ covered_files:
 
 ## Result
 
-Local verification is green at implementation head `7293eb47a6c799b6455dd854533aca932f4529ad`. Eight of nine outcomes are verified. The remaining gate is the hosted `macos-player-package` workflow on the final PR head. Phase 20 stays open until that exact revision passes.
+Local verification is green at implementation head `7293eb47a6c799b6455dd854533aca932f4529ad`. Seven of nine outcomes are fully verified. The Windows byte-exact checkout setup has been corrected after its first hosted failure, and the exact-head Windows rerun is pending; the hosted `macos-player-package` lane is also pending. Phase 20 stays open until both pass on the final PR revision.
 
 ## Goal-Backward Checks
 
 | # | Outcome | Status | Evidence |
 |---|---|---|---|
-| 1 | Fixture admission uses full immutable identities, bounded input handling, pinned notice/product policy, exact path inventory, and meaningful negative controls. | VERIFIED | `fixture_admission_controls`, `fixture_admission_repository`, both core/player product-control groups, and their self-tests passed in the final full CTest run. |
+| 1 | Fixture admission uses full immutable identities, bounded input handling, pinned notice/product policy, exact path inventory, and meaningful negative controls. | VERIFIED LOCALLY; WINDOWS RETEST PENDING | Admission and mutation CTests pass locally. The first hosted Windows configure exposed newline conversion before the admission check; CI now disables checkout conversion, and the exact-head Windows rerun remains pending. |
 | 2 | Installed, extracted, and released core packages enforce actual bytes, paths, inventory, root MIT, and named notice sidecar requirements. | VERIFIED | `preview_package_smoke`, `installed_runner_smoke`, source-archive controls, and final release-candidate replay passed. |
 | 3 | Player package staging and extracted-byte policy reject fixture payloads and notice mutations before execution. | VERIFIED LOCALLY; HOSTED GATE PENDING | The production player policy and 21 isolated mutation controls pass locally. Exact-head `macos-player-package` CI remains required to qualify the complete Cocoa package path. |
 | 4 | Filesystem/Git enumeration and Git blob reads remain bounded and clean up child processes on overflow or timeout. | VERIFIED | Fixture admission/repository controls and self-tests passed, including over-limit and stalled-child cleanup cases. |
@@ -46,6 +46,7 @@ Local verification is green at implementation head `7293eb47a6c799b6455dd854533a
 - The final ASVS L1 audit reports 29/29 authored threat entries closed across nine plan registers, with no open high-or-higher authored threat.
 - Review findings CR-05/08/09, the archive metadata/cleanup finding, the Windows path finding, and TAR warning WR-01 have closure evidence. The final archive/path review is clean.
 - The generated `20-UAT.md` is checked by the shared closure helper; no manual UAT item is required.
+- A temporary Windows-style checkout test proves the original `core.autocrlf=true` failure and passes when the workflow's pre-checkout configuration is applied.
 
 ## Requirement Coverage
 
@@ -57,4 +58,4 @@ The pending rights decision is recorded without claiming that checksums or popul
 
 ## Human Verification
 
-None. Phase 20 has no manual UAT. The remaining qualification is an automated hosted CI check.
+None. Phase 20 has no manual UAT. The remaining qualifications are automated hosted Windows and macOS CI checks.

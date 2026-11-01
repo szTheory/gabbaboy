@@ -5,7 +5,7 @@ milestone_name: Evidence Floor
 current_phase: 20
 current_phase_name: Fixture Admission Tune-up
 status: executing
-stopped_at: Phase 20 local verification complete — awaiting exact-head hosted macOS qualification
+stopped_at: Phase 20 local verification complete — awaiting exact-head hosted Windows and macOS qualification
 last_updated: "2026-11-01T14:12:14Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 20 rescope, reviews, security audit, full local suite, and release replay passed; hosted PR gate is pending
@@ -31,12 +31,12 @@ See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 Phase: 20 (Fixture Admission Tune-up) — EXECUTING, hosted exact-head qualification pending
 Plans: 20-01 through 20-09 have summaries; all nine plans are complete under the approved cap.
-Status: Local configure/build, all 1,711 CTests, release-candidate replay, final code reviews, and the 29-entry security audit pass. The hosted `macos-player-package` check must still pass on the final pushed revision before Phase 20 closes. `RIGHTS-01` remains pending because no fixture was admitted.
-Last activity: 2026-11-01 — final local Phase 20 verification passed; preparing the hosted exact-head check.
+Status: Local configure/build, all 1,711 CTests, release-candidate replay, final code reviews, and the 29-entry security audit pass. The hosted `native-windows-x64` check failed because checkout normalized fixture bytes; CI now disables autocrlf before checkout. Both the Windows retest and hosted `macos-player-package` must pass on the final pushed revision before Phase 20 closes. `RIGHTS-01` remains pending because no fixture was admitted.
+Last activity: 2026-11-01 — diagnosed the hosted Windows line-ending failure and added a pre-checkout fix; exact-head checks are pending.
 
-Completed stage: **Phase 20 implementation, rescope, final reviews, security audit, and local verification**. All nine plans have summaries; configure/build, 1,711/1,711 CTests, and the release-candidate replay pass at implementation head `7293eb47a6c799b6455dd854533aca932f4529ad`. The phase remains open only for exact-head hosted macOS package qualification. `RIGHTS-01` remains pending because no fixture was admitted. Previous completed implementation phase remains **19 — Qualified v0.3.0 Release**.
+Completed stage: **Phase 20 implementation, rescope, final reviews, security audit, and local verification**. All nine plans have summaries; configure/build, 1,711/1,711 CTests, and the release-candidate replay pass at implementation head `7293eb47a6c799b6455dd854533aca932f4529ad`. Phase 20 remains open for the exact-head hosted Windows retest and macOS package qualification. `RIGHTS-01` remains pending because no fixture was admitted. Previous completed implementation phase remains **19 — Qualified v0.3.0 Release**.
 
-Next workflow stage: **Exact-head hosted Phase 20 qualification**. The agent will push the reviewed Phase 20 candidate, open/refresh its PR, and verify the required macOS package check on the resulting head. No user action is needed while those checks run. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. Stop at Phase 20; do not begin Phase 21 — CGB Game Progress and Scene Regressions before hosted qualification passes.
+Next workflow stage: **Exact-head hosted Phase 20 qualification**. The agent will push the Windows checkout correction and verify the native Windows and macOS package checks on the resulting PR head. No user action is needed while those checks run. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. Stop at Phase 20; do not begin Phase 21 — CGB Game Progress and Scene Regressions before hosted qualification passes.
 
 ## Performance Metrics
 
@@ -66,7 +66,7 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 ## Session Continuity
 
 **Last session:** 2026-11-01T14:12:14Z
-**Stopped at:** Phase 20 local verification complete — awaiting hosted exact-head macOS check
+**Stopped at:** Phase 20 local verification complete — awaiting hosted exact-head Windows and macOS checks
 **Resume file:** .planning/phases/GB-20-fixture-admission-tune-up/continue.md
 
 ## Operator Next Steps

@@ -5,7 +5,7 @@
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1, shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
 - ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1, shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
 - ✅ **v0.3 Save States & Host Contract** — Phases 16–19, 35 plans, shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
-- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 implementation and local verification are complete, with exact-head hosted macOS qualification pending.
+- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 implementation and local verification are complete, with exact-head hosted Windows and macOS qualification pending.
 
 ## v0.4 — Evidence Floor
 
@@ -17,7 +17,7 @@ The two substantive tracks are CGB game acceptance with scene regressions, and d
 
 Numbering continues after completed Phase 19. Decimal phases are reserved for explicitly approved insertions.
 
-- [ ] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans are complete; final hosted macOS qualification remains.
+- [ ] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans are complete; final hosted Windows and macOS qualification remains.
 - [ ] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome.
 - [ ] **Phase 22: Composition and Microtest Evidence** — Admitted acid2 derivatives and gbmicrotest expose their exact model and oracle limits.
 - [ ] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established.
@@ -122,7 +122,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Fixture Admission Tune-up | 9/9 | Awaiting exact-head hosted macOS qualification | - |
+| 20. Fixture Admission Tune-up | 9/9 | Awaiting exact-head hosted Windows and macOS qualification | - |
 | 21. CGB Game Progress and Scene Regressions | 0/TBD | Not started | - |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
