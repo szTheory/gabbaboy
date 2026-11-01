@@ -49,6 +49,7 @@ MAX_GIT_TREE_STDERR_BYTES = 4096
 GIT_TREE_READ_CHUNK_BYTES = 64 * 1024
 GIT_TREE_TIMEOUT_SECONDS = 30
 GIT_BLOB_READ_CHUNK_BYTES = 64 * 1024
+GIT_BLOB_TIMEOUT_SECONDS = 30
 MAX_PRODUCT_FILE_BYTES = 512 * 1024 * 1024
 MAX_PRODUCT_TOTAL_BYTES = 1024 * 1024 * 1024
 MAX_PRODUCT_ENTRIES = 16384
@@ -146,36 +147,83 @@ def blob(root: Path, revision: str, path: str) -> bytes:
         raise Reject("git-object-unavailable", str(error)[:240]) from None
     stream = process.stdout
     data = bytearray()
+    failures: queue.Queue[Reject] = queue.Queue(maxsize=1)
+
+    def record_failure(error: Reject) -> None:
+        try:
+            failures.put_nowait(error)
+        except queue.Full:
+            pass
+
+    def read_stdout() -> None:
+        try:
+            while len(data) <= MAX_FILE_BYTES:
+                chunk = stream.read(min(GIT_BLOB_READ_CHUNK_BYTES, MAX_FILE_BYTES + 1 - len(data)))
+                if not chunk:
+                    break
+                data.extend(chunk)
+            if len(data) > MAX_FILE_BYTES:
+                record_failure(Reject("file-size-limit", path))
+        except OSError as error:
+            record_failure(Reject("git-blob-unavailable", f"{path}: {error.strerror}"))
+        except BaseException as error:
+            record_failure(Reject("git-blob-read-failed", f"{path}: {type(error).__name__}"))
+        finally:
+            try:
+                stream.close()
+            except OSError as error:
+                record_failure(Reject("git-blob-read-failed", f"{path}: {str(error)[:240]}"))
+
+    reader = threading.Thread(target=read_stdout, name="fixture-git-blob-stdout", daemon=True)
+    waited = False
     try:
         if stream is None:
             raise Reject("git-blob-reader-unavailable", path)
-        while len(data) <= MAX_FILE_BYTES:
-            chunk = stream.read(min(GIT_BLOB_READ_CHUNK_BYTES, MAX_FILE_BYTES + 1 - len(data)))
-            if not chunk:
+        reader.start()
+        deadline = time.monotonic() + GIT_BLOB_TIMEOUT_SECONDS
+        returncode = None
+        failure = None
+        while True:
+            try:
+                failure = failures.get_nowait()
                 break
-            data.extend(chunk)
-        if len(data) > MAX_FILE_BYTES:
-            if stream is not None:
-                stream.close()
-            _terminate_and_reap(process, "git show")
-            raise Reject("file-size-limit", path)
-        if stream is not None:
-            stream.close()
-        try:
-            returncode = process.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            _terminate_and_reap(process, "git show")
-            raise Reject("git-blob-timeout", path) from None
+            except queue.Empty:
+                pass
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                failure = Reject("git-blob-timeout", path)
+                break
+            try:
+                returncode = process.wait(timeout=min(0.05, remaining))
+                waited = True
+                break
+            except subprocess.TimeoutExpired:
+                continue
+            except OSError as error:
+                failure = Reject("git-blob-read-failed", f"{path}: {error}")
+                break
+
+        if failure is None:
+            reader.join(max(0, deadline - time.monotonic()))
+            if reader.is_alive():
+                failure = Reject("git-blob-timeout", path)
+            else:
+                try:
+                    failure = failures.get_nowait()
+                except queue.Empty:
+                    pass
+        if failure is not None:
+            raise failure
         if returncode != 0:
             raise Reject("git-blob-missing", path)
         return bytes(data)
-    except OSError as error:
-        raise Reject("git-blob-unavailable", f"{path}: {error.strerror}") from None
     finally:
+        if not waited:
+            _terminate_and_reap(process, "git show")
         if stream is not None and not stream.closed:
             stream.close()
-        if process.poll() is None:
-            _terminate_and_reap(process, "git show")
+        if reader.ident is not None:
+            reader.join()
 
 
 def _strip_html_comments(line: str, in_comment: bool) -> tuple[str, bool]:
@@ -1903,6 +1951,103 @@ def _fake_blob_process_lifecycle_control() -> bool:
     return True
 
 
+def _fake_blob_read_deadline_control() -> bool:
+    class StalledStream:
+        def __init__(self, terminated: threading.Event):
+            self.terminated = terminated
+            self.read_started = threading.Event()
+            self.released_by_termination = False
+            self.closed = False
+
+        def read(self, _size: int = -1) -> bytes:
+            self.read_started.set()
+            self.released_by_termination = self.terminated.wait(1)
+            return b""
+
+        def close(self) -> None:
+            self.closed = True
+
+    class StalledProcess:
+        def __init__(self):
+            self.terminated_event = threading.Event()
+            self.stdout = StalledStream(self.terminated_event)
+            self.returncode = None
+            self.terminated = False
+            self.wait_calls = 0
+            self.wait_after_terminate = 0
+            self.finished = threading.Event()
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.terminated = True
+            self.returncode = -15
+            self.terminated_event.set()
+            self.finished.set()
+
+        def kill(self) -> None:
+            self.returncode = -9
+            self.terminated_event.set()
+            self.finished.set()
+
+        def wait(self, timeout: float | None = None) -> int:
+            self.wait_calls += 1
+            if self.terminated:
+                self.wait_after_terminate += 1
+            if self.returncode is not None:
+                return self.returncode
+            if self.finished.wait(min(timeout or 0, 0.02)):
+                return self.returncode
+            raise subprocess.TimeoutExpired("git show", timeout)
+
+    fake = StalledProcess()
+    process_calls = 0
+    created_threads = []
+    original_popen = subprocess.Popen
+    original_thread = threading.Thread
+    original_timeout = GIT_BLOB_TIMEOUT_SECONDS
+
+    def fake_popen(*_args, **kwargs):
+        nonlocal process_calls
+        if kwargs.get("bufsize") != 0:
+            return original_popen(*_args, **kwargs)
+        process_calls += 1
+        return fake
+
+    def tracked_thread(*args, **kwargs):
+        thread = original_thread(*args, **kwargs)
+        created_threads.append(thread)
+        return thread
+
+    subprocess.Popen = fake_popen
+    threading.Thread = tracked_thread
+    globals()["GIT_BLOB_TIMEOUT_SECONDS"] = 0.05
+    started = time.monotonic()
+    try:
+        try:
+            blob(Path("."), BASELINE_COMMIT, "fixtures/stalled.bin")
+        except Reject as error:
+            if error.code != "git-blob-timeout":
+                raise Reject("self-test-git-blob-timeout-reason", str(error)) from None
+        else:
+            return False
+    finally:
+        subprocess.Popen = original_popen
+        threading.Thread = original_thread
+        globals()["GIT_BLOB_TIMEOUT_SECONDS"] = original_timeout
+
+    if process_calls == 0 or time.monotonic() - started >= 0.5:
+        raise Reject("self-test-git-blob-timeout", "stalled stream was not bounded by the read deadline")
+    if not fake.stdout.read_started.is_set() or not fake.stdout.released_by_termination:
+        raise Reject("self-test-git-blob-timeout", "terminating the child did not release its blocked stdout reader")
+    if not fake.terminated or fake.wait_after_terminate == 0:
+        raise Reject("self-test-git-blob-timeout", "timeout did not terminate and reap the git child")
+    if not fake.stdout.closed or not created_threads or any(thread.is_alive() for thread in created_threads):
+        raise Reject("self-test-git-blob-timeout", "timeout left the stdout stream or reader thread open")
+    return True
+
+
 def _fake_product_scandir_limit_control() -> bool:
     class FakeEntry:
         def __init__(self, path: str):
@@ -2042,6 +2187,8 @@ def _run_bounded_input_controls() -> int:
         missing.append("git-stream-lifecycle")
     if not _fake_blob_process_lifecycle_control():
         missing.append("git-blob-stream-lifecycle")
+    if not _fake_blob_read_deadline_control():
+        missing.append("git-blob-read-deadline")
     if not _fake_product_scandir_limit_control():
         missing.append("product-entry-scandir-limit")
 
@@ -2053,11 +2200,12 @@ def _run_bounded_input_controls() -> int:
             "git-tree-entry-count": "self-test-git-tree-entry-count-bypass",
             "git-stream-lifecycle": "self-test-git-stream-lifecycle-bypass",
             "git-blob-stream-lifecycle": "self-test-git-blob-stream-lifecycle-bypass",
+            "git-blob-read-deadline": "self-test-git-blob-timeout-bypass",
             "product-entry-scandir-limit": "self-test-product-entry-scandir-limit-bypass",
         }
         first = missing[0]
         raise Reject(markers[first], f"over-limit control was accepted or its stream lifecycle was not enforced: {first}")
-    return 7
+    return 8
 
 
 def self_test() -> None:
