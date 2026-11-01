@@ -1626,9 +1626,9 @@ def _run_manifest_cli(root: Path) -> subprocess.CompletedProcess[str]:
 def _prepare_synthetic(root: Path) -> None:
     project = Path(__file__).resolve().parents[2]
     object_dir = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-path", "objects"],
-                                cwd=project, capture_output=True, check=True, text=True).stdout.strip()
+                                cwd=project, capture_output=True, check=True).stdout.rstrip(b"\r\n")
     (root / ".git/objects/info").mkdir(parents=True, exist_ok=True)
-    (root / ".git/objects/info/alternates").write_text(object_dir + "\n", encoding="utf-8")
+    (root / ".git/objects/info/alternates").write_bytes(object_dir + b"\n")
     _write_synthetic(root)
 
 
@@ -1637,9 +1637,9 @@ def _prepare_legacy_tree(root: Path) -> None:
     project = Path(__file__).resolve().parents[2]
     git(root, "init", "-q")
     (root / ".git/objects/info").mkdir(parents=True, exist_ok=True)
-    object_dir = subprocess.run(["git", "rev-parse", "--absolute-git-dir"], cwd=project,
-                                capture_output=True, check=True, text=True).stdout.strip() + "/objects"
-    (root / ".git/objects/info/alternates").write_text(object_dir + "\n", encoding="utf-8")
+    object_dir = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-path", "objects"],
+                                cwd=project, capture_output=True, check=True).stdout.rstrip(b"\r\n")
+    (root / ".git/objects/info/alternates").write_bytes(object_dir + b"\n")
     archive = subprocess.run(["git", "archive", "--format=tar", BASELINE_COMMIT, "fixtures", "LICENSE"],
                              cwd=project, capture_output=True, check=True, timeout=30).stdout
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as stream:

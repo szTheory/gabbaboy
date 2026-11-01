@@ -684,10 +684,10 @@ def _private_baseline_repo(scratch, checker):
     subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
     object_dir = subprocess.run(
         ["git", "-C", str(project_root), "rev-parse", "--path-format=absolute", "--git-path", "objects"],
-        check=True, capture_output=True, text=True).stdout.strip()
+        check=True, capture_output=True).stdout.rstrip(b"\r\n")
     object_info = repo / ".git/objects/info"
     object_info.mkdir(parents=True, exist_ok=True)
-    (object_info / "alternates").write_text(object_dir + "\n", encoding="ascii")
+    (object_info / "alternates").write_bytes(object_dir + b"\n")
 
     paths = ["LICENSE", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json"]
     raw_tree = checker.git(repo, "ls-tree", "-r", "-z", "--full-tree", checker.BASELINE_COMMIT, "--", "fixtures")

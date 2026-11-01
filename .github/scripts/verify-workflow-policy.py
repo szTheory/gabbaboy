@@ -280,16 +280,17 @@ def _write_control_archive(path: Path, members: list[tuple[str, bytes, str]]) ->
 
 def _product_archive_controls(root: Path) -> None:
     """Exercise the publisher's production archive gate using real installed product bytes."""
-    install_parent = root / "build/workflow-policy-archive-controls"
-    shutil.rmtree(install_parent, ignore_errors=True)
-    try:
-        subprocess.run(["cmake", "--install", str(root / "build"), "--prefix",
-                        str(root / "build/workflow-policy-archive-controls/prefix")],
-                       cwd=root, capture_output=True, text=True, check=True, timeout=60)
-    except (OSError, subprocess.SubprocessError) as error:
-        raise SystemExit(f"product-archive control setup failed: CMake install: {error}") from None
     with tempfile.TemporaryDirectory(prefix="gbb-product-archive-controls.") as directory:
         scratch = Path(directory)
+        prefix = scratch / "prefix"
+        try:
+            subprocess.run(["cmake", "--install", str(root / "build"), "--prefix", str(prefix)],
+                           cwd=root, capture_output=True, text=True, check=True, timeout=60)
+        except (OSError, subprocess.SubprocessError) as error:
+            detail = ""
+            if isinstance(error, subprocess.CalledProcessError):
+                detail = f" stdout={error.stdout!r} stderr={error.stderr!r}"
+            raise SystemExit(f"product-archive control setup failed: CMake install: {error}{detail}") from None
 
         def pax_archive(path: Path, count: int, comment_size: int, payload_size: int = 0) -> None:
             with tarfile.open(path, mode="w:gz", format=tarfile.PAX_FORMAT) as bundle:
@@ -314,8 +315,6 @@ def _product_archive_controls(root: Path) -> None:
             if destination.exists():
                 raise SystemExit(f"{label} left an extraction destination")
             _mark_policy_control("helper", "product-archive-resource", label)
-        prefix = root / "build/workflow-policy-archive-controls/prefix"
-
         def archive_tree(source: Path, destination: Path, additions: dict[str, bytes] | None = None) -> None:
             files = sorted(path for path in source.rglob("*") if path.is_file())
             members = [(path.relative_to(source).as_posix(), path.read_bytes(), "file") for path in files]
@@ -2532,7 +2531,9 @@ def release_fixture_checker_path_controls(root: Path) -> int:
             environment["RUNNER_TEMP"] = str(runner_temp)
             result = subprocess.run([bash, str(wrapper), "--self-test-trusted-checker"], cwd=root,
                                     env=environment, capture_output=True, text=True, check=False, timeout=10)
-            expected = str(root / "tests/scripts/verify-fixture-admission.py")
+            expected = str(root / "tests/scripts/verify-fixture-admission.py").replace("\\", "/")
+            if os.name == "nt" and len(expected) > 2 and expected[1:3] == ":/":
+                expected = f"/{expected[0].lower()}{expected[2:]}"
             if result.returncode != 0 or f"PASS: trusted fixture checker path {expected}" not in result.stdout:
                 raise SystemExit(f"release checker path control failed ({label}): "
                                  f"exit={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}")
