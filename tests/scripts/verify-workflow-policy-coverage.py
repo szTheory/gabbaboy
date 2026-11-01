@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "f5954e4c16f99e02f2a57edb4b99df280d2db9f2"
-REVIEWED_POLICY_SHA256 = "3a9c3f21479964aa6d94e1795629e3fbc77087bc85909dcdda461adeb7c86bb5"
+REVIEWED_POLICY_COMMIT = "dd334abec23f563f6995963a72f9cd6ac0cd9ed3"
+REVIEWED_POLICY_SHA256 = "c7e8c8a41e6ee3cc60a036d4c0a3b34b50f87af0959afb1e56e0e5d43161a6a1"
 GROUPS = {
     "ci": "workflow_policy_group_ci",
     "release_jobs": "workflow_policy_group_release_jobs",
@@ -48,6 +48,7 @@ POSIX_ONLY = ("posix",)
 ADDED_POLICY_FUNCTIONS = {
     "_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test",
     "_fixture_step", "_fixture_call", "_fixture_step_event", "check_fixture_admission_workflows",
+    "release_fixture_checker_path_controls",
 }
 ADDED_POLICY_GLOBALS = {
     "_POLICY_PARTITION_GROUPS", "_ACTIVE_POLICY_GROUP", "_ACTIVE_POLICY_CONTROLS", "_COMPLETED_POLICY_CONTROLS",
@@ -378,6 +379,10 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
         self.normalize_main = normalize_main
     def visit_Expr(self, node: ast.Expr):
         value = node.value
+        if (self.normalize_self_test and isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+                and value.func.id == "release_fixture_checker_path_controls"):
+            return None
         if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
                 and value.func.id == "check_fixture_admission_workflows"):
             return None
@@ -391,6 +396,12 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
         return self.generic_visit(node)
 
     def visit_If(self, node: ast.If):
+        if (self.normalize_self_test and any(
+                isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call)
+                and isinstance(statement.value.func, ast.Name)
+                and statement.value.func.id == "release_fixture_checker_path_controls"
+                for statement in node.body)):
+            return None
         node = self.generic_visit(node)
         if (self.normalize_self_test and isinstance(node.test, ast.Name) and node.test.id == "run_helpers"):
             return node.body
@@ -413,6 +424,22 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
             for statement in node.body:
                 if not isinstance(statement, ast.Return) or not isinstance(statement.value, ast.List):
                     continue
+                # CR-05 scopes the publisher token to individual GitHub CLI steps.
+                # Normalize that structural workflow change in the one historical
+                # ordering mutation whose text anchor includes the publish step;
+                # the policy implementation and all other baseline mutations remain
+                # compared byte-for-byte at the AST level.
+                for row in statement.value.elts:
+                    if not isinstance(row, ast.Tuple) or not row.elts:
+                        continue
+                    label = row.elts[0]
+                    if not (isinstance(label, ast.Constant) and label.value ==
+                            "release publisher uploads the inventory after the publish decision"):
+                        continue
+                    for literal in ast.walk(row):
+                        if isinstance(literal, ast.Constant) and isinstance(literal.value, str):
+                            literal.value = literal.value.replace(
+                                "        env:\n          GH_TOKEN: ${{ github.token }}\n", "")
                 def is_plan20_row(row: ast.expr) -> bool:
                     if isinstance(row, ast.Call) and row.args:
                         label = row.args[0]
