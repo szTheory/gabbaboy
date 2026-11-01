@@ -13,8 +13,8 @@ provides:
 affects: [phase-20-release-qualification, core-packaging, fixture-policy]
 actuals:
   tokens: 14023
-  tasks: 3
-  commits: 8
+  tasks: 4
+  commits: 54
 tech-stack:
   added: []
   patterns:
@@ -76,11 +76,24 @@ coverage:
         ref: "python3 -I .github/scripts/verify-workflow-policy.py --self-test --group release_jobs"
         status: pass
     human_judgment: false
+  - id: D4
+    description: Source receipt and Linux/core archive parsing enforce decompressed stream, per-header metadata, aggregate metadata byte, and extension chain count bounds before metadata payload reads while preserving trusted source identity checks.
+    verification:
+      - kind: integration
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^v02_source_archive_controls$'"
+        status: pass
+      - kind: integration
+        ref: "bash tests/scripts/verify-release-candidate.sh --self-test"
+        status: pass
+      - kind: integration
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^(plan_cap|planning_hygiene_controls|summary_coverage_live)$'"
+        status: pass
+    human_judgment: false
 duration: 46min
 completed: 2026-10-31
-status: reopened
-completion_scope: Original Tasks 1–3 only; their six task commits, interleaving disclosure, metrics and evidence remain historical.
-pending_follow_up: Task 4 — bounded pre-payload metadata and decompressed-stream parsing on source/Linux-core release paths.
+status: complete
+completion_scope: Tasks 1–3 historical evidence plus the final security-rescope Task 4; no fixture or rights changes.
+pending_follow_up: None for this plan; phase-level review, full verification, and hosted macOS qualification remain with Phase 20 orchestration.
 plan_head_before: 6075bb2aecc687b287d830bb0f05ed8fcc414d42
 plan_head_after: 75f4e835a8192e8e8f94eac075824c29a5c756e1
 ---
@@ -89,13 +102,13 @@ plan_head_after: 75f4e835a8192e8e8f94eac075824c29a5c756e1
 
 **Installed, extracted, and released core products now enforce the shared fixture policy against actual archive and notice bytes.**
 
-## Reopened for the final security-audit archive follow-up
+## Final security-audit archive follow-up completed
 
-Plan 20-02 is incomplete until its appended Task 4 passes. The latest research addendum records hidden PAX metadata bypassing inspect_tar's visible-member payload budget on the source-receipt and Linux/core product paths. The prior metrics, six task commits and passing coverage below remain evidence for Tasks 1–3; they do not establish the new pre-payload per-header/aggregate/count or decompressed-stream guarantees.
+The latest research addendum recorded hidden PAX metadata bypassing inspect_tar's visible-member payload budget on the source-receipt and Linux/core product paths. Task 4 adds pre-payload bounds and production-path controls while preserving the historical Tasks 1–3 evidence below.
 
-The executor acts next on Task 4 in [20-02-PLAN.md](20-02-PLAN.md) under the already authorized in-place security rescope. Add the bounds and direct/CLI production controls, preserve valid source commit comments and trusted checker relocation, and pass v02_source_archive_controls, the release-candidate self-test and planning checks at the committed implementation head. Keep status reopened until then; append actual follow-up commits and fresh block-style coverage after success. No new owner confirmation, plan, dependency, fixture/rights change or live publication is included. Final Phase 20 integration/security closure remains separate.
+The source/core parser now rejects oversized PAX/GNU headers before the base parser reads their payload, caps aggregate metadata, extension chains, and decompressed input, and exercises these limits through source receipt and product archive CLI paths. The 70KB PAX reproducer is rejected before payload parsing. Existing source identity, commit-comment, product, and trusted relocation controls remain passing. No fixture or rights policy changed. Final Phase 20 integration/security closure remains separate.
 
-## Performance
+## Original Tasks 1–3 Performance
 
 - **Duration:** 46 min
 - **Started:** 2026-10-31T20:30:29-04:00 (first task RED commit)
@@ -110,13 +123,19 @@ The executor acts next on Task 4 in [20-02-PLAN.md](20-02-PLAN.md) under the alr
 - Bound release candidate qualification to the actual archive and named `gabbaboy-notices.txt` bytes. Missing, altered, and misnamed sidecars are negative controls.
 - Clarified the binary product notice paragraph while preserving every historical digest row and every other byte from the baseline notice file.
 
-## Task Commits
+## Original Task Commits
 
 1. **Task 1: Validate one real install through archive extraction and consumer startup** — `bc73db95` (RED), `96a5f92e` (GREEN).
 2. **Task 2: Close the real core subtree and archive mutation gaps** — `5825b1b4` (RED), `845a74a4` (GREEN).
 3. **Task 3: Enforce actual core release and sidecar bytes at producer and download boundaries** — `7c203c23` (RED), `75f4e835` (GREEN).
 
 The required plan commit ledger measured 8 commits from `plan_head_before` through `plan_head_after`; it includes two interleaved Plan 20-03 commits on the shared branch. The six task commits listed above are the Plan 20-02 commits. No Plan 20-03 files were staged or changed by this plan.
+
+## Task 4 Follow-up
+
+- **Commit:** `75bba2e2` — bounds source and core tar metadata before extension payload parsing.
+- **Validation:** `cmake --build --preset phase1 -j2` passed; `v02_source_archive_controls` passed; `verify-release-candidate.sh --self-test` passed; `plan_cap`, `planning_hygiene_controls`, and `summary_coverage_live` passed.
+- **Controls:** valid source and core archives remain accepted; direct and production CLI negatives reject oversized PAX headers, aggregate metadata, excessive extension chains, and decompressed stream overflow with intended resource reasons. Receipt failure emitted no success output. Existing hostile tagged sibling and trusted checker relocation controls still pass.
 
 ## Files Created/Modified
 
@@ -156,7 +175,7 @@ None.
 
 ## Next Phase Readiness
 
-Original Tasks 1–3 are complete; Plan 20-02 is reopened for Task 4 above. Phase orchestration still owns the remaining Phase 20 work and final-head qualification. No fixture was admitted; `RIGHTS-01` remains pending.
+Plan 20-02 tasks and focused checks are complete. Phase orchestration still owns the remaining Phase 20 work and final-head qualification. No fixture was admitted; `RIGHTS-01` remains pending.
 
 ---
 *Phase: GB-20-fixture-admission-tune-up*
@@ -168,3 +187,9 @@ Original Tasks 1–3 are complete; Plan 20-02 is reopened for Task 4 above. Phas
 - All six Plan 20-02 task commits are ancestors of the plan task head.
 - GSD coverage classifier reports all three deliverables as automatically covered.
 - Required focused package, archive, release-sidecar, fixture-product, and release-workflow controls passed.
+
+## Task 4 Self-Check: PASSED
+
+- Source parser implementation is committed as `75bba2e2` and is the recorded plan task head.
+- Configure/build and all three required verification commands passed at that head.
+- Coverage includes source/core CLI controls and the pre-payload 70KB PAX reproducer rejection.
