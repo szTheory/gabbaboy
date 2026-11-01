@@ -67,8 +67,69 @@ verify_checkout() {
   fi
 }
 
+check_package_policy() {
+  local prefix=$1
+  shift
+  if [[ "$prefix" != /* ]]; then
+    prefix="$ROOT_DIR/$prefix"
+  fi
+  local -a command=(python3 -I "$ROOT_DIR/tests/scripts/verify-fixture-admission.py"
+    --check-product-tree "$prefix" --layout player --repo-root "$ROOT_DIR")
+  if [[ $# -gt 0 ]]; then
+    command+=("$@")
+  fi
+  "${command[@]}"
+}
+
+expect_package_policy_rejection() (
+  local source_prefix=$1 label=$2 relative_path=$3 mutation=$4 expected_reason=$5
+  local control_root control_prefix target output status
+  control_root=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-player-policy-${label}.XXXXXX") ||
+    fail 'could not create an isolated player policy control directory'
+  trap 'rm -rf -- "$control_root"' EXIT
+  control_prefix="$control_root/installed-prefix"
+  cp -R "$source_prefix" "$control_prefix"
+  target="$control_prefix/$relative_path"
+  mkdir -p "$(dirname "$target")"
+  case "$mutation" in
+    extra)
+      printf 'unregistered player product member\n' > "$target"
+      ;;
+    known)
+      cp "$ROOT_DIR/fixtures/mooneye-cgb/boot_regs-cgb.gb" "$target"
+      ;;
+    remove)
+      rm -f -- "$target"
+      ;;
+    change)
+      printf 'controlled player product mutation\n' >> "$target"
+      ;;
+    *)
+      fail "unknown player package policy mutation: $mutation"
+      ;;
+  esac
+  if output=$(bash "$ROOT_DIR/tests/scripts/verify-phase3-player.sh" \
+      --check-package-policy "$control_prefix" 2>&1); then
+    status=0
+  else
+    status=$?
+  fi
+  if [[ "$status" -eq 0 ]]; then
+    fail "player package policy accepted control '$label'"
+  fi
+  if [[ "$output" != *"REJECT ${expected_reason}:"* ]]; then
+    printf '%s\n' "$output" >&2
+    fail "player policy control '$label' failed without expected reason ${expected_reason} (exit $status)"
+  fi
+  if [[ "$output" == *"PASS: fixture admission product"* ]]; then
+    printf '%s\n' "$output" >&2
+    fail "player policy control '$label' printed a success result after rejection"
+  fi
+  printf 'player package policy rejected %s (%s)\n' "$label" "$expected_reason"
+)
+
 verify_package() {
-  local candidate_dir=$1 write_final_receipt=$2
+  local candidate_dir=$1 write_final_receipt=$2 inventory_path=${3:-}
   local archive="$candidate_dir/gabbaboy-preview-macos-arm64.tar.gz"
   local build_receipt="$candidate_dir/build-receipt.json"
   [[ -s "$archive" ]] || fail 'candidate package archive is missing or empty'
@@ -111,6 +172,13 @@ PY
   mkdir -p "$EXTRACT_DIR"
   python3 "$ROOT_DIR/.github/scripts/safe_extract_package.py" "$archive" "$EXTRACT_DIR"
   local prefix="$EXTRACT_DIR/installed-prefix"
+  if [[ -n "$inventory_path" ]]; then
+    check_package_policy "$prefix" --inventory "$inventory_path"
+  else
+    check_package_policy "$prefix"
+  fi
+  expect_package_policy_rejection "$prefix" seeded-known-fixture \
+    share/gabbaboy/fixtures/visible-demo/seeded-control known product-fixture-leak
   local player_bin="$prefix/bin/gabbaboy-player"
   local demo_rom="$prefix/share/gabbaboy/fixtures/visible-demo/demo.gb"
   local fixture_manifest="$prefix/share/gabbaboy/fixtures/visible-demo/manifest.json"
@@ -394,13 +462,18 @@ PY
 
 mode=${1:---build-package}
 case "$mode" in
+  --check-package-policy)
+    [[ $# -eq 2 ]] || fail 'usage: verify-phase3-player.sh --check-package-policy PREFIX'
+    check_package_policy "$2"
+    exit 0
+    ;;
   --build-package)
-    [[ $# -le 1 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR'
+    [[ $# -le 1 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX'
     ;;
   --verify-package)
-    [[ $# -eq 2 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR'
+    [[ $# -eq 2 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX'
     ;;
-  *) fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR' ;;
+  *) fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX' ;;
 esac
 
 # The package lane qualifies only SDL's scripted software path, never physical
@@ -629,6 +702,10 @@ metadata_path = share / 'preview-metadata.json'
 metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + '\n')
 PY
 
+PLAYER_STAGE_INVENTORY="$BUILD_ROOT/player-stage-inventory.json"
+rm -f -- "$PLAYER_STAGE_INVENTORY"
+check_package_policy "$PACKAGE_PREFIX" --write-inventory "$PLAYER_STAGE_INVENTORY"
+
 PACKAGE_ARCHIVE="$ARTIFACT_DIR/gabbaboy-preview-macos-arm64.tar.gz"
 tar -czf "$PACKAGE_ARCHIVE" -C "$STAGE_ROOT" installed-prefix
 PACKAGE_SHA256=$(sha256_file "$PACKAGE_ARCHIVE")
@@ -673,6 +750,6 @@ receipt = {
 receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n')
 PY
 
-verify_package "$ARTIFACT_DIR" false
+verify_package "$ARTIFACT_DIR" false "$PLAYER_STAGE_INVENTORY"
 printf 'Player package built and extracted-byte smoke passed for SDL %s; package SHA-256 %s\n' \
   "$SDL_VERSION" "$PACKAGE_SHA256"
