@@ -18,7 +18,7 @@ Usage:
   verify-v02-source-archive.py --check-receipt RECEIPT --archive PATH
       --tag TAG --source-sha SHA
   verify-v02-source-archive.py --check-product-archive PATH [--repo-root DIR]
-      [--inventory PATH]
+      [--inventory PATH] [--notice-sidecar PATH]
   verify-v02-source-archive.py --self-test-product-tree DIR --repo-root DIR
   verify-v02-source-archive.py --self-test
 
@@ -482,7 +482,7 @@ def _shared_policy_checker():
     return module
 
 
-def check_product(archive, repo_root, limits, inventory_path=None):
+def check_product(archive, repo_root, limits, inventory_path=None, sidecar_path=None):
     inspection = inspect_archive(archive, limits, unwrapped=True)
     if any(e.kind == "symlink" for e in inspection.entries):
         raise Reject("product-link-not-allowed", "product package contains a link")
@@ -490,6 +490,8 @@ def check_product(archive, repo_root, limits, inventory_path=None):
     if repo_root is None:
         repo_root = pathlib.Path(__file__).resolve().parents[2]
     root = pathlib.Path(repo_root).resolve()
+    if sidecar_path is not None and pathlib.Path(sidecar_path).name != "gabbaboy-notices.txt":
+        raise Reject("product-notice-sidecar-invalid", "sidecar must use the gabbaboy-notices.txt release asset name")
     entries = {
         entry.path: {"kind": "file", "size_bytes": entry.size, "sha256": entry.sha256}
         for entry in inspection.entries
@@ -497,7 +499,7 @@ def check_product(archive, repo_root, limits, inventory_path=None):
     entries.update({path: {"kind": "directory"} for path in inspection.directories})
     try:
         inventory = checker._read_inventory(pathlib.Path(inventory_path)) if inventory_path else None
-        accepted = checker.check_product_entries(entries, "core", root, inventory=inventory)
+        accepted = checker.check_product_entries(entries, "core", root, inventory=inventory, sidecar=sidecar_path)
     except checker.Reject as rejection:
         detail = str(rejection).partition(": ")[2] or str(rejection)
         raise Reject(rejection.code, detail) from None
@@ -1296,6 +1298,7 @@ def main(argv):
     parser.add_argument("--check-product-archive")
     parser.add_argument("--repo-root")
     parser.add_argument("--inventory", help="compare actual archive paths and bytes with a producer stage inventory")
+    parser.add_argument("--notice-sidecar", help="validate the actual gabbaboy-notices.txt sidecar bytes")
     # Limits can only be tightened, never raised above the contract values.
     parser.add_argument("--max-entries", type=int, default=MAX_ENTRIES)
     parser.add_argument("--max-total-bytes", type=int, default=MAX_TOTAL_BYTES)
@@ -1312,18 +1315,19 @@ def main(argv):
                 parser.error("--self-test-product-tree needs --repo-root")
             self_test_product_tree(args.self_test_product_tree, args.repo_root)
         elif args.check_product_archive:
-            result = check_product(args.check_product_archive, args.repo_root, limits, args.inventory)
+            result = check_product(args.check_product_archive, args.repo_root, limits,
+                                   args.inventory, args.notice_sidecar)
             print(f"PASS: core product matches exact policy ({result['inspected_members']} members)")
         elif args.check_receipt:
-            if args.inventory:
-                parser.error("--inventory is only valid with --check-product-archive")
+            if args.inventory or args.notice_sidecar:
+                parser.error("--inventory and --notice-sidecar are only valid with --check-product-archive")
             if not (args.archive and args.tag and args.source_sha):
                 parser.error("--check-receipt needs --archive, --tag and --source-sha")
             check_receipt(args.check_receipt, args.archive, args.tag, args.source_sha, args.repo, limits)
             print("PASS: source archive receipt matches the archive bytes")
         elif args.archive:
-            if args.inventory:
-                parser.error("--inventory is only valid with --check-product-archive")
+            if args.inventory or args.notice_sidecar:
+                parser.error("--inventory and --notice-sidecar are only valid with --check-product-archive")
             if not (args.tag and args.source_sha and args.output):
                 parser.error("--archive needs --tag, --source-sha and --output")
             output = pathlib.Path(args.output)

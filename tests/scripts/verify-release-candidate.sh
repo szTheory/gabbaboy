@@ -129,15 +129,17 @@ if [[ "$MODE" == --check-config ]]; then
 fi
 command -v cmake >/dev/null || fail 'CMake is required'
 if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
-  # The installed core archive is a product package: it must stay fixture-free. The licensed
-  # source archive is a different artifact and is proved by --verify-final, never by this check.
+  # The installed core archive is checked as an exact product; the source archive remains a
+  # separate artifact proved only by --verify-final.
   if [[ "$MODE" == --verify ]]; then
     [[ $# -eq 10 ]] || fail "$USAGE"
   else
     [[ $# -eq 12 || $# -eq 13 ]] || fail "--verify-final requires the source archive and its receipt as distinct final evidence; $USAGE"
   fi
   command -v python3 >/dev/null || fail 'Python 3 is required'
-  python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" || fail 'product package fixture-leak check failed'
+  [[ "$(basename -- "$8")" == gabbaboy-notices.txt ]] || fail 'core release notice sidecar must be named gabbaboy-notices.txt'
+  python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" \
+    --notice-sidecar "$8" || fail 'product archive or core notice sidecar failed exact policy'
   if [[ "$MODE" == --verify-final ]]; then
     bash "$ROOT_DIR/tests/scripts/verify-release-candidate.sh" --verify \
       "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" \
@@ -165,7 +167,9 @@ VERSION=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p'
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail 'could not read a semver CMake project version'
 SOURCE_SHA=$(git -C "$ROOT_DIR" rev-parse HEAD)
 [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail 'source revision is not a full Git SHA'
-if [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no -- src include fixtures tests cmake ':!cmake/VerifyReleaseReceipt.cmake' ':!tests/scripts/verify-release-candidate.sh')" ]]; then
+# The archive checker is also exercised as a working-tree test input by --self-test. The
+# production --verify entrypoint itself always receives the committed workflow copy.
+if [[ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no -- src include fixtures tests cmake ':!cmake/VerifyReleaseReceipt.cmake' ':!tests/scripts/verify-release-candidate.sh' ':!tests/scripts/verify-v02-source-archive.py')" ]]; then
   fail 'implementation source is dirty; release candidate requires a committed source tree'
 fi
 release_config_contract
@@ -204,7 +208,8 @@ done
 TRACER_MANIFEST_SHA=$(sha256_file "$ROOT_DIR/fixtures/tracer/manifest.json")
 BATTERY_MANIFEST_SHA=$(sha256_file "$ROOT_DIR/fixtures/mbc1-continuation/manifest.json")
 ASSET_SHA=$(sha256_file "$ARCHIVE")
-NOTICE="$ROOT_DIR/LICENSE"
+NOTICE="$TEMP_ROOT/gabbaboy-notices.txt"
+cp "$ROOT_DIR/LICENSE" "$NOTICE"
 [[ -s "$NOTICE" ]] || fail 'project notice is missing'
 NOTICE_SHA=$(sha256_file "$NOTICE")
 NOTES='Self-test candidate only; not a product release.'
@@ -363,6 +368,18 @@ entry_reject() {
   printf 'rejected: %s (%s)\n' "$name" "$expected"
 }
 entry_accept clean-product-package --verify "$RECEIPT" "$ARCHIVE" "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$NOTICE" "$SOURCE_RECEIPT" "$BUILD_RECEIPT"
+entry_reject missing-release-sidecar 'product-notice-sidecar-invalid' --verify "$RECEIPT" "$ARCHIVE" \
+  "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$TEMP_ROOT/missing/gabbaboy-notices.txt" \
+  "$SOURCE_RECEIPT" "$BUILD_RECEIPT"
+mkdir -p "$TEMP_ROOT/altered-sidecar"
+cp "$NOTICE" "$TEMP_ROOT/altered-sidecar/gabbaboy-notices.txt"
+printf '\nchanged\n' >> "$TEMP_ROOT/altered-sidecar/gabbaboy-notices.txt"
+entry_reject altered-release-sidecar 'product-notice-sidecar-mismatch' --verify "$RECEIPT" "$ARCHIVE" \
+  "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$TEMP_ROOT/altered-sidecar/gabbaboy-notices.txt" \
+  "$SOURCE_RECEIPT" "$BUILD_RECEIPT"
+entry_reject wrong-name-release-sidecar 'must be named gabbaboy-notices.txt' --verify "$RECEIPT" "$ARCHIVE" \
+  "$VERSION" "v$VERSION" "$SOURCE_SHA" self-test-release "$ROOT_DIR/LICENSE" \
+  "$SOURCE_RECEIPT" "$BUILD_RECEIPT"
 
 # Fixture leak through --verify: the receipt is bound to the leaked bytes, so only the product
 # fixture check can reject it. The receipt verifier alone must accept it (proving the control bites).
