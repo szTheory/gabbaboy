@@ -1361,10 +1361,10 @@ def _self_test(root: Path, revision: str) -> int:
         b'_mark_policy_control("helper", print("marker side effect") or "window-discovery", "legacy-query")', 1,
     )
     reject_source_mutant("marker argument side effect", marker_effect)
-    selector_anchor = b"run_policy_self_test(root, args.group, args.completed_file)"
+    selector_anchor = b"run_policy_self_test(root, args.group, args.completed_file, args.build_dir)"
     selector_effect = candidate_source.replace(
         selector_anchor,
-        b'run_policy_self_test(root, print("selector side effect") or args.group, args.completed_file)', 1,
+        b'run_policy_self_test(root, print("selector side effect") or args.group, args.completed_file, args.build_dir)', 1,
     )
     reject_source_mutant("selector argument side effect", selector_effect)
 
@@ -1376,7 +1376,7 @@ def _self_test(root: Path, revision: str) -> int:
     runner_global = b"    global _ACTIVE_POLICY_GROUP, _ACTIVE_POLICY_CONTROLS, _COMPLETED_POLICY_CONTROLS\n"
     runner_return = candidate_source.replace(runner_global, runner_global + b"    return\n", 1)
     reject_source_mutant("runner body early return", runner_return)
-    runner_call = b"        self_test(root)\n"
+    runner_call = b"        self_test(root, product_build_dir)\n"
     fabricated_runner = candidate_source.replace(
         runner_call,
         b'        if completed_file is not None:\n'
@@ -1394,7 +1394,7 @@ def _self_test(root: Path, revision: str) -> int:
     duplicate_marker = candidate_source.replace(marker_statement, marker_statement * 2, 1)
     reject_source_mutant("duplicated marker call", duplicate_marker)
     changed_selector = candidate_source.replace(
-        selector_anchor, b"run_policy_self_test(root, None, args.completed_file)", 1,
+        selector_anchor, b"run_policy_self_test(root, None, args.completed_file, args.build_dir)", 1,
     )
     reject_source_mutant("changed selector invocation", changed_selector)
     duplicated_selector = candidate_source.replace(
@@ -1431,7 +1431,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 86:
+    if controls != 87:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
