@@ -64,6 +64,34 @@ if(NOT extract_result EQUAL 0)
 endif()
 
 set(extracted_prefix "${extract_root}/installed-prefix")
+# This control exercises the production installed-package verifier with a real staged tree.
+# Keep the mutation isolated: no planted bytes may reach the consumer smoke below.
+set(product_policy_control_root "${smoke_root}/product-policy-control")
+set(product_policy_control_prefix "${product_policy_control_root}/installed-prefix")
+file(REMOVE_RECURSE "${product_policy_control_root}")
+file(MAKE_DIRECTORY "${product_policy_control_root}")
+file(COPY "${extracted_prefix}" DESTINATION "${product_policy_control_root}")
+set(product_policy_control_payload
+  "${product_policy_control_prefix}/share/gabbaboy/fixtures/tracer/renamed-control")
+file(COPY_FILE "${source_dir}/fixtures/mooneye-cgb/boot_regs-cgb.gb"
+  "${product_policy_control_payload}")
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}"
+    "-DGBB_INSTALL_PREFIX=${product_policy_control_prefix}"
+    "-DGBB_EXECUTABLE_SUFFIX=${GBB_EXECUTABLE_SUFFIX}"
+    "-DGBB_SOURCE_DIR=${source_dir}"
+    -P "${source_dir}/cmake/VerifyInstalledPackage.cmake"
+  RESULT_VARIABLE product_policy_control_result
+  OUTPUT_VARIABLE product_policy_control_output
+  ERROR_VARIABLE product_policy_control_error)
+file(REMOVE_RECURSE "${product_policy_control_root}")
+if(product_policy_control_result EQUAL 0 OR
+   NOT "${product_policy_control_output}${product_policy_control_error}" MATCHES "product-fixture-leak")
+  message(FATAL_ERROR
+    "Installed-package verifier did not reject renamed fixture bytes for the expected policy reason (${product_policy_control_result}): ${product_policy_control_output}${product_policy_control_error}")
+endif()
+message(STATUS "Installed-package verifier rejected renamed fixture bytes before consumers")
+
 # D-32 / T-10-22: Mooneye MBC and CGB ROMs are repository fixtures only; prove they are absent from the
 # extracted package by name and digest, and that the installed fixture set is exactly as expected.
 set(mooneye_scan_command "${GBB_CMAKE_COMMAND}"
