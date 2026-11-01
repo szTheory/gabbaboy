@@ -24,14 +24,14 @@ metrics:
   tasks: 2
   files: 4
 actuals:
-  tokens: 2958.75
+  tokens: 3381.25
   tasks: 2
-  commits: 1
+  commits: 2
 requirements-completed: []
 requirements-pending: [RIGHTS-01]
-commits: 1
+commits: 2
 plan_head_before: 88b3ccc151d8d5abc65a85649f87d4dd05c3fa87
-plan_head_after: e637189a4598255082f71a618bd44d2d2b63e09e
+plan_head_after: fd0070db
 status: complete
 coverage:
   - id: SOURCE-ONLY-BASELINE
@@ -61,9 +61,10 @@ Source-only dense-input mutants now read immutable fixture baseline objects from
 - Preserved `unknown` and unqualified build definitions and the real altered-core `predicate-not-reached` semantic failure.
 - Added missing-object, empty/wrong-object-store, and changed-fixture fail-closed controls.
 
-## Task Commit
+## Task Commits
 
 - `e637189a`: Preserve fixture admission for source-only mutants.
+- `fd0070db`: Distinguish an unrelated baseline identity.
 
 ## Verification
 
