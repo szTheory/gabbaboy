@@ -24,27 +24,26 @@ key-decisions:
 metrics:
   duration: 30 min
   completed: 2026-11-01
-  tasks: 2
+  tasks: 3
   files: 5
 actuals:
   tokens: 11757.75
-  tasks: 2
-  commits: 4
+  tasks: 3
+  commits: 6
 requirements-completed: []
 requirements-pending: [RIGHTS-01]
-commits: 4
+commits: 6
 plan_head_before: 802555ac42264561d6b3f6fbad233d9aac6db0a9
-plan_head_after: aea38114
-status: reopened
-completion_scope: Original Tasks 1 and 2 only; their evidence and measured actuals are historical.
-pending_follow_up: Task 3 — final-review tar metadata bounds and missing-checker cleanup/retry.
+plan_head_after: 0d2a28d3
+status: complete
+completion_scope: Original Tasks 1 and 2 plus owner-authorized Task 3; original task evidence and historical actuals are preserved.
 coverage:
   - id: PLATFORM-ARCHIVE-TRUST
     description: Trusted publisher verifies macOS and Windows downloaded products before draft validation; hostile archives, altered bytes, and unsafe paths reject.
     human_judgment: false
     verification:
       - kind: integration
-        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_group_release_jobs$'"
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_group_release_jobs$' (installed-product positives and archive policy negatives, including hidden metadata limits and cleanup/retry)"
         status: pass
       - kind: integration
         ref: "python3 -I .github/scripts/verify-workflow-policy.py --self-test --group release_jobs --root ."
@@ -54,10 +53,20 @@ coverage:
     human_judgment: false
     verification:
       - kind: integration
-        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage$'"
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage$' (exact reviewed checker and bounded-helper source/AST pins)"
         status: pass
       - kind: integration
-        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage_controls$'"
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage_controls$' (82 negative controls, including independent resource/cleanup registry removal checks)"
+        status: pass
+  - id: BOUNDED-ARCHIVE-METADATA-CLEANUP
+    description: Product archives are bounded before hidden metadata or payload consumption, and missing-checker/late-rejection failures leave a retryable clean destination.
+    human_judgment: false
+    verification:
+      - kind: integration
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_group_release_jobs$'"
+        status: pass
+      - kind: unit
+        ref: "python3 -I .github/scripts/safe_extract_package.py --self-test"
         status: pass
 ---
 
@@ -67,11 +76,11 @@ The release publisher now checks downloaded macOS and Windows product archives w
 
 ## Reopened for owner-authorized final-review security rescope
 
-Plan 20-06 is incomplete until its appended Task 3 passes. Final review reproduced a hidden PAX/GNU metadata bypass of the extractor's regular-file byte budget (CR-01) and a missing-trusted-checker path that leaves a stale destination (WR-01). The original accomplishments, completed-task metrics, three task commits and passing coverage below remain historical evidence for Tasks 1 and 2; they do not establish the new resource/cleanup guarantees.
+Final review reproduced a hidden PAX/GNU metadata bypass of the extractor's regular-file byte budget (CR-01) and a missing-trusted-checker path that leaves a stale destination (WR-01). The original accomplishments, completed-task metrics, three task commits and passing coverage remain historical evidence for Tasks 1 and 2; Task 3 adds the resource and cleanup guarantees.
 
 The bounded follow-up in [20-06-PLAN.md](20-06-PLAN.md) adds total decompressed-stream and pre-payload metadata size/aggregate/count limits through the existing trusted production archive gate, synthetic controls for each limit, missing-checker cleanup and same-destination retry, and the reviewed source/AST/control-registry update. This stays inside Plan 20-06 and the nine-plan Phase 20 cap. No fixture or rights-policy change and no live publication are included. The executor acts next on Task 3; no new owner confirmation is required.
 
-After implementation, reconfigure/build at its committed head and pass the release-job grouped CTest, both workflow coverage CTests, the safe-extractor self-test, and the plan-cap/planning-hygiene/live-summary CTests named in Task 3. Append actual follow-up commits and fresh block-style coverage, then change status to complete. Final Phase 20 full-suite, hosted platform and review/security/closure evidence remain separate required gates.
+At the committed implementation/coverage head, reconfigure/build passed. The release-job grouped CTest, both workflow coverage CTests, safe-extractor self-test, plan-cap, planning-hygiene and live-summary CTests passed. Final Phase 20 full-suite, hosted platform and review/security/closure evidence remain separate required gates.
 
 ## Accomplishments
 
@@ -85,19 +94,24 @@ After implementation, reconfigure/build at its committed head and pass the relea
 - `88b3ccc1`: Verify downloaded platform products in trusted publisher.
 - `8dac3398`: Cover platform archive mutations and path aliases.
 - `aea38114`: Pin workflow policy archive coverage and registry.
+- `886000ef`: Bound product archive metadata streams and make cleanup/retry safe.
+- `36ed25a2`: Pin the bounded helper source/AST and add resource/cleanup coverage negatives.
+- `0d2a28d3`: Align the coverage CTest marker with the expanded negative-control count.
 
-The measured plan range includes the interleaved Plan 20-09 implementation commit, so its measured commit count is four while three commits above belong to Plan 20-06.
+Six Plan 20-06 task commits are listed above. Interleaved Plan 20-09 commits are excluded from this plan's count.
 
 ## Verification
 
-- Release workflow grouped controls passed in CTest, including macOS and Windows archive positives and negative mutations.
-- Both workflow coverage and coverage-control CTests passed after updating the reviewed source snapshot and reconfiguring at the candidate head.
+- `cmake --preset phase1` and `cmake --build --preset phase1 -j2` passed at the final implementation/coverage head.
+- The release workflow grouped controls passed in CTest, including macOS and Windows archive positives, exact hidden-metadata limits, missing-checker retry, and partial-extraction cleanup.
+- Both workflow coverage CTests passed; the independent coverage-control CTest reports 82 passing negative controls, including helper source mutation and each new registry-row removal.
+- `python3 -I .github/scripts/safe_extract_package.py --self-test`, `plan_cap`, `planning_hygiene_controls`, and `summary_coverage_live` passed.
 
 ## Deviations from Plan
 
-The independent coverage checker required its owner-authorized snapshot, AST allowlist, and registry update to recognize the new trusted workflow checker. The gate remained enforced and its negative controls passed.
+The independent coverage checker required its owner-authorized snapshot, AST allowlist, registry update, and an updated CTest completion marker to recognize the new trusted workflow checker and expanded negative-control count. The gate remained enforced and its negative controls passed.
 
-## Original Tasks 1–2 Self-Check: PASSED (historical)
+## Self-Check: PASSED
 
-- All three Plan 20-06 commits are ancestors of the recorded implementation head; the measured range contains four commits due to Plan 20-09 interleaving.
+- All six Plan 20-06 task commits are ancestors of the recorded final head; interleaved Plan 20-09 commits are excluded.
 - No fixture was admitted, and RIGHTS-01 remains pending.
