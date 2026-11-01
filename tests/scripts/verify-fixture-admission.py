@@ -1753,7 +1753,15 @@ def _run_manifest_mutations(root: Path) -> int:
             raise Reject("self-test-notice-inactive-markdown", f"{label} was accepted as an active digest table")
         cases.append(label)
 
-    path.write_bytes(original.replace(b'{\n', b'{\n  "schema_version": 1,\n', 1))
+    newline = b"\r\n" if b"\r\n" in original else b"\n"
+    duplicate_schema_key = original.replace(
+        b"{" + newline,
+        b"{" + newline + b'  "schema_version": 1,' + newline,
+        1,
+    )
+    if duplicate_schema_key == original:
+        raise Reject("self-test-duplicate-json", "synthetic manifest has no JSON object opener")
+    path.write_bytes(duplicate_schema_key)
     result = _run_manifest_cli(root)
     if result.returncode == 0 or "REJECT json-duplicate-key:" not in result.stderr:
         raise Reject("self-test-duplicate-json", result.stderr.strip() or "duplicate JSON key was accepted")

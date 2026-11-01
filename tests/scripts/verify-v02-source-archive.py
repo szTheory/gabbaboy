@@ -1558,11 +1558,14 @@ def self_test():
         else:
             raise SystemExit("self-test: .gitattributes and the notice file are required in the source tree")
 
-        # Real tree: archive the committed repository at a private tag in a private clone.
+        # Real tree: archive the committed repository at a private tag in a lightweight clone.
+        # The test only reads Git objects, so share the checkout object store and skip
+        # materializing a worktree instead of copying the full object database on Windows.
         root = script.parents[2]
         if (root / ".git").exists():
             clone = scratch / "clone"
-            subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(root), str(clone)], capture_output=True, check=False)
+            subprocess.run(["git", "clone", "-q", "--shared", "--no-checkout", str(root), str(clone)],
+                           capture_output=True, check=False)
             if (clone / ".git").exists():
                 head = private_git("rev-parse", "HEAD", cwd=clone).decode().strip()
                 private_git("tag", tag, cwd=clone)
