@@ -32,7 +32,8 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 **Success Criteria** (what must be TRUE):
   1. A fixture can enter the repository and public CI only when exact bytes, source/build inputs, and terms for its code, art, audio driver, and notices are recorded; incomplete rights or changed identities are rejected by automated controls.
   2. An installed or product-release package containing a controlled game-ROM insertion is rejected, while a valid package retains the required component notices and GabbaBoy's MIT declaration.
-**Plans**: 3 original plans, plus one in-scope gap-closure plan for the T-20-04 bounded-traversal security finding — 4 total. This is the single gap round allowed for the phase, not a general debt-closure phase.
+**Plan cap**: 9
+**Plans**: 9 total: three original plans, the consumed single security gap round (20-04), and five owner-authorized ordinary rescope plans (20-05–20-09). No additional gap round is authorized.
 
 Plans:
 **Wave 1**
@@ -44,6 +45,15 @@ Plans:
 
 **Wave 3** *(single in-scope security gap closure)*
 - [ ] 20-04-PLAN.md — Bound fixture filesystem traversal and Git tree enumeration.
+
+**Wave 4** *(authorized rescope; original plans remain intact)*
+- [ ] 20-05-PLAN.md — Independently pin product-policy bytes, reconcile configuration-specific core exports and product-control timeout rows.
+- [ ] 20-07-PLAN.md — Match repository-admission commands exactly and repair complete isolated workflow mutation subjects.
+- [ ] 20-08-PLAN.md — Align shared notice-contract consumers and their negative controls with the reviewed source/product distinction.
+
+**Wave 5** *(after the indicated Wave 4 dependencies)*
+- [ ] 20-06-PLAN.md — Validate downloaded macOS and Windows product bytes with trusted checker/policy in the isolated publisher.
+- [ ] 20-09-PLAN.md — Restore dense-input source-only mutant configure with separate immutable baseline evidence and unqualified-build controls.
 
 Use existing checks to assess CI headroom, current documentation, and carry-over dispositions while establishing this boundary. Preserve the accepted v0.3 audit debts and standalone closeout-helper failure unless a documented trigger actually applies. The admission contract remains mandatory when later phases add fixtures; RIGHTS-01 has this single owner phase.
 
@@ -58,7 +68,8 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   3. Potion Panic's GB Compo 2025 demo is assessed first in one bounded admission/build/predicate plan. Only after its recorded no-go may one bounded µCity 1.3 preferred-ucity.gbc fallback plan run; each records exact source/build, digest, cartridge metadata, native CGB mode, and the Phase 20 rights decision. No third game search begins.
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
-**Plans**: TBD — at most 12; the primary and fallback candidate attempts each occupy at most one plan.
+**Plan cap**: 12
+**Plans**: TBD — within the cap; the primary and fallback candidate attempts each occupy at most one plan.
 
 Captured frame and PCM digests establish reproducibility. They do not independently establish rendering accuracy, perceptual quality, physical CGB-E behavior, or general compatibility. A newly reproduced correctness/security issue must be fixed within scope or trigger a rescope; the candidate absence exit cannot silently defer it. Optional direct Steam Deck/SSH exploration is neither a completion gate nor a qualified Linux/Deck path.
 
@@ -71,7 +82,8 @@ Captured frame and PCM digests establish reproducibility. They do not independen
   1. The dmg-acid2 and cgb-acid2 derivatives carry reproducible source/build and rights records, original replacement glyphs, and an explicit text mask; their expected comparisons are derived independently of GabbaBoy output and are labeled as controlled composition evidence.
   2. The admitted gbmicrotest cohort records exact source/ROM identities, redistribution terms, model applicability, and named eligible/executed/excluded cases; missing required cases or unexplained exclusions cannot yield a successful suite result.
   3. Automated negative controls detect altered fixture/reference/mask identities and incorrect case applicability or accounting; neither diagnostic results nor cross-model comparisons are reported as mode-3 timing, game-level, or physical CGB-E qualification.
-**Plans**: TBD — at most 12.
+**Plan cap**: 10
+**Plans**: TBD — within the cap.
 
 Fixture admission uses Phase 20's contract. An unresolved acid2 or gbmicrotest rights/model/oracle gate requires scope resolution; it is not satisfied by capturing a new golden from GabbaBoy or by borrowing another silicon model's expected image.
 
@@ -84,7 +96,8 @@ Fixture admission uses Phase 20's contract. An unresolved acid2 or gbmicrotest r
   1. Final implementation-head qualification and the existing trusted release rehearsal pass for the reviewed revision with required hosted coverage, consumer evidence, and regression controls; earlier phase evidence remains historical and is not repeatedly refreshed.
   2. Release notes and the support ledger identify an admitted game's exact software-model progress result or the justified absence after the two named attempts, distinguish diagnostic and reproducibility observations, and retain hardware, perceptual, timing, platform, and compatibility limits.
   3. Published/downloaded artifact identities and digests reconcile with the release source, installed consumers work against those bytes, required license/component notices are present, and the fixture-exclusion checks accept the real packages and reject their game-ROM insertion control.
-**Plans**: TBD — at most 12.
+**Plan cap**: 9
+**Plans**: TBD — within the cap.
 
 Use the existing release path. RM-032 tooling is not an automatic work list; only a concrete release blocker can justify a narrowly scoped required change. Keep full libretro, supported Linux/Steam Deck gameplay, CGB timing rewrites, license migration, and a libfuturo dependency or early API/state freeze outside this milestone.
 
@@ -116,9 +129,9 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 
 ## Planning and Approval Boundary
 
-- At most four phases and about 40 plans; at most 12 plans in any phase. Phase 20 has three original plans plus one bounded T-20-04 gap-closure plan, for four total; no further gap round is authorized. These are scope caps, not acceptance evidence.
+- At most four phases and 40 plans; at most 12 plans in any phase. Active caps are 9/12/10/9 for Phases 20/21/22/23 (40 combined), including each phase's reserved gap slot. Phase 20's gap slot is already consumed by 20-04; the five rescope additions are ordinary plans. These are scope caps, not acceptance evidence; Phase 21–23 feature goals are unchanged.
 - Every deliverable has an automated check and a meaningful negative control. New reusable checkers live in tests/scripts/, use immutable commit facts where appropriate, and enter CTest when created. Automated UAT closure uses the existing shared closure tool; voluntary play is not a release gate.
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
-- Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; after the required security audit found an in-scope bounded-traversal gap, the single permitted gap round was recorded as Plan 20-04. No other Phase 20 scope was added.
+- Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
 
-Phase 20 execution has reached final review and verification, but the phase is not complete. The final code review has three blockers (CR-05, CR-08, CR-09), and the full local CTest run failed 20 of 1,711 tests; see the Phase 20 review and verification reports. The owner must decide whether to authorize a Phase 20 rescope before closure. If approved, exact next command: **/gsd-phase --edit 20 --force** to revise the Phase 20 scope/cap before planning further work. Stop here; do not close Phase 20 or advance to Phase 21 automatically.
+Phase 20 remains incomplete. The owner-authorized rescope plans address the three final-review blockers and genuine Phase 20-caused full-suite failures; the five sandbox-only Git-worktree failures already passed targeted reruns and add no code scope. Review these plans, then execute the remaining Phase 20 plans with **/gsd-execute-phase 20**. Require final-head full-suite, trusted platform evidence, review/security and automated closure checks before declaring the phase complete. RIGHTS-01 remains pending; no fixture was admitted. Stop after Phase 20 and never advance to Phase 21 automatically.
