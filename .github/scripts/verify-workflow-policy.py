@@ -2509,6 +2509,7 @@ def check_fixture_admission_workflows(root: Path) -> None:
 def release_fixture_checker_path_controls(root: Path) -> int:
     """Prove ambient env and RUNNER_TEMP checker replacements cannot redirect the release verifier."""
     wrapper = root / "tests/scripts/verify-release-candidate.sh"
+    bash = _trusted_bash_executable()
     with tempfile.TemporaryDirectory(prefix="gbb-release-checker-path-") as directory:
         scratch = Path(directory)
         fake_env_checker = scratch / "from-environment.py"
@@ -2529,7 +2530,7 @@ def release_fixture_checker_path_controls(root: Path) -> int:
             environment.pop("GBB_FIXTURE_ADMISSION_CHECKER", None)
             environment.update(extra_env)
             environment["RUNNER_TEMP"] = str(runner_temp)
-            result = subprocess.run(["bash", str(wrapper), "--self-test-trusted-checker"], cwd=root,
+            result = subprocess.run([bash, str(wrapper), "--self-test-trusted-checker"], cwd=root,
                                     env=environment, capture_output=True, text=True, check=False, timeout=10)
             expected = str(root / "tests/scripts/verify-fixture-admission.py")
             if result.returncode != 0 or f"PASS: trusted fixture checker path {expected}" not in result.stdout:
@@ -2537,6 +2538,22 @@ def release_fixture_checker_path_controls(root: Path) -> int:
                                  f"exit={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}")
             _mark_policy_control("helper", "fixture-checker-path", label)
     return len(cases)
+
+
+def _trusted_bash_executable() -> str:
+    """Select Git for Windows' Bash, avoiding the unrelated System32 WSL launcher."""
+    if os.name != "nt":
+        return "bash"
+    result = subprocess.run(["git", "--exec-path"], capture_output=True, text=True, check=False, timeout=10)
+    if result.returncode != 0:
+        raise SystemExit(f"Git Bash discovery failed: {result.stderr.strip() or result.returncode}")
+    exec_path = Path(result.stdout.strip()).resolve()
+    if len(exec_path.parents) < 3:
+        raise SystemExit(f"Git Bash discovery returned an unexpected Git exec path: {exec_path}")
+    candidate = exec_path.parents[2] / "bin" / "bash.exe"
+    if not candidate.is_file():
+        raise SystemExit(f"Git Bash is missing beside the installed Git for Windows: {candidate}")
+    return str(candidate)
 
 
 def _check_ci_planning_lane(workflow: str, tree: dict) -> None:

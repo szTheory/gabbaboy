@@ -51,7 +51,7 @@ POSIX_ONLY = ("posix",)
 ADDED_POLICY_FUNCTIONS = {
     "_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test",
     "_fixture_step", "_fixture_call", "_fixture_call_exact", "_fixture_step_event", "check_fixture_admission_workflows",
-    "release_fixture_checker_path_controls",
+    "release_fixture_checker_path_controls", "_trusted_bash_executable",
     "_archive_member_path", "_extract_product_archive", "check_product_archive",
     "_write_control_archive", "_product_archive_controls",
     "_workflow_subject_inputs", "_incomplete_subject_control", "run_policy_self_test",

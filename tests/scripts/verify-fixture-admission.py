@@ -1543,7 +1543,6 @@ def _write_synthetic(root: Path) -> str:
     """Create one complete synthetic fixture and commit the reviewed source bytes."""
     git(root, "init", "-q")
     git(root, "symbolic-ref", "HEAD", "refs/heads/main")
-    git(root, "update-ref", "refs/heads/main", BASELINE_COMMIT)
     git(root, "read-tree", "--empty")
     git(root, "config", "user.name", "GabbaBoy Fixture Test")
     git(root, "config", "user.email", "fixture-test@example.invalid")
@@ -1610,8 +1609,10 @@ def _write_synthetic(root: Path) -> str:
         "|---|---|---|\n"
         f"| `synthetic` | `{manifest_digest}` | `{sha256(license_bytes)}` |\n", encoding="utf-8")
     git(root, "add", "fixtures/synthetic", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json")
-    git(root, "commit", "-qm", "fixture: synthetic reviewed baseline")
-    commit = git(root, "rev-parse", "HEAD").decode("ascii").strip()
+    tree = git(root, "write-tree").decode("ascii").strip()
+    commit = git(root, "commit-tree", tree, "-p", BASELINE_COMMIT, "-m",
+                 "fixture: synthetic reviewed baseline").decode("ascii").strip()
+    git(root, "update-ref", "refs/heads/main", commit)
     (root / "fixtures/synthetic/admission.commit").write_text(commit + "\n", encoding="ascii")
     return commit
 
@@ -1623,9 +1624,10 @@ def _run_manifest_cli(root: Path) -> subprocess.CompletedProcess[str]:
 
 
 def _prepare_synthetic(root: Path) -> None:
+    project = Path(__file__).resolve().parents[2]
+    object_dir = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-path", "objects"],
+                                cwd=project, capture_output=True, check=True, text=True).stdout.strip()
     (root / ".git/objects/info").mkdir(parents=True, exist_ok=True)
-    object_dir = subprocess.run(["git", "rev-parse", "--absolute-git-dir"], cwd=Path(__file__).resolve().parents[2],
-                                capture_output=True, check=True, text=True).stdout.strip() + "/objects"
     (root / ".git/objects/info/alternates").write_text(object_dir + "\n", encoding="utf-8")
     _write_synthetic(root)
 

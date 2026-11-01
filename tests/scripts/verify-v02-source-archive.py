@@ -688,8 +688,6 @@ def _private_baseline_repo(scratch, checker):
     object_info = repo / ".git/objects/info"
     object_info.mkdir(parents=True, exist_ok=True)
     (object_info / "alternates").write_text(object_dir + "\n", encoding="ascii")
-    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/heads/main", checker.BASELINE_COMMIT],
-                   check=True, capture_output=True)
 
     paths = ["LICENSE", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json"]
     raw_tree = checker.git(repo, "ls-tree", "-r", "-z", "--full-tree", checker.BASELINE_COMMIT, "--", "fixtures")

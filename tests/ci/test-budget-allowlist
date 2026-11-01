@@ -70,6 +70,7 @@ player_cgb_speed_smoke	120	0.4	GB-CI-004	Lower when a measured player run is und
 player_cgb_speed_smoke_mutant_ppu_follows_cpu	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
 player_cgb_speed_smoke_wrong_sha	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
 player_session_script_no_input	300	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+preview_package_smoke	180	0.4	GB-CI-012	Lower after a measured Windows package build finishes comfortably under the 60 s default
 rtc3test_basic	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 rtc3test_negative_control	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 rtc3test_range	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s

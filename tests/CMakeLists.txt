@@ -1912,6 +1912,7 @@ add_test(NAME preview_package_smoke
     -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
+set_tests_properties(preview_package_smoke PROPERTIES TIMEOUT 180)
 
 # Phase 16 D-18: the base TIMEOUT for tests that set none. The player child scope inherits it and
 # applies the same sweep, because this directory's pass cannot reach child-directory tests.
