@@ -1551,6 +1551,7 @@ gbb_add_v02_contract(v02_fuzz_controls 180
 gbb_add_v02_contract(v02_source_archive_controls 90
   [=[PASS: source archive checker accepted [1-9][0-9]* cases and rejected [1-9][0-9]* negative controls]=]
   verify-v02-source-archive.py --self-test)
+set_tests_properties(v02_source_archive_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_delivery_controls 90
   [=[PASS: delivery checker positives=[1-9][0-9]* rejected_controls=[1-9][0-9]* real_owner_rejections=[1-9]]=]
   verify-v02-delivery.py --self-test)

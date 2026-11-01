@@ -1613,7 +1613,7 @@ def _write_synthetic(root: Path) -> str:
     commit = git(root, "commit-tree", tree, "-p", BASELINE_COMMIT, "-m",
                  "fixture: synthetic reviewed baseline").decode("ascii").strip()
     git(root, "update-ref", "refs/heads/main", commit)
-    (root / "fixtures/synthetic/admission.commit").write_text(commit + "\n", encoding="ascii")
+    (root / "fixtures/synthetic/admission.commit").write_bytes((commit + "\n").encode("ascii"))
     return commit
 
 
@@ -1771,17 +1771,17 @@ def _run_manifest_mutations(root: Path) -> int:
     path.write_bytes(original)
 
     pin_path = root / "fixtures/synthetic/admission.commit"
-    pin_path.write_text("refs/heads/main\n", encoding="ascii")
+    pin_path.write_bytes(b"refs/heads/main\n")
     result = _run_manifest_cli(root)
     if result.returncode == 0 or "REJECT admission-pin-invalid:" not in result.stderr:
         raise Reject("self-test-symbolic-pin", result.stderr.strip() or "symbolic pin was accepted")
     cases.append("symbolic-pin")
-    pin_path.write_text(BASELINE_COMMIT + "\n", encoding="ascii")
+    pin_path.write_bytes((BASELINE_COMMIT + "\n").encode("ascii"))
     result = _run_manifest_cli(root)
     if result.returncode == 0 or "REJECT git-blob-missing:" not in result.stderr:
         raise Reject("self-test-missing-blob", result.stderr.strip() or "missing pinned blob was accepted")
     cases.append("missing-pinned-blob")
-    pin_path.write_text(git(root, "rev-parse", "HEAD").decode("ascii").strip() + "\n", encoding="ascii")
+    pin_path.write_bytes((git(root, "rev-parse", "HEAD").decode("ascii").strip() + "\n").encode("ascii"))
     return len(cases)
 
 
@@ -2338,7 +2338,7 @@ def self_test() -> None:
         (case_root / "fixtures/synthetic/admission.commit").unlink()
 
     def missing_pin_object(case_root: Path) -> None:
-        (case_root / "fixtures/synthetic/admission.commit").write_text("0" * 40 + "\n", encoding="ascii")
+        (case_root / "fixtures/synthetic/admission.commit").write_bytes(b"0" * 40 + b"\n")
 
     cases = (
         ("coordinated-rewrite", coordinated_rewrite, "REJECT admission-pin-mismatch:"),

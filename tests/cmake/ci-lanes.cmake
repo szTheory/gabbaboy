@@ -121,6 +121,7 @@ set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-pol
 gbb_add_ci_lane_test(workflow_policy_group_release_jobs 0 "PASS: workflow policy group release_jobs controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --group release_jobs --root "${PROJECT_SOURCE_DIR}" --build-dir "${PROJECT_BINARY_DIR}"
   --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-release-jobs.json")
+set_tests_properties(workflow_policy_group_release_jobs PROPERTIES PROCESSORS 4)
 set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-release-support.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
 gbb_add_ci_lane_test(workflow_policy_group_release_support 0 "PASS: workflow policy group release_support controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --group release_support --root "${PROJECT_SOURCE_DIR}"
