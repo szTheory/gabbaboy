@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "dd334abec23f563f6995963a72f9cd6ac0cd9ed3"
-REVIEWED_POLICY_SHA256 = "c7e8c8a41e6ee3cc60a036d4c0a3b34b50f87af0959afb1e56e0e5d43161a6a1"
+REVIEWED_POLICY_COMMIT = "8dac3398"
+REVIEWED_POLICY_SHA256 = "843a09776bf49faacba8ddcda40a64c90481383295f7b0c9f644f686e1a6c3b6"
 GROUPS = {
     "ci": "workflow_policy_group_ci",
     "release_jobs": "workflow_policy_group_release_jobs",
@@ -47,18 +47,26 @@ ALL_PLATFORMS = ("posix", "windows")
 POSIX_ONLY = ("posix",)
 ADDED_POLICY_FUNCTIONS = {
     "_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test",
-    "_fixture_step", "_fixture_call", "_fixture_step_event", "check_fixture_admission_workflows",
+    "_fixture_step", "_fixture_call", "_fixture_call_exact", "_fixture_step_event", "check_fixture_admission_workflows",
     "release_fixture_checker_path_controls",
+    "_archive_member_path", "_extract_product_archive", "check_product_archive",
+    "_write_control_archive", "_product_archive_controls",
+    "_workflow_subject_inputs", "_incomplete_subject_control", "run_policy_self_test",
 }
 ADDED_POLICY_GLOBALS = {
     "_POLICY_PARTITION_GROUPS", "_ACTIVE_POLICY_GROUP", "_ACTIVE_POLICY_CONTROLS", "_COMPLETED_POLICY_CONTROLS",
     "FIXTURE_ADMISSION_REPOSITORY_CALL", "FIXTURE_ADMISSION_TRUSTED_SCRIPT", "CORE_PRODUCT_INVENTORY",
+    "MAX_PRODUCT_ARCHIVE_BYTES", "MAX_PRODUCT_ARCHIVE_MEMBERS",
+    "MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES", "MAX_PRODUCT_ARCHIVE_FILE_BYTES",
 }
 INSTRUMENTED_POLICY_FUNCTIONS = {
     "_window_discovery_shell_controls", "report_red_replay_controls", "_ledger_boundary_controls",
     "_ledger_git_object_controls", "_ledger_disclosure_scratch_controls", "_ledger_release_object_scratch_controls",
     "verify_cited_stub_controls", "rehearsal_bash_resolver_controls", "rehearsal_tag_guard_controls", "self_test",
 }
+# These existing functions changed in the exact reviewed snapshot above. Their full source
+# bytes are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
+REVIEWED_CHANGED_POLICY_FUNCTIONS = {"_copy_fixture", "main"}
 ADDED_MUTATION_CONTROLS = (
     ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
     ("P20 Linux stage gate prefixes an untrusted PATH assignment", "release.yml", "fixture-product-stage"),
@@ -66,13 +74,21 @@ ADDED_MUTATION_CONTROLS = (
     ("P20 fixture-repro admission gate moved after tool download", "fixture-repro.yml", "fixture-admission-gate"),
     ("P20 macOS package checkout becomes shallow", "ci.yml", "fixture-admission-history"),
     ("P20 macOS package admission gate is removed", "ci.yml", "fixture-admission-gate"),
+    ("P20 macOS reused core skips actual-byte validation", "release.yml", "fixture-product-reuse"),
+    ("P20 downloaded Linux core skips stage-inventory equality", "release.yml", "fixture-product-inventory-binding"),
+    ("P20 downloaded platform archive gate is removed", "release.yml", "fixture-product-trust"),
+    ("P20 downloaded platform archive gate selects candidate checker", "release.yml", "fixture-product-trust"),
+    ("P20 downloaded platform validation moves after draft validation", "release.yml", "fixture-product-trust"),
+    ("P20 fixture-repro admission command gets a PATH assignment", "fixture-repro.yml", "fixture-admission-gate"),
+    ("P20 fixture-repro admission command gets a duplicate repository root", "fixture-repro.yml", "fixture-admission-gate"),
+    ("P20 macOS admission command gets a PATH assignment", "ci.yml", "fixture-admission-gate"),
+    ("P20 macOS admission command gets a duplicate repository root", "ci.yml", "fixture-admission-gate"),
     ("P20 Linux core stage policy call is removed", "release.yml", "fixture-product-stage"),
     ("P20 Linux core stage policy runs after archive creation", "release.yml", "fixture-product-stage"),
     ("P20 Linux stage gate redirects the repository policy root", "release.yml", "fixture-product-stage"),
     ("P20 Linux stage gate repeats the repository root option", "release.yml", "fixture-product-stage"),
     ("P20 Linux stage gate appends a second product tree", "release.yml", "fixture-product-stage"),
-    ("P20 macOS reused core skips actual-byte validation", "release.yml", "fixture-product-reuse"),
-    ("P20 downloaded Linux core skips stage-inventory equality", "release.yml", "fixture-product-inventory-binding"),
+    ("P20 downloaded product archive controls", "release.yml", "fixture-product-trust"),
 )
 
 
@@ -246,6 +262,7 @@ def baseline_controls(source: bytes) -> list[dict]:
                             "conflicting environment override", group="release_jobs"))
     rows.append(_helper_row("fixture-checker-path", "release_fixture_checker_path_controls",
                             "replaced temporary checker", group="release_jobs"))
+    rows.append(_helper_row("incomplete-subject", "_incomplete_subject_control", "missing verifier source"))
 
     # Each named input case is independently marked after all output, status, API and checker-call assertions pass.
     window_function = _function_node(tree, "_window_discovery_shell_controls")
@@ -381,7 +398,7 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
         value = node.value
         if (self.normalize_self_test and isinstance(value, ast.Call)
                 and isinstance(value.func, ast.Name)
-                and value.func.id == "release_fixture_checker_path_controls"):
+                and value.func.id in {"release_fixture_checker_path_controls", "_incomplete_subject_control"}):
             return None
         if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
                 and value.func.id == "check_fixture_admission_workflows"):
@@ -399,7 +416,7 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
         if (self.normalize_self_test and any(
                 isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call)
                 and isinstance(statement.value.func, ast.Name)
-                and statement.value.func.id == "release_fixture_checker_path_controls"
+                and statement.value.func.id in {"release_fixture_checker_path_controls", "_product_archive_controls"}
                 for statement in node.body)):
             return None
         node = self.generic_visit(node)
@@ -497,6 +514,15 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
             selector_counts[node.args[0].value] += 1
     if selector_counts != {"--group": 1, "--completed-file": 1}:
         reject("workflow-policy CLI selector arguments are missing or duplicated")
+    archive_selector_counts = {"--check-product-archive": 0, "--expected-name": 0,
+                               "--layout": 0, "--destination": 0}
+    for node in ast.walk(main_node):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument"
+                and node.args and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value in archive_selector_counts):
+            archive_selector_counts[node.args[0].value] += 1
+    if archive_selector_counts != {name: 1 for name in archive_selector_counts}:
+        reject("trusted product archive CLI arguments are missing or duplicated")
 
     admission_calls = [node for node in ast.walk(current_functions.get("check_all", ast.Module(body=[], type_ignores=[])))
                        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
@@ -525,6 +551,8 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
         reject("workflow-policy group/completion CLI selectors differ from their approved defaults and semantics")
 
     for name, baseline_node in baseline_functions.items():
+        if name in REVIEWED_CHANGED_POLICY_FUNCTIONS:
+            continue
         transform = _StripMarkersAndSelectors(
             strip_cli_selectors=(name == "main"), normalize_self_test=(name == "self_test"),
             strip_markers=(name in INSTRUMENTED_POLICY_FUNCTIONS), normalize_main=(name == "main"),
@@ -547,12 +575,22 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
         ")\n"
         "FIXTURE_ADMISSION_TRUSTED_SCRIPT = 'python3 -I \"$RUNNER_TEMP/verify-fixture-admission.py\"'\n"
         "CORE_PRODUCT_INVENTORY = 'build/core-product-inventory.json'\n"
+        "MAX_PRODUCT_ARCHIVE_BYTES = 1_073_741_824\n"
+        "MAX_PRODUCT_ARCHIVE_MEMBERS = 16_384\n"
+        "MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES = 1_073_741_824\n"
+        "MAX_PRODUCT_ARCHIVE_FILE_BYTES = 536_870_912\n"
     ).body
     expected_assignment_dumps = [ast.dump(node, include_attributes=False) for node in expected_assignments]
     if len(expected_assignment_dumps) != len(ADDED_POLICY_GLOBALS):
         reject("internal selector-constant contract is malformed")
     expected_assignment_by_dump = {value: index for index, value in enumerate(expected_assignment_dumps)}
     expected_hash_import = ast.dump(ast.parse("import hashlib").body[0], include_attributes=False)
+    expected_archive_imports = {
+        ast.dump(ast.parse("import io").body[0], include_attributes=False),
+        ast.dump(ast.parse("import tarfile").body[0], include_attributes=False),
+        ast.dump(ast.parse("from pathlib import PurePosixPath").body[0], include_attributes=False),
+    }
+    consumed_archive_imports: set[str] = set()
     consumed_selector_assignments: set[int] = set()
     consumed_hash_import = False
     normalized_current_body: list[ast.stmt] = []
@@ -561,12 +599,19 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
         if isinstance(node, (ast.Import, ast.ImportFrom)) and dumped == expected_hash_import and not consumed_hash_import:
             consumed_hash_import = True
             continue
+        if isinstance(node, (ast.Import, ast.ImportFrom)) and dumped in expected_archive_imports:
+            if dumped not in consumed_archive_imports:
+                consumed_archive_imports.add(dumped)
+                continue
         if isinstance(node, (ast.Assign, ast.AnnAssign)) and dumped in expected_assignment_by_dump:
             assignment_index = expected_assignment_by_dump[dumped]
             if assignment_index not in consumed_selector_assignments:
                 consumed_selector_assignments.add(assignment_index)
                 continue
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in ADDED_POLICY_FUNCTIONS:
+            continue
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in REVIEWED_CHANGED_POLICY_FUNCTIONS:
+            normalized_current_body.append(copy.deepcopy(baseline_functions[node.name]))
             continue
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             transform = _StripMarkersAndSelectors(
@@ -577,6 +622,8 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
         normalized_current_body.append(node)
     if not consumed_hash_import:
         reject("workflow-policy is missing its approved stable-ID hash import")
+    if consumed_archive_imports != expected_archive_imports:
+        reject("workflow-policy trusted archive imports differ from the approved set")
     if len(consumed_selector_assignments) != len(expected_assignment_dumps):
         reject("workflow-policy selector constants differ from the approved set")
     if len(ADDED_POLICY_FUNCTIONS & set(current_functions)) != len(ADDED_POLICY_FUNCTIONS):

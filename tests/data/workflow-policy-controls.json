@@ -652,6 +652,15 @@
     },
     {
       "group": "helpers",
+      "id": "helper-d99736d2373f5ab5df93",
+      "kind": "helper",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "helpers",
       "id": "helper-d9ac0ef48224bc991a6f",
       "kind": "helper",
       "platforms": [
@@ -1026,6 +1035,15 @@
     {
       "group": "release_jobs",
       "id": "mutation-05365eb7d953b2a14004",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "release_jobs",
+      "id": "mutation-05be25a4fa1bb084f22f",
       "kind": "mutation",
       "platforms": [
         "posix",
@@ -2160,6 +2178,15 @@
     {
       "group": "rehearsal",
       "id": "mutation-56e83f6de03b49b22cc0",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "ci",
+      "id": "mutation-57188ebcea489bd54b55",
       "kind": "mutation",
       "platforms": [
         "posix",
@@ -3320,6 +3347,15 @@
     },
     {
       "group": "ci",
+      "id": "mutation-9c8a225ff032a66d44fb",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "ci",
       "id": "mutation-9cf000585717a5885fa4",
       "kind": "mutation",
       "platforms": [
@@ -3681,6 +3717,15 @@
     {
       "group": "release_jobs",
       "id": "mutation-b8ee5da5295e41321d7d",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "ci",
+      "id": "mutation-b960583d32997e1aed55",
       "kind": "mutation",
       "platforms": [
         "posix",
@@ -4075,6 +4120,15 @@
       ]
     },
     {
+      "group": "ci",
+      "id": "mutation-dcea8e3e3298bbe9fcdc",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
       "group": "release_jobs",
       "id": "mutation-dddeb3684fce2a4c8375",
       "kind": "mutation",
@@ -4104,6 +4158,15 @@
     {
       "group": "ci",
       "id": "mutation-de60c25dbc0fd301f30f",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "release_jobs",
+      "id": "mutation-de6c10f996673b25cae9",
       "kind": "mutation",
       "platforms": [
         "posix",
@@ -4372,6 +4435,15 @@
       ]
     },
     {
+      "group": "release_jobs",
+      "id": "mutation-ecf2e103e30336691d28",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
       "group": "rehearsal",
       "id": "mutation-ed68e0706e00e8dd94c3",
       "kind": "mutation",
@@ -4455,6 +4527,15 @@
     {
       "group": "release_jobs",
       "id": "mutation-f1ae9f5d4f622100bb4f",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
+      "group": "release_jobs",
+      "id": "mutation-f23c24c5df77159a9e21",
       "kind": "mutation",
       "platforms": [
         "posix",
@@ -4595,60 +4676,6 @@
         "posix",
         "windows"
       ]
-    },
-    {
-      "group": "ci",
-      "id": "mutation-9c8a225ff032a66d44fb",
-      "kind": "mutation",
-      "platforms": ["posix", "windows"]
-    },
-    {
-      "group": "ci",
-      "id": "mutation-57188ebcea489bd54b55",
-      "kind": "mutation",
-      "platforms": ["posix", "windows"]
-    },
-    {
-      "group": "ci",
-      "id": "mutation-dcea8e3e3298bbe9fcdc",
-      "kind": "mutation",
-      "platforms": ["posix", "windows"]
-    },
-    {
-      "group": "ci",
-      "id": "mutation-b960583d32997e1aed55",
-      "kind": "mutation",
-      "platforms": ["posix", "windows"]
-    },
-    {
-      "group": "helpers",
-      "id": "helper-d99736d2373f5ab5df93",
-      "kind": "helper",
-      "platforms": ["posix", "windows"]
-    },
-    {
-      "group": "release_jobs",
-      "id": "mutation-f14b6c95d2bfa07ee97f",
-      "kind": "mutation",
-      "platforms": ["posix", "windows"]
-    },
-    {
-      "group": "release_jobs",
-      "id": "mutation-05be25a4fa1bb084f22f",
-      "kind": "mutation",
-      "platforms": ["posix", "windows"]
-    },
-    {
-      "group": "release_jobs",
-      "id": "mutation-4db8bb7938cc9b8e5c18",
-      "kind": "mutation",
-      "platforms": ["posix", "windows"]
-    },
-    {
-      "group": "release_jobs",
-      "id": "mutation-f23c24c5df77159a9e21",
-      "kind": "mutation",
-      "platforms": ["posix", "windows"]
     }
   ],
   "groups": {
