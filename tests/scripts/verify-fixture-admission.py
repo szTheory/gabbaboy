@@ -133,6 +133,49 @@ def blob(root: Path, revision: str, path: str) -> bytes:
     return result.stdout
 
 
+def _notice_digest_table_matches(index: bytes, fixture_id: str, manifest_digest: str,
+                                 notice_digest: str) -> bool:
+    try:
+        lines = index.decode("utf-8", errors="strict").splitlines()
+    except UnicodeDecodeError:
+        return False
+
+    def cells(line: str) -> list[str] | None:
+        stripped = line.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")):
+            return None
+        return [cell.strip() for cell in stripped[1:-1].split("|")]
+
+    expected_header = ["Fixture directory", "`manifest.json` SHA-256", "`LICENSE.txt` SHA-256"]
+    matches = 0
+    in_digest_table = False
+    header_seen = False
+    separator_seen = False
+    for line in lines:
+        row = cells(line)
+        if row == expected_header:
+            if header_seen:
+                return False
+            header_seen = True
+            in_digest_table = True
+            continue
+        if not in_digest_table:
+            continue
+        if not separator_seen:
+            if row is None or len(row) != 3 or not all(re.fullmatch(r":?-{3,}:?", cell) for cell in row):
+                return False
+            separator_seen = True
+            continue
+        if row is None:
+            in_digest_table = False
+            continue
+        if len(row) != 3:
+            return False
+        if row == [f"`{fixture_id}`", f"`{manifest_digest}`", f"`{notice_digest}`"]:
+            matches += 1
+    return header_seen and separator_seen and matches == 1
+
+
 def read_regular(root: Path, path: str) -> bytes:
     relative_path(path, "file path")
     target = root.joinpath(*PurePosixPath(path).parts)
@@ -563,6 +606,8 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
     require_keys(notices, {"local_path", "sha256", "index_path"}, "notices")
     local_notice = relative_path(notices["local_path"], "notices.local_path")
     index_path = relative_path(notices["index_path"], "notices.index_path")
+    if index_path != "THIRD_PARTY_NOTICES.md":
+        raise Reject("notice-index-path-invalid", "notices.index_path must be THIRD_PARTY_NOTICES.md")
     if local_notice not in files or not isinstance(notices["sha256"], str) \
             or not HEX64.fullmatch(notices["sha256"]) or files[local_notice][1] != notices["sha256"]:
         raise Reject("notice-record-invalid", "local notice identity differs from files")
@@ -618,12 +663,8 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
         raise Reject("admission-pin-mismatch", index_path)
     manifest_digest = sha256(manifest_raw)
     license_digest = notices["sha256"]
-    matching_rows = [line for line in notice_index.decode("utf-8", errors="strict").splitlines()
-                     if manifest_path.encode("utf-8") in line.encode("utf-8")
-                     and manifest_digest.encode("ascii") in line.encode("utf-8")
-                     and local_notice.encode("utf-8") in line.encode("utf-8")
-                     and license_digest.encode("ascii") in line.encode("utf-8")]
-    if len(matching_rows) != 1:
+    fixture_id = PurePosixPath(fixture_dir).name
+    if not _notice_digest_table_matches(notice_index, fixture_id, manifest_digest, license_digest):
         raise Reject("notice-index-mismatch", index_path)
     return {"fixture": fixture_dir, "pin": pin, "files": len(files)}
 
@@ -1340,8 +1381,10 @@ def _write_synthetic(root: Path) -> str:
     manifest_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     manifest_digest = sha256(manifest_path.read_bytes())
     (root / "THIRD_PARTY_NOTICES.md").write_text(
-        f"| synthetic | fixtures/synthetic/manifest.json {manifest_digest} | "
-        f"fixtures/synthetic/LICENSE.txt {sha256(license_bytes)} |\n", encoding="utf-8")
+        "### Manifest and notice digests\n\n"
+        "| Fixture directory | `manifest.json` SHA-256 | `LICENSE.txt` SHA-256 |\n"
+        "|---|---|---|\n"
+        f"| `synthetic` | `{manifest_digest}` | `{sha256(license_bytes)}` |\n", encoding="utf-8")
     git(root, "add", "fixtures/synthetic", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json")
     git(root, "commit", "-qm", "fixture: synthetic reviewed baseline")
     commit = git(root, "rev-parse", "HEAD").decode("ascii").strip()
@@ -1458,6 +1501,18 @@ def _run_manifest_mutations(root: Path) -> int:
             "REJECT record-field-missing:")
     changed("notice-digest-mismatch", lambda value: value["notices"].update(sha256="0" * 64),
             "REJECT notice-record-invalid:")
+    changed("notice-index-redirect", lambda value: value["notices"].update(
+        index_path="fixtures/synthetic/evidence/grant.txt"), "REJECT notice-index-path-invalid:")
+
+    manifest_digest = sha256(original)
+    fixture_id = "synthetic"
+    notice_digest = record["notices"]["sha256"]
+    prose_with_all_values = (
+        f"fixture `{fixture_id}` manifest {manifest_digest} notice {notice_digest}"
+    ).encode("ascii")
+    if _notice_digest_table_matches(prose_with_all_values, fixture_id, manifest_digest, notice_digest):
+        raise Reject("self-test-notice-prose", "a prose line containing all digests was accepted as a table row")
+    cases.append("notice-prose-with-matching-digests")
 
     path.write_bytes(original.replace(b'{\n', b'{\n  "schema_version": 1,\n', 1))
     result = _run_manifest_cli(root)
