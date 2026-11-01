@@ -632,6 +632,13 @@ def check_repository(root: Path, baseline: str) -> dict:
     baseline = check_commit(root, baseline, "baseline-object-unavailable")
     baseline_files = tree_files(root, baseline, "fixtures")
     current_files = current_fixture_files(root)
+    loose_paths = {path for path in baseline_files | current_files
+                   if path.startswith("fixtures/") and len(PurePosixPath(path).parts) < 3}
+    for path in sorted(loose_paths):
+        if (path in baseline_files and path in current_files
+                and read_regular(root, path) == blob(root, baseline, path)):
+            continue
+        raise Reject("fixture-admission-required", f"changed fixture path {path} has no fixture-directory manifest")
     all_ids = {path.split("/", 2)[1] for path in baseline_files | current_files if path.startswith("fixtures/")}
     changed = 0
     for fixture_id in sorted(all_ids):
@@ -1535,6 +1542,13 @@ def _run_repository_controls() -> int:
         new_fixture.unlink()
         new_fixture.parent.rmdir()
 
+        loose_fixture = root / "fixtures/payload.gb"
+        loose_fixture.write_bytes(b"unadmitted loose synthetic payload\n")
+        result = _run_repository_cli(root)
+        if result.returncode == 0 or "REJECT fixture-admission-required:" not in result.stderr:
+            raise Reject("self-test-loose-fixture", result.stderr.strip() or "direct child of fixtures/ was accepted")
+        loose_fixture.unlink()
+
         added_payload = root / "fixtures/tracer/new-payload.bin"
         added_payload.write_bytes(b"unadmitted payload inside a legacy fixture\n")
         result = _run_repository_cli(root)
@@ -1556,7 +1570,7 @@ def _run_repository_controls() -> int:
         result = _run_repository_cli(root)
         if result.returncode == 0 or "REJECT root-license-mismatch:" not in result.stderr:
             raise Reject("self-test-root-license", result.stderr.strip() or "modified root LICENSE was accepted")
-        return 4
+        return 5
 
 
 def _fixture_entry_count(root: Path, relative: str) -> int:
