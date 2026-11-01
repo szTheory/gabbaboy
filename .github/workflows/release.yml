@@ -1400,13 +1400,14 @@ jobs:
       contents: write
       pull-requests: read
     env:
-      GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
       INPUT_RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
     steps:
       - name: Require trusted source and all candidate jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1444,6 +1445,33 @@ jobs:
           path: trusted
           fetch-depth: 0
           persist-credentials: false
+      - name: Download uploaded Linux candidate for an isolated product check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          for name in candidate-receipt.json gabbaboy-core-linux-x64.tar.gz gabbaboy-notices.txt source-receipt.json build-receipt.json; do
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" == 1 ]] || { echo "Expected exactly one draft asset named $name." >&2; exit 1; }
+          done
+          product_dir=trusted/build/linux-product
+          mkdir -p "$product_dir"
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern candidate-receipt.json --pattern gabbaboy-core-linux-x64.tar.gz \
+            --pattern gabbaboy-notices.txt --pattern source-receipt.json \
+            --pattern build-receipt.json --dir "$product_dir"
+      - name: Verify the uploaded Linux candidate with trusted checkers
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_version="${RELEASE_TAG#v}"
+          bash trusted/tests/scripts/verify-release-candidate.sh --verify \
+            trusted/build/linux-product/candidate-receipt.json trusted/build/linux-product/gabbaboy-core-linux-x64.tar.gz \
+            "$release_version" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+            trusted/build/linux-product/gabbaboy-notices.txt trusted/build/linux-product/source-receipt.json \
+            trusted/build/linux-product/build-receipt.json
       - name: Load trusted release evidence verifiers
         shell: bash
         run: |
@@ -1455,9 +1483,13 @@ jobs:
           name: release-evidence-fuzz
           path: build/evidence-fuzz
       - name: Validate draft candidate and all downloaded platform bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh validate-draft
       - name: Recheck final API inventory and downloaded receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh final-gate
       - name: Persist the exact pre-publish asset inventory
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1469,8 +1501,12 @@ jobs:
       # RM-030 (D-22): the full ASan stall replay of the exact tagged tree must have succeeded, judged by the trusted
       # revision's gate immediately before the one publication transition.
       - name: Require the successful exact-tree nightly ASan replay
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh nightly-gate
       - name: Publish the one qualified draft
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft

@@ -12,7 +12,7 @@ sha256_file() {
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 MODE=${1:-}
 SOURCE_ARCHIVE_CHECKER="$ROOT_DIR/tests/scripts/verify-v02-source-archive.py"
-USAGE='usage: verify-release-candidate.sh --self-test | --check-config | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT [SOURCE_REPOSITORY]'
+USAGE='usage: verify-release-candidate.sh --self-test | --self-test-trusted-checker | --check-config | --verify RECEIPT ASSET VERSION TAG SOURCE_SHA RELEASE_ID NOTICE_FILE SOURCE_RECEIPT BUILD_RECEIPT | --verify-final <the --verify arguments> SOURCE_ARCHIVE SOURCE_ARCHIVE_RECEIPT [SOURCE_REPOSITORY]'
 safe_extract() {
   python3 -I "$ROOT_DIR/tests/scripts/verify-v02-consumers.py" --extract "$1" "$2"
 }
@@ -127,6 +127,18 @@ if [[ "$MODE" == --check-config ]]; then
   printf 'PASS: release configuration data contract\n'
   exit 0
 fi
+if [[ "$MODE" == --self-test-trusted-checker ]]; then
+  [[ $# -eq 1 ]] || fail 'usage: verify-release-candidate.sh --self-test-trusted-checker'
+  fixture_checker="$ROOT_DIR/tests/scripts/verify-fixture-admission.py"
+  [[ -f "$fixture_checker" ]] || fail 'trusted fixture admission checker is unavailable'
+  [[ "${GBB_FIXTURE_ADMISSION_CHECKER:-}" != "$fixture_checker" ]] || fail 'test override must differ from the trusted checker'
+  if [[ -n "${RUNNER_TEMP:-}" ]]; then
+    [[ "$fixture_checker" != "$RUNNER_TEMP/verify-fixture-admission.py" ]] || fail 'temporary checker must differ from the trusted checker'
+  fi
+  python3 -I "$fixture_checker" --help >/dev/null || fail 'trusted fixture admission checker could not be executed'
+  printf 'PASS: trusted fixture checker path %s\n' "$fixture_checker"
+  exit 0
+fi
 command -v cmake >/dev/null || fail 'CMake is required'
 if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
   # The installed core archive is checked as an exact product; the source archive remains a
@@ -138,16 +150,9 @@ if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
   fi
   command -v python3 >/dev/null || fail 'Python 3 is required'
   [[ "$(basename -- "$8")" == gabbaboy-notices.txt ]] || fail 'core release notice sidecar must be named gabbaboy-notices.txt'
-  fixture_checker=${GBB_FIXTURE_ADMISSION_CHECKER:-}
-  if [[ -z "$fixture_checker" && -n "${RUNNER_TEMP:-}" \
-        && -f "$RUNNER_TEMP/verify-fixture-admission.py" ]]; then
-    fixture_checker="$RUNNER_TEMP/verify-fixture-admission.py"
-  fi
-  fixture_checker_args=()
-  if [[ -n "$fixture_checker" ]]; then
-    [[ -f "$fixture_checker" ]] || fail 'trusted fixture admission checker is unavailable'
-    fixture_checker_args=(--fixture-checker "$fixture_checker")
-  fi
+  fixture_checker="$ROOT_DIR/tests/scripts/verify-fixture-admission.py"
+  [[ -f "$fixture_checker" ]] || fail 'trusted fixture admission checker is unavailable'
+  fixture_checker_args=(--fixture-checker "$fixture_checker")
   python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" \
     --notice-sidecar "$8" "${fixture_checker_args[@]}" || fail 'product archive or core notice sidecar failed exact policy'
   if [[ "$MODE" == --verify-final ]]; then

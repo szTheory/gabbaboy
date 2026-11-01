@@ -59,6 +59,7 @@ INSTRUMENTED_POLICY_FUNCTIONS = {
     "verify_cited_stub_controls", "rehearsal_bash_resolver_controls", "rehearsal_tag_guard_controls", "self_test",
 }
 ADDED_MUTATION_CONTROLS = (
+    ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
     ("P20 fixture-repro admission gate is removed", "fixture-repro.yml", "fixture-admission-gate"),
     ("P20 fixture-repro admission gate moved after tool download", "fixture-repro.yml", "fixture-admission-gate"),
     ("P20 macOS package checkout becomes shallow", "ci.yml", "fixture-admission-history"),
@@ -179,10 +180,11 @@ def _source_for_function(source: bytes, name: str) -> str:
     return ast.get_source_segment(source.decode("utf-8"), node) or ""
 
 
-def _helper_row(family: str, source_name: str, *parts: str, platforms=ALL_PLATFORMS) -> dict:
+def _helper_row(family: str, source_name: str, *parts: str, platforms=ALL_PLATFORMS,
+                group: str = "helpers") -> dict:
     key = [family, *parts]
     return {
-        "id": stable_id("helper", *key), "kind": "helper", "key": key, "group": "helpers",
+        "id": stable_id("helper", *key), "kind": "helper", "key": key, "group": group,
         "platforms": list(platforms), "source": source_name,
     }
 
@@ -238,6 +240,10 @@ def baseline_controls(source: bytes) -> list[dict]:
     for (workflow, job_id), _expected in namespace["MACOS_QUALIFICATION_JOBS"].items():
         rows.append(_helper_row("macos-runner-positive", "self_test", workflow, job_id))
     rows.append(_helper_row("release-receipt-runner-positive", "self_test", "macOS receipt runner"))
+    rows.append(_helper_row("fixture-checker-path", "release_fixture_checker_path_controls",
+                            "conflicting environment override", group="release_jobs"))
+    rows.append(_helper_row("fixture-checker-path", "release_fixture_checker_path_controls",
+                            "replaced temporary checker", group="release_jobs"))
 
     # Each named input case is independently marked after all output, status, API and checker-call assertions pass.
     window_function = _function_node(tree, "_window_discovery_shell_controls")

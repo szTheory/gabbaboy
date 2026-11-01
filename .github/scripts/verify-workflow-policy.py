@@ -1882,6 +1882,79 @@ def check_fixture_admission_workflows(root: Path) -> None:
         if len(overlay) != 1 or job["steps"].index(overlay[0]) >= job["steps"].index(stage_step):
             raise Reject("fixture-product-trust", f"release.{job_id} must load the trusted byte-policy checker before building")
 
+    # The publisher is a separate job from the tagged candidate build. It reads only uploaded draft bytes into the
+    # trusted checkout and runs the check without a token; the producer's GITHUB_ENV and RUNNER_TEMP cannot cross jobs.
+    publisher = _require_job("release", release, "publish-qualified-release")
+    trusted_checkouts = [step for step in _checkouts(publisher)
+                         if step.get("with", {}).get("path") == "trusted"]
+    if len(trusted_checkouts) != 1 or trusted_checkouts[0].get("with", {}).get("ref") != TRUSTED_SHA_REF \
+            or str(trusted_checkouts[0].get("with", {}).get("fetch-depth")) != "0":
+        raise Reject("fixture-product-trust", "release publisher must check out the full trusted workflow revision under trusted/")
+    download = _fixture_step("release", "publish-qualified-release", publisher,
+                             "Download uploaded Linux candidate for an isolated product check")
+    verify = _fixture_step("release", "publish-qualified-release", publisher,
+                           "Verify the uploaded Linux candidate with trusted checkers")
+    validate = _fixture_step("release", "publish-qualified-release", publisher,
+                             "Validate draft candidate and all downloaded platform bytes")
+    expected_verify = ('bash trusted/tests/scripts/verify-release-candidate.sh --verify '
+                       'trusted/build/linux-product/candidate-receipt.json '
+                       'trusted/build/linux-product/gabbaboy-core-linux-x64.tar.gz '
+                       '"$release_version" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" '
+                       'trusted/build/linux-product/gabbaboy-notices.txt '
+                       'trusted/build/linux-product/source-receipt.json trusted/build/linux-product/build-receipt.json')
+    _fixture_step_event("release", "publish-qualified-release", publisher, verify["name"],
+                                      expected_verify, "fixture-product-trust", exact=True)
+    if not _runs_under_errexit(download) or not _runs_under_errexit(verify) \
+            or not _flat(download).count('gh release download "$RELEASE_TAG"') \
+            or 'product_dir=trusted/build/linux-product' not in download.get("run", "") \
+            or not all(f"--pattern {name}" in download.get("run", "") for name in (
+                "candidate-receipt.json", "gabbaboy-core-linux-x64.tar.gz", "gabbaboy-notices.txt",
+                "source-receipt.json", "build-receipt.json")) \
+            or download.get("env", {}).get("GH_TOKEN") != "${{ github.token }}" \
+            or _names_token(verify.get("env", {})) or _names_token(publisher.get("env", {})):
+        raise Reject("fixture-product-trust", "Linux product verification must download every uploaded input and run without an ambient token")
+    order = [publisher["steps"].index(step) for step in (trusted_checkouts[0], download, verify, validate)]
+    if order != sorted(order):
+        raise Reject("fixture-product-trust", "Linux product verification must use downloaded bytes after the trusted checkout and before publication")
+    candidate_wrapper = (root / "tests/scripts/verify-release-candidate.sh").read_text(encoding="utf-8")
+    if 'fixture_checker="$ROOT_DIR/tests/scripts/verify-fixture-admission.py"' not in candidate_wrapper \
+            or 'fixture_checker=${GBB_FIXTURE_ADMISSION_CHECKER' in candidate_wrapper \
+            or 'fixture_checker="$RUNNER_TEMP/verify-fixture-admission.py"' in candidate_wrapper:
+        raise Reject("fixture-product-trust", "release candidate verifier must use only its checked-out trusted sibling checker")
+
+
+def release_fixture_checker_path_controls(root: Path) -> int:
+    """Prove ambient env and RUNNER_TEMP checker replacements cannot redirect the release verifier."""
+    wrapper = root / "tests/scripts/verify-release-candidate.sh"
+    with tempfile.TemporaryDirectory(prefix="gbb-release-checker-path-") as directory:
+        scratch = Path(directory)
+        fake_env_checker = scratch / "from-environment.py"
+        fake_env_checker.write_text("raise SystemExit('environment checker was executed')\n", encoding="utf-8")
+        cases = (
+            ("conflicting environment override", {"GBB_FIXTURE_ADMISSION_CHECKER": str(fake_env_checker)}, False),
+            ("replaced temporary checker", {}, True),
+        )
+        for label, extra_env, replace_temp in cases:
+            runner_temp = scratch / ("runner-temp-replaced" if replace_temp else "runner-temp-empty")
+            runner_temp.mkdir(exist_ok=True)
+            temp_checker = runner_temp / "verify-fixture-admission.py"
+            if replace_temp:
+                temp_checker.write_text("raise SystemExit('temporary checker was executed')\n", encoding="utf-8")
+            elif temp_checker.exists():
+                temp_checker.unlink()
+            environment = os.environ.copy()
+            environment.pop("GBB_FIXTURE_ADMISSION_CHECKER", None)
+            environment.update(extra_env)
+            environment["RUNNER_TEMP"] = str(runner_temp)
+            result = subprocess.run(["bash", str(wrapper), "--self-test-trusted-checker"], cwd=root,
+                                    env=environment, capture_output=True, text=True, check=False, timeout=10)
+            expected = str(root / "tests/scripts/verify-fixture-admission.py")
+            if result.returncode != 0 or f"PASS: trusted fixture checker path {expected}" not in result.stdout:
+                raise SystemExit(f"release checker path control failed ({label}): "
+                                 f"exit={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}")
+            _mark_policy_control("helper", "fixture-checker-path", label)
+    return len(cases)
+
 
 def _check_ci_planning_lane(workflow: str, tree: dict) -> None:
     """The planning-only lane (D-21): a read-only classifier on the base commit's copy, a real planning-checks job, and
@@ -3939,6 +4012,9 @@ def _mutations():
         _m("P20 downloaded Linux core skips stage-inventory equality", rel, "  candidate:\n",
            "--inventory build/core-product-inventory.json", "--write-inventory build/core-product-inventory.json",
            "fixture-product-inventory-binding"),
+        _m("P20 isolated Linux product verifier is removed", rel, "  publish-qualified-release:\n",
+           "bash trusted/tests/scripts/verify-release-candidate.sh --verify",
+           "echo trusted product check removed", "fixture-product-trust"),
         _m("rehearsal package omits installed-host smoke", reh, "  package:\n",
            "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
         _m("rehearsal aggregate omits installed-host smoke", reh, "  aggregate:\n",
@@ -3979,9 +4055,13 @@ def _mutations():
              "          if-no-files-found: error\n"
              "          retention-days: 90\n", ""),
             ("  publish-qualified-release:\n", "      - name: Publish the one qualified draft\n"
+             "        env:\n"
+             "          GH_TOKEN: ${{ github.token }}\n"
              "        shell: bash\n"
              "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft\n",
              "      - name: Publish the one qualified draft\n"
+             "        env:\n"
+             "          GH_TOKEN: ${{ github.token }}\n"
              "        shell: bash\n"
              "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft\n"
              "      - name: Persist the exact pre-publish asset inventory\n"
@@ -5517,6 +5597,8 @@ git() {
 def self_test(root: Path) -> None:
     rejected = 0
     run_helpers = _ACTIVE_POLICY_GROUP is None or _ACTIVE_POLICY_GROUP in ("all", "helpers")
+    if _ACTIVE_POLICY_GROUP in (None, "all", "release_jobs"):
+        release_fixture_checker_path_controls(root)
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
         fixture = Path(directory) / "subject"
         work = Path(directory) / "work"
