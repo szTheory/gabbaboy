@@ -178,10 +178,53 @@ def blob(root: Path, revision: str, path: str) -> bytes:
             _terminate_and_reap(process, "git show")
 
 
+def _strip_html_comments(line: str, in_comment: bool) -> tuple[str, bool]:
+    visible: list[str] = []
+    offset = 0
+    while offset < len(line):
+        if in_comment:
+            close = line.find("-->", offset)
+            if close < 0:
+                return "".join(visible), True
+            offset = close + 3
+            in_comment = False
+            continue
+        start = line.find("<!--", offset)
+        if start < 0:
+            visible.append(line[offset:])
+            break
+        visible.append(line[offset:start])
+        offset = start + 4
+        in_comment = True
+    return "".join(visible), in_comment
+
+
+def _active_notice_lines(lines: list[str]):
+    """Yield Markdown lines outside fenced code blocks and HTML comments."""
+    fence_char: str | None = None
+    fence_length = 0
+    in_comment = False
+    for line in lines:
+        if fence_char is not None:
+            close = re.match(r"^ {0,3}(`+|~+)[ \t]*$", line)
+            if close and close.group(1)[0] == fence_char and len(close.group(1)) >= fence_length:
+                fence_char = None
+                fence_length = 0
+            continue
+
+        visible, in_comment = _strip_html_comments(line, in_comment)
+        fence = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", visible)
+        if fence and (fence.group(1)[0] != "`" or "`" not in fence.group(2)):
+            fence_char = fence.group(1)[0]
+            fence_length = len(fence.group(1))
+            continue
+        yield visible
+
+
 def _notice_digest_table_matches(index: bytes, fixture_id: str, manifest_digest: str,
                                  notice_digest: str) -> bool:
     try:
-        lines = index.decode("utf-8", errors="strict").splitlines()
+        lines = list(_active_notice_lines(index.decode("utf-8", errors="strict").splitlines()))
     except UnicodeDecodeError:
         return False
 
@@ -1563,6 +1606,19 @@ def _run_manifest_mutations(root: Path) -> int:
     if _notice_digest_table_matches(prose_with_all_values, fixture_id, manifest_digest, notice_digest):
         raise Reject("self-test-notice-prose", "a prose line containing all digests was accepted as a table row")
     cases.append("notice-prose-with-matching-digests")
+    matching_notice_table = (
+        "| Fixture directory | `manifest.json` SHA-256 | `LICENSE.txt` SHA-256 |\n"
+        "| --- | --- | --- |\n"
+        f"| `{fixture_id}` | `{manifest_digest}` | `{notice_digest}` |\n"
+    )
+    inactive_notice_tables = (
+        ("notice-fenced-table-with-matching-digests", f"```markdown\n{matching_notice_table}```\n"),
+        ("notice-html-comment-table-with-matching-digests", f"<!--\n{matching_notice_table}-->\n"),
+    )
+    for label, inactive in inactive_notice_tables:
+        if _notice_digest_table_matches(inactive.encode("ascii"), fixture_id, manifest_digest, notice_digest):
+            raise Reject("self-test-notice-inactive-markdown", f"{label} was accepted as an active digest table")
+        cases.append(label)
 
     path.write_bytes(original.replace(b'{\n', b'{\n  "schema_version": 1,\n', 1))
     result = _run_manifest_cli(root)
