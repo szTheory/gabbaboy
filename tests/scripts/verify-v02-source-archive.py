@@ -48,6 +48,11 @@ MAX_ENTRIES = 100000
 MAX_TOTAL_BYTES = 1 << 30
 MAX_MEMBER_BYTES = 64 << 20
 MAX_PATH_BYTES = 4096
+MAX_TAR_STREAM_BYTES = MAX_TOTAL_BYTES + (128 << 20)
+MAX_TAR_EXTENSION_BYTES = 64 << 10
+MAX_TAR_TOTAL_EXTENSION_BYTES = 4 << 20
+MAX_TAR_EXTENSION_HEADERS = 128
+MAX_TAR_READ_BYTES = 64 << 10
 KEEP_LIMIT = 4 << 20
 CHUNK = 1 << 20
 ROM_SUFFIXES = (".gb", ".gbc", ".sgb", ".rom", ".bin")
@@ -67,6 +72,70 @@ class Reject(Exception):
     def __init__(self, code, message):
         super().__init__(message)
         self.code = code
+
+
+class ArchiveLimitError(ValueError):
+    def __init__(self, reason, message):
+        super().__init__(message)
+        self.reason = reason
+
+
+class BoundedTarReader:
+    """Count decompressed TAR bytes and reject unbounded or over-budget reads."""
+    def __init__(self, source, limit, max_request):
+        self.source = source
+        self.limit = limit
+        self.max_request = max_request
+        self.bytes_read = 0
+
+    def read(self, size=-1):
+        if size is None or size < 0:
+            raise ValueError("unbounded reads are not allowed from the TAR stream")
+        if size == 0:
+            return b""
+        remaining = self.limit - self.bytes_read
+        data = self.source.read(min(size, self.max_request, remaining + 1))
+        if len(data) > remaining:
+            raise ArchiveLimitError("stream", f"TAR exceeds {self.limit}-byte decompressed-stream limit")
+        self.bytes_read += len(data)
+        return data
+
+
+def bounded_tarinfo_class(extension_headers=MAX_TAR_EXTENSION_HEADERS,
+                          extension_bytes=MAX_TAR_EXTENSION_BYTES,
+                          total_extension_bytes=MAX_TAR_TOTAL_EXTENSION_BYTES):
+    """Check PAX and GNU extension declarations before tarfile consumes their payloads."""
+    stats = {"headers": 0, "bytes": 0}
+    extension_types = {
+        tarfile.GNUTYPE_LONGNAME,
+        tarfile.GNUTYPE_LONGLINK,
+        tarfile.GNUTYPE_SPARSE,
+        tarfile.XHDTYPE,
+        tarfile.XGLTYPE,
+        tarfile.SOLARIS_XHDTYPE,
+    }
+
+    class BoundedTarInfo(tarfile.TarInfo):
+        def _proc_member(self, archive):
+            if self.type in extension_types:
+                if self.size < 0 or self.size > extension_bytes:
+                    raise ArchiveLimitError("extension-header",
+                                            f"extended TAR header exceeds {extension_bytes}-byte limit")
+                if stats["headers"] + 1 > extension_headers:
+                    raise ArchiveLimitError("extension-count",
+                                            f"TAR exceeds {extension_headers} extended-header limit")
+                if stats["bytes"] + self.size > total_extension_bytes:
+                    raise ArchiveLimitError("extension-total",
+                                            f"TAR exceeds {total_extension_bytes} aggregate extension-byte limit")
+                stats["headers"] += 1
+                stats["bytes"] += self.size
+            else:
+                # A source member may legitimately need one PAX path header (for long
+                # names); cap a hidden run of chained metadata headers per member.
+                stats["headers"] = 0
+            return super()._proc_member(archive)
+
+    return BoundedTarInfo
 
 
 class Limits:
@@ -204,24 +273,43 @@ def register(inspection, seen, raw, kind, size, target, reader, mode, limits, wa
 def inspect_tar(path, limits, want_git, unwrapped=False):
     inspection, seen = Inspection(unwrapped), set()
     try:
-        with tarfile.open(path, "r:gz") as bundle:
-            for member in bundle:
-                if member.issparse() or member.islnk():
-                    raise Reject("link-not-allowed" if member.islnk() else "nonregular-member",
-                                 f"archive member is a hard link or sparse file: {member.name!r}")
-                if member.isdir():
-                    kind, target, reader = "dir", None, None
-                elif member.issym():
-                    kind, target, reader = "symlink", member.linkname, None
-                elif member.isreg():
-                    kind, target, reader = "file", None, bundle.extractfile(member)
-                else:
-                    raise Reject("nonregular-member", f"archive member is a device, FIFO or special file: {member.name!r}")
-                register(inspection, seen, member.name, kind, member.size if kind == "file" else 0,
-                         target, reader, member.mode, limits, want_git)
-            inspection.commit = bundle.pax_headers.get("comment")
+        with open(path, "rb") as compressed:
+            with gzip.GzipFile(fileobj=compressed, mode="rb") as decompressed:
+                bounded = BoundedTarReader(decompressed, MAX_TAR_STREAM_BYTES, MAX_TAR_READ_BYTES)
+                with tarfile.open(
+                        fileobj=bounded, mode="r|",
+                        tarinfo=bounded_tarinfo_class(extension_headers=MAX_TAR_EXTENSION_HEADERS,
+                                                      extension_bytes=MAX_TAR_EXTENSION_BYTES,
+                                                      total_extension_bytes=MAX_TAR_TOTAL_EXTENSION_BYTES)) as bundle:
+                    for member in bundle:
+                        if member.issparse() or member.islnk():
+                            raise Reject("link-not-allowed" if member.islnk() else "nonregular-member",
+                                         f"archive member is a hard link or sparse file: {member.name!r}")
+                        if member.isdir():
+                            kind, target, reader = "dir", None, None
+                        elif member.issym():
+                            kind, target, reader = "symlink", member.linkname, None
+                        elif member.isreg():
+                            kind, target, reader = "file", None, bundle.extractfile(member)
+                        else:
+                            raise Reject("nonregular-member", f"archive member is a device, FIFO or special file: {member.name!r}")
+                        register(inspection, seen, member.name, kind, member.size if kind == "file" else 0,
+                                 target, reader, member.mode, limits, want_git)
+                    while bounded.read(MAX_TAR_READ_BYTES):
+                        pass
+                    inspection.commit = bundle.pax_headers.get("comment")
     except Reject:
         raise
+    except ArchiveLimitError as error:
+        code = {
+            "extension-header": "archive-extension-header-limit",
+            "extension-total": "archive-extension-total-limit",
+            "extension-count": "archive-extension-count-limit",
+            "stream": "archive-stream-limit",
+        }[error.reason]
+        raise Reject(code, str(error)) from None
+    except ValueError as error:
+        raise Reject("archive-unreadable", f"archive cannot be read as a bounded gzip tarball: {error}") from None
     except (tarfile.TarError, EOFError, zlib.error, OSError) as error:
         raise Reject("archive-unreadable", f"archive cannot be read as a gzip tarball: {error}")
     return inspection
@@ -511,7 +599,7 @@ def check_product(archive, repo_root, limits, inventory_path=None, sidecar_path=
 # --------------------------------------------------------------------------- self-test
 
 
-def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
+def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT, extra_pax=None):
     """Build a gzip tarball from {relative path: bytes | ('symlink', target) | ...} like GitHub does."""
     raw = io.BytesIO()
     headers = {"comment": commit} if commit else {}
@@ -525,6 +613,8 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
             # A leading "@" supplies the raw member name (traversal, absolute and second-root controls).
             # root=None builds the installed product layout, whose members sit at the archive top level.
             info = tarfile.TarInfo(name[1:] if name.startswith("@") else (name if root is None else f"{root}/{name}"))
+            if extra_pax and name in extra_pax:
+                info.pax_headers = extra_pax[name]
             if isinstance(value, tuple) and value[0] == "file":
                 info.size = len(value[1])
                 info.mode = value[2]
@@ -545,6 +635,33 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
     with gzip.GzipFile(fileobj=compressed, mode="wb", mtime=0) as handle:
         handle.write(raw.getvalue())
     return compressed.getvalue()
+
+
+def pax_record(key, value):
+    body = key.encode("ascii") + b"=" + value + b"\n"
+    length = len(body) + 2
+    while True:
+        record = str(length).encode("ascii") + b" " + body
+        if len(record) == length:
+            return record
+        length = len(record)
+
+
+def chained_pax_tar_bytes(count, record):
+    raw = io.BytesIO()
+    with tarfile.open(fileobj=raw, mode="w", format=tarfile.PAX_FORMAT) as bundle:
+        top = tarfile.TarInfo("gabbaboy-0.0.1")
+        top.type = tarfile.DIRTYPE
+        bundle.addfile(top)
+        for index in range(count):
+            extension = tarfile.TarInfo(f"./PaxHeaders/{index}")
+            extension.type = tarfile.XHDTYPE
+            extension.size = len(record)
+            bundle.addfile(extension, io.BytesIO(record))
+        payload = tarfile.TarInfo("gabbaboy-0.0.1/README.md")
+        payload.size = 1
+        bundle.addfile(payload, io.BytesIO(b"x"))
+    return gzip.compress(raw.getvalue(), mtime=0)
 
 
 def _load_product_policy_module():
@@ -841,6 +958,26 @@ def self_test():
             negatives += 1
             print(f"rejected: {label} ({code_expected})")
 
+        def expect_inspect_reject(label, code_expected, archive, limits=None):
+            nonlocal negatives
+            try:
+                inspect_tar(archive, limits or Limits(), want_git=False)
+            except Reject as rejection:
+                if rejection.code != code_expected:
+                    raise SystemExit(f"self-test parser negative {label}: expected {code_expected}, got {rejection.code}: {rejection}")
+            else:
+                raise SystemExit(f"self-test parser negative {label}: archive was accepted")
+            negatives += 1
+            print(f"rejected: {label} ({code_expected})")
+
+        def with_tar_limit(name, value, operation):
+            original = globals()[name]
+            globals()[name] = value
+            try:
+                operation()
+            finally:
+                globals()[name] = original
+
         base = synthetic_tree()
 
         def variant(**changes):
@@ -884,6 +1021,12 @@ def self_test():
         if generated_receipt["source_tree_sha256"] != tgz_receipt["source_tree_sha256"]:
             raise SystemExit("self-test: generated and git archives of one tree disagree")
         expect_pass("generated-without-repo", write("plain.tar.gz", tar_bytes(base, sha)))
+
+        large_source_metadata = write(
+            "source-with-large-pax.tar.gz",
+            tar_bytes(base, real_sha, extra_pax={"src/a.c": {"GBB.control": "x" * 70_000}}))
+        expect_reject("source-cli-oversized-pax", "archive-extension-header-limit", large_source_metadata,
+                      "--repo", str(repo), sha_arg=real_sha)
 
         # Rights and content mutations: each must fail for its own reason.
         expect_reject("missing-fixture-notice", "missing-notice", write("m1.tar.gz", tar_bytes(variant(fixtures__alpha__LICENSE_dot_txt=None), sha)))
@@ -935,6 +1078,46 @@ def self_test():
         # is refused before any allocation or read.
         bomb = top.tobuf(tarfile.GNU_FORMAT) + header.tobuf(tarfile.GNU_FORMAT)
         expect_reject("oversize-member-metadata", "member-oversize", write("p5.tar.gz", gzip.compress(bomb, mtime=0)))
+        oversized_global = write("oversized-global-pax.tar.gz",
+                                 tar_bytes({"README.md": b"x"}, "x" * 70_000))
+        base_proc_member = tarfile.TarInfo._proc_member
+        parser_body_calls = []
+
+        def count_extension_body_parser(info, archive):
+            parser_body_calls.append(info.type)
+            return base_proc_member(info, archive)
+
+        tarfile.TarInfo._proc_member = count_extension_body_parser
+        try:
+            inspect_tar(oversized_global, Limits(), want_git=False)
+        except Reject as rejection:
+            if rejection.code != "archive-extension-header-limit":
+                raise SystemExit(f"self-test 70KB PAX control rejected for wrong reason: {rejection}") from None
+            if parser_body_calls:
+                raise SystemExit("self-test 70KB PAX header reached TarInfo payload parsing before rejection")
+            negatives += 1
+            print("rejected: 70KB PAX header (archive-extension-header-limit)")
+        else:
+            raise SystemExit("self-test 70KB PAX header passed inspect_tar without a resource rejection")
+        finally:
+            tarfile.TarInfo._proc_member = base_proc_member
+
+        aggregate = write("aggregate-pax.tar.gz", tar_bytes(
+            {"one": b"1", "two": b"2", "three": b"3"}, None,
+            extra_pax={name: {"GBB.control": "x" * 60_000} for name in ("one", "two", "three")}))
+        with_tar_limit("MAX_TAR_TOTAL_EXTENSION_BYTES", 128 * 1024,
+                       lambda: expect_inspect_reject("aggregate extension payload", "archive-extension-total-limit", aggregate))
+
+        count_archive = write("extension-count.tar.gz", chained_pax_tar_bytes(129, b"5 x=\n"))
+        with_tar_limit("MAX_TAR_EXTENSION_HEADERS", 128,
+                       lambda: expect_inspect_reject("chained extension header count", "archive-extension-count-limit", count_archive))
+
+        stream_archive = write("decompressed-stream.tar.gz",
+                               tar_bytes({"README.md": b"z" * (32 * 1024)}, None))
+        if stream_archive.stat().st_size >= 32 * 1024:
+            raise SystemExit("self-test decompressed-stream control is not highly compressible")
+        with_tar_limit("MAX_TAR_STREAM_BYTES", 4096,
+                       lambda: expect_inspect_reject("decompressed TAR stream", "archive-stream-limit", stream_archive))
         expect_reject("symlink-not-in-tree", "link-not-allowed", write("p6.tar.gz", tar_bytes({**base, "link": ("symlink", "/etc/passwd")}, sha)))
         expect_reject("hardlink-member", "link-not-allowed", write("p7.tar.gz", tar_bytes({**base, "hard": ("hardlink", "README.md")}, sha)))
         expect_reject("device-member", "nonregular-member", write("p8.tar.gz", tar_bytes({**base, "dev": ("device", "")}, sha)))
@@ -1016,6 +1199,17 @@ def self_test():
         good_sidecar.write_bytes(product_checker.blob(product_repo, product_checker.BASELINE_COMMIT, "LICENSE"))
         expect_product("complete-core-product-with-release-sidecar", good_product, None,
                        inventory=good_inventory, notice_sidecar=good_sidecar, use_cli=True)
+        large_product_member = next(iter(good_product))
+        large_product_metadata = write(
+            "core-product-with-large-pax.tar.gz",
+            tar_bytes(good_product, None, root=None,
+                      extra_pax={large_product_member: {"GBB.control": "x" * 70_000}}))
+        code, err, stdout = run_cli(script, "--check-product-archive", str(large_product_metadata),
+                                    "--repo-root", str(product_repo))
+        if code != 1 or stdout or not err.startswith("REJECT archive-extension-header-limit:"):
+            raise SystemExit(f"self-test core product PAX negative expected metadata-limit rejection, got {code}: {err!r}, {stdout!r}")
+        negatives += 1
+        print("rejected: core-product CLI oversized PAX (archive-extension-header-limit)")
         missing_sidecar = scratch / "missing-sidecar" / "gabbaboy-notices.txt"
         expect_product("product-missing-release-sidecar", good_product, "product-notice-sidecar-invalid",
                        notice_sidecar=missing_sidecar, use_cli=True)
@@ -1125,6 +1319,9 @@ def self_test():
                 raise SystemExit(f"self-test receipt negative {label} printed success output: {stdout!r}")
             negatives += 1
             print(f"rejected: receipt {label} ({code_expected})")
+
+        expect_receipt_reject("oversized PAX source recheck", "archive-extension-header-limit", good,
+                              large_source_metadata, repo)
 
         receipt_cases = {
             "wrong-kind": lambda r: r.update(kind="gabbaboy-build-receipt"),
