@@ -26,6 +26,8 @@ if(GABBABOY_ENABLE_SANITIZERS)
 endif()
 
 option(GABBABOY_BUILD_PLAYER "Build the optional SDL3 player" OFF)
+set(GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT "" CACHE PATH
+  "Trusted local Git object store for immutable fixture-baseline reads in isolated source harnesses")
 
 include(CTest)
 include(GNUInstallDirs)
@@ -35,10 +37,13 @@ include(CMakePackageConfigHelpers)
 # consume fixture bytes. Non-testing source-library builds intentionally avoid a Git dependency.
 if(BUILD_TESTING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  set(GBB_FIXTURE_ADMISSION_ARGS --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
+  if(GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT)
+    list(APPEND GBB_FIXTURE_ADMISSION_ARGS --baseline-object-root "${GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT}")
+  endif()
   execute_process(
     COMMAND "${Python3_EXECUTABLE}" -I
-      "${PROJECT_SOURCE_DIR}/tests/scripts/verify-fixture-admission.py"
-      --check-repository --repo-root "${PROJECT_SOURCE_DIR}"
+      "${PROJECT_SOURCE_DIR}/tests/scripts/verify-fixture-admission.py" ${GBB_FIXTURE_ADMISSION_ARGS}
     RESULT_VARIABLE GBB_FIXTURE_ADMISSION_RESULT
     OUTPUT_VARIABLE GBB_FIXTURE_ADMISSION_OUTPUT
     ERROR_VARIABLE GBB_FIXTURE_ADMISSION_ERROR

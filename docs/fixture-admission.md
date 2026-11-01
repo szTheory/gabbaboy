@@ -53,6 +53,13 @@ existing fixture dispositions without migrating or re-auditing their rights. Any
 fixture path must carry a valid version 1 record and immutable admission pin. The root `LICENSE`
 must remain byte-identical to that baseline.
 
+An isolated source-only harness may supply `--baseline-object-root <bare-git-directory>` (or the
+narrow CMake cache path `GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT`) when it cannot carry Git metadata.
+The subject repository remains authoritative for current fixture bytes, manifests, notices, and
+policy; the separate local object store supplies only immutable commit and blob reads. The checker
+requires the fixed full commit identity to exist there and does not fetch, resolve mutable refs, or
+fall back to an empty baseline. This evidence root does not set or qualify the source build revision.
+
 ## Commands
 
 ```sh

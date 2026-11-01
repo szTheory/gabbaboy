@@ -25,6 +25,7 @@ MUTANT_REPLACEMENT = (
     + "                   m->accept_input_span->events[*cursor].at_half_dots == m->time_half_dots) ++*cursor;\n"
     + "        }\n"
 )
+BASELINE_COMMIT = "7cc6495e64f3645caa120e7458f754585b788985"
 
 
 def require(condition: bool, message: str) -> None:
@@ -116,6 +117,28 @@ def copy_tracked_source(destination: Path) -> None:
             shutil.copy2(source, target)
 
 
+def create_baseline_object_store(destination: Path) -> None:
+    destination.mkdir()
+    initialized = run(["git", "init", "--bare", str(destination)], cwd=ROOT)
+    require(initialized.returncode == 0, f"baseline object store init failed:\n{initialized.stdout}")
+    fetched = run(["git", "--git-dir", str(destination), "fetch", "--no-tags",
+                  str(ROOT), BASELINE_COMMIT], cwd=ROOT)
+    require(fetched.returncode == 0, f"fixed baseline object copy failed:\n{fetched.stdout}")
+    verified = run(["git", "--git-dir", str(destination), "cat-file", "-e",
+                    f"{BASELINE_COMMIT}^{{commit}}"], cwd=ROOT)
+    require(verified.returncode == 0, "copied baseline object did not verify at its full commit identity")
+
+
+def check_repository(subject: Path, evidence: Path | None, expected: str) -> None:
+    command = [sys.executable, "-I", str(subject / "tests/scripts/verify-fixture-admission.py"),
+               "--check-repository", "--repo-root", str(subject)]
+    if evidence is not None:
+        command.extend(("--baseline-object-root", str(evidence)))
+    result = run(command, cwd=subject)
+    require(result.returncode == 1 and expected in result.stdout,
+            f"expected admission rejection {expected!r}, got exit={result.returncode}:\n{result.stdout}")
+
+
 def verify_documentation_contract() -> None:
     text = (ROOT / "docs/game-acceptance.md").read_text(encoding="utf-8")
     for phrase in ("private, immutable event span", "16,384-event limit", "existing 64-event queue",
@@ -181,8 +204,16 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="dense-input-mutant-") as mutant_name:
             mutant_root = Path(mutant_name) / "source"
             mutant_build = Path(mutant_name) / "build"
+            baseline_object_root = Path(mutant_name) / "trusted-baseline.git"
             mutant_root.mkdir()
             copy_tracked_source(mutant_root)
+            create_baseline_object_store(baseline_object_root)
+            check_repository(mutant_root, None, "REJECT baseline-object-unavailable:")
+            empty_evidence = Path(mutant_name) / "empty-baseline.git"
+            empty_evidence.mkdir()
+            initialized = run(["git", "init", "--bare", str(empty_evidence)], cwd=ROOT)
+            require(initialized.returncode == 0, f"empty baseline store init failed:\n{initialized.stdout}")
+            check_repository(mutant_root, empty_evidence, "REJECT baseline-object-unavailable:")
             core_path = mutant_root / "src/core/gabbaboy.c"
             core = core_path.read_text(encoding="utf-8")
             require(core.count(MUTANT_ANCHOR) == 1,
@@ -193,7 +224,8 @@ def main() -> int:
             mutant_case_dir.mkdir()
             mutant_script, mutant_case = dense_fixture(mutant_case_dir, mutant_root)
             mutant_configure = run(["cmake", "-S", str(mutant_root), "-B", str(mutant_build),
-                                    "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Debug", "-DBUILD_TESTING=ON"],
+                                    "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Debug", "-DBUILD_TESTING=ON",
+                                    f"-DGABBABOY_FIXTURE_BASELINE_OBJECT_ROOT={baseline_object_root}"],
                                    cwd=mutant_root, timeout=180)
             require(mutant_configure.returncode == 0,
                     f"mutant CMake configure failed:\n{mutant_configure.stdout}")
@@ -221,11 +253,21 @@ def main() -> int:
             require("status=pass" not in mutant and "receipt id=" not in mutant,
                     "no-refill mutant emitted success or a successful receipt")
 
+            changed_subject = Path(mutant_name) / "changed-subject"
+            changed_subject.mkdir()
+            copy_tracked_source(changed_subject)
+            changed_fixture = changed_subject / "fixtures/tracer/tracer.gb"
+            require(changed_fixture.is_file(), "fixture-byte negative-control input is missing")
+            changed_fixture.write_bytes(changed_fixture.read_bytes() + b"\ncontrolled mutation\n")
+            check_repository(changed_subject, baseline_object_root, "REJECT record-field-missing:")
+
         print("dense-input status=pass ordered_events=67 same_timestamp=true")
         print("dense-input baseline=pass fields=" + ",".join(comparisons))
         print("dense-input documentation-contract=pass stale-limit-control=pass")
         print("dense-input failure-diagnostic=pass capped_bytes=" + str(len(stall_bytes)))
         print("dense-input no-refill-mutant=failed-as-expected reason=predicate-not-reached")
+        print("dense-input immutable-baseline=separate-object-store full-identity=verified")
+        print("dense-input baseline-controls=missing-object,wrong-object,changed-fixture-rejected")
     return 0
 
 

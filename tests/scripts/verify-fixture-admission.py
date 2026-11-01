@@ -808,15 +808,18 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
     return {"fixture": fixture_dir, "pin": pin, "files": len(files)}
 
 
-def check_repository(root: Path, baseline: str) -> dict:
-    baseline = check_commit(root, baseline, "baseline-object-unavailable")
-    baseline_files = tree_files(root, baseline, "fixtures")
+def check_repository(root: Path, baseline: str, baseline_root: Path | None = None) -> dict:
+    # The subject supplies current bytes and policy; only immutable baseline objects may
+    # come from a separate trusted object store used by source-only mutant harnesses.
+    evidence_root = root if baseline_root is None else baseline_root.resolve(strict=True)
+    baseline = check_commit(evidence_root, baseline, "baseline-object-unavailable")
+    baseline_files = tree_files(evidence_root, baseline, "fixtures")
     current_files = current_fixture_files(root)
     loose_paths = {path for path in baseline_files | current_files
                    if path.startswith("fixtures/") and len(PurePosixPath(path).parts) < 3}
     for path in sorted(loose_paths):
         if (path in baseline_files and path in current_files
-                and read_regular(root, path) == blob(root, baseline, path)):
+                and read_regular(root, path) == blob(evidence_root, baseline, path)):
             continue
         raise Reject("fixture-admission-required", f"changed fixture path {path} has no fixture-directory manifest")
     all_ids = {path.split("/", 2)[1] for path in baseline_files | current_files if path.startswith("fixtures/")}
@@ -828,7 +831,7 @@ def check_repository(root: Path, baseline: str) -> dict:
         identical = old == new
         if identical:
             for path in sorted(old):
-                if read_regular(root, path) != blob(root, baseline, path):
+                if read_regular(root, path) != blob(evidence_root, baseline, path):
                     identical = False
                     break
         if identical:
@@ -839,7 +842,7 @@ def check_repository(root: Path, baseline: str) -> dict:
         changed += 1
         check_manifest(root, manifest_path)
 
-    baseline_license = blob(root, baseline, "LICENSE")
+    baseline_license = blob(evidence_root, baseline, "LICENSE")
     if read_regular(root, "LICENSE") != baseline_license:
         raise Reject("root-license-mismatch", "LICENSE differs from the immutable project baseline")
     if not baseline_files:
@@ -2328,6 +2331,8 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument("--check-repository", action="store_true")
     modes.add_argument("--check-product-tree", type=Path)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument("--baseline-object-root", type=Path,
+                        help="optional trusted local Git object store for immutable baseline reads")
     parser.add_argument("--layout", choices=("core", "player"))
     parser.add_argument("--write-inventory", type=Path)
     parser.add_argument("--inventory", type=Path)
@@ -2365,7 +2370,7 @@ def main(argv: list[str] | None = None) -> int:
             baseline = policy.get("baseline_commit")
             if not isinstance(baseline, str) or baseline != BASELINE_COMMIT:
                 raise Reject("policy-invalid", "baseline_commit must be the reviewed full commit id")
-            result = check_repository(root, baseline)
+            result = check_repository(root, baseline, args.baseline_object_root)
             print(f"PASS: fixture admission repository legacy_files={result['legacy_files']} "
                   f"admitted_changes={result['admitted_changes']} baseline={result['baseline']}")
         return 0
