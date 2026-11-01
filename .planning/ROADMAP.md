@@ -5,7 +5,7 @@
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1, shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
 - ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1, shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
 - ✅ **v0.3 Save States & Host Contract** — Phases 16–19, 35 plans, shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
-- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 is planned but execution has not started.
+- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 implementation and local verification are complete, with exact-head hosted macOS qualification pending.
 
 ## v0.4 — Evidence Floor
 
@@ -17,7 +17,7 @@ The two substantive tracks are CGB game acceptance with scene regressions, and d
 
 Numbering continues after completed Phase 19. Decimal phases are reserved for explicitly approved insertions.
 
-- [ ] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary.
+- [ ] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans are complete; final hosted macOS qualification remains.
 - [ ] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome.
 - [ ] **Phase 22: Composition and Microtest Evidence** — Admitted acid2 derivatives and gbmicrotest expose their exact model and oracle limits.
 - [ ] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established.
@@ -37,23 +37,23 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 
 Plans:
 **Wave 1**
-- [ ] 20-01-PLAN.md — Versioned admission records, independent identity pins and shared exact product policy.
+- [x] 20-01-PLAN.md — Versioned admission records, independent identity pins and shared exact product policy.
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 20-02-PLAN.md — Actual core install/archive/release boundary; metadata bounds delivered, reopened at Task 5 for archive-wide extension-header count plus long-path compatibility.
-- [ ] 20-03-PLAN.md — Actual macOS player package and notice boundary with mutation controls.
+- [x] 20-02-PLAN.md — Actual core install/archive/release boundary; metadata and archive-wide extension-header bounds delivered with long-path compatibility.
+- [x] 20-03-PLAN.md — Actual macOS player package and notice boundary with mutation controls; hosted final qualification remains an orchestration gate.
 
 **Wave 3** *(single in-scope security gap closure)*
-- [ ] 20-04-PLAN.md — Bound fixture filesystem traversal and Git tree enumeration.
+- [x] 20-04-PLAN.md — Bound fixture filesystem traversal and Git tree enumeration.
 
 **Wave 4** *(authorized rescope; original plans remain intact)*
-- [ ] 20-05-PLAN.md — Independently pin product policy and exports/budgets; reopened at Task 3 to reject forbidden digests at every regular path, including generated/one_of core/player entries.
-- [ ] 20-07-PLAN.md — Match repository-admission commands exactly and repair complete isolated workflow mutation subjects.
-- [ ] 20-08-PLAN.md — Align shared notice-contract consumers and their negative controls with the reviewed source/product distinction.
+- [x] 20-05-PLAN.md — Independently pin product policy and exports/budgets; reject forbidden digests at every regular path, including generated/one_of core/player entries.
+- [x] 20-07-PLAN.md — Match repository-admission commands exactly and repair complete isolated workflow mutation subjects.
+- [x] 20-08-PLAN.md — Align shared notice-contract consumers and their negative controls with the reviewed source/product distinction.
 
 **Wave 5** *(after the indicated Wave 4 dependencies)*
-- [ ] 20-06-PLAN.md — Validate downloaded macOS and Windows product bytes with trusted checker/policy; metadata/cleanup follow-up complete, reopened at Task 4 for drive/ADS rejection and directory/file containment before creation.
-- [ ] 20-09-PLAN.md — Restore dense-input source-only mutant configure with separate immutable baseline evidence and unqualified-build controls.
+- [x] 20-06-PLAN.md — Validate downloaded macOS and Windows product bytes with trusted checker/policy; metadata, cleanup and pre-creation path containment controls complete.
+- [x] 20-09-PLAN.md — Restore dense-input source-only mutant configure with separate immutable baseline evidence and unqualified-build controls.
 
 Use existing checks to assess CI headroom, current documentation, and carry-over dispositions while establishing this boundary. Preserve the accepted v0.3 audit debts and standalone closeout-helper failure unless a documented trigger actually applies. The admission contract remains mandatory when later phases add fixtures; RIGHTS-01 has this single owner phase.
 
@@ -122,7 +122,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Fixture Admission Tune-up | 0/3 | Planned | - |
+| 20. Fixture Admission Tune-up | 9/9 | Awaiting exact-head hosted macOS qualification | - |
 | 21. CGB Game Progress and Scene Regressions | 0/TBD | Not started | - |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |

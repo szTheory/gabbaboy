@@ -365,6 +365,141 @@ ASVS is a web-application verification standard; use its validation and file-han
 **Research date:** 2026-10-31  
 **Valid until:** 2026-11-30 for repository structure; revisit sooner if package paths, install flows, or rights scope change.
 
+## Rescope Research (2026-11-01)
+
+This addendum supports the owner-authorized Phase 20 rescope after plans 20-01 through 20-04, both review-fix rounds, final review, and final verification. It supplements the original research and locked decisions; it does not reopen fixture/admission scope. **RIGHTS-01 remains pending**: no fixture was admitted, and no legal conclusion is made. Do not add, select, or admit a candidate as part of this rescope. [VERIFIED: 20-01-SUMMARY.md:80-89; 20-04-SUMMARY.md:80-85; 20-REVIEW.md:16-20; 20-VERIFICATION.md:137-146]
+
+### Rescope targets and implementation guidance
+
+| Gap | Evidence and required planning direction |
+|---|---|
+| Final macOS/Windows package qualification | The final review finds tagged build code runs before same-job package verification and can replace checker files staged from the workflow revision; those checks also read policy from the tagged checkout. The isolated publisher currently performs trusted actual-byte verification for Linux only. Plan final authorization at the isolated `publish-qualified-release` boundary: download named macOS and Windows candidate archive artifacts as data; use the trusted checkout's checker and independently sourced policy; safely extract and verify exact product paths, bytes, and notices before draft validation/publication. Keep producer-job checks as early feedback. Add mutation controls proving a tagged workspace cannot replace checker or policy and that extra/changed fixture bytes in either downloaded archive fail. Existing release flow already downloads artifacts in the publisher and verifies Linux from `trusted/`; extend that boundary, not a new publisher. [VERIFIED: 20-REVIEW.md:29-35; .github/workflows/release.yml:1391-1512,1470-1474] |
+| Independently pinned product policy | The product checker validates policy shape/baseline but currently accepts `cmake/FixtureAdmissionPolicy.json` as its own authority; inventory hashing that file does not independently authorize it. Bind the complete policy bytes to an identity held outside the candidate policy (for example a pinned digest in the trusted checker or a policy read from the trusted immutable checkout). Add a negative control that inserts a forbidden baseline fixture and product destination into a mutated candidate policy and requires rejection. Ensure final publisher checks select the trusted policy source as well as the trusted checker. [VERIFIED: 20-REVIEW.md:37-43; tests/scripts/verify-fixture-admission.py:847-875,922-983,1042-1074] |
+| Repository-admission workflow command validation | `fixture-repro.yml` and the macOS player CI command are checked through `_fixture_call`; the review found the matcher accepts command prefixes/assignment supersets. Require exact command words and exact shell assignments, with exactly one `--repo-root .`. Add negative mutations for a prefixed `PATH=/tmp/attacker` assignment and duplicate trailing `--repo-root /tmp/attacker`, targeting both admission call sites. Existing exact product-command controls are precedent but do not cover these repository checks. [VERIFIED: 20-REVIEW.md:45-51; .github/workflows/fixture-repro.yml:23; .github/scripts/verify-workflow-policy.py:852-877,1760-1818; tests/scripts/verify-fixture-admission.py:2278-2285] |
+
+### Full-suite failures: phase-caused versus sandbox-only
+
+The captured full run is 1,711 tests with 20 failures, so the suite remains red. Five failures that required temporary Git worktrees passed on targeted rerun with `.git/worktrees` write access; classify these as sandbox-only evidence and do not create product fixes for them. `acceptance_dense_input_controls` still failed with Git metadata access because the source-only mutant checkout cannot resolve its pinned baseline object; it is a genuine remaining test-harness failure, not a sandbox-only failure. Results and reruns are recorded in the validation artifact. [VERIFIED: 20-VALIDATION.md:92-101]
+
+| Group | Affected failures | Rescope treatment |
+|---|---|---|
+| Notice text contract | `v02_adoption_docs`, `v02_adoption_docs_controls`, `v02_support_ledger_controls`, `release_disclosure_generator`, `release_disclosure_controls`, `support_claims_controls` | Genuine phase-caused contract drift: update the notice/product-package distinction contract and its mutation fixtures together, preserving the rule that binary products do not contain source-only `THIRD_PARTY_NOTICES.md`. Keep positive and negative controls and ensure generated disclosure/adoption checks agree. [VERIFIED: 20-VALIDATION.md:96; tests/scripts/verify-v02-adoption.py:316,364] |
+| Installed debug CMake export inventory | `installed_runner_smoke` | Genuine product inventory regression: the installed tree has an unlisted `lib/cmake/GabbaBoy/GabbaBoyTargets-debug.cmake`. Reconcile the installed-package checker with actual configuration-specific CMake export outputs (or prevent the unplanned export), and test a clean install plus an unexpected-file negative. [VERIFIED: 20-VALIDATION.md:96; 20-VERIFICATION.md:92-107] |
+| Repo-less configure / workflow mutation setup | `workflow_policy_group_ci`, `workflow_policy_group_release_support`, `workflow_policy_group_rehearsal`, `workflow_policy_group_ledger`, `workflow_policy_group_helpers` | Genuine mutation-harness regression: isolated temporary subjects do not contain `tests/scripts/verify-release-candidate.sh`, although grouped controls read that wrapper. Make each synthetic subject self-contained by copying/seeding the wrapper and needed inputs, or adjust the checker seam so tests provide them explicitly. Do not weaken the production workflow guard. The `workflow_policy_group_ci` failure specifically blocked Phase 20's repository-admission workflow control. [VERIFIED: 20-VALIDATION.md:96-102; 20-VERIFICATION.md:83-90] |
+| Dense-input mutant configure | `acceptance_dense_input_controls` | Genuine unresolved harness failure: its source-only mutant checkout cannot resolve the pinned baseline object even when Git metadata writes are available. Make the temporary repository carry the required immutable baseline object/reference or inject a complete fixture Git repository; preserve the baseline-missing negative control. Do not classify this as a sandbox denial. [VERIFIED: 20-VALIDATION.md:96-101] |
+| Temporary mutation roots | Overlaps the workflow-policy failures above | Ensure mutation roots contain every source file the relevant checker reads, are isolated/disposable, and have the Git history/object graph the scenario requires. A source-only file copy is insufficient where the checker reads a pinned commit. Assert the intended semantic rejection so setup failures cannot masquerade as checker success. [VERIFIED: 20-VALIDATION.md:96-102; 20-REVIEW-FIX.md:36-42] |
+| Timeout budget rows | `test_budget` | Genuine budget-inventory mismatch: the core/player product self-tests each have CTest timeout 120 seconds, but the allowlist lacks rows. Add explicit rows with valid Phase 20 references and shrink triggers, or reduce measured test duration and registered timeout with evidence; do not remove the inventory checker or raise global ceilings. The contract requires a row for each over-base test and rejects stale/expired rows. [VERIFIED: 20-VALIDATION.md:96; tests/CMakeLists.txt:1447-1452; tests/scripts/verify-test-budget.py:1-19,54-75] |
+| Planning cap | `plan_cap` | Current ROADMAP Phase 22 and 23 headings lack cap lines. Repair active planning metadata as part of the authorized rescope. Contract: every active `### Phase N:` under `## Phase Details` has exactly one `**Plan cap**: N`; every phase plan file counts (decimal/suffixed plans count against parent unless separately headed/capped); maximum four active phases, twelve plans per phase, forty combined, and one reserved gap-closure slot. The checker reads the configure-time full commit, not the live worktree; controls cover missing/duplicate caps, over-cap plans, and vacuous roadmaps. [VERIFIED: tests/scripts/verify-planning-hygiene.py:7-17,74,217-274,375-446; tests/cmake/hygiene.cmake:9-24,73-75; 20-VALIDATION.md:96] |
+| Temporary Git worktree permissions | `v02_performance_controls`, `v02_delivery_controls`, `perf_advisory_pipeline`, `perf_advisory_controls`, `release_review_approval` | Sandbox-only for this captured environment: all five passed when rerun with Git metadata write access. Preserve their original failures in historical full-run evidence; do not alter their code based on this run. [VERIFIED: 20-VALIDATION.md:97] |
+
+### Rescope boundaries
+
+- Keep work within Phase 20. Trusted final package checks and repaired test contracts are required before closure; rerun full CTest at final head after fixing causes, plus focused negative controls for changed boundaries. Do not begin Phase 21. [VERIFIED: 20-VERIFICATION.md:144-147; .planning/STATE.md:31-35]
+- Do not interpret hashes, notices, or test success as legal permission. `RIGHTS-01` remains pending until its source-grounded rights review is satisfied; this addendum makes no legal claim. [VERIFIED: 20-CONTEXT.md:19-22; 20-VERIFICATION.md:137-141]
+
+## Fresh Rescope Addendum: Trusted Product TAR Metadata (2026-11-01)
+
+This focused addendum records the newly reproduced final-review blocker. It supplements the existing rescope research; it does not alter fixture scope, rights policy, or prior research. [VERIFIED: `20-FINAL-CODE-REVIEW.md`:42-54; `20-RESEARCH.md`:368-398]
+
+### Reproduction and source finding
+
+The final review reports CR-01: `_extract_product_archive()` opens the downloaded product tarball with `tarfile.open(..., mode="r:gz")`; PAX/GNU extension metadata is parsed while iterating, before member-count and regular-file-size accounting. Its expanded-byte total counts regular-file payloads, so that total does not bound hidden extension-header bytes. The task handoff records the original reproduction as a 70,000-byte PAX `comment` in a 245-byte compressed archive. [CITED: task handoff] I independently reproduced the same acceptance through the current production extractor: a PAX member carrying a 70,000-byte `comment` occupied 234 compressed bytes and `_extract_product_archive()` returned successfully with one extracted member. [VERIFIED: `.github/scripts/verify-workflow-policy.py`:64-123; `20-FINAL-CODE-REVIEW.md`:42-46; current-code reproduction with Python `tarfile`]
+
+The review headings are `### CR-01 [BLOCKER]: Tar metadata bypasses the decompressed archive limits` and `### WR-01 [WARNING]: Missing trusted checker leaves a stale extraction tree`. The current parser opening is exactly `with tarfile.open(archive, mode="r:gz") as bundle:`. [VERIFIED: `20-FINAL-CODE-REVIEW.md`:42-54; `.github/scripts/verify-workflow-policy.py`:79]
+
+The paired WR-01 path is also confirmed: `check_product_archive()` calls extraction before checking whether the trusted fixture checker exists; the missing-checker rejection is outside its cleanup `try/finally`. Thus this failure can leave the destination behind and make a retry with the same path fail. The exact checker path and rejection are `checker = repo_root / "tests/scripts/verify-fixture-admission.py"` and `raise Reject("product-archive-trusted-checker", "trusted fixture checker is unavailable")`. [VERIFIED: `.github/scripts/verify-workflow-policy.py`:126-146; `20-FINAL-CODE-REVIEW.md`:50-54; exact path and error code quoted]
+
+The product verifier's current limits are:
+
+```python
+MAX_PRODUCT_ARCHIVE_BYTES = 1_073_741_824
+MAX_PRODUCT_ARCHIVE_MEMBERS = 16_384
+MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES = 1_073_741_824
+MAX_PRODUCT_ARCHIVE_FILE_BYTES = 536_870_912
+```
+
+These are the exact values currently read in the trusted product checker. [VERIFIED: `.github/scripts/verify-workflow-policy.py`:46-49; exact values quoted]
+
+### Reusable bounded-stream pattern
+
+Reuse the bounded parsing primitives already present in `.github/scripts/safe_extract_package.py`: a decompressed `BoundedReader` that rejects unbounded reads and exposes at most a fixed-size request plus one byte past the remaining budget; a `TarInfo` subclass that counts extension headers and bytes before calling the superclass parser; and a `gzip.GzipFile` stream passed to `tarfile.open(..., mode="r|")`. Its extension check increments both counters, enforces count, per-header, and aggregate ceilings, and only then calls `super()._proc_member(archive)`. The guarded extension types are exactly `tarfile.GNUTYPE_LONGNAME`, `tarfile.GNUTYPE_LONGLINK`, `tarfile.GNUTYPE_SPARSE`, `tarfile.XHDTYPE`, `tarfile.XGLTYPE`, and `tarfile.SOLARIS_XHDTYPE`. This checks PAX/GNU metadata before `tarfile` consumes its payload and also limits decompressed tar headers, padding, member bytes, and end blocks. [VERIFIED: `.github/scripts/safe_extract_package.py`:30-92; exact extension values and check order quoted]
+
+The existing guard is implemented as:
+
+```python
+if stats["headers"] > MAX_EXTENSION_HEADERS:
+    raise ValueError(f"archive exceeds {MAX_EXTENSION_HEADERS} extended-header limit")
+if self.size < 0 or self.size > MAX_EXTENSION_BYTES:
+    raise ValueError(f"extended tar header exceeds {MAX_EXTENSION_BYTES}-byte limit")
+if stats["bytes"] > MAX_TOTAL_EXTENSION_BYTES:
+    raise ValueError(
+        f"archive exceeds {MAX_TOTAL_EXTENSION_BYTES} aggregate extended-header limit"
+    )
+return super()._proc_member(archive)
+```
+
+This verbatim control order is why the helper can reject the oversized PAX header before `tarfile` parses its payload. [VERIFIED: `.github/scripts/safe_extract_package.py`:64-77; ordering quoted]
+
+The helper's documented preview ceilings are:
+
+```python
+MAX_COMPRESSED_BYTES = 64 * 1024 * 1024
+MAX_MEMBERS = 4096
+MAX_PATH_COMPONENTS = 64
+MAX_EXPANDED_BYTES = 512 * 1024 * 1024
+MAX_ARCHIVE_STREAM_BYTES = 576 * 1024 * 1024
+MAX_EXTENSION_HEADERS = 8192
+MAX_EXTENSION_BYTES = 64 * 1024
+MAX_TOTAL_EXTENSION_BYTES = 8 * 1024 * 1024
+MAX_TAR_READ_BYTES = 64 * 1024
+COPY_CHUNK_BYTES = 1024 * 1024
+```
+
+Those exact limits belong to the preview extractor; its own comment is `# Preview archives are currently only a few MiB. These documented ceilings leave substantial headroom while bounding parsing, disk use, and copy work.` Reuse the reader and pre-parse extension guard, but parameterize the stream, per-header, aggregate-metadata, and extension-count budgets for product archives. Keep the product checker’s existing path, member, per-file, and regular-expanded-payload policy. In particular, give the decompressed stream finite headroom above allowed regular payload bytes for tar headers/padding and metadata; do not transplant the preview stream ceiling unchanged beside the product's 1 GiB expanded-payload limit. Load any shared helper only from the trusted checker’s own script directory when running under `python3 -I`; never resolve it from the extracted subject tree. Normalize bounded-reader/header failures to a stable `Reject` reason and ensure every extraction failure removes the destination. [VERIFIED: `.github/scripts/safe_extract_package.py`:15-27,82-92; `.github/scripts/verify-workflow-policy.py`:46-49,64-123,126-146; exact limits and comment quoted]
+
+Keep extraction policy separate from the shared tar-stream boundary: the preview helper requires the exact first path component `installed-prefix` and has smaller member and payload ceilings. The publisher needs its existing product layout and limits. A small shared reader/TarInfo guard is the narrow reuse point, with caller-specific limits and extraction validation left in each caller. [VERIFIED: `.github/scripts/safe_extract_package.py`:15-27,95-143; `.github/scripts/verify-workflow-policy.py`:46-123; exact path component quoted]
+
+The preview path requirement is implemented by the exact check `if parts[0].endswith(":") or parts[0] != "installed-prefix":`. [VERIFIED: `.github/scripts/safe_extract_package.py`:107-108; exact path value quoted]
+
+### Required production-path controls
+
+Extend `_product_archive_controls()` so every malformed archive reaches `check_product_archive()` or `_extract_product_archive()` and fails for its intended resource-bound reason; a setup exception or unrelated parse failure is not a passing negative. Retain its installed-product positive archive control. [VERIFIED: `.github/scripts/verify-workflow-policy.py`:165-230]
+
+| Control | Synthetic input | Required assertion |
+|---|---|---|
+| Per-header | A PAX `comment` larger than the configured per-header ceiling; keep the compressed fixture tiny (the 70,000-byte reproducer compressed to 234 bytes). | Production path rejects at the extension-header limit before the PAX payload is parsed. |
+| Aggregate metadata | Several individually permitted extension headers whose combined declared bytes exceed the aggregate ceiling while remaining below the count ceiling. | Production path reports the aggregate metadata limit, not the per-header or count limit. |
+| Extension count | Many small extension records that stay under per-header and aggregate-byte ceilings but exceed the count ceiling, while the ordinary member cap remains unexceeded. | Production path reports the extension-count limit before parsing the over-limit payload. |
+| Decompressed stream | A highly compressible synthetic tar whose decompressed bytes exceed a self-test-scoped stream ceiling while the compressed archive remains under its existing byte ceiling and regular payload accounting stays below its own limit. | The bounded reader rejects during production archive parsing at the decompressed-stream ceiling. |
+| Missing trusted checker | Pass a valid archive and a temporary trusted-root path without `tests/scripts/verify-fixture-admission.py`, using a destination that does not exist. | `check_product_archive()` raises `product-archive-trusted-checker` and leaves the destination absent; retry with the real trusted root and same destination succeeds. |
+
+The missing-checker case should validate checker availability before extraction and keep extraction plus subprocess execution inside one cleanup boundary, so both preflight failure and failures after extraction are clean. The product archive self-test already exercises valid, changed, extra-fixture, hostile-checker, and path/type cases against the production gate; add these cases there instead of creating a second archive harness. [VERIFIED: `.github/scripts/verify-workflow-policy.py`:126-146,165-260]
+
+### Planning and validation boundary
+
+The concrete owner is the existing 20-06 plan: it already changes `.github/scripts/verify-workflow-policy.py`, reads the safe archive helpers, adds synthetic archive controls through the trusted publisher, and gates the release product boundary. Extend 20-06's task actions and affected-file list to include the shared bounded-stream helper/refactor and its coverage accounting; preserve the phase's requirement to use trusted code and keep subject/archive content as data. If new policy-checker functions or globals are added, update the static inventory that admits them. No fixture or rights-policy change belongs in this fix. [VERIFIED: `20-06-PLAN.md`:5-20,48-71; `tests/scripts/verify-workflow-policy-coverage.py`:20-55]
+
+Run the configured/built release-job control and the policy coverage controls after implementation:
+
+```bash
+cmake --preset phase1
+cmake --build --preset phase1
+ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_group_release_jobs$'
+ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_(coverage|coverage_controls)$'
+```
+
+The first CTest reaches `_product_archive_controls()` through the existing `release_jobs` self-test; the coverage checks should be retained if the shared helper changes the verifier's static function/global inventory. At final phase head, keep the already required single full-suite run; a focused archive pass does not establish Phase 20 closure. [VERIFIED: `tests/cmake/ci-lanes.cmake`:120-145; `.github/scripts/verify-workflow-policy.py`:6153-6158; `AGENTS.md`:32-38]
+
+The existing CTest source names the relevant release control `workflow_policy_group_release_jobs` and invokes `--self-test --group release_jobs`; it separately names `workflow_policy_coverage` and `workflow_policy_coverage_controls`. The existing plan's exact configure/build and release-control commands are `cmake --preset phase1`, `cmake --build --preset phase1`, and `ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_group_release_jobs$'`. [VERIFIED: `tests/cmake/ci-lanes.cmake`:120-145; `20-06-PLAN.md`:71-82; commands/test names quoted]
+
+### Project Constraints (from AGENTS.md)
+
+- Every deliverable needs an automated check with a negative control. New checkers belong in `tests/scripts/`, read immutable evidence where applicable, and are wired into CTest. [VERIFIED: `AGENTS.md`:32,37]
+- Keep the milestone to at most four phases and about forty plans, with no more than twelve plans per phase; a 50% overrun triggers a rescope. At most two review-fix rounds and one gap round are allowed; unresolved correctness/security findings require a rescope. The source directives are `At most 4 phases and about 40 plans per milestone, and at most 12 plans per phase. A 50% overrun triggers a rescope.` and `At most 2 review-fix rounds and 1 gap round per phase. An unresolved correctness or security finding forces a rescope, never a seed.` [VERIFIED: `AGENTS.md`:33-37; exact directives quoted]
+- Preserve the phase boundary: do not auto-advance to Phase 21, and do not claim Phase 20 completion until final evidence and requirement traceability are inspected. The source directive is `**Stop after each phase. Never auto-advance into another phase or milestone.**` [VERIFIED: `AGENTS.md`:29-30,43; exact directive quoted]
+
+The current roadmap quotes `**Plan cap**: 9` and `**Plans**: 9 total: three original plans, the consumed single security gap round (20-04), and five owner-authorized ordinary rescope plans (20-05–20-09). No additional gap round is authorized.` Phase 21, 22, and 23 caps are exactly `**Plan cap**: 12`, `**Plan cap**: 10`, and `**Plan cap**: 9`; the active caps total 40. Extending 20-06 keeps Phase 20 at its current nine-plan cap. If this work is made a separate plan instead, revise and validate the cap allocation first; a tenth Phase 20 plan cannot be added under the existing cap without milestone-cap reconciliation. [VERIFIED: `.planning/ROADMAP.md`:35-36,71-72,85-86,99-100; each quoted cap value verbatim]
+
 ## Final-Review Rescope Addendum: Windows Archive Target Containment
 
 The post-rescope review confirms the metadata and missing-checker fixes, but reports a Windows target escape in `_archive_member_path` and `_extract_product_archive`. The current guard uses `PurePosixPath`; it accepts colon-bearing components. In the second bounded pass, directory targets are created without containment validation, and regular-file parents are created before their containment/symlink check. [VERIFIED: `20-POST-RESCOPE-CODE-REVIEW.md` CR-01; `.github/scripts/verify-workflow-policy.py`:74-85,142-163, reviewed at implementation head `d34317ca`]
@@ -376,6 +511,70 @@ Task 4 of the existing Plan 20-06 owns the remedy: reject colon syntax in every 
 Extend the existing production archive controls with directory/file drive-qualified and drive-relative names, nested drive components, and filename/intermediate-component ADS names. Require `product-archive-path` before member writes. Independently exercise both directory and regular-parent containment branches using normal relative archive names and a narrowly injected out-of-root target at the join boundary, without replacing the real extractor or containment check. Use temporary sibling sentinels and instrument filesystem creation to record/prevent an outside write attempt; assert zero such attempts, unchanged sentinels and destination cleanup. Retain nested-path and installed-product positives. Refresh the reviewed immutable source pin, precise AST inventory, independent per-control registry removal checks and CTest completion markers after implementation. [VERIFIED: existing `_product_archive_controls`, source/registry verification in `tests/scripts/verify-workflow-policy-coverage.py`, and registration in `tests/cmake/ci-lanes.cmake`:120-145; planning recommendation]
 
 The exact targeted implementation checks remain `ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_group_release_jobs$'`, `ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_(coverage|coverage_controls)$'`, and `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(plan_cap|planning_hygiene_controls|summary_coverage_live)$'`, after configure/build at the committed implementation/coverage head. This second owner-authorized security rescope adds Task 4 in place, preserves all six completed-task commits, and reopens the summary until those checks pass. Phase 20 stays at nine plans and active caps remain 9/12/10/9 (40 total); fixture admission, rights/legal claims, policy changes, live publication, unrelated cleanup and Phase 21 work remain excluded. [VERIFIED: existing CTest registrations, `20-06-SUMMARY.md`, ROADMAP caps; owner-authorized task boundary]
+
+## Fresh Security-Audit Rescope Addendum: T-20-07 and T-20-08
+
+The latest security-audit handoff reports two blockers not yet written to `20-FINAL-SECURITY`: T-20-07 for unbounded PAX metadata in `inspect_tar`, and T-20-08 for a known forbidden fixture digest accepted at an allowed generated product path. [CITED: task handoff] The checked-in `20-SECURITY.md` is stale for these findings: its T-20-07 and T-20-08 rows both say `closed`, and its summary says `None. `threats_open: 0` applies only to the authored plan threat registers.` Treat the latest audit verdict as the current security disposition, then refresh the final security evidence after the fixes. [VERIFIED: `20-SECURITY.md`:44-54; status values and summary quoted]
+
+### T-20-07 — Bound source and core archive parsing
+
+`verify-v02-source-archive.py` explicitly handles both GitHub source archives and installed core product archives and says it inspects archive bytes without extraction, using only the Python standard library. Its `Limits` currently define `MAX_ENTRIES = 100000`, `MAX_TOTAL_BYTES = 1 << 30`, `MAX_MEMBER_BYTES = 64 << 20`, and `MAX_PATH_BYTES = 4096`. [VERIFIED: `tests/scripts/verify-v02-source-archive.py`:1-23,45-53; exact values quoted]
+
+The source/member accounting counts visible members and their declared payload sizes: directories are registered with size zero, regular members contribute `member.size`, and `account()` updates `inspection.total` from that value. It does not count PAX extension bytes. `inspect_tar()` opens `with tarfile.open(path, "r:gz") as bundle:` and iterates members before reading the global source identity from `bundle.pax_headers.get("comment")`. `inspect_archive()` only compares the compressed file size to `limits.total` before dispatching to the TAR parser. [VERIFIED: `tests/scripts/verify-v02-source-archive.py`:139-145,204-227,264-274; parser call and identity read quoted]
+
+I reproduced the auditor's reported case through the production `inspect_tar()` function: a global PAX `comment` of 70,000 repeated bytes in a 246-byte gzip TAR was accepted with one visible file and `inspection.total == 1`. The `build_receipt()` source path and `check_product()` core-package path both call `inspect_archive()`, so the same parser boundary serves source receipts and core product archive checks. [VERIFIED: current-code reproduction, 2026-11-01; `tests/scripts/verify-v02-source-archive.py`:408-413,486-508]
+
+The global `comment` is required source identity: the current self-test builder writes `pax_headers = {"comment": commit}`, and `inspect_tar()` reads that value after iteration. Preserve valid commit comments while rejecting oversized metadata before the TAR library consumes it. Reuse the bounded decompressed-reader and pre-parse PAX/GNU guard pattern already documented above from `safe_extract_package.py`, with limits appropriate to this archive contract; do not copy its preview-only stream/member ceilings unchanged. Bound each extension header, aggregate extension bytes, extension-header count, and the complete decompressed TAR stream separately from visible payload totals. Convert bounds failures to a specific `Reject` instead of allowing a raw `ValueError` or a later source-identity/fixture error to stand in for the resource check. [VERIFIED: `tests/scripts/verify-v02-source-archive.py`:207-227,514-519; `.github/scripts/safe_extract_package.py`:30-92; exact PAX identity behavior quoted]
+
+Add these controls to the existing source-archive self-test and exercise its production CLI paths:
+
+| Control | Synthetic input | Required assertion |
+|---|---|---|
+| Per-header | A valid source-layout archive with a global commit comment and a PAX field larger than the per-header cap. Also retain the minimal one-visible-byte, 70,000-byte PAX reproducer as a direct `inspect_tar()` control. | The archive parser rejects at the metadata bound before member accounting or receipt creation; the valid commit comment positive case still passes. |
+| Aggregate metadata | Several extension records, each below the per-header cap, whose combined declared bytes exceed the aggregate cap while count stays below its cap. | The production parser identifies aggregate metadata overflow rather than per-header/count overflow. |
+| Extension count | Many small extension records below the per-header and aggregate-byte caps, with visible entries below `MAX_ENTRIES`. | The production parser rejects at the extension-count bound. |
+| Decompressed stream | A highly compressible TAR exceeding a self-test-scoped decompressed-stream cap while compressed size and visible member payload totals stay within their separate limits. | The bounded reader rejects while `inspect_tar()` is parsing, not after visible-member accounting. |
+| Core product path | A valid synthetic core product archive with one over-limit PAX header. | `check_product()` reaches the same bounded parser and rejects for the metadata limit before product-policy evaluation. |
+
+Use the existing `v02_source_archive_controls` CTest; it invokes `verify-v02-source-archive.py --self-test`. That self-test already has source-archive CLI positive/negative helpers and product-archive CLI cases, so no new dependency or CTest target is needed. [VERIFIED: `tests/CMakeLists.txt`:1551-1553; `tests/scripts/verify-v02-source-archive.py`:818-842,948-980,1095-1105]
+
+### T-20-08 — Check forbidden digests before allowed-path handling
+
+`_product_source_expectations()` builds the `forbidden` digest set from immutable-baseline and current fixture files outside the allowed source set. `_validate_product_entries()` expands its allowed paths with both expected files and `generated[layout]["one_of"]` alternatives. It currently checks `record["sha256"] in forbidden` only inside `if path not in allowed_files`; for a required generated file under an allowed path, the later generated-file check only rejects a zero-byte record. A forbidden digest at that path therefore avoids the leak check. The one-of alternatives are also allowed but are not in `expected`, so they likewise bypass both the fixture-digest check and protected-file identity comparison. [VERIFIED: `tests/scripts/verify-fixture-admission.py`:974-995,1054-1083]
+
+The current branch is:
+
+```python
+if path not in allowed_files:
+    if record["sha256"] in forbidden:
+        raise Reject("product-fixture-leak", path)
+    raise Reject("product-path-unknown", path)
+```
+
+For expected generated files, the current check is:
+
+```python
+elif record["size_bytes"] == 0:
+    raise Reject("product-generated-file-empty", path)
+```
+
+Both excerpts are verbatim. The narrow fix is to compare every actual non-directory file digest against `forbidden` before testing whether its path is allowed; then retain existing expected size/digest checks, generated-file non-empty checks, exact path rules, and unknown-path rejection. This changes no policy entries, allowed fixture source set, fixture bytes, or rights decision. [VERIFIED: `tests/scripts/verify-fixture-admission.py`:1067-1083; exact existing rejection codes quoted]
+
+Extend `self_test_packages()` for both core and player layouts. Reuse its existing pinned `source_contract` and `forbidden_product_bytes`: assert the selected fixture digest is in the forbidden set, then replace a non-empty required generated path with those exact bytes in a temporary product tree. Convert that tree with `product_tree_entries()` and require `_validate_product_entries()` to reject it specifically as a product fixture leak. Add the equivalent control for an allowed `one_of` generated path by preserving exactly one alternative in its group. This must fail even though the path is allowlisted, the digest and size are internally consistent, and the bytes are non-empty; retain the clean product positive in each layout. Existing `rejected_tree()` already makes isolated tree mutations and asserts a specific rejection through `_validate_product_entries()`, so extend it rather than creating another harness. [VERIFIED: `tests/scripts/verify-fixture-admission.py`:1327-1367,1381-1391,1411-1420,1452-1465]
+
+Run the existing source archive control and the core/player product-control CTests after implementation:
+
+```bash
+ctest --preset phase1 --output-on-failure --no-tests=error -R '^v02_source_archive_controls$'
+ctest --preset phase1 --output-on-failure --no-tests=error -R '^(fixture_product_core_controls|fixture_product_player_controls)$'
+ctest --preset phase1 --output-on-failure --no-tests=error -R '^(fixture_product_(core|player)_controls|installed_runner_smoke|preview_package_smoke)$'
+```
+
+The first CTest is registered for the source archive self-test; the product CTests run `verify-fixture-admission.py --self-test-packages --layout core` and `--layout player`. The third command is the existing 20-05 integration gate over product controls, install, and preview-package smoke. [VERIFIED: `tests/CMakeLists.txt`:1441-1452,1551-1553; `20-05-PLAN.md`:67-72; exact CTest names and commands quoted]
+
+### Existing-plan and cap boundary
+
+Keep T-20-07 as a focused follow-up to existing plan 20-02, which owns source/core archive checks and the `v02_source_archive_controls` path. Keep T-20-08 as a separate focused follow-up to existing plan 20-05, which owns the shared product policy/checker and core/player product controls. These are two changes to existing plan scopes, not two new plan files. Preserve the current Phase 20 plan count/cap of 9 and the active phase caps `9/12/10/9` (40 total); do not widen fixture admission, rights/legal policy, or dependencies. [VERIFIED: `20-02-PLAN.md`:34-50,89-92; `20-05-PLAN.md`:65-72; `.planning/ROADMAP.md`:35-36,71-72,85-86,99-100; cap values quoted]
 
 ## Final Product Review Addendum: Archive-Wide Extension Header Count
 

@@ -123,6 +123,10 @@ Eight Plan 20-06 task commits are listed above. Interleaved Plan 20-09 commits a
 - `cmake --preset phase1` and `cmake --build --preset phase1 -j2` passed at the final implementation/coverage head.
 - The release workflow grouped controls passed in CTest, including macOS and Windows archive positives, exact hidden-metadata limits, missing-checker retry, and partial-extraction cleanup.
 - Both workflow coverage CTests passed; the independent coverage-control CTest reports 86 passing negative controls, including source mutation and removal of each resource, cleanup and path registry row.
+
+## Final lifecycle replay integration follow-up
+
+Commit `7163002d` extended the existing release-lifecycle replay to carry the trusted downloaded-byte product gate through its successful publication path and reject each required macOS-core, macOS-player, and Windows-core archive when omitted or altered. It also pins the evolving adoption checker separately from the historical v0.3 source. The final `bash tests/scripts/verify-release-candidate.sh --self-test` passed at source head `7293eb47a6c799b6455dd854533aca932f4529ad`, including receipt identity, digest tampering, draft/proof, fixture-leak, source-archive, and substitution negatives. This phase-orchestration follow-up does not change rights policy or publish a release.
 - Drive-qualified, drive-relative, nested mixed-case drive, ADS filename/component, directory escape injection and regular-parent escape injection controls all reject with `product-archive-path`; spies observed zero outside writes and sentinels stayed unchanged.
 - `python3 -I .github/scripts/safe_extract_package.py --self-test`, `plan_cap`, `planning_hygiene_controls`, and `summary_coverage_live` passed.
 

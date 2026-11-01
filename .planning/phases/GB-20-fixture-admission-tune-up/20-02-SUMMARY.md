@@ -155,7 +155,7 @@ The required plan commit ledger measured 8 commits from `plan_head_before` throu
 - **Commit:** `6e8a9997` — added an archive-wide 32,768 extension-header cap while preserving the 128-header consecutive-chain cap.
 - **RED:** The interleaved three-member PAX archive was accepted when the new total cap was scoped to two.
 - **GREEN:** The third PAX header rejects as `archive-extension-total-count-limit`; instrumentation confirms only the first two extension payload parsers run. The existing 129-header chain negative still rejects independently.
-- **Compatibility positive:** 256 unique long-path members pass `inspect_tar` twice independently and pass the source receipt CLI under default bounds with global commit identity intact.
+- **Compatibility positive:** 256 unique long-path members pass the source receipt CLI under default bounds with global commit identity intact. The follow-up reset-isolation control also passes `inspect_tar` twice under a total-header cap exactly equal to the archive's observed count.
 - **Verification:** Configure/build passed; `v02_source_archive_controls`, `verify-release-candidate.sh --self-test`, and planning/hygiene checks passed at the committed implementation head.
 
 ## Task 4 Follow-up
@@ -225,4 +225,10 @@ Tasks 1–5 and their focused checks are complete. Phase orchestration still own
 
 - Implementation commit `6e8a9997` is the recorded plan task head.
 - Configure/build and all three required verification commands passed at that head.
-- Archive-wide interleaved-count and 256-long-path source controls passed; earlier chain, metadata-byte, stream, source identity, and trusted-checker controls remain passing.
+- Archive-wide interleaved-count and exact-cap counter-reset controls passed; the 256-long-path source receipt remains valid under default bounds. Earlier chain, metadata-byte, stream, source identity, and trusted-checker controls remain passing.
+
+## Final counter-lifetime follow-up
+
+- **Commit:** `7293eb47` — scopes both repeated parser inspections to the exact observed extension-header count and asserts the count before parsing.
+- **Regression proof:** each independent inspection passes; a shared counter would fail on the second call. The source-archive CTest passed in the final 1,711-test run at this source head.
+- This follow-up changes test evidence only; no fixture bytes or rights policy changed.

@@ -4,17 +4,17 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 20
 current_phase_name: Fixture Admission Tune-up
-status: planning
-stopped_at: Phase 20 planning and independent plan verification complete
-last_updated: "2026-10-31T23:16:35.306Z"
-last_activity: 2026-10-31
-last_activity_desc: Phase 20 plans passed independent review; next action is owner-selected Phase 20 execution
-state_head: 8162e28029591a5c06da311d1488a56a5472cd47
+status: executing
+stopped_at: Phase 20 local verification complete — awaiting exact-head hosted macOS qualification
+last_updated: "2026-11-01T14:12:14Z"
+last_activity: 2026-11-01
+last_activity_desc: Phase 20 rescope, reviews, security audit, full local suite, and release replay passed; hosted PR gate is pending
+state_head: 3cdfb1dbebeb60c5969de5fbeb93401968dc067c
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 3
-  completed_plans: 0
+  total_plans: 9
+  completed_plans: 9
   percent: 0
 ---
 
@@ -25,22 +25,22 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 20 — Fixture Admission Tune-up is planned and ready for execution; no implementation has started.
+**Current focus:** Phase 20 — Fixture Admission Tune-up
 
 ## Current Position
 
-Phase: 20 (Fixture Admission Tune-up) — READY TO EXECUTE
-Plan: 3 plans prepared (20-01 through 20-03)
-Status: Ready to execute
-Last activity: 2026-10-31 — Phase 20 plans passed independent review
+Phase: 20 (Fixture Admission Tune-up) — EXECUTING, hosted exact-head qualification pending
+Plans: 20-01 through 20-09 have summaries; all nine plans are complete under the approved cap.
+Status: Local configure/build, all 1,711 CTests, release-candidate replay, final code reviews, and the 29-entry security audit pass. The hosted `macos-player-package` check must still pass on the final pushed revision before Phase 20 closes. `RIGHTS-01` remains pending because no fixture was admitted.
+Last activity: 2026-11-01 — final local Phase 20 verification passed; preparing the hosted exact-head check.
 
-Completed stage: **Phase 20 planning and independent plan verification**. Three plans cover RIGHTS-01 across two waves. No builds, tests, candidate admission, or implementation work has started. Previous completed implementation phase remains **19 — Qualified v0.3.0 Release**.
+Completed stage: **Phase 20 implementation, rescope, final reviews, security audit, and local verification**. All nine plans have summaries; configure/build, 1,711/1,711 CTests, and the release-candidate replay pass at implementation head `7293eb47a6c799b6455dd854533aca932f4529ad`. The phase remains open only for exact-head hosted macOS package qualification. `RIGHTS-01` remains pending because no fixture was admitted. Previous completed implementation phase remains **19 — Qualified v0.3.0 Release**.
 
-Next workflow stage: **Phase 20 execution — Fixture Admission Tune-up**. Exact next command: **/gsd-execute-phase 20**. Both workflow.auto_advance and workflow._auto_chain_active remain false. The owner acts next; stop before execution until the owner chooses that command. Phase 21 — CGB Game Progress and Scene Regressions remains downstream of Phase 20 and must not start automatically.
+Next workflow stage: **Exact-head hosted Phase 20 qualification**. The agent will push the reviewed Phase 20 candidate, open/refresh its PR, and verify the required macOS package check on the resulting head. No user action is needed while those checks run. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. Stop at Phase 20; do not begin Phase 21 — CGB Game Progress and Scene Regressions before hosted qualification passes.
 
 ## Performance Metrics
 
-No v0.4 plans have executed and no new performance measurements are claimed. Preserve the existing deterministic cost budget and state-continuation evidence; final qualification runs once at the final implementation head.
+All nine Phase 20 plans have executed. Configure/build, full CTest (1,711/1,711), and release-candidate replay pass. No new performance measurements are claimed. Preserve the existing deterministic cost budget and state-continuation evidence.
 
 ## Accumulated Context
 
@@ -65,10 +65,10 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-10-31T23:16:35.286Z
-**Stopped at:** Phase 20 planning and independent plan verification complete
+**Last session:** 2026-11-01T14:12:14Z
+**Stopped at:** Phase 20 local verification complete — awaiting hosted exact-head macOS check
 **Resume file:** .planning/phases/GB-20-fixture-admission-tune-up/continue.md
 
 ## Operator Next Steps
 
-The owner acts next only when ready to execute **20 — Fixture Admission Tune-up**, using **/gsd-execute-phase 20**. Reuse the existing research, validation, patterns, and debt dispositions; do not restart Phase 19, automatically execute Phase 20, or begin Phase 21.
+No user action is needed now. The agent will complete the exact-head hosted PR check, then update the phase boundary records. If all required checks pass, the next phase is **21 — CGB Game Progress and Scene Regressions**, with exact next command **/gsd-discuss-phase 21**. Do not restart Phase 19 or automatically advance to Phase 21.

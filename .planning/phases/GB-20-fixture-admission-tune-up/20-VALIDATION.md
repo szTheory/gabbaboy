@@ -11,6 +11,8 @@ created: "2026-10-31"
 
 > Feedback contract for the fixture admission and distribution boundary. All fixture/package decisions use exact bytes and pinned identities; hashes establish identity, not redistribution permission.
 
+The original per-task map below records the first implementation waves. Its partial statuses are historical; the final rescope run at the end of this document is the current validation record for all nine plans.
+
 ---
 
 ## Test Infrastructure
@@ -77,7 +79,7 @@ There is no manual UAT for Phase 20. A future candidate's rights scope still req
 
 ---
 
-## Validation Sign-Off
+## Initial Validation Sign-Off (historical; superseded by the final rescope run)
 
 - [x] Every plan task has an automated verify command or an explicit Wave 0 dependency.
 - [x] Each package boundary has a clean positive control and meaningful mutation controls.
@@ -102,6 +104,22 @@ There is no manual UAT for Phase 20. A future candidate's rights scope still req
 
 The supplied spec-less edge remains explicitly unresolved/unclassified (RIGHTS-01; verification null) in Plan 20-01 must_haves. The two precision-filtered prohibition assumptions remain descriptor-less flagged-unverified. They do not invent manual UAT or legal clearance; see `20-SOURCE-AUDIT.md`.
 
-## Validation Audit — Current HEAD
+## Initial Validation Audit (historical; superseded by the final rescope run)
 
 **Result:** PARTIAL / noncompliant. The focused Phase 20 behavioral controls pass, but the full suite fails and the outstanding security review and hosted macOS package qualification gates remain unresolved. No manual UAT is required.
+
+## Final Rescope Validation Run — 2026-11-01
+
+The earlier audit above records the first execution head and is retained as history. The authorized rescope and final test follow-ups have since closed its findings.
+
+| Check | Final result | Evidence |
+|---|---|---|
+| Configure and build | PASS | `cmake --preset phase1` and `cmake --build --preset phase1` passed at source head `7293eb47a6c799b6455dd854533aca932f4529ad`. |
+| Full local CTest | PASS | 1,711/1,711 passed at the same source head; the captured last test log ends with `End testing` and no failed tests. |
+| Release-candidate replay | PASS | `bash tests/scripts/verify-release-candidate.sh --self-test` passed at the same source head, including archive/product positives and receipt, fixture-leak, source-archive, and substitution negatives. |
+| Security audit | PASS | `20-SECURITY.md` records 29/29 authored threat entries closed across all nine plan registers; `threats_open: 0`. |
+| Code reviews | PASS | Trusted publisher and Windows-path findings were fixed; the final archive/path review is clean; WR-01's exact-cap counter-reset proof is closed at `7293eb47`. |
+| Plan/summary coverage and plan cap | PASS locally | The full CTest includes `plan_cap`, planning hygiene, live-summary coverage, workflow-policy coverage, and negative controls. The phase has 9 plans under its cap of 9. |
+| Exact-head hosted macOS player package | PENDING | The `macos-player-package` pull-request job must pass on the final pushed revision. Local Cocoa UI tests cannot substitute for this hosted lane. |
+
+No fixture was admitted. `RIGHTS-01` remains pending because no candidate was admitted and automated identity/notice checks do not determine legal grant scope. No manual UAT is required; `20-UAT.md` is generated and checked by the shared closure helper from the plan-summary deliverables.
