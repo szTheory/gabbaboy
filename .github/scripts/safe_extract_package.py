@@ -30,9 +30,10 @@ COPY_CHUNK_BYTES = 1024 * 1024
 class BoundedReader:
     """Limit bytes exposed from a decompressor to the tar parser."""
 
-    def __init__(self, source, limit=MAX_ARCHIVE_STREAM_BYTES):
+    def __init__(self, source, limit=MAX_ARCHIVE_STREAM_BYTES, max_request=MAX_TAR_READ_BYTES):
         self.source = source
         self.limit = limit
+        self.max_request = max_request
         self.bytes_read = 0
 
     def read(self, size=-1):
@@ -41,15 +42,23 @@ class BoundedReader:
         if size == 0:
             return b""
         remaining = self.limit - self.bytes_read
-        request_size = min(size, MAX_TAR_READ_BYTES, remaining + 1)
+        request_size = min(size, self.max_request, remaining + 1)
         data = self.source.read(request_size)
         if len(data) > remaining:
-            raise ValueError(f"tar stream exceeds {self.limit}-byte decompressed-archive limit")
+            raise ArchiveLimitError("stream", f"tar stream exceeds {self.limit}-byte decompressed-archive limit")
         self.bytes_read += len(data)
         return data
 
 
-def bounded_tarinfo_class():
+class ArchiveLimitError(ValueError):
+    def __init__(self, reason, detail):
+        super().__init__(detail)
+        self.reason = reason
+
+
+def bounded_tarinfo_class(*, extension_headers=MAX_EXTENSION_HEADERS,
+                          extension_bytes=MAX_EXTENSION_BYTES,
+                          total_extension_bytes=MAX_TOTAL_EXTENSION_BYTES):
     """Reject excessive hidden PAX/GNU metadata before tarfile reads it."""
     stats = {"headers": 0, "bytes": 0}
     extension_types = (
@@ -64,30 +73,34 @@ def bounded_tarinfo_class():
     class BoundedTarInfo(tarfile.TarInfo):
         def _proc_member(self, archive):
             if self.type in extension_types:
+                if self.size < 0 or self.size > extension_bytes:
+                    raise ArchiveLimitError("extension-header", f"extended tar header exceeds {extension_bytes}-byte limit")
+                if stats["headers"] + 1 > extension_headers:
+                    raise ArchiveLimitError("extension-count", f"archive exceeds {extension_headers} extended-header limit")
+                if stats["bytes"] + self.size > total_extension_bytes:
+                    raise ArchiveLimitError("extension-total", f"archive exceeds {total_extension_bytes} aggregate extended-header limit")
                 stats["headers"] += 1
                 stats["bytes"] += self.size
-                if stats["headers"] > MAX_EXTENSION_HEADERS:
-                    raise ValueError(f"archive exceeds {MAX_EXTENSION_HEADERS} extended-header limit")
-                if self.size < 0 or self.size > MAX_EXTENSION_BYTES:
-                    raise ValueError(f"extended tar header exceeds {MAX_EXTENSION_BYTES}-byte limit")
-                if stats["bytes"] > MAX_TOTAL_EXTENSION_BYTES:
-                    raise ValueError(
-                        f"archive exceeds {MAX_TOTAL_EXTENSION_BYTES} aggregate extended-header limit"
-                    )
             return super()._proc_member(archive)
 
     return BoundedTarInfo
 
 
 @contextmanager
-def open_bounded_tar(archive_path):
+def open_bounded_tar(archive_path, *, stream_limit=MAX_ARCHIVE_STREAM_BYTES,
+                     extension_headers=MAX_EXTENSION_HEADERS,
+                     extension_bytes=MAX_EXTENSION_BYTES,
+                     total_extension_bytes=MAX_TOTAL_EXTENSION_BYTES,
+                     max_request=MAX_TAR_READ_BYTES):
     with Path(archive_path).open("rb") as compressed_file:
         with gzip.GzipFile(fileobj=compressed_file, mode="rb") as decompressed_file:
-            bounded_file = BoundedReader(decompressed_file)
+            bounded_file = BoundedReader(decompressed_file, limit=stream_limit, max_request=max_request)
             with tarfile.open(
                 fileobj=bounded_file,
                 mode="r|",
-                tarinfo=bounded_tarinfo_class(),
+                tarinfo=bounded_tarinfo_class(extension_headers=extension_headers,
+                                              extension_bytes=extension_bytes,
+                                              total_extension_bytes=total_extension_bytes),
             ) as archive:
                 yield archive, bounded_file
 
@@ -306,12 +319,29 @@ def self_test():
     expect_rejection("aggregate-size limit", over_total)
 
     source = io.BytesIO(b"decompressed bytes beyond cap")
-    bounded = BoundedReader(source, limit=16)
+    requests = []
+
+    class RequestTracker:
+        def read(self, size):
+            requests.append(size)
+            return source.read(size)
+
+    bounded = BoundedReader(RequestTracker(), limit=16, max_request=8)
     try:
-        bounded.read(1024)
+        bounded.read()
+    except ValueError:
+        if source.tell() != 0:
+            raise AssertionError("bounded reader consumed input for an unbounded read")
+    else:
+        raise AssertionError("bounded reader accepted an unbounded read")
+    try:
+        while True:
+            bounded.read(1024)
     except ValueError:
         if source.tell() != 17:
             raise AssertionError(f"bounded reader consumed {source.tell()} bytes, expected at most 17")
+        if max(requests) > 8:
+            raise AssertionError(f"bounded reader requested {max(requests)} bytes, expected at most 8")
     else:
         raise AssertionError("decompressed-stream limit accepted excess bytes")
     print(

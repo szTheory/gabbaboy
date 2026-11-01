@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+from contextlib import contextmanager
 import hashlib
+import importlib.util
 import io
 import json
 import math
@@ -47,6 +49,26 @@ MAX_PRODUCT_ARCHIVE_BYTES = 1_073_741_824
 MAX_PRODUCT_ARCHIVE_MEMBERS = 16_384
 MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES = 1_073_741_824
 MAX_PRODUCT_ARCHIVE_FILE_BYTES = 536_870_912
+MAX_PRODUCT_ARCHIVE_STREAM_BYTES = 1_207_959_552
+MAX_PRODUCT_ARCHIVE_EXTENSION_BYTES = 65_536
+MAX_PRODUCT_ARCHIVE_TOTAL_EXTENSION_BYTES = 4_194_304
+MAX_PRODUCT_ARCHIVE_EXTENSION_HEADERS = 128
+MAX_PRODUCT_ARCHIVE_READ_BYTES = 65_536
+
+
+def _load_trusted_archive_helper():
+    helper_path = Path(__file__).resolve().with_name("safe_extract_package.py")
+    if not helper_path.is_file() or helper_path.is_symlink():
+        raise RuntimeError("trusted bounded archive helper is unavailable")
+    spec = importlib.util.spec_from_file_location("gbb_safe_extract_package", helper_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("trusted bounded archive helper could not be loaded")
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
+
+
+_SAFE_ARCHIVE = _load_trusted_archive_helper()
 
 
 def _archive_member_path(name: str) -> str:
@@ -70,13 +92,20 @@ def _extract_product_archive(archive: Path, destination: Path) -> int:
         raise Reject("product-archive-unavailable", error.strerror or "stat failed") from None
     if destination.exists() or destination.is_symlink():
         raise Reject("product-archive-destination", "destination must not exist before extraction")
-    destination.mkdir(parents=True)
+    records: list[tuple[bytes, str, int, int]] = []
     names: set[str] = set()
     folded: set[str] = set()
-    records: list[tuple[tarfile.TarInfo, str]] = []
     total = 0
     try:
-        with tarfile.open(archive, mode="r:gz") as bundle:
+        limits = {
+            "stream_limit": MAX_PRODUCT_ARCHIVE_STREAM_BYTES,
+            "extension_headers": MAX_PRODUCT_ARCHIVE_EXTENSION_HEADERS,
+            "extension_bytes": MAX_PRODUCT_ARCHIVE_EXTENSION_BYTES,
+            "total_extension_bytes": MAX_PRODUCT_ARCHIVE_TOTAL_EXTENSION_BYTES,
+            "max_request": MAX_PRODUCT_ARCHIVE_READ_BYTES,
+        }
+        # Pass one validates the complete stream and records only bounded metadata.
+        with _SAFE_ARCHIVE.open_bounded_tar(archive, **limits) as (bundle, bounded_file):
             for member in bundle:
                 if len(records) >= MAX_PRODUCT_ARCHIVE_MEMBERS:
                     raise Reject("product-archive-members", "archive has too many members")
@@ -87,7 +116,7 @@ def _extract_product_archive(archive: Path, destination: Path) -> int:
                 names.add(relative)
                 folded.add(folded_name)
                 if member.isdir():
-                    records.append((member, relative))
+                    records.append((member.type, relative, member.size, member.mode))
                     continue
                 if not member.isreg():
                     raise Reject("product-archive-special", relative)
@@ -96,14 +125,35 @@ def _extract_product_archive(archive: Path, destination: Path) -> int:
                 total += member.size
                 if total > MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES:
                     raise Reject("product-archive-expanded-size", "archive expands beyond its total byte limit")
-                records.append((member, relative))
-            for member, relative in records:
+                records.append((member.type, relative, member.size, member.mode))
+            _drain_product_tar_stream(bounded_file)
+
+        paths = {relative: (kind, size, mode) for kind, relative, size, mode in records}
+        for _kind, relative, _size, _mode in records:
+            parts = PurePosixPath(relative).parts
+            for index in range(1, len(parts)):
+                parent = PurePosixPath(*parts[:index]).as_posix()
+                existing = paths.get(parent)
+                if existing is not None and existing[0] != tarfile.DIRTYPE:
+                    raise Reject("product-archive-path", relative)
+
+        # Pass two revalidates the same inventory before materializing each entry.
+        destination.mkdir(parents=True)
+        with _SAFE_ARCHIVE.open_bounded_tar(archive, **limits) as (bundle, bounded_file):
+            seen_count = 0
+            for member in bundle:
+                if seen_count >= len(records):
+                    raise Reject("product-archive-drift", "archive gained entries after validation")
+                kind, relative, size, mode = records[seen_count]
+                seen_count += 1
+                if (_archive_member_path(member.name) != relative or
+                        (member.type, member.size, member.mode) != (kind, size, mode)):
+                    raise Reject("product-archive-drift", relative)
                 target = destination.joinpath(*relative.split("/"))
                 if member.isdir():
                     target.mkdir(parents=True, exist_ok=True)
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
-                # A prior regular member may not become a parent directory.
                 cursor = target.parent
                 while cursor != destination:
                     if cursor.is_symlink() or destination not in cursor.parents:
@@ -112,26 +162,58 @@ def _extract_product_archive(archive: Path, destination: Path) -> int:
                 stream = bundle.extractfile(member)
                 if stream is None:
                     raise Reject("product-archive-member-read", relative)
+                copied = 0
                 with stream, target.open("xb") as output:
-                    shutil.copyfileobj(stream, output, length=64 * 1024)
+                    while True:
+                        chunk = stream.read(min(MAX_PRODUCT_ARCHIVE_READ_BYTES, size - copied + 1))
+                        if not chunk:
+                            break
+                        copied += len(chunk)
+                        if copied > size:
+                            raise Reject("product-archive-file-size", relative)
+                        output.write(chunk)
+                if copied != size:
+                    raise Reject("product-archive-file-size", relative)
+            if seen_count != len(records):
+                raise Reject("product-archive-drift", "archive lost entries after validation")
+            _drain_product_tar_stream(bounded_file)
     except Reject:
         shutil.rmtree(destination, ignore_errors=True)
         raise
+    except getattr(_SAFE_ARCHIVE, "ArchiveLimitError") as error:
+        shutil.rmtree(destination, ignore_errors=True)
+        reason = {
+            "stream": "product-archive-stream-limit",
+            "extension-header": "product-archive-extension-header-limit",
+            "extension-total": "product-archive-extension-total-limit",
+            "extension-count": "product-archive-extension-count-limit",
+        }.get(error.reason, "product-archive-invalid")
+        raise Reject(reason, str(error)[:240]) from None
     except (OSError, tarfile.TarError, EOFError) as error:
         shutil.rmtree(destination, ignore_errors=True)
         raise Reject("product-archive-invalid", str(error)[:240]) from None
+    except ValueError as error:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise Reject("product-archive-invalid", str(error)[:240]) from None
     return len(records)
+
+
+def _drain_product_tar_stream(bounded_file) -> None:
+    while bounded_file.read(MAX_PRODUCT_ARCHIVE_READ_BYTES):
+        pass
 
 
 def check_product_archive(archive: Path, expected_name: str, layout: str,
                           repo_root: Path, destination: Path) -> None:
     if archive.name != expected_name or layout not in ("core", "player"):
         raise Reject("product-archive-identity", "archive name or product layout is not authorized")
-    _extract_product_archive(archive, destination)
     checker = repo_root / "tests/scripts/verify-fixture-admission.py"
     if not checker.is_file():
         raise Reject("product-archive-trusted-checker", "trusted fixture checker is unavailable")
+    created = False
     try:
+        _extract_product_archive(archive, destination)
+        created = True
         result = subprocess.run(
             [sys.executable, "-I", str(checker), "--check-product-tree", str(destination),
              "--layout", layout, "--repo-root", str(repo_root)],
@@ -143,7 +225,8 @@ def check_product_archive(archive: Path, expected_name: str, layout: str,
     except subprocess.TimeoutExpired:
         raise Reject("product-archive-policy-timeout", "trusted product checker exceeded its time limit") from None
     finally:
-        shutil.rmtree(destination, ignore_errors=True)
+        if created:
+            shutil.rmtree(destination, ignore_errors=True)
 
 
 def _write_control_archive(path: Path, members: list[tuple[str, bytes, str]]) -> None:
@@ -174,6 +257,30 @@ def _product_archive_controls(root: Path) -> None:
         raise SystemExit(f"product-archive control setup failed: CMake install: {error}") from None
     with tempfile.TemporaryDirectory(prefix="gbb-product-archive-controls.") as directory:
         scratch = Path(directory)
+
+        def pax_archive(path: Path, count: int, comment_size: int, payload_size: int = 0) -> None:
+            with tarfile.open(path, mode="w:gz", format=tarfile.PAX_FORMAT) as bundle:
+                root_info = tarfile.TarInfo("installed-prefix/")
+                root_info.type = tarfile.DIRTYPE
+                bundle.addfile(root_info)
+                for index in range(count):
+                    info = tarfile.TarInfo(f"installed-prefix/file-{index:03d}.bin")
+                    info.size = payload_size
+                    info.pax_headers = {"comment": "x" * comment_size}
+                    bundle.addfile(info, io.BytesIO(b"x" * payload_size))
+
+        def expected_resource_rejection(label: str, archive: Path, destination: Path,
+                                        expected: str) -> None:
+            try:
+                _extract_product_archive(archive, destination)
+            except Reject as error:
+                if error.code != expected:
+                    raise SystemExit(f"{label} rejected for wrong reason: {error}") from None
+            else:
+                raise SystemExit(f"{label} was accepted")
+            if destination.exists():
+                raise SystemExit(f"{label} left an extraction destination")
+            _mark_policy_control("helper", "product-archive-resource", label)
         prefix = root / "build/workflow-policy-archive-controls/prefix"
 
         def archive_tree(source: Path, destination: Path, additions: dict[str, bytes] | None = None) -> None:
@@ -189,6 +296,89 @@ def _product_archive_controls(root: Path) -> None:
         archive_tree(prefix, valid_windows)
         check_product_archive(valid_windows, valid_windows.name, "core", root, scratch / "valid-windows-extracted")
         _mark_policy_control("mutation", "downloaded product archive controls", "fixture-product-trust")
+
+        missing_checker_root = scratch / "trusted-root-without-checker"
+        missing_checker_root.mkdir()
+        retry_destination = scratch / "missing-checker-retry"
+        try:
+            check_product_archive(valid, valid.name, "core", missing_checker_root, retry_destination)
+        except Reject as error:
+            if error.code != "product-archive-trusted-checker" or retry_destination.exists():
+                raise SystemExit(f"missing trusted checker cleanup failed: {error}") from None
+        else:
+            raise SystemExit("missing trusted checker was accepted")
+        _mark_policy_control("helper", "product-archive-cleanup", "missing checker leaves destination absent")
+        check_product_archive(valid, valid.name, "core", root, retry_destination)
+        if retry_destination.exists():
+            raise SystemExit("successful same-destination retry did not clean its extraction tree")
+        _mark_policy_control("helper", "product-archive-cleanup", "trusted checker retry succeeds")
+
+        allowed_pax = scratch / "allowed-pax.tar.gz"
+        pax_archive(allowed_pax, 1, 32, 8)
+        allowed_destination = scratch / "allowed-pax-extracted"
+        if _extract_product_archive(allowed_pax, allowed_destination) != 2:
+            raise SystemExit("small permitted PAX metadata did not preserve its two members")
+        shutil.rmtree(allowed_destination)
+        _mark_policy_control("helper", "product-archive-resource", "small extension accepted")
+
+        large_pax = scratch / "large-pax-comment.tar.gz"
+        pax_archive(large_pax, 1, 70_000, 1)
+        expected_resource_rejection("70,000-byte PAX comment", large_pax,
+                                    scratch / "large-pax-extracted", "product-archive-extension-header-limit")
+
+        aggregate_pax = scratch / "aggregate-pax.tar.gz"
+        pax_archive(aggregate_pax, 3, 60_000, 1)
+        with patch(__name__ + ".MAX_PRODUCT_ARCHIVE_TOTAL_EXTENSION_BYTES", 128 * 1024):
+            expected_resource_rejection("aggregate PAX metadata", aggregate_pax,
+                                        scratch / "aggregate-pax-extracted", "product-archive-extension-total-limit")
+
+        count_pax = scratch / "count-pax.tar.gz"
+        pax_archive(count_pax, 3, 8, 1)
+        with patch(__name__ + ".MAX_PRODUCT_ARCHIVE_EXTENSION_HEADERS", 2):
+            expected_resource_rejection("PAX extension count", count_pax,
+                                        scratch / "count-pax-extracted", "product-archive-extension-count-limit")
+
+        stream_archive = scratch / "stream-cap.tar.gz"
+        pax_archive(stream_archive, 1, 0, 16 * 1024)
+        if stream_archive.stat().st_size >= 16 * 1024:
+            raise SystemExit("stream-cap control is not a small compressed archive")
+        with patch(__name__ + ".MAX_PRODUCT_ARCHIVE_STREAM_BYTES", 4096):
+            expected_resource_rejection("decompressed tar stream", stream_archive,
+                                        scratch / "stream-cap-extracted", "product-archive-stream-limit")
+
+        late_archive = scratch / "late-stream-cap.tar.gz"
+        _write_control_archive(late_archive, [
+            ("installed-prefix/", b"", "directory"),
+            ("installed-prefix/first.bin", b"first", "file"),
+            ("installed-prefix/later.bin", b"z" * 32_768, "file"),
+        ])
+        late_destination = scratch / "late-stream-cap-extracted"
+        original_open = _SAFE_ARCHIVE.open_bounded_tar
+        open_count = 0
+
+        @contextmanager
+        def fail_second_stream(*args, **kwargs):
+            nonlocal open_count
+            open_count += 1
+            if open_count == 2:
+                kwargs["stream_limit"] = 10_240
+            with original_open(*args, **kwargs) as opened:
+                try:
+                    yield opened
+                except _SAFE_ARCHIVE.ArchiveLimitError as error:
+                    if not (late_destination / "installed-prefix/first.bin").is_file():
+                        raise SystemExit("late stream rejection occurred before one file was extracted") from error
+                    raise
+
+        with patch.object(_SAFE_ARCHIVE, "open_bounded_tar", fail_second_stream):
+            try:
+                check_product_archive(late_archive, late_archive.name, "core", root, late_destination)
+            except Reject as error:
+                if error.code != "product-archive-stream-limit" or late_destination.exists():
+                    raise SystemExit(f"late stream cleanup failed: {error}") from None
+            else:
+                raise SystemExit("late stream rejection control was accepted")
+        _mark_policy_control("helper", "product-archive-cleanup", "late resource rejection removes partial extraction")
 
         altered_prefix = scratch / "altered-prefix"
         shutil.copytree(prefix, altered_prefix)
