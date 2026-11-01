@@ -1271,8 +1271,10 @@ set_tests_properties(
 find_program(GBB_SAMESUITE_REPRO_BASH bash REQUIRED)
 add_test(NAME samesuite_repro_selfcheck
   COMMAND "${GBB_SAMESUITE_REPRO_BASH}" "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-samesuite.sh" --self-test)
+# This self-check launches many short subprocesses; keep parallel test load from consuming its timeout.
 set_tests_properties(samesuite_repro_selfcheck PROPERTIES
   TIMEOUT 30
+  RUN_SERIAL TRUE
   ENVIRONMENT "GBB_SAMESUITE_BASH=${GBB_SAMESUITE_REPRO_BASH}")
 
 # rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
