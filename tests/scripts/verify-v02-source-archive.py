@@ -52,6 +52,7 @@ MAX_TAR_STREAM_BYTES = MAX_TOTAL_BYTES + (128 << 20)
 MAX_TAR_EXTENSION_BYTES = 64 << 10
 MAX_TAR_TOTAL_EXTENSION_BYTES = 4 << 20
 MAX_TAR_EXTENSION_HEADERS = 128
+MAX_TAR_TOTAL_EXTENSION_HEADERS = 32_768
 MAX_TAR_READ_BYTES = 64 << 10
 KEEP_LIMIT = 4 << 20
 CHUNK = 1 << 20
@@ -102,10 +103,11 @@ class BoundedTarReader:
 
 
 def bounded_tarinfo_class(extension_headers=MAX_TAR_EXTENSION_HEADERS,
+                          total_extension_headers=MAX_TAR_TOTAL_EXTENSION_HEADERS,
                           extension_bytes=MAX_TAR_EXTENSION_BYTES,
                           total_extension_bytes=MAX_TAR_TOTAL_EXTENSION_BYTES):
     """Check PAX and GNU extension declarations before tarfile consumes their payloads."""
-    stats = {"headers": 0, "bytes": 0}
+    stats = {"chain_headers": 0, "total_headers": 0, "bytes": 0}
     extension_types = {
         tarfile.GNUTYPE_LONGNAME,
         tarfile.GNUTYPE_LONGLINK,
@@ -121,18 +123,22 @@ def bounded_tarinfo_class(extension_headers=MAX_TAR_EXTENSION_HEADERS,
                 if self.size < 0 or self.size > extension_bytes:
                     raise ArchiveLimitError("extension-header",
                                             f"extended TAR header exceeds {extension_bytes}-byte limit")
-                if stats["headers"] + 1 > extension_headers:
+                if stats["chain_headers"] + 1 > extension_headers:
                     raise ArchiveLimitError("extension-count",
                                             f"TAR exceeds {extension_headers} extended-header limit")
+                if stats["total_headers"] + 1 > total_extension_headers:
+                    raise ArchiveLimitError("extension-total-count",
+                                            f"TAR exceeds {total_extension_headers} archive-wide extended-header limit")
                 if stats["bytes"] + self.size > total_extension_bytes:
                     raise ArchiveLimitError("extension-total",
                                             f"TAR exceeds {total_extension_bytes} aggregate extension-byte limit")
-                stats["headers"] += 1
+                stats["chain_headers"] += 1
+                stats["total_headers"] += 1
                 stats["bytes"] += self.size
             else:
                 # A source member may legitimately need one PAX path header (for long
-                # names); cap a hidden run of chained metadata headers per member.
-                stats["headers"] = 0
+                # names); cap a hidden run per member, while keeping a separate archive total.
+                stats["chain_headers"] = 0
             return super()._proc_member(archive)
 
     return BoundedTarInfo
@@ -279,6 +285,7 @@ def inspect_tar(path, limits, want_git, unwrapped=False):
                 with tarfile.open(
                         fileobj=bounded, mode="r|",
                         tarinfo=bounded_tarinfo_class(extension_headers=MAX_TAR_EXTENSION_HEADERS,
+                                                      total_extension_headers=MAX_TAR_TOTAL_EXTENSION_HEADERS,
                                                       extension_bytes=MAX_TAR_EXTENSION_BYTES,
                                                       total_extension_bytes=MAX_TAR_TOTAL_EXTENSION_BYTES)) as bundle:
                     for member in bundle:
@@ -305,6 +312,7 @@ def inspect_tar(path, limits, want_git, unwrapped=False):
             "extension-header": "archive-extension-header-limit",
             "extension-total": "archive-extension-total-limit",
             "extension-count": "archive-extension-count-limit",
+            "extension-total-count": "archive-extension-total-count-limit",
             "stream": "archive-stream-limit",
         }[error.reason]
         raise Reject(code, str(error)) from None
@@ -1022,6 +1030,46 @@ def self_test():
             raise SystemExit("self-test: generated and git archives of one tree disagree")
         expect_pass("generated-without-repo", write("plain.tar.gz", tar_bytes(base, sha)))
 
+        long_path_members = dict(base)
+        long_path_names = []
+        for index in range(256):
+            name = f"src/long-paths/{index:03d}-" + ("x" * 105) + ".txt"
+            long_path_names.append(name)
+            long_path_members[name] = f"long path member {index}\n".encode("ascii")
+        long_path_archive = write("many-long-paths.tar.gz", tar_bytes(long_path_members, sha))
+        extension_types = {
+            tarfile.GNUTYPE_LONGNAME, tarfile.GNUTYPE_LONGLINK, tarfile.GNUTYPE_SPARSE,
+            tarfile.XHDTYPE, tarfile.XGLTYPE, tarfile.SOLARIS_XHDTYPE,
+        }
+        base_proc_member = tarfile.TarInfo._proc_member
+        extension_payload_calls = []
+
+        def count_long_path_extensions(info, archive):
+            if info.type in extension_types:
+                extension_payload_calls.append(info.type)
+            return base_proc_member(info, archive)
+
+        tarfile.TarInfo._proc_member = count_long_path_extensions
+        try:
+            first_inspection = inspect_tar(long_path_archive, Limits(), want_git=False)
+            if sum(entry.path in long_path_names for entry in first_inspection.entries) != 256:
+                raise SystemExit("self-test 256-long-path positive did not retain all members")
+            if len(extension_payload_calls) <= 128:
+                raise SystemExit("self-test 256-long-path positive did not exercise more than 128 extension headers")
+            if first_inspection.commit != sha:
+                raise SystemExit("self-test 256-long-path positive lost global source identity metadata")
+            extension_payload_calls.clear()
+            second_inspection = inspect_tar(long_path_archive, Limits(), want_git=False)
+            if sum(entry.path in long_path_names for entry in second_inspection.entries) != 256:
+                raise SystemExit("self-test repeated 256-long-path inspection lost members")
+            if len(extension_payload_calls) <= 128:
+                raise SystemExit("self-test repeated 256-long-path inspection did not reset archive counters")
+        finally:
+            tarfile.TarInfo._proc_member = base_proc_member
+        positives += 1
+        print("accepted: 256 long-path source members on independent inspections")
+        expect_pass("source-cli-256-long-paths", long_path_archive, sha_arg=sha)
+
         large_source_metadata = write(
             "source-with-large-pax.tar.gz",
             tar_bytes(base, real_sha, extra_pax={"src/a.c": {"GBB.control": "x" * 70_000}}))
@@ -1111,6 +1159,35 @@ def self_test():
         count_archive = write("extension-count.tar.gz", chained_pax_tar_bytes(129, b"5 x=\n"))
         with_tar_limit("MAX_TAR_EXTENSION_HEADERS", 128,
                        lambda: expect_inspect_reject("chained extension header count", "archive-extension-count-limit", count_archive))
+
+        interleaved_count_archive = write(
+            "interleaved-extension-count.tar.gz",
+            tar_bytes({"one": b"1", "two": b"2", "three": b"3"}, None,
+                      extra_pax={name: {"GBB.x": "y"} for name in ("one", "two", "three")}))
+        interleaved_record_size = len(pax_record("GBB.x", b"y"))
+        if (interleaved_count_archive.stat().st_size >= MAX_TOTAL_BYTES
+                or len(gzip.decompress(interleaved_count_archive.read_bytes())) >= MAX_TAR_STREAM_BYTES
+                or 3 > Limits().entries
+                or interleaved_record_size > MAX_TAR_EXTENSION_BYTES
+                or 3 * interleaved_record_size > MAX_TAR_TOTAL_EXTENSION_BYTES):
+            raise SystemExit("self-test interleaved count archive exceeded an unrelated archive limit")
+        interleaved_payload_calls = []
+
+        def count_interleaved_extension_payload(info, archive):
+            if info.type in extension_types:
+                interleaved_payload_calls.append(info.type)
+            return base_proc_member(info, archive)
+
+        tarfile.TarInfo._proc_member = count_interleaved_extension_payload
+        try:
+            with_tar_limit("MAX_TAR_TOTAL_EXTENSION_HEADERS", 2,
+                           lambda: expect_inspect_reject(
+                               "interleaved archive-wide extension header count",
+                               "archive-extension-total-count-limit", interleaved_count_archive))
+            if len(interleaved_payload_calls) != 2:
+                raise SystemExit("self-test archive-wide header cap parsed an over-limit extension payload")
+        finally:
+            tarfile.TarInfo._proc_member = base_proc_member
 
         stream_archive = write("decompressed-stream.tar.gz",
                                tar_bytes({"README.md": b"z" * (32 * 1024)}, None))
