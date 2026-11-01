@@ -1054,16 +1054,28 @@ def self_test():
             first_inspection = inspect_tar(long_path_archive, Limits(), want_git=False)
             if sum(entry.path in long_path_names for entry in first_inspection.entries) != 256:
                 raise SystemExit("self-test 256-long-path positive did not retain all members")
-            if len(extension_payload_calls) <= 128:
+            exact_extension_count = len(extension_payload_calls)
+            if exact_extension_count <= 128:
                 raise SystemExit("self-test 256-long-path positive did not exercise more than 128 extension headers")
+            if exact_extension_count > MAX_TAR_TOTAL_EXTENSION_HEADERS:
+                raise SystemExit("self-test 256-long-path positive exceeded the default archive-wide header cap")
             if first_inspection.commit != sha:
                 raise SystemExit("self-test 256-long-path positive lost global source identity metadata")
             extension_payload_calls.clear()
-            second_inspection = inspect_tar(long_path_archive, Limits(), want_git=False)
-            if sum(entry.path in long_path_names for entry in second_inspection.entries) != 256:
-                raise SystemExit("self-test repeated 256-long-path inspection lost members")
-            if len(extension_payload_calls) <= 128:
-                raise SystemExit("self-test repeated 256-long-path inspection did not reset archive counters")
+
+            def inspect_again_at_exact_total_cap():
+                second_inspection = inspect_tar(long_path_archive, Limits(), want_git=False)
+                if sum(entry.path in long_path_names for entry in second_inspection.entries) != 256:
+                    raise SystemExit("self-test repeated 256-long-path inspection lost members")
+                if len(extension_payload_calls) != exact_extension_count:
+                    raise SystemExit("self-test repeated 256-long-path inspection processed a different header count")
+                if second_inspection.commit != sha:
+                    raise SystemExit("self-test repeated 256-long-path inspection lost global source identity metadata")
+
+            # Requiring an exact-cap parse to succeed twice proves the archive-wide count is
+            # fresh for each inspect_tar call; a shared counter would reject the second pass.
+            with_tar_limit("MAX_TAR_TOTAL_EXTENSION_HEADERS", exact_extension_count,
+                           inspect_again_at_exact_total_cap)
         finally:
             tarfile.TarInfo._proc_member = base_proc_member
         positives += 1
