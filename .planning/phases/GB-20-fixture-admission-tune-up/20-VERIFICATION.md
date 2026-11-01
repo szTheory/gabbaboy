@@ -1,9 +1,10 @@
 ---
 phase: GB-20-fixture-admission-tune-up
-verified: 2026-11-01T22:00:52Z
-status: human_needed
+verified: 2026-11-01T23:13:34Z
+status: passed
 score: 35/35 must-haves verified
 source_head: 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c
+verification_head: 20e34d9a09b63059b34188c8fb486b5df50c2999
 covered_files: [
     ".github/scripts/release-evidence-lifecycle.sh",
     ".github/scripts/safe_extract_package.py",
@@ -63,20 +64,13 @@ covered_files: [
     "tests/scripts/verify-v02-source-archive.py",
     "tests/scripts/verify-workflow-policy-coverage.py"
 ]
-covered_digest: "v4:sha256:fdc6cd0f2ca8463eeab926cb395f0b7faf3e275d667f103c715b093d7b78ec22"
+covered_digest: "v4:sha256:b1f365f798ccb3e09000b59a33bfff93b9e2b881e7dcaf409734a69b0e57770b"
 behavior_unverified: 0
 overrides_applied: 0
 decision_coverage:
   honored: 3
   total: 3
   not_honored: []
-human_verification:
-  - test: "Review whether fixture fields, public availability, or matching digests are presented as legal permission."
-    expected: "No such claim is made; the documentation treats hashes as identity evidence and leaves grant scope to a source-grounded maintainer decision."
-    why_human: "Plan 20-01 leaves this prohibition unresolved and does not declare a verification tier; automated identity checks cannot decide legal interpretation."
-  - test: "Confirm that the phase preserved prior fixture-rights dispositions without extending them to new evidence."
-    expected: "No fixture or rights disposition was changed or generalized, and RIGHTS-01 remains pending."
-    why_human: "Plan 20-01 leaves this prohibition unresolved and does not declare a verification tier; owner judgment is required to resolve that declaration."
 ---
 
 # Phase 20: Fixture Admission Tune-up Verification Report
@@ -85,16 +79,25 @@ human_verification:
 
 **Source head:** 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c
 
-**Verified:** 2026-11-01T22:00:52Z
+**Verified:** 2026-11-01T23:13:34Z
 
-**Status:** human_needed
-**Re-verification:** No. The earlier report had no gaps section, so this was a fresh initial-mode verification.
+**Status:** passed
+**Re-verification:** No. The prior report had no `gaps:` section, so this pass re-established must-haves from the roadmap and plans.
 
 ## Goal Achievement
 
-The two roadmap success criteria are implemented: fixture admission is checked against exact source and evidence identities and component terms, and installed/release product boundaries reject controlled ROM insertions while validating notices and the root MIT declaration. The checkers inspect repository objects, staged and extracted product trees, and downloaded archives. They do not grant legal permission.
+Both roadmap success criteria are implemented: admission is checked against exact fixture/source/build identities and recorded component terms, and installed/release products reject controlled ROM insertions while validating notices and root MIT. The checkers inspect repository objects, staged and extracted product trees, and downloaded archives. They validate identity and package policy; they do not grant legal permission.
 
-Plan 20-01’s flagged RIGHTS-01 assumption is represented by truth 6 below: the current phase admits no candidate and automated checks do not adjudicate grant scope. This verifies the current disposition; it does not satisfy or clear RIGHTS-01.
+Plan 20-01’s flagged RIGHTS-01 assumption is represented by truth 6 below: this phase admits no candidate and automated checks do not adjudicate grant scope. The boundary is verified; RIGHTS-01 remains pending and is not cleared by this report.
+
+### Owner-Reviewed Prohibitions
+
+Plan 20-01 now marks both judgment-tier prohibitions resolved and records the owner's 2026-11-01 confirmation, grounded in D-01. The evidence supports both findings:
+
+- **No automated legal-clearance claim:** `docs/fixture-admission.md` says a digest establishes byte identity, not redistribution permission. The checker validates required record fields, pinned snapshots, and hashes; it has no legal grant adjudication path. `verify-v02-adoption.py --check docs --root .` passed with 447 documentation contract checks.
+- **Historical dispositions preserved:** `--check-repository` compared 236 baseline fixture files and returned `admitted_changes=0`. No fixture manifest, fixture notice, or root `LICENSE` differs from the immutable baseline. The only notice-file change is the narrowly scoped product-inventory paragraph; the adoption controls retain the historical digest-row checks. No fixture or new rights disposition was added.
+
+These findings resolve the two prior owner-review items only. They do not approve a fixture or satisfy RIGHTS-01.
 
 ### Observable Truths
 
@@ -138,9 +141,9 @@ Plan 20-01’s flagged RIGHTS-01 assumption is represented by truth 6 below: the
 
 **Score:** 35/35 observable truths verified (0 present, behavior-unverified).
 
-### Unresolved Must-Not Prohibitions
+### Resolved Must-Not Prohibitions
 
-Plan 20-01 declares two prohibitions with status unresolved but omits the required verification tier. Current code and docs support both constraints, and decision coverage found all three CONTEXT.md decisions honored. However, the verifier contract requires unresolved prohibitions to remain visible as human-verification items; they are not counted as silently passed. This drives human_needed without creating an implementation gap.
+Both Plan 20-01 prohibitions now declare `verification: judgment` and `status: resolved`. The owner review is recorded in the plan; the independent evidence above supports those resolutions. No unresolved prohibition remains.
 
 ## Required Artifacts
 
@@ -209,13 +212,13 @@ Implementation head: 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c.
 
 | Check | Result | Evidence |
 |---|---|---|
-| Configure/build | PASS | Final-head configure and build passed. |
+| Configure/build | PASS | Final implementation-head configure and build passed. The subsequent commit changes planning evidence only; code is unchanged. |
 | First full local CTest run | 1706/1711 passed | Five Git worktree metadata writes were denied by the managed read-only .git. All five named controls passed with temporary Git metadata under /tmp. |
 | Wrapper-based full local CTest run | 1710/1711 passed | Only v02_source_archive_controls reached its 90-second timeout during the full run, without a checker assertion. |
 | Focused source-archive retest | PASS, 45.57 seconds | The exact test passed alone using the normal Git path. The load/scheduler cause of the full-run timeout was not established. |
 | Combined local test evidence | 1711/1711 have passing evidence | Two partial full runs plus six focused retests cover all registered cases. No single full-suite invocation was all-green. |
 | Planning/summary/hygiene checks | 3/3 passed | plan_cap, planning_hygiene_controls, and summary_coverage_live passed after the latest documentation refresh. |
-| Shared UAT closure | Complete, 23/23 automated cases pass | `20-UAT.md` records zero issues or pending cases; this does not resolve the two spec-less Plan 20-01 prohibitions. |
+| Shared UAT closure | Complete, 23/23 automated cases pass | `20-UAT.md` records zero issues or pending cases; the two Plan 20-01 judgment items were separately reviewed by the owner. |
 | Exact-head pull-request CI | PASS | [Run 41347651035](https://github.com/szTheory/gabbaboy/actions/runs/41347651035), head SHA matches the implementation head. |
 | Exact-head push CI | PASS | [Run 41347645660](https://github.com/szTheory/gabbaboy/actions/runs/41347645660), head SHA matches the implementation head. |
 | Exact-head preview package | PASS | [Run 41347651030](https://github.com/szTheory/gabbaboy/actions/runs/41347651030), head SHA matches the implementation head. |
@@ -229,10 +232,11 @@ Implementation head: 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c.
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
-| Reusable extraction rejects drive/ADS paths and out-of-root writes before filesystem mutation | python3 -I .github/scripts/safe_extract_package.py --self-test | PASS; controls cover injected directory and file escapes | ✓ PASS |
-| Repository admission rejects unrecorded fixture changes | python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . | PASS; legacy_files=236, admitted_changes=0 | ✓ PASS |
+| Reusable extraction rejects drive/ADS paths and out-of-root writes before filesystem mutation | `python3 -I .github/scripts/safe_extract_package.py --self-test` | PASS; controls cover path aliases, containment, and bounded reads (0.2 s) | ✓ PASS |
+| Repository admission rejects unrecorded fixture changes | `python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .` | PASS; legacy_files=236, admitted_changes=0 (2.9 s) | ✓ PASS |
+| Notice documentation preserves the distinction between byte identity and permission | `python3 -I tests/scripts/verify-v02-adoption.py --check docs --root .` | PASS; 447 checks, positive_success=true (0.2 s) | ✓ PASS |
 
-The broader fixture-admission self-test and release-policy group did not finish inside this pass’s ten-second spot-check window and were not counted as fresh passes here. The exact-head final test evidence above records those registered controls passing in the full local runs.
+The full fixture-admission self-test and core product self-test also passed in this refresh (2 positive cases plus 58 admission negatives; 42 core-product negatives). They are recorded as production control runs, not under-ten-second spot-checks. The exact-head final evidence above covers the remaining registered and hosted controls; the code has not changed since that implementation head.
 
 ## Probe Execution
 
@@ -244,9 +248,9 @@ The broader fixture-admission self-test and release-policy group did not finish 
 
 | Requirement | Source Plan | Description | Status | Evidence |
 |---|---|---|---|---|
-| RIGHTS-01 | Plans 20-01 through 20-09 | Candidate fixture has verified repository/public-CI rights by component; ROMs stay out of products and root MIT remains unchanged. | NEEDS HUMAN; remains Pending | No candidate was admitted. Boundary checks and product exclusions are verified, but no source-grounded grant exists to verify. REQUIREMENTS.md remains Pending as instructed. |
+| RIGHTS-01 | Plans 20-01 through 20-09 | An admitted candidate has source-grounded repository/public-CI rights by component; game ROMs stay out of products and root MIT remains unchanged. | PENDING (explicitly retained) | No candidate was admitted. The technical boundary and product exclusions are verified; no candidate-specific grant was evaluated. `.planning/REQUIREMENTS.md` remains Pending as instructed. |
 
-No other requirement is mapped to Phase 20. The phase goal is achieved without claiming candidate rights clearance.
+No other requirement is mapped to Phase 20. The phase goal is achieved without claiming candidate rights clearance; future admission still requires source-grounded maintainer review.
 
 ## Test Quality Audit
 
@@ -272,23 +276,11 @@ The implementation-file scan found no unreferenced TBD/FIXME/XXX markers, cleanu
 
 ## Human Verification Required
 
-### 1. Legal-clearance language
-
-**Test:** Review the current admission documentation and checker/release output language for claims that populated fields, public availability, or a matching digest establish permission.
-
-**Expected:** No legal clearance is inferred; hashes establish identity only, and grant scope remains a source-grounded maintainer decision.
-**Why human:** Plan 20-01 explicitly leaves this prohibition unresolved and has no verification tier. Automated byte checks cannot decide legal interpretation.
-
-### 2. Historical rights dispositions
-
-**Test:** Confirm that Phase 20 preserved prior fixture-rights dispositions and did not extend them to new evidence.
-
-**Expected:** No candidate or rights disposition was changed or generalized; RIGHTS-01 remains Pending.
-**Why human:** Plan 20-01 explicitly leaves this prohibition unresolved and has no verification tier. The owner must resolve that declaration rather than letting the verifier silently treat it as passed.
+None for the Phase 20 goal. The owner explicitly reviewed the two judgment-tier findings and the code/docs support them. RIGHTS-01 remains pending because there is no candidate-specific rights decision to verify; no fixture is approved or admitted by this report.
 
 ## Gaps Summary
 
-No implementation truth, artifact, or key link failed. The phase goal is met and all 35 observable truths are verified. The report remains human_needed because Plan 20-01 contains two unresolved, untyped must-not prohibitions that the verification contract requires to be surfaced for owner resolution. RIGHTS-01 remains Pending; no fixture was admitted, and no legal clearance is claimed.
+No implementation truth, artifact, or key link failed; all 35 observable truths are verified. The two prior judgment findings are resolved by the owner and supported by current code and documentation. RIGHTS-01 remains Pending because no candidate was admitted and no source-grounded grant scope was evaluated. This is not a legal-clearance claim or an implementation gap in the Phase 20 boundary.
 
 ### Decision Coverage
 
@@ -296,5 +288,5 @@ All 3 trackable CONTEXT.md decisions are honored by shipped artifacts. This gate
 
 ---
 
-_Verified: 2026-11-01T22:00:52Z_
+_Verified: 2026-11-01T23:13:34Z_
 _Verifier: the agent (gsd-verifier)_
