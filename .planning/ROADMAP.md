@@ -32,7 +32,7 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 **Success Criteria** (what must be TRUE):
   1. A fixture can enter the repository and public CI only when exact bytes, source/build inputs, and terms for its code, art, audio driver, and notices are recorded; incomplete rights or changed identities are rejected by automated controls.
   2. An installed or product-release package containing a controlled game-ROM insertion is rejected, while a valid package retains the required component notices and GabbaBoy's MIT declaration.
-**Plans**: 3 plans — capped at 3; this is a tune-up, not a general debt-closure phase.
+**Plans**: 3 original plans, plus one in-scope gap-closure plan for the T-20-04 bounded-traversal security finding — 4 total. This is the single gap round allowed for the phase, not a general debt-closure phase.
 
 Plans:
 **Wave 1**
@@ -41,6 +41,9 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 20-02-PLAN.md — Actual core install, archive and release notice boundary with mutation controls.
 - [ ] 20-03-PLAN.md — Actual macOS player package and notice boundary with mutation controls.
+
+**Wave 3** *(single in-scope security gap closure)*
+- [ ] 20-04-PLAN.md — Bound fixture filesystem traversal and Git tree enumeration.
 
 Use existing checks to assess CI headroom, current documentation, and carry-over dispositions while establishing this boundary. Preserve the accepted v0.3 audit debts and standalone closeout-helper failure unless a documented trigger actually applies. The admission contract remains mandatory when later phases add fixtures; RIGHTS-01 has this single owner phase.
 
@@ -113,9 +116,9 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 
 ## Planning and Approval Boundary
 
-- At most four phases and about 40 plans; at most 12 plans in any phase. Phase 20 is capped at three plans. These are scope caps, not acceptance evidence.
+- At most four phases and about 40 plans; at most 12 plans in any phase. Phase 20 has three original plans plus one bounded T-20-04 gap-closure plan, for four total; no further gap round is authorized. These are scope caps, not acceptance evidence.
 - Every deliverable has an automated check and a meaningful negative control. New reusable checkers live in tests/scripts/, use immutable commit facts where appropriate, and enter CTest when created. Automated UAT closure uses the existing shared closure tool; voluntary play is not a release gate.
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
-- Both automatic-advance flags remain false. The owner approved this roadmap on 2026-10-31; Phase 20 planning is complete and no phase execution has started.
+- Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; after the required security audit found an in-scope bounded-traversal gap, the single permitted gap round was recorded as Plan 20-04. No other Phase 20 scope was added.
 
 Phase 20 planning and independent plan verification are complete. The next workflow stage is **Phase 20 execution — Fixture Admission Tune-up**. Exact next command: **/gsd-execute-phase 20**, only when the owner chooses to begin execution. Stop at this phase boundary; do not begin Phase 20 execution or advance to Phase 21 automatically.
