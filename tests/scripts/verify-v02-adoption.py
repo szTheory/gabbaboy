@@ -360,7 +360,11 @@ MARKED_SECTIONS: dict[str, tuple[tuple[str, tuple[tuple[str, str], ...]], ...]] 
 NOTICE_REQUIRED = (
     ("GitHub generated source archives retain the admitted licensed fixtures and "
      "their notices", "source-archive-distinction-missing"),
-    ("installed and downloaded product packages remain fixture-free",
+    ("Installed core packages carry exactly the original project-authored tracer, visible demo, "
+     "and MBC1 continuation fixtures with their pinned notices. The optional player carries only its listed demo "
+     "and continuation fixtures with their notices.",
+     "product-package-distinction-missing"),
+    ("Controlled game and diagnostic bytes remain repository-test inputs and are excluded from binary products.",
      "product-package-distinction-missing"),
     ("X11", "samesuite-rights-missing"),
     ("MIT License in [`LICENSE`](LICENSE)", "root-license-missing"),
@@ -1208,6 +1212,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              drop("GitHub generated source archives retain the admitted licensed "
                   "fixtures and their notices", "m"),
              f"source-archive-distinction-missing:{NOTICES}"),
+            ("missing-notice-product-distinction", NOTICES,
+             drop("Installed core packages carry exactly the\noriginal project-authored tracer, visible demo, and MBC1 continuation fixtures\nwith their pinned notices.", "product"),
+             f"product-package-distinction-missing:{NOTICES}"),
+            ("contradictory-notice-product-distinction", NOTICES,
+             swap("Controlled game and diagnostic bytes\nremain repository-test inputs and are excluded from binary products.",
+                  "Controlled game and diagnostic bytes are included in binary products.", "product-contradiction"),
+             f"product-package-distinction-missing:{NOTICES}"),
             ("rebound-attribution", NOTICES,
              append("Rebound assets are attributed to the admitted fixtures."),
              f"rebound-attribution-present:{NOTICES}"),
