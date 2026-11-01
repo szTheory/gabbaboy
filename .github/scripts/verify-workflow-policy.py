@@ -3958,6 +3958,8 @@ def _incomplete_subject_control() -> None:
             raise SystemExit("incomplete-subject control accepted a missing checker input")
         if target.exists():
             raise SystemExit("incomplete-subject control partially materialized an invalid subject")
+        if not (source / ".github/workflows/ci.yml").read_text(encoding="utf-8").startswith("subject input"):
+            raise SystemExit("incomplete-subject control mutated its source tree")
         _mark_policy_control("helper", "incomplete-subject", "missing verifier source")
 
 
