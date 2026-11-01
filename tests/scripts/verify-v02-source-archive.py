@@ -18,7 +18,7 @@ Usage:
   verify-v02-source-archive.py --check-receipt RECEIPT --archive PATH
       --tag TAG --source-sha SHA
   verify-v02-source-archive.py --check-product-archive PATH [--repo-root DIR]
-      [--inventory PATH] [--notice-sidecar PATH]
+      [--inventory PATH] [--notice-sidecar PATH] [--fixture-checker PATH]
   verify-v02-source-archive.py --self-test-product-tree DIR --repo-root DIR
   verify-v02-source-archive.py --self-test
 
@@ -465,28 +465,29 @@ def check_receipt(receipt_path, archive, tag, source_sha, repo, limits):
     return receipt
 
 
-_PRODUCT_POLICY_MODULE = None
+_PRODUCT_POLICY_MODULES = {}
 
 
-def _shared_policy_checker():
-    global _PRODUCT_POLICY_MODULE
-    if _PRODUCT_POLICY_MODULE is not None:
-        return _PRODUCT_POLICY_MODULE
-    path = pathlib.Path(__file__).resolve().with_name("verify-fixture-admission.py")
+def _shared_policy_checker(checker_path=None):
+    path = (pathlib.Path(checker_path).resolve() if checker_path else
+            pathlib.Path(__file__).resolve().with_name("verify-fixture-admission.py"))
+    key = str(path)
+    if key in _PRODUCT_POLICY_MODULES:
+        return _PRODUCT_POLICY_MODULES[key]
     spec = importlib.util.spec_from_file_location("gbb_fixture_admission_product", path)
     if spec is None or spec.loader is None:
         raise Reject("product-policy-unavailable", "shared fixture admission checker cannot be loaded")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    _PRODUCT_POLICY_MODULE = module
+    _PRODUCT_POLICY_MODULES[key] = module
     return module
 
 
-def check_product(archive, repo_root, limits, inventory_path=None, sidecar_path=None):
+def check_product(archive, repo_root, limits, inventory_path=None, sidecar_path=None, fixture_checker=None):
     inspection = inspect_archive(archive, limits, unwrapped=True)
     if any(e.kind == "symlink" for e in inspection.entries):
         raise Reject("product-link-not-allowed", "product package contains a link")
-    checker = _shared_policy_checker()
+    checker = _shared_policy_checker(fixture_checker)
     if repo_root is None:
         repo_root = pathlib.Path(__file__).resolve().parents[2]
     root = pathlib.Path(repo_root).resolve()
@@ -949,6 +950,27 @@ def self_test():
         product_checker, product_repo, good_product, good_inventory, forbidden_product_bytes, product_rules, source_contract = \
             _synthetic_core_product(scratch)
 
+        # A release retry must use the trusted workflow-commit checker even when the tagged
+        # workspace sibling differs. Exercise the CLI with a deliberately unusable sibling.
+        tagged_dir = scratch / "tagged-checkout"
+        trusted_dir = scratch / "trusted-control-plane"
+        tagged_dir.mkdir()
+        trusted_dir.mkdir()
+        tagged_script = tagged_dir / "verify-v02-source-archive.py"
+        shutil.copyfile(script, tagged_script)
+        (tagged_dir / "verify-fixture-admission.py").write_text(
+            "raise RuntimeError('tagged sibling checker must not be imported')\n", encoding="utf-8")
+        trusted_checker = trusted_dir / "verify-fixture-admission.py"
+        shutil.copyfile(product_checker.__file__, trusted_checker)
+        trusted_archive = write("product-with-explicit-trusted-checker.tar.gz",
+                                tar_bytes(good_product, None, root=None))
+        code, err, stdout = run_cli(tagged_script, "--check-product-archive", str(trusted_archive),
+                                    "--repo-root", str(product_repo), "--fixture-checker", str(trusted_checker))
+        if code != 0 or not stdout.startswith("PASS: core product matches exact policy"):
+            raise SystemExit(f"self-test trusted fixture checker was not used: {err!r}, {stdout!r}")
+        positives += 1
+        print("accepted: archive policy uses the explicit trusted fixture checker")
+
         def expect_product(label, files, expected, root_name=None, inventory=None,
                            notice_sidecar=None, use_cli=False):
             nonlocal positives, negatives
@@ -1297,6 +1319,7 @@ def main(argv):
     parser.add_argument("--check-receipt")
     parser.add_argument("--check-product-archive")
     parser.add_argument("--repo-root")
+    parser.add_argument("--fixture-checker", help="explicit trusted shared fixture admission checker")
     parser.add_argument("--inventory", help="compare actual archive paths and bytes with a producer stage inventory")
     parser.add_argument("--notice-sidecar", help="validate the actual gabbaboy-notices.txt sidecar bytes")
     # Limits can only be tightened, never raised above the contract values.
@@ -1316,18 +1339,18 @@ def main(argv):
             self_test_product_tree(args.self_test_product_tree, args.repo_root)
         elif args.check_product_archive:
             result = check_product(args.check_product_archive, args.repo_root, limits,
-                                   args.inventory, args.notice_sidecar)
+                                   args.inventory, args.notice_sidecar, args.fixture_checker)
             print(f"PASS: core product matches exact policy ({result['inspected_members']} members)")
         elif args.check_receipt:
-            if args.inventory or args.notice_sidecar:
-                parser.error("--inventory and --notice-sidecar are only valid with --check-product-archive")
+            if args.inventory or args.notice_sidecar or args.fixture_checker:
+                parser.error("--inventory, --notice-sidecar and --fixture-checker are only valid with --check-product-archive")
             if not (args.archive and args.tag and args.source_sha):
                 parser.error("--check-receipt needs --archive, --tag and --source-sha")
             check_receipt(args.check_receipt, args.archive, args.tag, args.source_sha, args.repo, limits)
             print("PASS: source archive receipt matches the archive bytes")
         elif args.archive:
-            if args.inventory or args.notice_sidecar:
-                parser.error("--inventory and --notice-sidecar are only valid with --check-product-archive")
+            if args.inventory or args.notice_sidecar or args.fixture_checker:
+                parser.error("--inventory, --notice-sidecar and --fixture-checker are only valid with --check-product-archive")
             if not (args.tag and args.source_sha and args.output):
                 parser.error("--archive needs --tag, --source-sha and --output")
             output = pathlib.Path(args.output)

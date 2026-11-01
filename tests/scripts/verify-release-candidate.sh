@@ -138,8 +138,18 @@ if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
   fi
   command -v python3 >/dev/null || fail 'Python 3 is required'
   [[ "$(basename -- "$8")" == gabbaboy-notices.txt ]] || fail 'core release notice sidecar must be named gabbaboy-notices.txt'
+  fixture_checker=${GBB_FIXTURE_ADMISSION_CHECKER:-}
+  if [[ -z "$fixture_checker" && -n "${RUNNER_TEMP:-}" \
+        && -f "$RUNNER_TEMP/verify-fixture-admission.py" ]]; then
+    fixture_checker="$RUNNER_TEMP/verify-fixture-admission.py"
+  fi
+  fixture_checker_args=()
+  if [[ -n "$fixture_checker" ]]; then
+    [[ -f "$fixture_checker" ]] || fail 'trusted fixture admission checker is unavailable'
+    fixture_checker_args=(--fixture-checker "$fixture_checker")
+  fi
   python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" \
-    --notice-sidecar "$8" || fail 'product archive or core notice sidecar failed exact policy'
+    --notice-sidecar "$8" "${fixture_checker_args[@]}" || fail 'product archive or core notice sidecar failed exact policy'
   if [[ "$MODE" == --verify-final ]]; then
     bash "$ROOT_DIR/tests/scripts/verify-release-candidate.sh" --verify \
       "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" \
