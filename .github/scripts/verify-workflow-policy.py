@@ -1764,6 +1764,29 @@ def _fixture_call(workflow: str, job_id: str, job: dict, command: str, code: str
         raise Reject(code, f"{_where(workflow, job_id)}: {error}") from None
 
 
+def _fixture_call_exact(workflow: str, job_id: str, job: dict, command: str, code: str) -> tuple[int, int]:
+    """Require one reachable repository-admission invocation with no extra words or assignments."""
+    words, assigns = expected_command(command)
+    matches: list[tuple[int, int, Event]] = []
+    for step_number, step in enumerate(job.get("steps", [])):
+        if "if" in step or not _runs_under_errexit(step) or not step.get("run"):
+            continue
+        events = _step_events(step)
+        for event in events:
+            if (event.words[:len(words)] == words
+                    and _reachable(event, events, False, False)):
+                matches.append((step_number, event.index, event))
+    if len(matches) != 1:
+        raise Reject(code, f"{_where(workflow, job_id)} must contain exactly one reachable repository-admission command")
+    step_number, event_number, event = matches[0]
+    if event.words != words or event.assigns != assigns or words.count("--repo-root") != 1:
+        raise Reject(code, f"{_where(workflow, job_id)} repository-admission command has extra arguments or assignments")
+    repo_index = words.index("--repo-root")
+    if words[repo_index + 1:repo_index + 2] != ["."]:
+        raise Reject(code, f"{_where(workflow, job_id)} repository-admission root must be exactly dot")
+    return step_number, event_number
+
+
 def _fixture_step_event(workflow: str, job_id: str, job: dict, step_name: str, command: str,
                         code: str, *, contains: tuple[str, ...] = (), conditional: bool = False,
                         exact: bool = False):
@@ -1798,8 +1821,8 @@ def check_fixture_admission_workflows(root: Path) -> None:
         if not checkouts or any(str(step.get("with", {}).get("fetch-depth")) != "0" for step in checkouts):
             raise Reject("fixture-admission-history", f"ci.{job_id} must check out full history for the immutable baseline")
     package = _require_job("ci", ci, "macos-player-package")
-    package_gate = _fixture_call("ci", "macos-player-package", package,
-                                 FIXTURE_ADMISSION_REPOSITORY_CALL, "fixture-admission-gate")
+    package_gate = _fixture_call_exact("ci", "macos-player-package", package,
+                                       FIXTURE_ADMISSION_REPOSITORY_CALL, "fixture-admission-gate")
     package_build = _fixture_call("ci", "macos-player-package", package,
                                   "bash tests/scripts/verify-phase3-player.sh --build-package",
                                   "fixture-admission-gate")
@@ -1811,8 +1834,8 @@ def check_fixture_admission_workflows(root: Path) -> None:
     checkouts = _checkouts(repro_job)
     if len(checkouts) != 1 or str(checkouts[0].get("with", {}).get("fetch-depth")) != "0":
         raise Reject("fixture-admission-history", "fixture-repro must check out full history for immutable admission pins")
-    gate = _fixture_call("fixture-repro", "fixture-repro", repro_job,
-                         FIXTURE_ADMISSION_REPOSITORY_CALL, "fixture-admission-gate")
+    gate = _fixture_call_exact("fixture-repro", "fixture-repro", repro_job,
+                               FIXTURE_ADMISSION_REPOSITORY_CALL, "fixture-admission-gate")
     downloader = _fixture_step("fixture-repro", "fixture-repro", repro_job, "Download pinned RGBDS release")
     if gate[0] >= repro_job["steps"].index(downloader):
         raise Reject("fixture-admission-gate", "fixture-repro admission must run before the first fixture tool download")
@@ -3886,19 +3909,56 @@ def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | 
     print(f"PASS: workflow policy group {group} controls={len(actual_ids)} ids_sha256={id_digest}")
 
 
+def _workflow_subject_inputs() -> tuple[str, ...]:
+    return (*(f".github/workflows/{item}" for item in WORKFLOWS), LEDGER_PATH, "CMakeLists.txt",
+            "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD,
+            LIFECYCLE_SCRIPT, PERF_GATE_SCRIPT, RELEASE_GATES_CLI,
+            "tests/scripts/verify-release-candidate.sh", PRODUCER_SCRIPT)
+
+
 def _copy_fixture(root: Path, target: Path) -> None:
+    required = _workflow_subject_inputs()
+    extra_inputs = required[len(WORKFLOWS):]
+    missing = [item for item in required if not (root / item).is_file()]
+    if missing:
+        raise Reject("workflow-fixture-incomplete", f"required subject source is missing: {missing[0]}")
     for item in WORKFLOWS:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
-    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD, LIFECYCLE_SCRIPT,
-                  PERF_GATE_SCRIPT, RELEASE_GATES_CLI):
-        if (root / extra).is_file():
-            (target / extra).parent.mkdir(parents=True, exist_ok=True)
-            (target / extra).write_bytes((root / extra).read_bytes())
+    for extra in extra_inputs[:-1]:
+        (target / extra).parent.mkdir(parents=True, exist_ok=True)
+        (target / extra).write_bytes((root / extra).read_bytes())
     script = target / PRODUCER_SCRIPT
     script.parent.mkdir(parents=True, exist_ok=True)
-    script.write_bytes((root / PRODUCER_SCRIPT).read_bytes()) if (root / PRODUCER_SCRIPT).is_file() else None
+    script.write_bytes((root / PRODUCER_SCRIPT).read_bytes())
+    candidate_script = target / "tests/scripts/verify-release-candidate.sh"
+    candidate_script.parent.mkdir(parents=True, exist_ok=True)
+    candidate_script.write_bytes((root / "tests/scripts/verify-release-candidate.sh").read_bytes())
+
+
+def _incomplete_subject_control() -> None:
+    with tempfile.TemporaryDirectory(prefix="gbb-workflow-incomplete-source.") as directory:
+        source = Path(directory) / "source"
+        source.mkdir()
+        missing = "tests/scripts/verify-release-candidate.sh"
+        for relative in _workflow_subject_inputs():
+            if relative == missing:
+                continue
+            path = source / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("subject input\n", encoding="utf-8")
+        target = Path(directory) / "subject"
+        try:
+            _copy_fixture(source, target)
+        except Reject as error:
+            if error.code != "workflow-fixture-incomplete" or missing not in str(error):
+                raise SystemExit(f"incomplete-subject control rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("incomplete-subject control accepted a missing checker input")
+        if target.exists():
+            raise SystemExit("incomplete-subject control partially materialized an invalid subject")
+        _mark_policy_control("helper", "incomplete-subject", "missing verifier source")
 
 
 def _run_cli(fixture: Path, cwd: Path, *extra: str) -> subprocess.CompletedProcess[str]:
@@ -3982,6 +4042,22 @@ def _mutations():
         _m("P20 macOS package admission gate is removed", "ci.yml", "  macos-player-package:\n",
            "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
            "echo admission gate removed", "fixture-admission-gate"),
+        _m("P20 fixture-repro admission command gets a PATH assignment", "fixture-repro.yml", "  fixture-repro:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "PATH=/tmp/attacker python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "fixture-admission-gate"),
+        _m("P20 fixture-repro admission command gets a duplicate repository root", "fixture-repro.yml", "  fixture-repro:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . --repo-root /tmp/other",
+           "fixture-admission-gate"),
+        _m("P20 macOS admission command gets a PATH assignment", "ci.yml", "  macos-player-package:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "PATH=/tmp/attacker python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "fixture-admission-gate"),
+        _m("P20 macOS admission command gets a duplicate repository root", "ci.yml", "  macos-player-package:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . --repo-root /tmp/other",
+           "fixture-admission-gate"),
         _m("P20 Linux core stage policy call is removed", rel, "  candidate:\n",
            "--check-product-tree build/release-stage", "--skip-product-tree build/release-stage",
            "fixture-product-stage"),
@@ -5602,6 +5678,8 @@ git() {
 def self_test(root: Path) -> None:
     rejected = 0
     run_helpers = _ACTIVE_POLICY_GROUP is None or _ACTIVE_POLICY_GROUP in ("all", "helpers")
+    if run_helpers:
+        _incomplete_subject_control()
     if _ACTIVE_POLICY_GROUP in (None, "all", "release_jobs"):
         release_fixture_checker_path_controls(root)
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:

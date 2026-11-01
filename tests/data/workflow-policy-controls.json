@@ -4595,6 +4595,36 @@
         "posix",
         "windows"
       ]
+    },
+    {
+      "group": "ci",
+      "id": "mutation-9c8a225ff032a66d44fb",
+      "kind": "mutation",
+      "platforms": ["posix", "windows"]
+    },
+    {
+      "group": "ci",
+      "id": "mutation-57188ebcea489bd54b55",
+      "kind": "mutation",
+      "platforms": ["posix", "windows"]
+    },
+    {
+      "group": "ci",
+      "id": "mutation-dcea8e3e3298bbe9fcdc",
+      "kind": "mutation",
+      "platforms": ["posix", "windows"]
+    },
+    {
+      "group": "ci",
+      "id": "mutation-b960583d32997e1aed55",
+      "kind": "mutation",
+      "platforms": ["posix", "windows"]
+    },
+    {
+      "group": "helpers",
+      "id": "helper-d99736d2373f5ab5df93",
+      "kind": "helper",
+      "platforms": ["posix", "windows"]
     }
   ],
   "groups": {
