@@ -60,6 +60,7 @@ INSTRUMENTED_POLICY_FUNCTIONS = {
 }
 ADDED_MUTATION_CONTROLS = (
     ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
+    ("P20 Linux stage gate prefixes an untrusted PATH assignment", "release.yml", "fixture-product-stage"),
     ("P20 fixture-repro admission gate is removed", "fixture-repro.yml", "fixture-admission-gate"),
     ("P20 fixture-repro admission gate moved after tool download", "fixture-repro.yml", "fixture-admission-gate"),
     ("P20 macOS package checkout becomes shallow", "ci.yml", "fixture-admission-history"),

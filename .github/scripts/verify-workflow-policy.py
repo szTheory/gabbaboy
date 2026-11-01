@@ -1777,7 +1777,8 @@ def _fixture_step_event(workflow: str, job_id: str, job: dict, step_name: str, c
         raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r}: {error}") from None
     for event in events:
         command_matches = event.words == words if exact else event.words[:len(words)] == words
-        if (command_matches and set(assigns) <= set(event.assigns)
+        assignments_match = event.assigns == assigns if exact else set(assigns) <= set(event.assigns)
+        if (command_matches and assignments_match
                 and set(contains) <= set(event.words)
                 and _reachable(event, events, conditional, False)):
             return (job["steps"].index(step), event.index)
@@ -4005,6 +4006,10 @@ def _mutations():
            "      - name: Configure and build cache-free release core\n",
            "--layout core --repo-root . --write-inventory build/core-product-inventory.json",
            "--layout core --repo-root . --write-inventory build/core-product-inventory.json --check-product-tree /tmp/other",
+           "fixture-product-stage"),
+        _m("P20 Linux stage gate prefixes an untrusted PATH assignment", rel, "  candidate:\n",
+           'python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage',
+           'PATH=/tmp/attacker python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage',
            "fixture-product-stage"),
         _m("P20 macOS reused core skips actual-byte validation", rel, "  candidate-macos:\n",
            "--check-product-tree build/reuse-extracted-core", "--skip-product-tree build/reuse-extracted-core",

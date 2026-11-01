@@ -2347,6 +2347,15 @@
       ]
     },
     {
+      "group": "release_jobs",
+      "id": "mutation-5f2064bf0a0344283f19",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
       "group": "rehearsal",
       "id": "mutation-5fa2a0117c43359a4166",
       "kind": "mutation",
