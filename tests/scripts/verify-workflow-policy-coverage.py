@@ -22,8 +22,8 @@ BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "886000ef9f66ce389978190aa6c64936a729ab4e"
-REVIEWED_POLICY_SHA256 = "6618a2c1016ab9aec5441f8364617a5f9c29ff9f86ab736f0a6bff076221f585"
+REVIEWED_POLICY_COMMIT = "a5bf5cc84c672be8f4e477a30ed1e0dc9dbae82a"
+REVIEWED_POLICY_SHA256 = "b68625cf135b25e56472b15d7a97aa065ec1c08d51ec9e38c572c619c44c7e5c"
 REVIEWED_ARCHIVE_HELPER_COMMIT = "886000ef9f66ce389978190aa6c64936a729ab4e"
 REVIEWED_ARCHIVE_HELPER_SHA256 = "6ed3ddd188a55c20e78b8326c8821ea0b47b2530b3e56c39cb56c9c87ebaf21e"
 GROUPS = {
@@ -56,6 +56,7 @@ ADDED_POLICY_FUNCTIONS = {
     "_write_control_archive", "_product_archive_controls",
     "_workflow_subject_inputs", "_incomplete_subject_control", "run_policy_self_test",
     "_load_trusted_archive_helper", "_drain_product_tar_stream",
+    "_product_archive_target",
 }
 ADDED_POLICY_GLOBALS = {
     "_POLICY_PARTITION_GROUPS", "_ACTIVE_POLICY_GROUP", "_ACTIVE_POLICY_CONTROLS", "_COMPLETED_POLICY_CONTROLS",
@@ -292,6 +293,14 @@ def baseline_controls(source: bytes) -> list[dict]:
         "late resource rejection removes partial extraction",
     ):
         rows.append(_helper_row("product-archive-cleanup", "_product_archive_controls", label,
+                                group="release_jobs"))
+    for label in (
+        "drive-qualified and nested drive paths rejected",
+        "NTFS alternate stream components rejected",
+        "directory containment before create",
+        "regular parent containment before create",
+    ):
+        rows.append(_helper_row("product-archive-path", "_product_archive_controls", label,
                                 group="release_jobs"))
 
     # Each named input case is independently marked after all output, status, API and checker-call assertions pass.
@@ -1044,6 +1053,10 @@ def _self_test(root: Path, revision: str) -> int:
         ("cleanup", "missing checker leaves destination absent"),
         ("cleanup", "trusted checker retry succeeds"),
         ("cleanup", "late resource rejection removes partial extraction"),
+        ("path", "drive-qualified and nested drive paths rejected"),
+        ("path", "NTFS alternate stream components rejected"),
+        ("path", "directory containment before create"),
+        ("path", "regular parent containment before create"),
     )
     expected_ids = {row["id"] for row in expected["controls"]}
     for family, label in required_archive_controls:
@@ -1400,7 +1413,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 82:
+    if controls != 86:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
