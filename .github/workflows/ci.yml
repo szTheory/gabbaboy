@@ -93,8 +93,6 @@ jobs:
         run: bash .github/scripts/verify-test-inventory.sh --self-test
       - name: Self-test the release support-ledger binding
         run: python3 tests/scripts/verify-support-ledger.py --self-test
-      - name: Self-test the release gates
-        run: bash .github/scripts/verify-release-gates.sh --self-test
       # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
       # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
       - name: Resolve immutable state pin base
@@ -150,6 +148,8 @@ jobs:
         run: python3 -I tests/scripts/verify-test-budget.py --self-test
       - name: Build
         run: cmake --build --preset phase1 --verbose
+      - name: Self-test the release gates
+        run: bash .github/scripts/verify-release-gates.sh --self-test
       - name: Run state pins against the immutable event base
         env:
           GBB_STATE_PIN_RECEIPT: ${{ github.workspace }}/build/state-pin-receipt.json
