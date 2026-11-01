@@ -214,6 +214,24 @@ def main() -> int:
             initialized = run(["git", "init", "--bare", str(empty_evidence)], cwd=ROOT)
             require(initialized.returncode == 0, f"empty baseline store init failed:\n{initialized.stdout}")
             check_repository(mutant_root, empty_evidence, "REJECT baseline-object-unavailable:")
+            wrong_evidence = Path(mutant_name) / "wrong-baseline.git"
+            unrelated_source = Path(mutant_name) / "unrelated-source"
+            wrong_evidence.mkdir()
+            unrelated_source.mkdir()
+            initialized = run(["git", "init", "--bare", str(wrong_evidence)], cwd=ROOT)
+            require(initialized.returncode == 0, f"wrong baseline store init failed:\n{initialized.stdout}")
+            initialized = run(["git", "init", str(unrelated_source)], cwd=ROOT)
+            require(initialized.returncode == 0, f"unrelated source repository init failed:\n{initialized.stdout}")
+            unrelated_commit = run(["git", "-C", str(unrelated_source), "-c", "user.name=Fixture Control",
+                                    "-c", "user.email=fixture-control@example.invalid", "commit", "--allow-empty",
+                                    "-m", "unrelated baseline identity"], cwd=ROOT)
+            require(unrelated_commit.returncode == 0, f"unrelated identity creation failed:\n{unrelated_commit.stdout}")
+            unrelated_identity = run(["git", "-C", str(unrelated_source), "rev-parse", "HEAD"], cwd=ROOT)
+            require(unrelated_identity.returncode == 0, f"unrelated identity lookup failed:\n{unrelated_identity.stdout}")
+            fetched_wrong = run(["git", "--git-dir", str(wrong_evidence), "fetch", "--no-tags",
+                                 str(unrelated_source), unrelated_identity.stdout.strip()], cwd=ROOT)
+            require(fetched_wrong.returncode == 0, f"wrong identity object copy failed:\n{fetched_wrong.stdout}")
+            check_repository(mutant_root, wrong_evidence, "REJECT baseline-object-unavailable:")
             core_path = mutant_root / "src/core/gabbaboy.c"
             core = core_path.read_text(encoding="utf-8")
             require(core.count(MUTANT_ANCHOR) == 1,
@@ -267,7 +285,7 @@ def main() -> int:
         print("dense-input failure-diagnostic=pass capped_bytes=" + str(len(stall_bytes)))
         print("dense-input no-refill-mutant=failed-as-expected reason=predicate-not-reached")
         print("dense-input immutable-baseline=separate-object-store full-identity=verified")
-        print("dense-input baseline-controls=missing-object,wrong-object,changed-fixture-rejected")
+        print("dense-input baseline-controls=missing-object,wrong-identity,changed-fixture-rejected")
     return 0
 
 
