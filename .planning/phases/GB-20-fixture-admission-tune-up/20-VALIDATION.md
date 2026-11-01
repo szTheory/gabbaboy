@@ -1,7 +1,7 @@
 ---
 phase: "20"
 slug: "fixture-admission-tune-up"
-status: validated
+status: partial
 nyquist_compliant: false
 wave_0_complete: true
 created: "2026-10-31"
@@ -39,15 +39,17 @@ created: "2026-10-31"
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 20-01-01 | 20-01 | 1 | RIGHTS-01 | T-20-01, T-20-03, T-20-04 | Real CLI accepts a complete synthetic manifest/notice/pinned-blob path and rejects a coordinated rewrite, missing pin or absent blob. | integration | `python3 -I tests/scripts/verify-fixture-admission.py --self-test` | New, created in this task | ✓ pass |
-| 20-01-02 | 20-01 | 1 | RIGHTS-01 | T-20-01, T-20-03, T-20-04 | Existing approvals pass; incomplete component/use records, new unregistered evidence including additions in legacy subtrees, bad input and changed identity fail before consumption. | integration | `python3 -I tests/scripts/verify-fixture-admission.py --self-test && python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . && python3 -I .github/scripts/verify-workflow-policy.py --self-test --group ci && python3 -I .github/scripts/verify-workflow-policy.py --self-test --group release_jobs` | New, Task 1 dependency | ✓ pass |
+| 20-01-02 | 20-01 | 1 | RIGHTS-01 | T-20-01, T-20-03, T-20-04 | Existing approvals pass; incomplete component/use records, new unregistered evidence including additions in legacy subtrees, bad input and changed identity fail before consumption. | integration | `python3 -I tests/scripts/verify-fixture-admission.py --self-test && python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . && python3 -I .github/scripts/verify-workflow-policy.py --self-test --group ci && python3 -I .github/scripts/verify-workflow-policy.py --self-test --group release_jobs` | New, Task 1 dependency | ⚠ partial — current CTest run's workflow-policy CI control failed while reading an absent temporary wrapper; release-jobs control passed |
 | 20-01-03 | 20-01 | 1 | RIGHTS-01 | T-20-02, T-20-03, T-20-04 | Both exact product policies accept clean synthetic trees and reject insertion, identity, notice/MIT/SDL/sidecar and documentation mutations. | unit | `python3 -I tests/scripts/verify-fixture-admission.py --self-test && python3 -I tests/scripts/verify-fixture-admission.py --self-test-packages --layout core && python3 -I tests/scripts/verify-fixture-admission.py --self-test-packages --layout player` | New, Task 1 dependency | ✓ pass |
 | 20-02-01 | 20-02 | 2 | RIGHTS-01 | T-20-05, T-20-06, T-20-07 | Real install/archive/extraction and consumers pass exact policy; a renamed planted ROM fails before execution. | integration | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` | Existing target, extended | ✓ pass |
 | 20-02-02 | 20-02 | 2 | RIGHTS-01 | T-20-05, T-20-06, T-20-07, T-20-08 | Every approved core subtree, renamed/suffixless insertion and missing/changed notice/MIT control fails in actual trees and parsed archives; source contract remains distinct. | integration | `python3 -I tests/scripts/verify-v02-source-archive.py --self-test && ctest --preset phase1 --output-on-failure --no-tests=error -R '^preview_package_smoke$'` | Existing, extended | ✓ pass |
 | 20-02-03 | 20-02 | 2 | RIGHTS-01 | T-20-06, T-20-07, T-20-08 | Core new/reused/downloaded production paths apply actual-byte policy; missing/changed gabbaboy-notices.txt fails; separate source evidence retained. | integration | `bash tests/scripts/verify-release-candidate.sh --self-test && python3 -I tests/scripts/verify-v02-source-archive.py --self-test && python3 -I .github/scripts/verify-workflow-policy.py --self-test --group release_jobs` | Existing, extended | ✓ pass |
 | 20-03-01 | 20-03 | 2 | RIGHTS-01 | T-20-09, T-20-10, T-20-11 | Real macOS stage/extracted player inventory and lifecycle pass; planted renamed payload fails before execution. | integration | `bash tests/scripts/verify-phase3-player.sh --build-package` | Existing, extended | ⚠ hosted macOS lane pending |
 | 20-03-02 | 20-03 | 2 | RIGHTS-01 | T-20-09, T-20-10, T-20-11 | Real valid player prefix passes shell wrapper; suffixless/renamed/subtree and every missing/changed fixture/GabbaBoy/SDL notice case fail with intended reasons, without altering positive bytes. | integration | `python3 -I tests/scripts/verify-fixture-admission.py --self-test-packages --layout player && bash tests/scripts/verify-phase3-player.sh --self-test-package-policy build/phase3-player/package-stage/installed-prefix` | New mode; Task 1 produces prefix | ✓ pass |
+| 20-04-01 | 20-04 | 3 | RIGHTS-01 | T-20-12 | Direct manifest and repository walks plus Git tree streaming reject over-limit entries/output with bounded child cleanup. | integration | `python3 -I tests/scripts/verify-fixture-admission.py --self-test` | Existing self-test extended | ✓ pass in current full-suite run |
+| 20-04-02 | 20-04 | 3 | RIGHTS-01 | T-20-12 | Filesystem and Git fixture enumeration reject excess entries/output during consumption, reap a rejected child, and preserve admission, repository, core and player controls. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^fixture_(admission|product_).*'` | Existing `fixture_admission_controls` target | ✓ pass in current full-suite run |
 
-Each PLAN task carries its concrete `<fails_when>` signal. All eight task behaviors have automated checks and negative controls; the only outstanding execution result is the existing hosted macOS player-package lane for 20-03-01. The local run produced the package stage and passed the policy/leak controls, but two pre-existing Cocoa menu tests could not initialize without a display service. Run the existing `macos-player-package` CI job at the exact final Phase 20 head before closing the phase. This is an automated environment limitation, not a human-verification item. The first tracer created its own synthetic verification path. No separate Wave 0 plan was added: missing scaffolds are part of Plan 20-01, before the two dependent package plans.
+Each PLAN task carries its concrete `<fails_when>` signal. Plan 20-04's expected RED marker and passing follow-up are recorded in `20-04-SUMMARY.md`; its focused admission/repository/core/player controls also passed in the current full-suite run. The existing hosted macOS player-package lane remains unqualified. The earlier local package attempt produced the package stage and passed policy/leak controls, but two Cocoa menu tests could not initialize without a display service. Run the existing `macos-player-package` CI job at the exact final Phase 20 head before closing the phase. This is an automated environment limitation, not a human-verification item. The first tracer created its own synthetic verification path. No separate Wave 0 plan was added: missing scaffolds are part of Plan 20-01, before the two dependent package plans.
 
 ### Actual package producer/check stages
 
@@ -82,23 +84,24 @@ There is no manual UAT for Phase 20. A future candidate's rights scope still req
 - [x] Wave 0 covers the missing admission and exact-inventory checks.
 - [x] No watch-mode flags.
 - [x] Focused self-test feedback latency is under 30 seconds (about 15 seconds in Plan 20-01).
-- [ ] `nyquist_compliant: true` set in frontmatter after validation; awaiting the existing hosted macOS package lane.
+- [ ] `nyquist_compliant: true` set in frontmatter. The current full suite has 20 failing tests, three critical review findings remain, and the hosted macOS package lane is unavailable.
 
-**Approval:** partial; one automated package execution result remains pending.
+**Approval:** PARTIAL; the full suite is red, review blockers remain, and exact-head hosted macOS package qualification is unavailable.
 
 ## Execution Evidence
 
-- **Coverage:** 8/8 plan tasks have automated checks; each package boundary has a clean positive and content-caused negative controls.
-- **Passed execution evidence:** Plans 20-01 and 20-02 all task checks; Plan 20-03's policy wrapper, portable controls, and 21 real-tree mutation cases.
-- **Pending execution evidence:** `20-03-01` full `--build-package` qualification in the existing `macos-player-package` CI lane. Local run stopped at `player_slot_menu_shortcuts` and its negative control because the host lacks a Cocoa display service; 106/108 local CTests passed. The stage policy and seeded ROM rejection were separately verified locally. This remains an automated-result gap until the existing lane passes at the exact final head; it is not a manual test.
+- **Coverage:** 10/10 plan tasks have automated checks or recorded TDD evidence. Each package boundary has a clean positive and content-caused negative controls.
+- **Recorded source revision:** HEAD `ee4fd369d5e318c9d416534f92aeee0d45ecd2e5`.
+- **Configure/build:** `cmake --preset phase1` and `cmake --build --preset phase1` passed.
+- **Full CTest:** `ctest --preset phase1 --output-on-failure --no-tests=error` ran 1,711 tests and failed 20; the command returned nonzero. The failures were `v02_adoption_docs`, `v02_adoption_docs_controls`, `v02_support_ledger_controls`, `release_disclosure_generator`, `release_disclosure_controls`, `v02_performance_controls`, `v02_delivery_controls`, `installed_runner_smoke`, `acceptance_dense_input_controls`, `test_budget`, `perf_advisory_pipeline`, `perf_advisory_controls`, `workflow_policy_group_ci`, `workflow_policy_group_release_support`, `workflow_policy_group_rehearsal`, `workflow_policy_group_ledger`, `workflow_policy_group_helpers`, `plan_cap`, `support_claims_controls`, and `release_review_approval`. They cover notice-contract drift, the installed debug CMake target inventory, workflow-policy controls reading absent temporary wrappers, plan-cap parsing, timeout-budget rows, an unavailable baseline object, and Git worktree permission denials in the sandbox. This is not a green full-suite result.
+- **Sandbox-only rerun:** The five failures that needed temporary Git worktrees (`v02_performance_controls`, `v02_delivery_controls`, `perf_advisory_pipeline`, `perf_advisory_controls`, and `release_review_approval`) passed when those exact tests were rerun with `.git/worktrees` write access. `acceptance_dense_input_controls` was also rerun with that access and still fails because its source-only mutant checkout cannot resolve the pinned baseline object. The original full-suite run remains red; this isolates five of its failures as sandbox-only.
+- **Phase 20 focused evidence:** fixture admission, repository admission, core product and player product controls passed in that same run. The workflow-policy `ci` group failed while reading an absent temporary wrapper; the `release_jobs` group passed.
+- **Review blockers:** the current `20-REVIEW.md` reports three critical findings after both fix rounds: macOS/Windows release product checks still trust the tagged workspace; the product allowlist digest is not independently pinned; and repository-admission workflow commands can be redirected by the command matcher. These implementation blockers remain escalated for the phase owner.
+- **Pending execution evidence:** `20-03-01` full `--build-package` qualification in the existing hosted `macos-player-package` CI lane at the exact final Phase 20 head. Local qualification cannot substitute for that lane; the prior attempt stopped at two Cocoa menu checks because this host lacks a display service.
 - **Human judgment:** none for this phase. RIGHTS-01 remains pending because no fixture was admitted and automation does not determine legal grant scope.
 
 The supplied spec-less edge remains explicitly unresolved/unclassified (RIGHTS-01; verification null) in Plan 20-01 must_haves. The two precision-filtered prohibition assumptions remain descriptor-less flagged-unverified. They do not invent manual UAT or legal clearance; see `20-SOURCE-AUDIT.md`.
 
-## Validation Audit 2026-11-01
+## Validation Audit — Current HEAD
 
-| Metric | Count |
-|---|---|
-| Gaps found | 1 |
-| Resolved | 0 |
-| Escalated | 1 |
+**Result:** PARTIAL / noncompliant. The focused Phase 20 behavioral controls pass, but the full suite fails and the outstanding security review and hosted macOS package qualification gates remain unresolved. No manual UAT is required.
