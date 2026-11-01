@@ -68,6 +68,26 @@ fixture/manifest/notice rewrite against an unchanged pin. `--check-repository` r
 `BUILD_TESTING` CMake configure before fixture-consuming targets are declared. Non-testing source
 library builds do not require Git history. The CTest controls exercise both modes.
 
+## Admission resource limits
+
+The checker caps each filesystem walk at **16,384 total descendant entries**. The count includes
+every directory and every file, link, or special entry under the scanned fixture root. The direct
+manifest check walks only that fixture's directory; repository validation walks the complete
+`fixtures/` tree. Entries are counted as they are discovered, before a directory is traversed or a
+file is added to the inventory. Exceeding the cap stops the walk with
+`fixture-entry-count-limit`. This total-tree cap is separate from the existing **4,096-file
+manifest list limit** (`record-files-invalid`).
+
+Each Git fixture-tree enumeration is read as a live `git ls-tree` stream. The checker consumes at
+most **32 MiB of stdout** and **16,384 complete records** per enumeration. These limits are applied
+while fixed-size chunks are read, before complete output or an unbounded record list can be kept in
+memory. Overflow rejects with `git-tree-output-limit` or `git-tree-entry-count-limit`. Git stderr
+is drained concurrently so the child cannot block on a full error pipe, while only its last **4
+KiB** is retained for diagnostics.
+
+On an overflow, timeout, malformed record, or reader failure, the checker terminates and waits for
+the Git child, closes both pipes, and joins both reader threads before returning the rejection.
+
 ## Binary product paths and inventories
 
 `check_product_entries(entries, layout, repo_root, inventory=None, sidecar=None)` is the shared

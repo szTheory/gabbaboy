@@ -45,6 +45,9 @@ MAX_FILES = 4096
 MAX_FIXTURE_ENTRIES = 16384
 MAX_GIT_TREE_RECORDS = 16384
 MAX_GIT_TREE_OUTPUT_BYTES = 32 * 1024 * 1024
+MAX_GIT_TREE_STDERR_BYTES = 4096
+GIT_TREE_READ_CHUNK_BYTES = 64 * 1024
+GIT_TREE_TIMEOUT_SECONDS = 30
 MAX_PRODUCT_FILE_BYTES = 512 * 1024 * 1024
 MAX_PRODUCT_TOTAL_BYTES = 1024 * 1024 * 1024
 MAX_PRODUCT_ENTRIES = 16384
@@ -203,12 +206,36 @@ def _require_file_bytes(root: Path, revision: str, path: str, size: int, digest:
     return pinned
 
 
+def _retain_stderr_tail(target: bytearray, chunk: bytes) -> None:
+    if len(chunk) >= MAX_GIT_TREE_STDERR_BYTES:
+        target[:] = chunk[-MAX_GIT_TREE_STDERR_BYTES:]
+        return
+    excess = len(target) + len(chunk) - MAX_GIT_TREE_STDERR_BYTES
+    if excess > 0:
+        del target[:excess]
+    target.extend(chunk)
+
+
 def tree_files(root: Path, revision: str, prefix: str) -> set[str]:
-    raw = git(root, "ls-tree", "-r", "-z", revision, "--", prefix)
     result: set[str] = set()
-    for record in raw.split(b"\0"):
+    record_count = 0
+    pending = bytearray()
+    failures: queue.Queue[BaseException] = queue.Queue(maxsize=1)
+    stderr_tail = bytearray()
+
+    def record_failure(error: BaseException) -> None:
+        try:
+            failures.put_nowait(error)
+        except queue.Full:
+            pass
+
+    def add_record(record: bytes) -> None:
+        nonlocal record_count
         if not record:
-            continue
+            return
+        record_count += 1
+        if record_count > MAX_GIT_TREE_RECORDS:
+            raise Reject("git-tree-entry-count-limit", f"more than {MAX_GIT_TREE_RECORDS} records")
         try:
             metadata, path_raw = record.split(b"\t", 1)
             mode, kind, _oid = metadata.decode("ascii").split(" ", 2)
@@ -218,28 +245,174 @@ def tree_files(root: Path, revision: str, prefix: str) -> set[str]:
         if kind != "blob" or mode not in ("100644", "100755"):
             raise Reject("fixture-link-or-special-file", path)
         result.add(path)
+
+    command = ["git", "ls-tree", "-r", "-z", revision, "--", prefix]
+    try:
+        process = subprocess.Popen(command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   bufsize=0)
+    except OSError as error:
+        raise Reject("git-object-unavailable", str(error)[:240]) from None
+    if process.stdout is None or process.stderr is None:
+        raise Reject("git-tree-reader-unavailable", prefix)
+
+    def read_stdout() -> None:
+        bytes_read = 0
+        try:
+            while True:
+                read_size = min(GIT_TREE_READ_CHUNK_BYTES,
+                                max(1, MAX_GIT_TREE_OUTPUT_BYTES - bytes_read + 1))
+                chunk = process.stdout.read(read_size)
+                if not chunk:
+                    break
+                bytes_read += len(chunk)
+                if bytes_read > MAX_GIT_TREE_OUTPUT_BYTES:
+                    raise Reject("git-tree-output-limit", f"more than {MAX_GIT_TREE_OUTPUT_BYTES} bytes")
+                start = 0
+                while True:
+                    separator = chunk.find(b"\0", start)
+                    if separator < 0:
+                        pending.extend(chunk[start:])
+                        break
+                    pending.extend(chunk[start:separator])
+                    add_record(bytes(pending))
+                    pending.clear()
+                    start = separator + 1
+        except BaseException as error:
+            if isinstance(error, Reject):
+                record_failure(error)
+            else:
+                record_failure(Reject("git-tree-read-failed", type(error).__name__))
+        finally:
+            try:
+                process.stdout.close()
+            except OSError as error:
+                record_failure(Reject("git-tree-read-failed", str(error)[:240]))
+
+    def read_stderr() -> None:
+        try:
+            while True:
+                chunk = process.stderr.read(MAX_GIT_TREE_STDERR_BYTES)
+                if not chunk:
+                    break
+                _retain_stderr_tail(stderr_tail, chunk)
+        except BaseException as error:
+            record_failure(Reject("git-tree-read-failed", f"stderr: {type(error).__name__}"))
+        finally:
+            try:
+                process.stderr.close()
+            except OSError as error:
+                record_failure(Reject("git-tree-read-failed", f"stderr: {str(error)[:240]}"))
+
+    readers = [threading.Thread(target=read_stdout, name="fixture-git-tree-stdout", daemon=True),
+               threading.Thread(target=read_stderr, name="fixture-git-tree-stderr", daemon=True)]
+    waited = False
+    try:
+        for reader in readers:
+            reader.start()
+        deadline = time.monotonic() + GIT_TREE_TIMEOUT_SECONDS
+        returncode = None
+        failure = None
+        while True:
+            try:
+                failure = failures.get_nowait()
+                break
+            except queue.Empty:
+                pass
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                failure = Reject("git-tree-timeout", prefix)
+                break
+            try:
+                returncode = process.wait(timeout=min(0.05, remaining))
+                waited = True
+                break
+            except subprocess.TimeoutExpired:
+                continue
+            except OSError as error:
+                failure = Reject("git-tree-read-failed", str(error)[:240])
+                break
+
+        if failure is None:
+            for reader in readers:
+                reader.join(max(0, deadline - time.monotonic()))
+            if any(reader.is_alive() for reader in readers):
+                failure = Reject("git-tree-timeout", f"reader did not finish for {prefix}")
+            else:
+                try:
+                    failure = failures.get_nowait()
+                except queue.Empty:
+                    pass
+
+        if failure is not None:
+            raise failure
+        if pending:
+            raise Reject("git-tree-invalid", f"unterminated record in {prefix}")
+        if returncode != 0:
+            detail = bytes(stderr_tail).decode("utf-8", errors="replace").strip()[:240]
+            raise Reject("git-object-unavailable", detail or "git ls-tree failed")
+    finally:
+        if not waited:
+            try:
+                if process.poll() is None:
+                    process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            except OSError:
+                pass
+        for stream in (process.stdout, process.stderr):
+            try:
+                stream.close()
+            except OSError:
+                pass
+        for reader in readers:
+            if reader.ident is not None:
+                reader.join()
     return result
 
 
-def current_fixture_files(root: Path) -> set[str]:
-    fixture_root = root / "fixtures"
-    if not fixture_root.is_dir() or fixture_root.is_symlink():
-        raise Reject("fixture-tree-unavailable", "fixtures/ is missing or linked")
+def current_fixture_files(root: Path, fixture_dir: str | None = None) -> set[str]:
+    relative_root = "fixtures" if fixture_dir is None else relative_path(fixture_dir, "fixture directory")
+    if relative_root != "fixtures" and not relative_root.startswith("fixtures/"):
+        raise Reject("fixture-tree-unavailable", relative_root)
+    fixture_root = root.joinpath(*PurePosixPath(relative_root).parts)
+    try:
+        root_mode = fixture_root.lstat().st_mode
+    except OSError:
+        raise Reject("fixture-tree-unavailable", f"{relative_root} is missing") from None
+    if stat.S_ISLNK(root_mode):
+        raise Reject("path-link", relative_root)
+    if not stat.S_ISDIR(root_mode):
+        raise Reject("fixture-tree-unavailable", relative_root)
     found: set[str] = set()
-    for path in fixture_root.rglob("*"):
-        relative = path.relative_to(root).as_posix()
+    pending = [(fixture_root, relative_root)]
+    entry_count = 0
+    while pending:
+        directory, directory_relative = pending.pop()
         try:
-            mode = path.lstat().st_mode
-        except OSError:
-            raise Reject("fixture-tree-unavailable", relative) from None
-        if stat.S_ISLNK(mode):
-            raise Reject("path-link", relative)
-        if stat.S_ISREG(mode):
-            found.add(relative)
-        elif not stat.S_ISDIR(mode):
-            raise Reject("fixture-special-file", relative)
-        if len(found) > MAX_FILES:
-            raise Reject("fixture-file-count-limit", "too many files")
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    relative = f"{directory_relative}/{entry.name}"
+                    entry_count += 1
+                    if entry_count > MAX_FIXTURE_ENTRIES:
+                        raise Reject("fixture-entry-count-limit",
+                                     f"more than {MAX_FIXTURE_ENTRIES} entries under {relative_root}")
+                    try:
+                        mode = entry.stat(follow_symlinks=False).st_mode
+                    except OSError:
+                        raise Reject("fixture-tree-unavailable", relative) from None
+                    if stat.S_ISLNK(mode):
+                        raise Reject("path-link", relative)
+                    if stat.S_ISDIR(mode):
+                        pending.append((Path(entry.path), relative))
+                    elif stat.S_ISREG(mode):
+                        found.add(relative)
+                    else:
+                        raise Reject("fixture-special-file", relative)
+        except OSError as error:
+            raise Reject("fixture-tree-unavailable", f"{directory_relative}: {error.strerror}") from None
     return found
 
 
@@ -427,12 +600,7 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
     if pinned_files != expected_files:
         extra = sorted(pinned_files ^ expected_files)
         raise Reject("fixture-file-inventory-mismatch", extra[0] if extra else fixture_dir)
-    current_files: set[str] = set()
-    for path in root.joinpath(*PurePosixPath(fixture_dir).parts).rglob("*"):
-        if path.is_symlink():
-            raise Reject("path-link", path.relative_to(root).as_posix())
-        if path.is_file():
-            current_files.add(path.relative_to(root).as_posix())
+    current_files = current_fixture_files(root, fixture_dir)
     if current_files != expected_files | {pin_path}:
         extra = sorted(current_files ^ (expected_files | {pin_path}))
         raise Reject("fixture-file-inventory-mismatch", extra[0] if extra else fixture_dir)
@@ -1512,6 +1680,13 @@ def _fake_tree_process_lifecycle_control() -> bool:
         raise Reject("self-test-git-stream-lifecycle", "overflow returned before its readers completed")
     if fake.stderr.bytes_read != len(fake.stderr.data):
         raise Reject("self-test-git-stream-lifecycle", "stderr reader did not drain the child's output")
+    retained = bytearray()
+    for offset in range(0, len(fake.stderr.data), 1024):
+        _retain_stderr_tail(retained, fake.stderr.data[offset:offset + 1024])
+        if len(retained) > MAX_GIT_TREE_STDERR_BYTES:
+            raise Reject("self-test-git-stderr-limit", "stderr retention exceeded 4 KiB")
+    if len(retained) != MAX_GIT_TREE_STDERR_BYTES or retained != fake.stderr.data[-MAX_GIT_TREE_STDERR_BYTES:]:
+        raise Reject("self-test-git-stderr-limit", "stderr reader did not retain the bounded tail")
     return True
 
 
