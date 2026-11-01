@@ -185,6 +185,9 @@ def _product_archive_controls(root: Path) -> None:
         valid = scratch / "gabbaboy-core-macos-arm64.tar.gz"
         archive_tree(prefix, valid)
         check_product_archive(valid, valid.name, "core", root, scratch / "valid-extracted")
+        valid_windows = scratch / "gabbaboy-core-windows-x64.tar.gz"
+        archive_tree(prefix, valid_windows)
+        check_product_archive(valid_windows, valid_windows.name, "core", root, scratch / "valid-windows-extracted")
         _mark_policy_control("mutation", "downloaded product archive controls", "fixture-product-trust")
 
         altered_prefix = scratch / "altered-prefix"
@@ -232,8 +235,10 @@ def _product_archive_controls(root: Path) -> None:
             ("../escape", b"x", "file", "product-archive-path"),
             ("link", b"", "symlink", "product-archive-special"),
             ("one//two", b"x", "file", "product-archive-path"),
+            ("Case/Name", b"first", "file", "product-archive-duplicate"),
+            ("case/name", b"second", "file", "product-archive-duplicate"),
         )
-        for index, (name, data, kind, code) in enumerate(cases):
+        for index, (name, data, kind, code) in enumerate(cases[:3]):
             hostile_path = scratch / f"hostile-{index}.tar.gz"
             _write_control_archive(hostile_path, [(name, data, kind)])
             try:
@@ -243,6 +248,15 @@ def _product_archive_controls(root: Path) -> None:
                     raise SystemExit(f"unsafe archive member {name!r} rejected for wrong reason: {error}") from None
             else:
                 raise SystemExit(f"unsafe archive member {name!r} was accepted")
+        duplicate = scratch / "duplicate.tar.gz"
+        _write_control_archive(duplicate, [(name, data, kind) for name, data, kind, _code in cases[3:]])
+        try:
+            _extract_product_archive(duplicate, scratch / "duplicate-out")
+        except Reject as error:
+            if error.code != "product-archive-duplicate":
+                raise SystemExit(f"case-fold duplicate archive paths rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("case-fold duplicate archive paths were accepted")
 
 
 # --------------------------------------------------------------------------- reader
