@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[2]
 BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "2c4a66ad50b979bbfcf3bff6cf9f4e644a56d9b7"
-REVIEWED_POLICY_SHA256 = "f6092a477be22336ffe585c25508f3e7da761e7b9da3f3716e3f0dbdc302405c"
+REVIEWED_POLICY_COMMIT = "f5954e4c16f99e02f2a57edb4b99df280d2db9f2"
+REVIEWED_POLICY_SHA256 = "3a9c3f21479964aa6d94e1795629e3fbc77087bc85909dcdda461adeb7c86bb5"
 GROUPS = {
     "ci": "workflow_policy_group_ci",
     "release_jobs": "workflow_policy_group_release_jobs",
@@ -47,15 +47,28 @@ ALL_PLATFORMS = ("posix", "windows")
 POSIX_ONLY = ("posix",)
 ADDED_POLICY_FUNCTIONS = {
     "_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test",
+    "_fixture_step", "_fixture_call", "_fixture_step_event", "check_fixture_admission_workflows",
 }
 ADDED_POLICY_GLOBALS = {
     "_POLICY_PARTITION_GROUPS", "_ACTIVE_POLICY_GROUP", "_ACTIVE_POLICY_CONTROLS", "_COMPLETED_POLICY_CONTROLS",
+    "FIXTURE_ADMISSION_REPOSITORY_CALL", "FIXTURE_ADMISSION_TRUSTED_SCRIPT", "CORE_PRODUCT_INVENTORY",
 }
 INSTRUMENTED_POLICY_FUNCTIONS = {
     "_window_discovery_shell_controls", "report_red_replay_controls", "_ledger_boundary_controls",
     "_ledger_git_object_controls", "_ledger_disclosure_scratch_controls", "_ledger_release_object_scratch_controls",
     "verify_cited_stub_controls", "rehearsal_bash_resolver_controls", "rehearsal_tag_guard_controls", "self_test",
 }
+ADDED_MUTATION_CONTROLS = (
+    ("P20 fixture-repro admission gate is removed", "fixture-repro.yml", "fixture-admission-gate"),
+    ("P20 fixture-repro admission gate moved after tool download", "fixture-repro.yml", "fixture-admission-gate"),
+    ("P20 macOS package checkout becomes shallow", "ci.yml", "fixture-admission-history"),
+    ("P20 macOS package admission gate is removed", "ci.yml", "fixture-admission-gate"),
+    ("P20 Linux core stage policy call is removed", "release.yml", "fixture-product-stage"),
+    ("P20 Linux core stage policy runs after archive creation", "release.yml", "fixture-product-stage"),
+    ("P20 Linux stage gate redirects the repository policy root", "release.yml", "fixture-product-stage"),
+    ("P20 macOS reused core skips actual-byte validation", "release.yml", "fixture-product-reuse"),
+    ("P20 downloaded Linux core skips stage-inventory equality", "release.yml", "fixture-product-inventory-binding"),
+)
 
 
 class CoverageError(Exception):
@@ -198,6 +211,19 @@ def baseline_controls(source: bytes) -> list[dict]:
                 "platforms": list(ALL_PLATFORMS), "source": builder, "workflow": workflow,
                 "expected": expected, "label": label,
             })
+    # Plan 20 adds workflow policy controls against the same immutable checker baseline.
+    # Keep these explicit additions in the independently reviewed registry rather than
+    # silently treating them as historical baseline controls.
+    for label, workflow, expected in ADDED_MUTATION_CONTROLS:
+        group = GROUP_BY_WORKFLOW.get(workflow)
+        if group is None:
+            reject(f"approved mutation workflow has no semantic group: {workflow}")
+        key = [label, expected]
+        rows.append({
+            "id": stable_id("mutation", *key), "kind": "mutation", "key": key, "group": group,
+            "platforms": list(ALL_PLATFORMS), "source": "_mutations", "workflow": workflow,
+            "expected": expected, "label": label,
+        })
     for label, _mutate, _extra, expected in namespace["_ledger_mutations"]():
         key = [label, expected]
         rows.append({
@@ -341,16 +367,11 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
         self.normalize_self_test = normalize_self_test
         self.strip_markers = strip_markers
         self.normalize_main = normalize_main
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        node = self.generic_visit(node)
-        if node.name == "self_test":
-            node.body = [stmt for stmt in node.body if not (
-                isinstance(stmt, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "run_helpers"
-                                                     for target in stmt.targets))]
-        return node
-
     def visit_Expr(self, node: ast.Expr):
         value = node.value
+        if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                and value.func.id == "check_fixture_admission_workflows"):
+            return None
         if (self.strip_markers and isinstance(value, ast.Call)
                 and isinstance(value.func, ast.Name) and value.func.id == "_mark_policy_control"):
             return None
@@ -371,6 +392,28 @@ class _StripMarkersAndSelectors(ast.NodeTransformer):
         if self.normalize_main and isinstance(node.func, ast.Name) and node.func.id == "run_policy_self_test":
             return ast.copy_location(ast.Call(func=ast.Name(id="self_test", ctx=ast.Load()),
                                               args=[node.args[0]], keywords=[]), node)
+        return node
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        node = self.generic_visit(node)
+        if node.name == "self_test":
+            node.body = [stmt for stmt in node.body if not (
+                isinstance(stmt, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "run_helpers"
+                                                     for target in stmt.targets))]
+        if node.name == "_mutations":
+            for statement in node.body:
+                if not isinstance(statement, ast.Return) or not isinstance(statement.value, ast.List):
+                    continue
+                def is_plan20_row(row: ast.expr) -> bool:
+                    if isinstance(row, ast.Call) and row.args:
+                        label = row.args[0]
+                    elif isinstance(row, ast.Tuple) and row.elts:
+                        label = row.elts[0]
+                    else:
+                        return False
+                    return (isinstance(label, ast.Constant) and isinstance(label.value, str)
+                            and label.value.startswith("P20 "))
+                statement.value.elts = [row for row in statement.value.elts if not is_plan20_row(row)]
         return node
 
 
@@ -399,9 +442,13 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
         function = current_functions[name]
         if function.decorator_list:
             reject(f"new selector function {name} has an unapproved import-time decorator")
-        if any(not isinstance(default, ast.Constant) for default in [*function.args.defaults, *function.args.kw_defaults]
-               if default is not None):
-            reject(f"new selector function {name} has a nonliteral import-time default")
+        for default in [*function.args.defaults, *function.args.kw_defaults]:
+            if default is None:
+                continue
+            try:
+                ast.literal_eval(default)
+            except (ValueError, TypeError):
+                reject(f"new selector function {name} has a nonliteral import-time default")
 
     # Exactly one of each CLI selector may be added to main; a duplicate option can silently change argparse behavior.
     main_node = current_functions.get("main")
@@ -414,6 +461,14 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
             selector_counts[node.args[0].value] += 1
     if selector_counts != {"--group": 1, "--completed-file": 1}:
         reject("workflow-policy CLI selector arguments are missing or duplicated")
+
+    admission_calls = [node for node in ast.walk(current_functions.get("check_all", ast.Module(body=[], type_ignores=[])))
+                       if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                       and node.func.id == "check_fixture_admission_workflows"]
+    if (len(admission_calls) != 1 or len(admission_calls[0].args) != 1
+            or not isinstance(admission_calls[0].args[0], ast.Name)
+            or admission_calls[0].args[0].id != "root" or admission_calls[0].keywords):
+        reject("fixture-admission workflow guard is missing or redirected from check_all")
     expected_selector_calls = [
         node for node in ast.parse(
             'parser.add_argument("--group", choices=(*_POLICY_PARTITION_GROUPS, "all"), default="all",\n'
@@ -451,6 +506,11 @@ def _compare_baseline_source_identity(baseline: bytes, current: bytes) -> None:
         "_ACTIVE_POLICY_GROUP: str | None = None\n"
         "_ACTIVE_POLICY_CONTROLS: dict[str, dict] = {}\n"
         "_COMPLETED_POLICY_CONTROLS: set[str] = set()\n"
+        "FIXTURE_ADMISSION_REPOSITORY_CALL = (\n"
+        "    'python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .'\n"
+        ")\n"
+        "FIXTURE_ADMISSION_TRUSTED_SCRIPT = 'python3 -I \"$RUNNER_TEMP/verify-fixture-admission.py\"'\n"
+        "CORE_PRODUCT_INVENTORY = 'build/core-product-inventory.json'\n"
     ).body
     expected_assignment_dumps = [ast.dump(node, include_attributes=False) for node in expected_assignments]
     if len(expected_assignment_dumps) != len(ADDED_POLICY_GLOBALS):
