@@ -460,7 +460,6 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
     nonempty(source["repository"], "source.repository")
     if not isinstance(source["revision"], str) or not HEX40.fullmatch(source["revision"]):
         raise Reject("source-revision-invalid", "source.revision must be a full commit id")
-    check_commit(root, source["revision"], "source-revision-unavailable")
 
     inputs = file_records(manifest["inputs"], "inputs")
     files = file_records(manifest["files"], "files")
@@ -485,7 +484,6 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
             nonempty(tool[key], f"{label}.{key}")
         if not isinstance(tool["revision"], str) or not HEX40.fullmatch(tool["revision"]):
             raise Reject("build-tool-revision-invalid", label)
-        check_commit(root, tool["revision"], "build-tool-revision-unavailable")
         if tool["disposition"] not in ("build_only", "copied", "linked", "shipped"):
             raise Reject("build-tool-disposition-invalid", label)
         if tool["disposition"] == "build_only":
@@ -1319,11 +1317,13 @@ def _write_synthetic(root: Path) -> str:
                                              "build_inputs": "Synthetic input scope only.",
                                              "notices": "Synthetic notice scope only."}},
         "permissions": {"repository": True, "public_ci": True},
-        "source": {"repository": "https://example.invalid/fixture", "revision": BASELINE_COMMIT},
+        # External revisions are identifiers in their named repositories. These intentionally
+        # do not resolve in the synthetic GabbaBoy Git database.
+        "source": {"repository": "https://example.invalid/fixture", "revision": "f" * 40},
         "inputs": [input_record],
         "files": files,
         "build": {"recipe": "synthetic build", "tools": [{"name": "test-tool", "version": "1.0",
-                   "terms": "MIT", "source_repository": "https://example.invalid/tool", "revision": BASELINE_COMMIT,
+                   "terms": "MIT", "source_repository": "https://example.invalid/tool", "revision": "e" * 40,
                    "disposition": "build_only", "component": None, "covered_paths": []}]},
         "components": components,
         "notices": {"local_path": "fixtures/synthetic/LICENSE.txt", "sha256": sha256(license_bytes),
@@ -1428,8 +1428,8 @@ def _run_manifest_mutations(root: Path) -> int:
             "REJECT permission-scope-incomplete:")
     changed("source-revision-malformed", lambda value: value["source"].update(revision="main"),
             "REJECT source-revision-invalid:")
-    changed("source-revision-missing-object", lambda value: value["source"].update(revision="0" * 40),
-            "REJECT source-revision-unavailable:")
+    changed("build-tool-revision-malformed", lambda value: value["build"]["tools"][0].update(revision="main"),
+            "REJECT build-tool-revision-invalid:")
     changed("input-not-in-files", lambda value: value["inputs"][0].update(path="fixtures/synthetic/missing.asm"),
             "REJECT input-not-fixture-file:")
     changed("duplicate-file", lambda value: value["files"].append(dict(value["files"][0])),
