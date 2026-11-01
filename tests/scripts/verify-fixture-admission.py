@@ -24,6 +24,9 @@ from pathlib import Path, PurePosixPath
 
 
 BASELINE_COMMIT = "7cc6495e64f3645caa120e7458f754585b788985"
+# Independent trust anchor for the complete product policy bytes. Updating the
+# JSON requires a reviewed digest change here; candidate policy cannot authorize itself.
+PRODUCT_POLICY_SHA256 = "4c54582f1c1145474f3da620c086bdfc4457bcbff1831b0398fa1ff7247a2b6f"
 NOTICE_BASELINE_PRODUCT_CLAIM = (
     b"The installed and downloaded product packages\n"
     b"remain fixture-free: they carry only the original project-authored tracer,\n"
@@ -846,6 +849,7 @@ def check_repository(root: Path, baseline: str) -> dict:
 
 def _product_rules(root: Path, override: dict | None = None) -> tuple[dict, bytes]:
     policy_bytes = read_regular(root, "cmake/FixtureAdmissionPolicy.json")
+    _check_product_policy_identity(policy_bytes)
     policy = parse_json(policy_bytes, "FixtureAdmissionPolicy.json")
     require_keys(policy, {"schema_version", "baseline_commit", "products"}, "FixtureAdmissionPolicy.json")
     if policy["schema_version"] != 1 or policy["baseline_commit"] != BASELINE_COMMIT:
@@ -908,6 +912,11 @@ def _product_rules(root: Path, override: dict | None = None) -> tuple[dict, byte
             for path in alternatives:
                 relative_path(path, f"generated.{layout}.one_of")
     return rules, policy_bytes
+
+
+def _check_product_policy_identity(policy_bytes: bytes) -> None:
+    if sha256(policy_bytes) != PRODUCT_POLICY_SHA256:
+        raise Reject("product-policy-identity", "complete policy bytes do not match the trusted checker pin")
 
 
 def _check_product_notice_index(baseline_index: bytes, current_index: bytes) -> None:
@@ -1317,6 +1326,28 @@ def self_test_packages(layout: str) -> int:
         raise Reject("product-layout-invalid", layout)
     repo_root = Path(__file__).resolve().parents[2]
     rules, _policy_bytes = _product_rules(repo_root)
+    policy_controls = 0
+    _check_product_policy_identity(_policy_bytes)
+    mutated_policy = _policy_bytes.replace(b"fixtures/tracer/tracer.gb", b"fixtures/tracer/other.gb", 1)
+    if mutated_policy == _policy_bytes:
+        raise Reject("self-test-product-policy-pin", "policy mutation did not change bytes")
+    _expect_product_reject("policy-byte-identity", lambda: _check_product_policy_identity(mutated_policy),
+                           "product-policy-identity")
+    policy_controls += 1
+
+    coordinated = json.loads(_policy_bytes)
+    baseline = check_commit(repo_root, BASELINE_COMMIT, "baseline-object-unavailable")
+    forbidden_path = next(path for path in sorted(tree_files(repo_root, baseline, "fixtures"))
+                          if path not in coordinated["products"]["files"])
+    forbidden_bytes = blob(repo_root, baseline, forbidden_path)
+    coordinated["products"]["files"][forbidden_path] = {
+        "sha256": sha256(forbidden_bytes),
+        "destinations": {"core": ["share/gabbaboy/fixtures/forbidden/" + PurePosixPath(forbidden_path).name]},
+    }
+    coordinated_bytes = json.dumps(coordinated, sort_keys=True, separators=(",", ":")).encode()
+    _expect_product_reject("coordinated-policy-identity", lambda: _check_product_policy_identity(coordinated_bytes),
+                           "product-policy-identity")
+    policy_controls += 1
     check_product_documentation(repo_root, rules)
     if (rules["external_notices"]["sdl3"]["sha256"]
             != "1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd"
@@ -1331,7 +1362,18 @@ def self_test_packages(layout: str) -> int:
         entries = product_tree_entries(tree)
         clean_inventory = _validate_product_entries(entries, layout, repo_root, rules_override=test_rules,
                                                      source_contract=source_contract)
-        controls = 1 + _self_test_product_notice_index(repo_root)
+        controls = 1 + _self_test_product_notice_index(repo_root) + policy_controls
+
+        if layout == "core":
+            configuration_group = rules["generated"]["core"]["one_of"][2]
+            selected = next(path for path in configuration_group if path in entries)
+            for alternative in configuration_group:
+                variant_entries = dict(entries)
+                variant_entries.pop(selected)
+                variant_entries[alternative] = entries[selected]
+                _validate_product_entries(variant_entries, layout, repo_root, rules_override=test_rules,
+                                          source_contract=source_contract)
+                controls += 1
 
         def rejected_tree(label: str, mutate, code: str) -> None:
             nonlocal controls
@@ -1344,6 +1386,14 @@ def self_test_packages(layout: str) -> int:
                     candidate_entries, layout, repo_root, rules_override=test_rules,
                     source_contract=source_contract), code)
                 controls += 1
+
+        if layout == "core":
+            second_configuration = next(path for path in rules["generated"]["core"]["one_of"][2]
+                                        if path not in entries)
+            rejected_tree("simultaneous-config-exports",
+                          lambda candidate: (candidate / second_configuration).parent.mkdir(parents=True, exist_ok=True)
+                          or (candidate / second_configuration).write_bytes(b"extra configuration export"),
+                          "product-path-variant-invalid")
 
         fixture_prefixes = sorted({
             destination.rsplit("/", 1)[0]

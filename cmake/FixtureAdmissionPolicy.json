@@ -98,7 +98,12 @@
         "one_of": [
           ["bin/gabbaboy-runner", "bin/gabbaboy-runner.exe"],
           ["lib/libgabbaboy_core.a", "lib/gabbaboy_core.lib"],
-          ["lib/cmake/GabbaBoy/GabbaBoyTargets-release.cmake"]
+          [
+            "lib/cmake/GabbaBoy/GabbaBoyTargets-debug.cmake",
+            "lib/cmake/GabbaBoy/GabbaBoyTargets-release.cmake",
+            "lib/cmake/GabbaBoy/GabbaBoyTargets-relwithdebinfo.cmake",
+            "lib/cmake/GabbaBoy/GabbaBoyTargets-minsizerel.cmake"
+          ]
         ]
       },
       "player": {

@@ -179,6 +179,18 @@ path set from an inventory. Inventory files bind the exact accepted file map, la
 digest. The package self-tests cover clean layouts, notice and fixture changes, extra and renamed
 payloads, inventory mismatch, links, duplicate entries, and the documentation-to-policy contract.
 
+The trusted checker independently pins the SHA-256 of the complete
+`cmake/FixtureAdmissionPolicy.json` bytes. A policy update requires review of every source,
+destination, generated path and notice identity, followed by an intentional update of the
+`PRODUCT_POLICY_SHA256` literal in `verify-fixture-admission.py` and the product-control tests.
+Changing policy JSON alone cannot authorize new package bytes. A core install may contain exactly
+one CMake export file for Debug, Release, RelWithDebInfo or MinSizeRel; extra configuration
+exports are rejected. The accepted installed paths are
+`lib/cmake/GabbaBoy/GabbaBoyTargets-debug.cmake`,
+`lib/cmake/GabbaBoy/GabbaBoyTargets-release.cmake`,
+`lib/cmake/GabbaBoy/GabbaBoyTargets-relwithdebinfo.cmake`, and
+`lib/cmake/GabbaBoy/GabbaBoyTargets-minsizerel.cmake`.
+
 ## Rights decision boundary
 
 The checker verifies required fields, full identities, local snapshots, notice bindings, and
