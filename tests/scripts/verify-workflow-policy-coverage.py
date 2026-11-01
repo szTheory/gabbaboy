@@ -927,7 +927,10 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
     for name in sorted(POLICY_TEST_NAMES):
         test = actual_by_name[name][0]
         properties = _test_properties(test)
-        if set(properties) != {"TIMEOUT", "WORKING_DIRECTORY"}:
+        expected_properties = {"TIMEOUT", "WORKING_DIRECTORY"}
+        if name == GROUPS["release_jobs"]:
+            expected_properties.add("PROCESSORS")
+        if set(properties) != expected_properties:
             reject(f"CTest {name} has an unexpected property that can change execution or qualification")
         timeout = properties.get("TIMEOUT")
         expected_timeout = _expected_timeout(name, sanitizer_enabled)
@@ -935,6 +938,8 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
             reject(f"CTest {name} must retain its {expected_timeout}-second configured timeout")
         if not _same_path(str(properties.get("WORKING_DIRECTORY", "")), build_dir / "tests"):
             reject(f"CTest {name} has an unexpected working directory")
+        if name == GROUPS["release_jobs"] and properties.get("PROCESSORS") != 4:
+            reject("CTest release_jobs must reserve all four native test slots for its bounded control group")
 
         definitions = _parse_wrapper_definitions(test, root, cmake_executable)
         cli = definitions.get("GBB_CMD", "").split(";")
@@ -1082,13 +1087,16 @@ def _self_test(root: Path, revision: str) -> int:
             definitions.extend((("GBB_EXPECT_FILE", str(completion)), ("GBB_EXPECT_FILE_FRESH", "TRUE")))
         command = [cmake_executable, *(f"-D{name}={value}" for name, value in definitions),
                    "-P", str(root / "tests/expect_exit.cmake")]
+        properties = [
+            {"name": "TIMEOUT", "value": timeout},
+            {"name": "WORKING_DIRECTORY", "value": str(build_dir / "tests")},
+        ]
+        if name == GROUPS["release_jobs"]:
+            properties.append({"name": "PROCESSORS", "value": 4})
         return {
             "name": name,
             "command": command,
-            "properties": [
-                {"name": "TIMEOUT", "value": timeout},
-                {"name": "WORKING_DIRECTORY", "value": str(build_dir / "tests")},
-            ],
+            "properties": properties,
         }
 
     for name, mutate in (
@@ -1179,12 +1187,19 @@ def _self_test(root: Path, revision: str) -> int:
         target = next(test for test in test_list if test["name"] == GROUPS["ci"])
         next(prop for prop in target["properties"] if prop["name"] == "TIMEOUT")["value"] = value
 
+    def set_policy_processors(test_list: list[dict], value: int) -> None:
+        target = next(test for test in test_list if test["name"] == GROUPS["release_jobs"])
+        next(prop for prop in target["properties"] if prop["name"] == "PROCESSORS")["value"] = value
+
     mutant = copy.deepcopy(tests)
     set_timeout(mutant, 540)
     rejected("incorrectly scaled native timeout", lambda: validate(mutant))
     mutant = copy.deepcopy(tests)
     set_timeout(mutant, 180)
     rejected("unscaled sanitizer timeout", lambda: validate(mutant, sanitizer=True))
+    mutant = copy.deepcopy(tests)
+    set_policy_processors(mutant, 3)
+    rejected("unreserved release policy processors", lambda: validate(mutant))
 
     def named_test(test_list: list[dict], name: str) -> dict:
         return next(test for test in test_list if test["name"] == name)
@@ -1431,7 +1446,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 87:
+    if controls != 88:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
