@@ -91,9 +91,9 @@ coverage:
     human_judgment: false
 duration: 46min
 completed: 2026-10-31
-status: complete
-completion_scope: Tasks 1–3 historical evidence plus the final security-rescope Task 4; no fixture or rights changes.
-pending_follow_up: None for this plan; phase-level review, full verification, and hosted macOS qualification remain with Phase 20 orchestration.
+status: reopened
+completion_scope: Completed Tasks 1–4 only; all original commits, metrics and passing evidence remain historical.
+pending_follow_up: Task 5 — independent archive-wide extension-header count with preserved 128-header chain cap and long-path compatibility.
 plan_head_before: 6075bb2aecc687b287d830bb0f05ed8fcc414d42
 plan_head_after: 75f4e835a8192e8e8f94eac075824c29a5c756e1
 ---
@@ -101,6 +101,12 @@ plan_head_after: 75f4e835a8192e8e8f94eac075824c29a5c756e1
 # Phase GB-20 Plan 02: Fixture Admission Tune-up Summary
 
 **Installed, extracted, and released core products now enforce the shared fixture policy against actual archive and notice bytes.**
+
+## Reopened for the archive-wide extension-header count follow-up
+
+Plan 20-02 is incomplete until Task 5 passes. [20-FINAL-PRODUCT-CODE-REVIEW.md](20-FINAL-PRODUCT-CODE-REVIEW.md) confirms the earlier parser and digest fixes but finds that extension count resets after each ordinary member. The existing 128-header count therefore bounds consecutive chains, while interleaved metadata lacks its own archive-wide count bound. Earlier commits, metrics and coverage below remain evidence for Tasks 1–4; they do not establish this new total-count guarantee.
+
+The executor acts next on Task 5 in [20-02-PLAN.md](20-02-PLAN.md), retaining the 128-header chain cap and adding an independent 32,768-header archive total. The production negative must lower only the total cap and exceed it with three interleaved headers, while a realistic 256-long-path source positive passes under unchanged defaults. Keep status reopened until the source-archive CTest, release-candidate self-test and planning checks pass at the committed implementation head; then append actual Task 5 commits and fresh block-style coverage. No owner confirmation, new plan, fixture/rights change, dependency or live publication is included. Phase 20 integration/security and hosted qualification remain separate gates.
 
 ## Final security-audit archive follow-up completed
 
@@ -175,7 +181,7 @@ None.
 
 ## Next Phase Readiness
 
-Plan 20-02 tasks and focused checks are complete. Phase orchestration still owns the remaining Phase 20 work and final-head qualification. No fixture was admitted; `RIGHTS-01` remains pending.
+Tasks 1–4 and their focused checks are complete; Plan 20-02 is reopened for Task 5 above. Phase orchestration still owns the remaining Phase 20 work and final-head qualification. No fixture was admitted; `RIGHTS-01` remains pending.
 
 ---
 *Phase: GB-20-fixture-admission-tune-up*
@@ -188,7 +194,7 @@ Plan 20-02 tasks and focused checks are complete. Phase orchestration still owns
 - GSD coverage classifier reports all three deliverables as automatically covered.
 - Required focused package, archive, release-sidecar, fixture-product, and release-workflow controls passed.
 
-## Task 4 Self-Check: PASSED
+## Task 4 Self-Check: PASSED (historical)
 
 - Source parser implementation is committed as `75bba2e2` and is the recorded plan task head.
 - Configure/build and all three required verification commands passed at that head.
