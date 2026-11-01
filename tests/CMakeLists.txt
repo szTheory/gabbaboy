@@ -1271,8 +1271,10 @@ set_tests_properties(
 find_program(GBB_SAMESUITE_REPRO_BASH bash REQUIRED)
 add_test(NAME samesuite_repro_selfcheck
   COMMAND "${GBB_SAMESUITE_REPRO_BASH}" "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-samesuite.sh" --self-test)
+# This self-check launches many short subprocesses; keep parallel test load from consuming its timeout.
 set_tests_properties(samesuite_repro_selfcheck PROPERTIES
   TIMEOUT 30
+  RUN_SERIAL TRUE
   ENVIRONMENT "GBB_SAMESUITE_BASH=${GBB_SAMESUITE_REPRO_BASH}")
 
 # rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
@@ -1434,6 +1436,23 @@ function(gbb_add_v02_contract name timeout regex script)
   set_tests_properties(${name} PROPERTIES TIMEOUT ${timeout} LABELS "v02"
     ENVIRONMENT "${environment}")
 endfunction()
+
+# Phase 20 D-01/D-02: the real admission CLI checks one synthetic candidate plus a coherent rewrite
+# negative, while the repository gate preserves legacy fixture identities and rejects new evidence
+# before any fixture-consuming target is configured.
+gbb_add_v02_contract(fixture_admission_controls 90
+  [=[PASS: fixture admission self-test positives=[1-9][0-9]* negative_controls=[1-9][0-9]*]=]
+  verify-fixture-admission.py --self-test)
+gbb_add_v02_contract(fixture_admission_repository 30
+  [=[PASS: fixture admission repository legacy_files=[1-9][0-9]* admitted_changes=0 baseline=[0-9a-f]+]=]
+  verify-fixture-admission.py --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
+gbb_add_v02_contract(fixture_product_core_controls 120
+  [=[PASS: fixture admission product layout=core positive=1 negative_controls=[1-9][0-9]*]=]
+  verify-fixture-admission.py --self-test-packages --layout core)
+gbb_add_v02_contract(fixture_product_player_controls 120
+  [=[PASS: fixture admission product layout=player positive=1 negative_controls=[1-9][0-9]*]=]
+  verify-fixture-admission.py --self-test-packages --layout player)
+
 gbb_add_v02_contract(v02_game_claims 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "game"]=]
   verify-v02-adoption.py --check game)
@@ -1534,6 +1553,7 @@ gbb_add_v02_contract(v02_fuzz_controls 180
 gbb_add_v02_contract(v02_source_archive_controls 90
   [=[PASS: source archive checker accepted [1-9][0-9]* cases and rejected [1-9][0-9]* negative controls]=]
   verify-v02-source-archive.py --self-test)
+set_tests_properties(v02_source_archive_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_delivery_controls 90
   [=[PASS: delivery checker positives=[1-9][0-9]* rejected_controls=[1-9][0-9]* real_owner_rejections=[1-9]]=]
   verify-v02-delivery.py --self-test)
@@ -1895,6 +1915,7 @@ add_test(NAME preview_package_smoke
     -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
+set_tests_properties(preview_package_smoke PROPERTIES TIMEOUT 180)
 
 # Phase 16 D-18: the base TIMEOUT for tests that set none. The player child scope inherits it and
 # applies the same sweep, because this directory's pass cannot reach child-directory tests.

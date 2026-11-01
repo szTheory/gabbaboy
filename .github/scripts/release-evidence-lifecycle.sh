@@ -224,6 +224,12 @@ fi
 lifecycle_validate_draft() {
 # BEGIN validate-draft
 set -euo pipefail
+[[ -s build/platform-products/downloaded/gabbaboy-core-macos-arm64.tar.gz && \
+   -s build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz && \
+   -s build/platform-products/downloaded/gabbaboy-core-windows-x64.tar.gz ]] || {
+  echo "Trusted macOS and Windows product archives must pass the isolated byte gate before draft validation." >&2
+  exit 1
+}
 bash trusted/.github/scripts/verify-release-gates.sh --check-draft "$RELEASE_ID" "$RELEASE_TAG" "$SOURCE_SHA"
 mkdir -p build/release-final
 gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir build/release-final

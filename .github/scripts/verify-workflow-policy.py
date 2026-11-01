@@ -20,17 +20,22 @@ from __future__ import annotations
 
 import argparse
 import ast
+from contextlib import contextmanager
 import hashlib
+import importlib.util
+import io
 import json
 import math
 import os
 import re
 import shutil
+import tarfile
 import subprocess
 import sys
 import tempfile
 from fractions import Fraction
 from pathlib import Path
+from pathlib import PurePosixPath
 from unittest.mock import call, patch
 
 
@@ -38,6 +43,538 @@ class Reject(Exception):
     def __init__(self, code: str, message: str) -> None:
         self.code = code
         super().__init__(f"REJECT {code}: {message}")
+
+
+MAX_PRODUCT_ARCHIVE_BYTES = 1_073_741_824
+MAX_PRODUCT_ARCHIVE_MEMBERS = 16_384
+MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES = 1_073_741_824
+MAX_PRODUCT_ARCHIVE_FILE_BYTES = 536_870_912
+MAX_PRODUCT_ARCHIVE_STREAM_BYTES = 1_207_959_552
+MAX_PRODUCT_ARCHIVE_EXTENSION_BYTES = 65_536
+MAX_PRODUCT_ARCHIVE_TOTAL_EXTENSION_BYTES = 4_194_304
+MAX_PRODUCT_ARCHIVE_EXTENSION_HEADERS = 128
+MAX_PRODUCT_ARCHIVE_READ_BYTES = 65_536
+
+
+def _load_trusted_archive_helper():
+    helper_path = Path(__file__).resolve().with_name("safe_extract_package.py")
+    if not helper_path.is_file() or helper_path.is_symlink():
+        raise RuntimeError("trusted bounded archive helper is unavailable")
+    spec = importlib.util.spec_from_file_location("gbb_safe_extract_package", helper_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("trusted bounded archive helper could not be loaded")
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    return helper
+
+
+_SAFE_ARCHIVE = _load_trusted_archive_helper()
+
+
+def _archive_member_path(name: str) -> str:
+    if not name or "\\" in name or "\x00" in name or name.startswith("/"):
+        raise Reject("product-archive-path", f"invalid archive member {name!r}")
+    is_directory = name.endswith("/")
+    candidate = name[:-1] if is_directory else name
+    path = PurePosixPath(candidate)
+    if (not candidate or str(path) != candidate or path.is_absolute()
+            or any(":" in part for part in candidate.split("/"))
+            or any(part in ("", ".", "..") for part in candidate.split("/"))):
+        raise Reject("product-archive-path", f"invalid archive member {name!r}")
+    return candidate
+
+
+def _product_archive_target(destination_root: Path, target: Path, relative: str) -> Path:
+    """Prove the native target and its existing ancestry stay inside the private extraction root."""
+    try:
+        root = destination_root.resolve(strict=True)
+        lexical_root = destination_root.absolute()
+        resolved = target.resolve(strict=False)
+    except OSError as error:
+        raise Reject("product-archive-path", f"cannot resolve archive target {relative!r}: {error.strerror}") from None
+    if root.drive.casefold() != resolved.drive.casefold() or root.anchor.casefold() != resolved.anchor.casefold():
+        raise Reject("product-archive-path", f"archive target changes drive or anchor: {relative!r}")
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        raise Reject("product-archive-path", f"archive target escapes extraction root: {relative!r}") from None
+
+    cursor = target
+    while cursor != lexical_root:
+        try:
+            if cursor.is_symlink():
+                raise Reject("product-archive-path", f"archive target traverses a symlink: {relative!r}")
+            if cursor != target and cursor.exists() and not cursor.is_dir():
+                raise Reject("product-archive-path", f"archive target traverses a non-directory: {relative!r}")
+            parent = cursor.parent
+            if parent == cursor:
+                raise Reject("product-archive-path", f"archive target has no extraction-root ancestor: {relative!r}")
+            parent_resolved = parent.resolve(strict=False)
+            parent_resolved.relative_to(root)
+            cursor = parent
+        except Reject:
+            raise
+        except (OSError, ValueError):
+            raise Reject("product-archive-path", f"archive target ancestry escapes extraction root: {relative!r}") from None
+    return resolved
+
+
+def _extract_product_archive(archive: Path, destination: Path) -> int:
+    """Materialize a bounded tar.gz without following archive-controlled paths or links."""
+    try:
+        if archive.is_symlink() or not archive.is_file() or archive.stat().st_size > MAX_PRODUCT_ARCHIVE_BYTES:
+            raise Reject("product-archive-size", "archive is missing, linked, or exceeds its byte limit")
+    except OSError as error:
+        raise Reject("product-archive-unavailable", error.strerror or "stat failed") from None
+    if destination.exists() or destination.is_symlink():
+        raise Reject("product-archive-destination", "destination must not exist before extraction")
+    records: list[tuple[bytes, str, int, int]] = []
+    names: set[str] = set()
+    folded: set[str] = set()
+    total = 0
+    try:
+        limits = {
+            "stream_limit": MAX_PRODUCT_ARCHIVE_STREAM_BYTES,
+            "extension_headers": MAX_PRODUCT_ARCHIVE_EXTENSION_HEADERS,
+            "extension_bytes": MAX_PRODUCT_ARCHIVE_EXTENSION_BYTES,
+            "total_extension_bytes": MAX_PRODUCT_ARCHIVE_TOTAL_EXTENSION_BYTES,
+            "max_request": MAX_PRODUCT_ARCHIVE_READ_BYTES,
+        }
+        # Pass one validates the complete stream and records only bounded metadata.
+        with _SAFE_ARCHIVE.open_bounded_tar(archive, **limits) as (bundle, bounded_file):
+            for member in bundle:
+                if len(records) >= MAX_PRODUCT_ARCHIVE_MEMBERS:
+                    raise Reject("product-archive-members", "archive has too many members")
+                relative = _archive_member_path(member.name)
+                folded_name = relative.casefold()
+                if relative in names or folded_name in folded:
+                    raise Reject("product-archive-duplicate", relative)
+                names.add(relative)
+                folded.add(folded_name)
+                if member.isdir():
+                    records.append((member.type, relative, member.size, member.mode))
+                    continue
+                if not member.isreg():
+                    raise Reject("product-archive-special", relative)
+                if member.size < 0 or member.size > MAX_PRODUCT_ARCHIVE_FILE_BYTES:
+                    raise Reject("product-archive-file-size", relative)
+                total += member.size
+                if total > MAX_PRODUCT_ARCHIVE_EXPANDED_BYTES:
+                    raise Reject("product-archive-expanded-size", "archive expands beyond its total byte limit")
+                records.append((member.type, relative, member.size, member.mode))
+            _drain_product_tar_stream(bounded_file)
+
+        paths = {relative: (kind, size, mode) for kind, relative, size, mode in records}
+        for _kind, relative, _size, _mode in records:
+            parts = PurePosixPath(relative).parts
+            for index in range(1, len(parts)):
+                parent = PurePosixPath(*parts[:index]).as_posix()
+                existing = paths.get(parent)
+                if existing is not None and existing[0] != tarfile.DIRTYPE:
+                    raise Reject("product-archive-path", relative)
+
+        # Pass two revalidates the same inventory before materializing each entry.
+        destination.mkdir(parents=True)
+        destination_root = destination
+        with _SAFE_ARCHIVE.open_bounded_tar(archive, **limits) as (bundle, bounded_file):
+            seen_count = 0
+            for member in bundle:
+                if seen_count >= len(records):
+                    raise Reject("product-archive-drift", "archive gained entries after validation")
+                kind, relative, size, mode = records[seen_count]
+                seen_count += 1
+                if (_archive_member_path(member.name) != relative or
+                        (member.type, member.size, member.mode) != (kind, size, mode)):
+                    raise Reject("product-archive-drift", relative)
+                target = destination.joinpath(*relative.split("/"))
+                target = _product_archive_target(destination_root, target, relative)
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                stream = bundle.extractfile(member)
+                if stream is None:
+                    raise Reject("product-archive-member-read", relative)
+                copied = 0
+                with stream, target.open("xb") as output:
+                    while True:
+                        chunk = stream.read(min(MAX_PRODUCT_ARCHIVE_READ_BYTES, size - copied + 1))
+                        if not chunk:
+                            break
+                        copied += len(chunk)
+                        if copied > size:
+                            raise Reject("product-archive-file-size", relative)
+                        output.write(chunk)
+                if copied != size:
+                    raise Reject("product-archive-file-size", relative)
+            if seen_count != len(records):
+                raise Reject("product-archive-drift", "archive lost entries after validation")
+            _drain_product_tar_stream(bounded_file)
+    except Reject:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise
+    except getattr(_SAFE_ARCHIVE, "ArchiveLimitError") as error:
+        shutil.rmtree(destination, ignore_errors=True)
+        reason = {
+            "stream": "product-archive-stream-limit",
+            "extension-header": "product-archive-extension-header-limit",
+            "extension-total": "product-archive-extension-total-limit",
+            "extension-count": "product-archive-extension-count-limit",
+        }.get(error.reason, "product-archive-invalid")
+        raise Reject(reason, str(error)[:240]) from None
+    except (OSError, tarfile.TarError, EOFError) as error:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise Reject("product-archive-invalid", str(error)[:240]) from None
+    except ValueError as error:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise Reject("product-archive-invalid", str(error)[:240]) from None
+    return len(records)
+
+
+def _drain_product_tar_stream(bounded_file) -> None:
+    while bounded_file.read(MAX_PRODUCT_ARCHIVE_READ_BYTES):
+        pass
+
+
+def check_product_archive(archive: Path, expected_name: str, layout: str,
+                          repo_root: Path, destination: Path) -> None:
+    if archive.name != expected_name or layout not in ("core", "player"):
+        raise Reject("product-archive-identity", "archive name or product layout is not authorized")
+    checker = repo_root / "tests/scripts/verify-fixture-admission.py"
+    if not checker.is_file():
+        raise Reject("product-archive-trusted-checker", "trusted fixture checker is unavailable")
+    created = False
+    try:
+        _extract_product_archive(archive, destination)
+        created = True
+        result = subprocess.run(
+            [sys.executable, "-I", str(checker), "--check-product-tree", str(destination),
+             "--layout", layout, "--repo-root", str(repo_root)],
+            cwd=repo_root, capture_output=True, text=True, check=False, timeout=90,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip().replace(str(repo_root), "<trusted-root>")[:500]
+            raise Reject("product-archive-policy", detail or "trusted product checker refused archive")
+    except subprocess.TimeoutExpired:
+        raise Reject("product-archive-policy-timeout", "trusted product checker exceeded its time limit") from None
+    finally:
+        if created:
+            shutil.rmtree(destination, ignore_errors=True)
+
+
+def _write_control_archive(path: Path, members: list[tuple[str, bytes, str]]) -> None:
+    with tarfile.open(path, "w:gz") as bundle:
+        for name, data, kind in members:
+            info = tarfile.TarInfo(name)
+            if kind == "symlink":
+                info.type = tarfile.SYMTYPE
+                info.linkname = "../../outside"
+                bundle.addfile(info)
+            elif kind == "directory":
+                info.type = tarfile.DIRTYPE
+                bundle.addfile(info)
+            else:
+                info.size = len(data)
+                bundle.addfile(info, io.BytesIO(data))
+
+
+def _product_archive_controls(root: Path, build_dir: Path) -> None:
+    """Exercise the publisher's production archive gate using real installed product bytes."""
+    for label in _SAFE_ARCHIVE.self_test():
+        _mark_policy_control("helper", "product-archive-path", label)
+
+    with tempfile.TemporaryDirectory(prefix="gbb-product-archive-controls.") as directory:
+        scratch = Path(directory)
+        prefix = scratch / "prefix"
+        try:
+            subprocess.run(["cmake", "--install", str(build_dir), "--prefix", str(prefix)],
+                           cwd=root, capture_output=True, text=True, check=True, timeout=60)
+        except (OSError, subprocess.SubprocessError) as error:
+            detail = ""
+            if isinstance(error, subprocess.CalledProcessError):
+                detail = f" stdout={error.stdout!r} stderr={error.stderr!r}"
+            raise SystemExit(f"product-archive control setup failed: CMake install: {error}{detail}") from None
+
+        def pax_archive(path: Path, count: int, comment_size: int, payload_size: int = 0) -> None:
+            with tarfile.open(path, mode="w:gz", format=tarfile.PAX_FORMAT) as bundle:
+                root_info = tarfile.TarInfo("installed-prefix/")
+                root_info.type = tarfile.DIRTYPE
+                bundle.addfile(root_info)
+                for index in range(count):
+                    info = tarfile.TarInfo(f"installed-prefix/file-{index:03d}.bin")
+                    info.size = payload_size
+                    info.pax_headers = {"comment": "x" * comment_size}
+                    bundle.addfile(info, io.BytesIO(b"x" * payload_size))
+
+        def expected_resource_rejection(label: str, archive: Path, destination: Path,
+                                        expected: str) -> None:
+            try:
+                _extract_product_archive(archive, destination)
+            except Reject as error:
+                if error.code != expected:
+                    raise SystemExit(f"{label} rejected for wrong reason: {error}") from None
+            else:
+                raise SystemExit(f"{label} was accepted")
+            if destination.exists():
+                raise SystemExit(f"{label} left an extraction destination")
+            _mark_policy_control("helper", "product-archive-resource", label)
+        def archive_tree(source: Path, destination: Path, additions: dict[str, bytes] | None = None) -> None:
+            files = sorted(path for path in source.rglob("*") if path.is_file())
+            members = [(path.relative_to(source).as_posix(), path.read_bytes(), "file") for path in files]
+            members.extend((name, data, "file") for name, data in (additions or {}).items())
+            _write_control_archive(destination, members)
+
+        valid = scratch / "gabbaboy-core-macos-arm64.tar.gz"
+        archive_tree(prefix, valid)
+        check_product_archive(valid, valid.name, "core", root, scratch / "valid-extracted")
+        valid_windows = scratch / "gabbaboy-core-windows-x64.tar.gz"
+        archive_tree(prefix, valid_windows)
+        check_product_archive(valid_windows, valid_windows.name, "core", root, scratch / "valid-windows-extracted")
+        _mark_policy_control("mutation", "downloaded product archive controls", "fixture-product-trust")
+
+        missing_checker_root = scratch / "trusted-root-without-checker"
+        missing_checker_root.mkdir()
+        retry_destination = scratch / "missing-checker-retry"
+        try:
+            check_product_archive(valid, valid.name, "core", missing_checker_root, retry_destination)
+        except Reject as error:
+            if error.code != "product-archive-trusted-checker" or retry_destination.exists():
+                raise SystemExit(f"missing trusted checker cleanup failed: {error}") from None
+        else:
+            raise SystemExit("missing trusted checker was accepted")
+        _mark_policy_control("helper", "product-archive-cleanup", "missing checker leaves destination absent")
+        check_product_archive(valid, valid.name, "core", root, retry_destination)
+        if retry_destination.exists():
+            raise SystemExit("successful same-destination retry did not clean its extraction tree")
+        _mark_policy_control("helper", "product-archive-cleanup", "trusted checker retry succeeds")
+
+        allowed_pax = scratch / "allowed-pax.tar.gz"
+        pax_archive(allowed_pax, 1, 32, 8)
+        allowed_destination = scratch / "allowed-pax-extracted"
+        if _extract_product_archive(allowed_pax, allowed_destination) != 2:
+            raise SystemExit("small permitted PAX metadata did not preserve its two members")
+        shutil.rmtree(allowed_destination)
+        _mark_policy_control("helper", "product-archive-resource", "small extension accepted")
+
+        large_pax = scratch / "large-pax-comment.tar.gz"
+        pax_archive(large_pax, 1, 70_000, 1)
+        expected_resource_rejection("70,000-byte PAX comment", large_pax,
+                                    scratch / "large-pax-extracted", "product-archive-extension-header-limit")
+
+        aggregate_pax = scratch / "aggregate-pax.tar.gz"
+        pax_archive(aggregate_pax, 3, 60_000, 1)
+        with patch(__name__ + ".MAX_PRODUCT_ARCHIVE_TOTAL_EXTENSION_BYTES", 128 * 1024):
+            expected_resource_rejection("aggregate PAX metadata", aggregate_pax,
+                                        scratch / "aggregate-pax-extracted", "product-archive-extension-total-limit")
+
+        count_pax = scratch / "count-pax.tar.gz"
+        pax_archive(count_pax, 3, 8, 1)
+        with patch(__name__ + ".MAX_PRODUCT_ARCHIVE_EXTENSION_HEADERS", 2):
+            expected_resource_rejection("PAX extension count", count_pax,
+                                        scratch / "count-pax-extracted", "product-archive-extension-count-limit")
+
+        stream_archive = scratch / "stream-cap.tar.gz"
+        pax_archive(stream_archive, 1, 0, 16 * 1024)
+        if stream_archive.stat().st_size >= 16 * 1024:
+            raise SystemExit("stream-cap control is not a small compressed archive")
+        with patch(__name__ + ".MAX_PRODUCT_ARCHIVE_STREAM_BYTES", 4096):
+            expected_resource_rejection("decompressed tar stream", stream_archive,
+                                        scratch / "stream-cap-extracted", "product-archive-stream-limit")
+
+        late_archive = scratch / "late-stream-cap.tar.gz"
+        _write_control_archive(late_archive, [
+            ("installed-prefix/", b"", "directory"),
+            ("installed-prefix/first.bin", b"first", "file"),
+            ("installed-prefix/later.bin", b"z" * 32_768, "file"),
+        ])
+        late_destination = scratch / "late-stream-cap-extracted"
+        original_open = _SAFE_ARCHIVE.open_bounded_tar
+        open_count = 0
+
+        @contextmanager
+        def fail_second_stream(*args, **kwargs):
+            nonlocal open_count
+            open_count += 1
+            if open_count == 2:
+                kwargs["stream_limit"] = 10_240
+            with original_open(*args, **kwargs) as opened:
+                try:
+                    yield opened
+                except _SAFE_ARCHIVE.ArchiveLimitError as error:
+                    if not (late_destination / "installed-prefix/first.bin").is_file():
+                        raise SystemExit("late stream rejection occurred before one file was extracted") from error
+                    raise
+
+        with patch.object(_SAFE_ARCHIVE, "open_bounded_tar", fail_second_stream):
+            try:
+                check_product_archive(late_archive, late_archive.name, "core", root, late_destination)
+            except Reject as error:
+                if error.code != "product-archive-stream-limit" or late_destination.exists():
+                    raise SystemExit(f"late stream cleanup failed: {error}") from None
+            else:
+                raise SystemExit("late stream rejection control was accepted")
+        _mark_policy_control("helper", "product-archive-cleanup", "late resource rejection removes partial extraction")
+
+        altered_prefix = scratch / "altered-prefix"
+        shutil.copytree(prefix, altered_prefix)
+        (altered_prefix / "share/gabbaboy/fixtures/tracer/tracer.gb").write_bytes(b"altered controlled ROM")
+        altered = scratch / "gabbaboy-core-windows-x64.tar.gz"
+        archive_tree(altered_prefix, altered)
+        try:
+            check_product_archive(altered, altered.name, "core", root, scratch / "altered-extracted")
+        except Reject as error:
+            if error.code != "product-archive-policy" or "product-identity-mismatch" not in str(error):
+                raise SystemExit(f"altered fixture archive rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("altered controlled fixture bytes were accepted in a product archive")
+
+        forbidden = root / "fixtures/mooneye-cgb/boot_regs-cgb.gb"
+        injected = scratch / "gabbaboy-core-windows-x64.tar.gz"
+        archive_tree(prefix, injected, {"share/gabbaboy/injected.bin": forbidden.read_bytes()})
+        try:
+            check_product_archive(injected, injected.name, "core", root, scratch / "extra-extracted")
+        except Reject as error:
+            if error.code != "product-archive-policy" or "product-fixture-leak" not in str(error):
+                raise SystemExit(f"extra controlled fixture bytes rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("extra controlled fixture bytes were accepted in a product archive")
+
+        marker = scratch / "tagged-checker-ran"
+        hostile = scratch / "gabbaboy-core-macos-arm64.tar.gz"
+        archive_tree(prefix, hostile, {
+            "tests/scripts/verify-fixture-admission.py":
+                f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran')\n".encode(),
+            "cmake/FixtureAdmissionPolicy.json": b'{"products":{"files":{}}}\n',
+        })
+        try:
+            check_product_archive(hostile, hostile.name, "core", root, scratch / "hostile-extracted")
+        except Reject as error:
+            if error.code != "product-archive-policy" or "product-path-unknown" not in str(error):
+                raise SystemExit(f"hostile archive checker/policy rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("hostile archive checker/policy was accepted")
+        if marker.exists():
+            raise SystemExit("publisher executed a checker copied from the tagged archive")
+
+        cases = (
+            ("../escape", b"x", "file", "product-archive-path"),
+            ("link", b"", "symlink", "product-archive-special"),
+            ("one//two", b"x", "file", "product-archive-path"),
+            ("Case/Name", b"first", "file", "product-archive-duplicate"),
+            ("case/name", b"second", "file", "product-archive-duplicate"),
+        )
+        for index, (name, data, kind, code) in enumerate(cases[:3]):
+            hostile_path = scratch / f"hostile-{index}.tar.gz"
+            _write_control_archive(hostile_path, [(name, data, kind)])
+            try:
+                _extract_product_archive(hostile_path, scratch / f"hostile-{index}-out")
+            except Reject as error:
+                if error.code != code:
+                    raise SystemExit(f"unsafe archive member {name!r} rejected for wrong reason: {error}") from None
+            else:
+                raise SystemExit(f"unsafe archive member {name!r} was accepted")
+
+        drive_names = (
+            ("D:/outside/", b"", "directory"),
+            ("D:/outside/file", b"x", "file"),
+            ("D:outside/file", b"x", "file"),
+            ("nested/d:/outside/", b"", "directory"),
+            ("nested/d:/outside/file", b"x", "file"),
+        )
+        for index, (name, data, kind) in enumerate(drive_names):
+            hostile_path = scratch / f"drive-path-{index}.tar.gz"
+            destination = scratch / f"drive-path-{index}-out"
+            _write_control_archive(hostile_path, [(name, data, kind)])
+            try:
+                _extract_product_archive(hostile_path, destination)
+            except Reject as error:
+                if error.code != "product-archive-path":
+                    raise SystemExit(f"drive archive member {name!r} rejected for wrong reason: {error}") from None
+            else:
+                raise SystemExit(f"drive archive member {name!r} was accepted")
+            if destination.exists():
+                raise SystemExit(f"drive archive member {name!r} left an extraction destination")
+        _mark_policy_control("helper", "product-archive-path", "drive-qualified and nested drive paths rejected")
+
+        ads_names = (
+            "share/file:stream",
+            "share:stream/file",
+            "SHARE:Stream/FILE",
+        )
+        for index, name in enumerate(ads_names):
+            hostile_path = scratch / f"ads-path-{index}.tar.gz"
+            destination = scratch / f"ads-path-{index}-out"
+            _write_control_archive(hostile_path, [(name, b"x", "file")])
+            try:
+                _extract_product_archive(hostile_path, destination)
+            except Reject as error:
+                if error.code != "product-archive-path":
+                    raise SystemExit(f"ADS archive member {name!r} rejected for wrong reason: {error}") from None
+            else:
+                raise SystemExit(f"ADS archive member {name!r} was accepted")
+            if destination.exists():
+                raise SystemExit(f"ADS archive member {name!r} left an extraction destination")
+        _mark_policy_control("helper", "product-archive-path", "NTFS alternate stream components rejected")
+
+        def injected_escape_control(label: str, member: str, injected_parts: tuple[str, ...], directory: bool) -> None:
+            archive_path = scratch / f"{label.replace(' ', '-')}.tar.gz"
+            destination = scratch / f"{label.replace(' ', '-')}-destination"
+            outside = scratch / f"{label.replace(' ', '-')}-outside"
+            outside.mkdir()
+            sentinel = outside / "sentinel.txt"
+            sentinel.write_text("preserve", encoding="utf-8")
+            _write_control_archive(archive_path, [(member, b"" if directory else b"x",
+                                                  "directory" if directory else "file")])
+            escaped_target = outside / "escaped" if directory else outside / "parent/file.bin"
+            attempted_outside_writes: list[str] = []
+            original_joinpath = Path.joinpath
+            original_mkdir = Path.mkdir
+            original_open = Path.open
+
+            def joinpath(path: Path, *parts: str) -> Path:
+                if path == destination and tuple(parts) == injected_parts:
+                    return escaped_target
+                return original_joinpath(path, *parts)
+
+            def mkdir(path: Path, *args, **kwargs):
+                if path == outside or outside in path.parents:
+                    attempted_outside_writes.append(f"mkdir:{path}")
+                    raise OSError("test prevented an outside mkdir")
+                return original_mkdir(path, *args, **kwargs)
+
+            def open_path(path: Path, *args, **kwargs):
+                if path == outside or outside in path.parents:
+                    attempted_outside_writes.append(f"open:{path}")
+                    raise OSError("test prevented an outside open")
+                return original_open(path, *args, **kwargs)
+
+            with patch.object(Path, "joinpath", joinpath), patch.object(Path, "mkdir", mkdir), \
+                    patch.object(Path, "open", open_path):
+                try:
+                    _extract_product_archive(archive_path, destination)
+                except Reject as error:
+                    if error.code != "product-archive-path":
+                        raise SystemExit(f"{label} rejected for wrong reason: {error}") from None
+                else:
+                    raise SystemExit(f"{label} was accepted")
+            if attempted_outside_writes:
+                raise SystemExit(f"{label} attempted outside writes: {attempted_outside_writes}")
+            if sentinel.read_text(encoding="utf-8") != "preserve" or destination.exists():
+                raise SystemExit(f"{label} changed the sentinel or left an extraction destination")
+            _mark_policy_control("helper", "product-archive-path", label)
+
+        injected_escape_control("directory containment before create", "safe-dir/", ("safe-dir",), True)
+        injected_escape_control("regular parent containment before create", "safe-parent/file.bin",
+                                ("safe-parent", "file.bin"), False)
+        duplicate = scratch / "duplicate.tar.gz"
+        _write_control_archive(duplicate, [(name, data, kind) for name, data, kind, _code in cases[3:]])
+        try:
+            _extract_product_archive(duplicate, scratch / "duplicate-out")
+        except Reject as error:
+            if error.code != "product-archive-duplicate":
+                raise SystemExit(f"case-fold duplicate archive paths rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("case-fold duplicate archive paths were accepted")
 
 
 # --------------------------------------------------------------------------- reader
@@ -1743,6 +2280,286 @@ def check_preview_player_lane(root: Path) -> None:
             raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} step {name!r} must run only when {PREVIEW_PLAYER_GUARD}")
 
 
+FIXTURE_ADMISSION_REPOSITORY_CALL = (
+    "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root ."
+)
+FIXTURE_ADMISSION_TRUSTED_SCRIPT = 'python3 -I "$RUNNER_TEMP/verify-fixture-admission.py"'
+CORE_PRODUCT_INVENTORY = "build/core-product-inventory.json"
+
+
+def _fixture_step(workflow: str, job_id: str, job: dict, name: str) -> dict:
+    matches = [step for step in job.get("steps", []) if step.get("name") == name]
+    if len(matches) != 1:
+        raise Reject("fixture-admission-workflow", f"{_where(workflow, job_id)} needs one {name!r} step")
+    return matches[0]
+
+
+def _fixture_call(workflow: str, job_id: str, job: dict, command: str, code: str, **options):
+    try:
+        return require_call(workflow, job_id, job, command, **options)
+    except Reject as error:
+        raise Reject(code, f"{_where(workflow, job_id)}: {error}") from None
+
+
+def _fixture_call_exact(workflow: str, job_id: str, job: dict, command: str, code: str) -> tuple[int, int]:
+    """Require one reachable repository-admission invocation with no extra words or assignments."""
+    words, assigns = expected_command(command)
+    matches: list[tuple[int, int, Event]] = []
+    for step_number, step in enumerate(job.get("steps", [])):
+        if "if" in step or not _runs_under_errexit(step) or not step.get("run"):
+            continue
+        events = _step_events(step)
+        for event in events:
+            if (event.words[:len(words)] == words
+                    and _reachable(event, events, False, False)):
+                matches.append((step_number, event.index, event))
+    if len(matches) != 1:
+        raise Reject(code, f"{_where(workflow, job_id)} must contain exactly one reachable repository-admission command")
+    step_number, event_number, event = matches[0]
+    if event.words != words or event.assigns != assigns or words.count("--repo-root") != 1:
+        raise Reject(code, f"{_where(workflow, job_id)} repository-admission command has extra arguments or assignments")
+    repo_index = words.index("--repo-root")
+    if words[repo_index + 1:repo_index + 2] != ["."]:
+        raise Reject(code, f"{_where(workflow, job_id)} repository-admission root must be exactly dot")
+    return step_number, event_number
+
+
+def _fixture_step_event(workflow: str, job_id: str, job: dict, step_name: str, command: str,
+                        code: str, *, contains: tuple[str, ...] = (), conditional: bool = False,
+                        exact: bool = False):
+    step = _fixture_step(workflow, job_id, job, step_name)
+    if not step.get("run") or not _runs_under_errexit(step):
+        raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r} must run under fatal shell settings")
+    try:
+        events = shell_events(step.get("run", ""))
+        words, assigns = expected_command(command)
+    except Reject as error:
+        raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r}: {error}") from None
+    for event in events:
+        command_matches = event.words == words if exact else event.words[:len(words)] == words
+        assignments_match = event.assigns == assigns if exact else set(assigns) <= set(event.assigns)
+        if (command_matches and assignments_match
+                and set(contains) <= set(event.words)
+                and _reachable(event, events, conditional, False)):
+            return (job["steps"].index(step), event.index)
+    raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r} does not run a reachable, fatal {command}")
+
+
+def check_fixture_admission_workflows(root: Path) -> None:
+    """Keep immutable baseline objects and actual-byte admission ahead of fixture consumers."""
+    ci = read_workflow(root / ".github/workflows/ci.yml")
+    history_jobs = (
+        "planning-checks", "native-linux", "native-macos", "native-windows", "linux-sanitizers",
+        "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "macos-player-package",
+    )
+    for job_id in history_jobs:
+        job = _require_job("ci", ci, job_id)
+        checkouts = _checkouts(job)
+        if not checkouts or any(str(step.get("with", {}).get("fetch-depth")) != "0" for step in checkouts):
+            raise Reject("fixture-admission-history", f"ci.{job_id} must check out full history for the immutable baseline")
+    package = _require_job("ci", ci, "macos-player-package")
+    package_gate = _fixture_call_exact("ci", "macos-player-package", package,
+                                       FIXTURE_ADMISSION_REPOSITORY_CALL, "fixture-admission-gate")
+    package_build = _fixture_call("ci", "macos-player-package", package,
+                                  "bash tests/scripts/verify-phase3-player.sh --build-package",
+                                  "fixture-admission-gate")
+    if package_gate >= package_build:
+        raise Reject("fixture-admission-gate", "ci.macos-player-package must check admission before package configuration")
+
+    repro = read_workflow(root / ".github/workflows/fixture-repro.yml")
+    repro_job = _require_job("fixture-repro", repro, "fixture-repro")
+    checkouts = _checkouts(repro_job)
+    if len(checkouts) != 1 or str(checkouts[0].get("with", {}).get("fetch-depth")) != "0":
+        raise Reject("fixture-admission-history", "fixture-repro must check out full history for immutable admission pins")
+    gate = _fixture_call_exact("fixture-repro", "fixture-repro", repro_job,
+                               FIXTURE_ADMISSION_REPOSITORY_CALL, "fixture-admission-gate")
+    downloader = _fixture_step("fixture-repro", "fixture-repro", repro_job, "Download pinned RGBDS release")
+    if gate[0] >= repro_job["steps"].index(downloader):
+        raise Reject("fixture-admission-gate", "fixture-repro admission must run before the first fixture tool download")
+
+    release = read_workflow(root / ".github/workflows/release.yml")
+    policies = (
+        ("candidate", "Configure and build cache-free release core", "build/release-stage",
+         "tar --sort=name", "Smoke relocated C/C++ consumers from the downloaded bytes", "build/extracted",
+         'cmake -DGBB_INSTALL_PREFIX="$prefix"', "Revalidate a previously qualified candidate before retry",
+         "build/reuse/gabbaboy-core-linux-x64.tar.gz", "build/reuse-extracted"),
+        ("candidate-macos", "Build and package macOS arm64 core once", "build/release-stage",
+         'python3 "$RUNNER_TEMP/create-deterministic-archive.py"',
+         "Smoke the downloaded player archive and relocated C/C++ consumers", "build/extracted-core",
+         'cmake -DGBB_INSTALL_PREFIX="$prefix"', "Validate reused macOS core package",
+         "build/reuse/gabbaboy-core-macos-arm64.tar.gz", "build/reuse-extracted-core"),
+        ("candidate-windows", "Build and package Windows x64 core once", "build/release-stage",
+         "tar -czf build/gabbaboy-core-windows-x64.tar.gz", "Qualify Windows release archive using the existing native consumer lane",
+         "build/extracted", 'cmake -DGBB_INSTALL_PREFIX="$prefix"', "Validate reused Windows core package",
+         "build/reuse/gabbaboy-core-windows-x64.tar.gz", "build/reuse-extracted"),
+    )
+    for (job_id, stage_name, stage_path, archive_command, smoke_name, extracted_path,
+         consumer_command, reuse_name, reuse_archive, reuse_tree) in policies:
+        job = _require_job("release", release, job_id)
+        checkout = _checkouts(job)
+        if len(checkout) != 1 or str(checkout[0].get("with", {}).get("fetch-depth")) != "0":
+            raise Reject("fixture-admission-history", f"release.{job_id} must check out full history for immutable policy objects")
+        stage_step = _fixture_step("release", job_id, job, stage_name)
+        stage_command = (f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {stage_path} '
+                         f'--layout core --repo-root . --write-inventory {CORE_PRODUCT_INVENTORY}')
+        stage_call = _fixture_step_event("release", job_id, job, stage_name, stage_command,
+                                         "fixture-product-stage",
+                                         contains=("--layout", "core", "--repo-root", ".", "--write-inventory",
+                                                   CORE_PRODUCT_INVENTORY), exact=True)
+        archive_call = _fixture_step_event("release", job_id, job, stage_name, archive_command,
+                                           "fixture-product-stage")
+        if stage_call >= archive_call:
+            raise Reject("fixture-product-stage", f"release.{job_id} must validate installed bytes before archive creation")
+
+        smoke_step = _fixture_step("release", job_id, job, smoke_name)
+        extract_call = _fixture_step_event("release", job_id, job, smoke_name,
+                                           "bash tests/scripts/verify-release-candidate.sh --extract",
+                                           "fixture-product-inventory-binding")
+        extracted_command = (f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {extracted_path} '
+                             f'--layout core --repo-root . --inventory {CORE_PRODUCT_INVENTORY}')
+        extracted_call = _fixture_step_event("release", job_id, job, smoke_name, extracted_command,
+                                             "fixture-product-inventory-binding",
+                                             contains=("--layout", "core", "--repo-root", ".", "--inventory",
+                                                       CORE_PRODUCT_INVENTORY), exact=True)
+        consumer_call = _fixture_step_event("release", job_id, job, smoke_name, consumer_command,
+                                            "fixture-product-inventory-binding")
+        if not extract_call < extracted_call < consumer_call:
+            raise Reject("fixture-product-inventory-binding", f"release.{job_id} must compare extracted bytes before consumers run")
+
+        reuse_step = _fixture_step("release", job_id, job, reuse_name)
+        reuse_extract = _fixture_step_event("release", job_id, job, reuse_name,
+                                            f"bash tests/scripts/verify-release-candidate.sh --extract {reuse_archive}",
+                                            "fixture-product-reuse", conditional=True)
+        reuse_command = (f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {reuse_tree} '
+                         f'--layout core --repo-root . --write-inventory {CORE_PRODUCT_INVENTORY}')
+        reuse_call = _fixture_step_event("release", job_id, job, reuse_name, reuse_command, "fixture-product-reuse",
+                                         contains=("--layout", "core", "--repo-root", ".", "--write-inventory",
+                                                   CORE_PRODUCT_INVENTORY), conditional=True, exact=True)
+        if reuse_extract >= reuse_call:
+            raise Reject("fixture-product-reuse", f"release.{job_id} must validate reused bytes after safe extraction")
+
+        overlay = [step for step in job.get("steps", [])
+                   if f'git show "${{GITHUB_SHA}}:tests/scripts/verify-fixture-admission.py"' in str(step.get("run", ""))]
+        if len(overlay) != 1 or job["steps"].index(overlay[0]) >= job["steps"].index(stage_step):
+            raise Reject("fixture-product-trust", f"release.{job_id} must load the trusted byte-policy checker before building")
+
+    # The publisher is a separate job from the tagged candidate build. It reads only uploaded draft bytes into the
+    # trusted checkout and runs the check without a token; the producer's GITHUB_ENV and RUNNER_TEMP cannot cross jobs.
+    publisher = _require_job("release", release, "publish-qualified-release")
+    trusted_checkouts = [step for step in _checkouts(publisher)
+                         if step.get("with", {}).get("path") == "trusted"]
+    if len(trusted_checkouts) != 1 or trusted_checkouts[0].get("with", {}).get("ref") != TRUSTED_SHA_REF \
+            or str(trusted_checkouts[0].get("with", {}).get("fetch-depth")) != "0":
+        raise Reject("fixture-product-trust", "release publisher must check out the full trusted workflow revision under trusted/")
+    download = _fixture_step("release", "publish-qualified-release", publisher,
+                             "Download uploaded Linux candidate for an isolated product check")
+    verify = _fixture_step("release", "publish-qualified-release", publisher,
+                           "Verify the uploaded Linux candidate with trusted checkers")
+    platform_download = _fixture_step("release", "publish-qualified-release", publisher,
+                                      "Download exact macOS and Windows product archives")
+    platform_verify = _fixture_step("release", "publish-qualified-release", publisher,
+                                    "Verify downloaded macOS and Windows product bytes with trusted policy")
+    validate = _fixture_step("release", "publish-qualified-release", publisher,
+                             "Validate draft candidate and all downloaded platform bytes")
+    platform_commands = (
+        ('gabbaboy-core-macos-arm64.tar.gz', 'gabbaboy-core-macos-arm64.tar.gz', 'core', 'macos-core'),
+        ('gabbaboy-preview-macos-arm64.tar.gz', 'gabbaboy-preview-macos-arm64.tar.gz', 'player', 'macos-player'),
+        ('gabbaboy-core-windows-x64.tar.gz', 'gabbaboy-core-windows-x64.tar.gz', 'core', 'windows-core'),
+    )
+    for archive_path, expected_name, product_layout, extraction_name in platform_commands:
+        command = (f'python3 -I trusted/.github/scripts/verify-workflow-policy.py --check-product-archive '
+                   f'build/platform-products/downloaded/{archive_path} --expected-name {expected_name} '
+                   f'--layout {product_layout} --repo-root trusted '
+                   f'--destination build/platform-products/extracted/{extraction_name}')
+        _fixture_step_event("release", "publish-qualified-release", publisher, platform_verify["name"],
+                            command, "fixture-product-trust", exact=True)
+    if not _runs_under_errexit(platform_download) or not _runs_under_errexit(platform_verify) \
+            or _names_token(platform_verify.get("env", {})) \
+            or not all(name in platform_download.get("run", "") for name, *_ in platform_commands):
+        raise Reject("fixture-product-trust", "downloaded macOS/Windows products must be data checked by a token-free trusted validator")
+    platform_order = [publisher["steps"].index(step) for step in
+                      (trusted_checkouts[0], platform_download, platform_verify, validate)]
+    if platform_order != sorted(platform_order):
+        raise Reject("fixture-product-trust", "macOS/Windows downloaded-byte validation must precede draft validation")
+    expected_verify = ('bash trusted/tests/scripts/verify-release-candidate.sh --verify '
+                       'trusted/build/linux-product/candidate-receipt.json '
+                       'trusted/build/linux-product/gabbaboy-core-linux-x64.tar.gz '
+                       '"$release_version" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" '
+                       'trusted/build/linux-product/gabbaboy-notices.txt '
+                       'trusted/build/linux-product/source-receipt.json trusted/build/linux-product/build-receipt.json')
+    _fixture_step_event("release", "publish-qualified-release", publisher, verify["name"],
+                                      expected_verify, "fixture-product-trust", exact=True)
+    if not _runs_under_errexit(download) or not _runs_under_errexit(verify) \
+            or not _flat(download).count('gh release download "$RELEASE_TAG"') \
+            or 'product_dir=trusted/build/linux-product' not in download.get("run", "") \
+            or not all(f"--pattern {name}" in download.get("run", "") for name in (
+                "candidate-receipt.json", "gabbaboy-core-linux-x64.tar.gz", "gabbaboy-notices.txt",
+                "source-receipt.json", "build-receipt.json")) \
+            or download.get("env", {}).get("GH_TOKEN") != "${{ github.token }}" \
+            or _names_token(verify.get("env", {})) or _names_token(publisher.get("env", {})):
+        raise Reject("fixture-product-trust", "Linux product verification must download every uploaded input and run without an ambient token")
+    order = [publisher["steps"].index(step) for step in (trusted_checkouts[0], download, verify, validate)]
+    if order != sorted(order):
+        raise Reject("fixture-product-trust", "Linux product verification must use downloaded bytes after the trusted checkout and before publication")
+    candidate_wrapper = (root / "tests/scripts/verify-release-candidate.sh").read_text(encoding="utf-8")
+    if 'fixture_checker="$ROOT_DIR/tests/scripts/verify-fixture-admission.py"' not in candidate_wrapper \
+            or 'fixture_checker=${GBB_FIXTURE_ADMISSION_CHECKER' in candidate_wrapper \
+            or 'fixture_checker="$RUNNER_TEMP/verify-fixture-admission.py"' in candidate_wrapper:
+        raise Reject("fixture-product-trust", "release candidate verifier must use only its checked-out trusted sibling checker")
+
+
+def release_fixture_checker_path_controls(root: Path) -> int:
+    """Prove ambient env and RUNNER_TEMP checker replacements cannot redirect the release verifier."""
+    wrapper = root / "tests/scripts/verify-release-candidate.sh"
+    bash = _trusted_bash_executable()
+    with tempfile.TemporaryDirectory(prefix="gbb-release-checker-path-") as directory:
+        scratch = Path(directory)
+        fake_env_checker = scratch / "from-environment.py"
+        fake_env_checker.write_text("raise SystemExit('environment checker was executed')\n", encoding="utf-8")
+        cases = (
+            ("conflicting environment override", {"GBB_FIXTURE_ADMISSION_CHECKER": str(fake_env_checker)}, False),
+            ("replaced temporary checker", {}, True),
+        )
+        for label, extra_env, replace_temp in cases:
+            runner_temp = scratch / ("runner-temp-replaced" if replace_temp else "runner-temp-empty")
+            runner_temp.mkdir(exist_ok=True)
+            temp_checker = runner_temp / "verify-fixture-admission.py"
+            if replace_temp:
+                temp_checker.write_text("raise SystemExit('temporary checker was executed')\n", encoding="utf-8")
+            elif temp_checker.exists():
+                temp_checker.unlink()
+            environment = os.environ.copy()
+            environment.pop("GBB_FIXTURE_ADMISSION_CHECKER", None)
+            environment.update(extra_env)
+            environment["RUNNER_TEMP"] = str(runner_temp)
+            result = subprocess.run([bash, str(wrapper), "--self-test-trusted-checker"], cwd=root,
+                                    env=environment, capture_output=True, text=True, check=False, timeout=10)
+            expected = str(root / "tests/scripts/verify-fixture-admission.py").replace("\\", "/")
+            if os.name == "nt" and len(expected) > 2 and expected[1:3] == ":/":
+                expected = f"/{expected[0].lower()}{expected[2:]}"
+            if result.returncode != 0 or f"PASS: trusted fixture checker path {expected}" not in result.stdout:
+                raise SystemExit(f"release checker path control failed ({label}): "
+                                 f"exit={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}")
+            _mark_policy_control("helper", "fixture-checker-path", label)
+    return len(cases)
+
+
+def _trusted_bash_executable() -> str:
+    """Select Git for Windows' Bash, avoiding the unrelated System32 WSL launcher."""
+    if os.name != "nt":
+        return "bash"
+    result = subprocess.run(["git", "--exec-path"], capture_output=True, text=True, check=False, timeout=10)
+    if result.returncode != 0:
+        raise SystemExit(f"Git Bash discovery failed: {result.stderr.strip() or result.returncode}")
+    exec_path = Path(result.stdout.strip()).resolve()
+    if len(exec_path.parents) < 3:
+        raise SystemExit(f"Git Bash discovery returned an unexpected Git exec path: {exec_path}")
+    candidate = exec_path.parents[2] / "bin" / "bash.exe"
+    if not candidate.is_file():
+        raise SystemExit(f"Git Bash is missing beside the installed Git for Windows: {candidate}")
+    return str(candidate)
+
+
 def _check_ci_planning_lane(workflow: str, tree: dict) -> None:
     """The planning-only lane (D-21): a read-only classifier on the base commit's copy, a real planning-checks job, and
     the full-matrix condition on every heavy job. required-native itself is judged by check_ci."""
@@ -3404,6 +4221,7 @@ def check_all(root: Path, release_head: bool = False, git_root: Path | None = No
     check_readonly_workflows(root)
     check_preview_player_lane(root)
     check_release(root)
+    check_fixture_admission_workflows(root)
     check_release_gate_wiring(root)
     check_version_window(root)
     check_version_pr_gate(root)
@@ -3600,11 +4418,15 @@ def _mark_policy_control(kind: str, *parts: str) -> None:
     _record_policy_completion(_COMPLETED_POLICY_CONTROLS, control_id, control, _ACTIVE_POLICY_GROUP, platform)
 
 
-def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | None = None) -> None:
+def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | None = None,
+                         build_dir: Path | None = None) -> None:
     """Run the unchanged complete self-test, optionally selecting one frozen mutation family."""
     global _ACTIVE_POLICY_GROUP, _ACTIVE_POLICY_CONTROLS, _COMPLETED_POLICY_CONTROLS
     if group not in (*_POLICY_PARTITION_GROUPS, "all"):
         raise SystemExit(f"unknown workflow-policy control group: {group}")
+    product_build_dir = (build_dir if build_dir is not None else root / "build").resolve()
+    if group in ("all", "release_jobs") and not (product_build_dir / "cmake_install.cmake").is_file():
+        raise SystemExit(f"workflow-policy product controls require a configured build directory: {product_build_dir}")
     repository = Path(__file__).resolve().parents[2]
     manifest_path = repository / "tests/data/workflow-policy-controls.json"
     try:
@@ -3644,7 +4466,7 @@ def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | 
 
             globals()[name] = selected
     try:
-        self_test(root)
+        self_test(root, product_build_dir)
     finally:
         for name, original in original_generators.items():
             globals()[name] = original
@@ -3671,19 +4493,58 @@ def run_policy_self_test(root: Path, group: str = "all", completed_file: Path | 
     print(f"PASS: workflow policy group {group} controls={len(actual_ids)} ids_sha256={id_digest}")
 
 
+def _workflow_subject_inputs() -> tuple[str, ...]:
+    return (*(f".github/workflows/{item}" for item in WORKFLOWS), LEDGER_PATH, "CMakeLists.txt",
+            "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD,
+            LIFECYCLE_SCRIPT, PERF_GATE_SCRIPT, RELEASE_GATES_CLI,
+            "tests/scripts/verify-release-candidate.sh", PRODUCER_SCRIPT)
+
+
 def _copy_fixture(root: Path, target: Path) -> None:
+    required = _workflow_subject_inputs()
+    extra_inputs = required[len(WORKFLOWS):]
+    missing = [item for item in required if not (root / item).is_file()]
+    if missing:
+        raise Reject("workflow-fixture-incomplete", f"required subject source is missing: {missing[0]}")
     for item in WORKFLOWS:
         destination = target / ".github/workflows" / item
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes((root / ".github/workflows" / item).read_bytes())
-    for extra in (LEDGER_PATH, "CMakeLists.txt", "tests/expected-tests.txt", WINDOW_CONFIG, WINDOW_CHECKER, WINDOW_RECORD, LIFECYCLE_SCRIPT,
-                  PERF_GATE_SCRIPT, RELEASE_GATES_CLI):
-        if (root / extra).is_file():
-            (target / extra).parent.mkdir(parents=True, exist_ok=True)
-            (target / extra).write_bytes((root / extra).read_bytes())
+    for extra in extra_inputs[:-1]:
+        (target / extra).parent.mkdir(parents=True, exist_ok=True)
+        (target / extra).write_bytes((root / extra).read_bytes())
     script = target / PRODUCER_SCRIPT
     script.parent.mkdir(parents=True, exist_ok=True)
-    script.write_bytes((root / PRODUCER_SCRIPT).read_bytes()) if (root / PRODUCER_SCRIPT).is_file() else None
+    script.write_bytes((root / PRODUCER_SCRIPT).read_bytes())
+    candidate_script = target / "tests/scripts/verify-release-candidate.sh"
+    candidate_script.parent.mkdir(parents=True, exist_ok=True)
+    candidate_script.write_bytes((root / "tests/scripts/verify-release-candidate.sh").read_bytes())
+
+
+def _incomplete_subject_control() -> None:
+    with tempfile.TemporaryDirectory(prefix="gbb-workflow-incomplete-source.") as directory:
+        source = Path(directory) / "source"
+        source.mkdir()
+        missing = "tests/scripts/verify-release-candidate.sh"
+        for relative in _workflow_subject_inputs():
+            if relative == missing:
+                continue
+            path = source / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("subject input\n", encoding="utf-8")
+        target = Path(directory) / "subject"
+        try:
+            _copy_fixture(source, target)
+        except Reject as error:
+            if error.code != "workflow-fixture-incomplete" or missing not in str(error):
+                raise SystemExit(f"incomplete-subject control rejected for wrong reason: {error}") from None
+        else:
+            raise SystemExit("incomplete-subject control accepted a missing checker input")
+        if target.exists():
+            raise SystemExit("incomplete-subject control partially materialized an invalid subject")
+        if not (source / ".github/workflows/ci.yml").read_text(encoding="utf-8").startswith("subject input"):
+            raise SystemExit("incomplete-subject control mutated its source tree")
+        _mark_policy_control("helper", "incomplete-subject", "missing verifier source")
 
 
 def _run_cli(fixture: Path, cwd: Path, *extra: str) -> subprocess.CompletedProcess[str]:
@@ -3752,6 +4613,119 @@ def _mutations():
     reh = "release-rehearsal.yml"
     rel = "release.yml"
     return [
+        _m("P20 fixture-repro admission gate is removed", "fixture-repro.yml", "  fixture-repro:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "echo admission gate removed", "fixture-admission-gate"),
+        ("P20 fixture-repro admission gate moved after tool download", "fixture-repro.yml", [
+            ("  fixture-repro:\n", "      - name: Check fixture admission before reproduction\n"
+             "        run: python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .\n", ""),
+            ("  fixture-repro:\n", "      - name: Confirm assembler version and reproduce fixture bytes\n",
+             "      - name: Check fixture admission before reproduction\n"
+             "        run: python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .\n"
+             "      - name: Confirm assembler version and reproduce fixture bytes\n")], "fixture-admission-gate"),
+        _m("P20 macOS package checkout becomes shallow", "ci.yml", "  macos-player-package:\n",
+           "          fetch-depth: 0\n", "          # immutable fixture baseline unavailable\n", "fixture-admission-history"),
+        _m("P20 macOS package admission gate is removed", "ci.yml", "  macos-player-package:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "echo admission gate removed", "fixture-admission-gate"),
+        _m("P20 downloaded platform archive gate is removed", rel, "  publish-qualified-release:\n",
+           "--check-product-archive build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz",
+           "--check-product-tree build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz",
+           "fixture-product-trust"),
+        _m("P20 downloaded platform archive gate selects candidate checker", rel,
+           "      - name: Verify downloaded macOS and Windows product bytes with trusted policy\n",
+           "python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n            --check-product-archive",
+           "python3 -I .github/scripts/verify-workflow-policy.py \\\n            --check-product-archive",
+           "subject-judge-execution"),
+        ("P20 downloaded platform validation moves after draft validation", rel, [
+            ("  publish-qualified-release:\n", "      - name: Verify downloaded macOS and Windows product bytes with trusted policy\n"
+             "        shell: bash\n        run: |\n          set -euo pipefail\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-core-macos-arm64.tar.gz \\\n"
+             "            --expected-name gabbaboy-core-macos-arm64.tar.gz --layout core --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/macos-core\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz \\\n"
+             "            --expected-name gabbaboy-preview-macos-arm64.tar.gz --layout player --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/macos-player\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-core-windows-x64.tar.gz \\\n"
+             "            --expected-name gabbaboy-core-windows-x64.tar.gz --layout core --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/windows-core\n", ""),
+            ("  publish-qualified-release:\n", "      - name: Validate draft candidate and all downloaded platform bytes\n"
+             "        env:\n          GH_TOKEN: ${{ github.token }}\n        shell: bash\n"
+             "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh validate-draft\n",
+             "      - name: Validate draft candidate and all downloaded platform bytes\n"
+             "        env:\n          GH_TOKEN: ${{ github.token }}\n        shell: bash\n"
+             "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh validate-draft\n"
+             "      - name: Verify downloaded macOS and Windows product bytes with trusted policy\n"
+             "        shell: bash\n        run: |\n          set -euo pipefail\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-core-macos-arm64.tar.gz \\\n"
+             "            --expected-name gabbaboy-core-macos-arm64.tar.gz --layout core --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/macos-core\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz \\\n"
+             "            --expected-name gabbaboy-preview-macos-arm64.tar.gz --layout player --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/macos-player\n"
+             "          python3 -I trusted/.github/scripts/verify-workflow-policy.py \\\n"
+             "            --check-product-archive build/platform-products/downloaded/gabbaboy-core-windows-x64.tar.gz \\\n"
+             "            --expected-name gabbaboy-core-windows-x64.tar.gz --layout core --repo-root trusted \\\n"
+             "            --destination build/platform-products/extracted/windows-core\n")], "fixture-product-trust"),
+        _m("P20 fixture-repro admission command gets a PATH assignment", "fixture-repro.yml", "  fixture-repro:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "PATH=/tmp/attacker python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "fixture-admission-gate"),
+        _m("P20 fixture-repro admission command gets a duplicate repository root", "fixture-repro.yml", "  fixture-repro:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . --repo-root /tmp/other",
+           "fixture-admission-gate"),
+        _m("P20 macOS admission command gets a PATH assignment", "ci.yml", "  macos-player-package:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "PATH=/tmp/attacker python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "fixture-admission-gate"),
+        _m("P20 macOS admission command gets a duplicate repository root", "ci.yml", "  macos-player-package:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . --repo-root /tmp/other",
+           "fixture-admission-gate"),
+        _m("P20 Linux core stage policy call is removed", rel, "  candidate:\n",
+           "--check-product-tree build/release-stage", "--skip-product-tree build/release-stage",
+           "fixture-product-stage"),
+        ("P20 Linux core stage policy runs after archive creation", rel, [
+            ("  candidate:\n", '          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage \\\n'
+             "            --layout core --repo-root . --write-inventory build/core-product-inventory.json\n", ""),
+            ("  candidate:\n", "  -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share\n",
+             "  -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share\n"
+             '          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage \\\n'
+             "            --layout core --repo-root . --write-inventory build/core-product-inventory.json\n")],
+         "fixture-product-stage"),
+        _m("P20 Linux stage gate redirects the repository policy root", rel,
+           "      - name: Configure and build cache-free release core\n",
+           "--repo-root . --write-inventory build/core-product-inventory.json",
+           "--write-inventory build/core-product-inventory.json", "fixture-product-stage"),
+        _m("P20 Linux stage gate repeats the repository root option", rel,
+           "      - name: Configure and build cache-free release core\n",
+           "--repo-root . --write-inventory build/core-product-inventory.json",
+           "--repo-root . --write-inventory build/core-product-inventory.json --repo-root /tmp/other",
+           "fixture-product-stage"),
+        _m("P20 Linux stage gate appends a second product tree", rel,
+           "      - name: Configure and build cache-free release core\n",
+           "--layout core --repo-root . --write-inventory build/core-product-inventory.json",
+           "--layout core --repo-root . --write-inventory build/core-product-inventory.json --check-product-tree /tmp/other",
+           "fixture-product-stage"),
+        _m("P20 Linux stage gate prefixes an untrusted PATH assignment", rel, "  candidate:\n",
+           'python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage',
+           'PATH=/tmp/attacker python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage',
+           "fixture-product-stage"),
+        _m("P20 macOS reused core skips actual-byte validation", rel, "  candidate-macos:\n",
+           "--check-product-tree build/reuse-extracted-core", "--skip-product-tree build/reuse-extracted-core",
+           "fixture-product-reuse"),
+        _m("P20 downloaded Linux core skips stage-inventory equality", rel, "  candidate:\n",
+           "--inventory build/core-product-inventory.json", "--write-inventory build/core-product-inventory.json",
+           "fixture-product-inventory-binding"),
+        _m("P20 isolated Linux product verifier is removed", rel, "  publish-qualified-release:\n",
+           "bash trusted/tests/scripts/verify-release-candidate.sh --verify",
+           "echo trusted product check removed", "fixture-product-trust"),
         _m("rehearsal package omits installed-host smoke", reh, "  package:\n",
            "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
         _m("rehearsal aggregate omits installed-host smoke", reh, "  aggregate:\n",
@@ -3792,9 +4766,13 @@ def _mutations():
              "          if-no-files-found: error\n"
              "          retention-days: 90\n", ""),
             ("  publish-qualified-release:\n", "      - name: Publish the one qualified draft\n"
+             "        env:\n"
+             "          GH_TOKEN: ${{ github.token }}\n"
              "        shell: bash\n"
              "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft\n",
              "      - name: Publish the one qualified draft\n"
+             "        env:\n"
+             "          GH_TOKEN: ${{ github.token }}\n"
              "        shell: bash\n"
              "        run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft\n"
              "      - name: Persist the exact pre-publish asset inventory\n"
@@ -5327,9 +6305,13 @@ git() {
     return 1
 
 
-def self_test(root: Path) -> None:
+def self_test(root: Path, build_dir: Path) -> None:
     rejected = 0
     run_helpers = _ACTIVE_POLICY_GROUP is None or _ACTIVE_POLICY_GROUP in ("all", "helpers")
+    if run_helpers:
+        _incomplete_subject_control()
+    if _ACTIVE_POLICY_GROUP in (None, "all", "release_jobs"):
+        release_fixture_checker_path_controls(root)
     with tempfile.TemporaryDirectory(prefix="gbb-workflow-policy.") as directory:
         fixture = Path(directory) / "subject"
         work = Path(directory) / "work"
@@ -5511,6 +6493,8 @@ def self_test(root: Path) -> None:
                     raise SystemExit(f"self-test negative {label!r} failed: accepted")
     if run_helpers:
         rejected += report_red_replay_controls(root)
+    if _ACTIVE_POLICY_GROUP in (None, "all", "release_jobs"):
+        _product_archive_controls(root, build_dir)
     print(f"PASS: workflow policy self-test negative_controls={rejected} "
           f"positive_controls={1 + runner_positive_controls + resolver_accepted + accepted + routing_accepted}")
 
@@ -5520,10 +6504,14 @@ def main() -> int:
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument("--check", action="store_true", help="judge the workflow files under --root")
     modes.add_argument("--self-test", action="store_true", help="run positive and intended-defect controls through the CLI")
+    modes.add_argument("--check-product-archive", type=Path, metavar="ARCHIVE",
+                       help="safely extract and validate one downloaded product archive")
     parser.add_argument("--group", choices=(*_POLICY_PARTITION_GROUPS, "all"), default="all",
                         help="limit --self-test to one registered control group; defaults to all controls")
     parser.add_argument("--completed-file", type=Path, default=None,
                         help="write completed stable control IDs after a successful --self-test")
+    parser.add_argument("--build-dir", type=Path, default=None,
+                        help="configured CMake build tree used by product archive controls")
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="tree whose .github/workflows files are judged as data")
     parser.add_argument("--git-root", type=Path, default=None,
@@ -5536,11 +6524,21 @@ def main() -> int:
                         help="judge as the release head: provisional rows and unreadable tree-equal citation objects are rejected")
     parser.add_argument("--verify-cited", action="store_true",
                         help="online and advisory (never in CTest): confirm each ledger citation through gh")
+    parser.add_argument("--expected-name", default="", help="exact authorized archive basename")
+    parser.add_argument("--layout", choices=("core", "player"), default="core")
+    parser.add_argument("--destination", type=Path, default=None)
     args = parser.parse_args()
     root = args.root.resolve()
     try:
         if args.self_test:
-            run_policy_self_test(root, args.group, args.completed_file)
+            run_policy_self_test(root, args.group, args.completed_file, args.build_dir)
+            return 0
+        if args.check_product_archive is not None:
+            if not args.expected_name or args.destination is None:
+                raise Reject("product-archive-identity", "--expected-name and --destination are required")
+            check_product_archive(args.check_product_archive.resolve(), args.expected_name, args.layout,
+                                  root, args.destination.resolve())
+            print(f"PASS: trusted product archive layout={args.layout} name={args.expected_name}")
             return 0
         if args.verify_cited:
             return verify_cited(root)

@@ -49,6 +49,7 @@ Status: observed / reproduced / adopted / superseded
 | XFER-019 | Playstead Phase 16 lessons at `bcd93b6` require a failure-path remedy and tests of the real default I/O provider, not only injected providers | Preserve real host filesystem, signal, rollback and installed-package continuation checks; a software remedy is implementable work, not an external prerequisite | Source-inspected; GabbaBoy host/slot controls provide local evidence |
 | XFER-020 | Cogmaster XFER-078 at `1336d3f` records configure-time revision staleness; the current audit reproduced it in state_fuzz_controls after a documentation commit | Reconfigure/build/install before final-head verification; retain the original failure instead of weakening the immutable revision check | Reproduced locally; final suite evidence in v0.3 milestone audit |
 | XFER-021 | Glueyneo methodology at `b96c78d`, Nesturbator active-core lessons at `89a042b` and Genewhip seam analysis at `18df6d7` separate retained records, fresh execution and product/model claims | Reuse adequate unchanged evidence, distinguish oracle/gate failures from core defects, and scope future game observations to model/scene/source | Observed; confirms D-069/D-103 and existing evidence classes |
+| XFER-022 | Owner reports an existing SSH workflow for moving personal ROMs to Steam Deck and giving play feedback while working on Nesturbator; this is not a GabbaBoy run | Use short title/scene/symptom notes as private repro leads; verify the exact GabbaBoy build and content, then let agents reduce reproducible faults into rights-cleared fixtures and automated controls. Keep personal ROMs, saves, and captures outside the repo; don't infer Linux-player or RetroArch support | Owner-reported workflow; adopted as optional v0.4 feedback context, GabbaBoy path not yet verified |
 
 The implementation and planning lessons follow; retain their distinct evidence classes.
 
@@ -1049,6 +1050,15 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:**19-CONSUMER-MARKER-RESCOPE.md;19-REVIEW.md; ignored consumer-marker-prep, consumer-marker-local and d136-hosted-native evidence.
 - **Status:** Adopted.
 
+### GB-CI-018 / 2026-11-01 / Reuse validated baselines inside mutation-heavy self-tests
+
+- **Cause and evidence:** The source-archive control self-test revalidated the same immutable fixture-policy baseline for each direct sidecar case. On the same implementation, `v02_source_archive_controls` took 62.45 seconds before the harness adjustment and 52.11 seconds after it at `39eb048e7770652b84a3fc5da7aaa3890adbd70c`.
+- **Remedy:** Validate an immutable baseline once per self-test run and reuse the validated value for direct mutation cases. Keep the real CLI positive, missing-sidecar CLI negative, source CLI cases, real archive checks, and the production-policy CTest intact.
+- **Applies when:** A mutation-heavy test repeats expensive validation of unchanged trusted setup data. Cache only data whose immutability and validation scope are explicit; do not cache the mutated subject or remove production-boundary controls.
+- **Verification:** `v02_source_archive_controls` passed at the recorded head; `bash tests/scripts/verify-release-candidate.sh --self-test` passed with the same source tree; exact-head Windows CI passed in both pull-request and push matrices.
+- **Source:** Phase 20 Plan 20-02 final source-archive runtime follow-up and exact-head CI runs 41334163805 / 41334157283.
+- **Status:** Measured and adopted for this control harness.
+
 
 ## v0.3 milestone-boundary exchange / 2026-10-31
 
@@ -1064,3 +1074,10 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Additional archival evidence:** The plan-cap gate rejected a deliberately collapsed roadmap, and the deferral omission control removed only one copy of a now-repeated marker. Read the matching archive only at an explicit completed boundary in the same commit with no active requirements/plans; reject missing archives and over-cap fixtures. Remove all marker copies for the omission mutant, with a repeated-marker positive twin. These changes extend the existing CTest checks rather than creating a new workflow.
 
 - **Clean-checkout correction:** The first push CMake-floor run failed only `summary_coverage_live`: the local empty phase directory survived the move, but Git does not preserve empty directories. Track a `.gitkeep` placeholder, treat only that exact marker as empty in the immutable plan-cap reader, and exercise the clean archive checkout before retrying CI. No missing-directory or live-plan refusal is weakened.
+
+## Phase 20 completion bookkeeping correction / 2026-11-01
+
+- **Cause and evidence:** OpenGSD `phase.complete 20` marked every requirement mapped to Phase 20 Complete, including `RIGHTS-01`, even though no fixture was admitted and the Phase 20 verifier explicitly retained that requirement as Pending. Phase completion and full requirement satisfaction are separate facts for a requirement that spans multiple conditions or phases.
+- **Remedy:** Compare each requirement changed by `phase.complete` with the final verification report. Use `gsd-tools requirements revert-phase <ID>` to clear an overclaimed checkbox, then keep its traceability row `Pending` when the remaining work is not a current-phase gap (`revert-phase` labels it `Gaps Found`). Reconcile STATE.md and state.json with the exact next phase route before committing.
+- **Applies when:** Completing a phase that maps a multi-part requirement, or where the phase verifies only a subset of its conditions.
+- **Verification:** `RIGHTS-01` is unchecked and Pending in REQUIREMENTS.md; Phase 20 verification remains passed and states that no fixture or legal permission was approved. Phase 21 remains unstarted.

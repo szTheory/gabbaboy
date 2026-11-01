@@ -1,20 +1,21 @@
 ---
 gsd_state_version: "1.0"
-milestone: v0.3
-milestone_name: Save States & Host Contract
-current_phase: 19
-current_phase_name: Qualified v0.3.0 Release
-status: milestone_completed
-stopped_at: v0.3 archived with owner-approved overrides; next milestone not started
-last_updated: "2026-10-31T19:01:44.469697+00:00"
+milestone: v0.4
+milestone_name: Evidence Floor
+current_phase: 21
+current_phase_name: CGB Game Progress and Scene Regressions
+status: planning
+stopped_at: Phase 20 verification passed; stopped at the Phase 21 boundary
+last_updated: "2026-11-01T23:18:57.555Z"
+last_activity: 2026-11-01
+last_activity_desc: Phase 20 verification passed after owner review; RIGHTS-01 stays pending and Phase 21 is unstarted
+state_head: 20e34d9a09b63059b34188c8fb486b5df50c2999
 progress:
   total_phases: 4
-  completed_phases: 4
-  total_plans: 35
-  completed_plans: 35
-  percent: 100
-last_activity: 2026-10-31
-last_activity_desc: "v0.3 milestone completion and archival; owner-approved override_closeout"
+  completed_phases: 1
+  total_plans: 9
+  completed_plans: 9
+  percent: 25
 ---
 
 # Project State
@@ -24,21 +25,32 @@ last_activity_desc: "v0.3 milestone completion and archival; owner-approved over
 See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** v0.3 milestone boundary; planning the next milestone is owner-selected.
+**Current focus:** Phase 21 — CGB Game Progress and Scene Regressions
 
 ## Current Position
 
-Completed stage: **v0.3 — Save States & Host Contract, milestone completion and archival**. Final completed numbered phase: **19 — Qualified v0.3.0 Release**. All four phases, 35 plans and 17 requirements are delivered. Release v0.3.0 is published. See [MILESTONES.md](MILESTONES.md), [audit](milestones/v0.3-MILESTONE-AUDIT.md) and [closeout](milestones/v0.3-CLOSEOUT.md).
+Phase: 20 — Fixture Admission Tune-up verification complete
+Plans: Phase 20-01 through 20-09 have summaries; all nine plans are complete under the approved cap.
+Status: Ready to plan
+Last activity: 2026-11-01 — owner reviewed two judgment findings; Phase 20 verifier passed
 
-The owner selected **override_closeout** after disclosure: three stale runtime verification projections, nine nonblocking audit debts and the standalone closeout-scan helper failure. Original phase SUMMARY/VERIFICATION records and their fingerprints remain unchanged. The audit's final implementation-head suite passed without failures/skips; all four automated UAT closures and their weakening controls pass. No physical/perceptual or live Playstead qualification is inferred.
+Completed stage: **Phase 20 — Fixture Admission Tune-up, implementation and final verification**. All nine plans are complete. All 1,711 CTests have passing evidence across two partial full runs and six focused retests; no single full-suite invocation was all-green. Exact-head pull/push CI, preview-package, and fixture-reproduction runs passed; the security audit had no open items and final code review was clean. The final GSD verifier passes all 35 implementation truths with no human checkpoint. The owner reviewed the two judgment findings: public availability or matching hashes do not establish legal permission, and historical fixture approvals were preserved without extending them to new evidence. This review resolves those verification findings only. No fixture was admitted, no legal permission was granted, and `RIGHTS-01` remains Pending. Phase 21 has not started.
 
-**Next stage: proposed v0.4 — Evidence Floor, milestone initialization**, not started. Exact command: `/gsd-new-milestone`. The owner acts next when ready. No next phase number/title or Phase 20 exists; define those with fresh requirements at kickoff. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. No human product UAT or release repair is pending.
+Next workflow stage: **Phase 21 — CGB Game Progress and Scene Regressions, discussion**. Phase 20 is complete; Phase 21 remains unstarted. When the owner chooses to continue, run **/gsd-discuss-phase 21**. Do not advance automatically; both `workflow.auto_advance` and `workflow._auto_chain_active` remain false.
+
+## Performance Metrics
+
+All nine Phase 20 plans have executed. Configure/build and release-candidate replay passed at the final implementation head. Two full CTest runs plus six focused retests provide passing evidence for all 1,711 tests, including a standalone pass for the source-archive control after a full-suite timeout. Preserve the existing deterministic cost budget and state-continuation evidence.
 
 ## Accumulated Context
 
-Adopted decisions: [DECISIONS.md](context/DECISIONS.md), including owner closeout choice D-137. Detailed prior state: [v0.3-STATE-ARCHIVE.md](milestones/v0.3-STATE-ARCHIVE.md). Boundary sibling/Playstead lessons and the rolling roadmap are refreshed; no sibling was modified.
+Adopted decisions: [DECISIONS.md](context/DECISIONS.md), including v0.4 scope D-138 and the retained v0.3 closeout choice D-137. Detailed prior state: [v0.3-STATE-ARCHIVE.md](milestones/v0.3-STATE-ARCHIVE.md). The recent boundary sibling/Playstead scan is retained; no sibling was modified.
 
-No product correctness/security blocker remains. RM-024 test quality, RM-025 measured CI duplication and optional release-tooling candidates retain their triggers in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md). Existing accepted release authority and platform exclusions remain scoped by the audit.
+v0.4 has two substantive tracks: shared CGB progress/game evidence and acid2/gbmicrotest admission. Potion Panic is the first bounded candidate; µCity 1.3 is the only fallback. Exact source/build/model/rights gates remain pending; no game fixture is admitted. A justified absence after both attempts is permitted, but a newly reproduced unresolved correctness/security defect requires a rescope.
+
+Retain root MIT and separate fixture terms. Full libretro is a near-term candidate outside v0.4; direct Steam Deck/SSH exploration is optional and does not qualify a Linux player. libfuturo is independent coordination context with no dependency or early API/state freeze.
+
+RM-024 test quality, RM-025 measured CI duplication, the standalone closeout-helper failure, and optional release-tooling candidates retain their accepted dispositions and triggers in [FUTURE-MILESTONES.md](context/FUTURE-MILESTONES.md). Do not reopen them without a concrete trigger. Existing release authority and platform exclusions remain scoped by the audit.
 
 ## Deferred Items
 
@@ -53,10 +65,10 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-10-31T19:01:44.469697+00:00
-**Stopped at:** v0.3 milestone completion and archival; next milestone not started.
-**Resume file:** [.continue-here.md](.continue-here.md).
+**Last session:** 2026-11-01T23:18:57Z
+**Stopped at:** Phase 20 verification passed; stopped at the Phase 21 boundary
+**Resume file:** .planning/phases/GB-20-fixture-admission-tune-up/continue.md
 
 ## Operator Next Steps
 
-The owner may run `/gsd-new-milestone` to define v0.4 Evidence Floor. Reuse existing research and recorded debt dispositions; do not restart Phase 19, refresh historical verification fingerprints, or begin another phase automatically.
+Phase 20 is complete and verified. The owner reviewed the two judgment findings; this does not admit a fixture or resolve `RIGHTS-01`, which remains Pending. Phase 21 — CGB Game Progress and Scene Regressions — is unstarted. When ready, the owner starts its discussion with **/gsd-discuss-phase 21**.
