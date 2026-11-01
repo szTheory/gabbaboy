@@ -947,7 +947,8 @@ def self_test():
         product_checker, product_repo, good_product, good_inventory, forbidden_product_bytes, product_rules, source_contract = \
             _synthetic_core_product(scratch)
 
-        def expect_product(label, files, expected, root_name=None, inventory=None, use_cli=False):
+        def expect_product(label, files, expected, root_name=None, inventory=None,
+                           notice_sidecar=None, use_cli=False):
             nonlocal positives, negatives
             archive = write(f"{label}.tar.gz", tar_bytes(files, None, root=root_name))
             inventory_path = None
@@ -956,6 +957,8 @@ def self_test():
                 inventory_path = scratch / f"{label}.inventory.json"
                 inventory_path.write_text(json.dumps(inventory, sort_keys=True), encoding="utf-8")
                 args.extend(("--inventory", str(inventory_path)))
+            if notice_sidecar is not None:
+                args.extend(("--notice-sidecar", str(notice_sidecar)))
             if use_cli:
                 code, err, stdout = run_cli(script, *args)
                 if expected is None:
@@ -984,6 +987,23 @@ def self_test():
         # a full fixture-tree digest scan for every individual negative control.
         expect_product("complete-core-product-from-pinned-baseline", good_product, None,
                        inventory=good_inventory, use_cli=True)
+
+        good_sidecar = scratch / "gabbaboy-notices.txt"
+        good_sidecar.write_bytes(product_checker.blob(product_repo, product_checker.BASELINE_COMMIT, "LICENSE"))
+        expect_product("complete-core-product-with-release-sidecar", good_product, None,
+                       inventory=good_inventory, notice_sidecar=good_sidecar, use_cli=True)
+        missing_sidecar = scratch / "missing-sidecar" / "gabbaboy-notices.txt"
+        expect_product("product-missing-release-sidecar", good_product, "product-notice-sidecar-invalid",
+                       notice_sidecar=missing_sidecar, use_cli=True)
+        altered_sidecar = scratch / "altered-sidecar" / "gabbaboy-notices.txt"
+        altered_sidecar.parent.mkdir()
+        altered_sidecar.write_bytes(good_sidecar.read_bytes() + b"altered\n")
+        expect_product("product-altered-release-sidecar", good_product, "product-notice-sidecar-mismatch",
+                       notice_sidecar=altered_sidecar, use_cli=True)
+        wrong_name_sidecar = scratch / "notice.txt"
+        wrong_name_sidecar.write_bytes(good_sidecar.read_bytes())
+        expect_product("product-wrong-release-sidecar-name", good_product, "product-notice-sidecar-invalid",
+                       notice_sidecar=wrong_name_sidecar, use_cli=True)
 
         def cached_product_entries(entries, layout, repo_root, inventory=None, sidecar=None):
             return product_checker._validate_product_entries(
