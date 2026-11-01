@@ -9,6 +9,7 @@ import hashlib
 import io
 import json
 import os
+import queue
 import re
 import stat
 import subprocess
@@ -16,6 +17,8 @@ import sys
 import tempfile
 import tarfile
 import shutil
+import threading
+import time
 from collections.abc import Iterable, Mapping
 from pathlib import Path, PurePosixPath
 
@@ -39,6 +42,9 @@ MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_FIXTURE_BYTES = 256 * 1024 * 1024
 MAX_FILES = 4096
+MAX_FIXTURE_ENTRIES = 16384
+MAX_GIT_TREE_RECORDS = 16384
+MAX_GIT_TREE_OUTPUT_BYTES = 32 * 1024 * 1024
 MAX_PRODUCT_FILE_BYTES = 512 * 1024 * 1024
 MAX_PRODUCT_TOTAL_BYTES = 1024 * 1024 * 1024
 MAX_PRODUCT_ENTRIES = 16384
@@ -1385,6 +1391,212 @@ def _run_repository_controls() -> int:
         return 4
 
 
+def _fixture_entry_count(root: Path, relative: str) -> int:
+    """Count a tree's descendant entries without materializing a directory listing."""
+    pending = [root / relative]
+    count = 0
+    while pending:
+        directory = pending.pop()
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    count += 1
+                    if entry.is_dir(follow_symlinks=False):
+                        pending.append(Path(entry.path))
+        except OSError as error:
+            raise Reject("self-test-fixture-count-failed", f"{relative}: {error.strerror}") from None
+    return count
+
+
+class _FakeTreeStream:
+    def __init__(self, data: bytes):
+        self.data = data
+        self.offset = 0
+        self.bytes_read = 0
+        self.closed = False
+        self.eof_reads = 0
+
+    def read(self, size: int = -1) -> bytes:
+        if self.closed:
+            raise ValueError("read from closed fake stream")
+        if self.offset >= len(self.data):
+            self.eof_reads += 1
+            return b""
+        if size < 0:
+            size = len(self.data) - self.offset
+        chunk = self.data[self.offset:self.offset + size]
+        self.offset += len(chunk)
+        self.bytes_read += len(chunk)
+        return chunk
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _FakeTreeProcess:
+    def __init__(self, stdout_data: bytes, stderr_data: bytes):
+        self.stdout = _FakeTreeStream(stdout_data)
+        self.stderr = _FakeTreeStream(stderr_data)
+        self.returncode = None
+        self.terminated = False
+        self.wait_calls = 0
+        self.wait_after_terminate = 0
+        self._finished = threading.Event()
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self) -> None:
+        self.terminated = True
+        self.returncode = -15
+        self._finished.set()
+
+    def kill(self) -> None:
+        self.returncode = -9
+        self._finished.set()
+
+    def wait(self, timeout: float | None = None) -> int:
+        self.wait_calls += 1
+        if self.terminated:
+            self.wait_after_terminate += 1
+        if self.returncode is not None:
+            return self.returncode
+        if self._finished.wait(timeout):
+            return self.returncode
+        raise subprocess.TimeoutExpired("git ls-tree", timeout)
+
+
+def _fake_tree_process_lifecycle_control() -> bool:
+    fake = _FakeTreeProcess(b"x" * 8192, b"e" * 8192)
+    process_calls = 0
+    created_threads = []
+    original_popen = subprocess.Popen
+    original_thread = threading.Thread
+    original_limit = MAX_GIT_TREE_OUTPUT_BYTES
+
+    def fake_popen(*_args, **_kwargs):
+        nonlocal process_calls
+        if _kwargs.get("bufsize") != 0:
+            return original_popen(*_args, **_kwargs)
+        process_calls += 1
+        return fake
+
+    def tracked_thread(*args, **kwargs):
+        thread = original_thread(*args, **kwargs)
+        created_threads.append(thread)
+        return thread
+
+    subprocess.Popen = fake_popen
+    threading.Thread = tracked_thread
+    globals()["MAX_GIT_TREE_OUTPUT_BYTES"] = 4
+    try:
+        try:
+            tree_files(Path("."), BASELINE_COMMIT, "fixtures")
+        except Reject as error:
+            if error.code != "git-tree-output-limit":
+                raise Reject("self-test-git-stream-lifecycle-reason", str(error)) from None
+        else:
+            return False
+    finally:
+        subprocess.Popen = original_popen
+        threading.Thread = original_thread
+        globals()["MAX_GIT_TREE_OUTPUT_BYTES"] = original_limit
+
+    if process_calls == 0:
+        return False
+    if not fake.terminated or fake.wait_after_terminate == 0:
+        raise Reject("self-test-git-stream-lifecycle", "overflow did not terminate and reap its child")
+    if not fake.stdout.closed or not fake.stderr.closed:
+        raise Reject("self-test-git-stream-lifecycle", "overflow did not close both child streams")
+    if not created_threads or any(thread.is_alive() for thread in created_threads):
+        raise Reject("self-test-git-stream-lifecycle", "overflow returned before its readers completed")
+    if fake.stderr.bytes_read != len(fake.stderr.data):
+        raise Reject("self-test-git-stream-lifecycle", "stderr reader did not drain the child's output")
+    return True
+
+
+def _run_bounded_input_controls() -> int:
+    missing: list[str] = []
+    project = Path(__file__).resolve().parents[2]
+
+    with tempfile.TemporaryDirectory(prefix="gbb-fixture-entry-manifest-") as directory:
+        root = Path(directory)
+        _prepare_synthetic(root)
+        initial_count = _fixture_entry_count(root, "fixtures/synthetic")
+        (root / "fixtures/synthetic/empty-one/nested-empty").mkdir(parents=True)
+        original_limit = MAX_FIXTURE_ENTRIES
+        globals()["MAX_FIXTURE_ENTRIES"] = initial_count + 1
+        try:
+            try:
+                check_manifest(root, "fixtures/synthetic/manifest.json")
+            except Reject as error:
+                if error.code != "fixture-entry-count-limit":
+                    raise Reject("self-test-fixture-entry-count-reason", str(error)) from None
+            else:
+                missing.append("fixture-entry-count")
+        finally:
+            globals()["MAX_FIXTURE_ENTRIES"] = original_limit
+
+    with tempfile.TemporaryDirectory(prefix="gbb-fixture-entry-repository-") as directory:
+        root = Path(directory)
+        _prepare_legacy_tree(root)
+        initial_count = _fixture_entry_count(root, "fixtures")
+        (root / "fixtures/tracer/empty-added-directory").mkdir()
+        original_limit = MAX_FIXTURE_ENTRIES
+        globals()["MAX_FIXTURE_ENTRIES"] = initial_count
+        try:
+            try:
+                check_repository(root, BASELINE_COMMIT)
+            except Reject as error:
+                if error.code != "fixture-entry-count-limit":
+                    raise Reject("self-test-repository-entry-count-reason", str(error)) from None
+            else:
+                missing.append("repository-entry-count")
+        finally:
+            globals()["MAX_FIXTURE_ENTRIES"] = original_limit
+
+    original_bytes_limit = MAX_GIT_TREE_OUTPUT_BYTES
+    globals()["MAX_GIT_TREE_OUTPUT_BYTES"] = 1
+    try:
+        try:
+            tree_files(project, BASELINE_COMMIT, "fixtures")
+        except Reject as error:
+            if error.code != "git-tree-output-limit":
+                raise Reject("self-test-git-tree-output-reason", str(error)) from None
+        else:
+            missing.append("git-tree-output")
+    finally:
+        globals()["MAX_GIT_TREE_OUTPUT_BYTES"] = original_bytes_limit
+
+    original_records_limit = MAX_GIT_TREE_RECORDS
+    globals()["MAX_GIT_TREE_RECORDS"] = 1
+    try:
+        try:
+            tree_files(project, BASELINE_COMMIT, "fixtures")
+        except Reject as error:
+            if error.code != "git-tree-entry-count-limit":
+                raise Reject("self-test-git-tree-entry-count-reason", str(error)) from None
+        else:
+            missing.append("git-tree-entry-count")
+    finally:
+        globals()["MAX_GIT_TREE_RECORDS"] = original_records_limit
+
+    if not _fake_tree_process_lifecycle_control():
+        missing.append("git-stream-lifecycle")
+
+    if missing:
+        markers = {
+            "fixture-entry-count": "self-test-fixture-entry-count-bypass",
+            "repository-entry-count": "self-test-repository-entry-count-bypass",
+            "git-tree-output": "self-test-git-tree-output-bypass",
+            "git-tree-entry-count": "self-test-git-tree-entry-count-bypass",
+            "git-stream-lifecycle": "self-test-git-stream-lifecycle-bypass",
+        }
+        first = missing[0]
+        raise Reject(markers[first], f"over-limit control was accepted or its stream lifecycle was not enforced: {first}")
+    return 5
+
+
 def self_test() -> None:
     with tempfile.TemporaryDirectory(prefix="gbb-fixture-admission-positive-") as directory:
         root = Path(directory)
@@ -1441,8 +1653,9 @@ def self_test() -> None:
     for label, mutate, expected in cases:
         reject_case(label, mutate, expected)
     repository_controls = _run_repository_controls()
+    bounded_controls = _run_bounded_input_controls()
     print(f"PASS: fixture admission self-test positives=2 negative_controls="
-          f"{manifest_controls + len(cases) + repository_controls}")
+          f"{manifest_controls + len(cases) + repository_controls + bounded_controls}")
 
 
 def main(argv: list[str] | None = None) -> int:
