@@ -1,8 +1,8 @@
 ---
 phase: "20"
 slug: "fixture-admission-tune-up"
-status: partial
-nyquist_compliant: false
+status: validated
+nyquist_compliant: true
 wave_0_complete: true
 created: "2026-10-31"
 ---
@@ -11,7 +11,7 @@ created: "2026-10-31"
 
 > Feedback contract for the fixture admission and distribution boundary. All fixture/package decisions use exact bytes and pinned identities; hashes establish identity, not redistribution permission.
 
-The original per-task map below records the first implementation waves. Its partial statuses are historical; the final rescope run at the end of this document is the current validation record for all nine plans.
+The original per-task map below records the first implementation waves. Its partial statuses are historical; the final exact-head addendum at the end of this document is the current validation record for all nine plans.
 
 ---
 
@@ -108,9 +108,9 @@ The supplied spec-less edge remains explicitly unresolved/unclassified (RIGHTS-0
 
 **Result:** PARTIAL / noncompliant. The focused Phase 20 behavioral controls pass, but the full suite fails and the outstanding security review and hosted macOS package qualification gates remain unresolved. No manual UAT is required.
 
-## Final Rescope Validation Run — 2026-11-01
+## Prior Rescope Validation Run at 7293eb47 (historical)
 
-The earlier audit above records the first execution head and is retained as history. The authorized rescope and final test follow-ups have since closed its findings.
+This report records the implementation-head evidence before the final test follow-ups and hosted qualification. Its results are retained as history; the current exact-head status is recorded in the addendum below.
 
 | Check | Final result | Evidence |
 |---|---|---|
@@ -124,3 +124,19 @@ The earlier audit above records the first execution head and is retained as hist
 | Exact-head hosted macOS player package | PENDING | The `macos-player-package` pull-request job must pass on the final pushed revision. Local Cocoa UI tests cannot substitute for this hosted lane. |
 
 No fixture was admitted. `RIGHTS-01` remains pending because no candidate was admitted and automated identity/notice checks do not determine legal grant scope. No manual UAT is required; `20-UAT.md` is generated and checked by the shared closure helper from the plan-summary deliverables.
+
+## Final Exact-Head Validation — 2026-11-01
+
+Implementation head: `39eb048e7770652b84a3fc5da7aaa3890adbd70c`.
+
+| Check | Result | Evidence |
+|---|---|---|
+| Configure/build | PASS | `cmake --preset phase1` and `cmake --build --preset phase1` passed after reconfiguring for this head. |
+| Full local suite and revision-bound controls | PASS | The full CTest run passed 1,708/1,711. Its only three failures (`cgb_corpus_report_tracer`, `cgb_corpus_report_controls`, and `state_fuzz_controls`) used the stale configure-time revision. After reconfigure/build at this head, all three passed in a focused retest. |
+| Source archive / release controls | PASS | `v02_source_archive_controls` passed in 52.11 seconds; `bash tests/scripts/verify-release-candidate.sh --self-test` passed against the same source tree. |
+| Exact-head pull-request CI | PASS | Run 41334163805 completed successfully, including native Linux/macOS/Windows, CMake 3.25.3, sanitizer, acceptance, performance, and `required-native` jobs. The macOS player package passed. |
+| Exact-head push CI | PASS | Run 41334157283 completed successfully with the same native, floor, sanitizer, acceptance, performance, and `required-native` gates. Event-specific planning and macOS player jobs were skipped as expected. |
+| Installed and player consumers | PASS | Preview run 41334163730 passed Linux and macOS installed-package smoke, downloaded macOS player receipt verification, and the aggregate gate. |
+| Rights disposition | PENDING | No fixture was admitted. These checks establish identity and distribution boundaries, not legal permission or grant scope. |
+
+All registered CTests have passing evidence across the full run and the three post-configure retests. No manual UAT is required. This closes the remaining hosted qualification items without changing RIGHTS-01.

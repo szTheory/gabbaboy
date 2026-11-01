@@ -1050,6 +1050,15 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:**19-CONSUMER-MARKER-RESCOPE.md;19-REVIEW.md; ignored consumer-marker-prep, consumer-marker-local and d136-hosted-native evidence.
 - **Status:** Adopted.
 
+### GB-CI-018 / 2026-11-01 / Reuse validated baselines inside mutation-heavy self-tests
+
+- **Cause and evidence:** The source-archive control self-test revalidated the same immutable fixture-policy baseline for each direct sidecar case. On the same implementation, `v02_source_archive_controls` took 62.45 seconds before the harness adjustment and 52.11 seconds after it at `39eb048e7770652b84a3fc5da7aaa3890adbd70c`.
+- **Remedy:** Validate an immutable baseline once per self-test run and reuse the validated value for direct mutation cases. Keep the real CLI positive, missing-sidecar CLI negative, source CLI cases, real archive checks, and the production-policy CTest intact.
+- **Applies when:** A mutation-heavy test repeats expensive validation of unchanged trusted setup data. Cache only data whose immutability and validation scope are explicit; do not cache the mutated subject or remove production-boundary controls.
+- **Verification:** `v02_source_archive_controls` passed at the recorded head; `bash tests/scripts/verify-release-candidate.sh --self-test` passed with the same source tree; exact-head Windows CI passed in both pull-request and push matrices.
+- **Source:** Phase 20 Plan 20-02 final source-archive runtime follow-up and exact-head CI runs 41334163805 / 41334157283.
+- **Status:** Measured and adopted for this control harness.
+
 
 ## v0.3 milestone-boundary exchange / 2026-10-31
 

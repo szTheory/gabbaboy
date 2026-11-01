@@ -2,13 +2,13 @@
 status: complete
 phase: GB-20-fixture-admission-tune-up
 source: 20-01-SUMMARY.md, 20-02-SUMMARY.md, 20-03-SUMMARY.md, 20-04-SUMMARY.md, 20-05-SUMMARY.md, 20-06-SUMMARY.md, 20-07-SUMMARY.md, 20-08-SUMMARY.md, 20-09-SUMMARY.md
-started: 2026-11-01T14:24:46.242884+00:00
-updated: 2026-11-01T14:24:46.242884+00:00
+started: 2026-11-01T18:42:18.466732+00:00
+updated: 2026-11-01T18:42:18.466732+00:00
 ---
 
 ## Automated Evidence
 
-Final local implementation checks at 7293eb47a6c799b6455dd854533aca932f4529ad: configure/build passed, CTest passed 1711/1711, and `bash tests/scripts/verify-release-candidate.sh --self-test` passed with product/archive positives and receipt, fixture-leak, source-archive, and substitution negatives. Security audit: 29/29 authored entries closed. Final archive/path review is clean; the TAR counter-reset warning is closed. The CI workflow self-test passes 111 negative controls. A Windows-style temporary clone reproduces the initial `core.autocrlf=true` manifest rejection and passes after the workflow's pre-checkout settings. Exact-head hosted Windows retry and macOS package qualification remain pending on PR #139. RIGHTS-01 remains pending because no fixture was admitted and automation does not determine legal grant scope.
+Final automated evidence at implementation head 39eb048e7770652b84a3fc5da7aaa3890adbd70c: configure/build passed; the full CTest run passed 1,708 tests, and its three configure-time revision-snapshot controls passed after reconfigure/build in a focused retest. The source-archive controls and release-candidate replay passed. Exact-head pull-request and push CI matrices passed, including native Windows/macOS/Linux, sanitizer, CMake floor, and required-native gates. The separate preview workflow passed Linux/macOS installed-package smoke, downloaded macOS player receipt verification, and its aggregate gate. Security audit and final archive/path review are clean. No fixture was admitted; RIGHTS-01 remains pending because automated checks do not establish legal permission or grant scope. No manual UAT is required.
 
 ## Current Test
 

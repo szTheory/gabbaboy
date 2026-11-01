@@ -5,7 +5,7 @@
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1, shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
 - ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1, shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
 - ✅ **v0.3 Save States & Host Contract** — Phases 16–19, 35 plans, shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
-- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 implementation and local verification are complete, with exact-head hosted Windows and macOS qualification pending.
+- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 is complete, with RIGHTS-01 still pending because no fixture was admitted.
 
 ## v0.4 — Evidence Floor
 
@@ -17,7 +17,7 @@ The two substantive tracks are CGB game acceptance with scene regressions, and d
 
 Numbering continues after completed Phase 19. Decimal phases are reserved for explicitly approved insertions.
 
-- [ ] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans are complete; final hosted Windows and macOS qualification remains.
+- [x] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans and exact-head hosted platform/package qualification are complete; RIGHTS-01 remains pending because no fixture was admitted.
 - [ ] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome.
 - [ ] **Phase 22: Composition and Microtest Evidence** — Admitted acid2 derivatives and gbmicrotest expose their exact model and oracle limits.
 - [ ] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established.
@@ -122,7 +122,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Fixture Admission Tune-up | 9/9 | Awaiting exact-head hosted Windows and macOS qualification | - |
+| 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 0/TBD | Not started | - |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
@@ -134,4 +134,4 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
 - Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
 
-Phase 20 remains incomplete. Retain completed publisher metadata/cleanup/containment, source/core bounded parsing and core/player forbidden-digest evidence. The final product review found interleaved extension headers bypass the source parser's resetting per-chain counter. Its authorized in-place rescope adds Plan 20-02 Task 5: preserve the 128-header chain bound, independently cap archive-wide metadata headers at 32,768, prove a low-total-cap interleaved production rejection, and retain realistic greater-than-128-member long-path source positives. The visible-member limit remains unchanged; the total metadata cap is an independent bound. Reopen only this plan's summary until Task 5 passes, preserving all earlier task evidence. No fixture admission, rights/legal claim or policy change, live publication, dependency, unrelated cleanup, extra plan or cap change is included. Execute the remaining Phase 20 work with **/gsd-execute-phase 20**, resuming 20-02 at Task 5 explicitly because an existing summary causes the runtime index to skip a reopened plan. Require final-head full-suite, trusted platform evidence, review/security and automated closure checks before declaring the phase complete. RIGHTS-01 remains pending; no fixture was admitted. Stop after Phase 20 and never advance to Phase 21 automatically.
+Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`. Its nine plans, final local review/security evidence, exact-head pull-request and push CI matrices, and the Linux/macOS/player consumer smoke checks passed. The full CTest run passed 1,708 cases; its three configure-time revision-snapshot controls passed after reconfigure/build and focused retest. The archive-controls self-test now reuses its prevalidated fixture-policy baseline and passed in 52.11 seconds. No fixture was admitted; RIGHTS-01 remains pending, with no legal-clearance claim. Phase 21 stays unstarted; use **/gsd-discuss-phase 21** when the owner chooses to continue.

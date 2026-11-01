@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
-current_phase: 20
-current_phase_name: Fixture Admission Tune-up
-status: executing
-stopped_at: Phase 20 local verification complete — awaiting exact-head hosted Windows and macOS qualification
-last_updated: "2026-11-01T14:12:14Z"
+current_phase: 21
+current_phase_name: CGB Game Progress and Scene Regressions
+status: planning
+stopped_at: Phase 20 complete, ready to plan Phase 21
+last_updated: "2026-11-01T18:54:45.523Z"
 last_activity: 2026-11-01
-last_activity_desc: Phase 20 rescope, reviews, security audit, full local suite, and release replay passed; hosted PR gate is pending
-state_head: 3cdfb1dbebeb60c5969de5fbeb93401968dc067c
+last_activity_desc: Phase 20 complete, transitioned to Phase 21
+state_head: 39eb048e7770652b84a3fc5da7aaa3890adbd70c
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 9
   completed_plans: 9
-  percent: 0
+  percent: 25
 ---
 
 # Project State
@@ -25,22 +25,22 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 20 — Fixture Admission Tune-up
+**Current focus:** Phase 21 — CGB Game Progress and Scene Regressions
 
 ## Current Position
 
-Phase: 20 (Fixture Admission Tune-up) — EXECUTING, hosted exact-head qualification pending
-Plans: 20-01 through 20-09 have summaries; all nine plans are complete under the approved cap.
-Status: Local configure/build, all 1,711 CTests, release-candidate replay, final code reviews, and the 29-entry security audit pass. The hosted `native-windows-x64` check failed because checkout normalized fixture bytes; CI now disables autocrlf before checkout. Both the Windows retest and hosted `macos-player-package` must pass on the final pushed revision before Phase 20 closes. `RIGHTS-01` remains pending because no fixture was admitted.
-Last activity: 2026-11-01 — diagnosed the hosted Windows line-ending failure and added a pre-checkout fix; exact-head checks are pending.
+Phase: 21 — CGB Game Progress and Scene Regressions
+Plans: Phase 20-01 through 20-09 have summaries; all nine plans are complete under the approved cap.
+Status: Phase 20 is complete; Phase 21 has not started.
+Last activity: 2026-11-01 — Phase 20 final hosted and consumer qualification passed
 
-Completed stage: **Phase 20 implementation, rescope, final reviews, security audit, and local verification**. All nine plans have summaries; configure/build, 1,711/1,711 CTests, and the release-candidate replay pass at implementation head `7293eb47a6c799b6455dd854533aca932f4529ad`. Phase 20 remains open for the exact-head hosted Windows retest and macOS package qualification. `RIGHTS-01` remains pending because no fixture was admitted. Previous completed implementation phase remains **19 — Qualified v0.3.0 Release**.
+Completed stage: **Phase 20 implementation, approved rescope, final reviews/security audit, local verification, and exact-head hosted qualification**. All nine plans have summaries. At implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`, the full local CTest run passed 1,708 tests; its three configure-time revision-snapshot failures passed after reconfigure/build in a focused retest. Both exact-head CI matrices and Linux/macOS/player consumer checks passed. All 29 authored security entries are closed and the final archive/path review is clean. `RIGHTS-01` remains pending because no fixture was admitted. Previous completed implementation phase remains **19 — Qualified v0.3.0 Release**.
 
-Next workflow stage: **Exact-head hosted Phase 20 qualification**. The agent will push the Windows checkout correction and verify the native Windows and macOS package checks on the resulting PR head. No user action is needed while those checks run. Both `workflow.auto_advance` and `workflow._auto_chain_active` remain false. Stop at Phase 20; do not begin Phase 21 — CGB Game Progress and Scene Regressions before hosted qualification passes.
+Next workflow stage: **Owner pause after Phase 20**. The next phase is **21 — CGB Game Progress and Scene Regressions**; it has not started. When the owner chooses to continue, use **/gsd-discuss-phase 21**. No automatic advance is enabled; both `workflow.auto_advance` and `workflow._auto_chain_active` remain false.
 
 ## Performance Metrics
 
-All nine Phase 20 plans have executed. Configure/build, full CTest (1,711/1,711), and release-candidate replay pass. No new performance measurements are claimed. Preserve the existing deterministic cost budget and state-continuation evidence.
+All nine Phase 20 plans have executed. Configure/build and release-candidate replay passed at the final implementation head. The full CTest run passed 1,708/1,711; the three revision-bound tests passed after reconfigure/build and focused retesting. The source-archive control runtime fell from 62.45 to 52.11 seconds with all negatives retained. Preserve the existing deterministic cost budget and state-continuation evidence.
 
 ## Accumulated Context
 
@@ -65,10 +65,10 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-01T14:12:14Z
-**Stopped at:** Phase 20 local verification complete — awaiting hosted exact-head Windows and macOS checks
+**Last session:** 2026-11-01T18:54:45Z
+**Stopped at:** Phase 20 complete; owner pause before Phase 21
 **Resume file:** .planning/phases/GB-20-fixture-admission-tune-up/continue.md
 
 ## Operator Next Steps
 
-No user action is needed now. The agent will complete the exact-head hosted PR check, then update the phase boundary records. If all required checks pass, the next phase is **21 — CGB Game Progress and Scene Regressions**, with exact next command **/gsd-discuss-phase 21**. Do not restart Phase 19 or automatically advance to Phase 21.
+No user action is needed now. Phase 20 is complete. When you choose to begin the next phase, run **/gsd-discuss-phase 21** for **21 — CGB Game Progress and Scene Regressions**. Phase 21 remains unstarted; do not auto-advance.

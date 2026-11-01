@@ -142,3 +142,9 @@ The independent coverage checker required its owner-authorized snapshots, precis
 
 - All eight Plan 20-06 task commits are ancestors of the recorded implementation/coverage head; interleaved Plan 20-09 commits are excluded.
 - No fixture was admitted, and RIGHTS-01 remains pending.
+
+## Exact-head hosted qualification
+
+The final implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c` passed both exact-head CI events: pull-request run 41334163805 and push run 41334157283. Native Windows passed in both after the checkout line-ending fix; the exact-head macOS player package passed in the pull-request run. The push run skipped that pull-request-only lane as expected.
+
+Preview run 41334163730 also passed all four jobs: Linux installed-package smoke, macOS installed-package smoke, downloaded macOS player package receipt verification, and the aggregate gate. RIGHTS-01 remains pending because no fixture was admitted.

@@ -1,33 +1,33 @@
 {
   "contract": "1.0.0",
   "flavor": "core",
-  "milestone": "v0.3 \u2014 Save States & Host Contract",
+  "milestone": "v0.4 — Evidence Floor",
   "phases": [
     {
-      "number": "16",
-      "name": "Tune-up and v0.2 Debt Closure",
+      "number": "20",
+      "name": "Fixture Admission Tune-up",
       "status": "complete"
     },
     {
-      "number": "17",
-      "name": "Native Save State Core",
-      "status": "complete"
+      "number": "21",
+      "name": "CGB Game Progress and Scene Regressions",
+      "status": "pending"
     },
     {
-      "number": "18",
-      "name": "Player Save Slots and Host Contract",
-      "status": "complete"
+      "number": "22",
+      "name": "Composition and Microtest Evidence",
+      "status": "pending"
     },
     {
-      "number": "19",
-      "name": "Qualified v0.3.0 Release",
+      "number": "23",
+      "name": "Qualified v0.4.0 Release",
       "status": "pending"
     }
   ],
   "next": {
-    "command": "/gsd-new-milestone",
-    "label": "Start proposed v0.4 \u2014 Evidence Floor",
-    "reason": "v0.3 archived with owner-approved overrides; next milestone not started; fresh requirements and phases are defined at kickoff"
+    "command": "/gsd-discuss-phase 21",
+    "label": "Discuss Phase 21 — CGB Game Progress and Scene Regressions",
+    "reason": "Phase 20 complete; owner pause before Phase 21"
   },
-  "updated_at": "2026-10-31T19:01:44.469697+00:00"
+  "updated_at": "2026-11-01T18:54:45.523Z"
 }

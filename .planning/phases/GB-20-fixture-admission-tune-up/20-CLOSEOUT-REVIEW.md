@@ -1,8 +1,8 @@
 ---
 phase: GB-20-fixture-admission-tune-up
-reviewed: 2026-11-01T14:16:08Z
-status: pending_external_gate
-implementation_head: 7293eb47a6c799b6455dd854533aca932f4529ad
+reviewed: 2026-11-01T18:39:40Z
+status: complete
+implementation_head: 39eb048e7770652b84a3fc5da7aaa3890adbd70c
 ---
 
 # Phase 20 — Final Review Closure
@@ -20,10 +20,10 @@ The original review and follow-up review findings below are preserved in their i
 | Source archive extension count reset at ordinary members | Closed by a separate archive-wide header cap while retaining the 128-header chain cap, with the third interleaved header rejected before payload parsing. | [20-02-SUMMARY.md](20-02-SUMMARY.md), [20-FINAL-PRODUCT-CODE-REVIEW.md](20-FINAL-PRODUCT-CODE-REVIEW.md) |
 | WR-01: repeated long-path parses did not prove counter reset between calls | Closed by an exact-observed-count cap applied to both inspections; the second parse proves counters are per inspection. | [20-FINAL-TAR-CODE-REVIEW.md](20-FINAL-TAR-CODE-REVIEW.md), [20-02-SUMMARY.md](20-02-SUMMARY.md) |
 | Initial full-suite and planning failures | Closed at the final local head; configure/build and 1,711/1,711 CTests pass. Planning/summary and workflow-source coverage tests were rerun after closeout documentation updates. | [20-VALIDATION.md](20-VALIDATION.md), [20-VERIFICATION.md](20-VERIFICATION.md) |
-| Windows `core.autocrlf=true` changed checked fixture bytes before configure | Addressed in candidate CI setup by disabling autocrlf and pinning checkout line endings before the Windows checkout. A local negative clone reproduces the exact rejection; the configured clone passes. Exact-head hosted Windows recheck is pending. | [20-06-SUMMARY.md](20-06-SUMMARY.md), `.github/workflows/ci.yml`, Windows native CI |
+| Windows `core.autocrlf=true` changed checked fixture bytes before configure | Addressed in candidate CI setup by disabling autocrlf and pinning checkout line endings before the Windows checkout. A local negative clone reproduces the exact rejection; the configured clone passes. Exact-head native Windows CI passed in both the pull-request and push matrices. | [20-06-SUMMARY.md](20-06-SUMMARY.md), `.github/workflows/ci.yml`, exact-head Windows CI |
 
-## Remaining Gate
+## Final Qualification
 
-The local source and archive checks are green. The `native-windows-x64` and `macos-player-package` pull-request jobs must pass on the final pushed PR head before Phase 20 can close. The local host cannot supply the Cocoa display service needed by the macOS package lane.
+The final implementation head passed local verification and both hosted CI matrices. The separate preview workflow also passed Linux and macOS installed-package smoke checks and downloaded-player receipt verification. The local host's missing Cocoa display service was covered by the hosted macOS package lane.
 
 `RIGHTS-01` remains pending because no candidate was admitted and automated checks do not decide legal permission or grant scope. No fixture or legal-status change is part of this review.

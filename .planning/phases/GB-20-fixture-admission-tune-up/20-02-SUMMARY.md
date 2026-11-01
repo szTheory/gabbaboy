@@ -232,3 +232,9 @@ Tasks 1–5 and their focused checks are complete. Phase orchestration still own
 - **Commit:** `7293eb47` — scopes both repeated parser inspections to the exact observed extension-header count and asserts the count before parsing.
 - **Regression proof:** each independent inspection passes; a shared counter would fail on the second call. The source-archive CTest passed in the final 1,711-test run at this source head.
 - This follow-up changes test evidence only; no fixture bytes or rights policy changed.
+
+## Final source-archive control runtime follow-up
+
+At implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`, the source-archive self-test reuses its prevalidated fixture-policy baseline for direct sidecar controls while keeping the product CLI positive, missing-sidecar CLI rejection, source CLI cases, and real archive checks. This removes repeated baseline parsing from each direct case without dropping a negative control.
+
+`v02_source_archive_controls` passed in 52.11 seconds, down from 62.45 seconds before the harness change. `bash tests/scripts/verify-release-candidate.sh --self-test` also passed against the same source tree. No archive policy, admitted fixture, or rights decision changed.
