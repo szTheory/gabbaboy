@@ -140,3 +140,30 @@ Implementation head: `39eb048e7770652b84a3fc5da7aaa3890adbd70c`.
 | Rights disposition | PENDING | No fixture was admitted. These checks establish identity and distribution boundaries, not legal permission or grant scope. |
 
 All registered CTests have passing evidence across the full run and the three post-configure retests. No manual UAT is required. This closes the remaining hosted qualification items without changing RIGHTS-01.
+
+
+## Plan 20-06 containment follow-up — source head `1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c`
+
+| Check | Result | Evidence |
+|---|---|---|
+| Configure/build | PASS | `cmake --preset phase1` and `cmake --build --preset phase1 -j2` passed at `1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c`. |
+| Direct reusable extractor controls | PASS | `python3 -I .github/scripts/safe_extract_package.py --self-test` passed, including nested drive/ADS paths, cross-drive joining, and pre-creation outside-target controls. |
+| Trusted release extraction and coverage | PASS | The `workflow_policy_group_release_jobs`, `workflow_policy_coverage`, and `workflow_policy_coverage_controls` CTests passed, including all four new control rows and their removal negatives. |
+| Planning and summary gates | PASS | `plan_cap`, `planning_hygiene_controls`, and `summary_coverage_live` passed in the full run. |
+| First full local CTest | 1706/1711 passed | The five failures were `v02_performance_controls`, `v02_delivery_controls`, `perf_advisory_pipeline`, `perf_advisory_controls`, and `release_review_approval`. Git could not create project-root worktree metadata under the managed checkout's read-only `.git`; none reported a product assertion failure. |
+| Git-worktree focused retests | 5/5 passed | All five controls passed with a temporary Git wrapper redirecting only worktree operations launched from the project checkout to writable metadata under `/tmp`. |
+| Wrapper-based full local CTest | 1710/1711 passed | All Git-worktree controls passed. `v02_source_archive_controls` reached its 90-second CTest timeout without a checker assertion or output while the full suite was running. |
+| Source-archive focused retest | PASS, 45.57 seconds | The exact `v02_source_archive_controls` test passed alone with the normal Git path and its existing 90-second timeout. No timeout or implementation change was made. Its isolated pass after the full-suite timeout indicates a load-sensitive delay; the precise scheduler/process cause was not established. |
+| Combined local test evidence | 1711/1711 cases have passing evidence | The two full-suite runs plus six focused retests cover all registered cases. This is combined evidence, not one uninterrupted green full-suite invocation. |
+| Goal verification | HUMAN NEEDED | The GSD verifier confirmed all 35 implementation truths with no code gaps. It preserved two Plan 20-01 spec-less prohibitions as unresolved and descriptor-less, as required by the project instruction; owner source-grounding is needed before verification can pass. This is not a manual UAT request or a legal-clearance decision. |
+| Rights status | PENDING | No fixture was admitted; byte identity checks do not establish legal permission or grant scope. |
+
+The Phase 20 release-policy self-test passed with 186 controls, and the independent workflow-coverage self-test passed with 94 controls. Exact-head PR and push CI, preview-package smoke, and fixture-repro runs all completed successfully for PR #139 at this implementation head; the PR remains open and unmerged. The PR-only version gate was skipped as expected for this change.
+
+## Validation Audit 2026-11-01
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |

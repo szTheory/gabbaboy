@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 21",
-    "label": "Discuss Phase 21 — CGB Game Progress and Scene Regressions",
-    "reason": "Phase 20 complete; owner pause before Phase 21"
+    "command": "/gsd-execute-phase 20",
+    "label": "Resume Phase 20 verification after owner resolution",
+    "reason": "The verifier reports human_needed for two unresolved, descriptor-less Plan 20-01 prohibitions; Phase 21 remains unstarted"
   },
-  "updated_at": "2026-11-01T18:54:45.523Z"
+  "updated_at": "2026-11-01T21:54:42.000Z"
 }

@@ -2,13 +2,13 @@
 status: complete
 phase: GB-20-fixture-admission-tune-up
 source: 20-01-SUMMARY.md, 20-02-SUMMARY.md, 20-03-SUMMARY.md, 20-04-SUMMARY.md, 20-05-SUMMARY.md, 20-06-SUMMARY.md, 20-07-SUMMARY.md, 20-08-SUMMARY.md, 20-09-SUMMARY.md
-started: 2026-11-01T18:42:18.466732+00:00
-updated: 2026-11-01T18:42:18.466732+00:00
+started: 2026-11-01T21:59:52.188462+00:00
+updated: 2026-11-01T21:59:52.188462+00:00
 ---
 
 ## Automated Evidence
 
-Final automated evidence at implementation head 39eb048e7770652b84a3fc5da7aaa3890adbd70c: configure/build passed; the full CTest run passed 1,708 tests, and its three configure-time revision-snapshot controls passed after reconfigure/build in a focused retest. The source-archive controls and release-candidate replay passed. Exact-head pull-request and push CI matrices passed, including native Windows/macOS/Linux, sanitizer, CMake floor, and required-native gates. The separate preview workflow passed Linux/macOS installed-package smoke, downloaded macOS player receipt verification, and its aggregate gate. Security audit and final archive/path review are clean. No fixture was admitted; RIGHTS-01 remains pending because automated checks do not establish legal permission or grant scope. No manual UAT is required.
+Phase 20 automated evidence at implementation head 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c: all nine plan summaries report automated coverage. Two full local CTest runs and six focused retests provide passing evidence for all 1,711 registered tests, although neither full invocation was entirely green. Final-head PR CI 41347651035, push CI 41347645660, preview 41347651030, and fixture-repro PR/push runs 41347651034 and 41347645556 succeeded. The fresh verifier confirmed 35/35 implementation truths. It remains human_needed because two spec-less Plan 20-01 prohibitions are unresolved and descriptor-less; this automated closure does not resolve them. RIGHTS-01 remains pending because no fixture was admitted. Phase 21 remains unstarted.
 
 ## Current Test
 
@@ -150,7 +150,7 @@ result: pass
 source: automated
 summary_file: 20-06-SUMMARY.md
 coverage_id: PLATFORM-ARCHIVE-COVERAGE
-evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage$' (exact reviewed checker and bounded-helper source/AST pins)", "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage_controls$' (86 negative controls, including independent resource/cleanup/path registry removal checks)"]
+evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage$' (exact reviewed checker and bounded-helper source/AST pins)", "ctest --preset phase1 --output-on-failure --no-tests=error -R '^workflow_policy_coverage_controls$' (94 negative controls, including independent resource/cleanup/path registry removal checks)"]
 
 ### 18. Product archives are bounded before hidden metadata or payload consumption, and missing-checker/late-rejection failures leave a retryable clean destination.
 expected: "Product archives are bounded before hidden metadata or payload consumption, and missing-checker/late-rejection failures leave a retryable clean destination."

@@ -1,78 +1,54 @@
 ---
 phase: GB-20-fixture-admission-tune-up
-reviewed: 2026-11-01T02:36:07Z
+reviewed: 2026-11-01T21:00:23Z
 depth: standard
-files_reviewed: 20
+files_reviewed: 4
 files_reviewed_list:
+  - .github/scripts/safe_extract_package.py
   - .github/scripts/verify-workflow-policy.py
-  - .github/workflows/ci.yml
-  - .github/workflows/fixture-repro.yml
-  - .github/workflows/preview.yml
-  - .github/workflows/release.yml
-  - CMakeLists.txt
-  - THIRD_PARTY_NOTICES.md
-  - cmake/FixtureAdmissionPolicy.json
-  - cmake/PreviewPackageSmoke.cmake
-  - cmake/VerifyInstalledPackage.cmake
-  - docs/fixture-admission.md
-  - tests/CMakeLists.txt
   - tests/data/workflow-policy-controls.json
-  - tests/expected-tests.txt
-  - tests/scripts/test_player_package_policy.py
-  - tests/scripts/verify-fixture-admission.py
-  - tests/scripts/verify-phase3-player.sh
-  - tests/scripts/verify-release-candidate.sh
-  - tests/scripts/verify-v02-source-archive.py
   - tests/scripts/verify-workflow-policy-coverage.py
 findings:
-  critical: 3
+  critical: 0
   warning: 0
   info: 0
-  total: 3
-status: issues_found
+  total: 0
+status: clean
 ---
 
 # Phase 20: Code Review Report
 
-**Reviewed:** 2026-11-01T02:36:07Z  
-**Depth:** standard  
-**Files Reviewed:** 20  
-**Status:** issues_found
+**Reviewed:** 2026-11-01T21:00:23Z
+
+**Depth:** standard
+
+**Files Reviewed:** 4
+
+**Status:** clean
 
 ## Summary
 
-The Phase 20 implementation and both fix rounds were re-reviewed at current HEAD. CR-06, CR-07, WR-04 and WR-05 are corrected; CR-01 through CR-04 and WR-01 through WR-03 also appear resolved in the current code. CR-05's environment and temporary-path override was removed from the wrapper, and the isolated publisher checks the uploaded Linux product with trusted files. The macOS and Windows product checks still trust a writable checker and policy from the tagged build workspace. Two additional admission bypasses remain in the mutable product policy and workflow command matcher. Three blocking findings remain. The fix report records the focused controls as passing; this review was static and did not rerun them.
+The final Plan 20-06 Task 4 review rechecked the reusable extractor, trusted product extractor, immutable source/AST coverage, and control registry. The prior CR-01 escape is resolved: both extractors reject colon-bearing components, resolve and contain each target before creating parents or opening files, and have negative controls for nested drive/ADS names and injected outside targets. No remaining bug or security finding was identified in the reviewed changes.
 
 ## Narrative Findings (AI reviewer)
 
-### Critical Issues
+No open findings. The reviewed helper source is pinned by the coverage checker to the immutable reviewed commit and digest; the checker also requires each new registry row and independently rejects removal of the drive/ADS and containment guards.
 
-#### CR-05: BLOCKER — macOS and Windows release product checks still trust the tagged workspace
+## Prior Review Finding History
 
-**File:** `.github/workflows/release.yml:728-737, 781-792, 850-861, 922-928, 968-979, 1041-1051`; `.github/scripts/release-evidence-lifecycle.sh:224-293`
+#### CR-01: BLOCKER — Drive-qualified archive components could escape extraction on Windows (resolved)
 
-**Issue:** The macOS and Windows jobs copy the admission checker from the workflow revision into writable `RUNNER_TEMP` before running the tagged source's CMake configure, build and install steps. They then invoke that temporary checker against the staged and downloaded packages. Tagged build code runs in the same job before those checks and can replace the checker. The checker also receives `--repo-root .`, so its package allowlist is read from the tagged checkout. The isolated publisher rechecks only the Linux archive; its later draft validation hashes and inventories platform assets but does not verify their product layouts. A tagged macOS or Windows build can therefore add an excluded fixture and make the same-job check accept and publish it.
+**Original file:** `.github/scripts/safe_extract_package.py:115-120, 188-197` at the 20:20 review.
+**Original issue:** A later `D:escape` component passed first-component-only drive validation. On Windows, joining that component could reset the extraction target to another drive, and the helper created parent directories before checking containment. Colon-bearing names also allowed NTFS alternate streams.
 
-**Fix:** Re-download and safely extract the macOS and Windows product archives in the trusted publisher job, then validate them with the trusted checkout's checker and policy before draft validation/publication. Keep same-job checks as early feedback, not the final product authorization.
+**Resolution:** Commit `37de7e8a9afee6b2b8a263e543279704cbfc1d56` rejects colon syntax in every path component and resolves each native target against the extraction root before parent creation. The trusted product extractor has the corresponding guard. The new self-tests cover a nested drive-relative path, ADS paths, Windows cross-drive joining, and injected outside directory/file targets; their spies require zero outside write attempts and unchanged sentinels. The independent coverage test pins both helper and policy source bytes and checks guard-removal and registry-removal mutants.
 
-#### CR-08: BLOCKER — Product allowlist is loaded from an unpinned mutable file
-
-**File:** `tests/scripts/verify-fixture-admission.py:847-875, 922-983, 1042-1074`; `cmake/FixtureAdmissionPolicy.json:1-115`
-
-**Issue:** `_product_rules` reads the current `cmake/FixtureAdmissionPolicy.json` and validates its shape and baseline commit, but does not bind the `products` bytes to an immutable approved identity. `_product_source_expectations` then treats every fixture source listed in that file as allowed, and `_validate_product_entries` accepts its declared product destination when its bytes match the baseline. A change can add a repository-only game or diagnostic fixture, such as a `fixtures/mooneye-cgb/...` file, to the policy and install it into the package; the policy check and stage inventory will then approve the same change. The inventory hashes this mutable policy but does not independently establish that it is the approved policy.
-
-**Fix:** Pin the complete product-policy digest to an independently reviewed identity in the checker or load the policy from a trusted immutable checkout. Add a negative control that adds a forbidden baseline fixture and destination to a candidate policy and requires rejection.
-
-#### CR-09: BLOCKER — Workflow policy accepts redirected fixture-admission commands
-
-**File:** `.github/scripts/verify-workflow-policy.py:852-877, 1760-1818`; `tests/scripts/verify-fixture-admission.py:2278-2285`
-
-**Issue:** `_fixture_call` delegates to `require_call`, which accepts any shell command whose words start with the expected command and whose expected assignments are only a subset of the observed assignments. The repository-admission commands checked for `ci.macos-player-package` and `fixture-repro` are not matched exactly. A modified workflow can prefix `PATH=/tmp/attacker` and pass policy while selecting an untrusted `python3`, or append a duplicate `--repo-root /tmp/attacker`; argparse uses the last `--repo-root`, so the gate checks a controlled tree instead of the checkout. Existing exact-command checks and mutations cover product commands, but not these repository-admission calls.
-
-**Fix:** Require exact words and assignments for the repository-admission invocations, including exactly one `--repo-root .`. Add mutation controls for both a prefixed PATH assignment and a repeated `--repo-root` option.
+**Verification evidence:** `safe_extract_package.py --self-test`, the release-job policy CTest, workflow-policy coverage and negative-control CTests passed. The full local CTest run had five environment-only worktree failures because the managed checkout's `.git` is read-only; all five focused reruns passed using temporary Git metadata outside the checkout.
 
 ---
 
-_Reviewed: 2026-11-01T02:36:07Z_  
-_Reviewer: the agent (gsd-code-reviewer)_  
+_Reviewed: 2026-11-01T21:00:23Z_
+
+_Reviewer: the agent (gsd-code-reviewer)_
+
 _Depth: standard_

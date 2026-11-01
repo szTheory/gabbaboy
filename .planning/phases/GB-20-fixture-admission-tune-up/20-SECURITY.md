@@ -7,14 +7,14 @@ threats_open: 0
 asvs_level: 1
 block_on: high
 created: "2026-10-31"
-source_head: 7293eb47a6c799b6455dd854533aca932f4529ad
+source_head: 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c
 ---
 
 # Phase 20 — Security
 
-The final ASVS L1 audit reviewed all nine authored threat registers at `7293eb47a6c799b6455dd854533aca932f4529ad`. All 29 authored register entries (20 unique IDs plus T-20-SC repeated in each plan) are mitigated. T-20-04's Git blob read is streamed under a 32 MiB + 1 byte limit and 30-second deadline, with terminate/reap/reader cleanup verified by stalled and over-limit controls. `threats_open: 0` counts authored threats at the configured `high` threshold.
+The final ASVS L1 audit at `7293eb47a6c799b6455dd854533aca932f4529ad` reviewed all nine authored threat registers. All 29 authored register entries (20 unique IDs plus T-20-SC repeated in each plan) were mitigated at that audit. The later Plan 20-06 containment follow-up verified the existing T-20-20 mitigation against both extraction paths at source head `1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c`; no new threat entry or accepted risk was added. T-20-04's Git blob read is streamed under a 32 MiB + 1 byte limit and 30-second deadline, with terminate/reap/reader cleanup verified by stalled and over-limit controls. `threats_open: 0` counts authored threats at the configured `high` threshold.
 
-The original CR-05/CR-08/CR-09 findings and later archive/path findings were addressed by the authorized rescope. The final source-archive review's WR-01 counter-lifetime warning was closed by commit `7293eb47`: the 256-long-path archive is inspected twice under a total-header cap exactly equal to the first parse's count, so shared counter state would reject the second parse. Final local configure/build, full CTest, and release-candidate replay evidence is recorded in `20-VALIDATION.md` and `20-VERIFICATION.md`; exact-head Windows and macOS qualification remain release gates until their PR checks pass.
+The original CR-05/CR-08/CR-09 findings and later archive/path findings were addressed by the authorized rescope. The final source-archive review's WR-01 counter-lifetime warning was closed by commit `7293eb47`: the 256-long-path archive is inspected twice under a total-header cap exactly equal to the first parse's count, so shared counter state would reject the second parse. Final local configure/build and CTest evidence, the source-archive focused retest, and exact-head hosted qualification are recorded in `20-VALIDATION.md` and `20-VERIFICATION.md`. The final PR and push matrices passed their Windows and macOS lanes.
 
 Plan 20-04 closes directory-walk and `git ls-tree` enumeration gaps: fixture walks count entries as visited, and Git tree output is streamed with byte and record limits plus child cleanup. Follow-up work also bounds `git show` blob output while consuming it and applies a deadline; overflow/stall controls prove child termination, reaping, and reader cleanup.
 
@@ -54,7 +54,7 @@ Evidence paths are relative to the repository root. The shared T-20-SC threat ap
 | T-20-17 | Tampering | Dense-input immutable baseline and build identity | high | mitigate | `tests/scripts/verify-dense-input.py` reads baseline evidence from its separately pinned immutable object source while evaluating the source-only mutant checkout; dense-input positives and unqualified-build controls pass. | closed |
 | T-20-18 | Denial of Service | Trusted publisher archive metadata and streams | high | mitigate | `.github/scripts/verify-workflow-policy.py` bounds decompressed tar streams and PAX/GNU per-header, aggregate-byte, and count metadata before payload parsing; resource-limit negatives pass. | closed |
 | T-20-19 | Tampering | Trusted archive extraction failure cleanup | medium | mitigate | The publisher preflights trusted checker availability and encloses extraction/checking in one cleanup boundary; missing-checker and late-rejection controls prove cleanup and same-destination retry. | closed |
-| T-20-20 | Tampering | Windows archive path and extraction containment | high | mitigate | `.github/scripts/verify-workflow-policy.py` rejects drive/ADS syntax and validates directory/file targets and ancestry before creation; controls prove no outside writes, preserved sentinels, and cleanup. | closed |
+| T-20-20 | Tampering | Windows archive path and extraction containment | high | mitigate | `.github/scripts/verify-workflow-policy.py` and `.github/scripts/safe_extract_package.py` reject colon-bearing drive/ADS components and resolve native targets inside the extraction root before parent creation or file open; path controls prove zero outside write attempts and unchanged sentinels. | closed |
 | T-20-SC | Tampering | Package installations | high | mitigate | Phase 20 adds no package-manager dependency; the traversal/archive code uses Python's standard library. All nine plan summaries list no added dependencies. | closed in all nine plan registers |
 
 ## Open Authored Threats
@@ -78,3 +78,16 @@ None. All plan dispositions are `mitigate`; no accepted risk was inferred or add
 | 2026-11-01 | `7293eb47a6c799b6455dd854533aca932f4529ad` | 29/29 | 0/29 | 0 | Final ASVS L1 audit across nine plan registers. Trusted release verification, pinned policy, exact workflow matching, bounded parsing/cleanup, Windows containment, dense-input evidence, and exact-cap archive counter-reset control are closed. |
 
 The prior T-20-04 finding is preserved in `20-04-PLAN.md` under `<gap_closure>`. Plan 20-04 bounded fixture walks and streamed `git ls-tree`; follow-up work bounded `git show` and added a deadline for stalled blob reads. The focused controls pass. `RIGHTS-01` remains pending: no fixture was admitted and code does not determine legal grant scope.
+
+
+## Plan 20-06 safe-extractor containment follow-up
+
+The final code review's CR-01 was a gap in the reusable safe extractor, not a new rights threat. The existing T-20-20 mitigation now covers both trusted extraction paths. The `safe_extract_package.py` self-test, release-job policy group, and exact source/AST coverage with path-control removal negatives passed at `1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c`. The full CTest run had five environment-only Git worktree metadata failures under the read-only checkout; all five passed in focused reruns using temporary Git metadata under `/tmp`. No accepted risk was added. `RIGHTS-01` remains pending.
+
+## Security Audit 2026-11-01
+
+| Metric | Count |
+|---|---|
+| Threats found | 1 |
+| Closed | 1 |
+| Open | 0 |

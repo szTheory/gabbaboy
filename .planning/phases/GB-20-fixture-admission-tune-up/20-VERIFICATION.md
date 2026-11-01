@@ -1,8 +1,9 @@
 ---
 phase: GB-20-fixture-admission-tune-up
-verified: 2026-11-01T18:53:11Z
-status: passed
+verified: 2026-11-01T22:00:52Z
+status: human_needed
 score: 35/35 must-haves verified
+source_head: 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c
 covered_files: [
     ".github/scripts/release-evidence-lifecycle.sh",
     ".github/scripts/safe_extract_package.py",
@@ -29,6 +30,18 @@ covered_files: [
     ".planning/phases/GB-20-fixture-admission-tune-up/20-08-SUMMARY.md",
     ".planning/phases/GB-20-fixture-admission-tune-up/20-09-PLAN.md",
     ".planning/phases/GB-20-fixture-admission-tune-up/20-09-SUMMARY.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-CLOSEOUT-REVIEW.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-FINAL-ARCHIVE-CODE-REVIEW.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-FINAL-CODE-REVIEW.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-FINAL-PRODUCT-CODE-REVIEW.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-FINAL-TAR-CODE-REVIEW.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-REVIEW-DISPOSITION.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-REVIEW-FIX.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-REVIEW.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-SECURITY.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-UAT.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-UI-REVIEW.md",
+    ".planning/phases/GB-20-fixture-admission-tune-up/20-VALIDATION.md",
     "CMakeLists.txt",
     "THIRD_PARTY_NOTICES.md",
     "cmake/FixtureAdmissionPolicy.json",
@@ -50,188 +63,238 @@ covered_files: [
     "tests/scripts/verify-v02-source-archive.py",
     "tests/scripts/verify-workflow-policy-coverage.py"
 ]
-covered_digest: "v4:sha256:51eabf66b973fd39c1420855bf79acfdf5a47471176bf25b54dd674c7f0440b7"
+covered_digest: "v4:sha256:fdc6cd0f2ca8463eeab926cb395f0b7faf3e275d667f103c715b093d7b78ec22"
 behavior_unverified: 0
 overrides_applied: 0
 decision_coverage:
   honored: 3
   total: 3
   not_honored: []
-human_verification: []
+human_verification:
+  - test: "Review whether fixture fields, public availability, or matching digests are presented as legal permission."
+    expected: "No such claim is made; the documentation treats hashes as identity evidence and leaves grant scope to a source-grounded maintainer decision."
+    why_human: "Plan 20-01 leaves this prohibition unresolved and does not declare a verification tier; automated identity checks cannot decide legal interpretation."
+  - test: "Confirm that the phase preserved prior fixture-rights dispositions without extending them to new evidence."
+    expected: "No fixture or rights disposition was changed or generalized, and RIGHTS-01 remains pending."
+    why_human: "Plan 20-01 leaves this prohibition unresolved and does not declare a verification tier; owner judgment is required to resolve that declaration."
 ---
 
 # Phase 20: Fixture Admission Tune-up Verification Report
 
 **Phase Goal:** Maintainers can admit permitted evidence through one checked fixture and distribution boundary before new game or diagnostic bytes enter public automation.
 
-**Source head:** 39eb048e7770652b84a3fc5da7aaa3890adbd70c
-**Verified:** 2026-11-01T18:53:11Z
-**Status:** passed
-**Re-verification:** No. The prior report had no gaps section, so initial-mode verification applies.
+**Source head:** 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c
+
+**Verified:** 2026-11-01T22:00:52Z
+
+**Status:** human_needed
+**Re-verification:** No. The earlier report had no gaps section, so this was a fresh initial-mode verification.
 
 ## Goal Achievement
 
-The outcome is a working admission and distribution boundary. It does not admit a fixture or decide the legal scope of any grant. Source and product bytes, their declared identities, required notices, and release paths are checked by executable controls.
+The two roadmap success criteria are implemented: fixture admission is checked against exact source and evidence identities and component terms, and installed/release product boundaries reject controlled ROM insertions while validating notices and the root MIT declaration. The checkers inspect repository objects, staged and extracted product trees, and downloaded archives. They do not grant legal permission.
+
+Plan 20-01’s flagged RIGHTS-01 assumption is represented by truth 6 below: the current phase admits no candidate and automated checks do not adjudicate grant scope. This verifies the current disposition; it does not satisfy or clear RIGHTS-01.
 
 ### Observable Truths
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | A fixture enters repository/public CI only with exact bytes, source/build inputs and component terms/notices recorded; incomplete rights or changed identities reject. | ✓ VERIFIED | Actual CLI validates the versioned manifest, notice index and independent Git pins. Its synthetic positive and coordinated rewrite/missing-evidence controls pass. |
-| 2 | A controlled game-ROM insertion in an installed or product-release package is rejected, while a valid package retains required notices and the root MIT declaration. | ✓ VERIFIED | Core/player stage, archive, extraction and downloaded-package controls inspect actual bytes; exact-head package CI and preview jobs pass. |
-| 3 | A complete synthetic fixture admission reaches the real CLI through versioned manifest, notice index and independently pinned Git blobs; incomplete records and changed identities fail closed. | ✓ VERIFIED | tests/scripts/verify-fixture-admission.py self-test; exact admission decision, source pin and blob checks in check_manifest(). |
-| 4 | New or changed evidence cannot enter configured repository tests or fixture reproduction without the admission gate; existing approvals are retained without a rights re-audit. | ✓ VERIFIED | CMake BUILD_TESTING gate precedes fixture-consuming tests; ci.yml and fixture-repro.yml gate use. Direct repository check reports 236 legacy files and 0 admitted changes; no fixture or LICENSE diff from the pinned baseline. |
-| 5 | Product policy maps exact smoke-fixture and notice paths to independently pinned source bytes, while source-archive policy stays separate. | ✓ VERIFIED | cmake/FixtureAdmissionPolicy.json and verify-fixture-admission.py bind product inventory to baseline blobs; verify-v02-source-archive.py keeps source receipt parsing separate. |
-| 6 | This phase admits no candidate, and automated structure/identity checks do not decide grant scope. | ✓ VERIFIED | No fixture changed or was added. docs/fixture-admission.md states a digest establishes identity, not permission; RIGHTS-01 remains PENDING. |
-| 7 | An installed prefix and its extracted preview archive contain exactly permitted core fixture bytes/notices and unchanged root MIT. | ✓ VERIFIED | VerifyInstalledPackage.cmake and PreviewPackageSmoke.cmake call the shared actual-tree policy for stage and extracted archive; preview smoke passed locally/hosted. |
-| 8 | Renamed, suffixless, or subtree ROM insertions are rejected at the core package boundary. | ✓ VERIFIED | Product checker compares forbidden fixture digests before path/allowlist handling; positive/negative core package controls pass. |
-| 9 | Core release producers and downloaded/reused archive checks enforce policy on actual archive and sidecar bytes; source archive inclusion is separate. | ✓ VERIFIED | release.yml, verify-release-candidate.sh and verify-v02-source-archive.py trace staged/downloaded product bytes and the sidecar through the checker; release controls pass. |
-| 10 | Missing or altered fixture notices, root MIT or core gabbaboy-notices.txt cannot pass the core package check. | ✓ VERIFIED | Exact notice and sidecar mutation controls reject at the core boundary; verify-v02-adoption controls pass. |
-| 11 | Source receipts and Linux/core product archives reject excessive hidden PAX/GNU metadata before payload parsing with stream, per-header, aggregate-byte and header-count bounds. | ✓ VERIFIED | Bounded streaming parser checks counts/bytes before payload parsing; v02_source_archive_controls passed. |
-| 12 | Per-member extension chains retain a 128-header cap while a separate archive-wide cap of 32,768 never resets; valid long-path archives with over 128 members remain accepted. | ✓ VERIFIED | Parser has independent chain and total counters; positive 256-long-path-member control passes with the total limit enforced. |
-| 13 | The actual macOS player stage and extracted package carry only the exact original fixture subset, root MIT and fixture/SDL notices at their established paths. | ✓ VERIFIED | verify-phase3-player.sh validates stage and extracted archive inventories; exact-head hosted macOS player package lane passes. |
-| 14 | Downloaded/reused player verification applies the same actual-byte policy before launch, including renamed or hidden fixture payloads. | ✓ VERIFIED | release/preview callers invoke the player policy before execution; player mutation controls reject before launch. |
-| 15 | A clean player package passes, while insertion, identity and missing/altered fixture, MIT or SDL notices fail for their expected reasons. | ✓ VERIFIED | Actual package positive/negative controls pass; PR macos-player-package and preview player receipt jobs pass. |
-| 16 | Direct manifest and repository validation reject fixture walks over the fixed file/directory-entry limit. | ✓ VERIFIED | Incremental filesystem walker enforces MAX_FIXTURE_ENTRIES; fixture_admission_controls exercises overflow and passes. |
-| 17 | Git fixture-tree enumeration bounds stdout bytes and record count while consuming output, and terminates/reaps an over-limit child. | ✓ VERIFIED | Streaming tree_files() checks both bounds and cleans up the subprocess; self-test covers overflow/cleanup and passes. |
-| 18 | Stable rejection tokens distinguish filesystem-entry, Git-entry and Git-output-byte overflow. | ✓ VERIFIED | Dedicated stable tokens are returned by the three checked branches; negative controls assert the intended token. |
-| 19 | Existing fixture identities, product policy, notices and admission decisions continue to pass after traversal hardening. | ✓ VERIFIED | Current repository admission check and focused admission/core/player controls pass on this head. |
-| 20 | Product authority is independently pinned and the exact core inventory reconciles with that policy. | ✓ VERIFIED | Product-policy SHA is pinned independently; core inventory is checked against exact paths, bytes and baseline identities. |
-| 21 | Positive and content-caused negative controls exercise the real production boundary and reject for intended reasons. | ✓ VERIFIED | Core/player policy self-tests and workflow controls assert exact stable rejection reasons; all related CTests pass in the final evidence set. |
-| 22 | Every regular product file is checked for a known forbidden fixture digest before allowed/generated/one_of path handling, for both layouts. | ✓ VERIFIED | _validate_product_entries() checks forbidden digests before exceptions; core/player insertion controls exercise all layouts. |
-| 23 | No fixture is admitted, prior rights dispositions remain unchanged, and RIGHTS-01 stays pending. | ✓ VERIFIED | Repository check reports admitted_changes=0; fixture and root LICENSE are unchanged from the immutable baseline; REQUIREMENTS.md marks RIGHTS-01 Pending. |
-| 24 | The trusted publisher validates downloaded macOS and Windows products. | ✓ VERIFIED | release.yml downloads and invokes the trusted shared checker for both platform products before qualification; exact-head native and release-policy jobs pass. |
-| 25 | Positive and content-caused negative controls exercise the downloaded-product boundary and reject for intended reasons. | ✓ VERIFIED | release lifecycle and workflow-policy controls inspect the real downloaded-product path and assert stable reasons; current tests pass. |
-| 26 | Hidden tar extension metadata and total decompressed bytes are bounded before an over-limit payload reaches the parser. | ✓ VERIFIED | Trusted bounded reader and safe extractor enforce stream and extension limits before member processing; security controls pass. |
-| 27 | A missing trusted checker fails without leaving an extraction destination; restoring the checker permits retry at the same destination. | ✓ VERIFIED | Lifecycle controls verify cleanup and same-destination retry; these state transitions pass in the final CTest evidence. |
-| 28 | Drive-qualified and NTFS alternate-stream names reject on every host, and target paths/parents are contained before filesystem creation. | ✓ VERIFIED | safe_extract_package.py and verify-workflow-policy.py validate path components and containment before writes; path mutation controls pass. |
-| 29 | Admission workflow commands are matched exactly in complete mutation subjects. | ✓ VERIFIED | Workflow checker operates on isolated complete workflow subjects and rejects command redirection; workflow-policy controls pass. |
-| 30 | Positive and content-caused negative controls exercise repository-admission workflow matching and reject for intended reasons. | ✓ VERIFIED | CI/release workflow mutation controls assert exact matcher outcomes; release/workflow policy groups pass. |
-| 31 | Notice-contract consumers preserve the exact source-versus-product distinction. | ✓ VERIFIED | verify-v02-adoption.py checks the reviewed notice claims and explicit product contract; CTest adoption controls pass. |
-| 32 | Positive and content-caused negative notice controls reject missing or contradictory claims for intended reasons. | ✓ VERIFIED | Notice mutation controls cover missing/altered source and product notices; adoption controls pass. |
-| 33 | Dense-input source-only mutant admission uses separate immutable evidence. | ✓ VERIFIED | verify-dense-input.py creates a distinct baseline object store and source-only mutant; tests exercise it independently from the build tree. |
-| 34 | An external baseline object store does not qualify the source-only build; missing trusted evidence fails closed. | ✓ VERIFIED | Baseline object identity is not treated as build evidence; missing/wrong baseline and changed fixture controls reject. |
-| 35 | Positive and content-caused negative controls exercise dense-input admission and reject for intended reasons. | ✓ VERIFIED | acceptance_dense_input_controls and source-only mutant tests pass in the current exact-head evidence. |
+| 1 | A fixture can enter repository/public CI only when exact bytes, source/build inputs, and component terms/notices are recorded; incomplete rights or changed identities reject. | ✓ VERIFIED | The admission CLI validates versioned records against immutable Git blobs and the notice index. Final-head admission controls pass, and the direct repository check reports zero admitted changes. |
+| 2 | A controlled game-ROM insertion in an installed or product-release package is rejected, while a valid package retains component notices and the root MIT declaration. | ✓ VERIFIED | Core/player package policies check actual staged, extracted, and archived bytes; exact-head preview and CI jobs pass. |
+| 3 | Complete synthetic admission reaches the real CLI through a versioned manifest, notice index, and independent Git pins; incomplete records and changed identities fail closed. | ✓ VERIFIED | The registered fixture-admission controls exercise the production CLI, positive admission, and semantic negatives; they passed in the final-head local runs. |
+| 4 | New or changed evidence cannot enter configured repository tests or fixture reproduction without admission checks; existing approvals are retained without a rights re-audit. | ✓ VERIFIED | CMake runs the repository check before configuring fixture-consuming targets. CI and fixture-repro run the same check before their first fixture-consuming steps. The direct check reports admitted_changes=0. |
+| 5 | Product policy maps exact fixture and notice paths to independently pinned source bytes while source-archive policy remains separate. | ✓ VERIFIED | The product-policy JSON is pinned independently; the source archive checker keeps its receipt and source-archive contract separate from binary products. |
+| 6 | This phase admits no candidate, and automated structure or identity checks do not adjudicate grant scope. | ✓ VERIFIED | The repository check reports admitted_changes=0; REQUIREMENTS.md still marks RIGHTS-01 Pending; fixture-admission docs state that hashes establish identity rather than permission. |
+| 7 | An installed prefix and extracted preview archive contain exactly permitted core fixture bytes and notices plus unchanged root MIT. | ✓ VERIFIED | Installed-prefix and extracted-archive checks call the shared actual-tree policy and compare against the produced stage inventory; preview-package smoke passed at the exact head. |
+| 8 | Renamed, suffixless, or subtree ROM insertions are rejected at the core package boundary. | ✓ VERIFIED | Forbidden fixture digests are checked before path exceptions; product mutation controls assert the product-fixture-leak rejection. |
+| 9 | Core release producers and downloaded/reused archive checks enforce policy on actual archive and sidecar bytes; source archive inclusion is separate. | ✓ VERIFIED | Release workflow stages and downloads use the trusted product checker; the source archive checker retains a separate source contract. Exact-head CI and release-policy controls pass. |
+| 10 | Missing or altered fixture notices, root MIT, or the core gabbaboy-notices.txt sidecar cannot pass the core package check. | ✓ VERIFIED | Package mutation controls reject missing, altered, and misnamed notice assets at the real product boundary. |
+| 11 | Source receipts and Linux/core product archive checks bound hidden PAX/GNU metadata before payload parsing, including stream, per-header, aggregate-byte, and count limits. | ✓ VERIFIED | The bounded streaming TAR parser checks metadata limits before its base parser consumes extension payloads. The exact named source-archive control passed alone in 45.57 seconds at this head. |
+| 12 | The 128-header chain cap remains separate from a 32,768-header archive-wide cap; valid archives with more than 128 long-path members remain accepted. | ✓ VERIFIED | The parser has distinct chain and total counters. Its controls test interleaved over-limit headers, 256 long-path members, and independent counter lifetime. |
+| 13 | The actual macOS player stage and extracted archive retain the exact fixture subset, root MIT, and fixture/SDL notices at established paths. | ✓ VERIFIED | The player verifier checks stage and extracted trees; exact-head macOS player-package CI passed. |
+| 14 | Downloaded/reused player verification applies the same actual-byte policy before launch, including renamed or hidden fixture payloads. | ✓ VERIFIED | Release and preview callers check downloaded player bytes before execution; player mutation controls and exact-head preview qualification pass. |
+| 15 | A clean player package passes, while insertion, identity, and missing/changed fixture, MIT, or SDL notice controls fail for their intended reasons. | ✓ VERIFIED | Production-wrapper player controls assert semantic rejection reasons and preserve the clean candidate inventory; exact-head package CI passed. |
+| 16 | Direct manifest and repository validation reject fixture walks above the fixed file/directory-entry limit. | ✓ VERIFIED | Incremental filesystem traversal counts entries before processing; the registered fixture-admission controls passed in final-head runs. |
+| 17 | Git fixture enumeration bounds stdout bytes and record count while consuming output, and terminates/reaps an over-limit child. | ✓ VERIFIED | The streaming reader applies both limits during consumption; fake-process controls assert termination, reaping, stream closure, and reader completion. |
+| 18 | Stable rejection tokens distinguish filesystem-entry, Git-entry, and Git-output-byte overflow. | ✓ VERIFIED | Each bounded branch returns its dedicated token, and negative controls assert the exact token. |
+| 19 | Existing fixture identities, product policy, notices, and admission decisions continue to pass after traversal hardening. | ✓ VERIFIED | The current repository check and final-head admission/product controls pass; no admitted fixture changes are present. |
+| 20 | Product authority is independently pinned and the exact core inventory reconciles with that policy. | ✓ VERIFIED | The checker pins the policy digest and derives the expected product inventory from immutable source bytes; product controls pass. |
+| 21 | Positive and content-caused negative controls exercise production boundaries and reject for the intended reasons. | ✓ VERIFIED | Admission, core/player product, workflow-policy, and notice controls assert exact acceptance/rejection results and reason tokens. |
+| 22 | Every regular product file is checked for a forbidden fixture digest before allowed/generated/one_of path handling in both core and player layouts. | ✓ VERIFIED | Digest checks precede path exceptions; core and player controls cover required and one_of generated paths. |
+| 23 | No fixture is admitted, prior rights dispositions remain unchanged, and RIGHTS-01 stays pending. | ✓ VERIFIED | The direct repository check reports admitted_changes=0; REQUIREMENTS.md remains Pending; the source and license state do not claim new permission. |
+| 24 | The trusted publisher validates downloaded macOS and Windows products. | ✓ VERIFIED | Release workflow callers use checker and policy files from the trusted publisher checkout; exact-head release-policy controls and hosted platform CI passed. |
+| 25 | Positive and content-caused negative controls exercise downloaded-product verification and reject for intended reasons. | ✓ VERIFIED | Release lifecycle controls cover downloaded bytes, altered content, and unsafe paths; release-policy controls passed at this head. |
+| 26 | Hidden tar extension metadata and total decompressed bytes are bounded before an over-limit payload reaches parsing. | ✓ VERIFIED | The bounded reader and pre-payload TAR guards enforce stream and extension limits; exact-head source-archive controls passed. |
+| 27 | A missing trusted checker rejects without leaving an extraction destination; restoring the checker permits retry at the same destination. | ✓ VERIFIED | Lifecycle controls exercise cleanup on missing-checker and late-rejection paths and same-destination retry; the registered final-head controls passed. |
+| 28 | Drive-qualified and NTFS alternate-stream paths reject on every host, and directory/file targets are contained before filesystem creation. | ✓ VERIFIED | The reusable extractor self-test passed for drive/ADS syntax and injected directory/file escapes; exact-head Windows CI also passed. |
+| 29 | Repository-admission commands are matched exactly in complete workflow mutation subjects. | ✓ VERIFIED | The trusted workflow checker parses exact command words and root assignments; complete-subject mutation controls pass. |
+| 30 | Positive and content-caused negative controls exercise repository-admission workflow matching. | ✓ VERIFIED | CI and workflow-policy controls assert the intended command match and reject removal or redirection. |
+| 31 | Notice-contract consumers preserve the exact source-versus-product distinction. | ✓ VERIFIED | The adoption checker verifies the reviewed distinction against THIRD_PARTY_NOTICES.md; its registered controls pass. |
+| 32 | Positive and negative notice controls reject missing or contradictory claims for intended reasons. | ✓ VERIFIED | Adoption/documentation mutations assert the specific missing or contradictory notice outcomes; final-head test evidence passes. |
+| 33 | Dense-input source-only mutant admission uses separate immutable evidence. | ✓ VERIFIED | The source-only harness reads baseline objects from a separate pinned object store while evaluating subject-owned source bytes. |
+| 34 | An external baseline object store does not qualify a source-only build; missing trusted evidence fails closed. | ✓ VERIFIED | The source-only flow keeps build qualification tied to the subject revision; missing/wrong baseline and changed-fixture controls reject. |
+| 35 | Positive and content-caused negative controls exercise dense-input admission and reject for intended reasons. | ✓ VERIFIED | The registered dense-input controls cover the separate baseline, unqualified-build, and changed-fixture cases and passed in the final-head evidence set. |
 
-**Score:** 35/35 truths verified (0 present, behavior-unverified).
+**Score:** 35/35 observable truths verified (0 present, behavior-unverified).
 
-The two must-not constraints in Plan 20-01 were also checked: the tooling/docs do not present hashes or populated fields as legal clearance, and the baseline comparison/gates preserve prior approvals without granting blanket permission to new evidence. Both are verified; this is not a decision on any fixture's legal scope.
+### Unresolved Must-Not Prohibitions
 
-### Required Artifacts
+Plan 20-01 declares two prohibitions with status unresolved but omits the required verification tier. Current code and docs support both constraints, and decision coverage found all three CONTEXT.md decisions honored. However, the verifier contract requires unresolved prohibitions to remain visible as human-verification items; they are not counted as silently passed. This drives human_needed without creating an implementation gap.
 
-All 28 plan artifact declarations pass the GSD artifact check. Unique artifact paths are listed below; each exists, is substantive, and is wired into its caller or test boundary.
+## Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| tests/scripts/verify-fixture-admission.py | Admission CLI and product checker | ✓ VERIFIED | 20-01/04/05/09; tested by CTest and direct repository check. |
-| cmake/FixtureAdmissionPolicy.json | Independent baseline and destination policy | ✓ VERIFIED | 20-01/05; consumed by shared checker. |
-| docs/fixture-admission.md | Manifest contract and legal-scope limitation | ✓ VERIFIED | 20-01/04/05/09; contract matches implementation. |
-| cmake/VerifyInstalledPackage.cmake | Installed core policy check | ✓ VERIFIED | 20-02; invokes trusted shared policy. |
-| cmake/PreviewPackageSmoke.cmake | Actual stage/extracted package smoke and mutations | ✓ VERIFIED | 20-02; drives installed and archive controls. |
-| tests/scripts/verify-v02-source-archive.py | Bounded source/product archive verification | ✓ VERIFIED | 20-02; used by release candidate and CTest. |
-| .github/workflows/release.yml | Core/player producer and downloaded product checks | ✓ VERIFIED | 20-02/06; validates actual bytes before release qualification. |
-| tests/scripts/verify-phase3-player.sh | Player stage/archive validation | ✓ VERIFIED | 20-03; called by package/release jobs. |
-| tests/ci/test-budget-allowlist | Test-budget and policy accounting | ✓ VERIFIED | 20-05; consumed by the matching CI lane. |
-| .github/scripts/release-evidence-lifecycle.sh | Release evidence lifecycle helpers | ✓ VERIFIED | 20-06; sourced by the trusted release checker. |
-| .github/scripts/verify-workflow-policy.py | Trusted workflow and downloaded archive verifier | ✓ VERIFIED | 20-06/07; wired to CI/release checks and tests. |
-| tests/data/workflow-policy-controls.json | Stable workflow mutation-control registry | ✓ VERIFIED | 20-06/07; consumed by workflow policy tests. |
-| .github/scripts/safe_extract_package.py | Bounded safe archive extraction helper | ✓ VERIFIED | 20-06; dynamically loaded from trusted sibling path. |
-| tests/scripts/verify-workflow-policy-coverage.py | Control registry and workflow mutation tests | ✓ VERIFIED | 20-06; registered in CTest. |
-| tests/cmake/ci-lanes.cmake | CI lane test wiring | ✓ VERIFIED | 20-06; wires safety checks into CTest. |
-| tests/scripts/verify-v02-adoption.py | Notice and product-claim contract controls | ✓ VERIFIED | 20-08; registered and passing in CTest. |
-| tests/scripts/verify-dense-input.py | Source-only mutant with independent evidence | ✓ VERIFIED | 20-09; invoked by dense-input acceptance controls. |
-| CMakeLists.txt | Configure-time repository admission gate | ✓ VERIFIED | 20-09; runs before fixture-consuming targets when BUILD_TESTING is enabled. |
+| tests/scripts/verify-fixture-admission.py | Admission, repository, and actual product-byte checker | ✓ VERIFIED | Exists, substantive validation paths and semantic controls, called by CMake and CI/release flows. |
+| cmake/FixtureAdmissionPolicy.json | Independently pinned product paths and source identities | ✓ VERIFIED | Exists, consumed by the checker and package policies. |
+| docs/fixture-admission.md | Manifest, limits, identity, and legal-scope contract | ✓ VERIFIED | Exists, substantive contract; aligned with checker and notice controls. |
+| cmake/VerifyInstalledPackage.cmake | Installed-prefix policy validation | ✓ VERIFIED | Checks actual installed bytes through the shared checker. |
+| cmake/PreviewPackageSmoke.cmake | Stage/extracted package and mutation checks | ✓ VERIFIED | Checks the produced prefix and extracted archive before consumers run. |
+| tests/scripts/verify-v02-source-archive.py | Bounded source/archive and core product inspection | ✓ VERIFIED | Shared bounded TAR parser is used by receipt and product paths. |
+| .github/workflows/release.yml | Trusted core/player downloaded-product enforcement | ✓ VERIFIED | Release jobs call trusted checker and lifecycle boundaries. |
+| tests/scripts/verify-phase3-player.sh | Player stage/extract package policy | ✓ VERIFIED | Calls the shared checker before archive use and player execution. |
+| tests/ci/test-budget-allowlist | Bounded test-control budgets | ✓ VERIFIED | Present and checked by registered test-budget controls. |
+| .github/scripts/release-evidence-lifecycle.sh | Trusted release extraction and cleanup lifecycle | ✓ VERIFIED | Called from release workflow and checked by release lifecycle controls. |
+| .github/scripts/verify-workflow-policy.py | Trusted workflow and downloaded archive policy | ✓ VERIFIED | Substantive policy; dynamically loads the sibling safe extractor. |
+| tests/data/workflow-policy-controls.json | Stable workflow/source-control registry | ✓ VERIFIED | Present; independent coverage checks validate required entries. |
+| .github/scripts/safe_extract_package.py | Bounded archive reader and safe extractor | ✓ VERIFIED | Present; rejects unsafe names and proves containment before writes. |
+| tests/scripts/verify-workflow-policy-coverage.py | Immutable source and mutation coverage checker | ✓ VERIFIED | Present; pins the reviewed source and tests guard-removal mutants. |
+| tests/cmake/ci-lanes.cmake | Enforced workflow-coverage completion | ✓ VERIFIED | Present and wired into registered CTest lanes. |
+| tests/scripts/verify-v02-adoption.py | Shared source/product notice contract | ✓ VERIFIED | Present and called by registered adoption/documentation controls. |
+| tests/scripts/verify-dense-input.py | Source-only mutant baseline enforcement | ✓ VERIFIED | Present and connected to the dense-input CTest path. |
+| CMakeLists.txt | Configure-time fixture admission gate | ✓ VERIFIED | Gate runs before fixture-consuming targets and tests are configured. |
 
-### Key Link Verification
+## Key Link Verification
 
-| Plan | Automated result | Manual source trace | Status |
-|---|---:|---|---|
-| 20-01 | 3/3 | Manifest/policy, configure gate and fixture-repro call are direct references. | ✓ WIRED |
-| 20-02 | 4/5 | The fifth link starts at inspect_tar(), a function within the target file, so the path-based checker cannot resolve it; receipt and product paths use the same bounded parser. | ✓ WIRED |
-| 20-03 | 3/3 | Player stage/extraction calls and CI/release callers directly reference the shared policy. | ✓ WIRED |
-| 20-04 | 0/3 | All three sources are function/test names rather than file paths; check_manifest(), check_repository(), current_fixture_files(), tree_files() and the registered CTest are connected in code. | ✓ WIRED |
-| 20-05 | 1/1 | The production checker consumes the pinned policy; controls exercise it. | ✓ WIRED |
-| 20-06 | 2/3 | The third link is a dynamic import from the trusted sibling script directory; the policy checker calls it before extraction. | ✓ WIRED |
-| 20-07 | 1/1 | Mutation control registry is consumed by the workflow policy test. | ✓ WIRED |
-| 20-08 | 1/1 | Notice checker reads the source/product notice contract. | ✓ WIRED |
-| 20-09 | 1/1 | Dense-input checker invokes the admission checker with isolated immutable evidence. | ✓ WIRED |
+| From | To | Via | Status | Details |
+|---|---|---|---|---|
+| tests/scripts/verify-fixture-admission.py | cmake/FixtureAdmissionPolicy.json | Reads independent baseline and policy identities | WIRED | Target reference and current repository check verified. |
+| CMakeLists.txt | tests/scripts/verify-fixture-admission.py | BUILD_TESTING configure gate | WIRED | CMake executes the checker before target/test setup. |
+| .github/workflows/fixture-repro.yml | tests/scripts/verify-fixture-admission.py | Before fixture build/download | WIRED | Workflow invokes repository admission at entry. |
+| cmake/VerifyInstalledPackage.cmake | tests/scripts/verify-fixture-admission.py | Actual installed-prefix tree | WIRED | Passes explicit checkout and policy roots. |
+| cmake/PreviewPackageSmoke.cmake | cmake/VerifyInstalledPackage.cmake | Stage and extracted prefix | WIRED | Both actual trees are checked before use. |
+| tests/scripts/verify-release-candidate.sh | tests/scripts/verify-v02-source-archive.py | Product receipt/verification dispatch | WIRED | Existing verification modes invoke the archive checker with a real sidecar. |
+| tests/scripts/verify-v02-source-archive.py inspect_tar | build_receipt and check_product | inspect_archive dispatches to inspect_tar; both callers use inspect_archive | WIRED | The receipt and core product paths share the bounded TAR parser through the archive dispatcher. |
+| .github/workflows/release.yml | tests/scripts/verify-fixture-admission.py | Core product stages and extracted downloads | WIRED | Trusted source checker validates actual trees before qualification. |
+| tests/scripts/verify-phase3-player.sh | tests/scripts/verify-fixture-admission.py | Player stage and extracted package | WIRED | Production wrapper calls the shared policy before launch. |
+| .github/workflows/ci.yml | tests/scripts/verify-phase3-player.sh | macos-player-package producer | WIRED | Exact package build lane calls the wrapper. |
+| .github/workflows/release.yml | tests/scripts/verify-phase3-player.sh | Player build and downloaded verification | WIRED | Both package stages use the wrapper. |
+| check_manifest | current_fixture_files | Bounded filesystem walk | WIRED | Manifest checker calls the incremental walker. |
+| check_repository | current_fixture_files and tree_files | Current and immutable tree comparison | WIRED | Repository admission calls both bounded enumerators. |
+| fixture_admission_controls CTest | verify-fixture-admission.py --self-test | Production semantic controls | WIRED | CTest registration invokes the script self-test. |
+| tests/scripts/verify-fixture-admission.py | cmake/FixtureAdmissionPolicy.json | Product inventory and immutable authority | WIRED | Shared contract also covers the Plan 20-05 policy link. |
+| .github/workflows/release.yml | .github/scripts/release-evidence-lifecycle.sh | Trusted release lifecycle | WIRED | Workflow invokes lifecycle operations from trusted checkout. |
+| .github/scripts/verify-workflow-policy.py | .github/scripts/safe_extract_package.py | Dynamic sibling load | WIRED | Manual trace confirmed resolved sibling path, importlib load, and use of bounded archive APIs. |
+| tests/scripts/verify-workflow-policy-coverage.py | tests/data/workflow-policy-controls.json | Stable controls and reviewed source | WIRED | Coverage checker reads and validates the registry. |
+| .github/scripts/verify-workflow-policy.py | tests/data/workflow-policy-controls.json | Workflow mutation controls | WIRED | Registered release and CI controls invoke the production checker. |
+| tests/scripts/verify-v02-adoption.py | THIRD_PARTY_NOTICES.md | Source/product notice claims | WIRED | Registered adoption controls read and validate the notice contract. |
+| tests/scripts/verify-dense-input.py | tests/scripts/verify-fixture-admission.py | Independent baseline admission | WIRED | Dense-input controls use the fixture checker without inheriting build qualification. |
 
-The automated checker reports 16/21 direct links. I traced the remaining five in code; they are path-checker limitations on function-level and dynamic-import links, not disconnected artifacts. All 21 links are wired.
+The GSD link query could not interpret function-name endpoints in Plans 20-02 and 20-04 and did not detect the dynamic helper load in Plan 20-06. Source inspection confirmed those links as wired; no link remains unresolved.
 
-### Data-Flow Trace (Level 4)
+## Data-Flow Trace (Level 4)
 
 | Artifact | Data variable | Source | Produces real data | Status |
 |---|---|---|---|---|
-| verify-fixture-admission.py | Manifest, notice index and file digests | Repository files plus pinned Git blobs | Yes; verifies actual bytes against immutable identities | ✓ FLOWING |
-| Installed/package policy callers | Product entries and sidecar | Staged, extracted or downloaded filesystem/archive bytes | Yes; checker hashes actual regular files and compares exact inventory | ✓ FLOWING |
-| verify-v02-source-archive.py | Tar members and receipts | Bounded decompressed archive stream | Yes; checks parsed payload, metadata and receipt against real archive bytes | ✓ FLOWING |
-| safe_extract_package.py / workflow policy | Archive inventory and destinations | Downloaded release archive and trusted local checker | Yes; validates paths and actual content before/while extracting | ✓ FLOWING |
+| Fixture admission checker | Current fixture tree and manifest bytes | Working tree plus pinned Git blobs | Yes; direct repository check reads the actual checkout and immutable baseline | ✓ FLOWING |
+| Core/player product checker | Product paths, sizes, and digests | Staged and extracted package files | Yes; policies enumerate and hash actual files, with synthetic trees used only as negatives | ✓ FLOWING |
+| Trusted publisher | Downloaded archive and sidecar | CI artifact bytes, checked with trusted checkout code | Yes; checker runs before release qualification | ✓ FLOWING |
+| Source archive checker | Members and metadata | Real TAR stream | Yes; bounded parser processes archive bytes and feeds receipt/product checks | ✓ FLOWING |
+| Dense-input admission | Subject source and baseline objects | Source-only mutant plus separately pinned object store | Yes; baseline objects do not supply subject build identity | ✓ FLOWING |
 
-This is an infrastructure phase with no rendered user data; the byte/archive traces above are the relevant data flows.
+## Final Implementation-Head Evidence
 
-### Behavioral Spot-Checks
+Implementation head: 1b9aa6f79b8a78efa995fa689bb8f9762c3aa30c.
 
-| Behavior | Command/evidence | Result | Status |
+| Check | Result | Evidence |
+|---|---|---|
+| Configure/build | PASS | Final-head configure and build passed. |
+| First full local CTest run | 1706/1711 passed | Five Git worktree metadata writes were denied by the managed read-only .git. All five named controls passed with temporary Git metadata under /tmp. |
+| Wrapper-based full local CTest run | 1710/1711 passed | Only v02_source_archive_controls reached its 90-second timeout during the full run, without a checker assertion. |
+| Focused source-archive retest | PASS, 45.57 seconds | The exact test passed alone using the normal Git path. The load/scheduler cause of the full-run timeout was not established. |
+| Combined local test evidence | 1711/1711 have passing evidence | Two partial full runs plus six focused retests cover all registered cases. No single full-suite invocation was all-green. |
+| Planning/summary/hygiene checks | 3/3 passed | plan_cap, planning_hygiene_controls, and summary_coverage_live passed after the latest documentation refresh. |
+| Shared UAT closure | Complete, 23/23 automated cases pass | `20-UAT.md` records zero issues or pending cases; this does not resolve the two spec-less Plan 20-01 prohibitions. |
+| Exact-head pull-request CI | PASS | [Run 41347651035](https://github.com/szTheory/gabbaboy/actions/runs/41347651035), head SHA matches the implementation head. |
+| Exact-head push CI | PASS | [Run 41347645660](https://github.com/szTheory/gabbaboy/actions/runs/41347645660), head SHA matches the implementation head. |
+| Exact-head preview package | PASS | [Run 41347651030](https://github.com/szTheory/gabbaboy/actions/runs/41347651030), head SHA matches the implementation head. |
+| Exact-head fixture-repro PR and push runs | PASS | [PR run 41347651034](https://github.com/szTheory/gabbaboy/actions/runs/41347651034) and [push run 41347645556](https://github.com/szTheory/gabbaboy/actions/runs/41347645556) both match the implementation head. |
+| PR disposition | OPEN, unmerged | [PR #139](https://github.com/szTheory/gabbaboy/pull/139) remains open; no merge is claimed. |
+| Security audit | 29/29 authored threat entries closed | 20-SECURITY.md records threats_open=0; rights clearance remains separate. |
+| Final review | Clean | Current code review reports zero open findings; the disposition table marks all six reviewed findings fixed. |
+| UI review | Not applicable | Phase 20 changes no interface or user flow. |
+
+## Behavioral Spot-Checks
+
+| Behavior | Command | Result | Status |
 |---|---|---|---|
-| Current repository admission | python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . | PASS: 236 legacy files, admitted_changes=0, baseline 7cc6495e64f3645caa120e7458f754585b788985 | ✓ PASS |
-| Full local CTest evidence | Final exact-head full run plus focused retests after cmake --preset phase1 && cmake --build --preset phase1 | Full run passed 1708/1711; only cgb_corpus_report_tracer, cgb_corpus_report_controls and state_fuzz_controls failed on stale configure-time revision; all three passed in focused retest. This is combined evidence, not one 1711/1711 run. | ✓ PASS |
-| Source archive controls | v02_source_archive_controls | Passed in 52.11 seconds. | ✓ PASS |
-| Release candidate controls | bash tests/scripts/verify-release-candidate.sh --self-test | Passed against the same source tree. | ✓ PASS |
-| Exact-head PR qualification | GitHub run 41334163805 at source head 39eb048e7770652b84a3fc5da7aaa3890adbd70c | Native Linux/macOS/Windows, CMake 3.25.3, sanitizer, acceptance, performance, required-native and macos-player-package passed. | ✓ PASS |
-| Exact-head push qualification | GitHub run 41334157283 at the same head | Native, floor, sanitizer, acceptance, performance and required-native passed; trigger-specific macOS player/planning jobs skipped. | ✓ PASS |
-| Installed/player consumer smoke | Preview run 41334163730 at the same head | Linux/macOS installed package smoke, downloaded macOS player receipt and aggregate passed. | ✓ PASS |
+| Reusable extraction rejects drive/ADS paths and out-of-root writes before filesystem mutation | python3 -I .github/scripts/safe_extract_package.py --self-test | PASS; controls cover injected directory and file escapes | ✓ PASS |
+| Repository admission rejects unrecorded fixture changes | python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root . | PASS; legacy_files=236, admitted_changes=0 | ✓ PASS |
 
-No single all-green local CTest run is claimed; all 1,711 tests have passing evidence across the full run and the three post-configure focused retests.
+The broader fixture-admission self-test and release-policy group did not finish inside this pass’s ten-second spot-check window and were not counted as fresh passes here. The exact-head final test evidence above records those registered controls passing in the full local runs.
 
-### Probe Execution
+## Probe Execution
 
-No Phase 20 plan or summary declares a probe, and no matching scripts/*/tests/probe-*.sh probe exists. The repository has a separate tests/scripts/probe-mooneye-candidate.sh, but Phase 20 does not reference it and it concerns the earlier candidate-protocol work, so it is not a Phase 20 probe.
+| Probe | Command | Result | Status |
+|---|---|---|---|
+| No Phase 20 probe is declared in the plans or summaries | N/A | The repository Mooneye candidate probe is unrelated to this fixture/package-boundary phase | N/A |
 
-### Requirements Coverage
+## Requirements Coverage
 
-| Requirement | Source plan | Description | Status | Evidence |
+| Requirement | Source Plan | Description | Status | Evidence |
 |---|---|---|---|---|
-| RIGHTS-01 | 20-01 through 20-09 | Record exact rights/source/build/notices and exclude game ROMs from product packages while retaining root MIT. | PENDING | No fixture was admitted; current work proves byte identity and package boundaries, not legal permission or grant scope. REQUIREMENTS.md remains PENDING as directed. |
+| RIGHTS-01 | Plans 20-01 through 20-09 | Candidate fixture has verified repository/public-CI rights by component; ROMs stay out of products and root MIT remains unchanged. | NEEDS HUMAN; remains Pending | No candidate was admitted. Boundary checks and product exclusions are verified, but no source-grounded grant exists to verify. REQUIREMENTS.md remains Pending as instructed. |
 
-No additional Phase 20 requirement is orphaned from the plans.
+No other requirement is mapped to Phase 20. The phase goal is achieved without claiming candidate rights clearance.
 
-### Test Quality Audit
+## Test Quality Audit
 
-| Test file | Linked requirement/behavior | Active | Skipped | Circular | Assertion level | Verdict |
-|---|---|---:|---:|---:|---|---|
-| tests/scripts/verify-fixture-admission.py | RIGHTS-01 admission and repository boundary | Yes | 0 | No | Behavioral/value: exact accept/reject decisions, digests and tokens | ✓ PASS |
-| tests/scripts/verify-v02-source-archive.py | RIGHTS-01 source/product archive separation and metadata bounds | Yes | 0 | No | Behavioral/value: archive acceptance/rejection and exact reasons | ✓ PASS |
-| tests/scripts/verify-phase3-player.sh | RIGHTS-01 actual player package policy | Yes | 0 | No | Behavioral: clean package plus staged/extracted mutation checks | ✓ PASS |
-| .github/scripts/safe_extract_package.py and tests/scripts/verify-release-lifecycle.py | Downloaded product extraction, cleanup and retry | Yes | 0 | No | Behavioral: preflight, cleanup and same-destination retry | ✓ PASS |
-| .github/scripts/verify-workflow-policy.py and tests/scripts/verify-workflow-policy-coverage.py | Trusted checker, workflow command wiring and path controls | Yes | 0 | No | Behavioral/value: isolated workflow mutations and expected outcomes | ✓ PASS |
-| tests/scripts/verify-dense-input.py | Source-only mutant evidence boundary | Yes | 0 | No | Behavioral/value: independent evidence acceptance and fail-closed controls | ✓ PASS |
-| tests/scripts/verify-v02-adoption.py | Source/product notice claims | Yes | 0 | No | Value: required and contradictory notice text controls | ✓ PASS |
+| Test File | Linked Req | Active | Skipped | Circular | Assertion Level | Verdict |
+|---|---|---:|---:|---|---|---|
+| tests/scripts/verify-fixture-admission.py | RIGHTS-01 boundary | Yes | 0 found | No | Behavioral/value: positive admission, exact rejection tokens, and immutable identity checks | Proves the evidence gate; does not prove legal grant scope. |
+| tests/scripts/verify-v02-source-archive.py | RIGHTS-01 product boundary | Yes | 0 found | No | Behavioral/value: exact parser limits, product bytes, and rejection reasons | Pass; synthetic archives are inputs, expected outcomes are independent tokens. |
+| tests/scripts/verify-workflow-policy-coverage.py | RIGHTS-01 trusted workflow boundary | Yes | 0 found | No | Value: pinned source digest, registry identity, and guard-removal mutants | Pass; controls are not derived from the system response. |
+| tests/scripts/verify-v02-adoption.py | RIGHTS-01 notice contract | Yes | 0 found | No | Value: expected notice claims and semantic mutations | Pass; candidate-specific legal scope remains pending. |
 
-Disabled-test scan found no skipped/pending tests in the linked files. Temporary files written by the controls are test subjects/receipts; expected decisions are independently specified or pinned, not generated by running the assertion target. No circular expected-value generation or insufficient assertion was found.
+**Disabled tests on requirements:** 0 found.
 
-**Disabled tests on requirements:** 0
-**Circular patterns detected:** 0
-**Insufficient assertions:** 0
+**Circular patterns detected:** 0; test scripts write synthetic inputs and mutants, not expected output generated from the implementation.
+**Insufficient assertions:** 0 for the checked admission, archive, workflow-policy, and notice behaviors. Candidate-specific legal permission has no fixture to exercise and remains pending.
 
-### Anti-Patterns Found
+## Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |---|---:|---|---|---|
-| — | — | None | — | No unresolved TBD/FIXME/XXX, placeholder or empty implementation was found in changed implementation files. The small number of empty-list returns are explicit error/catch results; empty collection initializers are collectors populated along the checked paths, not product data stubs. |
+| .planning/phases/GB-20-fixture-admission-tune-up/20-08-SUMMARY.md | 18 | Lists tests/data/notice-adoption-controls.json as modified, but the file is absent and has no Git history or references. | Info | Plan 20-08’s notice controls are in verify-v02-adoption.py; this summary key-file mismatch does not affect the declared must-haves. |
+
+The implementation-file scan found no unreferenced TBD/FIXME/XXX markers, cleanup placeholders, empty implementations, hardcoded empty output data, or console-log-only handlers.
+
+## Human Verification Required
+
+### 1. Legal-clearance language
+
+**Test:** Review the current admission documentation and checker/release output language for claims that populated fields, public availability, or a matching digest establish permission.
+
+**Expected:** No legal clearance is inferred; hashes establish identity only, and grant scope remains a source-grounded maintainer decision.
+**Why human:** Plan 20-01 explicitly leaves this prohibition unresolved and has no verification tier. Automated byte checks cannot decide legal interpretation.
+
+### 2. Historical rights dispositions
+
+**Test:** Confirm that Phase 20 preserved prior fixture-rights dispositions and did not extend them to new evidence.
+
+**Expected:** No candidate or rights disposition was changed or generalized; RIGHTS-01 remains Pending.
+**Why human:** Plan 20-01 explicitly leaves this prohibition unresolved and has no verification tier. The owner must resolve that declaration rather than letting the verifier silently treat it as passed.
+
+## Gaps Summary
+
+No implementation truth, artifact, or key link failed. The phase goal is met and all 35 observable truths are verified. The report remains human_needed because Plan 20-01 contains two unresolved, untyped must-not prohibitions that the verification contract requires to be surfaced for owner resolution. RIGHTS-01 remains Pending; no fixture was admitted, and no legal clearance is claimed.
 
 ### Decision Coverage
 
-All 3 trackable decisions in 20-CONTEXT.md are honored by shipped artifacts.
-
-### Human Verification Required
-
-N/A — infrastructure/foundation phase with no user-facing elements. All acceptance criteria and state/cleanup invariants have automated evidence. RIGHTS-01 remains pending until a real candidate and source-grounded legal decision exist; no candidate is part of this phase.
-
-### Gaps Summary
-
-No phase-goal gaps found. Admission, actual-byte product checks, safe extraction, archive limits, workflow wiring, and their negative controls are present and exercised. RIGHTS-01 is deliberately still PENDING: no fixture was admitted, and this verification does not infer legal permission from hashes, populated fields or public availability.
+All 3 trackable CONTEXT.md decisions are honored by shipped artifacts. This gate is non-blocking.
 
 ---
 
-_Verified: 2026-11-01T18:53:11Z_
+_Verified: 2026-11-01T22:00:52Z_
 _Verifier: the agent (gsd-verifier)_
