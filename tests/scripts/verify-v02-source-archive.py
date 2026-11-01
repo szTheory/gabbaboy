@@ -1262,7 +1262,9 @@ def self_test():
                     raise SystemExit(f"self-test product negative {label}: expected {expected}, got {code}: {err!r}")
             else:
                 try:
-                    check_product(str(archive), str(product_repo), Limits(), str(inventory_path) if inventory_path else None)
+                    check_product(str(archive), str(product_repo), Limits(),
+                                  str(inventory_path) if inventory_path else None,
+                                  str(notice_sidecar) if notice_sidecar is not None else None)
                 except Reject as rejection:
                     if expected is None or rejection.code != expected:
                         raise SystemExit(f"self-test product {label}: expected {expected or 'accept'}, got {rejection.code}: {rejection}")
@@ -1282,10 +1284,17 @@ def self_test():
         expect_product("complete-core-product-from-pinned-baseline", good_product, None,
                        inventory=good_inventory, use_cli=True)
 
+        def cached_product_entries(entries, layout, repo_root, inventory=None, sidecar=None):
+            return product_checker._validate_product_entries(
+                entries, layout, repo_root, inventory=inventory, sidecar=sidecar,
+                rules_override=product_rules, source_contract=source_contract)
+
+        product_checker.check_product_entries = cached_product_entries
+
         good_sidecar = scratch / "gabbaboy-notices.txt"
         good_sidecar.write_bytes(product_checker.blob(product_repo, product_checker.BASELINE_COMMIT, "LICENSE"))
         expect_product("complete-core-product-with-release-sidecar", good_product, None,
-                       inventory=good_inventory, notice_sidecar=good_sidecar, use_cli=True)
+                       inventory=good_inventory, notice_sidecar=good_sidecar)
         large_product_member = next(iter(good_product))
         large_product_metadata = write(
             "core-product-with-large-pax.tar.gz",
@@ -1304,18 +1313,11 @@ def self_test():
         altered_sidecar.parent.mkdir()
         altered_sidecar.write_bytes(good_sidecar.read_bytes() + b"altered\n")
         expect_product("product-altered-release-sidecar", good_product, "product-notice-sidecar-mismatch",
-                       notice_sidecar=altered_sidecar, use_cli=True)
+                       notice_sidecar=altered_sidecar)
         wrong_name_sidecar = scratch / "notice.txt"
         wrong_name_sidecar.write_bytes(good_sidecar.read_bytes())
         expect_product("product-wrong-release-sidecar-name", good_product, "product-notice-sidecar-invalid",
-                       notice_sidecar=wrong_name_sidecar, use_cli=True)
-
-        def cached_product_entries(entries, layout, repo_root, inventory=None, sidecar=None):
-            return product_checker._validate_product_entries(
-                entries, layout, repo_root, inventory=inventory, sidecar=sidecar,
-                rules_override=product_rules, source_contract=source_contract)
-
-        product_checker.check_product_entries = cached_product_entries
+                       notice_sidecar=wrong_name_sidecar)
         expect_product("product-wrapped-in-a-source-style-root", good_product, "product-path-unknown", root_name="stage")
         for directory in ("tracer", "visible-demo", "mbc1-continuation"):
             expect_product(f"product-extra-member-{directory}",
