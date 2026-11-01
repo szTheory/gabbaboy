@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
@@ -12,12 +13,14 @@ import stat
 import subprocess
 import sys
 import tempfile
+import tarfile
 from pathlib import Path, PurePosixPath
 
 
 BASELINE_COMMIT = "7cc6495e64f3645caa120e7458f754585b788985"
 MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 MAX_FILE_BYTES = 32 * 1024 * 1024
+MAX_TOTAL_FIXTURE_BYTES = 256 * 1024 * 1024
 MAX_FILES = 4096
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
@@ -53,7 +56,7 @@ def parse_json(raw: bytes, where: str) -> dict:
     try:
         text = raw.decode("utf-8", errors="strict")
         value = json.loads(text, object_pairs_hook=unique_pairs, parse_constant=reject_constant)
-    except (UnicodeDecodeError, json.JSONDecodeError, Reject) as error:
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, RecursionError, Reject) as error:
         if isinstance(error, Reject):
             raise
         raise Reject("json-invalid", f"{where}: {error}") from None
@@ -157,6 +160,8 @@ def file_records(value: object, where: str) -> dict[str, tuple[int, str]]:
         if path in result:
             raise Reject("record-files-duplicate", path)
         result[path] = (size, digest)
+    if sum(size for size, _digest in result.values()) > MAX_TOTAL_FIXTURE_BYTES:
+        raise Reject("record-total-size-limit", where)
     return result
 
 
@@ -466,6 +471,9 @@ def check_repository(root: Path, baseline: str) -> dict:
 def _write_synthetic(root: Path) -> str:
     """Create one complete synthetic fixture and commit the reviewed source bytes."""
     git(root, "init", "-q")
+    git(root, "symbolic-ref", "HEAD", "refs/heads/main")
+    git(root, "update-ref", "refs/heads/main", BASELINE_COMMIT)
+    git(root, "read-tree", "--empty")
     git(root, "config", "user.name", "GabbaBoy Fixture Test")
     git(root, "config", "user.email", "fixture-test@example.invalid")
     (root / "cmake").mkdir(parents=True, exist_ok=True)
@@ -547,6 +555,209 @@ def _prepare_synthetic(root: Path) -> None:
     _write_synthetic(root)
 
 
+def _prepare_legacy_tree(root: Path) -> None:
+    """Materialize only the immutable baseline fixture tree for repository-gate controls."""
+    project = Path(__file__).resolve().parents[2]
+    git(root, "init", "-q")
+    (root / ".git/objects/info").mkdir(parents=True, exist_ok=True)
+    object_dir = subprocess.run(["git", "rev-parse", "--absolute-git-dir"], cwd=project,
+                                capture_output=True, check=True, text=True).stdout.strip() + "/objects"
+    (root / ".git/objects/info/alternates").write_text(object_dir + "\n", encoding="utf-8")
+    archive = subprocess.run(["git", "archive", "--format=tar", BASELINE_COMMIT, "fixtures", "LICENSE"],
+                             cwd=project, capture_output=True, check=True, timeout=30).stdout
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as stream:
+        for member in stream.getmembers():
+            if member.isdir():
+                continue
+            path = relative_path(member.name, "baseline archive path")
+            if member.issym() or member.islnk() or not member.isfile():
+                raise Reject("self-test-baseline-archive-invalid", path)
+            if path != "LICENSE" and not path.startswith("fixtures/"):
+                raise Reject("self-test-baseline-archive-invalid", path)
+            if member.size > MAX_FILE_BYTES:
+                raise Reject("self-test-baseline-archive-invalid", path)
+            source = stream.extractfile(member)
+            if source is None:
+                raise Reject("self-test-baseline-archive-invalid", path)
+            target = root.joinpath(*PurePosixPath(path).parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(source.read(MAX_FILE_BYTES + 1))
+    policy_path = root / "cmake/FixtureAdmissionPolicy.json"
+    policy_path.parent.mkdir(parents=True, exist_ok=True)
+    policy_path.write_bytes((project / "cmake/FixtureAdmissionPolicy.json").read_bytes())
+
+
+def _run_repository_cli(root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, "-I", str(Path(__file__).resolve()), "--check-repository",
+                           "--repo-root", str(root)], capture_output=True, text=True,
+                          check=False, timeout=30)
+
+
+def _run_manifest_mutations(root: Path) -> int:
+    path = root / "fixtures/synthetic/manifest.json"
+    original = path.read_bytes()
+    record = parse_json(original, "synthetic manifest")
+    cases = []
+
+    def changed(label: str, mutate, expected: str) -> None:
+        candidate = json.loads(json.dumps(record))
+        mutate(candidate)
+        path.write_text(json.dumps(candidate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        result = _run_manifest_cli(root)
+        if result.returncode == 0 or expected not in result.stderr:
+            raise Reject(f"self-test-{label}", result.stderr.strip() or f"{label} mutation was accepted")
+        cases.append(label)
+        path.write_bytes(original)
+
+    changed("missing-schema-version", lambda value: value.pop("schema_version"), "REJECT record-field-missing:")
+    changed("missing-fixture-kind", lambda value: value.pop("fixture_kind"), "REJECT record-field-missing:")
+    changed("missing-permissions", lambda value: value.pop("permissions"), "REJECT record-field-missing:")
+    changed("missing-source", lambda value: value.pop("source"), "REJECT record-field-missing:")
+    changed("missing-inputs", lambda value: value.pop("inputs"), "REJECT record-field-missing:")
+    changed("missing-files", lambda value: value.pop("files"), "REJECT record-field-missing:")
+    changed("missing-build", lambda value: value.pop("build"), "REJECT record-field-missing:")
+    changed("missing-components", lambda value: value.pop("components"), "REJECT record-field-missing:")
+    changed("missing-notices", lambda value: value.pop("notices"), "REJECT record-field-missing:")
+    changed("unknown-manifest-field", lambda value: value.update(extra="unexpected"), "REJECT record-field-unknown:")
+    changed("unsupported-schema", lambda value: value.update(schema_version=2), "REJECT record-schema-unsupported:")
+    changed("no-go-decision", lambda value: value["decision"].update(status="no-go"), "REJECT fixture-no-go:")
+    changed("component-rationale-omitted", lambda value: value["decision"]["component_rationale"].pop("code"),
+            "REJECT decision-component-rationale-invalid:")
+    changed("repository-only-permission", lambda value: value["permissions"].update(public_ci=False),
+            "REJECT permission-scope-incomplete:")
+    changed("source-revision-malformed", lambda value: value["source"].update(revision="main"),
+            "REJECT source-revision-invalid:")
+    changed("source-revision-missing-object", lambda value: value["source"].update(revision="0" * 40),
+            "REJECT source-revision-unavailable:")
+    changed("input-not-in-files", lambda value: value["inputs"][0].update(path="fixtures/synthetic/missing.asm"),
+            "REJECT input-not-fixture-file:")
+    changed("duplicate-file", lambda value: value["files"].append(dict(value["files"][0])),
+            "REJECT record-files-duplicate:")
+    changed("unsafe-file-path", lambda value: value["files"][0].update(path="../outside.gb"), "REJECT path-invalid:")
+    changed("empty-build-recipe", lambda value: value["build"].update(recipe=" "), "REJECT record-field-invalid:")
+    changed("unknown-tool-disposition", lambda value: value["build"]["tools"][0].update(disposition="bundled"),
+            "REJECT build-tool-disposition-invalid:")
+    changed("copied-tool-without-coverage", lambda value: value["build"]["tools"][0].update(
+        disposition="copied", component="code", covered_paths=[]), "REJECT build-tool-coverage-invalid:")
+    changed("missing-component", lambda value: value["components"].pop("art"), "REJECT record-field-missing:")
+    changed("empty-absence-reason", lambda value: value["components"]["art"].update(reason=" "),
+            "REJECT record-field-invalid:")
+    changed("repository-only-component", lambda value: value["components"]["code"]["scope"].update(public_ci=False),
+            "REJECT component-scope-incomplete:")
+    changed("unbound-evidence", lambda value: value["components"]["code"]["evidence"].update(path="fixtures/synthetic/missing.txt"),
+            "REJECT component-evidence-not-pinned:")
+    changed("audio-driver-without-grant", lambda value: value["components"].update(audio_driver={"presence": "present"}),
+            "REJECT record-field-missing:")
+    changed("notice-digest-mismatch", lambda value: value["notices"].update(sha256="0" * 64),
+            "REJECT notice-record-invalid:")
+
+    path.write_bytes(original.replace(b'{\n', b'{\n  "schema_version": 1,\n', 1))
+    result = _run_manifest_cli(root)
+    if result.returncode == 0 or "REJECT json-duplicate-key:" not in result.stderr:
+        raise Reject("self-test-duplicate-json", result.stderr.strip() or "duplicate JSON key was accepted")
+    cases.append("duplicate-json-key")
+    path.write_bytes(b"{not JSON\n")
+    result = _run_manifest_cli(root)
+    if result.returncode == 0 or "REJECT json-invalid:" not in result.stderr:
+        raise Reject("self-test-malformed-json", result.stderr.strip() or "malformed JSON was accepted")
+    cases.append("malformed-json")
+    path.write_bytes(original.replace(b'"approved"', b'NaN', 1))
+    result = _run_manifest_cli(root)
+    if result.returncode == 0 or "REJECT json-non-finite:" not in result.stderr:
+        raise Reject("self-test-non-finite-json", result.stderr.strip() or "non-finite JSON was accepted")
+    cases.append("non-finite-json")
+    path.write_bytes(original)
+
+    pin_path = root / "fixtures/synthetic/admission.commit"
+    pin_path.write_text("refs/heads/main\n", encoding="ascii")
+    result = _run_manifest_cli(root)
+    if result.returncode == 0 or "REJECT admission-pin-invalid:" not in result.stderr:
+        raise Reject("self-test-symbolic-pin", result.stderr.strip() or "symbolic pin was accepted")
+    cases.append("symbolic-pin")
+    pin_path.write_text(BASELINE_COMMIT + "\n", encoding="ascii")
+    result = _run_manifest_cli(root)
+    if result.returncode == 0 or "REJECT git-blob-missing:" not in result.stderr:
+        raise Reject("self-test-missing-blob", result.stderr.strip() or "missing pinned blob was accepted")
+    cases.append("missing-pinned-blob")
+    pin_path.write_text(git(root, "rev-parse", "HEAD").decode("ascii").strip() + "\n", encoding="ascii")
+    return len(cases)
+
+
+def _run_live_byte_mutations(root: Path) -> int:
+    controls = 0
+    paths = (
+        "fixtures/synthetic/demo.asm",
+        "fixtures/synthetic/LICENSE.txt",
+        "THIRD_PARTY_NOTICES.md",
+    )
+    for path in paths:
+        target = root / path
+        original = target.read_bytes()
+        target.write_bytes(original + b"changed after admission\n")
+        result = _run_manifest_cli(root)
+        if result.returncode == 0 or "REJECT admission-pin-mismatch:" not in result.stderr:
+            raise Reject("self-test-live-byte-mismatch", result.stderr.strip() or f"changed bytes accepted: {path}")
+        target.write_bytes(original)
+        controls += 1
+
+    fixture_file = root / "fixtures/synthetic/demo.gb"
+    saved_file = root / "fixtures/synthetic/demo.gb.saved"
+    fixture_file.rename(saved_file)
+    try:
+        fixture_file.symlink_to(saved_file.name)
+    except OSError:
+        saved_file.rename(fixture_file)
+    else:
+        result = _run_manifest_cli(root)
+        fixture_file.unlink()
+        saved_file.rename(fixture_file)
+        if result.returncode == 0 or "REJECT path-link:" not in result.stderr:
+            raise Reject("self-test-link-escape", result.stderr.strip() or "fixture symlink was accepted")
+        controls += 1
+    return controls
+
+
+def _run_repository_controls() -> int:
+    with tempfile.TemporaryDirectory(prefix="gbb-fixture-admission-legacy-") as directory:
+        root = Path(directory)
+        _prepare_legacy_tree(root)
+        positive = _run_repository_cli(root)
+        if positive.returncode != 0 or "PASS: fixture admission repository" not in positive.stdout:
+            raise Reject("self-test-repository-positive", positive.stderr.strip() or positive.stdout.strip())
+
+        new_fixture = root / "fixtures/new-unadmitted-fixture/payload.bin"
+        new_fixture.parent.mkdir(parents=True)
+        new_fixture.write_bytes(b"unadmitted synthetic payload\n")
+        result = _run_repository_cli(root)
+        if result.returncode == 0 or "REJECT fixture-admission-required:" not in result.stderr:
+            raise Reject("self-test-new-fixture", result.stderr.strip() or "new fixture without a record was accepted")
+        new_fixture.unlink()
+        new_fixture.parent.rmdir()
+
+        added_payload = root / "fixtures/tracer/new-payload.bin"
+        added_payload.write_bytes(b"unadmitted payload inside a legacy fixture\n")
+        result = _run_repository_cli(root)
+        if result.returncode == 0 or "REJECT record-field-missing:" not in result.stderr:
+            raise Reject("self-test-legacy-addition", result.stderr.strip() or "new legacy-subtree payload was accepted")
+        added_payload.unlink()
+
+        existing_payload = "fixtures/tracer/tracer.gb"
+        original_payload = blob(root, BASELINE_COMMIT, existing_payload)
+        (root / existing_payload).write_bytes(b"changed legacy payload\n")
+        result = _run_repository_cli(root)
+        if result.returncode == 0 or "REJECT record-field-missing:" not in result.stderr:
+            raise Reject("self-test-legacy-replacement", result.stderr.strip() or "replaced legacy payload was accepted")
+        (root / existing_payload).write_bytes(original_payload)
+
+        license_path = root / "LICENSE"
+        original_license = license_path.read_bytes()
+        license_path.write_bytes(original_license + b"changed\n")
+        result = _run_repository_cli(root)
+        if result.returncode == 0 or "REJECT root-license-mismatch:" not in result.stderr:
+            raise Reject("self-test-root-license", result.stderr.strip() or "modified root LICENSE was accepted")
+        return 4
+
+
 def self_test() -> None:
     with tempfile.TemporaryDirectory(prefix="gbb-fixture-admission-positive-") as directory:
         root = Path(directory)
@@ -554,6 +765,7 @@ def self_test() -> None:
         positive = _run_manifest_cli(root)
         if positive.returncode != 0 or "PASS: fixture admission" not in positive.stdout:
             raise Reject("self-test-positive", positive.stderr.strip() or positive.stdout.strip())
+        manifest_controls = _run_manifest_mutations(root) + _run_live_byte_mutations(root)
 
     def reject_case(label: str, mutate, expected: str) -> None:
         with tempfile.TemporaryDirectory(prefix=f"gbb-fixture-admission-{label}-") as directory:
@@ -601,7 +813,9 @@ def self_test() -> None:
     )
     for label, mutate, expected in cases:
         reject_case(label, mutate, expected)
-    print(f"PASS: fixture admission self-test positives=1 negative_controls={len(cases)}")
+    repository_controls = _run_repository_controls()
+    print(f"PASS: fixture admission self-test positives=2 negative_controls="
+          f"{manifest_controls + len(cases) + repository_controls}")
 
 
 def main(argv: list[str] | None = None) -> int:

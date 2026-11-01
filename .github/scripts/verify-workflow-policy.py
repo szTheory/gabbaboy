@@ -1743,6 +1743,141 @@ def check_preview_player_lane(root: Path) -> None:
             raise Reject("preview-player-lane", f"{_where(workflow, PREVIEW_PLAYER_JOB)} step {name!r} must run only when {PREVIEW_PLAYER_GUARD}")
 
 
+FIXTURE_ADMISSION_REPOSITORY_CALL = (
+    "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root ."
+)
+FIXTURE_ADMISSION_TRUSTED_SCRIPT = 'python3 -I "$RUNNER_TEMP/verify-fixture-admission.py"'
+CORE_PRODUCT_INVENTORY = "build/core-product-inventory.json"
+
+
+def _fixture_step(workflow: str, job_id: str, job: dict, name: str) -> dict:
+    matches = [step for step in job.get("steps", []) if step.get("name") == name]
+    if len(matches) != 1:
+        raise Reject("fixture-admission-workflow", f"{_where(workflow, job_id)} needs one {name!r} step")
+    return matches[0]
+
+
+def _fixture_call(workflow: str, job_id: str, job: dict, command: str, code: str, **options):
+    try:
+        return require_call(workflow, job_id, job, command, **options)
+    except Reject as error:
+        raise Reject(code, f"{_where(workflow, job_id)}: {error}") from None
+
+
+def _fixture_step_event(workflow: str, job_id: str, job: dict, step_name: str, command: str,
+                        code: str, *, contains: tuple[str, ...] = (), conditional: bool = False):
+    step = _fixture_step(workflow, job_id, job, step_name)
+    if not step.get("run") or not _runs_under_errexit(step):
+        raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r} must run under fatal shell settings")
+    try:
+        events = shell_events(step.get("run", ""))
+        words, assigns = expected_command(command)
+    except Reject as error:
+        raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r}: {error}") from None
+    for event in events:
+        if (event.words[:len(words)] == words and set(assigns) <= set(event.assigns)
+                and set(contains) <= set(event.words)
+                and _reachable(event, events, conditional, False)):
+            return (job["steps"].index(step), event.index)
+    raise Reject(code, f"{_where(workflow, job_id)} step {step_name!r} does not run a reachable, fatal {command}")
+
+
+def check_fixture_admission_workflows(root: Path) -> None:
+    """Keep immutable baseline objects and actual-byte admission ahead of fixture consumers."""
+    ci = read_workflow(root / ".github/workflows/ci.yml")
+    history_jobs = (
+        "planning-checks", "native-linux", "native-macos", "native-windows", "linux-sanitizers",
+        "linux-sanitizers-tests", "linux-sanitizers-acceptance", "cmake-floor-3-25-3", "macos-player-package",
+    )
+    for job_id in history_jobs:
+        job = _require_job("ci", ci, job_id)
+        checkouts = _checkouts(job)
+        if not checkouts or any(str(step.get("with", {}).get("fetch-depth")) != "0" for step in checkouts):
+            raise Reject("fixture-admission-history", f"ci.{job_id} must check out full history for the immutable baseline")
+    package = _require_job("ci", ci, "macos-player-package")
+    package_gate = _fixture_call("ci", "macos-player-package", package,
+                                 FIXTURE_ADMISSION_REPOSITORY_CALL, "fixture-admission-gate")
+    package_build = _fixture_call("ci", "macos-player-package", package,
+                                  "bash tests/scripts/verify-phase3-player.sh --build-package",
+                                  "fixture-admission-gate")
+    if package_gate >= package_build:
+        raise Reject("fixture-admission-gate", "ci.macos-player-package must check admission before package configuration")
+
+    repro = read_workflow(root / ".github/workflows/fixture-repro.yml")
+    repro_job = _require_job("fixture-repro", repro, "fixture-repro")
+    checkouts = _checkouts(repro_job)
+    if len(checkouts) != 1 or str(checkouts[0].get("with", {}).get("fetch-depth")) != "0":
+        raise Reject("fixture-admission-history", "fixture-repro must check out full history for immutable admission pins")
+    gate = _fixture_call("fixture-repro", "fixture-repro", repro_job,
+                         FIXTURE_ADMISSION_REPOSITORY_CALL, "fixture-admission-gate")
+    downloader = _fixture_step("fixture-repro", "fixture-repro", repro_job, "Download pinned RGBDS release")
+    if gate[0] >= repro_job["steps"].index(downloader):
+        raise Reject("fixture-admission-gate", "fixture-repro admission must run before the first fixture tool download")
+
+    release = read_workflow(root / ".github/workflows/release.yml")
+    policies = (
+        ("candidate", "Configure and build cache-free release core", "build/release-stage",
+         "tar --sort=name", "Smoke relocated C/C++ consumers from the downloaded bytes", "build/extracted",
+         'cmake -DGBB_INSTALL_PREFIX="$prefix"', "Revalidate a previously qualified candidate before retry",
+         "build/reuse/gabbaboy-core-linux-x64.tar.gz", "build/reuse-extracted"),
+        ("candidate-macos", "Build and package macOS arm64 core once", "build/release-stage",
+         'python3 "$RUNNER_TEMP/create-deterministic-archive.py"',
+         "Smoke the downloaded player archive and relocated C/C++ consumers", "build/extracted-core",
+         'cmake -DGBB_INSTALL_PREFIX="$prefix"', "Validate reused macOS core package",
+         "build/reuse/gabbaboy-core-macos-arm64.tar.gz", "build/reuse-extracted-core"),
+        ("candidate-windows", "Build and package Windows x64 core once", "build/release-stage",
+         "tar -czf build/gabbaboy-core-windows-x64.tar.gz", "Qualify Windows release archive using the existing native consumer lane",
+         "build/extracted", 'cmake -DGBB_INSTALL_PREFIX="$prefix"', "Validate reused Windows core package",
+         "build/reuse/gabbaboy-core-windows-x64.tar.gz", "build/reuse-extracted"),
+    )
+    for (job_id, stage_name, stage_path, archive_command, smoke_name, extracted_path,
+         consumer_command, reuse_name, reuse_archive, reuse_tree) in policies:
+        job = _require_job("release", release, job_id)
+        checkout = _checkouts(job)
+        if len(checkout) != 1 or str(checkout[0].get("with", {}).get("fetch-depth")) != "0":
+            raise Reject("fixture-admission-history", f"release.{job_id} must check out full history for immutable policy objects")
+        stage_step = _fixture_step("release", job_id, job, stage_name)
+        stage_command = f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {stage_path}'
+        stage_call = _fixture_step_event("release", job_id, job, stage_name, stage_command,
+                                         "fixture-product-stage",
+                                         contains=("--layout", "core", "--repo-root", ".", "--write-inventory",
+                                                   CORE_PRODUCT_INVENTORY))
+        archive_call = _fixture_step_event("release", job_id, job, stage_name, archive_command,
+                                           "fixture-product-stage")
+        if stage_call >= archive_call:
+            raise Reject("fixture-product-stage", f"release.{job_id} must validate installed bytes before archive creation")
+
+        smoke_step = _fixture_step("release", job_id, job, smoke_name)
+        extract_call = _fixture_step_event("release", job_id, job, smoke_name,
+                                           "bash tests/scripts/verify-release-candidate.sh --extract",
+                                           "fixture-product-inventory-binding")
+        extracted_command = f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {extracted_path}'
+        extracted_call = _fixture_step_event("release", job_id, job, smoke_name, extracted_command,
+                                             "fixture-product-inventory-binding",
+                                             contains=("--layout", "core", "--repo-root", ".", "--inventory",
+                                                       CORE_PRODUCT_INVENTORY))
+        consumer_call = _fixture_step_event("release", job_id, job, smoke_name, consumer_command,
+                                            "fixture-product-inventory-binding")
+        if not extract_call < extracted_call < consumer_call:
+            raise Reject("fixture-product-inventory-binding", f"release.{job_id} must compare extracted bytes before consumers run")
+
+        reuse_step = _fixture_step("release", job_id, job, reuse_name)
+        reuse_extract = _fixture_step_event("release", job_id, job, reuse_name,
+                                            f"bash tests/scripts/verify-release-candidate.sh --extract {reuse_archive}",
+                                            "fixture-product-reuse", conditional=True)
+        reuse_command = f'{FIXTURE_ADMISSION_TRUSTED_SCRIPT} --check-product-tree {reuse_tree}'
+        reuse_call = _fixture_step_event("release", job_id, job, reuse_name, reuse_command, "fixture-product-reuse",
+                                         contains=("--layout", "core", "--repo-root", ".", "--write-inventory",
+                                                   CORE_PRODUCT_INVENTORY), conditional=True)
+        if reuse_extract >= reuse_call:
+            raise Reject("fixture-product-reuse", f"release.{job_id} must validate reused bytes after safe extraction")
+
+        overlay = [step for step in job.get("steps", [])
+                   if f'git show "${{GITHUB_SHA}}:tests/scripts/verify-fixture-admission.py"' in str(step.get("run", ""))]
+        if len(overlay) != 1 or job["steps"].index(overlay[0]) >= job["steps"].index(stage_step):
+            raise Reject("fixture-product-trust", f"release.{job_id} must load the trusted byte-policy checker before building")
+
+
 def _check_ci_planning_lane(workflow: str, tree: dict) -> None:
     """The planning-only lane (D-21): a read-only classifier on the base commit's copy, a real planning-checks job, and
     the full-matrix condition on every heavy job. required-native itself is judged by check_ci."""
@@ -3404,6 +3539,7 @@ def check_all(root: Path, release_head: bool = False, git_root: Path | None = No
     check_readonly_workflows(root)
     check_preview_player_lane(root)
     check_release(root)
+    check_fixture_admission_workflows(root)
     check_release_gate_wiring(root)
     check_version_window(root)
     check_version_pr_gate(root)
@@ -3752,6 +3888,42 @@ def _mutations():
     reh = "release-rehearsal.yml"
     rel = "release.yml"
     return [
+        _m("P20 fixture-repro admission gate is removed", "fixture-repro.yml", "  fixture-repro:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "echo admission gate removed", "fixture-admission-gate"),
+        ("P20 fixture-repro admission gate moved after tool download", "fixture-repro.yml", [
+            ("  fixture-repro:\n", "      - name: Check fixture admission before reproduction\n"
+             "        run: python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .\n", ""),
+            ("  fixture-repro:\n", "      - name: Confirm assembler version and reproduce fixture bytes\n",
+             "      - name: Check fixture admission before reproduction\n"
+             "        run: python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .\n"
+             "      - name: Confirm assembler version and reproduce fixture bytes\n")], "fixture-admission-gate"),
+        _m("P20 macOS package checkout becomes shallow", "ci.yml", "  macos-player-package:\n",
+           "          fetch-depth: 0\n", "          # immutable fixture baseline unavailable\n", "fixture-admission-history"),
+        _m("P20 macOS package admission gate is removed", "ci.yml", "  macos-player-package:\n",
+           "python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .",
+           "echo admission gate removed", "fixture-admission-gate"),
+        _m("P20 Linux core stage policy call is removed", rel, "  candidate:\n",
+           "--check-product-tree build/release-stage", "--skip-product-tree build/release-stage",
+           "fixture-product-stage"),
+        ("P20 Linux core stage policy runs after archive creation", rel, [
+            ("  candidate:\n", '          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage \\\n'
+             "            --layout core --repo-root . --write-inventory build/core-product-inventory.json\n", ""),
+            ("  candidate:\n", "  -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share\n",
+             "  -czf build/gabbaboy-core-linux-x64.tar.gz -C build/release-stage include lib bin share\n"
+             '          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage \\\n'
+             "            --layout core --repo-root . --write-inventory build/core-product-inventory.json\n")],
+         "fixture-product-stage"),
+        _m("P20 Linux stage gate redirects the repository policy root", rel,
+           "      - name: Configure and build cache-free release core\n",
+           "--repo-root . --write-inventory build/core-product-inventory.json",
+           "--write-inventory build/core-product-inventory.json", "fixture-product-stage"),
+        _m("P20 macOS reused core skips actual-byte validation", rel, "  candidate-macos:\n",
+           "--check-product-tree build/reuse-extracted-core", "--skip-product-tree build/reuse-extracted-core",
+           "fixture-product-reuse"),
+        _m("P20 downloaded Linux core skips stage-inventory equality", rel, "  candidate:\n",
+           "--inventory build/core-product-inventory.json", "--write-inventory build/core-product-inventory.json",
+           "fixture-product-inventory-binding"),
         _m("rehearsal package omits installed-host smoke", reh, "  package:\n",
            "python3 -I tests/scripts/test_installed_host.py", "# installed-host smoke removed", "required-command-not-executed"),
         _m("rehearsal aggregate omits installed-host smoke", reh, "  aggregate:\n",
