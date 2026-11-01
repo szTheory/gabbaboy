@@ -22,10 +22,10 @@ BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "19ddc7f393795767a95f70bb5f23ca32e413e13b"
-REVIEWED_POLICY_SHA256 = "677dcc8d89d4110c8048017b4b00908a50af6807d838054dd0436bcfb75c437d"
-REVIEWED_ARCHIVE_HELPER_COMMIT = "886000ef9f66ce389978190aa6c64936a729ab4e"
-REVIEWED_ARCHIVE_HELPER_SHA256 = "6ed3ddd188a55c20e78b8326c8821ea0b47b2530b3e56c39cb56c9c87ebaf21e"
+REVIEWED_POLICY_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
+REVIEWED_POLICY_SHA256 = "17e9204c8b625bbc4c30fd2b3b10056708c5af102d4ca395ec84ff06ca5e35b4"
+REVIEWED_ARCHIVE_HELPER_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
+REVIEWED_ARCHIVE_HELPER_SHA256 = "54fcfd4869ca2f3d085cfac690804858b42c37d73e7032ff6912a4e972123ce5"
 GROUPS = {
     "ci": "workflow_policy_group_ci",
     "release_jobs": "workflow_policy_group_release_jobs",
@@ -1471,7 +1471,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 90:
+    if controls != 94:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
