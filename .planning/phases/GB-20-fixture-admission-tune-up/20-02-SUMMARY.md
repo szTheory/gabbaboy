@@ -12,9 +12,9 @@ provides:
   - Exact approved product-policy paragraph exception is covered while other notice bytes remain pinned
 affects: [phase-20-release-qualification, core-packaging, fixture-policy]
 actuals:
-  tokens: 14023
-  tasks: 4
-  commits: 54
+  tokens: 16266.5
+  tasks: 5
+  commits: 59
 tech-stack:
   added: []
   patterns:
@@ -89,24 +89,37 @@ coverage:
         ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^(plan_cap|planning_hygiene_controls|summary_coverage_live)$'"
         status: pass
     human_judgment: false
+  - id: D5
+    description: Archive-wide extension-header counting survives ordinary members, rejects the first over-limit header before parsing its payload, and preserves independent long-path source positives.
+    verification:
+      - kind: integration
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^v02_source_archive_controls$'"
+        status: pass
+      - kind: integration
+        ref: "bash tests/scripts/verify-release-candidate.sh --self-test"
+        status: pass
+      - kind: integration
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^(plan_cap|planning_hygiene_controls|summary_coverage_live)$'"
+        status: pass
+    human_judgment: false
 duration: 46min
 completed: 2026-10-31
-status: reopened
-completion_scope: Completed Tasks 1–4 only; all original commits, metrics and passing evidence remain historical.
-pending_follow_up: Task 5 — independent archive-wide extension-header count with preserved 128-header chain cap and long-path compatibility.
+status: complete
+completion_scope: Tasks 1–4 historical evidence plus final-review security-rescope Task 5; no fixture or rights changes.
+pending_follow_up: None for this plan; phase-level review, full verification, and hosted macOS qualification remain with Phase 20 orchestration.
 plan_head_before: 6075bb2aecc687b287d830bb0f05ed8fcc414d42
-plan_head_after: 75f4e835a8192e8e8f94eac075824c29a5c756e1
+plan_head_after: 6e8a99978121f5a621b3dc6fcbe31d4303bd99e6
 ---
 
 # Phase GB-20 Plan 02: Fixture Admission Tune-up Summary
 
 **Installed, extracted, and released core products now enforce the shared fixture policy against actual archive and notice bytes.**
 
-## Reopened for the archive-wide extension-header count follow-up
+## Archive-wide extension-header count follow-up completed
 
-Plan 20-02 is incomplete until Task 5 passes. [20-FINAL-PRODUCT-CODE-REVIEW.md](20-FINAL-PRODUCT-CODE-REVIEW.md) confirms the earlier parser and digest fixes but finds that extension count resets after each ordinary member. The existing 128-header count therefore bounds consecutive chains, while interleaved metadata lacks its own archive-wide count bound. Earlier commits, metrics and coverage below remain evidence for Tasks 1–4; they do not establish this new total-count guarantee.
+The final product review found that extension count reset after each ordinary member. Task 5 preserves the existing 128-header chain cap and adds an independent archive-wide total of 32,768 guarded PAX/GNU headers.
 
-The executor acts next on Task 5 in [20-02-PLAN.md](20-02-PLAN.md), retaining the 128-header chain cap and adding an independent 32,768-header archive total. The production negative must lower only the total cap and exceed it with three interleaved headers, while a realistic 256-long-path source positive passes under unchanged defaults. Keep status reopened until the source-archive CTest, release-candidate self-test and planning checks pass at the committed implementation head; then append actual Task 5 commits and fresh block-style coverage. No owner confirmation, new plan, fixture/rights change, dependency or live publication is included. Phase 20 integration/security and hosted qualification remain separate gates.
+The production parser rejects the third interleaved PAX header under a scoped total cap of two before the base parser consumes its payload; the per-chain cap, per-header and aggregate byte caps, stream limit, visible-entry limit and source identity checks remain separate. A 256-member long-path source archive passes repeated independent inspections and the source receipt CLI under unchanged defaults. The source-archive CTest, release-candidate self-test and planning checks passed at the committed implementation head. Phase 20 integration/security and hosted qualification remain separate gates.
 
 ## Final security-audit archive follow-up completed
 
@@ -136,6 +149,14 @@ The source/core parser now rejects oversized PAX/GNU headers before the base par
 3. **Task 3: Enforce actual core release and sidecar bytes at producer and download boundaries** — `7c203c23` (RED), `75f4e835` (GREEN).
 
 The required plan commit ledger measured 8 commits from `plan_head_before` through `plan_head_after`; it includes two interleaved Plan 20-03 commits on the shared branch. The six task commits listed above are the Plan 20-02 commits. No Plan 20-03 files were staged or changed by this plan.
+
+## Task 5 Follow-up
+
+- **Commit:** `6e8a9997` — added an archive-wide 32,768 extension-header cap while preserving the 128-header consecutive-chain cap.
+- **RED:** The interleaved three-member PAX archive was accepted when the new total cap was scoped to two.
+- **GREEN:** The third PAX header rejects as `archive-extension-total-count-limit`; instrumentation confirms only the first two extension payload parsers run. The existing 129-header chain negative still rejects independently.
+- **Compatibility positive:** 256 unique long-path members pass `inspect_tar` twice independently and pass the source receipt CLI under default bounds with global commit identity intact.
+- **Verification:** Configure/build passed; `v02_source_archive_controls`, `verify-release-candidate.sh --self-test`, and planning/hygiene checks passed at the committed implementation head.
 
 ## Task 4 Follow-up
 
@@ -181,7 +202,7 @@ None.
 
 ## Next Phase Readiness
 
-Tasks 1–4 and their focused checks are complete; Plan 20-02 is reopened for Task 5 above. Phase orchestration still owns the remaining Phase 20 work and final-head qualification. No fixture was admitted; `RIGHTS-01` remains pending.
+Tasks 1–5 and their focused checks are complete. Phase orchestration still owns the remaining Phase 20 work and final-head qualification. No fixture was admitted; `RIGHTS-01` remains pending.
 
 ---
 *Phase: GB-20-fixture-admission-tune-up*
@@ -199,3 +220,9 @@ Tasks 1–4 and their focused checks are complete; Plan 20-02 is reopened for Ta
 - Source parser implementation is committed as `75bba2e2` and is the recorded plan task head.
 - Configure/build and all three required verification commands passed at that head.
 - Coverage includes source/core CLI controls and the pre-payload 70KB PAX reproducer rejection.
+
+## Task 5 Self-Check: PASSED
+
+- Implementation commit `6e8a9997` is the recorded plan task head.
+- Configure/build and all three required verification commands passed at that head.
+- Archive-wide interleaved-count and 256-long-path source controls passed; earlier chain, metadata-byte, stream, source identity, and trusted-checker controls remain passing.
