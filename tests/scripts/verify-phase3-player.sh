@@ -83,6 +83,7 @@ check_package_policy() {
 
 expect_package_policy_rejection() (
   local source_prefix=$1 label=$2 relative_path=$3 mutation=$4 expected_reason=$5
+  local expected_path=${6:-$relative_path}
   local control_root control_prefix target output status
   control_root=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-player-policy-${label}.XXXXXX") ||
     fail 'could not create an isolated player policy control directory'
@@ -117,15 +118,88 @@ expect_package_policy_rejection() (
   if [[ "$status" -eq 0 ]]; then
     fail "player package policy accepted control '$label'"
   fi
-  if [[ "$output" != *"REJECT ${expected_reason}:"* ]]; then
+  if [[ "$output" != *"REJECT ${expected_reason}: ${expected_path}"* ]]; then
     printf '%s\n' "$output" >&2
-    fail "player policy control '$label' failed without expected reason ${expected_reason} (exit $status)"
+    fail "player policy control '$label' failed without expected rejection ${expected_reason}: ${expected_path} (exit $status)"
   fi
   if [[ "$output" == *"PASS: fixture admission product"* ]]; then
     printf '%s\n' "$output" >&2
     fail "player policy control '$label' printed a success result after rejection"
   fi
   printf 'player package policy rejected %s (%s)\n' "$label" "$expected_reason"
+)
+
+self_test_package_policy() (
+  local prefix=$1 control_root positive_output
+  if [[ "$prefix" != /* ]]; then
+    prefix="$ROOT_DIR/$prefix"
+  fi
+  [[ -d "$prefix" ]] || fail "player package policy prefix does not exist: $prefix"
+
+  positive_output=$(bash "$ROOT_DIR/tests/scripts/verify-phase3-player.sh" \
+      --check-package-policy "$prefix" 2>&1) || {
+    printf '%s\n' "$positive_output" >&2
+    fail 'clean player package policy prefix failed the production wrapper'
+  }
+  [[ "$positive_output" == *"PASS: fixture admission product"* ]] || {
+    printf '%s\n' "$positive_output" >&2
+    fail 'clean player package policy prefix did not report a policy pass'
+  }
+  printf '%s\n' "$positive_output"
+
+  control_root=$(mktemp -d "${TMPDIR:-/tmp}/gabbaboy-player-policy-inventory.XXXXXX") ||
+    fail 'could not create an isolated player package policy inventory directory'
+  trap 'rm -rf -- "$control_root"' EXIT
+  check_package_policy "$prefix" --write-inventory "$control_root/before.json" >/dev/null
+
+  expect_package_policy_rejection "$prefix" renamed-root-known \
+    share/renamed.payload known product-fixture-leak
+  expect_package_policy_rejection "$prefix" suffixless-root-known \
+    share/suffixless known product-fixture-leak
+  expect_package_policy_rejection "$prefix" renamed-visible-demo-known \
+    share/gabbaboy/fixtures/visible-demo/renamed.payload known product-fixture-leak
+  expect_package_policy_rejection "$prefix" suffixless-visible-demo-known \
+    share/gabbaboy/fixtures/visible-demo/suffixless known product-fixture-leak
+  expect_package_policy_rejection "$prefix" renamed-mbc1-known \
+    share/gabbaboy/fixtures/mbc1-continuation/renamed.payload known product-fixture-leak
+  expect_package_policy_rejection "$prefix" suffixless-mbc1-known \
+    share/gabbaboy/fixtures/mbc1-continuation/suffixless known product-fixture-leak
+  expect_package_policy_rejection "$prefix" extra-visible-demo-member \
+    share/gabbaboy/fixtures/visible-demo/unregistered.bin extra product-path-unknown
+  expect_package_policy_rejection "$prefix" extra-mbc1-member \
+    share/gabbaboy/fixtures/mbc1-continuation/unregistered.bin extra product-path-unknown
+  expect_package_policy_rejection "$prefix" disallowed-tracer-subtree \
+    share/gabbaboy/fixtures/tracer/known.gb known product-path-unknown \
+    share/gabbaboy/fixtures/tracer
+  expect_package_policy_rejection "$prefix" changed-demo-rom \
+    share/gabbaboy/fixtures/visible-demo/demo.gb change product-identity-mismatch
+  expect_package_policy_rejection "$prefix" changed-demo-manifest \
+    share/gabbaboy/fixtures/visible-demo/manifest.json change product-identity-mismatch
+  expect_package_policy_rejection "$prefix" missing-visible-demo-notice \
+    share/licenses/GabbaBoy/visible-demo-LICENSE.txt remove product-path-missing
+  expect_package_policy_rejection "$prefix" changed-visible-demo-notice \
+    share/licenses/GabbaBoy/visible-demo-LICENSE.txt change product-identity-mismatch
+  expect_package_policy_rejection "$prefix" missing-mbc1-fixture-notice \
+    share/gabbaboy/fixtures/mbc1-continuation/LICENSE.txt remove product-path-missing
+  expect_package_policy_rejection "$prefix" changed-mbc1-fixture-notice \
+    share/gabbaboy/fixtures/mbc1-continuation/LICENSE.txt change product-identity-mismatch
+  expect_package_policy_rejection "$prefix" missing-mbc1-central-notice \
+    share/licenses/GabbaBoy/mbc1-continuation-LICENSE.txt remove product-path-missing
+  expect_package_policy_rejection "$prefix" changed-mbc1-central-notice \
+    share/licenses/GabbaBoy/mbc1-continuation-LICENSE.txt change product-identity-mismatch
+  expect_package_policy_rejection "$prefix" missing-gabbaboy-notice \
+    share/licenses/GabbaBoy/LICENSE.txt remove product-path-missing
+  expect_package_policy_rejection "$prefix" changed-gabbaboy-notice \
+    share/licenses/GabbaBoy/LICENSE.txt change product-identity-mismatch
+  expect_package_policy_rejection "$prefix" missing-sdl-notice \
+    share/licenses/SDL3/LICENSE.txt remove product-path-missing
+  expect_package_policy_rejection "$prefix" changed-sdl-notice \
+    share/licenses/SDL3/LICENSE.txt change product-identity-mismatch
+
+  check_package_policy "$prefix" --write-inventory "$control_root/after.json" >/dev/null
+  cmp -s "$control_root/before.json" "$control_root/after.json" ||
+    fail 'player package policy controls changed the original candidate prefix'
+  printf 'player package policy controls preserved the original prefix inventory\n'
 )
 
 verify_package() {
@@ -177,8 +251,7 @@ PY
   else
     check_package_policy "$prefix"
   fi
-  expect_package_policy_rejection "$prefix" seeded-known-fixture \
-    share/gabbaboy/fixtures/visible-demo/seeded-control known product-fixture-leak
+  self_test_package_policy "$prefix"
   local player_bin="$prefix/bin/gabbaboy-player"
   local demo_rom="$prefix/share/gabbaboy/fixtures/visible-demo/demo.gb"
   local fixture_manifest="$prefix/share/gabbaboy/fixtures/visible-demo/manifest.json"
@@ -467,13 +540,18 @@ case "$mode" in
     check_package_policy "$2"
     exit 0
     ;;
+  --self-test-package-policy)
+    [[ $# -eq 2 ]] || fail 'usage: verify-phase3-player.sh --self-test-package-policy PREFIX'
+    self_test_package_policy "$2"
+    exit 0
+    ;;
   --build-package)
-    [[ $# -le 1 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX'
+    [[ $# -le 1 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX | --self-test-package-policy PREFIX'
     ;;
   --verify-package)
-    [[ $# -eq 2 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX'
+    [[ $# -eq 2 ]] || fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX | --self-test-package-policy PREFIX'
     ;;
-  *) fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX' ;;
+  *) fail 'usage: verify-phase3-player.sh [--build-package] | --verify-package ARTIFACT-DIR | --check-package-policy PREFIX | --self-test-package-policy PREFIX' ;;
 esac
 
 # The package lane qualifies only SDL's scripted software path, never physical
