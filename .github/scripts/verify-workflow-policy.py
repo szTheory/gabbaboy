@@ -78,9 +78,45 @@ def _archive_member_path(name: str) -> str:
     candidate = name[:-1] if is_directory else name
     path = PurePosixPath(candidate)
     if (not candidate or str(path) != candidate or path.is_absolute()
+            or any(":" in part for part in candidate.split("/"))
             or any(part in ("", ".", "..") for part in candidate.split("/"))):
         raise Reject("product-archive-path", f"invalid archive member {name!r}")
     return candidate
+
+
+def _product_archive_target(destination_root: Path, target: Path, relative: str) -> Path:
+    """Prove the native target and its existing ancestry stay inside the private extraction root."""
+    try:
+        root = destination_root.resolve(strict=True)
+        lexical_root = destination_root.absolute()
+        resolved = target.resolve(strict=False)
+    except OSError as error:
+        raise Reject("product-archive-path", f"cannot resolve archive target {relative!r}: {error.strerror}") from None
+    if root.drive.casefold() != resolved.drive.casefold() or root.anchor.casefold() != resolved.anchor.casefold():
+        raise Reject("product-archive-path", f"archive target changes drive or anchor: {relative!r}")
+    try:
+        resolved.relative_to(root)
+    except ValueError:
+        raise Reject("product-archive-path", f"archive target escapes extraction root: {relative!r}") from None
+
+    cursor = target
+    while cursor != lexical_root:
+        try:
+            if cursor.is_symlink():
+                raise Reject("product-archive-path", f"archive target traverses a symlink: {relative!r}")
+            if cursor != target and cursor.exists() and not cursor.is_dir():
+                raise Reject("product-archive-path", f"archive target traverses a non-directory: {relative!r}")
+            parent = cursor.parent
+            if parent == cursor:
+                raise Reject("product-archive-path", f"archive target has no extraction-root ancestor: {relative!r}")
+            parent_resolved = parent.resolve(strict=False)
+            parent_resolved.relative_to(root)
+            cursor = parent
+        except Reject:
+            raise
+        except (OSError, ValueError):
+            raise Reject("product-archive-path", f"archive target ancestry escapes extraction root: {relative!r}") from None
+    return resolved
 
 
 def _extract_product_archive(archive: Path, destination: Path) -> int:
@@ -139,6 +175,7 @@ def _extract_product_archive(archive: Path, destination: Path) -> int:
 
         # Pass two revalidates the same inventory before materializing each entry.
         destination.mkdir(parents=True)
+        destination_root = destination
         with _SAFE_ARCHIVE.open_bounded_tar(archive, **limits) as (bundle, bounded_file):
             seen_count = 0
             for member in bundle:
@@ -150,15 +187,11 @@ def _extract_product_archive(archive: Path, destination: Path) -> int:
                         (member.type, member.size, member.mode) != (kind, size, mode)):
                     raise Reject("product-archive-drift", relative)
                 target = destination.joinpath(*relative.split("/"))
+                target = _product_archive_target(destination_root, target, relative)
                 if member.isdir():
                     target.mkdir(parents=True, exist_ok=True)
                     continue
                 target.parent.mkdir(parents=True, exist_ok=True)
-                cursor = target.parent
-                while cursor != destination:
-                    if cursor.is_symlink() or destination not in cursor.parents:
-                        raise Reject("product-archive-path", relative)
-                    cursor = cursor.parent
                 stream = bundle.extractfile(member)
                 if stream is None:
                     raise Reject("product-archive-member-read", relative)
@@ -438,6 +471,99 @@ def _product_archive_controls(root: Path) -> None:
                     raise SystemExit(f"unsafe archive member {name!r} rejected for wrong reason: {error}") from None
             else:
                 raise SystemExit(f"unsafe archive member {name!r} was accepted")
+
+        drive_names = (
+            ("D:/outside/", b"", "directory"),
+            ("D:/outside/file", b"x", "file"),
+            ("D:outside/file", b"x", "file"),
+            ("nested/d:/outside/", b"", "directory"),
+            ("nested/d:/outside/file", b"x", "file"),
+        )
+        for index, (name, data, kind) in enumerate(drive_names):
+            hostile_path = scratch / f"drive-path-{index}.tar.gz"
+            destination = scratch / f"drive-path-{index}-out"
+            _write_control_archive(hostile_path, [(name, data, kind)])
+            try:
+                _extract_product_archive(hostile_path, destination)
+            except Reject as error:
+                if error.code != "product-archive-path":
+                    raise SystemExit(f"drive archive member {name!r} rejected for wrong reason: {error}") from None
+            else:
+                raise SystemExit(f"drive archive member {name!r} was accepted")
+            if destination.exists():
+                raise SystemExit(f"drive archive member {name!r} left an extraction destination")
+        _mark_policy_control("helper", "product-archive-path", "drive-qualified and nested drive paths rejected")
+
+        ads_names = (
+            "share/file:stream",
+            "share:stream/file",
+            "SHARE:Stream/FILE",
+        )
+        for index, name in enumerate(ads_names):
+            hostile_path = scratch / f"ads-path-{index}.tar.gz"
+            destination = scratch / f"ads-path-{index}-out"
+            _write_control_archive(hostile_path, [(name, b"x", "file")])
+            try:
+                _extract_product_archive(hostile_path, destination)
+            except Reject as error:
+                if error.code != "product-archive-path":
+                    raise SystemExit(f"ADS archive member {name!r} rejected for wrong reason: {error}") from None
+            else:
+                raise SystemExit(f"ADS archive member {name!r} was accepted")
+            if destination.exists():
+                raise SystemExit(f"ADS archive member {name!r} left an extraction destination")
+        _mark_policy_control("helper", "product-archive-path", "NTFS alternate stream components rejected")
+
+        def injected_escape_control(label: str, member: str, injected_parts: tuple[str, ...], directory: bool) -> None:
+            archive_path = scratch / f"{label.replace(' ', '-')}.tar.gz"
+            destination = scratch / f"{label.replace(' ', '-')}-destination"
+            outside = scratch / f"{label.replace(' ', '-')}-outside"
+            outside.mkdir()
+            sentinel = outside / "sentinel.txt"
+            sentinel.write_text("preserve", encoding="utf-8")
+            _write_control_archive(archive_path, [(member, b"" if directory else b"x",
+                                                  "directory" if directory else "file")])
+            escaped_target = outside / "escaped" if directory else outside / "parent/file.bin"
+            attempted_outside_writes: list[str] = []
+            original_joinpath = Path.joinpath
+            original_mkdir = Path.mkdir
+            original_open = Path.open
+
+            def joinpath(path: Path, *parts: str) -> Path:
+                if path == destination and tuple(parts) == injected_parts:
+                    return escaped_target
+                return original_joinpath(path, *parts)
+
+            def mkdir(path: Path, *args, **kwargs):
+                if path == outside or outside in path.parents:
+                    attempted_outside_writes.append(f"mkdir:{path}")
+                    raise OSError("test prevented an outside mkdir")
+                return original_mkdir(path, *args, **kwargs)
+
+            def open_path(path: Path, *args, **kwargs):
+                if path == outside or outside in path.parents:
+                    attempted_outside_writes.append(f"open:{path}")
+                    raise OSError("test prevented an outside open")
+                return original_open(path, *args, **kwargs)
+
+            with patch.object(Path, "joinpath", joinpath), patch.object(Path, "mkdir", mkdir), \
+                    patch.object(Path, "open", open_path):
+                try:
+                    _extract_product_archive(archive_path, destination)
+                except Reject as error:
+                    if error.code != "product-archive-path":
+                        raise SystemExit(f"{label} rejected for wrong reason: {error}") from None
+                else:
+                    raise SystemExit(f"{label} was accepted")
+            if attempted_outside_writes:
+                raise SystemExit(f"{label} attempted outside writes: {attempted_outside_writes}")
+            if sentinel.read_text(encoding="utf-8") != "preserve" or destination.exists():
+                raise SystemExit(f"{label} changed the sentinel or left an extraction destination")
+            _mark_policy_control("helper", "product-archive-path", label)
+
+        injected_escape_control("directory containment before create", "safe-dir/", ("safe-dir",), True)
+        injected_escape_control("regular parent containment before create", "safe-parent/file.bin",
+                                ("safe-parent", "file.bin"), False)
         duplicate = scratch / "duplicate.tar.gz"
         _write_control_archive(duplicate, [(name, data, kind) for name, data, kind, _code in cases[3:]])
         try:
