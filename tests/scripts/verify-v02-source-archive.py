@@ -25,6 +25,7 @@ Failures print `REJECT <code>: <reason>` on stderr and exit 1.
 import argparse
 import gzip
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -37,6 +38,7 @@ import tarfile
 import tempfile
 import zipfile
 import zlib
+import shutil
 
 SCHEMA_VERSION = 1
 RECEIPT_KIND = "gabbaboy-source-archive-receipt"
@@ -525,6 +527,10 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
                 info.size = len(value[1])
                 info.mode = value[2]
                 bundle.addfile(info, io.BytesIO(value[1]))
+            elif isinstance(value, tuple) and value[0] == "dir":
+                info.type = tarfile.DIRTYPE
+                info.mode = 0o755
+                bundle.addfile(info)
             elif isinstance(value, tuple):
                 info.type = {"symlink": tarfile.SYMTYPE, "hardlink": tarfile.LNKTYPE, "device": tarfile.CHRTYPE}[value[0]]
                 info.linkname = value[1]
@@ -537,6 +543,86 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
     with gzip.GzipFile(fileobj=compressed, mode="wb", mtime=0) as handle:
         handle.write(raw.getvalue())
     return compressed.getvalue()
+
+
+def _load_product_policy_module():
+    path = pathlib.Path(__file__).resolve().with_name("verify-fixture-admission.py")
+    spec = importlib.util.spec_from_file_location("gbb_fixture_admission_selftest", path)
+    if spec is None or spec.loader is None:
+        raise SystemExit("self-test: shared fixture admission checker could not be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _private_baseline_repo(scratch, checker):
+    """Materialize a private working tree backed by only the immutable product baseline."""
+    project_root = pathlib.Path(__file__).resolve().parents[2]
+    repo = pathlib.Path(scratch) / "synthetic-policy-repository"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+    object_dir = subprocess.run(
+        ["git", "-C", str(project_root), "rev-parse", "--path-format=absolute", "--git-path", "objects"],
+        check=True, capture_output=True, text=True).stdout.strip()
+    object_info = repo / ".git/objects/info"
+    object_info.mkdir(parents=True, exist_ok=True)
+    (object_info / "alternates").write_text(object_dir + "\n", encoding="ascii")
+    subprocess.run(["git", "-C", str(repo), "update-ref", "refs/heads/main", checker.BASELINE_COMMIT],
+                   check=True, capture_output=True)
+
+    paths = ["LICENSE", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json"]
+    raw_tree = checker.git(repo, "ls-tree", "-r", "-z", "--full-tree", checker.BASELINE_COMMIT, "--", "fixtures")
+    for record in raw_tree.split(b"\0"):
+        if not record:
+            continue
+        _metadata, raw_path = record.split(b"\t", 1)
+        paths.append(raw_path.decode("utf-8", "surrogateescape"))
+    for relative in paths:
+        target = repo.joinpath(*relative.split("/"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        data = (project_root / relative).read_bytes() if relative == "cmake/FixtureAdmissionPolicy.json" \
+            else checker.blob(repo, checker.BASELINE_COMMIT, relative)
+        target.write_bytes(data)
+    return repo
+
+
+def _synthetic_core_product(scratch):
+    checker = _load_product_policy_module()
+    repo = _private_baseline_repo(scratch, checker)
+    rules, _policy_bytes = checker._product_rules(repo)
+    source_contract = checker._product_source_expectations(repo, rules, "core")
+    tree = pathlib.Path(scratch) / "synthetic-core-product"
+    tree.mkdir()
+    checker._write_synthetic_product_tree(tree, repo, "core", rules, b"", source_contract)
+    entries = checker.product_tree_entries(tree)
+    product = {}
+    for relative, record in entries.items():
+        if record["kind"] == "directory":
+            product[relative] = ("dir",)
+        else:
+            product[relative] = tree.joinpath(*relative.split("/")).read_bytes()
+    inventory = checker.check_product_entries(entries, "core", repo)
+    forbidden_source = "fixtures/mooneye-cgb/boot_regs-cgb.gb"
+    forbidden_bytes = checker.blob(repo, checker.BASELINE_COMMIT, forbidden_source)
+    return checker, repo, product, inventory, forbidden_bytes
+
+
+def check_product_notice_contract(content):
+    try:
+        text = content.decode("utf-8", "strict") if isinstance(content, bytes) else content
+    except UnicodeDecodeError:
+        raise Reject("notice-contract-invalid", "THIRD_PARTY_NOTICES.md is not UTF-8") from None
+    paragraphs = [paragraph.strip() for paragraph in text.split("\n\n") if paragraph.strip()]
+    claims = [paragraph for paragraph in paragraphs
+              if "installed core packages" in paragraph.lower() and "binary products" in paragraph.lower()]
+    if len(claims) != 1:
+        raise Reject("notice-contract-invalid", "expected one explicit installed-product fixture claim")
+    claim = claims[0].lower()
+    required = ("exactly the original project-authored tracer, visible demo, and mbc1 continuation fixtures",
+                "their pinned notices", "controlled game and diagnostic bytes", "excluded from binary products",
+                "do not decide whether a grant's author had authority")
+    if any(phrase not in claim for phrase in required) or "fixture-free" in claim:
+        raise Reject("notice-contract-invalid", "product claim does not describe the exact fixtures, notices, exclusions, and review boundary")
 
 
 def synthetic_tree():
@@ -780,18 +866,20 @@ def self_test():
         expect_reject("truncated-gzip", "archive-unreadable", write("t1.tar.gz", generated.read_bytes()[:200]))
         expect_reject("not-an-archive", "archive-unreadable", write("t2.tar.gz", b"plain text, not an archive"))
 
-        # Product package contract: separate from the source archive contract.
-        good_product = {
-            "include/gabbaboy/gabbaboy.h": b"/* header */\n",
-            "share/gabbaboy/fixtures/tracer/manifest.json": b"{}\n",
-            "share/gabbaboy/fixtures/tracer/tracer.gb": b"\x00T",
-            "share/gabbaboy/fixtures/mbc1-continuation/manifest.json": b"{}\n",
-        }
+        # Product package contract: build a complete accepted product from the pinned source baseline,
+        # independent of mutable files in the checkout under test.
+        product_checker, product_repo, good_product, good_inventory, forbidden_product_bytes = \
+            _synthetic_core_product(scratch)
 
-        def expect_product(label, files, expected, root_name=None):
+        def expect_product(label, files, expected, root_name=None, inventory=None):
             nonlocal positives, negatives
             archive = write(f"{label}.tar.gz", tar_bytes(files, None, root=root_name))
-            code, err, stdout = run_cli(script, "--check-product-archive", str(archive))
+            args = ["--check-product-archive", str(archive), "--repo-root", str(product_repo)]
+            if inventory is not None:
+                inventory_path = scratch / f"{label}.inventory.json"
+                inventory_path.write_text(json.dumps(inventory, sort_keys=True), encoding="utf-8")
+                args.extend(("--inventory", str(inventory_path)))
+            code, err, stdout = run_cli(script, *args)
             if expected is None:
                 if code != 0:
                     raise SystemExit(f"self-test product positive {label} failed: {err}")
@@ -805,13 +893,63 @@ def self_test():
                 negatives += 1
                 print(f"rejected: {label} ({expected})")
 
-        expect_product("product-fixture-free", good_product, None)
+        expect_product("complete-core-product-from-pinned-baseline", good_product, None)
         expect_product("product-wrapped-in-a-source-style-root", good_product, "product-fixture-leak", root_name="stage")
-        expect_product("product-with-third-party-fixture", {**good_product, "share/gabbaboy/fixtures/libbet/libbet.gb": b"\x00L"}, "product-fixture-leak")
-        expect_product("product-with-renamed-rom", {**good_product, "share/gabbaboy/renamed.gb": b"\x00L"}, "product-fixture-leak")
-        expect_product("product-with-notice-table", {**good_product, NOTICE_NAME: b"x"}, "product-fixture-leak")
-        expect_product("product-missing-header", {k: v for k, v in good_product.items() if "include" not in k}, "product-package-incomplete")
-        code, err, _ = run_cli(script, "--check-product-archive", str(generated))
+        for directory in ("tracer", "visible-demo", "mbc1-continuation"):
+            expect_product(f"product-extra-member-{directory}",
+                           {**good_product, f"share/gabbaboy/fixtures/{directory}/unregistered.bin": b"extra"},
+                           "product-path-unknown")
+            for disguise in ("renamed-payload.bin", "suffixless"):
+                path = f"share/gabbaboy/fixtures/{directory}/{disguise}"
+                expect_product(f"product-known-forbidden-{directory}-{disguise}",
+                               {**good_product, path: forbidden_product_bytes}, "product-fixture-leak")
+
+        policy_rules, _ = product_checker._product_rules(product_repo)
+        fixture_records = [(source, record) for source, record in policy_rules["files"].items()
+                           if source.startswith("fixtures/") and record["destinations"].get("core")]
+        for index, (source, record) in enumerate(fixture_records):
+            destination = record["destinations"]["core"][0]
+            if source.endswith("LICENSE.txt"):
+                expect_product(f"product-missing-fixture-license-{index}",
+                               {path: value for path, value in good_product.items() if path != destination},
+                               "product-path-missing")
+                expect_product(f"product-altered-fixture-license-{index}",
+                               {**good_product, destination: good_product[destination] + b"altered\n"},
+                               "product-identity-mismatch")
+            elif source.endswith((".gb", ".gbc", ".sgb", ".rom", ".bin", ".asm")) or source.endswith("manifest.json"):
+                expect_product(f"product-altered-fixture-identity-{index}",
+                               {**good_product, destination: good_product[destination] + b"changed\n"},
+                               "product-identity-mismatch")
+
+        root_license = "share/gabbaboy/LICENSE.txt"
+        expect_product("product-missing-root-mit", {path: value for path, value in good_product.items()
+                                                      if path != root_license}, "product-path-missing")
+        expect_product("product-altered-root-mit", {**good_product, root_license: good_product[root_license] + b"altered\n"},
+                       "product-identity-mismatch")
+        expect_product("product-with-source-notice-index", {**good_product, NOTICE_NAME: b"x"}, "product-path-unknown")
+        expect_product("product-with-changed-inventory", good_product,
+                       "product-inventory-mismatch", inventory={**good_inventory, "policy_sha256": "0" * 64})
+        expect_product("product-missing-generated-header",
+                       {k: v for k, v in good_product.items() if k != "include/gabbaboy/gabbaboy.h"},
+                       "product-path-missing")
+
+        notices = (pathlib.Path(__file__).resolve().parents[2] / NOTICE_NAME).read_bytes()
+        check_product_notice_contract(notices)
+        positives += 1
+        altered_claim = notices.replace(
+            b"exactly the original project-authored tracer, visible demo, and MBC1 continuation fixtures",
+            b"fixture-free binary products")
+        try:
+            check_product_notice_contract(altered_claim)
+        except Reject as error:
+            if error.code != "notice-contract-invalid":
+                raise SystemExit(f"self-test notice-contract negative returned unrelated rejection: {error}")
+            negatives += 1
+            print("rejected: altered binary product claim (notice-contract-invalid)")
+        else:
+            raise SystemExit("self-test notice-contract negative accepted an altered product claim")
+
+        code, err, _ = run_cli(script, "--check-product-archive", str(generated), "--repo-root", str(product_repo))
         if code != 1 or not err.startswith("REJECT product-"):
             raise SystemExit(f"self-test: a licensed source archive was accepted as a product package: {err!r}")
         negatives += 1
