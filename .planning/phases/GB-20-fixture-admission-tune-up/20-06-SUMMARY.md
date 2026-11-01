@@ -35,7 +35,9 @@ requirements-pending: [RIGHTS-01]
 commits: 4
 plan_head_before: 802555ac42264561d6b3f6fbad233d9aac6db0a9
 plan_head_after: aea38114
-status: complete
+status: reopened
+completion_scope: Original Tasks 1 and 2 only; their evidence and measured actuals are historical.
+pending_follow_up: Task 3 — final-review tar metadata bounds and missing-checker cleanup/retry.
 coverage:
   - id: PLATFORM-ARCHIVE-TRUST
     description: Trusted publisher verifies macOS and Windows downloaded products before draft validation; hostile archives, altered bytes, and unsafe paths reject.
@@ -63,6 +65,14 @@ coverage:
 
 The release publisher now checks downloaded macOS and Windows product archives with a trusted local verifier before draft validation.
 
+## Reopened for owner-authorized final-review security rescope
+
+Plan 20-06 is incomplete until its appended Task 3 passes. Final review reproduced a hidden PAX/GNU metadata bypass of the extractor's regular-file byte budget (CR-01) and a missing-trusted-checker path that leaves a stale destination (WR-01). The original accomplishments, completed-task metrics, three task commits and passing coverage below remain historical evidence for Tasks 1 and 2; they do not establish the new resource/cleanup guarantees.
+
+The bounded follow-up in [20-06-PLAN.md](20-06-PLAN.md) adds total decompressed-stream and pre-payload metadata size/aggregate/count limits through the existing trusted production archive gate, synthetic controls for each limit, missing-checker cleanup and same-destination retry, and the reviewed source/AST/control-registry update. This stays inside Plan 20-06 and the nine-plan Phase 20 cap. No fixture or rights-policy change and no live publication are included. The executor acts next on Task 3; no new owner confirmation is required.
+
+After implementation, reconfigure/build at its committed head and pass the release-job grouped CTest, both workflow coverage CTests, the safe-extractor self-test, and the plan-cap/planning-hygiene/live-summary CTests named in Task 3. Append actual follow-up commits and fresh block-style coverage, then change status to complete. Final Phase 20 full-suite, hosted platform and review/security/closure evidence remain separate required gates.
+
 ## Accomplishments
 
 - Added bounded tar.gz extraction that rejects traversal, links, special entries, duplicate and case-folded paths, and archive size excesses.
@@ -87,7 +97,7 @@ The measured plan range includes the interleaved Plan 20-09 implementation commi
 
 The independent coverage checker required its owner-authorized snapshot, AST allowlist, and registry update to recognize the new trusted workflow checker. The gate remained enforced and its negative controls passed.
 
-## Self-Check: PASSED
+## Original Tasks 1–2 Self-Check: PASSED (historical)
 
 - All three Plan 20-06 commits are ancestors of the recorded implementation head; the measured range contains four commits due to Plan 20-09 interleaving.
 - No fixture was admitted, and RIGHTS-01 remains pending.
