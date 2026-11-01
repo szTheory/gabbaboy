@@ -78,7 +78,9 @@ coverage:
     human_judgment: false
 duration: 46min
 completed: 2026-10-31
-status: complete
+status: reopened
+completion_scope: Original Tasks 1–3 only; their six task commits, interleaving disclosure, metrics and evidence remain historical.
+pending_follow_up: Task 4 — bounded pre-payload metadata and decompressed-stream parsing on source/Linux-core release paths.
 plan_head_before: 6075bb2aecc687b287d830bb0f05ed8fcc414d42
 plan_head_after: 75f4e835a8192e8e8f94eac075824c29a5c756e1
 ---
@@ -86,6 +88,12 @@ plan_head_after: 75f4e835a8192e8e8f94eac075824c29a5c756e1
 # Phase GB-20 Plan 02: Fixture Admission Tune-up Summary
 
 **Installed, extracted, and released core products now enforce the shared fixture policy against actual archive and notice bytes.**
+
+## Reopened for the final security-audit archive follow-up
+
+Plan 20-02 is incomplete until its appended Task 4 passes. The latest research addendum records hidden PAX metadata bypassing inspect_tar's visible-member payload budget on the source-receipt and Linux/core product paths. The prior metrics, six task commits and passing coverage below remain evidence for Tasks 1–3; they do not establish the new pre-payload per-header/aggregate/count or decompressed-stream guarantees.
+
+The executor acts next on Task 4 in [20-02-PLAN.md](20-02-PLAN.md) under the already authorized in-place security rescope. Add the bounds and direct/CLI production controls, preserve valid source commit comments and trusted checker relocation, and pass v02_source_archive_controls, the release-candidate self-test and planning checks at the committed implementation head. Keep status reopened until then; append actual follow-up commits and fresh block-style coverage after success. No new owner confirmation, plan, dependency, fixture/rights change or live publication is included. Final Phase 20 integration/security closure remains separate.
 
 ## Performance
 
@@ -148,13 +156,13 @@ None.
 
 ## Next Phase Readiness
 
-Plan 20-02 is complete. Phase orchestration still owns the remaining Phase 20 work and final-head qualification. No fixture was admitted; `RIGHTS-01` remains pending.
+Original Tasks 1–3 are complete; Plan 20-02 is reopened for Task 4 above. Phase orchestration still owns the remaining Phase 20 work and final-head qualification. No fixture was admitted; `RIGHTS-01` remains pending.
 
 ---
 *Phase: GB-20-fixture-admission-tune-up*
 *Completed: 2026-10-31*
 
-## Self-Check: PASSED
+## Original Tasks 1–3 Self-Check: PASSED (historical)
 
 - Summary file exists.
 - All six Plan 20-02 task commits are ancestors of the plan task head.

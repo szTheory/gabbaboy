@@ -33,7 +33,9 @@ requirements-pending: [RIGHTS-01]
 commits: 2
 plan_head_before: c37681b019aadc580b53265aaa2f61f3db9b2a92
 plan_head_after: 462cc2898428dcaed6e93c115761516964854401
-status: complete
+status: reopened
+completion_scope: Original Tasks 1 and 2 only; both commits, measured actuals and passing coverage remain historical.
+pending_follow_up: Task 3 — forbidden digest validation before all allowed/generated/one_of product paths in both layouts.
 coverage:
   - id: PRODUCT-POLICY-PIN
     description: Product validation rejects a modified complete policy and coordinated forbidden inventory mutation, and accepts only one supported configuration export.
@@ -50,6 +52,12 @@ coverage:
 # Phase GB-20 Plan 05: Product Policy Pin Summary
 
 The trusted checker now pins complete product policy bytes and permits only one known configuration-specific core export.
+
+## Reopened for the final security-audit forbidden-digest follow-up
+
+Plan 20-05 is incomplete until its appended Task 3 passes. The latest research addendum confirms known forbidden fixture bytes can bypass the digest check at an allowed generated path; one_of alternatives have the same gap. Existing accomplishments, both task commits, metrics and passing coverage below remain evidence for Tasks 1–2, not the new digest-before-path guarantee.
+
+The executor acts next on Task 3 in [20-05-PLAN.md](20-05-PLAN.md) under the already authorized in-place security rescope. Check every regular product entry before allowed-path handling, prove required and one_of generated-path leaks reject for the intended reason in both core and player, and pass both product-control CTests plus installed/preview, source-archive and planning integration checks at the committed head. Keep status reopened until then; append actual follow-up commits and fresh block-style coverage after success. No owner confirmation, new plan, dependency, fixture/rights-policy change or live publication is included. RIGHTS-01 remains pending and final Phase 20 security closure is separate.
 
 ## Accomplishments
 
@@ -72,7 +80,7 @@ The trusted checker now pins complete product policy bytes and permits only one 
 
 None.
 
-## Self-Check: PASSED
+## Original Tasks 1–2 Self-Check: PASSED (historical)
 
 - Both task commits are ancestors of this summary's implementation head.
 - The recorded plan range contains two commits. Rights clearance remains pending.
