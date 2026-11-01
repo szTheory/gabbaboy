@@ -9,6 +9,7 @@ endif()
 
 get_filename_component(source_dir "${GBB_SOURCE_DIR}" ABSOLUTE)
 get_filename_component(binary_dir "${GBB_BINARY_DIR}" ABSOLUTE)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(smoke_root "${binary_dir}/preview-package-smoke")
 set(package_build_dir "${smoke_root}/release-package-build")
 set(install_prefix "${smoke_root}/installed-prefix")
@@ -102,17 +103,42 @@ if(NOT extract_result EQUAL 0)
 endif()
 
 set(extracted_prefix "${extract_root}/installed-prefix")
-# This control exercises the production installed-package verifier with a real staged tree.
-# Keep the mutation isolated: no planted bytes may reach the consumer smoke below.
+# Check the product archive's actual bytes using the same fixed policy and the producer's
+# complete stage inventory. The existing wrapped archive remains the relocation smoke input;
+# this second archive uses the release layout with include/lib/bin/share at its root.
+set(core_layout_archive "${smoke_root}/core-layout.tar.gz")
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}" -E tar czf "${core_layout_archive}" -- include lib bin share
+  WORKING_DIRECTORY "${extracted_prefix}"
+  RESULT_VARIABLE core_layout_archive_result
+  OUTPUT_VARIABLE core_layout_archive_output
+  ERROR_VARIABLE core_layout_archive_error)
+if(NOT core_layout_archive_result EQUAL 0 OR NOT EXISTS "${core_layout_archive}")
+  message(FATAL_ERROR
+    "Extracted core product archive creation failed (${core_layout_archive_result}): ${core_layout_archive_output}${core_layout_archive_error}")
+endif()
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" -I "${source_dir}/tests/scripts/verify-v02-source-archive.py"
+    --check-product-archive "${core_layout_archive}"
+    --repo-root "${source_dir}"
+    --inventory "${core_inventory}"
+  RESULT_VARIABLE archive_policy_result
+  OUTPUT_VARIABLE archive_policy_output
+  ERROR_VARIABLE archive_policy_error)
+if(NOT archive_policy_result EQUAL 0)
+  message(FATAL_ERROR
+    "Extracted core archive failed exact product policy (${archive_policy_result}): ${archive_policy_output}${archive_policy_error}")
+endif()
+
+# Keep one control at the installed-prefix production boundary, and exercise the full byte
+# mutation matrix against private copies of this real extracted tree through the same shared API.
 set(product_policy_control_root "${smoke_root}/product-policy-control")
 set(product_policy_control_prefix "${product_policy_control_root}/installed-prefix")
 file(REMOVE_RECURSE "${product_policy_control_root}")
 file(MAKE_DIRECTORY "${product_policy_control_root}")
 file(COPY "${extracted_prefix}" DESTINATION "${product_policy_control_root}")
-set(product_policy_control_payload
-  "${product_policy_control_prefix}/share/gabbaboy/fixtures/tracer/renamed-control")
 file(COPY_FILE "${source_dir}/fixtures/mooneye-cgb/boot_regs-cgb.gb"
-  "${product_policy_control_payload}")
+  "${product_policy_control_prefix}/share/gabbaboy/fixtures/tracer/renamed-control")
 execute_process(
   COMMAND "${GBB_CMAKE_COMMAND}"
     "-DGBB_INSTALL_PREFIX=${product_policy_control_prefix}"
@@ -122,13 +148,23 @@ execute_process(
   RESULT_VARIABLE product_policy_control_result
   OUTPUT_VARIABLE product_policy_control_output
   ERROR_VARIABLE product_policy_control_error)
+set(product_policy_control_diagnostic "${product_policy_control_output}${product_policy_control_error}")
 file(REMOVE_RECURSE "${product_policy_control_root}")
 if(product_policy_control_result EQUAL 0 OR
-   NOT "${product_policy_control_output}${product_policy_control_error}" MATCHES "product-fixture-leak")
+   NOT product_policy_control_diagnostic MATCHES "product-fixture-leak")
   message(FATAL_ERROR
-    "Installed-package verifier did not reject renamed fixture bytes for the expected policy reason (${product_policy_control_result}): ${product_policy_control_output}${product_policy_control_error}")
+    "Installed-package verifier did not reject renamed fixture bytes for the expected policy reason (${product_policy_control_result}): ${product_policy_control_diagnostic}")
 endif()
-message(STATUS "Installed-package verifier rejected renamed fixture bytes before consumers")
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" -I "${source_dir}/tests/scripts/verify-v02-source-archive.py"
+    --self-test-product-tree "${extracted_prefix}" --repo-root "${source_dir}"
+  RESULT_VARIABLE tree_controls_result
+  OUTPUT_VARIABLE tree_controls_output
+  ERROR_VARIABLE tree_controls_error)
+if(NOT tree_controls_result EQUAL 0)
+  message(FATAL_ERROR
+    "Actual extracted-tree product controls failed (${tree_controls_result}): ${tree_controls_output}${tree_controls_error}")
+endif()
 
 # D-32 / T-10-22: Mooneye MBC and CGB ROMs are repository fixtures only; prove they are absent from the
 # extracted package by name and digest, and that the installed fixture set is exactly as expected.

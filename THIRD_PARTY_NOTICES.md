@@ -10,9 +10,13 @@ and ROM digest are recorded in its manifest and local notice.
 
 GitHub generated source archives retain the admitted licensed fixtures and
 their notices, so every third-party fixture below travels with a source archive
-together with its license text. The installed and downloaded product packages
-remain fixture-free: they carry only the original project-authored tracer,
-visible demo and MBC1 continuation fixtures. No fixture below is derived from a
+together with its license text. Installed core packages carry exactly the
+original project-authored tracer, visible demo, and MBC1 continuation fixtures
+with their pinned notices. The optional player carries only its listed demo and
+continuation fixtures with their notices. Controlled game and diagnostic bytes
+remain repository-test inputs and are excluded from binary products. Automated
+package checks compare recorded byte identities; they do not decide whether a
+grant's author had authority. No fixture below is derived from a
 Nintendo boot ROM or a commercial game image, and the table lists only material
 that is actually present in the repository tree.
 

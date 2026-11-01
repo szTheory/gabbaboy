@@ -21,6 +21,20 @@ from pathlib import Path, PurePosixPath
 
 
 BASELINE_COMMIT = "7cc6495e64f3645caa120e7458f754585b788985"
+NOTICE_BASELINE_PRODUCT_CLAIM = (
+    b"The installed and downloaded product packages\n"
+    b"remain fixture-free: they carry only the original project-authored tracer,\n"
+    b"visible demo and MBC1 continuation fixtures."
+)
+NOTICE_APPROVED_PRODUCT_CLAIM = (
+    b"Installed core packages carry exactly the\n"
+    b"original project-authored tracer, visible demo, and MBC1 continuation fixtures\n"
+    b"with their pinned notices. The optional player carries only its listed demo and\n"
+    b"continuation fixtures with their notices. Controlled game and diagnostic bytes\n"
+    b"remain repository-test inputs and are excluded from binary products. Automated\n"
+    b"package checks compare recorded byte identities; they do not decide whether a\n"
+    b"grant's author had authority."
+)
 MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_FIXTURE_BYTES = 256 * 1024 * 1024
@@ -540,14 +554,22 @@ def _product_rules(root: Path, override: dict | None = None) -> tuple[dict, byte
     return rules, policy_bytes
 
 
+def _check_product_notice_index(baseline_index: bytes, current_index: bytes) -> None:
+    """Allow the reviewed product-policy paragraph while pinning every other notice byte."""
+    if baseline_index.count(NOTICE_BASELINE_PRODUCT_CLAIM) != 1:
+        raise Reject("product-source-mismatch", "baseline product-policy paragraph is not uniquely identifiable")
+    approved_index = baseline_index.replace(NOTICE_BASELINE_PRODUCT_CLAIM, NOTICE_APPROVED_PRODUCT_CLAIM, 1)
+    if current_index not in (baseline_index, approved_index):
+        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs outside the approved product-policy paragraph")
+
+
 def _product_source_expectations(root: Path, rules: dict, layout: str) -> tuple[dict[str, dict], set[str], bytes]:
     baseline = check_commit(root, BASELINE_COMMIT, "baseline-object-unavailable")
     # Source artifacts and the notice index are still checked against the immutable baseline
     # when a caller validates bytes extracted from an archive.
     check_repository(root, baseline)
     pinned_index = blob(root, baseline, "THIRD_PARTY_NOTICES.md")
-    if read_regular(root, "THIRD_PARTY_NOTICES.md") != pinned_index:
-        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs from the baseline")
+    _check_product_notice_index(pinned_index, read_regular(root, "THIRD_PARTY_NOTICES.md"))
     expected: dict[str, dict] = {}
     allowed_fixture_sources: set[str] = set()
     for source_path, record in rules["files"].items():
@@ -898,6 +920,37 @@ def _expect_product_reject(label: str, operation, code: str) -> None:
     raise Reject(f"self-test-product-{label}", f"mutation was accepted; expected {code}")
 
 
+def _self_test_product_notice_index(repo_root: Path) -> int:
+    baseline = check_commit(repo_root, BASELINE_COMMIT, "baseline-object-unavailable")
+    pinned = blob(repo_root, baseline, "THIRD_PARTY_NOTICES.md")
+    current = read_regular(repo_root, "THIRD_PARTY_NOTICES.md")
+    _check_product_notice_index(pinned, current)
+    approved = pinned.replace(NOTICE_BASELINE_PRODUCT_CLAIM, NOTICE_APPROVED_PRODUCT_CLAIM, 1)
+    _check_product_notice_index(pinned, approved)
+
+    controls = [
+        ("arbitrary-paragraph-edit", approved.replace(b"No fixture below", b"Every fixture below", 1)),
+        ("removed-product-claim", approved.replace(NOTICE_APPROVED_PRODUCT_CLAIM, b"", 1)),
+        ("altered-product-claim", approved.replace(NOTICE_APPROVED_PRODUCT_CLAIM,
+                                                    NOTICE_APPROVED_PRODUCT_CLAIM + b" altered", 1)),
+        ("historical-digest-row-change",
+         approved.replace(b"59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c",
+                          b"09284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c", 1)),
+    ]
+    for label, candidate in controls:
+        if candidate == approved:
+            raise Reject("self-test-product-notice-index", f"{label} did not alter its target")
+        try:
+            _check_product_notice_index(pinned, candidate)
+        except Reject as error:
+            if error.code != "product-source-mismatch":
+                raise Reject("self-test-product-notice-index", f"{label} failed for an unrelated reason") from None
+        else:
+            raise Reject("self-test-product-notice-index", f"{label} was accepted")
+        print(f"rejected: notice index {label}")
+    return len(controls)
+
+
 def self_test_packages(layout: str) -> int:
     if layout not in ("core", "player"):
         raise Reject("product-layout-invalid", layout)
@@ -917,7 +970,7 @@ def self_test_packages(layout: str) -> int:
         entries = product_tree_entries(tree)
         clean_inventory = _validate_product_entries(entries, layout, repo_root, rules_override=test_rules,
                                                      source_contract=source_contract)
-        controls = 1
+        controls = 1 + _self_test_product_notice_index(repo_root)
 
         def rejected_tree(label: str, mutate, code: str) -> None:
             nonlocal controls
