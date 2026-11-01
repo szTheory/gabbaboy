@@ -22,8 +22,8 @@ BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "f370266baec1f5a58078fa42c66d4562c1fa777f"
-REVIEWED_POLICY_SHA256 = "0a33416b687906e906baac2eea2c886ef4a2222037e985a65a0dd3057fcd02c6"
+REVIEWED_POLICY_COMMIT = "19ddc7f393795767a95f70bb5f23ca32e413e13b"
+REVIEWED_POLICY_SHA256 = "677dcc8d89d4110c8048017b4b00908a50af6807d838054dd0436bcfb75c437d"
 REVIEWED_ARCHIVE_HELPER_COMMIT = "886000ef9f66ce389978190aa6c64936a729ab4e"
 REVIEWED_ARCHIVE_HELPER_SHA256 = "6ed3ddd188a55c20e78b8326c8821ea0b47b2530b3e56c39cb56c9c87ebaf21e"
 GROUPS = {
@@ -74,7 +74,7 @@ INSTRUMENTED_POLICY_FUNCTIONS = {
 }
 # These existing functions changed in the exact reviewed snapshot above. Their full source
 # bytes are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
-REVIEWED_CHANGED_POLICY_FUNCTIONS = {"_copy_fixture", "main"}
+REVIEWED_CHANGED_POLICY_FUNCTIONS = {"_copy_fixture", "main", "self_test"}
 ADDED_MUTATION_CONTROLS = (
     ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
     ("P20 Linux stage gate prefixes an untrusted PATH assignment", "release.yml", "fixture-product-stage"),
@@ -941,15 +941,19 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         if name in GROUPS.values():
             group = next(group for group, test_name in GROUPS.items() if test_name == name)
             completion_path = build_dir / f"workflow-policy-{GROUP_COMPLETION_FILES[group]}.json"
+            expected_values = {"--group", "--root", "--completed-file"}
+            if group == "release_jobs":
+                expected_values.add("--build-dir")
             cli_values, cli_booleans = _parse_python_cli(
-                cli, python_executable, root / POLICY_PATH,
-                {"--group", "--root", "--completed-file"}, {"--self-test"},
+                cli, python_executable, root / POLICY_PATH, expected_values, {"--self-test"},
             )
-            if cli_booleans != {"--self-test"} or set(cli_values) != {"--group", "--root", "--completed-file"}:
+            if cli_booleans != {"--self-test"} or set(cli_values) != expected_values:
                 reject(f"CTest {name} does not invoke exactly one selected policy self-test group")
             if (cli_values["--group"] != group or not _path_option_is(cli_values, "--root", root)
                     or not _path_option_is(cli_values, "--completed-file", completion_path)):
                 reject(f"CTest {name} has a wrong group, root, or completion-file argument")
+            if group == "release_jobs" and not _path_option_is(cli_values, "--build-dir", build_dir):
+                reject(f"CTest {name} has an incorrect configured product build directory")
             completion_key = os.path.normcase(str(completion_path.resolve()))
             if completion_key in completion_paths:
                 reject(f"CTest {name} shares a completion-file destination with another group")
@@ -1105,8 +1109,12 @@ def _self_test(root: Path, revision: str) -> int:
     for group, name in GROUPS.items():
         completion = build_dir / f"workflow-policy-{GROUP_COMPLETION_FILES[group]}.json"
         marker = f"PASS: workflow policy group {group} controls=[0-9]+ ids_sha256=[0-9a-f]+"
-        tests.append(test_entry(name, [python_executable, "-I", str(root / POLICY_PATH), "--self-test",
-                                       "--group", group, "--root", str(root), "--completed-file", str(completion)],
+        command = [python_executable, "-I", str(root / POLICY_PATH), "--self-test",
+                   "--group", group, "--root", str(root)]
+        if group == "release_jobs":
+            command.extend(("--build-dir", str(build_dir)))
+        command.extend(("--completed-file", str(completion)))
+        tests.append(test_entry(name, command,
                                 marker, 180, completion))
     coverage_script = root / "tests/scripts/verify-workflow-policy-coverage.py"
     tests.extend((
@@ -1263,6 +1271,16 @@ def _self_test(root: Path, revision: str) -> int:
     rejected("wrong group completion path", lambda: validate_mutated(lambda test_list: change_cli(named_test(test_list, ci_name),
         [python_executable, "-I", str(root / POLICY_PATH), "--self-test", "--group", "ci", "--root", str(root),
          "--completed-file", str(build_dir / "workflow-policy-helpers.json")])))
+    release_name = GROUPS["release_jobs"]
+    release_argv = [python_executable, "-I", str(root / POLICY_PATH), "--self-test", "--group", "release_jobs",
+                    "--root", str(root), "--build-dir", str(build_dir), "--completed-file",
+                    str(build_dir / "workflow-policy-release-jobs.json")]
+    def wrong_product_build_dir(test_list: list[dict]) -> None:
+        argv = release_argv.copy()
+        argv[argv.index("--build-dir") + 1] = "/tmp/other"
+        change_cli(named_test(test_list, release_name), argv)
+
+    rejected("wrong product controls build directory", lambda: validate_mutated(wrong_product_build_dir))
     rejected("workflow-policy check echo substitution", lambda: validate_mutated(lambda test_list: change_cli(
         named_test(test_list, "workflow_policy_check"), ["echo", "PASS:"])))
     rejected("wrong exit-plus-marker script", lambda: validate_mutated(lambda test_list:
