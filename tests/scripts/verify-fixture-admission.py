@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import io
 import json
@@ -14,6 +15,8 @@ import subprocess
 import sys
 import tempfile
 import tarfile
+import shutil
+from collections.abc import Iterable, Mapping
 from pathlib import Path, PurePosixPath
 
 
@@ -22,6 +25,9 @@ MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_TOTAL_FIXTURE_BYTES = 256 * 1024 * 1024
 MAX_FILES = 4096
+MAX_PRODUCT_FILE_BYTES = 512 * 1024 * 1024
+MAX_PRODUCT_TOTAL_BYTES = 1024 * 1024 * 1024
+MAX_PRODUCT_ENTRIES = 16384
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 COMPONENTS = ("code", "art", "audio_driver", "build_inputs", "notices")
@@ -468,6 +474,574 @@ def check_repository(root: Path, baseline: str) -> dict:
     return {"legacy_files": len(baseline_files), "admitted_changes": changed, "baseline": baseline}
 
 
+def _product_rules(root: Path, override: dict | None = None) -> tuple[dict, bytes]:
+    policy_bytes = read_regular(root, "cmake/FixtureAdmissionPolicy.json")
+    policy = parse_json(policy_bytes, "FixtureAdmissionPolicy.json")
+    require_keys(policy, {"schema_version", "baseline_commit", "products"}, "FixtureAdmissionPolicy.json")
+    if policy["schema_version"] != 1 or policy["baseline_commit"] != BASELINE_COMMIT:
+        raise Reject("policy-invalid", "baseline commit differs from the reviewed full identity")
+    rules = override if override is not None else policy.get("products")
+    if not isinstance(rules, dict):
+        raise Reject("product-policy-invalid", "products must be an object")
+    require_keys(rules, {"files", "external_notices", "release_notice_sidecar", "generated"}, "products")
+    files = rules["files"]
+    if not isinstance(files, dict) or not files:
+        raise Reject("product-policy-invalid", "products.files must be a non-empty object")
+    for source_path, record in files.items():
+        relative_path(source_path, "product source path")
+        if not isinstance(record, dict):
+            raise Reject("product-policy-invalid", source_path)
+        require_keys(record, {"sha256", "destinations"}, f"products.files.{source_path}")
+        if not isinstance(record["sha256"], str) or not HEX64.fullmatch(record["sha256"]):
+            raise Reject("product-policy-invalid", f"products.files.{source_path}.sha256")
+        destinations = record["destinations"]
+        if not isinstance(destinations, dict) or set(destinations) - {"core", "player"}:
+            raise Reject("product-policy-invalid", f"products.files.{source_path}.destinations")
+        for layout, paths in destinations.items():
+            if not isinstance(paths, list) or not paths:
+                raise Reject("product-policy-invalid", f"products.files.{source_path}.{layout}")
+            for path in paths:
+                relative_path(path, f"products.files.{source_path}.{layout}")
+    notices = rules["external_notices"]
+    if not isinstance(notices, dict) or set(notices) != {"sdl3"}:
+        raise Reject("product-policy-invalid", "external_notices must define the pinned SDL3 license")
+    for name, record in notices.items():
+        if not isinstance(record, dict):
+            raise Reject("product-policy-invalid", f"external_notices.{name}")
+        require_keys(record, {"path", "size_bytes", "sha256"}, f"external_notices.{name}")
+        relative_path(record["path"], f"external_notices.{name}.path")
+        if (not isinstance(record["size_bytes"], int) or isinstance(record["size_bytes"], bool)
+                or record["size_bytes"] <= 0 or record["size_bytes"] > MAX_PRODUCT_FILE_BYTES
+                or not isinstance(record["sha256"], str) or not HEX64.fullmatch(record["sha256"])):
+            raise Reject("product-policy-invalid", f"external_notices.{name} identity")
+    sidecar = rules["release_notice_sidecar"]
+    if not isinstance(sidecar, dict):
+        raise Reject("product-policy-invalid", "release_notice_sidecar must be an object")
+    require_keys(sidecar, {"path", "sha256"}, "release_notice_sidecar")
+    relative_path(sidecar["path"], "release_notice_sidecar.path")
+    if not isinstance(sidecar["sha256"], str) or not HEX64.fullmatch(sidecar["sha256"]):
+        raise Reject("product-policy-invalid", "release_notice_sidecar.sha256")
+    generated = rules["generated"]
+    if not isinstance(generated, dict) or set(generated) != {"core", "player"}:
+        raise Reject("product-policy-invalid", "generated must define core and player layouts")
+    for layout, record in generated.items():
+        if not isinstance(record, dict):
+            raise Reject("product-policy-invalid", f"generated.{layout}")
+        require_keys(record, {"required", "one_of"}, f"generated.{layout}")
+        if not isinstance(record["required"], list) or not isinstance(record["one_of"], list):
+            raise Reject("product-policy-invalid", f"generated.{layout} path groups")
+        for path in record["required"]:
+            relative_path(path, f"generated.{layout}.required")
+        for alternatives in record["one_of"]:
+            if not isinstance(alternatives, list) or not alternatives:
+                raise Reject("product-policy-invalid", f"generated.{layout}.one_of")
+            for path in alternatives:
+                relative_path(path, f"generated.{layout}.one_of")
+    return rules, policy_bytes
+
+
+def _product_source_expectations(root: Path, rules: dict, layout: str) -> tuple[dict[str, dict], set[str], bytes]:
+    baseline = check_commit(root, BASELINE_COMMIT, "baseline-object-unavailable")
+    # Source artifacts and the notice index are still checked against the immutable baseline
+    # when a caller validates bytes extracted from an archive.
+    check_repository(root, baseline)
+    pinned_index = blob(root, baseline, "THIRD_PARTY_NOTICES.md")
+    if read_regular(root, "THIRD_PARTY_NOTICES.md") != pinned_index:
+        raise Reject("product-source-mismatch", "THIRD_PARTY_NOTICES.md differs from the baseline")
+    expected: dict[str, dict] = {}
+    allowed_fixture_sources: set[str] = set()
+    for source_path, record in rules["files"].items():
+        pinned = blob(root, baseline, source_path)
+        digest = sha256(pinned)
+        if digest != record["sha256"]:
+            raise Reject("product-policy-invalid", f"{source_path} digest is not the pinned baseline digest")
+        if read_regular(root, source_path) != pinned:
+            raise Reject("product-source-mismatch", source_path)
+        if source_path.startswith("fixtures/"):
+            allowed_fixture_sources.add(source_path)
+        for destination in record["destinations"].get(layout, []):
+            if destination in expected:
+                raise Reject("product-policy-invalid", f"duplicate product destination: {destination}")
+            expected[destination] = {"kind": "file", "size_bytes": len(pinned), "sha256": digest}
+
+    if layout == "player":
+        sdl = rules["external_notices"]["sdl3"]
+        expected[sdl["path"]] = {"kind": "file", "size_bytes": sdl["size_bytes"], "sha256": sdl["sha256"]}
+    generated = rules["generated"][layout]
+    for path in generated["required"]:
+        if path in expected:
+            raise Reject("product-policy-invalid", f"generated path overlaps protected source: {path}")
+        expected[path] = {"kind": "generated"}
+    alternative_groups: list[list[str]] = []
+    for alternatives in generated["one_of"]:
+        if len(set(alternatives)) != len(alternatives) or any(path in expected for path in alternatives):
+            raise Reject("product-policy-invalid", f"duplicate generated alternative: {alternatives}")
+        alternative_groups.append(alternatives)
+    allowed = set(expected)
+    for alternatives in alternative_groups:
+        allowed.update(alternatives)
+
+    # Any fixture blob outside the exact source set for this layout is forbidden everywhere in
+    # the product, even if renamed or stripped of its usual ROM/file suffix.
+    forbidden: set[str] = set()
+    baseline_fixture_paths = tree_files(root, baseline, "fixtures")
+    total_fixture_bytes = 0
+    for path in baseline_fixture_paths:
+        if path in allowed_fixture_sources:
+            continue
+        data = blob(root, baseline, path)
+        total_fixture_bytes += len(data)
+        if total_fixture_bytes > MAX_TOTAL_FIXTURE_BYTES:
+            raise Reject("product-source-size-limit", "fixture digest scan exceeds the bounded total")
+        forbidden.add(sha256(data))
+    for path in current_fixture_files(root):
+        if path in allowed_fixture_sources:
+            continue
+        data = read_regular(root, path)
+        total_fixture_bytes += len(data)
+        if total_fixture_bytes > 2 * MAX_TOTAL_FIXTURE_BYTES:
+            raise Reject("product-source-size-limit", "current fixture digest scan exceeds the bounded total")
+        forbidden.add(sha256(data))
+    return expected, forbidden, pinned_index
+
+
+def _normalize_product_entries(entries: Mapping | Iterable) -> dict[str, dict]:
+    if isinstance(entries, Mapping):
+        pairs = entries.items()
+    else:
+        pairs = entries
+    normalized: dict[str, dict] = {}
+    folded: set[str] = set()
+    count = 0
+    for item in pairs:
+        try:
+            path_value, record = item
+        except (TypeError, ValueError):
+            raise Reject("product-entry-invalid", "each product entry must be a path and record") from None
+        path = relative_path(path_value, "product entry path")
+        count += 1
+        if count > MAX_PRODUCT_ENTRIES:
+            raise Reject("product-entry-count-limit", "too many product entries")
+        if path in normalized:
+            raise Reject("product-path-duplicate", path)
+        folded_path = path.casefold()
+        if folded_path in folded:
+            raise Reject("product-path-duplicate", f"case-fold collision at {path}")
+        folded.add(folded_path)
+        if not isinstance(record, dict) or "kind" not in record:
+            raise Reject("product-entry-invalid", path)
+        kind = record["kind"]
+        if kind in ("symlink", "link", "hardlink"):
+            raise Reject("path-link", path)
+        if kind == "directory":
+            if set(record) - {"kind", "size_bytes", "sha256"}:
+                raise Reject("product-entry-invalid", path)
+            normalized[path] = {"kind": "directory"}
+            continue
+        if kind != "file" or set(record) != {"kind", "size_bytes", "sha256"}:
+            raise Reject("product-entry-invalid", path)
+        size, digest = record["size_bytes"], record["sha256"]
+        if (not isinstance(size, int) or isinstance(size, bool) or size < 0
+                or size > MAX_PRODUCT_FILE_BYTES or not isinstance(digest, str) or not HEX64.fullmatch(digest)):
+            raise Reject("product-entry-invalid", path)
+        normalized[path] = {"kind": "file", "size_bytes": size, "sha256": digest}
+    if sum(record.get("size_bytes", 0) for record in normalized.values()) > MAX_PRODUCT_TOTAL_BYTES:
+        raise Reject("product-total-size-limit", "product is too large")
+    return normalized
+
+
+def _inventory_record(layout: str, entries: dict[str, dict], policy_bytes: bytes) -> dict:
+    files = {path: record for path, record in sorted(entries.items()) if record["kind"] == "file"}
+    return {"schema_version": 1, "layout": layout, "policy_sha256": sha256(policy_bytes), "files": files}
+
+
+def _validate_product_entries(entries: Mapping | Iterable, layout: str, repo_root: Path,
+                              inventory: object = None, sidecar: object = None,
+                              rules_override: dict | None = None,
+                              source_contract: tuple[dict[str, dict], set[str], bytes] | None = None) -> dict:
+    if layout not in ("core", "player"):
+        raise Reject("product-layout-invalid", layout)
+    rules, policy_bytes = _product_rules(repo_root, rules_override)
+    expected, forbidden, _pinned_index = source_contract or _product_source_expectations(repo_root, rules, layout)
+    actual = _normalize_product_entries(entries)
+    generated = rules["generated"][layout]
+    allowed_files = set(expected)
+    alternative_groups = [set(group) for group in generated["one_of"]]
+    allowed_files.update(path for group in alternative_groups for path in group)
+    required_paths = set(expected)
+    allowed_directories: set[str] = set()
+    for path in allowed_files:
+        parts = PurePosixPath(path).parts
+        for index in range(1, len(parts)):
+            allowed_directories.add("/".join(parts[:index]))
+    for path, record in actual.items():
+        if record["kind"] == "directory":
+            if path not in allowed_directories:
+                raise Reject("product-path-unknown", path)
+            continue
+        if path not in allowed_files:
+            if record["sha256"] in forbidden:
+                raise Reject("product-fixture-leak", path)
+            raise Reject("product-path-unknown", path)
+        if path in expected:
+            expected_record = expected[path]
+            if expected_record["kind"] == "file":
+                if (record["size_bytes"] != expected_record["size_bytes"]
+                        or record["sha256"] != expected_record["sha256"]):
+                    raise Reject("product-identity-mismatch", path)
+            elif record["size_bytes"] == 0:
+                raise Reject("product-generated-file-empty", path)
+    missing = sorted(required_paths - set(actual))
+    if missing:
+        raise Reject("product-path-missing", missing[0])
+    for group in alternative_groups:
+        present = group & set(actual)
+        if len(present) != 1:
+            raise Reject("product-path-variant-invalid", ",".join(sorted(group)))
+    if sidecar is not None:
+        expected_sidecar = rules["release_notice_sidecar"]
+        if isinstance(sidecar, bytes):
+            sidecar_bytes = sidecar
+        else:
+            sidecar_path = Path(sidecar)
+            if not sidecar_path.is_absolute():
+                sidecar_path = repo_root / sidecar_path
+            try:
+                if sidecar_path.is_symlink() or not sidecar_path.is_file():
+                    raise Reject("product-notice-sidecar-invalid", expected_sidecar["path"])
+                if sidecar_path.stat().st_size > MAX_PRODUCT_FILE_BYTES:
+                    raise Reject("product-notice-sidecar-invalid", "sidecar exceeds size limit")
+                sidecar_bytes = sidecar_path.read_bytes()
+            except OSError:
+                raise Reject("product-notice-sidecar-invalid", expected_sidecar["path"]) from None
+        if sha256(sidecar_bytes) != expected_sidecar["sha256"]:
+            raise Reject("product-notice-sidecar-mismatch", expected_sidecar["path"])
+
+    candidate_inventory = _inventory_record(layout, actual, policy_bytes)
+    if inventory is not None:
+        if inventory != candidate_inventory:
+            raise Reject("product-inventory-mismatch", "validated paths, sizes, bytes, layout, or policy identity differ")
+    return candidate_inventory
+
+
+def check_product_entries(entries: Mapping | Iterable, layout: str, repo_root: Path,
+                          inventory: object = None, sidecar: object = None) -> dict:
+    """Validate normalized product entries against pinned fixture and notice paths."""
+    return _validate_product_entries(entries, layout, repo_root, inventory=inventory, sidecar=sidecar)
+
+
+def _hash_product_file(path: Path, relative: str) -> dict:
+    try:
+        if path.is_symlink():
+            raise Reject("path-link", relative)
+        info = path.lstat()
+    except OSError:
+        raise Reject("product-tree-unavailable", relative) from None
+    if not stat.S_ISREG(info.st_mode):
+        raise Reject("product-special-file", relative)
+    if info.st_size > MAX_PRODUCT_FILE_BYTES:
+        raise Reject("product-file-size-limit", relative)
+    data = path.read_bytes()
+    if len(data) != info.st_size:
+        raise Reject("product-tree-changed", relative)
+    return {"kind": "file", "size_bytes": len(data), "sha256": sha256(data)}
+
+
+def product_tree_entries(tree: Path) -> dict[str, dict]:
+    try:
+        root = tree.resolve(strict=True)
+    except OSError:
+        raise Reject("product-tree-unavailable", str(tree)) from None
+    if not root.is_dir() or tree.is_symlink():
+        raise Reject("product-tree-unavailable", str(tree))
+    entries: dict[str, dict] = {}
+    folded: set[str] = set()
+    for current, dirnames, filenames in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current)
+        retained_dirs = []
+        for dirname in dirnames:
+            path = current_path / dirname
+            relative = path.relative_to(root).as_posix()
+            relative_path(relative, "product directory")
+            if path.is_symlink():
+                raise Reject("path-link", relative)
+            try:
+                if not stat.S_ISDIR(path.lstat().st_mode):
+                    raise Reject("product-special-file", relative)
+            except OSError:
+                raise Reject("product-tree-unavailable", relative) from None
+            entries[relative] = {"kind": "directory"}
+            if len(entries) > MAX_PRODUCT_ENTRIES:
+                raise Reject("product-entry-count-limit", "too many product entries")
+            retained_dirs.append(dirname)
+        dirnames[:] = retained_dirs
+        for filename in filenames:
+            path = current_path / filename
+            relative = relative_path(path.relative_to(root).as_posix(), "product file")
+            if relative.casefold() in folded:
+                raise Reject("product-path-duplicate", relative)
+            folded.add(relative.casefold())
+            entries[relative] = _hash_product_file(path, relative)
+            if len(entries) > MAX_PRODUCT_ENTRIES:
+                raise Reject("product-entry-count-limit", "too many product entries")
+    return entries
+
+
+def _read_inventory(path: Path) -> dict:
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise Reject("product-inventory-invalid", str(path))
+        return parse_json(path.read_bytes(), "product inventory")
+    except OSError:
+        raise Reject("product-inventory-invalid", str(path)) from None
+
+
+def _write_inventory(path: Path, inventory: dict, repo_root: Path) -> None:
+    if not path.is_absolute():
+        path = repo_root / path
+    parent = path.parent.resolve(strict=True)
+    if path.exists() or path.is_symlink():
+        raise Reject("product-inventory-exists", str(path))
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=parent,
+                                         prefix=f".{path.name}.", suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(inventory, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+        os.replace(temporary, path)
+    except OSError as error:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise Reject("product-inventory-write-failed", error.strerror or "write failed") from None
+
+
+def _read_sidecar_argument(root: Path, value: str | None) -> object:
+    return Path(value) if value is not None else None
+
+
+def check_product_documentation(root: Path, rules: dict, content: bytes | None = None) -> None:
+    if content is None:
+        content = read_regular(root, "docs/fixture-admission.md")
+    try:
+        text = content.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        raise Reject("product-doc-contract", "documentation is not UTF-8") from None
+    required_text = (
+        "--check-product-tree", "--layout core", "--layout player", "--write-inventory",
+        "--inventory", "--notice-sidecar", "check_product_entries", "THIRD_PARTY_NOTICES.md",
+        "does not decide whether a grant's author had authority",
+        "A source archive is not a core or player product",
+    )
+    missing = [item for item in required_text if item not in text]
+    if missing:
+        raise Reject("product-doc-contract", f"missing contract text: {missing[0]}")
+    product_paths = {rules["release_notice_sidecar"]["path"]}
+    product_paths.update(record["path"] for record in rules["external_notices"].values())
+    for record in rules["files"].values():
+        for paths in record["destinations"].values():
+            product_paths.update(paths)
+    for layout in ("core", "player"):
+        product_paths.update(rules["generated"][layout]["required"])
+        for group in rules["generated"][layout]["one_of"]:
+            product_paths.update(group)
+    absent = sorted(path for path in product_paths if path not in text)
+    if absent:
+        raise Reject("product-doc-contract", f"missing policy path: {absent[0]}")
+
+
+def _synthetic_product_rules(rules: dict, layout: str) -> tuple[dict, bytes]:
+    test_rules = copy.deepcopy(rules)
+    sdl_bytes = b"Synthetic SDL notice for package-policy controls only.\n"
+    if layout == "player":
+        test_rules["external_notices"]["sdl3"]["size_bytes"] = len(sdl_bytes)
+        test_rules["external_notices"]["sdl3"]["sha256"] = sha256(sdl_bytes)
+    return test_rules, sdl_bytes
+
+
+def _write_synthetic_product_tree(tree: Path, repo_root: Path, layout: str, rules: dict,
+                                  sdl_bytes: bytes,
+                                  source_contract: tuple[dict[str, dict], set[str], bytes] | None = None) -> None:
+    expected, _forbidden, _notice_index = source_contract or _product_source_expectations(repo_root, rules, layout)
+    payloads: dict[str, bytes] = {}
+    baseline = check_commit(repo_root, BASELINE_COMMIT, "baseline-object-unavailable")
+    for source_path, record in rules["files"].items():
+        data = blob(repo_root, baseline, source_path)
+        if sha256(data) != record["sha256"]:
+            raise Reject("self-test-product-policy", source_path)
+        for destination in record["destinations"].get(layout, []):
+            payloads[destination] = data
+    if layout == "player":
+        sdl_path = rules["external_notices"]["sdl3"]["path"]
+        payloads[sdl_path] = sdl_bytes
+    generated = rules["generated"][layout]
+    for path in generated["required"]:
+        payloads[path] = f"synthetic generated output: {path}\n".encode("utf-8")
+    for alternatives in generated["one_of"]:
+        path = alternatives[0]
+        payloads[path] = f"synthetic generated output: {path}\n".encode("utf-8")
+    if set(expected) - set(payloads):
+        raise Reject("self-test-product-policy", "synthetic product is missing an expected path")
+    for relative, data in payloads.items():
+        target = tree.joinpath(*PurePosixPath(relative).parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+
+
+def _expect_product_reject(label: str, operation, code: str) -> None:
+    try:
+        operation()
+    except Reject as error:
+        if error.code != code:
+            raise Reject(f"self-test-product-{label}", f"expected {code}, received {error}") from None
+        return
+    raise Reject(f"self-test-product-{label}", f"mutation was accepted; expected {code}")
+
+
+def self_test_packages(layout: str) -> int:
+    if layout not in ("core", "player"):
+        raise Reject("product-layout-invalid", layout)
+    repo_root = Path(__file__).resolve().parents[2]
+    rules, _policy_bytes = _product_rules(repo_root)
+    check_product_documentation(repo_root, rules)
+    if (rules["external_notices"]["sdl3"]["sha256"]
+            != "1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd"
+            or rules["external_notices"]["sdl3"]["size_bytes"] != 884):
+        raise Reject("self-test-product-sdl-pin", "SDL license identity differs from the reviewed source notice")
+    test_rules, sdl_bytes = _synthetic_product_rules(rules, layout)
+    source_contract = _product_source_expectations(repo_root, test_rules, layout)
+    with tempfile.TemporaryDirectory(prefix=f"gbb-product-{layout}-positive-") as directory:
+        tree = Path(directory) / "installed-prefix"
+        tree.mkdir()
+        _write_synthetic_product_tree(tree, repo_root, layout, test_rules, sdl_bytes, source_contract)
+        entries = product_tree_entries(tree)
+        clean_inventory = _validate_product_entries(entries, layout, repo_root, rules_override=test_rules,
+                                                     source_contract=source_contract)
+        controls = 1
+
+        def rejected_tree(label: str, mutate, code: str) -> None:
+            nonlocal controls
+            with tempfile.TemporaryDirectory(prefix=f"gbb-product-{layout}-{label}-") as case_dir:
+                candidate = Path(case_dir) / "installed-prefix"
+                shutil.copytree(tree, candidate, symlinks=True)
+                mutate(candidate)
+                candidate_entries = product_tree_entries(candidate)
+                _expect_product_reject(label, lambda: _validate_product_entries(
+                    candidate_entries, layout, repo_root, rules_override=test_rules,
+                    source_contract=source_contract), code)
+                controls += 1
+
+        fixture_prefixes = sorted({
+            destination.rsplit("/", 1)[0]
+            for record in rules["files"].values()
+            for destination in record["destinations"].get(layout, [])
+            if destination.startswith("share/gabbaboy/fixtures/")
+        })
+        for index, fixture_dir in enumerate(fixture_prefixes):
+            rejected_tree(f"extra-fixture-member-{index}",
+                          lambda candidate, fixture_dir=fixture_dir: (candidate / fixture_dir / "extra.bin").write_bytes(b"unregistered"),
+                          "product-path-unknown")
+        # A different basename or no suffix cannot disguise a known repository-only fixture.
+        allowed_source_paths = {path for path, record in rules["files"].items()
+                                if record["destinations"].get(layout)}
+        baseline = check_commit(repo_root, BASELINE_COMMIT, "baseline-object-unavailable")
+        forbidden_path = next(path for path in sorted(tree_files(repo_root, baseline, "fixtures"))
+                              if path not in allowed_source_paths)
+        forbidden_bytes = blob(repo_root, baseline, forbidden_path)
+        for name in ("renamed-payload.bin", "suffixless"):
+            rejected_tree(name, lambda candidate, name=name: (candidate / "share/gabbaboy" / name).write_bytes(forbidden_bytes),
+                          "product-fixture-leak")
+
+        protected_paths = sorted(path for path in clean_inventory["files"]
+                                 if "LICENSE" in PurePosixPath(path).name)
+        for path in protected_paths:
+            rejected_tree(f"missing-notice-{controls}", lambda candidate, path=path: (candidate / path).unlink(),
+                          "product-path-missing")
+            rejected_tree(f"altered-notice-{controls}", lambda candidate, path=path:
+                          (candidate / path).write_bytes((candidate / path).read_bytes() + b"altered\n"),
+                          "product-identity-mismatch")
+
+        fixture_product_paths = sorted(path for path in clean_inventory["files"]
+                                        if path.startswith("share/gabbaboy/fixtures/")
+                                        and "LICENSE" not in PurePosixPath(path).name)
+        for index, path in enumerate(fixture_product_paths):
+            rejected_tree(f"changed-fixture-identity-{index}", lambda candidate, path=path:
+                          (candidate / path).write_bytes((candidate / path).read_bytes() + b"changed\n"),
+                          "product-identity-mismatch")
+        missing_fixture = fixture_product_paths[0]
+        rejected_tree("missing-fixture-member", lambda candidate: (candidate / missing_fixture).unlink(),
+                      "product-path-missing")
+
+        if layout == "core":
+            sidecar = blob(repo_root, baseline, "LICENSE")
+            _validate_product_entries(entries, layout, repo_root, sidecar=sidecar, rules_override=test_rules,
+                                      source_contract=source_contract)
+            _expect_product_reject("altered-release-sidecar", lambda: _validate_product_entries(
+                entries, layout, repo_root, sidecar=sidecar + b"altered", rules_override=test_rules,
+                source_contract=source_contract),
+                "product-notice-sidecar-mismatch")
+            controls += 1
+
+        inventory_changed = {path: dict(record) for path, record in entries.items()}
+        generated_path = next(path for path, record in inventory_changed.items()
+                              if record["kind"] == "file" and path in rules["generated"][layout]["required"])
+        inventory_changed[generated_path]["sha256"] = "0" * 64
+        _expect_product_reject("inventory-difference", lambda: _validate_product_entries(
+            inventory_changed, layout, repo_root, inventory=clean_inventory, rules_override=test_rules,
+            source_contract=source_contract),
+            "product-inventory-mismatch")
+        controls += 1
+
+        duplicate_entries = list(entries.items()) + [next(iter(entries.items()))]
+        _expect_product_reject("duplicate-entry", lambda: _validate_product_entries(
+            duplicate_entries, layout, repo_root, rules_override=test_rules,
+            source_contract=source_contract), "product-path-duplicate")
+        controls += 1
+
+        _expect_product_reject("source-notices-file", lambda: _validate_product_entries(
+            {**entries, "THIRD_PARTY_NOTICES.md": {"kind": "file", "size_bytes": 1, "sha256": "0" * 64}},
+            layout, repo_root, rules_override=test_rules, source_contract=source_contract), "product-path-unknown")
+        controls += 1
+
+        with tempfile.TemporaryDirectory(prefix=f"gbb-product-{layout}-receipt-") as case_dir:
+            candidate = Path(case_dir) / "installed-prefix"
+            shutil.copytree(tree, candidate, symlinks=True)
+            (candidate / "unapproved-output").write_bytes(b"unexpected")
+            receipt_path = Path(case_dir) / "rejected-inventory.json"
+            result = subprocess.run(
+                [sys.executable, "-I", str(Path(__file__).resolve()), "--check-product-tree", str(candidate),
+                 "--layout", layout, "--repo-root", str(repo_root), "--write-inventory", str(receipt_path)],
+                capture_output=True, text=True, check=False, timeout=30)
+            if result.returncode == 0 or "REJECT product-path-unknown:" not in result.stderr:
+                raise Reject("self-test-product-rejected-receipt", result.stderr.strip() or
+                             "product with an unknown path was accepted")
+            if receipt_path.exists() or receipt_path.is_symlink():
+                raise Reject("self-test-product-rejected-receipt", "rejected product wrote an inventory receipt")
+            controls += 1
+
+        doc = read_regular(repo_root, "docs/fixture-admission.md")
+        damaged_doc = doc.replace(b"share/gabbaboy/fixtures/tracer/tracer.gb",
+                                  b"share/gabbaboy/fixtures/tracer/renamed.gb")
+        _expect_product_reject("documentation-mismatch", lambda: check_product_documentation(
+            repo_root, rules, damaged_doc), "product-doc-contract")
+        controls += 1
+
+        with tempfile.TemporaryDirectory(prefix=f"gbb-product-{layout}-link-") as link_dir:
+            candidate = Path(link_dir) / "installed-prefix"
+            shutil.copytree(tree, candidate, symlinks=True)
+            link_target = next(path for path in sorted(candidate.rglob("*")) if path.is_file() and not path.is_symlink())
+            link_target.unlink()
+            try:
+                link_target.symlink_to("/etc/passwd")
+            except OSError as error:
+                raise Reject("self-test-product-link", f"could not create controlled symlink: {error}") from None
+            _expect_product_reject("link-escape", lambda: product_tree_entries(candidate), "path-link")
+            controls += 1
+
+        print(f"PASS: fixture admission product layout={layout} positive=1 negative_controls={controls}")
+        return controls
+
+
 def _write_synthetic(root: Path) -> str:
     """Create one complete synthetic fixture and commit the reviewed source bytes."""
     git(root, "init", "-q")
@@ -822,10 +1396,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument("--self-test", action="store_true")
+    modes.add_argument("--self-test-packages", action="store_true")
     modes.add_argument("--check-manifest")
     modes.add_argument("--check-repository", action="store_true")
+    modes.add_argument("--check-product-tree", type=Path)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument("--layout", choices=("core", "player"))
+    parser.add_argument("--write-inventory", type=Path)
+    parser.add_argument("--inventory", type=Path)
+    parser.add_argument("--notice-sidecar", type=Path)
     args = parser.parse_args(argv)
+    if args.write_inventory and args.inventory:
+        parser.error("--write-inventory and --inventory are mutually exclusive")
+    if (args.self_test_packages or args.check_product_tree) and not args.layout:
+        parser.error("package checks require --layout core|player")
+    if not (args.self_test_packages or args.check_product_tree) and any(
+            (args.layout, args.write_inventory, args.inventory, args.notice_sidecar)):
+        parser.error("--layout, inventory, and sidecar options require a product-tree mode")
     try:
         root = args.repo_root.resolve(strict=True)
         policy = parse_json((root / "cmake/FixtureAdmissionPolicy.json").read_bytes(), "FixtureAdmissionPolicy.json")
@@ -833,9 +1420,20 @@ def main(argv: list[str] | None = None) -> int:
             raise Reject("policy-invalid", "baseline commit differs from the reviewed full identity")
         if args.self_test:
             self_test()
+        elif args.self_test_packages:
+            self_test_packages(args.layout)
         elif args.check_manifest:
             result = check_manifest(root, args.check_manifest)
             print(f"PASS: fixture admission fixture={result['fixture']} pinned={result['pin']} files={result['files']}")
+        elif args.check_product_tree:
+            entries = product_tree_entries(args.check_product_tree)
+            inventory = _read_inventory(args.inventory) if args.inventory else None
+            accepted = check_product_entries(entries, args.layout, root, inventory=inventory,
+                                             sidecar=_read_sidecar_argument(root, args.notice_sidecar))
+            if args.write_inventory:
+                _write_inventory(args.write_inventory, accepted, root)
+            print(f"PASS: fixture admission product layout={args.layout} files={len(accepted['files'])} "
+                  f"policy={accepted['policy_sha256']}")
         else:
             baseline = policy.get("baseline_commit")
             if not isinstance(baseline, str) or baseline != BASELINE_COMMIT:

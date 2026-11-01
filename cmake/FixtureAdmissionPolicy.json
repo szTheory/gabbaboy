@@ -1,4 +1,115 @@
 {
   "schema_version": 1,
-  "baseline_commit": "7cc6495e64f3645caa120e7458f754585b788985"
+  "baseline_commit": "7cc6495e64f3645caa120e7458f754585b788985",
+  "products": {
+    "files": {
+      "LICENSE": {
+        "sha256": "9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9",
+        "destinations": {
+          "core": ["share/gabbaboy/LICENSE.txt"],
+          "player": ["share/licenses/GabbaBoy/LICENSE.txt"]
+        }
+      },
+      "fixtures/tracer/tracer.gb": {
+        "sha256": "ded6a499118b57539710892d58b4d7ced2269f08d447eed1451201d8ad65ec8d",
+        "destinations": {"core": ["share/gabbaboy/fixtures/tracer/tracer.gb"]}
+      },
+      "fixtures/tracer/manifest.json": {
+        "sha256": "59284b6087dc6cb3bf08169b0c3e58444197494521750fac11839632c652cf5c",
+        "destinations": {"core": ["share/gabbaboy/fixtures/tracer/manifest.json"]}
+      },
+      "fixtures/tracer/LICENSE.txt": {
+        "sha256": "8eb246a5af0a83cbc4a264018ea0af31a859540fe5dcf2ec65a46c067d4d144a",
+        "destinations": {"core": ["share/gabbaboy/fixtures/tracer/LICENSE.txt"]}
+      },
+      "fixtures/visible-demo/demo.gb": {
+        "sha256": "38afb54b40f4b6612906c7a68e367199d8bff135508a39d7acdc996bf3d86530",
+        "destinations": {
+          "core": ["share/gabbaboy/fixtures/visible-demo/demo.gb"],
+          "player": ["share/gabbaboy/fixtures/visible-demo/demo.gb"]
+        }
+      },
+      "fixtures/visible-demo/manifest.json": {
+        "sha256": "8c695ef04d4f65e286aa444d0dfbbc98b354b944fef0dc6ac6dc453c264a31a3",
+        "destinations": {
+          "core": ["share/gabbaboy/fixtures/visible-demo/manifest.json"],
+          "player": ["share/gabbaboy/fixtures/visible-demo/manifest.json"]
+        }
+      },
+      "fixtures/visible-demo/LICENSE.txt": {
+        "sha256": "3ba0e4a2894cdab4de168266be80463105cde267051443fd046946e846d12e96",
+        "destinations": {
+          "core": ["share/gabbaboy/fixtures/visible-demo/LICENSE.txt"],
+          "player": ["share/licenses/GabbaBoy/visible-demo-LICENSE.txt"]
+        }
+      },
+      "fixtures/mbc1-continuation/continuation.asm": {
+        "sha256": "ad82e0cd51eeb6d536421d20c4a5b88ee0c019a4e699c2c75de077a20c82ba94",
+        "destinations": {
+          "core": ["share/gabbaboy/fixtures/mbc1-continuation/continuation.asm"],
+          "player": ["share/gabbaboy/fixtures/mbc1-continuation/continuation.asm"]
+        }
+      },
+      "fixtures/mbc1-continuation/continuation.gb": {
+        "sha256": "f89bf3884ff10a702aa117f2963e6fe9ea8aeac3a9bc003f52b6c5ca6abfbbd2",
+        "destinations": {
+          "core": ["share/gabbaboy/fixtures/mbc1-continuation/continuation.gb"],
+          "player": ["share/gabbaboy/fixtures/mbc1-continuation/continuation.gb"]
+        }
+      },
+      "fixtures/mbc1-continuation/manifest.json": {
+        "sha256": "1c25c570be98ece42ff9069635fb07cf4559b578817373ec3bd4d3552e8809d1",
+        "destinations": {
+          "core": ["share/gabbaboy/fixtures/mbc1-continuation/manifest.json"],
+          "player": ["share/gabbaboy/fixtures/mbc1-continuation/manifest.json"]
+        }
+      },
+      "fixtures/mbc1-continuation/LICENSE.txt": {
+        "sha256": "dcd87663c88f74f55d61a403e752985e8bc63cfa1341d499bb7a521e22a91b20",
+        "destinations": {
+          "core": ["share/gabbaboy/fixtures/mbc1-continuation/LICENSE.txt"],
+          "player": [
+            "share/gabbaboy/fixtures/mbc1-continuation/LICENSE.txt",
+            "share/licenses/GabbaBoy/mbc1-continuation-LICENSE.txt"
+          ]
+        }
+      }
+    },
+    "external_notices": {
+      "sdl3": {
+        "path": "share/licenses/SDL3/LICENSE.txt",
+        "size_bytes": 884,
+        "sha256": "1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd"
+      }
+    },
+    "release_notice_sidecar": {
+      "path": "gabbaboy-notices.txt",
+      "sha256": "9b8ffb09e0f0c1feea000e809bfe210f948e866d99b968bb9b7f580b1bd323f9"
+    },
+    "generated": {
+      "core": {
+        "required": [
+          "include/gabbaboy/gabbaboy.h",
+          "share/gabbaboy/host-contract.json",
+          "lib/cmake/GabbaBoy/GabbaBoyTargets.cmake",
+          "lib/cmake/GabbaBoy/GabbaBoyConfig.cmake",
+          "lib/cmake/GabbaBoy/GabbaBoyConfigVersion.cmake"
+        ],
+        "one_of": [
+          ["bin/gabbaboy-runner", "bin/gabbaboy-runner.exe"],
+          ["lib/libgabbaboy_core.a", "lib/gabbaboy_core.lib"],
+          ["lib/cmake/GabbaBoy/GabbaBoyTargets-release.cmake"]
+        ]
+      },
+      "player": {
+        "required": [
+          "bin/gabbaboy-player",
+          "lib/libSDL3.0.dylib",
+          "share/gabbaboy/preview-metadata.json",
+          "share/doc/GabbaBoy/preview.md"
+        ],
+        "one_of": []
+      }
+    }
+  }
 }

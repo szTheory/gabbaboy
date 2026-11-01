@@ -59,6 +59,8 @@ must remain byte-identical to that baseline.
 python3 -I tests/scripts/verify-fixture-admission.py --self-test
 python3 -I tests/scripts/verify-fixture-admission.py --check-manifest fixtures/<id>/manifest.json --repo-root .
 python3 -I tests/scripts/verify-fixture-admission.py --check-repository --repo-root .
+python3 -I tests/scripts/verify-fixture-admission.py --self-test-packages --layout core
+python3 -I tests/scripts/verify-fixture-admission.py --self-test-packages --layout player
 ```
 
 `--self-test` sends a complete synthetic record through the real CLI and rejects a coordinated
@@ -66,10 +68,101 @@ fixture/manifest/notice rewrite against an unchanged pin. `--check-repository` r
 `BUILD_TESTING` CMake configure before fixture-consuming targets are declared. Non-testing source
 library builds do not require Git history. The CTest controls exercise both modes.
 
+## Binary product paths and inventories
+
+`check_product_entries(entries, layout, repo_root, inventory=None, sidecar=None)` is the shared
+API for already-inspected archive entries and staged directory trees. `entries` maps each
+normalized relative path to `{"kind": "file", "size_bytes": N, "sha256": "..."}`; directory
+records may use `{"kind": "directory"}`. Links and special files are rejected. The API checks
+current source, manifest, local notice and notice-index bytes against the fixed legacy Git
+baseline before accepting a product. Fixture and notice digests identify bytes only.
+
+The core layout contains the installed public header and runner, the static core library, the
+host contract, the CMake package exports, the root MIT license, and the tracer, visible-demo and
+MBC1 continuation fixture members. Its protected and generated paths are:
+
+```text
+include/gabbaboy/gabbaboy.h
+bin/gabbaboy-runner
+bin/gabbaboy-runner.exe
+lib/libgabbaboy_core.a
+lib/gabbaboy_core.lib
+lib/cmake/GabbaBoy/GabbaBoyTargets.cmake
+lib/cmake/GabbaBoy/GabbaBoyTargets-release.cmake
+lib/cmake/GabbaBoy/GabbaBoyConfig.cmake
+lib/cmake/GabbaBoy/GabbaBoyConfigVersion.cmake
+share/gabbaboy/host-contract.json
+share/gabbaboy/LICENSE.txt
+share/gabbaboy/fixtures/tracer/tracer.gb
+share/gabbaboy/fixtures/tracer/manifest.json
+share/gabbaboy/fixtures/tracer/LICENSE.txt
+share/gabbaboy/fixtures/visible-demo/demo.gb
+share/gabbaboy/fixtures/visible-demo/manifest.json
+share/gabbaboy/fixtures/visible-demo/LICENSE.txt
+share/gabbaboy/fixtures/mbc1-continuation/continuation.asm
+share/gabbaboy/fixtures/mbc1-continuation/continuation.gb
+share/gabbaboy/fixtures/mbc1-continuation/manifest.json
+share/gabbaboy/fixtures/mbc1-continuation/LICENSE.txt
+```
+
+The player layout is a separate producer contract. It omits tracer and keeps the current
+visible-demo and MBC1 continuation subset, the SDL runtime, notices and preview metadata:
+
+```text
+bin/gabbaboy-player
+lib/libSDL3.0.dylib
+share/gabbaboy/fixtures/visible-demo/demo.gb
+share/gabbaboy/fixtures/visible-demo/manifest.json
+share/licenses/GabbaBoy/visible-demo-LICENSE.txt
+share/gabbaboy/fixtures/mbc1-continuation/continuation.asm
+share/gabbaboy/fixtures/mbc1-continuation/continuation.gb
+share/gabbaboy/fixtures/mbc1-continuation/manifest.json
+share/gabbaboy/fixtures/mbc1-continuation/LICENSE.txt
+share/licenses/GabbaBoy/mbc1-continuation-LICENSE.txt
+share/licenses/GabbaBoy/LICENSE.txt
+share/licenses/SDL3/LICENSE.txt
+share/gabbaboy/preview-metadata.json
+share/doc/GabbaBoy/preview.md
+```
+
+The SDL3 notice is pinned to SHA-256
+`1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd`. The separate release
+notice is `gabbaboy-notices.txt`; its bytes must equal the pinned root `LICENSE`. It is not a
+binary-product tree member. `THIRD_PARTY_NOTICES.md` belongs to source archives and is not
+required in either binary product. A source archive is not a core or player product and keeps
+its existing independent source-archive policy.
+
+The core producer permits exactly one runner name (`bin/gabbaboy-runner` or
+`bin/gabbaboy-runner.exe`) and exactly one core library name (`lib/libgabbaboy_core.a` or
+`lib/gabbaboy_core.lib`). Release builds include the single
+`lib/cmake/GabbaBoy/GabbaBoyTargets-release.cmake` export. These are the producer's explicit
+platform/configuration variants; the checker does not learn additional paths from an observed
+package. All other listed regular-file paths are required, and unknown or missing files fail.
+
+Use the same checker on the producer stage and on safely extracted archive bytes. Writing an
+inventory is allowed only after the tree passes policy; an extracted tree must match every path,
+size and SHA-256 in that inventory:
+
+```sh
+python3 -I tests/scripts/verify-fixture-admission.py --check-product-tree build/release-stage \
+  --layout core --repo-root . --write-inventory build/core-product-inventory.json
+python3 -I tests/scripts/verify-fixture-admission.py --check-product-tree build/extracted \
+  --layout core --repo-root . --inventory build/core-product-inventory.json
+python3 -I tests/scripts/verify-fixture-admission.py --check-product-tree build/player-prefix \
+  --layout player --repo-root . --notice-sidecar build/gabbaboy-notices.txt
+```
+
+`--notice-sidecar` checks a separate root MIT notice against the same pinned bytes. The checker
+scans every product member for known repository-only fixture digests without relying on file
+suffixes, rejects extra members inside approved fixture directories, and does not expand its
+path set from an inventory. Inventory files bind the exact accepted file map, layout and policy
+digest. The package self-tests cover clean layouts, notice and fixture changes, extra and renamed
+payloads, inventory mismatch, links, duplicate entries, and the documentation-to-policy contract.
+
 ## Rights decision boundary
 
 The checker verifies required fields, full identities, local snapshots, notice bindings, and
-actual bytes. It cannot decide whether a grant's author had authority, whether a quoted grant's
+actual bytes. It does not decide whether a grant's author had authority, whether a quoted grant's
 scope covers a component, or whether repository/public-CI use is legally permitted. A maintainer
 must make that decision from source evidence. Public availability, repository visibility, populated
 fields, commit history, and matching hashes do not provide that permission. Phase 20 creates this

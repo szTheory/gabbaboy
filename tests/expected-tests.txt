@@ -239,6 +239,8 @@ tracer_smoke
 fixture_digest
 fixture_admission_controls
 fixture_admission_repository
+fixture_product_core_controls
+fixture_product_player_controls
 visible_fixture_digest
 mbc1_continuation_fixture_digest
 installed_runner_smoke

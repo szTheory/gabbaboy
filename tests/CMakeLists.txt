@@ -1438,12 +1438,18 @@ endfunction()
 # Phase 20 D-01/D-02: the real admission CLI checks one synthetic candidate plus a coherent rewrite
 # negative, while the repository gate preserves legacy fixture identities and rejects new evidence
 # before any fixture-consuming target is configured.
-gbb_add_v02_contract(fixture_admission_controls 30
+gbb_add_v02_contract(fixture_admission_controls 90
   [=[PASS: fixture admission self-test positives=[1-9][0-9]* negative_controls=[1-9][0-9]*]=]
   verify-fixture-admission.py --self-test)
 gbb_add_v02_contract(fixture_admission_repository 30
   [=[PASS: fixture admission repository legacy_files=[1-9][0-9]* admitted_changes=0 baseline=[0-9a-f]+]=]
   verify-fixture-admission.py --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
+gbb_add_v02_contract(fixture_product_core_controls 120
+  [=[PASS: fixture admission product layout=core positive=1 negative_controls=[1-9][0-9]*]=]
+  verify-fixture-admission.py --self-test-packages --layout core)
+gbb_add_v02_contract(fixture_product_player_controls 120
+  [=[PASS: fixture admission product layout=player positive=1 negative_controls=[1-9][0-9]*]=]
+  verify-fixture-admission.py --self-test-packages --layout player)
 
 gbb_add_v02_contract(v02_game_claims 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "game"]=]
