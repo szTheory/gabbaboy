@@ -764,9 +764,9 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
         pin_text = pin_raw.decode("ascii")
     except UnicodeDecodeError:
         raise Reject("admission-pin-invalid", pin_path) from None
-    if not re.fullmatch(r"[0-9a-f]{40}\n?", pin_text):
+    if not re.fullmatch(r"[0-9a-f]{40}\r?\n?", pin_text):
         raise Reject("admission-pin-invalid", "must contain exactly one full commit id")
-    pin_text = pin_text.rstrip("\n")
+    pin_text = pin_text.rstrip("\r\n")
     pin = check_commit(root, pin_text, "admission-pin-invalid")
     current_head = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
     ancestry = subprocess.run(["git", "merge-base", "--is-ancestor", pin, current_head], cwd=root,
@@ -1789,7 +1789,17 @@ def _run_manifest_mutations(root: Path) -> int:
     if result.returncode == 0 or "REJECT git-blob-missing:" not in result.stderr:
         raise Reject("self-test-missing-blob", result.stderr.strip() or "missing pinned blob was accepted")
     cases.append("missing-pinned-blob")
-    pin_path.write_bytes((git(root, "rev-parse", "HEAD").decode("ascii").strip() + "\n").encode("ascii"))
+    valid_pin = git(root, "rev-parse", "HEAD").decode("ascii").strip()
+    pin_path.write_bytes((valid_pin + "\n").encode("ascii"))
+    result = _run_manifest_cli(root)
+    if result.returncode != 0 or "PASS: fixture admission" not in result.stdout:
+        raise Reject("self-test-valid-pin", result.stderr.strip() or result.stdout.strip())
+    cases.append("valid-pin")
+    pin_path.write_bytes((valid_pin + "\r\n").encode("ascii"))
+    result = _run_manifest_cli(root)
+    if result.returncode != 0 or "PASS: fixture admission" not in result.stdout:
+        raise Reject("self-test-crlf-pin", result.stderr.strip() or result.stdout.strip())
+    cases.append("crlf-pin")
     return len(cases)
 
 
