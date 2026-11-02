@@ -325,9 +325,15 @@ def _has_unqualified_license_prohibition(text: str) -> bool:
                 text.rfind("\n", 0, match.start()),
             ) + 1
             prefix = text[sentence_start:match.start()]
-            explicit_negation = re.search(
-                r"\b(?:not\s+(?:a\s+)?conclusion\s+that|(?:does|do|did|is|are|was|were)\s+not|never)\b",
-                prefix + matched_text, re.I)
+            clause_prefix = re.split(r"[;:]", prefix)[-1]
+            explicit_negation = (
+                re.search(r"\bnot\s+(?:a\s+)?conclusion\s+that\b",
+                          clause_prefix + matched_text, re.I)
+                or re.search(r"\b(?:does|do|did|is|are|was|were)\s+not\b|\bnever\b",
+                             matched_text, re.I)
+                or re.search(r"\b(?:does|do|did|is|are|was|were)\s+not\s*$|\bnever\s*$",
+                             clause_prefix, re.I)
+            )
             if explicit_negation is not None:
                 continue
             return True
@@ -565,6 +571,15 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
                        "documentation-rights-conclusion-overstated",
                        f"unrelated-negation-{label}-license-prohibition-claim")
 
+    for explicit_negation in (
+        "GPL-3.0 does not prohibit this use.",
+        "This use is not prohibited by BSD-2-Clause.",
+        "This is not a conclusion that CC BY-NC-SA prohibits this use.",
+        "MIT never prohibits this use.",
+    ):
+        if _has_unqualified_license_prohibition(explicit_negation):
+            raise Reject("self-test-explicit-negation-failed", explicit_negation)
+
     admitted_but_no_game = dict(snapshot)
     admitted_but_no_game["docs/game-acceptance.md"] += b"\nAdmitted game: Potion Panic\n"
     _expect_reject(lambda: validate_documentation(admitted_but_no_game,
@@ -589,7 +604,7 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: safe_evidence_path(Path("/repo"),
                                               "build/phase21-evidence/../../escape.json"),
                     "evidence-path-traversal", "evidence-path-traversal")
-    print("game-evidence controls pass positives=3 rejected_controls=24 subjects=synthetic-only")
+    print("game-evidence controls pass outcomes=3 accepted_negations=4 rejected_controls=26 subjects=synthetic-only")
 
 
 def _import_progress_checker(root: Path):
