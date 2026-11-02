@@ -180,12 +180,23 @@ def validate_native_receipt(receipt: str) -> None:
             raise CheckError(f"native-mode-receipt-missing:checkpoint_{label}_completion_half_dots")
         if not re.fullmatch(r"[0-9a-f]{64}", fields.get(f"checkpoint_{label}_frame", "")):
             raise CheckError(f"native-mode-receipt-missing:checkpoint_{label}_frame")
+    blue = expected_solid_rgb555_digest(0x001F)
+    green = expected_solid_rgb555_digest(0x03E0)
+    if any(fields.get(f"checkpoint_{label}_frame") != blue for label in ("title", "play_start", "mid")):
+        raise CheckError("native-mode-receipt-unexpected-pre-input-frame")
+    if fields.get("checkpoint_hit_frame") != green:
+        raise CheckError("native-mode-receipt-unexpected-post-input-frame")
     try:
         pcm_samples = int(fields.get("pcm_samples", ""))
     except ValueError as error:
         raise CheckError("native-mode-receipt-missing:pcm_samples") from error
     if pcm_samples <= 0:
         raise CheckError("native-mode-receipt-missing:pcm_samples")
+
+
+def expected_solid_rgb555_digest(color: int) -> str:
+    pixels = color.to_bytes(2, "little") * (160 * 144)
+    return hashlib.sha256(b"GBB-RGB555LE-v1 160x144\n" + pixels).hexdigest()
 
 
 def git_text(repo_root: Path, args: list[str]) -> str:
@@ -208,6 +219,9 @@ SOURCE_FACTS = {
     "src/accept/predicate.c": (
         CONTROL_SHA256, '"cgb-control-progress"', '"cgb-control-impossible"',
         "0x15Fu", "0x16Cu", "0x17Cu",
+        "0x3E, 0xA5, 0xEA, 0x00, 0xC0, 0xAF, 0xEA, 0x01",
+        "0x3E, 0x01, 0xEA, 0x01, 0xC0",
+        "0x3E, 0x20, 0xE0, 0x00, 0xF0, 0x00, 0xCB, 0x47",
     ),
     "src/accept/gbb_accept.h": (
         "GBB_ACCEPT_OBSERVE_PROGRESS_ONLY", "source_rows", "gbb_accept_predicate_eval_fn",
@@ -287,12 +301,14 @@ def self_test(repo_root: Path) -> None:
             raise
     else:
         raise CheckError("self-test-predicate-anchor-control-failed")
+    blue = expected_solid_rgb555_digest(0x001F)
+    green = expected_solid_rgb555_digest(0x03E0)
     complete = ("profile=CGB-CPU-E execution_mode=cgb frame_format=GBB-RGB555LE-v1 "
                 "evidence_class=original-harness-only rom_sha256=" + "a" * 64 + " input_sha256=" + "b" * 64 +
-                " checkpoint_title_completion_half_dots=1 checkpoint_title_frame=" + "c" * 64 +
-                " checkpoint_play_start_completion_half_dots=2 checkpoint_play_start_frame=" + "d" * 64 +
-                " checkpoint_mid_completion_half_dots=3 checkpoint_mid_frame=" + "e" * 64 +
-                " checkpoint_hit_completion_half_dots=4 checkpoint_hit_frame=" + "f" * 64 + " pcm_samples=1")
+                " checkpoint_title_completion_half_dots=1 checkpoint_title_frame=" + blue +
+                " checkpoint_play_start_completion_half_dots=2 checkpoint_play_start_frame=" + blue +
+                " checkpoint_mid_completion_half_dots=3 checkpoint_mid_frame=" + blue +
+                " checkpoint_hit_completion_half_dots=4 checkpoint_hit_frame=" + green + " pcm_samples=1")
     validate_native_receipt(complete)
     try:
         validate_native_receipt(complete.replace("execution_mode=cgb ", ""))
