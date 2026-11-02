@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 21",
-    "label": "Discuss Phase 21",
-    "reason": "Phase 20 verification passed; Phase 21 remains unstarted until the owner chooses to continue"
+    "command": "/gsd-execute-phase 21",
+    "label": "Execute Phase 21",
+    "reason": "Phase 21 planning is complete; seven reviewed plans are ready for owner-selected execution"
   },
-  "updated_at": "2026-11-01T23:18:57.555Z"
+  "updated_at": "2026-11-02T01:45:40.734Z"
 }
