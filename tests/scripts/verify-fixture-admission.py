@@ -764,7 +764,7 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
         pin_text = pin_raw.decode("ascii")
     except UnicodeDecodeError:
         raise Reject("admission-pin-invalid", pin_path) from None
-    if not re.fullmatch(r"[0-9a-f]{40}\r?\n?", pin_text):
+    if not re.fullmatch(r"[0-9a-f]{40}(?:\n|\r\n)?", pin_text):
         raise Reject("admission-pin-invalid", "must contain exactly one full commit id")
     pin_text = pin_text.rstrip("\r\n")
     pin = check_commit(root, pin_text, "admission-pin-invalid")
@@ -1784,12 +1784,17 @@ def _run_manifest_mutations(root: Path) -> int:
     if result.returncode == 0 or "REJECT admission-pin-invalid:" not in result.stderr:
         raise Reject("self-test-symbolic-pin", result.stderr.strip() or "symbolic pin was accepted")
     cases.append("symbolic-pin")
+    valid_pin = git(root, "rev-parse", "HEAD").decode("ascii").strip()
+    pin_path.write_bytes((valid_pin + "\r").encode("ascii"))
+    result = _run_manifest_cli(root)
+    if result.returncode == 0 or "REJECT admission-pin-invalid:" not in result.stderr:
+        raise Reject("self-test-bare-cr-pin", result.stderr.strip() or "bare-CR pin was accepted")
+    cases.append("bare-cr-pin")
     pin_path.write_bytes((BASELINE_COMMIT + "\n").encode("ascii"))
     result = _run_manifest_cli(root)
     if result.returncode == 0 or "REJECT git-blob-missing:" not in result.stderr:
         raise Reject("self-test-missing-blob", result.stderr.strip() or "missing pinned blob was accepted")
     cases.append("missing-pinned-blob")
-    valid_pin = git(root, "rev-parse", "HEAD").decode("ascii").strip()
     pin_path.write_bytes((valid_pin + "\n").encode("ascii"))
     result = _run_manifest_cli(root)
     if result.returncode != 0 or "PASS: fixture admission" not in result.stdout:
