@@ -28,7 +28,7 @@ add_test(NAME phase21_game_evidence
           --check --runner "$<TARGET_FILE:gabbaboy-runner>"
           --repo-root "${PROJECT_SOURCE_DIR}"
           --source-revision "${GBB_CANDIDATE_SOURCE_REV}"
-          --write-evidence "${PROJECT_BINARY_DIR}/phase21-evidence/result.json")
+          --write-evidence "${PROJECT_SOURCE_DIR}/build/phase21-evidence/result.json")
 set_tests_properties(phase21_game_evidence PROPERTIES
   TIMEOUT 60 LABELS integration WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 
