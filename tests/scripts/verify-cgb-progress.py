@@ -426,7 +426,7 @@ def run_compatibility(runner: Path, repo_root: Path, source_revision: str,
     with tempfile.TemporaryDirectory(prefix="gbb-cgb-mode-control-") as temp:
         work = Path(temp)
         work.chmod(0o700)
-        (work / "compat.gb").write_bytes(rom)
+        (work / "control.gb").write_bytes(rom)
         (work / "positive.input").write_bytes(script)
         case = case_line("cgb-control-compatibility", "cgb-control-compatibility",
                          "positive.input", rom, script)
