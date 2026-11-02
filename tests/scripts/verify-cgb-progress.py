@@ -31,6 +31,8 @@ RGB555_HEADER = b"GBB-RGB555LE-v1 160x144\n"
 PPM_HEADER = b"P6\n160 144\n255\n"
 FRAME_PIXELS = 160 * 144
 MAX_OBSERVATIONS = 64
+DEFAULT_RUNNER_TIMEOUT_SECONDS = 30
+MAX_RUNNER_TIMEOUT_SECONDS = 120
 CHECKPOINT_COLORS = {"title": 0x001F, "play_start": 0x001F, "mid": 0x001F, "hit": 0x03E0}
 CONTROL_SHA256 = "17822873ec8641280d9504229d96850414e872bc90de5431469a498e5271db7e"
 CONTROL_COMPAT_SHA256 = "6a1d4a1ed58e8a51f3a5be1283a2226775867fc1373b628ecbc798d12d3ca5fc"
@@ -45,6 +47,17 @@ class CheckError(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
+
+
+def parse_runner_timeout(raw: str) -> int:
+    try:
+        timeout = int(raw)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("runner timeout must be an integer") from error
+    if not 1 <= timeout <= MAX_RUNNER_TIMEOUT_SECONDS:
+        raise argparse.ArgumentTypeError(
+            f"runner timeout must be between 1 and {MAX_RUNNER_TIMEOUT_SECONDS} seconds")
+    return timeout
 
 
 class Program:
@@ -537,6 +550,15 @@ def synthetic_receipt(fields: dict[str, str]) -> str:
 
 
 def self_test(repo_root: Path) -> None:
+    if parse_runner_timeout(str(DEFAULT_RUNNER_TIMEOUT_SECONDS)) != DEFAULT_RUNNER_TIMEOUT_SECONDS or \
+            parse_runner_timeout("90") != 90:
+        raise CheckError("self-test-runner-timeout-policy-failed")
+    for invalid_timeout in ("0", "-1", "121", "30.5", "invalid"):
+        try:
+            parse_runner_timeout(invalid_timeout)
+        except argparse.ArgumentTypeError:
+            continue
+        raise CheckError("self-test-runner-timeout-control-failed")
     if normalized_host_path(r"C:\Runner\Temp\failure-dumps\control.ppm") != \
             normalized_host_path(r"C:\Runner\Temp\failure-dumps/control.ppm"):
         raise CheckError("self-test-host-path-normalization-failed")
@@ -708,7 +730,8 @@ def status_reason(stdout: str) -> str | None:
     return match.group(1) if match else None
 
 
-def run_tracer(runner: Path, repo_root: Path, source_revision: str, checker_path: Path) -> int:
+def run_tracer(runner: Path, repo_root: Path, source_revision: str, checker_path: Path,
+               runner_timeout: int) -> int:
     self_test(repo_root)
     source_commit, checker_sha = verify_source_identity(repo_root, source_revision, checker_path)
     if not runner.is_file():
@@ -735,11 +758,11 @@ def run_tracer(runner: Path, repo_root: Path, source_revision: str, checker_path
         helper = load_host_fixture(repo_root)
         args = ["--acceptance", "cases.txt", "--model", "cgb-cpu-e", "--receipt"]
         positive_code, positive_out, positive_err = helper.run_runner(
-            str(runner), [*args, "--case", "cgb-control-progress"], str(work), 30)
+            str(runner), [*args, "--case", "cgb-control-progress"], str(work), runner_timeout)
         no_input_code, no_input_out, no_input_err = helper.run_runner(
-            str(runner), [*args, "--case", "cgb-control-no-input"], str(work), 30)
+            str(runner), [*args, "--case", "cgb-control-no-input"], str(work), runner_timeout)
         impossible_code, impossible_out, impossible_err = helper.run_runner(
-            str(runner), [*args, "--case", "cgb-control-impossible"], str(work), 30)
+            str(runner), [*args, "--case", "cgb-control-impossible"], str(work), runner_timeout)
         receipt_lines = [line for line in positive_out.splitlines() if line.startswith("receipt id=")]
         if positive_code != 0 or "status=pass" not in positive_out or positive_err or len(receipt_lines) != 1:
             raise CheckError("positive-native-cgb-route-failed:" +
@@ -772,7 +795,7 @@ def validate_progress_negative(name: str, code: int, stdout: str, stderr: str,
 
 
 def run_discrimination(runner: Path, repo_root: Path, source_revision: str,
-                       checker_path: Path) -> int:
+                       checker_path: Path, runner_timeout: int) -> int:
     self_test(repo_root)
     source_commit, checker_sha = verify_source_identity(repo_root, source_revision, checker_path)
     if not runner.is_file():
@@ -816,7 +839,7 @@ def run_discrimination(runner: Path, repo_root: Path, source_revision: str,
             validate_case_identity(line, rom, script)
 
         positive_code, positive_out, positive_err = helper.run_runner(
-            str(runner), [*base, "--case", "cgb-discrimination-positive"], str(work), 30)
+            str(runner), [*base, "--case", "cgb-discrimination-positive"], str(work), runner_timeout)
         positive_receipts = [line for line in positive_out.splitlines() if line.startswith("receipt id=")]
         if (positive_code != 0 or "status=pass" not in positive_out or positive_err or
                 len(positive_receipts) != 1):
@@ -831,20 +854,20 @@ def run_discrimination(runner: Path, repo_root: Path, source_revision: str,
         )
         for name, identifier, final_state in negative_specs:
             code, stdout, stderr = helper.run_runner(
-                str(runner), [*base, "--case", identifier, "--raw-verdict"], str(work), 30)
+                str(runner), [*base, "--case", identifier, "--raw-verdict"], str(work), runner_timeout)
             validate_progress_negative(name, code, stdout, stderr, final_state)
 
         (work / "cases.txt").write_text(raw_lines + strict_lines, encoding="ascii")
         for index, script in enumerate((no_input, positive)):
             validate_case_identity(strict_lines.splitlines()[index], rom, script)
         strict_code, strict_out, strict_err = helper.run_runner(
-            str(runner), [*base, "--case", "cgb-discrimination-strict-fail"], str(work), 30)
+            str(runner), [*base, "--case", "cgb-discrimination-strict-fail"], str(work), runner_timeout)
         if (strict_code != 0 or "status=xfail" not in strict_out or
                 "reason=predicate-not-reached" not in strict_out or
                 "final_ready=a5 final_progress=00" not in strict_out or strict_err):
             raise CheckError(f"strict-xfail-control-failed:exit={strict_code}:{strict_out.strip()}:{strict_err.strip()}")
         unexpected_code, unexpected_out, unexpected_err = helper.run_runner(
-            str(runner), [*base, "--case", "cgb-discrimination-strict-pass"], str(work), 30)
+            str(runner), [*base, "--case", "cgb-discrimination-strict-pass"], str(work), runner_timeout)
         if (unexpected_code != 1 or "status=unexpected-pass" not in unexpected_out or
                 "status=pass" in unexpected_out or unexpected_err):
             raise CheckError(f"unexpected-pass-control-failed:exit={unexpected_code}:"+
@@ -858,7 +881,7 @@ def run_discrimination(runner: Path, repo_root: Path, source_revision: str,
 
 
 def run_observations(runner: Path, repo_root: Path, source_revision: str,
-                     checker_path: Path) -> int:
+                     checker_path: Path, runner_timeout: int) -> int:
     self_test(repo_root)
     source_commit, checker_sha = verify_source_identity(repo_root, source_revision, checker_path)
     if not runner.is_file():
@@ -890,7 +913,7 @@ def run_observations(runner: Path, repo_root: Path, source_revision: str,
             dump_dir.mkdir(mode=0o700)
             code, stdout, stderr = helper.run_runner(
                 str(runner), [*base, "--observe", "--receipt", "--dump-checkpoints", str(dump_dir)],
-                str(work), 30)
+                str(work), runner_timeout)
             if code != 0 or stderr:
                 raise CheckError(f"observation-run-failed:{run_name}:{code}:{stdout.strip()}:{stderr.strip()}")
             observed_runs.append(validate_observation(stdout, rom, script, source_commit))
@@ -922,7 +945,7 @@ def run_observations(runner: Path, repo_root: Path, source_revision: str,
         failure_ppm.write_bytes(stale_failure)
         failure_code, failure_out, failure_err = helper.run_runner(
             str(runner), ["--acceptance", "cases.txt", "--case", "cgb-control-no-input",
-                          "--model", "cgb-cpu-e", "--failure-dir", str(failure_dir)], str(work), 30)
+                          "--model", "cgb-cpu-e", "--failure-dir", str(failure_dir)], str(work), runner_timeout)
         reported_ppm = re.search(r"(?:^|\s)ppm=([^\r\n]+)", failure_out)
         if (failure_code != 1 or status_reason(failure_out) != "predicate-not-reached" or failure_err or
                 "final_ready=a5 final_progress=00" not in failure_out or
@@ -940,7 +963,7 @@ def run_observations(runner: Path, repo_root: Path, source_revision: str,
 
 
 def run_compatibility(runner: Path, repo_root: Path, source_revision: str,
-                      checker_path: Path) -> int:
+                      checker_path: Path, runner_timeout: int) -> int:
     self_test(repo_root)
     source_commit, checker_sha = verify_source_identity(repo_root, source_revision, checker_path)
     if not runner.is_file():
@@ -961,7 +984,7 @@ def run_compatibility(runner: Path, repo_root: Path, source_revision: str,
         helper = load_host_fixture(repo_root)
         code, stdout, stderr = helper.run_runner(
             str(runner), ["--acceptance", "cases.txt", "--case", "cgb-control-compatibility",
-                          "--model", "cgb-cpu-e", "--receipt"], str(work), 30)
+                          "--model", "cgb-cpu-e", "--receipt"], str(work), runner_timeout)
     expected = "reason=execution-mode-mismatch expected=cgb actual=cgb-dmg-compat"
     if code != 3 or expected not in stdout or "status=pass" in stdout or "receipt id=" in stdout or stderr:
         safe_out = stdout.replace(str(work), "<temp>").strip()
@@ -978,6 +1001,8 @@ def main() -> int:
     parser.add_argument("--runner", type=Path)
     parser.add_argument("--repo-root", type=Path)
     parser.add_argument("--source-revision")
+    parser.add_argument("--runner-timeout", type=parse_runner_timeout,
+                        default=DEFAULT_RUNNER_TIMEOUT_SECONDS)
     parser.add_argument("--tracer", action="store_true")
     parser.add_argument("--discrimination", action="store_true")
     parser.add_argument("--compatibility", action="store_true")
@@ -996,22 +1021,22 @@ def main() -> int:
             if args.runner is None or args.source_revision is None:
                 raise CheckError("runner-and-source-revision-required")
             return run_tracer(args.runner.resolve(), repo_root, args.source_revision,
-                              Path(__file__).resolve())
+                              Path(__file__).resolve(), args.runner_timeout)
         if args.discrimination:
             if args.runner is None or args.source_revision is None:
                 raise CheckError("runner-and-source-revision-required")
             return run_discrimination(args.runner.resolve(), repo_root, args.source_revision,
-                                      Path(__file__).resolve())
+                                      Path(__file__).resolve(), args.runner_timeout)
         if args.compatibility:
             if args.runner is None or args.source_revision is None:
                 raise CheckError("runner-and-source-revision-required")
             return run_compatibility(args.runner.resolve(), repo_root, args.source_revision,
-                                     Path(__file__).resolve())
+                                     Path(__file__).resolve(), args.runner_timeout)
         if args.observations:
             if args.runner is None or args.source_revision is None:
                 raise CheckError("runner-and-source-revision-required")
             return run_observations(args.runner.resolve(), repo_root, args.source_revision,
-                                    Path(__file__).resolve())
+                                    Path(__file__).resolve(), args.runner_timeout)
         raise CheckError("select-self-test-or-tracer")
     except (CheckError, OSError, TimeoutError, ValueError) as error:
         reason = error.reason if isinstance(error, CheckError) else str(error)

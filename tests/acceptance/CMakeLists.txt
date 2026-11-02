@@ -695,36 +695,43 @@ set_tests_properties(cgb_runner_profile_dmg_identity_negative PROPERTIES TIMEOUT
 # GBB-RGB555LE-v1 digest under frame555/observed555, never the DMG RGB888 keys. --model cgb-cpu-e and
 # --profile cgb select the same run (main.c maps the profile to the model token).
 set(GBB_CGB_COLOUR_CASES tests/acceptance/cases-cgb-colour.txt)
+# Keep the child-process deadline aligned with the sanitizer test-timeout multiplier. The CTest
+# TIMEOUT is scaled independently by ScaleSanitizerTimeouts.cmake; this bounds only the runner.
+set(GBB_CGB_PROGRESS_RUNNER_TIMEOUT 30)
+if(GABBABOY_ENABLE_SANITIZERS)
+  math(EXPR GBB_CGB_PROGRESS_RUNNER_TIMEOUT "${GBB_CGB_PROGRESS_RUNNER_TIMEOUT} * 3")
+endif()
 add_test(NAME acceptance_cgb_progress_discrimination
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
           --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
-          --source-revision HEAD --discrimination)
+          --source-revision HEAD --discrimination --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
 set_tests_properties(acceptance_cgb_progress_discrimination PROPERTIES
   TIMEOUT 60 LABELS acceptance_cgb_progress WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 add_test(NAME acceptance_cgb_progress_observations
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
           --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
-          --source-revision HEAD --observations)
+          --source-revision HEAD --observations --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
 set_tests_properties(acceptance_cgb_progress_observations PROPERTIES
   TIMEOUT 60 LABELS acceptance_cgb_progress
   PASS_REGULAR_EXPRESSION "cgb-observations status=pass"
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 add_test(NAME acceptance_cgb_progress_controls
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
-          --self-test --repo-root ${PROJECT_SOURCE_DIR})
+          --self-test --repo-root ${PROJECT_SOURCE_DIR}
+          --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
 set_tests_properties(acceptance_cgb_progress_controls PROPERTIES
   TIMEOUT 60 LABELS acceptance_cgb_progress WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   PASS_REGULAR_EXPRESSION "verify-cgb-progress self-test pass")
 add_test(NAME acceptance_cgb_progress_tracer
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
           --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
-          --source-revision HEAD --tracer)
+          --source-revision HEAD --tracer --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
 set_tests_properties(acceptance_cgb_progress_tracer PROPERTIES
   TIMEOUT 60 LABELS acceptance_cgb_progress WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 add_test(NAME acceptance_cgb_progress_compat_rejected
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
           --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
-          --source-revision HEAD --compatibility)
+          --source-revision HEAD --compatibility --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
 set_tests_properties(acceptance_cgb_progress_compat_rejected PROPERTIES
   TIMEOUT 60 PASS_REGULAR_EXPRESSION "compatibility-control pass actual=cgb-dmg-compat"
   FAIL_REGULAR_EXPRESSION "status=pass|receipt id=" LABELS acceptance_cgb_progress

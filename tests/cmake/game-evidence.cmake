@@ -21,9 +21,10 @@ add_test(NAME phase21_fixture_admission_controls
           --source-revision "${GBB_CANDIDATE_SOURCE_REV}"
           --runner "$<TARGET_FILE:gabbaboy-runner>"
           --current-build-qualification "${GBB_RUNNER_QUALIFICATION_PATH}")
-# Keep the 69-control check first among timeout-sensitive suites in the serial CTest order.
+# Keep the 69-control check isolated from parallel CTest workers; it performs repeated temporary Git
+# commits and otherwise exceeded its unchanged 60-second limit under native macOS load.
 set_tests_properties(phase21_fixture_admission_controls PROPERTIES
-  TIMEOUT 60 COST 60 LABELS integration WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  TIMEOUT 60 COST 60 RUN_SERIAL TRUE LABELS integration WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 
 set(GBB_GAME_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-game-evidence.py")
 add_test(NAME phase21_game_evidence

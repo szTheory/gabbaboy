@@ -1797,7 +1797,9 @@ def validate_one(root: Path, revision: str, relative: str, stage: str | None,
 
 def write_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+    # These synthetic records are committed in the disposable test repository. Keep their bytes
+    # independent of the host's text-mode newline conversion so the worktree matches Git blobs.
+    path.write_bytes((json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
 
 
 def run_checker(root: Path, *args: str, expect_code: int = 0,
@@ -1909,19 +1911,19 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
     )
     input_script.write_bytes(input_bytes)
     synthetic_rom = _synthetic_candidate_rom()
-    case_file.write_text(
+    case_text = (
         "id=synthetic-cgb-progress rom=fixtures/synthetic-cgb/candidate.gbc "
         f"rom_sha256={sha256(synthetic_rom)} rom_size={len(synthetic_rom)} "
         "oracle=progress-predicate predicate=synthetic-progress "
         "input_script=tests/acceptance/inputs/synthetic-cgb-candidate.input "
-        f"input_sha256={sha256(input_bytes)} budget_half_dots=2000000 model_pass=cgb-cpu-e\n",
-        encoding="ascii",
+        f"input_sha256={sha256(input_bytes)} budget_half_dots=2000000 model_pass=cgb-cpu-e\n"
     )
+    case_file.write_bytes(case_text.encode("ascii"))
     synthetic_observations = _synthetic_replay_observations()
     checkpoint_frames = {item["name"]: item["rgb555_sha256"] for item in synthetic_observations}
     aggregate = SYNTHETIC_REPLAY_AGGREGATE
     runner = root / "tests/scripts/synthetic-runner.py"
-    runner.write_text(
+    runner.write_bytes((
         "#!/usr/bin/env python3\n"
         "import os\n"
         "import sys\n"
@@ -1975,8 +1977,7 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
         "        f'checkpoint_{label}_frame={checkpoint_frames[label]}',\n"
         "    ))\n"
         "print('receipt ' + ' '.join(receipt_fields))\n",
-        encoding="utf-8",
-    )
+    ).encode("utf-8"))
     runner.chmod(0o755)
     paths = [*CONTRACT_PATHS, "tests/scripts/test_cgb_candidate_order.py",
              "tests/scripts/synthetic-runner.py", "tests/acceptance/synthetic-cgb-candidate.case",
@@ -2067,7 +2068,7 @@ def _write_synthetic_admission_fixture(root: Path) -> dict[str, Any]:
     git(root, "add", "-f", f"{fixture}/candidate.gbc")
     git(root, "commit", "--quiet", "-m", "synthetic admitted CGB fixture")
     pin = git(root, "rev-parse", "HEAD").decode("ascii").strip()
-    (root / f"{fixture}/admission.commit").write_text(pin + "\n", encoding="ascii")
+    (root / f"{fixture}/admission.commit").write_bytes((pin + "\n").encode("ascii"))
     return {
         "fixture": fixture, "rom_path": f"{fixture}/candidate.gbc", "rom": rom,
         "rom_sha256": sha256(rom), "manifest_path": manifest_path,
@@ -2337,7 +2338,7 @@ def _no_go_order_controls(root: Path) -> tuple[dict[str, str], str]:
                 expect_text="candidate-partial-not-final")
 
     write_json(primary_file, valid_primary)
-    (root / "tests/data/cgb-candidates/third.json").write_text("{}\n", encoding="utf-8")
+    (root / "tests/data/cgb-candidates/third.json").write_bytes(b"{}\n")
     _run_all(root, expected_code=1, expected_text="candidate-attempt-set")
     (root / "tests/data/cgb-candidates/third.json").unlink()
 
