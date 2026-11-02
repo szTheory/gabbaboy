@@ -659,7 +659,13 @@ def self_test(repo_root: Path) -> None:
     current_commit_checker = git_text_bytes(
         repo_root, ["show", f"HEAD:{checker_path.relative_to(repo_root).as_posix()}"])
     if current_commit_checker == checker_path.read_bytes():
-        expect_rejected(lambda: verify_source_identity(repo_root, "HEAD^", checker_path),
+        stale_revision = next((revision for revision in git_text(
+            repo_root, ["rev-list", "--max-count=64", "HEAD"]).splitlines()
+            if git_text_bytes(repo_root, ["show", f"{revision}:{checker_path.relative_to(repo_root).as_posix()}"])
+            != current_commit_checker), None)
+        if stale_revision is None:
+            raise CheckError("self-test-stale-source-revision-unavailable")
+        expect_rejected(lambda: verify_source_identity(repo_root, stale_revision, checker_path),
                         "checker-source-mismatch", "source-revision-mismatch")
         original_runner_facts = SOURCE_FACTS["src/runner/acceptance.c"]
         SOURCE_FACTS["src/runner/acceptance.c"] = (*original_runner_facts, "missing-evidence-control")
