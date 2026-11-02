@@ -879,7 +879,7 @@ def create_synthetic_promotion_subject(root):
                                 text=True, timeout=15, check=False)
     if configured.returncode != 0:
         raise Reject("scene-report-synthetic-configure-failed:" + configured.stderr.strip()[-160:])
-    exercised = subprocess.run(["ctest", "--test-dir", str(root / "build"), "--output-on-failure",
+    exercised = subprocess.run(["ctest", "--test-dir", str(root / "build"), "-C", "Debug", "--output-on-failure",
                                 "--no-tests=error"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, text=True, timeout=15, check=False)
     if exercised.returncode != 0:

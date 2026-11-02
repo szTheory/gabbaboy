@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.util
+import os
 import re
 from pathlib import Path
 import subprocess
@@ -267,6 +268,10 @@ def validate_checkpoint_dump(path: Path, label: str, expected_digest: str) -> No
         raise CheckError(f"checkpoint-dump-color-invalid:{label}")
     if expected_solid_rgb555_digest(expected_color) != expected_digest:
         raise CheckError(f"checkpoint-dump-digest-mismatch:{label}")
+
+
+def normalized_host_path(path: str) -> str:
+    return os.path.normcase(os.path.normpath(path.replace("\\", "/"))).replace("\\", "/")
 
 
 def validate_progress_fields(fields: dict[str, str], *, observation: bool, rom: bytes,
@@ -532,6 +537,9 @@ def synthetic_receipt(fields: dict[str, str]) -> str:
 
 
 def self_test(repo_root: Path) -> None:
+    if normalized_host_path(r"C:\Runner\Temp\failure-dumps\control.ppm") != \
+            normalized_host_path(r"C:\Runner\Temp\failure-dumps/control.ppm"):
+        raise CheckError("self-test-host-path-normalization-failed")
     rom, labels = build_rom()
     if len(NINTENDO_LOGO) != 48 or len(rom) != ROM_SIZE or rom[0x143] != 0x80:
         raise CheckError("header-invalid")
@@ -909,9 +917,11 @@ def run_observations(runner: Path, repo_root: Path, source_revision: str,
         failure_code, failure_out, failure_err = helper.run_runner(
             str(runner), ["--acceptance", "cases.txt", "--case", "cgb-control-no-input",
                           "--model", "cgb-cpu-e", "--failure-dir", str(failure_dir)], str(work), 30)
+        reported_ppm = re.search(r"(?:^|\s)ppm=(\S+)", failure_out)
         if (failure_code != 1 or status_reason(failure_out) != "predicate-not-reached" or failure_err or
                 "final_ready=a5 final_progress=00" not in failure_out or
-                f"ppm={failure_ppm}" not in failure_out):
+                reported_ppm is None or
+                normalized_host_path(reported_ppm.group(1)) != normalized_host_path(str(failure_ppm))):
             raise CheckError("cgb-failure-dump-control-failed:" + failure_out.strip() + ":" + failure_err.strip())
         validate_checkpoint_dump(failure_ppm, "title", expected_solid_rgb555_digest(CHECKPOINT_COLORS["title"]))
         if failure_ppm.read_bytes() == stale_failure:
