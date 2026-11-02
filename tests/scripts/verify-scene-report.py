@@ -596,13 +596,15 @@ def verify_ctest_build(root, names, source_paths):
     pattern = "^(" + "|".join(re.escape(name) for name in names) + ")$"
     try:
         result = subprocess.run(
-            ["ctest", "--test-dir", str(root / "build"), "--output-on-failure", "--no-tests=error",
-             "--timeout", "60", "-R", pattern], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            ["ctest", "--test-dir", str(root / "build"), "-C", "Debug", "--output-on-failure",
+             "--no-tests=error", "--timeout", "60", "-R", pattern],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, timeout=62, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise Reject("scene-report-executable-check-timeout") from None
     if result.returncode != 0:
-        raise Reject("scene-report-executable-check-failed")
+        detail = (result.stdout + result.stderr).strip().replace("\r", " ").replace("\n", " ")
+        raise Reject("scene-report-executable-check-failed:" + detail[-200:])
     for name in names:
         if not re.search(r"\b" + re.escape(name) + r"\b.*Passed", result.stdout):
             raise Reject(f"scene-report-executable-check-incomplete:{name}")
