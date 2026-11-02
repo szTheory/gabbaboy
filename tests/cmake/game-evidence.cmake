@@ -22,7 +22,7 @@ add_test(NAME phase21_fixture_admission_controls
           --runner "$<TARGET_FILE:gabbaboy-runner>"
           --current-build-qualification "${GBB_RUNNER_QUALIFICATION_PATH}")
 set_tests_properties(phase21_fixture_admission_controls PROPERTIES
-  TIMEOUT 60 LABELS integration WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  TIMEOUT 60 COST 60 LABELS integration WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 
 set(GBB_GAME_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-game-evidence.py")
 add_test(NAME phase21_game_evidence

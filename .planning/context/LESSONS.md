@@ -1059,11 +1059,11 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:** Phase 20 Plan 20-02 final source-archive runtime follow-up and exact-head CI runs 41334163805 / 41334157283.
 - **Status:** Measured and adopted for this control harness.
 
-### GB-CI-019 / 2026-11-02 / Align nested shell checks with CMake's Python
+### GB-CI-019 / 2026-11-02 / Align nested shell checks with CMake's Python and front-load long controls
 
-- **Cause and evidence:** CMake launched the release lifecycle checker with its selected Python, but the nested shell gate used bare `python3` from the host `PATH`. On a host where that resolved to Python 3.9, the gate failed on `Path.write_text(newline=...)`; putting CMake's Python directory first cleared the focused release checks. With that interpreter fixed, the 95-control test passed alone in 31.66 seconds but hit its unchanged 60-second cap when scheduled at the end of the full serial run.
-- **Remedy:** Give the release shell tests a `PATH` beginning with the configured `Python3_EXECUTABLE` directory. Assign the long control test a CTest `COST` so the existing scheduler runs it with the other long checks; keep its serial execution, coverage, and 60-second timeout.
-- **Applies when:** A CTest-launched Python checker invokes shell scripts that use bare `python3`, or a serial suite has a measured control that risks its existing cap when left at the tail.
+- **Cause and evidence:** CMake launched the release lifecycle checker with its selected Python, but the nested shell gate used bare `python3` from the host `PATH`. On a host where that resolved to Python 3.9, the gate failed on `Path.write_text(newline=...)`; putting CMake's Python directory first cleared the focused release checks. With that interpreter fixed, the 95-control test passed alone but hit its unchanged 60-second cap at the tail of the full serial run. The Phase 21 fixture controls also ran close to their existing cap when selected after other long checks.
+- **Remedy:** Give the release shell tests a `PATH` beginning with the configured `Python3_EXECUTABLE` directory. Assign both long control tests a CTest `COST` so the existing scheduler runs them with the other long checks; keep their serial execution, coverage, and 60-second timeouts.
+- **Applies when:** A CTest-launched Python checker invokes shell scripts that use bare `python3`, or measured serial controls risk their existing caps when left at the tail.
 - **Verification:** Pending the focused checks and full serial CTest run at the remedied source revision.
 - **Status:** Adopted for the release lifecycle test harness; no production runtime behavior changes.
 
