@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -113,6 +114,42 @@ class CandidateOrderTests(unittest.TestCase):
                 CHECKER_MODULE.cmake_source_path_key(forward_slash),
                 CHECKER_MODULE.cmake_source_path_key(case_variant),
             )
+
+    def test_cmake_source_entry_matches_relative_file_by_filesystem_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            expected = root / "src" / "core" / "gabbaboy.c"
+            expected.parent.mkdir(parents=True)
+            expected.write_bytes(b"synthetic CMake source\n")
+            build_dir = root / "build"
+            build_dir.mkdir()
+
+            relative_entry = {
+                "directory": str(build_dir),
+                "file": os.path.relpath(expected, start=build_dir),
+                "command": "cc -DGBB_BUILD_QUALIFIED=1 -c source.c",
+            }
+            self.assertTrue(CHECKER_MODULE.cmake_source_entry_matches(relative_entry, expected, root))
+
+            wrong_source = root / "src" / "core" / "gabbaboy_test.c"
+            wrong_source.write_bytes(b"different source\n")
+            wrong_entry = dict(relative_entry)
+            wrong_entry["file"] = os.path.relpath(wrong_source, start=build_dir)
+            self.assertFalse(CHECKER_MODULE.cmake_source_entry_matches(wrong_entry, expected, root))
+
+            case_variant = dict(relative_entry)
+            case_variant["file"] = str(expected).swapcase()
+            self.assertEqual(
+                CHECKER_MODULE.cmake_source_entry_matches(case_variant, expected, root),
+                os.name == "nt",
+            )
+
+    def test_cmake_compile_command_accepts_arguments_form(self) -> None:
+        entry = {"arguments": ["cc", "-DGBB_BUILD_QUALIFIED=1", "-c", "source.c"]}
+        self.assertEqual(
+            CHECKER_MODULE.cmake_compile_command(entry),
+            "cc -DGBB_BUILD_QUALIFIED=1 -c source.c",
+        )
 
     def test_primary_and_fallback_no_go_form_a_valid_absence(self) -> None:
         records = [

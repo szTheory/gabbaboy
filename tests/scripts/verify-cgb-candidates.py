@@ -2247,6 +2247,51 @@ def cmake_source_path_key(path: str | Path) -> str:
     return os.path.normcase(PureWindowsPath(str(path)).as_posix())
 
 
+def cmake_source_entry_matches(entry: dict[str, Any], expected: Path, source_root: Path) -> bool:
+    """Match a compile-database source by filesystem identity, with a portable lexical fallback."""
+    raw_file = entry.get("file")
+    if not isinstance(raw_file, str) or not raw_file:
+        return False
+
+    source = Path(raw_file)
+    candidates: list[Path] = []
+    if source.is_absolute():
+        candidates.append(source)
+    else:
+        directory = entry.get("directory")
+        if isinstance(directory, str) and directory:
+            base = Path(directory)
+            if not base.is_absolute():
+                base = source_root / base
+            candidates.append(base / source)
+        candidates.append(source_root / source)
+
+    expected_key = cmake_source_path_key(os.path.normpath(str(expected)))
+    for candidate in candidates:
+        # Windows may report the same source through short/long names. Keep POSIX matching
+        # lexical so case-only paths remain distinct even on a case-insensitive mounted volume.
+        if os.name == "nt":
+            try:
+                if candidate.samefile(expected):
+                    return True
+            except (OSError, ValueError):
+                pass
+        if cmake_source_path_key(os.path.normpath(str(candidate))) == expected_key:
+            return True
+    return False
+
+
+def cmake_compile_command(entry: dict[str, Any]) -> str:
+    """Read either standard compile-database command representation."""
+    command = entry.get("command")
+    if isinstance(command, str):
+        return command
+    arguments = entry.get("arguments")
+    if isinstance(arguments, list) and all(isinstance(item, str) for item in arguments):
+        return " ".join(arguments)
+    return ""
+
+
 def _pin_synthetic_runner_build_revision(root: Path) -> None:
     runner_path = root / "tests/scripts/synthetic-runner.py"
     raw = runner_path.read_bytes()
@@ -2441,16 +2486,24 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
             raise Reject("candidate-self-test-failed", f"{label} compile commands are invalid") from None
         if not isinstance(commands, list):
             raise Reject("candidate-self-test-failed", f"{label} compile commands are invalid")
-        core_source_key = cmake_source_path_key(root / "src/core/gabbaboy.c")
-        core_command = next((entry.get("command", "") for entry in commands
-                             if isinstance(entry, dict)
-                             and isinstance(entry.get("file"), str)
-                             and cmake_source_path_key(entry["file"]) == core_source_key), "")
-        observed = re.search(r"(?:^|\s)-DGBB_BUILD_QUALIFIED=([01])(?:\s|$)", core_command)
-        if observed is None or observed.group(1) != expected:
-            actual = observed.group(1) if observed is not None else "missing"
+        core_source = root / "src/core/gabbaboy.c"
+        core_entries = [entry for entry in commands
+                        if isinstance(entry, dict)
+                        and cmake_source_entry_matches(entry, core_source, root)]
+        core_command = cmake_compile_command(core_entries[0]) if len(core_entries) == 1 else ""
+        observed = re.findall(
+            r"(?<!\S)[\"']?-DGBB_BUILD_QUALIFIED=([01])[\"']?(?=\s|$)", core_command
+        )
+        if len(observed) != 1 or observed[0] != expected:
+            actual = observed[0] if len(observed) == 1 else "missing"
+            candidate_files = [entry.get("file") for entry in commands
+                               if isinstance(entry, dict)
+                               and isinstance(entry.get("file"), str)
+                               and PureWindowsPath(entry["file"]).name.casefold() == "gabbaboy.c"]
             raise Reject("candidate-self-test-failed",
-                         f"{label} expected GBB_BUILD_QUALIFIED={expected}, received {actual}")
+                         f"{label} expected GBB_BUILD_QUALIFIED={expected}, received {actual}; "
+                         f"matching_sources={len(core_entries)}; source_candidates={candidate_files[:4]!r}; "
+                         f"command={core_command[-512:]!r}")
 
     source_control_invocations = _runner_invocations(root)
     cmake_runner_qualification("clean", "1")
