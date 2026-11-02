@@ -69,7 +69,7 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
 **Plan cap**: 12
-**Plans**: 7/7 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan. Plan 21-07's local full suite and source-bound receipt pass; exact-head PR/platform and installed-consumer qualification still gates phase closure.
+**Plans**: 7/8 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan. Plan 21-08 consumes the single reserved gap round to close current/historical replay provenance and aggregate observation blockers. Final current-revision local, hosted/platform and installed-consumer qualification still gates phase closure.
 
 Plans:
 **Wave 1**
@@ -88,6 +88,9 @@ Plans:
 
 **Wave 5** *(blocked on controls, the final candidate pair and scene workflow)*
 - [x] 21-07-PLAN.md — Actual outcome/documentation composition, final source qualification and Phase 21 handoff.
+
+**Wave 6** *(single reserved gap round after final review)*
+- [ ] 21-08-PLAN.md — Separate historical provenance from current CMake artifact qualification and bind replay to exact aggregate RGB555/PCM observations.
 
 Captured frame and PCM digests establish reproducibility. They do not independently establish rendering accuracy, perceptual quality, physical CGB-E behavior, or general compatibility. A newly reproduced correctness/security issue must be fixed within scope or trigger a rescope; the candidate absence exit cannot silently defer it. Optional direct Steam Deck/SSH exploration is neither a completion gate nor a qualified Linux/Deck path.
 
@@ -141,7 +144,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
-| 21. CGB Game Progress and Scene Regressions | 7/7 | In Progress | - |
+| 21. CGB Game Progress and Scene Regressions | 7/8 | In Progress | - |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 

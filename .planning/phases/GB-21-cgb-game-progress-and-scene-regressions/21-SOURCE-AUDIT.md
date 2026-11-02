@@ -1,6 +1,6 @@
 # Phase 21 — Source Coverage and Planning Decisions
 
-Planning covers seven plans and sixteen tasks in five waves. The phase cap is twelve plans, including its reserved gap allowance; the primary and fallback attempts each occupy exactly one plan. No implementation, candidate admission, game progress or phase-completion claim is made by this planning artifact.
+Original planning covers seven plans and sixteen tasks in five waves. Plan 21-08 adds two tasks in Wave 6 as the single reserved gap round after final review. The resulting eight plans remain within the twelve-plan cap; the primary and fallback attempts each occupy exactly one plan. This planning artifact does not itself establish implementation, candidate admission, game progress or phase completion.
 
 ## Source Coverage
 
@@ -82,10 +82,26 @@ Two bespoke values/transparency constraints survive precision: honest evidence-c
 - API-coverage detector examined the actual phase scope/plans and returned `detected: false`; exit 1 is its documented negative verdict, not a missing probe. No external API/SDK/service is integrated and no coverage matrix is needed.
 - Assumption-delta detected `fallback` and `optional`. Plan 21-03 records `no-change`: exact candidate attempt remains the primary identity, D-01 already fixes the ordered conditional pair, and optional Deck exploration is outside the qualified path. No additional owner choice is required.
 - No listed ORM/schema path exists in the phase scope, so schema-push guidance does not apply.
-- Security enforcement is active at ASVS 1/high. All seven plans have threat registers; ordinary IDs T-21-01 through T-21-17 are unique and only reserved T-21-SC repeats.
+- Security enforcement is active at ASVS 1/high. All eight plans have threat registers; ordinary IDs T-21-01 through T-21-19 are unique and only reserved T-21-SC repeats.
 
 ## Planning Validation
 
 The first independent review's five findings are addressed by scoped planning changes: all four research questions now have explicit planning resolutions while their factual execution evidence stays pending; Plans 21-04/05 justify their ten-file conditional footprint; both candidate build tasks require confinement/probes or a pre-execution no-go; and Plan 21-03 rejects missing/permissive isolation evidence through synthetic controls. The seven-plan/five-wave graph, one-plan-per-candidate bounds and all locked decisions remain intact.
 
 The installed OpenGSD runtime validates all seven plan frontmatters and task structures; each task has read-first, acceptance criteria, automated verification and an observable fails_when condition. All files end in `</output>`. This validates executable planning shape only. No implementation tests or candidate builds are run by planning; independent plan-checker review remains the orchestrator's next gate.
+
+## Final-Review Rescope Coverage — Plan 21-08
+
+The final review at source `29ab44c7bbaaca8ba587c4dd19e169466df5d78e` found that a current replay could not satisfy both a historical executable hash and current embedded source revision, and that well-formed changed PCM values were accepted. Plan 21-08 consumes the phase's one gap round; it does not turn either issue into a deferred seed or use actual candidate absence as a substitute for repair.
+
+| Source | Gap item | Plan | Disposition |
+|--------|----------|------|-------------|
+| GOAL | Reproducible current CGB replay after historical receipt creation | 08 Task 1 | Current CMake artifact qualification is independent of immutable historical source/hash facts. |
+| REQ | GAME-02 exact source, executable and frame/PCM bindings | 08 Tasks 1–2 | Canonical current target/build receipt and exact stored aggregate observations, with causal rejection controls. |
+| REQ | FIXT-01 bounded admitted/absence accounting | 08 Tasks 1–2 | Actual two-candidate no-go records stay unchanged; no third attempt or new rights authority. |
+| RESEARCH | Source-qualified receipts must not be refreshed merely to agree with HEAD | 08 Task 1 | Historical blobs and current checker/build snapshot validation are distinct; CR-03 case/input equality is retained. |
+| CONTEXT | D-02/D-04 exact admission and shared qualified runner | 08 Task 1 | Phase 20 admission precedes candidate execution; trusted CMake output supplies the current artifact. |
+| CONTEXT | D-06 bound RGB555/PCM reproducibility observations | 08 Task 2 | Supported aggregate window values replace unsupported per-checkpoint PCM and compare exactly. |
+| CONTEXT | D-10 existing helpers and standard library | 08 Tasks 1–2 | Reuse normal CMake/Python/CTest and original harness qualification, without another dependency. |
+
+Other GOAL/REQ/RESEARCH/CONTEXT items retain the original coverage table. Deferred ideas, later phases, both retained descriptor-less prohibitions and the six unresolved generic edge assumptions keep their existing dispositions. The new plan adds T-21-18/T-21-19 and reserved T-21-SC; no existing threat ID is reused.
