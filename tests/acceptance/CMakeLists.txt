@@ -21,7 +21,12 @@ endforeach()
 add_test(NAME acceptance_predicate_truth_table COMMAND test_acceptance_lib acceptance_predicate_truth_table)
 add_test(NAME acceptance_predicate_anchors
   COMMAND test_acceptance_lib acceptance_predicate_anchors ${GBB_ACCEPT_LIBBET_ROM})
-set_tests_properties(acceptance_predicate_truth_table acceptance_predicate_anchors PROPERTIES TIMEOUT 30)
+add_test(NAME acceptance_predicate_cgb_truth_table
+  COMMAND test_acceptance_lib acceptance_predicate_cgb_truth_table)
+add_test(NAME acceptance_predicate_cgb_anchors
+  COMMAND test_acceptance_lib acceptance_predicate_cgb_anchors)
+set_tests_properties(acceptance_predicate_truth_table acceptance_predicate_anchors
+  acceptance_predicate_cgb_truth_table acceptance_predicate_cgb_anchors PROPERTIES TIMEOUT 30)
 
 # Runner acceptance case (D-23, D-28): paths in cases.txt resolve against the working directory,
 # so every acceptance CTest runs from the repository root.
@@ -688,6 +693,14 @@ set_tests_properties(cgb_runner_profile_dmg_identity_negative PROPERTIES TIMEOUT
 # GBB-RGB555LE-v1 digest under frame555/observed555, never the DMG RGB888 keys. --model cgb-cpu-e and
 # --profile cgb select the same run (main.c maps the profile to the model token).
 set(GBB_CGB_COLOUR_CASES tests/acceptance/cases-cgb-colour.txt)
+add_test(NAME acceptance_cgb_progress_discrimination
+  COMMAND ${CMAKE_COMMAND}
+    "-DGBB_CMD=${Python3_EXECUTABLE};-I;${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py;--self-test;--repo-root;${PROJECT_SOURCE_DIR}"
+    -DGBB_EXPECT_CODE=0
+    "-DGBB_EXPECT_REGEX=wrong_input=predicate-not-reached"
+    -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
+    -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+set_tests_properties(acceptance_cgb_progress_discrimination PROPERTIES TIMEOUT 30 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 add_test(NAME acceptance_cgb_progress_tracer
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
           --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
@@ -724,9 +737,6 @@ add_test(NAME acceptance_cgb_colour_flipped_ppm
     -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(acceptance_cgb_colour_flipped_ppm PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-# Historical case remains until Plan 21-02 performs the test-name cleanup. CGB capture is now
-# supported; this native-CGB Libbet run reaches its guest predicate but no-input never satisfies it.
-gbb_add_acceptance_exit(acceptance_cgb_colour_progress_refused 1
-  "reason=predicate-not-reached" 300
-  "--acceptance;${GBB_CGB_COLOUR_CASES};--case;libbet-cgb-progress;--model;cgb-cpu-e")
+# The separate generated-header control in verify-cgb-progress.py checks the API-reported mode.
+# This legacy Libbet case remains as a no-input CGB predicate input but has no dedicated test entry.
 # --- Phase 11 plan 11-09 end ---
