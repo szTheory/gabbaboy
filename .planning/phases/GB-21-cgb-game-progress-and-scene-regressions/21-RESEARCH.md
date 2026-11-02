@@ -330,27 +330,29 @@ This is a plan shape, not a verified predicate for either candidate. The exact s
 | A2 | µCity 1.3's pinned source exposes a bounded predicate that changes under a short deterministic action from a reproducible start. [ASSUMED] | Candidate source/build constraints | If false, fallback records predicate-feasibility no-go; manual controls and a fixed map seed alone are insufficient. |
 | A3 | A small original native-CGB control ROM can exercise the runner's positive, input-negative, predicate-negative and mode-negative paths with the existing software profile. [ASSUMED] | Architecture and validation | If false, harness failure is reported separately from candidate absence and requires rescope rather than a claimed fixture success. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Potion Panic exact source/build/rights closure:** Which creator-controlled immutable source commit and recursive submodules produce the GB Compo 2025 demo, and can all art/audio/tool inputs be admitted for repository and public-CI use?
+These questions are resolved for planning by the bounded execution contracts below. Exact candidate identity, rights, tool compatibility and build/progress results remain unverified execution evidence; the resolution does not admit a fixture or claim that an unknown fact has been established.
+
+1. **Potion Panic exact source/build/rights closure (RESOLVED for planning):** Which creator-controlled immutable source commit and recursive submodules produce the GB Compo 2025 demo, and can all art/audio/tool inputs be admitted for repository and public-CI use?
    - What we know: The creator page separates code and asset license labels; the available GitHub page is a fork whose README points back to the upstream recursive clone. [CITED: https://deved.itch.io/potion-panic; https://github.com/gbcompo25/potion-panic]
    - What is unclear: The live Codeberg source was not retrievable through the research browser, and this research did not establish exact source-to-ROM identity or per-component clearance. [VERIFIED: researcher source-fetch attempt; 21-CONTEXT.md, D-02]
-   - Recommendation: Use the bounded first attempt to resolve it; any unresolved source, rights or build identity is a recorded no-go. Do not search for another game. [VERIFIED: 21-CONTEXT.md, D-01-D-02]
+   - Planning resolution (RESOLVED): Plan 21-04 Task 1 is the single primary attempt. It must establish creator-controlled source authority, immutable recursive inputs, component grants and one reproducible toolchain before building or admitting bytes. Any source/rights/build identity that cannot be established becomes a concrete no-go with later observations marked not-observed. An available build runs only after its restricted environment and denial probes are established; unavailable isolation is a build-isolation no-go. This is a resolved plan branch, not verified candidate evidence. [VERIFIED: 21-04-PLAN.md, Task 1; 21-CONTEXT.md, D-01-D-02]
 
-2. **Potion Panic builder environment:** Is SuperFamiconv required by the exact pinned source, and is the locally installed RGBDS version compatible?
+2. **Potion Panic builder environment (RESOLVED for planning):** Is SuperFamiconv required by the exact pinned source, and is the locally installed RGBDS version compatible?
    - What we know: The indexed README lists RGBDS, Python 3 and SuperFamiconv; local RGBDS/Python/make exist but SuperFamiconv does not. [CITED: https://github.com/gbcompo25/potion-panic; VERIFIED: command availability/version probe, 2026-11-01]
    - What is unclear: Exact upstream build closure and version compatibility. [VERIFIED: researcher source-fetch attempt; CITED: https://github.com/gbcompo25/potion-panic]
-   - Recommendation: Resolve from pinned source before a phase build; missing required tool is a build blocker unless the phase owner separately authorizes and supplies it. [VERIFIED: 21-CONTEXT.md, D-02]
+   - Planning resolution (RESOLVED): Plan 21-04 Task 1 inspects the pinned recipe to determine whether SuperFamiconv is required and which tool versions are compatible. A necessary build-only tool may be acquired and digest-verified in the temporary acquisition area under the existing plan, then exposed read-only inside the restricted build environment. A required tool that is unavailable, unpinnable, incompatible with the single documented recipe, or unusable under the isolation policy produces a concrete build no-go. No global installation, repeated tool-version search or project runtime dependency is authorized. Tool compatibility remains pending execution evidence. [VERIFIED: 21-04-PLAN.md, Task 1; 21-CONTEXT.md, D-02/D-10]
 
-3. **µCity 1.3 fallback exact release:** Which immutable author release/source commit corresponds to preferred ucity.gbc and provides a complete rights/build manifest?
+3. **µCity 1.3 fallback exact release (RESOLVED for planning):** Which immutable author release/source commit corresponds to preferred ucity.gbc and provides a complete rights/build manifest?
    - What we know: The author README names preferred ucity.gbc and links Codeberg releases; the default and compatibility ROMs differ. [CITED: https://github.com/AntonioND/ucity]
    - What is unclear: Exact release digest, source-built correspondence, per-file/media terms, and required recent RGBDS version. [VERIFIED: researcher source-review scope; CITED: https://github.com/AntonioND/ucity]
-   - Recommendation: Resolve only if Potion Panic has a recorded no-go; do not substitute ucity_compat.gbc. [VERIFIED: 21-CONTEXT.md, D-01-D-02]
+   - Planning resolution (RESOLVED): Plan 21-05 is eligible only after the checked primary no-go. Its first task pins the author-controlled µCity 1.3 release/source and preferred ucity.gbc, component grants, recursive inputs and compatible toolchain; inability to establish identity, rights, the bounded build or its isolation produces a concrete no-go. An admitted primary instead yields a checked not-needed fallback record. No other release/artifact or third game is substituted. Exact fallback evidence remains pending the eligible execution branch. [VERIFIED: 21-05-PLAN.md, Task 1; 21-CONTEXT.md, D-01-D-02]
 
-4. **Actionable current scene report:** Is there a specific title/scene/symptom report available to reproduce now?
+4. **Actionable current scene report (RESOLVED for planning):** Is there a specific title/scene/symptom report available to reproduce now?
    - What we know: Existing research provides scouting scenes and historical issue leads, not a confirmed GabbaBoy defect with a reproducible expected behavior in the reviewed phase sources. [VERIFIED: .planning/research/2026-10-31-GAME-SCENE-SHORTLIST.md:1-10,36-61; .planning/research/2026-10-31-GAME-FEEDBACK-REVIEW.md:46-74]
    - What is unclear: Exact current report, content release, observed boundary and independent oracle. [VERIFIED: reviewed phase-research scope; 21-CONTEXT.md, D-07-D-09]
-   - Recommendation: The phase can demonstrate report intake/classification from the minimum title/scene/symptom contract and preserve any real report as triage; do not fabricate a scene regression. [VERIFIED: 21-CONTEXT.md, D-07-D-09]
+   - Planning resolution (RESOLVED): The reviewed sources contain no current actionable GabbaBoy report. Plan 21-06 therefore delivers and tests title/scene/symptom intake, agent-owned metadata recovery/classification and the independent-expectation promotion contract with synthetic subjects. If a real report arrives it follows that contract; if none arrives, the final record states no live scene regression was available. A report without permitted reproduction or an independent expectation stays triage. No invented defect, captured golden or mandatory owner play fills that evidence limit. [VERIFIED: 21-06-PLAN.md, Tasks 1-2; 21-CONTEXT.md, D-07-D-09]
 
 ## Environment Availability
 
@@ -361,7 +363,7 @@ This is a plan shape, not a verified predicate for either candidate. The exact s
 | Python 3 | Candidate scripts and stdlib fixture checker | ✓ | 3.14.4 | — [VERIFIED: command availability/version probe, 2026-11-01] |
 | GNU make | µCity author build instructions | ✓ | 3.81 | — [VERIFIED: command availability/version probe, 2026-11-01] |
 | RGBDS rgbasm/rgbfix | Both candidate source build leads | ✓ | 1.0.4 | —; confirm exact-source version compatibility. [VERIFIED: command availability/version probe, 2026-11-01] |
-| SuperFamiconv | Potion Panic indexed README build requirements | ✗ | — | No evidenced fallback; if exact pinned build requires it, record build gate no-go or seek separately authorized tool provision. [CITED: https://github.com/gbcompo25/potion-panic; VERIFIED: command availability probe, 2026-11-01] |
+| SuperFamiconv | Potion Panic indexed README build requirements | ✗ | — | No evidenced substitute; Plan 21-04 permits bounded pinned acquisition only for the exact recipe and restricted build. If the required tool cannot be established, record build no-go. [CITED: https://github.com/gbcompo25/potion-panic; VERIFIED: command availability probe, 2026-11-01; 21-04-PLAN.md, Task 1] |
 
 **Missing dependencies with no fallback:**
 
