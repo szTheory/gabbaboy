@@ -901,7 +901,10 @@ def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) ->
     environment = {
         name: os.environ[name] for name in isolation["environment_allowlist"] if name in os.environ
     }
-    result = run_process([str(runner), "--acceptance", progress["case_file"], "--case",
+    command = [str(runner)]
+    if runner.suffix.lower() == ".py":
+        command = [sys.executable, "-I", str(runner)]
+    result = run_process([*command, "--acceptance", progress["case_file"], "--case",
                           progress["case_id"], "--receipt"], root,
                          timeout=MAX_SUBPROCESS_SECONDS, environment=environment)
     output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
@@ -1824,7 +1827,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     modes.add_argument("--check-all", action="store_true")
     parser.add_argument("--stage", choices=("source", "rights", "build", "identity", "mode", "progress", "final"))
     parser.add_argument("--require-final", action="store_true")
-    parser.add_argument("--runner", help="optional repository-contained acceptance runner executable")
+    parser.add_argument("--runner", help="optional repository-contained acceptance runner executable or Python script")
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--source-revision", help="full immutable project source commit")
     return parser.parse_args(argv)

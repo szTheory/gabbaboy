@@ -561,7 +561,7 @@ def verify_ctest_build(root, names, source_paths):
         raise Reject("scene-report-build-source-mismatch")
     try:
         listing = subprocess.run(
-            ["ctest", "--test-dir", str(root / "build"), "--show-only=json-v1"],
+            ["ctest", "--test-dir", str(root / "build"), "-C", "Debug", "--show-only=json-v1"],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, timeout=10, check=False)
     except (OSError, subprocess.TimeoutExpired):
