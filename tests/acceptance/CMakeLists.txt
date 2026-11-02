@@ -688,6 +688,11 @@ set_tests_properties(cgb_runner_profile_dmg_identity_negative PROPERTIES TIMEOUT
 # GBB-RGB555LE-v1 digest under frame555/observed555, never the DMG RGB888 keys. --model cgb-cpu-e and
 # --profile cgb select the same run (main.c maps the profile to the model token).
 set(GBB_CGB_COLOUR_CASES tests/acceptance/cases-cgb-colour.txt)
+add_test(NAME acceptance_cgb_progress_tracer
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
+          --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
+          --source-revision HEAD --tracer)
+set_tests_properties(acceptance_cgb_progress_tracer PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 gbb_add_acceptance_exit(acceptance_cgb_colour_hblank 0
   "acceptance id=cgb-colour-hblank status=pass model=cgb-cpu-e.*frame555=${gbb_hex64_re}" 60
   "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--model;cgb-cpu-e")
