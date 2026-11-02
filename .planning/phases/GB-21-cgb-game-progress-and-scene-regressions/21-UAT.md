@@ -1,30 +1,32 @@
 ---
 status: complete
 phase: GB-21-cgb-game-progress-and-scene-regressions
-source: 21-01-SUMMARY.md, 21-02-SUMMARY.md, 21-03-SUMMARY.md, 21-04-SUMMARY.md, 21-05-SUMMARY.md, 21-06-SUMMARY.md, 21-07-SUMMARY.md
-started: 2026-11-02T16:23:15.439825+00:00
-updated: 2026-11-02T16:23:18.231Z
+source: 21-01-SUMMARY.md, 21-02-SUMMARY.md, 21-03-SUMMARY.md, 21-04-SUMMARY.md, 21-05-SUMMARY.md, 21-06-SUMMARY.md, 21-07-SUMMARY.md, 21-08-SUMMARY.md
+started: 2026-11-02T21:05:27.368900+00:00
+updated: 2026-11-02T21:05:27.368900+00:00
 ---
 
 ## Automated Evidence
 
 # Phase 21 automated verification evidence
 
-## Boundary
+## Local boundary
 
-This record was prepared against PR #140 head `a05a0b12e9b1e4bf4b1901b7c81b6160df3688b4`, based on `main` at `9d3dbb3a02e9fc17b5870b45276a4d4833d18d02`. GitHub reported the PR open and mergeable. The evidence below is tied to that point-in-time head; this file records phase closure and does not claim a later live route or ancestry.
+Local code and test results refer to source `ca17216b22d0d9f2fb742c8baed3e1543bc307e1`. This record does not assert a hosted status for a future PR head.
 
-## Automated tests
+All eight plan summaries (21-01 through 21-08) classify deliverables as automated and cite passing verification. There are no mandatory human UAT checkpoints.
 
-- Plan summaries 21-01 through 21-07 each classify all coverage entries as automated, with passing verification references and no human-judgment entries.
-- The full local suite passed 1,724/1,724 at implementation source `fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf`. After merging current `main`, 1,718 tests registered on this host; 1,712 passed in the full run and the remaining six passed in focused retests. No timeout or test budget changed. Six fuzz-runtime-dependent tests were not registered on this host.
-- The independent source-bound game-evidence check passed at the merged head and recorded `game=not-admitted`, model `CGB-CPU-E`, mode `cgb`.
-- Pull-request checks at this exact head passed: CI run [41474032142](https://github.com/szTheory/gabbaboy/actions/runs/41474032142), fixture reproduction run [41474032137](https://github.com/szTheory/gabbaboy/actions/runs/41474032137), and installed-package smoke run [41474032193](https://github.com/szTheory/gabbaboy/actions/runs/41474032193). These include the required native platform matrix, Linux sanitizers, CMake floor, fixture reproductions, and Linux/macOS installed consumers. The version PR gate was skipped because this change does not create a version PR.
-- The verify-work API-coverage pre-check initially matched the phrase “connect to a controlled local network endpoint” in the sandbox-denial test instructions. The phase implements no external API, SDK, or service. `COVERAGE.md` records this reasoned no-integration decision, and the gate passes while surfacing the overridden signal.
+Configure and build passed. The focused `phase21_fixture_admission_(contract|controls)` selection passed 2/2 (39.02s and 3.75s). The first full serial CTest run registered 1,718 tests: 1,712 passed and six timed out at existing per-test limits. Every Phase 21 progress, admission, game-evidence, and scene-report test passed in that run. After the separate test run in another checkout cleared, all six timed-out controls passed in one serial focused retry (84.77s, 11.83s, 12.88s, 17.57s, 21.45s, 26.90s). A second final-head configure/build/full serial CTest run passed all 1,718 tests in 1,665.95s. The cause of the initial timeouts remains unestablished. The suite's 27.8-minute wall time used a 3,600-second outer workflow cap; CTest limits, budgets, and membership were unchanged. After closure generation, the helper self-test and normal check passed for all 20 automated deliverables, and focused evidence checks passed 11/11 in 10.46s.
+
+The independent source-bound game-evidence check records `game=not-admitted`, model `CGB-CPU-E`, and mode `cgb`. No candidate game source or ROM was executed. Potion Panic remains a source and rights-scope no-go because exact component grants and repository/public-CI scope were not established. µCity 1.3 remains a no-go because required `source/engine/hardware.inc` has no identified grant or notice. These are evidence-scope decisions, not claims that either license prohibits use. `FIXT-01` remains pending further owner-selected source evidence.
+
+## Hosted qualification boundary
+
+Current-head hosted CI, fixture-reproduction, and installed-package consumer status must be read from [PR #140](https://github.com/szTheory/gabbaboy/pull/140) after the final evidence commit is pushed. This local record does not treat older run results or push-event checks as proof for that later head.
 
 ## Outcome limits
 
-Neither candidate game was admitted or run. Potion Panic remains a source and rights-scope no-go because exact component grants and repository/public-CI scope could not be established. µCity 1.3 remains a no-go because required `source/engine/hardware.inc` has no identified grant or notice. These are evidence-scope decisions, not claims that either license prohibits use. The original CGB result remains harness-only; RGB555/PCM digests establish repeatability, not accuracy, physical hardware behavior, or general compatibility. `FIXT-01` remains pending further owner-selected source evidence.
+The original CGB result remains harness-only. RGB555/PCM digests establish repeatability, not accuracy, physical hardware behavior, perceptual behavior, or general compatibility.
 
 ## Current Test
 
@@ -176,10 +178,26 @@ summary_file: 21-07-SUMMARY.md
 coverage_id: D4
 evidence: ["cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure --timeout 60 --parallel 1 \u2014 source fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf; 1724/1724 in 1220.71s"]
 
+### 19. The canonical CMake-built runner qualification binds the exact 24 build inputs, including state-version parsing and the borrowed acceptance-input header; dirty changes to either are rejected before candidate execution, and BUILD_TESTING=OFF remains Python-free.
+expected: "The canonical CMake-built runner qualification binds the exact 24 build inputs, including state-version parsing and the borrowed acceptance-input header; dirty changes to either are rejected before candidate execution, and BUILD_TESTING=OFF remains Python-free."
+result: pass
+source: automated
+summary_file: 21-08-SUMMARY.md
+coverage_id: D1
+evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_fixture_admission_(contract|controls)$' at source 5335ae5c41609bc84a3842385fd2b75ec61dcdc4; 24-input receipt and per-path dirty-source/qualification controls passed", "cmake -S . -B build/phase21-no-tests -G Ninja -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_DISABLE_FIND_PACKAGE_Python3=TRUE && cmake --build build/phase21-no-tests --target gabbaboy-runner; both passed at source 5335ae5c41609bc84a3842385fd2b75ec61dcdc4"]
+
+### 20. Fresh admitted replay must reproduce the immutable aggregate end time, rolling RGB555, PCM digest, sample count, audibility, and channel statistics; valid changed values fail with the intended observation mismatch.
+expected: "Fresh admitted replay must reproduce the immutable aggregate end time, rolling RGB555, PCM digest, sample count, audibility, and channel statistics; valid changed values fail with the intended observation mismatch."
+result: pass
+source: automated
+summary_file: 21-08-SUMMARY.md
+coverage_id: D2
+evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_fixture_admission_(contract|controls)$' at source 5335ae5c41609bc84a3842385fd2b75ec61dcdc4; 69 synthetic negative controls passed, fixture controls 45.32 seconds", "ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_game_evidence$' at source 5335ae5c41609bc84a3842385fd2b75ec61dcdc4; passed in 9.00 seconds"]
+
 ## Summary
 
-total: 18
-passed: 18
+total: 20
+passed: 20
 issues: 0
 pending: 0
 skipped: 0
