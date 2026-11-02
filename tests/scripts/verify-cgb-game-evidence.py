@@ -350,7 +350,7 @@ def _has_unqualified_license_prohibition(text: str) -> bool:
             if gap > 80:
                 continue
 
-            claim_prefix = sentence[:min(license_match.start(), verb_start)]
+            claim_prefix = sentence[:verb_start]
             clause_boundaries = [
                 claim_prefix.rfind(";") + 1,
                 claim_prefix.rfind(":") + 1,
@@ -360,6 +360,20 @@ def _has_unqualified_license_prohibition(text: str) -> bool:
             negated_conclusion = re.search(
                 r"\bnot\s+(?:a\s+)?conclusion\s+that\b", clause_prefix, re.I)
             if directly_negated is None and negated_conclusion is None:
+                return True
+
+        sentence_prefix = sentence[:verb_start]
+        pronoun_subject = re.match(r"\s*(?:it|this|that license|the license)\b",
+                                   sentence_prefix, re.I)
+        if pronoun_subject is not None and directly_negated is None:
+            previous_boundaries = list(
+                LEGAL_SENTENCE_BOUNDARY_PATTERN.finditer(text, 0, sentence_start))
+            previous_sentence_start = (
+                previous_boundaries[-2].end() if len(previous_boundaries) > 1 else 0)
+            previous_sentence = text[previous_sentence_start:sentence_start]
+            previous_licenses = list(LEGAL_LICENSE_PATTERN.finditer(previous_sentence))
+            if previous_licenses and \
+                    sentence_start - (previous_sentence_start + previous_licenses[-1].end()) <= 160:
                 return True
     return False
 
@@ -591,6 +605,12 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
          "This is not a conclusion that the rights are settled, but GPL-3.0 prohibits this use."),
         ("contrastive-second-verb",
          "GPL-3.0 does not prohibit documenting its terms, but it prohibits this use."),
+        ("repeat-after-semicolon",
+         "This is not a conclusion that GPL-3.0 prohibits use; it prohibits use."),
+        ("repeat-license-after-period",
+         "GPL-3.0 does not prohibit use. It prohibits use."),
+        ("pronoun-after-semicolon",
+         "GPL-3.0 does not prohibit use; it prohibits use."),
     ):
         unrelated_negation = dict(base_docs)
         unrelated_negation["docs/game-acceptance.md"] += (
@@ -632,7 +652,7 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: safe_evidence_path(Path("/repo"),
                                               "build/phase21-evidence/../../escape.json"),
                     "evidence-path-traversal", "evidence-path-traversal")
-    print("game-evidence controls pass outcomes=3 accepted_negations=4 rejected_controls=26 subjects=synthetic-only")
+    print("game-evidence controls pass outcomes=3 accepted_negations=4 rejected_controls=29 subjects=synthetic-only")
 
 
 def _import_progress_checker(root: Path):
