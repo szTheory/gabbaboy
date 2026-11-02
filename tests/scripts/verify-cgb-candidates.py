@@ -2067,6 +2067,16 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     if admitted_primary["receipt"]["value"]["project_source_revision"] == _current_revision(root):
         raise Reject("candidate-self-test-failed", "historical evidence revision did not differ from replay head")
 
+    # The receipt remains bound to its historical runner, while replay uses a separately built
+    # current artifact with different bytes. This must succeed without rewriting history.
+    current_runner = root / "tests/scripts/synthetic-runner.py"
+    historical_runner_sha = admitted_primary["receipt"]["value"]["runner_sha256"]
+    current_runner.write_bytes(current_runner.read_bytes() + b"\n# current synthetic build artifact\n")
+    current_runner.chmod(0o755)
+    current_runner_sha = sha256(current_runner.read_bytes())
+    if current_runner_sha == historical_runner_sha:
+        raise Reject("candidate-self-test-failed", "cross-revision runner hashes were not distinct")
+
     before = _runner_invocations(root)
     _run_all(root, runner=True)
     if _runner_invocations(root) != before + 1:
