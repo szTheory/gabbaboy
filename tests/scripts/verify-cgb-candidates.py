@@ -2417,8 +2417,10 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
             detail = (result.stdout + result.stderr).decode("utf-8", errors="replace").strip()[-512:]
             raise Reject("candidate-self-test-failed", f"{label} CMake configure failed: {detail}")
         commands_path = build_dir / "compile_commands.json"
-        commands = parse_json(read_regular(root, commands_path.relative_to(root).as_posix()),
-                              "CMake compile commands")
+        try:
+            commands = json.loads(read_regular(root, commands_path.relative_to(root).as_posix()))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            raise Reject("candidate-self-test-failed", f"{label} compile commands are invalid") from None
         if not isinstance(commands, list):
             raise Reject("candidate-self-test-failed", f"{label} compile commands are invalid")
         core_command = next((entry.get("command", "") for entry in commands
