@@ -2457,6 +2457,29 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         "candidate-runner-pcm-invalid",
     )
 
+    def valid_output_change(label: str, replacements: tuple[tuple[bytes, bytes], ...]) -> None:
+        mutated = original_runner
+        for old, new in replacements:
+            if old not in mutated:
+                raise Reject("candidate-self-test-failed", f"{label} mutation target missing")
+            mutated = mutated.replace(old, new, 1)
+        runner_output_control(label, mutated, "candidate-runner-observation-mismatch")
+
+    valid_output_change("changed-rolling-digest", ((b"{'1' * 64}", b"{'3' * 64}"),))
+    valid_output_change("changed-pcm-digest", ((b"{'2' * 64}", b"{'4' * 64}"),))
+    valid_output_change("changed-in-range-sample-count", ((b"pcm_samples=100", b"pcm_samples=101"),))
+    valid_output_change("changed-consistent-silent-statistics", (
+        (b"pcm_left_peak_to_peak=0", b"pcm_left_peak_to_peak=1"),
+    ))
+    valid_output_change("changed-consistent-audible-statistics", (
+        (b"pcm_samples=100", b"pcm_samples=10000"),
+        (b"pcm_audible=false", b"pcm_audible=true"),
+        (b"pcm_left_peak_to_peak=0", b"pcm_left_peak_to_peak=2048"),
+        (b"pcm_left_changes=0", b"pcm_left_changes=4800"),
+        (b"pcm_right_peak_to_peak=0", b"pcm_right_peak_to_peak=2048"),
+        (b"pcm_right_changes=0", b"pcm_right_changes=4800"),
+    ))
+
     runner_path = root / "tests/scripts/synthetic-runner.py"
     self_mutating_runner = original_runner.replace(
         b"with marker.open('a', encoding='utf-8') as stream:\n",
