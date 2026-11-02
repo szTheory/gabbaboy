@@ -88,6 +88,20 @@ def admitted_record() -> dict[str, object]:
 
 
 class CandidateOrderTests(unittest.TestCase):
+    def test_cmake_source_path_key_accepts_windows_slashes_and_rejects_neighbor(self) -> None:
+        backslash = r"C:\build\synthetic\src\core\gabbaboy.c"
+        forward_slash = "C:/build/synthetic/src/core/gabbaboy.c"
+        wrong_source = "C:/build/synthetic/src/core/gabbaboy_test.c"
+
+        self.assertEqual(
+            CHECKER_MODULE.cmake_source_path_key(backslash),
+            CHECKER_MODULE.cmake_source_path_key(forward_slash),
+        )
+        self.assertNotEqual(
+            CHECKER_MODULE.cmake_source_path_key(forward_slash),
+            CHECKER_MODULE.cmake_source_path_key(wrong_source),
+        )
+
     def test_primary_and_fallback_no_go_form_a_valid_absence(self) -> None:
         records = [
             record("potion-panic-gbcompo25", "no-go"),

@@ -22,7 +22,7 @@ import tarfile
 import tempfile
 import threading
 import time
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 
@@ -2242,6 +2242,11 @@ def _current_revision(root: Path) -> str:
     return git(root, "rev-parse", "HEAD").decode("ascii").strip()
 
 
+def cmake_source_path_key(path: str | Path) -> str:
+    """Normalize CMake compile-database paths across Windows slash styles and case."""
+    return PureWindowsPath(str(path)).as_posix().casefold()
+
+
 def _pin_synthetic_runner_build_revision(root: Path) -> None:
     runner_path = root / "tests/scripts/synthetic-runner.py"
     raw = runner_path.read_bytes()
@@ -2436,9 +2441,11 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
             raise Reject("candidate-self-test-failed", f"{label} compile commands are invalid") from None
         if not isinstance(commands, list):
             raise Reject("candidate-self-test-failed", f"{label} compile commands are invalid")
+        core_source_key = cmake_source_path_key(root / "src/core/gabbaboy.c")
         core_command = next((entry.get("command", "") for entry in commands
                              if isinstance(entry, dict)
-                             and entry.get("file") == str(root / "src/core/gabbaboy.c")), "")
+                             and isinstance(entry.get("file"), str)
+                             and cmake_source_path_key(entry["file"]) == core_source_key), "")
         observed = re.search(r"(?:^|\s)-DGBB_BUILD_QUALIFIED=([01])(?:\s|$)", core_command)
         if observed is None or observed.group(1) != expected:
             actual = observed.group(1) if observed is not None else "missing"
