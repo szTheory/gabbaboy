@@ -138,22 +138,25 @@ def build_compat_rom() -> tuple[bytes, dict[str, int]]:
     return bytes(rom), labels
 
 
-def input_script(with_right: bool) -> bytes:
+def input_script(with_right: bool, button: str = "RIGHT") -> bytes:
     lines = ["gbinput 1", "wait 1f", "mark title", "wait 1f", "mark play_start",
              "wait 1f", "mark mid"]
     if with_right:
-        lines.extend(("tap RIGHT 1f", "wait 116f"))
+        lines.extend((f"tap {button} 1f", "wait 116f"))
     else:
         lines.append("wait 117f")
     return ("\n".join(lines) + "\n").encode("ascii")
 
 
-def case_line(identifier: str, predicate: str, script_name: str, rom: bytes, script: bytes) -> str:
+def case_line(identifier: str, predicate: str, script_name: str, rom: bytes, script: bytes,
+              model_fail: bool = False) -> str:
+    model_field = "model_fail" if model_fail else "model_pass"
+    expected_failure = " expect_fail_reason=predicate-not-reached" if model_fail else ""
     return (f"id={identifier} rom=control.gb rom_sha256={hashlib.sha256(rom).hexdigest()} "
             f"rom_size={len(rom)} oracle=progress-predicate predicate={predicate} "
             f"expect_hw_capability=0 input_script={script_name} "
             f"input_sha256={hashlib.sha256(script).hexdigest()} "
-            f"budget_half_dots={BUDGET_HALF_DOTS} model_pass=cgb-cpu-e\n")
+            f"budget_half_dots={BUDGET_HALF_DOTS} {model_field}=cgb-cpu-e{expected_failure}\n")
 
 
 def validate_case_identity(line: str, rom: bytes, script: bytes) -> None:
@@ -412,6 +415,101 @@ def run_tracer(runner: Path, repo_root: Path, source_revision: str, checker_path
     return 0
 
 
+def validate_progress_negative(name: str, code: int, stdout: str, stderr: str,
+                               expected_state: str) -> None:
+    if (code != 1 or status_reason(stdout) != "predicate-not-reached" or
+            expected_state not in stdout or "status=pass" in stdout or stderr):
+        safe_out = stdout.strip()
+        safe_err = stderr.strip()
+        raise CheckError(f"{name}-negative-control-failed:exit={code}:{safe_out}:{safe_err}")
+
+
+def run_discrimination(runner: Path, repo_root: Path, source_revision: str,
+                       checker_path: Path) -> int:
+    self_test(repo_root)
+    source_commit, checker_sha = verify_source_identity(repo_root, source_revision, checker_path)
+    if not runner.is_file():
+        raise CheckError("runner-unavailable")
+    runner_sha = hashlib.sha256(runner.read_bytes()).hexdigest()
+    rom, _ = build_rom()
+    positive = input_script(True)
+    no_input = input_script(False)
+    wrong_input = input_script(True, "LEFT")
+    validate_source_anchors(rom)
+    if hashlib.sha256(rom).hexdigest() != CONTROL_SHA256:
+        raise CheckError("rom-source-identity-mismatch")
+
+    with tempfile.TemporaryDirectory(prefix="gbb-cgb-discrimination-") as temp:
+        work = Path(temp)
+        work.chmod(0o700)
+        (work / "control.gb").write_bytes(rom)
+        (work / "positive.input").write_bytes(positive)
+        (work / "no-input.input").write_bytes(no_input)
+        (work / "wrong-input.input").write_bytes(wrong_input)
+        raw_lines = (
+            case_line("cgb-discrimination-positive", "cgb-control-progress", "positive.input", rom, positive) +
+            case_line("cgb-discrimination-no-input", "cgb-control-progress", "no-input.input", rom, no_input) +
+            case_line("cgb-discrimination-wrong-input", "cgb-control-progress", "wrong-input.input", rom, wrong_input) +
+            case_line("cgb-discrimination-impossible", "cgb-control-impossible", "positive.input", rom, positive)
+        )
+        strict_lines = (
+            case_line("cgb-discrimination-strict-fail", "cgb-control-progress", "no-input.input",
+                      rom, no_input, model_fail=True) +
+            case_line("cgb-discrimination-strict-pass", "cgb-control-progress", "positive.input",
+                      rom, positive, model_fail=True)
+        )
+        helper = load_host_fixture(repo_root)
+        base = ["--acceptance", "cases.txt", "--model", "cgb-cpu-e", "--receipt"]
+
+        (work / "cases.txt").write_text(raw_lines, encoding="ascii")
+        for line, script in ((raw_lines.splitlines()[0], positive),
+                             (raw_lines.splitlines()[1], no_input),
+                             (raw_lines.splitlines()[2], wrong_input),
+                             (raw_lines.splitlines()[3], positive)):
+            validate_case_identity(line, rom, script)
+
+        positive_code, positive_out, positive_err = helper.run_runner(
+            str(runner), [*base, "--case", "cgb-discrimination-positive"], str(work), 30)
+        positive_receipts = [line for line in positive_out.splitlines() if line.startswith("receipt id=")]
+        if (positive_code != 0 or "status=pass" not in positive_out or positive_err or
+                len(positive_receipts) != 1):
+            raise CheckError("positive-native-cgb-route-failed:" +
+                             positive_out.strip() + ":" + positive_err.strip())
+        validate_native_receipt(positive_receipts[0])
+
+        negative_specs = (
+            ("no-input", "cgb-discrimination-no-input", "final_ready=a5 final_progress=00"),
+            ("wrong-input", "cgb-discrimination-wrong-input", "final_ready=a5 final_progress=00"),
+            ("impossible", "cgb-discrimination-impossible", "final_ready=a5 final_progress=01"),
+        )
+        for name, identifier, final_state in negative_specs:
+            code, stdout, stderr = helper.run_runner(
+                str(runner), [*base, "--case", identifier, "--raw-verdict"], str(work), 30)
+            validate_progress_negative(name, code, stdout, stderr, final_state)
+
+        (work / "cases.txt").write_text(raw_lines + strict_lines, encoding="ascii")
+        for index, script in enumerate((no_input, positive)):
+            validate_case_identity(strict_lines.splitlines()[index], rom, script)
+        strict_code, strict_out, strict_err = helper.run_runner(
+            str(runner), [*base, "--case", "cgb-discrimination-strict-fail"], str(work), 30)
+        if (strict_code != 0 or "status=xfail" not in strict_out or
+                "reason=predicate-not-reached" not in strict_out or
+                "final_ready=a5 final_progress=00" not in strict_out or strict_err):
+            raise CheckError(f"strict-xfail-control-failed:exit={strict_code}:{strict_out.strip()}:{strict_err.strip()}")
+        unexpected_code, unexpected_out, unexpected_err = helper.run_runner(
+            str(runner), [*base, "--case", "cgb-discrimination-strict-pass"], str(work), 30)
+        if (unexpected_code != 1 or "status=unexpected-pass" not in unexpected_out or
+                "status=pass" in unexpected_out or unexpected_err):
+            raise CheckError(f"unexpected-pass-control-failed:exit={unexpected_code}:"+
+                             f"{unexpected_out.strip()}:{unexpected_err.strip()}")
+
+    print("cgb-discrimination status=pass controls=positive,no-input,wrong-input,impossible,strict-xfail,unexpected-pass "
+          f"source_revision={source_commit} checker_sha256={checker_sha} runner_sha256={runner_sha} "
+          f"rom_sha256={hashlib.sha256(rom).hexdigest()} positive_input_sha256={hashlib.sha256(positive).hexdigest()} "
+          f"no_input_sha256={hashlib.sha256(no_input).hexdigest()} wrong_input_sha256={hashlib.sha256(wrong_input).hexdigest()}")
+    return 0
+
+
 def run_compatibility(runner: Path, repo_root: Path, source_revision: str,
                       checker_path: Path) -> int:
     self_test(repo_root)
@@ -452,6 +550,7 @@ def main() -> int:
     parser.add_argument("--repo-root", type=Path)
     parser.add_argument("--source-revision")
     parser.add_argument("--tracer", action="store_true")
+    parser.add_argument("--discrimination", action="store_true")
     parser.add_argument("--compatibility", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
@@ -468,6 +567,11 @@ def main() -> int:
                 raise CheckError("runner-and-source-revision-required")
             return run_tracer(args.runner.resolve(), repo_root, args.source_revision,
                               Path(__file__).resolve())
+        if args.discrimination:
+            if args.runner is None or args.source_revision is None:
+                raise CheckError("runner-and-source-revision-required")
+            return run_discrimination(args.runner.resolve(), repo_root, args.source_revision,
+                                      Path(__file__).resolve())
         if args.compatibility:
             if args.runner is None or args.source_revision is None:
                 raise CheckError("runner-and-source-revision-required")
