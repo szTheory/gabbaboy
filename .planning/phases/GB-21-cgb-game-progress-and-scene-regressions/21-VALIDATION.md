@@ -1,7 +1,7 @@
 ---
 phase: "21"
 slug: "cgb-game-progress-and-scene-regressions"
-status: awaiting-final-pr-checks
+status: local-qualified
 nyquist_compliant: true
 wave_0_complete: true
 created: "2026-11-01"
@@ -55,7 +55,7 @@ Plan 21-07 implementation and local qualification are complete. The table record
 | 21-06-01 | 21-06 | 2 | FEED-01 | T-21-13 | Minimal text intake without implicit personal-media or owner-play requirements. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_scene_report_tracer$'` | New in task | pass |
 | 21-06-02 | 21-06 | 2 | FEED-01 | T-21-13, T-21-14 | Independent permitted scene promotion, relevant negatives and privacy controls. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_scene_report_(tracer|controls|contract)$'` | Extended in task | pass |
 | 21-07-01 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-15, T-21-16 | Integrated actual outcome/docs reject false or unsupported claims. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_(game_evidence(_controls)?|fixture_admission|scene_report_.*)$'` | New composition checks | pass |
-| 21-07-02 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-16, T-21-17 | Final source/full-suite/hosted-consumer and traceable automated closure. | integration | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` | Existing full suite plus new tests | local pass; hosted pending |
+| 21-07-02 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-16, T-21-17 | Final source/full-suite/hosted-consumer and traceable automated closure. | integration | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` | Existing full suite plus new tests | local pass; check live exact-head PR status |
 
 Every runnable command added to a plan must name an observable `fails_when` condition. Expected-failure controls must assert the raw predicate/mode reason so setup errors cannot masquerade as the intended negative.
 
@@ -89,24 +89,24 @@ The six spec-less edge assumptions and two descriptor-less values prohibitions r
 
 ## Final Local Evidence
 
-Final code-change source and runner identity: `9bed35ce6e80e407ea31543cf986c795c9da061d`. A refreshed configure/build, source-bound receipt, and focused Phase 21/planning CTests passed at metadata source `f9711ea86b22b9fb33ba5516fe3d5d33c1538b1b`; the code tree is unchanged from `9bed35ce`.
+Final code-change source and runner identity: `66ee663ba8f7a505d67871fab7163b57306d0dd2`.
 
 - Configure: `cmake -S . -B build` — passed.
-- Build: `cmake --build build --parallel 8` — passed (638 Ninja build steps).
-- Full CTest: `ctest --test-dir build --output-on-failure --timeout 60 --parallel 1` — passed 1724/1724 in 1,227.20 seconds. The first sandbox-restricted run failed five pre-existing worktree-based v0.2/performance/release-review controls because it could not write under `.git/worktrees`; the same full suite then passed with repository-write permission. The final run includes the lesson-ID correction, Windows CRLF/bare-CR pin controls, and all four Windows synthetic-control portability fixes.
-- Fixture-admission budget: `phase21_fixture_admission_contract` took about 3 seconds and `phase21_fixture_admission_controls` about 14 seconds; both retain explicit 60-second CTest limits. The full run's `test_budget` check passed. Earlier 120/180-second declarations were brought within the fixed 60-second budget by removing redundant full-checker work per mutation; neither the budget nor its baseline was raised or refreshed, and no unrelated v0.3 debt was changed.
-- Source-bound receipt: `python3 -I tests/scripts/verify-cgb-game-evidence.py --check --runner build/gabbaboy-runner --repo-root . --source-revision f9711ea86b22b9fb33ba5516fe3d5d33c1538b1b --write-evidence build/phase21-evidence/result.json` — passed at the same source and runner identity. Outcome is `game=not-admitted`, model `CGB-CPU-E`, mode `cgb`.
-- Final focused CTest: `ctest --test-dir build --output-on-failure --timeout 60 --parallel 1 -R '^(phase21_.*|summary_coverage.*|lessons_unique_ids|state_size|test_budget)$'` — passed all 16 tests at metadata source `f9711ea`; this covers the final summary, lessons, state-size, test-budget and every Phase 21 contract.
+- Build: `cmake --build build` — passed (638 Ninja build steps).
+- Full CTest: `ctest --test-dir build --output-on-failure --timeout 60 --parallel 1` — passed 1724/1724 in 1,204.93 seconds. The project budget and baseline remain unchanged. Sandbox-restricted attempts could not create temporary Git worktrees under `.git/worktrees`; the complete final run passed with repository-write permission.
+- Fixture-admission budget: `phase21_fixture_admission_contract` took 3.61 seconds and `phase21_fixture_admission_controls` took 12.48 seconds; both retain explicit 60-second CTest limits. The full run's `test_budget` check passed. Earlier 120/180-second declarations were brought within the fixed 60-second budget by removing redundant full-checker work per mutation; neither the budget nor its baseline was raised or refreshed, and no unrelated v0.3 debt was changed.
+- Source-bound receipt: `python3 -I tests/scripts/verify-cgb-game-evidence.py --check --runner build/gabbaboy-runner --repo-root . --source-revision 66ee663ba8f7a505d67871fab7163b57306d0dd2 --write-evidence build/phase21-evidence/result.json` — passed at the implementation source and runner identity. Outcome is `game=not-admitted`, model `CGB-CPU-E`, mode `cgb`.
+- Final focused evidence: `ctest --test-dir build --output-on-failure --timeout 60 --parallel 1 -R '^(phase21_.*|summary_coverage.*|lessons_unique_ids|state_size|test_budget)$'` passed 16/16 in 26.56 seconds after the summary/lesson updates. It covers summary schema, unique lesson IDs, state size, the fixed budget, and every Phase 21 contract.
 - Candidate result: Potion Panic is no-go because exact source/component grants and repository/public-CI rights scope could not be established after its author-linked source fetch failed. µCity 1.3 is no-go because required `source/engine/hardware.inc` has no identified grant or notice, leaving complete build-source scope unestablished. These are rights/source-scope no-go decisions, not claims that either license prohibits use.
 - Neither game source was run. Fallback toolchain/build/run facts remain `not_observed`; no fallback fixture, acceptance case, input, predicate, or notice row exists. Original ROM progress remains harness-only. RGB555/PCM digests show repeatability only; no accuracy, physical-hardware, perceptual, mode-3 timing, or general-compatibility claim is made.
-- Independent code review at `893ecac8`: clean, 0 findings after the final path-with-spaces and CTest-registration fixes; the final portability delta was executor-reviewed and adds no security surface. See `21-07-REVIEW.md`. Security review closed implementation mitigations for T-21-15 and T-21-SC. Exact-head hosted/platform/installed-consumer checks remain open for T-21-16; shared verify-work closure remains for T-21-17.
+- Independent code review at `893ecac8`: clean, 0 findings. Executor follow-up through `66ee663b` found that the new path normalization adds no security surface. See `21-07-REVIEW.md`. Security review closed implementation mitigations for T-21-15 and T-21-SC. Exact-head hosted/platform/installed-consumer checks remain open for T-21-16; shared verify-work closure remains for T-21-17.
 
 ## CI/CD Efficiency
 
-The full local serial run measured 1,227.20 seconds. Its slowest test was `workflow_policy_group_release_jobs` at 61.70 seconds; fixture-admission contract and mutation controls passed under their unchanged declared 60-second cap, and `test_budget` passed. CI already uses four workers. The diagnostic push run `41422793614` on `b4e4c41a` completed Linux native/sanitizer, macOS native, fixture-reproduction and CMake-floor jobs; Windows failed only the two Phase 21 synthetic controls now fixed at `9bed35ce`. The run skipped PR-only planning and macOS package checks, so it cannot establish hosted qualification. These measurements do not justify changing concurrency, caching, timeouts or test membership. Measure the final exact-head PR workflows before considering changes.
+The full local serial run measured 1,204.93 seconds. `workflow_policy_group_release_jobs` took 60.91 seconds and passed; fixture-admission contract and mutation controls took 3.61 and 12.48 seconds under their unchanged declared 60-second caps, and `test_budget` passed. CI uses four workers. Exact-source push run `41430769014` on `6d552502` passed Linux native/sanitizer, macOS native, CMake-floor, and acceptance jobs; Windows failed only `phase21_scene_report_controls`, whose mixed path separators are fixed at `66ee663b`. Fixture-reproduction run `41430769108` passed. The push event skipped PR-only planning and macOS package checks, so these diagnostics are not hosted qualification. Measurements do not justify changing concurrency, caching, timeouts, or test membership.
 
 ## Hosted Qualification
 
-PR #140 is the required source for exact-head native/platform and installed-consumer qualification. After the final metadata commit is pushed, accept only successful pull-request runs whose `headSha` equals the current PR head; push-event and local results are not substitutes. Once those checks are established, use the shared `/gsd-verify-work 21` closure.
+PR #140 is the required source for exact-head native/platform and installed-consumer qualification. After the final metadata commit is pushed, accept only successful pull-request runs whose `headSha` equals the current PR head; push-event and local results are not substitutes. The previous exact-source push diagnostic failed on the path comparison that `66ee663b` fixes. Read the current hosted result live from PR #140; once exact-head checks pass, use the shared `/gsd-verify-work 21` closure.
 
-**Approval:** local implementation and automated validation are recorded; hosted qualification and phase closure remain pending.
+**Status:** local implementation and automated validation are recorded; PR #140 carries the live hosted status, and shared phase closure remains a separate step.

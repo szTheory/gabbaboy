@@ -163,3 +163,10 @@ _Depth: deep_
 - The synthetic scene checker ran CTest with `-C Debug`, but its inventory query omitted the configuration. The inventory query now uses the same `Debug` configuration.
 - The two focused Phase 21 controls pass, and the complete serial local suite passes 1,724/1,724 under the unchanged 60-second CTest cap. The source-bound receipt identifies this source as `game=not-admitted`, `CGB-CPU-E`, native `cgb`.
 - The changes add no network, file-access, authorization, or dependency surface. Independent review at `893ecac8` remains clean; final exact-head PR Windows and installed-consumer checks remain necessary.
+
+## Executor Follow-up — 66ee663b
+
+- The exact-head Windows diagnostic at `6d552502` found that the scene control compared a CTest JSON path using forward slashes against a Windows-native `pathlib.Path` string using backslashes. The checker now normalizes both sides and the synthetic control exercises mixed separators.
+- The fix only changes local path matching inside the source-bound test checker; it adds no new inputs, filesystem access, network, authorization, or dependency surface.
+- The synthetic controls report 17 passing controls. Configure, build, and all 1,724 CTests pass at the unchanged 60-second project budget on this revision. Exact-head Windows PR status must be read on PR #140's current head.
+- **Disposition:** No security or correctness findings remain locally; the PR event must confirm the Windows behavior on the hosted runner.

@@ -1080,6 +1080,15 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** A cross-platform contract executes Python helpers or inspects multi-configuration CTest inventory. The helper must use the same interpreter/configuration contract on every host.
 - **Verification:** At `9bed35ce6e80e407ea31543cf986c795c9da061d`, both focused Phase 21 controls passed and the full local serial CTest suite passed 1724/1724 under the unchanged 60-second cap. The exact-head pull-request Windows matrix is the required hosted confirmation.
 
+### GB-CGB-018 / 2026-11-02 / Normalize CTest command paths before matching Windows source arguments
+
+- **Cause and evidence:** Exact-head Windows push run `41430769014` failed only `phase21_scene_report_controls`. CTest's JSON command used forward slashes while `pathlib.Path` rendered the same source path with Windows backslashes, so the valid `synthetic_scene_positive` command was rejected. Linux formatting had hidden the mismatch.
+- **Remedy:** Normalize case and slash direction on both the expected source path and command text before matching. Keep a synthetic control that proves Windows-form separators match the same command path.
+- **Applies when:** A cross-platform checker matches paths emitted by native build/test tools. The check must compare equivalent path forms without weakening the source identity requirement.
+- **Verification:** At `66ee663ba8f7a505d67871fab7163b57306d0dd2`, the synthetic scene controls pass with 17 controls and the complete local CTest suite passes 1724/1724 in 1204.93 seconds under the unchanged 60-second budget. Exact-head Windows PR qualification is still required.
+- **Source:** Phase 21 Plan 21-07; push diagnostic `41430769014`.
+- **Status:** Adopted.
+
 
 ## v0.3 milestone-boundary exchange / 2026-10-31
 

@@ -69,7 +69,7 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
 **Plan cap**: 12
-**Plans**: 7/7 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan.
+**Plans**: 7/7 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan. Plan 21-07's local full suite and source-bound receipt pass; exact-head PR/platform and installed-consumer qualification still gates phase closure.
 
 Plans:
 **Wave 1**
