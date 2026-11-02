@@ -69,7 +69,7 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
 **Plan cap**: 12
-**Plans**: 3/7 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan.
+**Plans**: 4/7 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan.
 
 Plans:
 **Wave 1**
@@ -78,7 +78,7 @@ Plans:
 
 **Wave 2** *(blocked on the indicated Wave 1 dependencies)*
 - [x] 21-02-PLAN.md — Input/predicate discrimination and independently specified original RGB555 observation controls.
-- [ ] 21-06-PLAN.md — Minimal scene intake, agent-owned reproduction procedure and independent/private-data promotion gates.
+- [x] 21-06-PLAN.md — Minimal scene intake, agent-owned reproduction procedure and independent/private-data promotion gates.
 
 **Wave 3** *(blocked on Plans 21-02 and 21-03)*
 - [ ] 21-04-PLAN.md — One bounded Potion Panic GB Compo 2025 source/build/rights/native-progress attempt or actual no-go.
@@ -141,7 +141,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
-| 21. CGB Game Progress and Scene Regressions | 3/7 | In Progress | - |
+| 21. CGB Game Progress and Scene Regressions | 4/7 | In Progress | - |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 

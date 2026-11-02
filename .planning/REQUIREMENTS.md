@@ -23,7 +23,7 @@
 
 ### Scene Feedback
 
-- [ ] **FEED-01**: A concise title/scene/symptom report is enough to start agent-owned reproduction and classification; any resulting automated scene regression has an independent expected behavior and a negative control, while personal ROMs, saves, states, and captures remain outside the repository.
+- [x] **FEED-01**: A concise title/scene/symptom report is enough to start agent-owned reproduction and classification; any resulting automated scene regression has an independent expected behavior and a negative control, while personal ROMs, saves, states, and captures remain outside the repository.
 
 ### Release Evidence
 
@@ -61,7 +61,7 @@ Deferred to a later owner-approved milestone.
 | RIGHTS-01 | Phase 20 | Pending |
 | DIAG-01 | Phase 22 | Pending |
 | DIAG-02 | Phase 22 | Pending |
-| FEED-01 | Phase 21 | Pending |
+| FEED-01 | Phase 21 | Complete |
 | REL-01 | Phase 23 | Pending |
 
 **Coverage:**
