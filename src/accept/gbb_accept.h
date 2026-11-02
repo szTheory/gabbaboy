@@ -134,13 +134,23 @@ typedef enum {
 #define GBB_ACCEPT_ANCHOR_MAX 20u
 
 typedef struct {
-    const char *role_name;
+    const char *name;
     uint16_t address;
     const char *derivation;
     uint32_t anchor_offset;
     uint8_t anchor_length;       /* 0 when the row has no ROM anchor */
     uint8_t anchor[GBB_ACCEPT_ANCHOR_MAX];
 } gbb_accept_predicate_row;
+
+#define GBB_ACCEPT_SOURCE_ROW_COUNT 3u
+
+typedef bool (*gbb_accept_predicate_eval_fn)(gbb_accept_peek_fn peek, void *context,
+                                             uint8_t expect_hw);
+
+typedef enum {
+    GBB_ACCEPT_OBSERVE_LIBBET = 0,
+    GBB_ACCEPT_OBSERVE_PROGRESS_ONLY = 1
+} gbb_accept_observation_policy;
 
 typedef struct {
     const char *name;
@@ -150,6 +160,13 @@ typedef struct {
      * diagnostics and requires an FF00 reset pulse and the expected hw_capability at that frame.
      * Zero means the predicate has no SGB probe. */
     uint32_t sgb_probe_frames;
+    /* NULL retains the legacy Libbet predicate. Non-NULL callbacks are immutable ROM-bound
+     * evaluators and must read only their documented source-derived bytes. */
+    gbb_accept_predicate_eval_fn evaluate;
+    /* Zero preserves Libbet's structure, audible-PCM and SGB gates. */
+    gbb_accept_observation_policy observation_policy;
+    /* Named source rows for predicates that do not use Libbet semantic roles. */
+    gbb_accept_predicate_row source_rows[GBB_ACCEPT_SOURCE_ROW_COUNT];
 } gbb_accept_predicate;
 
 /* NULL for an unknown name or a ROM digest other than the pinned one. */

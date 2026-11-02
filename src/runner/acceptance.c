@@ -88,6 +88,8 @@ static int input_error(const gbb_case *c, const char *reason) {
 #define MAX_CHECKPOINTS 8u
 #define FRAME_RING 3u
 #define FRAME_PITCH GBB_ACCEPT_FRAME_WIDTH
+#define FRAME_PITCH555 (GBB_ACCEPT_FRAME_WIDTH * 2u)
+#define CAPTURE_FORMAT_UNKNOWN 2u
 #define MAX_OBSERVE_LINES 64u
 #define OBSERVE_LINE_BYTES 192u
 #define MAX_DIR_BYTES 3800u
@@ -113,7 +115,11 @@ typedef struct {
     uint64_t completion_half_dots;
     char digest[65];
     unsigned distinct_shades;
-    uint8_t pixels[GBB_ACCEPT_FRAME_SHADE_BYTES];
+    uint8_t format; /* 0: RGB888 shades, 1: RGB555 */
+    union {
+        uint8_t shades[GBB_ACCEPT_FRAME_SHADE_BYTES];
+        uint16_t rgb555[GBB_ACCEPT_FRAME_SHADE_BYTES];
+    } pixels;
 } frame_record;
 
 typedef struct {
@@ -126,6 +132,10 @@ typedef struct {
     uint64_t frames_seen;
     uint64_t last_generation;
     uint8_t scratch[GBB_ACCEPT_FRAME_SHADE_BYTES];
+    uint16_t scratch555[GBB_ACCEPT_FRAME_SHADE_BYTES];
+    uint8_t frame_format;
+    uint32_t execution_mode;
+    uint64_t pcm_samples;
     gbb_accept_sha256_ctx rolling;
     gbb_accept_track track;
     gbb_accept_pcm_digest_ctx pcm;
@@ -164,8 +174,11 @@ static void resolve_checkpoint(run_state *st, checkpoint *cp, const frame_record
     if (st->dump_dir != NULL) {
         char name[128], path[MAX_DIR_BYTES + 128u];
         snprintf(name, sizeof(name), "%s.%s.ppm", st->id, cp->label);
-        if (!join_path(path, sizeof(path), st->dump_dir, name) ||
-            gbb_accept_write_ppm(path, frame->pixels, FRAME_PITCH) != 0) {
+        if (!join_path(path, sizeof(path), st->dump_dir, name)) {
+            st->dump_failed = true;
+        } else if ((frame->format == 1u
+                        ? gbb_accept_write_ppm_rgb555(path, frame->pixels.rgb555, FRAME_PITCH555)
+                        : gbb_accept_write_ppm(path, frame->pixels.shades, FRAME_PITCH)) != 0) {
             st->dump_failed = true;
         }
     }
@@ -174,6 +187,11 @@ static void resolve_checkpoint(run_state *st, checkpoint *cp, const frame_record
 static void on_pcm(void *context, const gbb_audio_frame *frames, size_t count) {
     run_state *st = context;
     gbb_accept_pcm_digest_feed(&st->pcm, frames, count);
+    if (count > UINT64_MAX - st->pcm_samples) {
+        st->error = "pcm-sample-overflow";
+        return;
+    }
+    st->pcm_samples += (uint64_t)count;
     if (st->window_active) gbb_accept_pcm_stats_feed(&st->window, frames, count);
 }
 
@@ -185,12 +203,17 @@ static void on_after_step(void *context, gbb_instance *instance, uint64_t actual
     st->window_active = st->has_play_start && actual_half_dots >= st->play_start_half_dots;
     if (st->error != NULL) return;
     gbb_frame_info info;
-    if (capture_format(instance) == 1u) {
-        /* D-43 covers frame-digest cases only; a silent "no completed frame" would hide the gap. */
-        st->error = "frame-unsupported-profile";
+    uint8_t format = capture_format(instance);
+    if (format == CAPTURE_FORMAT_UNKNOWN || format != st->frame_format) {
+        st->error = "frame-invalid";
         return;
     }
-    if (gbb_copy_frame(instance, st->scratch, sizeof(st->scratch), FRAME_PITCH, &info) != GBB_OK) {
+    if (format == 1u) {
+        if (gbb_copy_frame_rgb555(instance, st->scratch555, sizeof(st->scratch555), FRAME_PITCH555,
+                                  &info) != GBB_OK) {
+            return; /* no completed frame yet (or since reset) */
+        }
+    } else if (gbb_copy_frame(instance, st->scratch, sizeof(st->scratch), FRAME_PITCH, &info) != GBB_OK) {
         return; /* no completed frame yet (or since reset) */
     }
     if (info.generation == st->last_generation) return;
@@ -199,16 +222,23 @@ static void on_after_step(void *context, gbb_instance *instance, uint64_t actual
         return;
     }
     uint8_t bin[32];
-    if (gbb_accept_rgb_digest_bin(st->scratch, FRAME_PITCH, bin) != 0) {
+    int digest_result = format == 1u
+        ? gbb_accept_rgb555_digest_bin(st->scratch555, FRAME_PITCH555, bin)
+        : gbb_accept_rgb_digest_bin(st->scratch, FRAME_PITCH, bin);
+    if (digest_result != 0) {
         st->error = "frame-invalid";
         return;
     }
     st->last_generation = info.generation;
     frame_record *slot = &st->ring[st->frames_seen % FRAME_RING];
-    memcpy(slot->pixels, st->scratch, sizeof(slot->pixels));
+    slot->format = format;
+    if (format == 1u) memcpy(slot->pixels.rgb555, st->scratch555, sizeof(slot->pixels.rgb555));
+    else memcpy(slot->pixels.shades, st->scratch, sizeof(slot->pixels.shades));
     slot->completion_half_dots = info.completion_half_dots;
     bin_to_hex(bin, slot->digest);
-    slot->distinct_shades = gbb_accept_frame_distinct_shades(slot->pixels, FRAME_PITCH);
+    slot->distinct_shades = format == 1u
+        ? gbb_accept_rgb555_distinct(slot->pixels.rgb555, FRAME_PITCH555)
+        : gbb_accept_frame_distinct_shades(slot->pixels.shades, FRAME_PITCH);
     gbb_accept_sha256_update(&st->rolling, bin, sizeof(bin));
     st->frames_seen++;
     for (size_t i = 0; i < st->checkpoint_count; ++i) {
@@ -296,7 +326,17 @@ static int compare_lines(const void *a, const void *b) {
     return strcmp((const char *)a, (const char *)b);
 }
 
-static void print_observation(const gbb_case *c, const run_state *st, bool hit, uint64_t t_hit,
+static const char *execution_mode_name(uint32_t mode) {
+    switch (mode) {
+    case GBB_MODE_DMG: return "dmg";
+    case GBB_MODE_CGB: return "cgb";
+    case GBB_MODE_CGB_DMG_COMPAT: return "cgb-dmg-compat";
+    default: return "unknown";
+    }
+}
+
+static void print_observation(const gbb_case *c, const gbb_accept_predicate *predicate,
+                              gbb_instance *instance, const run_state *st, bool hit, uint64_t t_hit,
                               bool pcm_only, const char pcm_hex[65], const char rolling_hex[65]) {
     observe_lines *out = malloc(sizeof(*out));
     if (out == NULL) {
@@ -305,10 +345,23 @@ static void print_observation(const gbb_case *c, const run_state *st, bool hit, 
     }
     out->count = 0;
     char key[96];
+    const bool progress_only = predicate->observation_policy == GBB_ACCEPT_OBSERVE_PROGRESS_ONLY;
     if (!pcm_only) {
         emit_line(out, c->id, "class", "regression");
         if (hit) emit_line(out, c->id, "t_hit_half_dots", "%llu", (unsigned long long)t_hit);
         else emit_line(out, c->id, "t_hit_half_dots", "none");
+        if (progress_only) {
+            emit_line(out, c->id, "profile", "%s", "CGB-CPU-E");
+            emit_line(out, c->id, "execution_mode", "%s", execution_mode_name(st->execution_mode));
+            emit_line(out, c->id, "frame_format", "%s", "GBB-RGB555LE-v1");
+            emit_line(out, c->id, "evidence_class", "%s", "original-harness-only");
+            for (size_t i = 0; i < GBB_ACCEPT_SOURCE_ROW_COUNT; ++i) {
+                const gbb_accept_predicate_row *row = &predicate->source_rows[i];
+                if (row->name == NULL || row->address < 0xC000u || row->address > 0xDFFFu) continue;
+                snprintf(key, sizeof(key), "predicate.%s", row->name);
+                emit_line(out, c->id, key, "%02x", gbb_peek_ram(instance, row->address));
+            }
+        }
         for (size_t i = 0; i < st->checkpoint_count; ++i) {
             const checkpoint *cp = &st->checkpoints[i];
             snprintf(key, sizeof(key), "checkpoint.%s.requested_half_dots", cp->label);
@@ -317,12 +370,14 @@ static void print_observation(const gbb_case *c, const run_state *st, bool hit, 
             snprintf(key, sizeof(key), "checkpoint.%s.completion_half_dots", cp->label);
             if (cp->resolved) emit_line(out, c->id, key, "%llu", (unsigned long long)cp->completion_half_dots);
             else emit_line(out, c->id, key, "none");
-            snprintf(key, sizeof(key), "checkpoint.%s.frame", cp->label);
+            snprintf(key, sizeof(key), progress_only ? "checkpoint.%s.frame555" : "checkpoint.%s.frame",
+                     cp->label);
             emit_line(out, c->id, key, "%s", cp->resolved ? cp->digest : "none");
         }
-        emit_line(out, c->id, "frame.rolling", "%s", rolling_hex);
+        emit_line(out, c->id, progress_only ? "frame.rolling555" : "frame.rolling", "%s", rolling_hex);
     }
     emit_line(out, c->id, "pcm_sha256", "%s", pcm_hex);
+    if (progress_only) emit_line(out, c->id, "pcm_samples", "%llu", (unsigned long long)st->pcm_samples);
     emit_line(out, c->id, "pcm.window.left.peak_to_peak", "%d",
               (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples));
     emit_line(out, c->id, "pcm.window.left.changes", "%llu", (unsigned long long)st->window.left.changes);
@@ -355,8 +410,13 @@ static void write_failure_ppm(const gbb_case *c, const gbb_acceptance_options *o
     if (options == NULL || options->failure_dir == NULL || frame == NULL) return;
     char name[96], path[MAX_DIR_BYTES + 128u];
     snprintf(name, sizeof(name), "%s.ppm", c->id);
-    if (join_path(path, sizeof(path), options->failure_dir, name) &&
-        gbb_accept_write_ppm(path, frame->pixels, FRAME_PITCH) == 0) {
+    int write_result = -1;
+    if (join_path(path, sizeof(path), options->failure_dir, name)) {
+        write_result = frame->format == 1u
+            ? gbb_accept_write_ppm_rgb555(path, frame->pixels.rgb555, FRAME_PITCH555)
+            : gbb_accept_write_ppm(path, frame->pixels.shades, FRAME_PITCH);
+    }
+    if (write_result == 0) {
         snprintf(note, PPM_NOTE_BYTES, " ppm=%s", path);
     } else {
         snprintf(note, PPM_NOTE_BYTES, " ppm=write-failed");
@@ -381,6 +441,31 @@ static int fail_run(const gbb_case *c, const gbb_acceptance_options *options, co
     printf("acceptance id=%s status=fail model=%s reason=%s end_half_dots=%llu%s%s%s\n", c->id, run_model(options), reason,
            (unsigned long long)end_half_dots, final_note, note, ppm_note);
     return EXIT_FAIL;
+}
+
+static void set_final_state(run_state *st, const gbb_accept_predicate *predicate, gbb_instance *instance) {
+    if (predicate->observation_policy == GBB_ACCEPT_OBSERVE_LIBBET) {
+#define FINAL(role) gbb_peek_ram(instance, predicate->rows[role].address)
+        snprintf(st->final_state, sizeof(st->final_state),
+                 "final_hw=%02x final_attract=%02x final_floor=%02x final_score=%02x/%02x final_size=%02xx%02x",
+                 FINAL(GBB_ACCEPT_ROLE_HW_CAPABILITY), FINAL(GBB_ACCEPT_ROLE_ATTRACT_MODE),
+                 FINAL(GBB_ACCEPT_ROLE_CUR_FLOOR), FINAL(GBB_ACCEPT_ROLE_CUR_SCORE),
+                 FINAL(GBB_ACCEPT_ROLE_MAX_SCORE), FINAL(GBB_ACCEPT_ROLE_FLOOR_WIDTH),
+                 FINAL(GBB_ACCEPT_ROLE_FLOOR_HEIGHT));
+#undef FINAL
+        return;
+    }
+
+    size_t used = 0;
+    for (size_t i = 0; i < GBB_ACCEPT_SOURCE_ROW_COUNT && used < sizeof(st->final_state); ++i) {
+        const gbb_accept_predicate_row *row = &predicate->source_rows[i];
+        if (row->name == NULL || row->address < 0xC000u || row->address > 0xDFFFu) continue;
+        int n = snprintf(st->final_state + used, sizeof(st->final_state) - used,
+                         "%sfinal_%s=%02x", used == 0 ? "" : " ", row->name,
+                         gbb_peek_ram(instance, row->address));
+        if (n < 0 || (size_t)n >= sizeof(st->final_state) - used) break;
+        used += (size_t)n;
+    }
 }
 
 /* ---- Bounded diagnostics replay (D-17, D-18) ----
@@ -685,15 +770,12 @@ typedef struct {
     gbb_frame_info info;
 } scratch_frame;
 
-#define FRAME_PITCH555 (GBB_ACCEPT_FRAME_WIDTH * 2u)
-
 _Static_assert(sizeof(((scratch_frame *)0)->pixels555) ==
                    (size_t)GBB_ACCEPT_FRAME_WIDTH * GBB_ACCEPT_FRAME_HEIGHT * 2u,
                "RGB555 scratch size");
 
 /* D-43: the store is decided by the instance profile. 2 means the profile could not be read; the
  * callers report that as frame-invalid instead of silently using the DMG store on a CGB instance. */
-#define CAPTURE_FORMAT_UNKNOWN 2u
 static uint8_t capture_format(const gbb_instance *instance) {
     gbb_info info;
     memset(&info, 0, sizeof(info));
@@ -1066,6 +1148,24 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
         goto done;
     }
     if (gbb_load_rom(instance, rom, rom_length) != GBB_OK) { code = input_error(c, "rom-rejected"); goto done; }
+    gbb_info loaded_info;
+    memset(&loaded_info, 0, sizeof(loaded_info));
+    loaded_info.struct_size = GBB_INFO_SIZE_V1;
+    if (gbb_get_info(instance, &loaded_info) != GBB_OK) {
+        printf("acceptance id=%s status=unsupported model=%s reason=rom-info-unavailable\n",
+               c->id, run_model(options));
+        code = EXIT_UNSUPPORTED;
+        goto done;
+    }
+    st->execution_mode = loaded_info.mode;
+    st->frame_format = loaded_info.profile == (uint32_t)GBB_PROFILE_CGB_CPU_E ? 1u : 0u;
+    if (run_profile(options) == GBB_RUNNER_PROFILE_CGB && loaded_info.mode != GBB_MODE_CGB) {
+        printf("acceptance id=%s status=unsupported model=%s reason=execution-mode-mismatch "
+               "expected=cgb actual=%s\n", c->id, run_model(options),
+               execution_mode_name(loaded_info.mode));
+        code = EXIT_UNSUPPORTED;
+        goto done;
+    }
     stepper = malloc(sizeof(*stepper)); /* carries a PCM buffer: keep it off the stack */
     if (stepper == NULL) {
         fprintf(stderr, "runner-error: stepper allocation failed\n");
@@ -1088,16 +1188,7 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     gbb_accept_drive_result result;
     gbb_accept_drive(&config, &result);
 
-    /* Final predicate variables (D-14): what the guest actually reached, so a control's failure is
-     * explained by state rather than by absence. Two-digit hex per byte. */
-#define FINAL(role) gbb_peek_ram(instance, predicate->rows[role].address)
-    snprintf(st->final_state, sizeof(st->final_state),
-             "final_hw=%02x final_attract=%02x final_floor=%02x final_score=%02x/%02x final_size=%02xx%02x",
-             FINAL(GBB_ACCEPT_ROLE_HW_CAPABILITY), FINAL(GBB_ACCEPT_ROLE_ATTRACT_MODE),
-             FINAL(GBB_ACCEPT_ROLE_CUR_FLOOR), FINAL(GBB_ACCEPT_ROLE_CUR_SCORE),
-             FINAL(GBB_ACCEPT_ROLE_MAX_SCORE), FINAL(GBB_ACCEPT_ROLE_FLOOR_WIDTH),
-             FINAL(GBB_ACCEPT_ROLE_FLOOR_HEIGHT));
-#undef FINAL
+    set_final_state(st, predicate, instance);
 
     char pcm_hex[65], rolling_hex[65];
     gbb_accept_pcm_digest_final(&st->pcm, pcm_hex);
@@ -1117,7 +1208,8 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     }
 
     if (observe && (result.status == GBB_ACCEPT_DRIVE_HIT || result.status == GBB_ACCEPT_DRIVE_NOT_REACHED)) {
-        print_observation(c, st, result.status == GBB_ACCEPT_DRIVE_HIT, result.t_hit_half_dots,
+        print_observation(c, predicate, instance, st,
+                          result.status == GBB_ACCEPT_DRIVE_HIT, result.t_hit_half_dots,
                           options->pcm_only, pcm_hex, rolling_hex);
         code = EXIT_PASS;
         goto done;
@@ -1125,21 +1217,26 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
 
     switch (result.status) {
     case GBB_ACCEPT_DRIVE_HIT: {
-        /* Evidence gates (D-16, D-25): every checkpoint frame exists and is structured, the hit
-         * differs from the title, and both channels are audible in the play window. */
+        const bool progress_only = predicate->observation_policy == GBB_ACCEPT_OBSERVE_PROGRESS_ONLY;
         const char *reason = NULL;
         for (size_t i = 0; i < st->checkpoint_count && reason == NULL; ++i) {
             if (!st->checkpoints[i].resolved) reason = "checkpoint-not-ready";
         }
-        for (size_t i = 0; i < st->checkpoint_count && reason == NULL; ++i) {
-            if (st->checkpoints[i].distinct_shades < min_shades_for(st->checkpoints[i].label)) {
+        if (!progress_only) {
+            /* Libbet's original evidence gates: structured frames, a changed hit frame, and audible PCM. */
+            for (size_t i = 0; i < st->checkpoint_count && reason == NULL; ++i) {
+                if (st->checkpoints[i].distinct_shades < min_shades_for(st->checkpoints[i].label)) {
+                    reason = "checkpoint-structure";
+                }
+            }
+            if (reason == NULL &&
+                strcmp(st->checkpoints[0].digest, st->checkpoints[st->hit_index].digest) == 0) {
                 reason = "checkpoint-structure";
             }
+            if (reason == NULL && (!pcm_has_samples(st) || !gbb_accept_pcm_audible(&st->window))) {
+                reason = "pcm-silent";
+            }
         }
-        if (reason == NULL && strcmp(st->checkpoints[0].digest, st->checkpoints[st->hit_index].digest) == 0) {
-            reason = "checkpoint-structure";
-        }
-        if (reason == NULL && (!pcm_has_samples(st) || !gbb_accept_pcm_audible(&st->window))) reason = "pcm-silent";
         if (reason != NULL) {
             code = fail_run(c, options, st, reason, result.end_half_dots);
             if (code == EXIT_FAIL) stall_if_requested(c, options, rom, rom_length, &script, reason, result.end_half_dots);
@@ -1169,26 +1266,59 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
             code = EXIT_FAIL;
             break;
         }
-        printf("acceptance id=%s status=pass model=%s t_hit_half_dots=%llu%s\n", c->id, run_model(options),
-               (unsigned long long)result.t_hit_half_dots, note);
+        if (progress_only) {
+            printf("acceptance id=%s status=pass model=%s profile=CGB-CPU-E execution_mode=cgb "
+                   "frame_format=GBB-RGB555LE-v1 evidence_class=original-harness-only "
+                   "t_hit_half_dots=%llu%s\n", c->id, run_model(options),
+                   (unsigned long long)result.t_hit_half_dots, note);
+        } else {
+            printf("acceptance id=%s status=pass model=%s t_hit_half_dots=%llu%s\n", c->id,
+                   run_model(options), (unsigned long long)result.t_hit_half_dots, note);
+        }
         if (options != NULL && options->receipt) {
-            printf("receipt id=%s rom_sha256=%s rom_size=%u input_sha256=%s predicate=%s "
-                   "budget_half_dots=%llu end_half_dots=%llu core_revision=%s build_qualified=%s",
-                   c->id, c->rom_sha256, (unsigned)c->rom_size, c->input_sha256, c->predicate,
-                   (unsigned long long)c->budget_half_dots,
-                   (unsigned long long)result.end_half_dots,
-                   options->core_revision != NULL ? options->core_revision : "unknown",
-                   options->build_qualified ? "true" : "false");
-            for (size_t i = 0; i < st->checkpoint_count; ++i) {
-                printf(" frame_%s=%s", st->checkpoints[i].label, st->checkpoints[i].digest);
+            if (progress_only) {
+                printf("receipt id=%s profile=CGB-CPU-E execution_mode=cgb frame_format=GBB-RGB555LE-v1 "
+                       "evidence_class=original-harness-only rom_sha256=%s rom_size=%u input_sha256=%s "
+                       "predicate=%s budget_half_dots=%llu end_half_dots=%llu t_hit_half_dots=%llu "
+                       "core_revision=%s build_qualified=%s",
+                       c->id, c->rom_sha256, (unsigned)c->rom_size, c->input_sha256, c->predicate,
+                       (unsigned long long)c->budget_half_dots, (unsigned long long)result.end_half_dots,
+                       (unsigned long long)result.t_hit_half_dots,
+                       options->core_revision != NULL ? options->core_revision : "unknown",
+                       options->build_qualified ? "true" : "false");
+                for (size_t i = 0; i < st->checkpoint_count; ++i) {
+                    const checkpoint *cp = &st->checkpoints[i];
+                    printf(" checkpoint_%s_completion_half_dots=%llu checkpoint_%s_frame=%s",
+                           cp->label, (unsigned long long)cp->completion_half_dots,
+                           cp->label, cp->digest);
+                }
+                printf(" frame_rolling555=%s pcm_sha256=%s pcm_samples=%llu "
+                       "pcm_left_peak_to_peak=%d pcm_left_changes=%llu "
+                       "pcm_right_peak_to_peak=%d pcm_right_changes=%llu",
+                       rolling_hex, pcm_hex, (unsigned long long)st->pcm_samples,
+                       (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples),
+                       (unsigned long long)st->window.left.changes,
+                       (int)gbb_accept_pcm_peak_to_peak(&st->window.right, st->window.samples),
+                       (unsigned long long)st->window.right.changes);
+            } else {
+                printf("receipt id=%s rom_sha256=%s rom_size=%u input_sha256=%s predicate=%s "
+                       "budget_half_dots=%llu end_half_dots=%llu core_revision=%s build_qualified=%s",
+                       c->id, c->rom_sha256, (unsigned)c->rom_size, c->input_sha256, c->predicate,
+                       (unsigned long long)c->budget_half_dots,
+                       (unsigned long long)result.end_half_dots,
+                       options->core_revision != NULL ? options->core_revision : "unknown",
+                       options->build_qualified ? "true" : "false");
+                for (size_t i = 0; i < st->checkpoint_count; ++i) {
+                    printf(" frame_%s=%s", st->checkpoints[i].label, st->checkpoints[i].digest);
+                }
+                printf(" frame_rolling=%s pcm_sha256=%s pcm_left_peak_to_peak=%d pcm_left_changes=%llu "
+                       "pcm_right_peak_to_peak=%d pcm_right_changes=%llu",
+                       rolling_hex, pcm_hex,
+                       (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples),
+                       (unsigned long long)st->window.left.changes,
+                       (int)gbb_accept_pcm_peak_to_peak(&st->window.right, st->window.samples),
+                       (unsigned long long)st->window.right.changes);
             }
-            printf(" frame_rolling=%s pcm_sha256=%s pcm_left_peak_to_peak=%d pcm_left_changes=%llu "
-                   "pcm_right_peak_to_peak=%d pcm_right_changes=%llu",
-                   rolling_hex, pcm_hex,
-                   (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples),
-                   (unsigned long long)st->window.left.changes,
-                   (int)gbb_accept_pcm_peak_to_peak(&st->window.right, st->window.samples),
-                   (unsigned long long)st->window.right.changes);
             if (probe) printf(" hw_f90=%02x sgb_reset_pulses=%u", (unsigned)hw_probe, sgb_pulses);
             printf("\n");
         }

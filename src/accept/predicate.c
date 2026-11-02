@@ -8,6 +8,7 @@
  * On any Libbet upgrade, re-derive from a rebuilt .sym and replace the row. */
 
 #define LIBBET_SHA256 "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9"
+#define CGB_CONTROL_SHA256 "17822873ec8641280d9504229d96850414e872bc90de5431469a498e5271db7e"
 
 static const gbb_accept_predicate libbet_tutorial_cleared = {
     "libbet-tutorial-cleared",
@@ -58,11 +59,70 @@ static const gbb_accept_predicate libbet_tutorial_cleared = {
     90u
 };
 
+/* This original harness sets C000 to A5 when ready, then changes C001 once after RIGHT. The two
+ * predicates intentionally use the same source-derived state and ROM anchors; the impossible
+ * control asks for a value the authored program cannot store. */
+static bool cgb_control_progress_eval(gbb_accept_peek_fn peek, void *context, uint8_t expect_hw) {
+    (void)expect_hw;
+    return peek != NULL && peek(context, 0xC000u) == 0xA5u && peek(context, 0xC001u) == 0x01u;
+}
+
+static bool cgb_control_impossible_eval(gbb_accept_peek_fn peek, void *context, uint8_t expect_hw) {
+    (void)expect_hw;
+    return peek != NULL && peek(context, 0xC000u) == 0xA5u && peek(context, 0xC001u) == 0xFFu;
+}
+
+static const gbb_accept_predicate cgb_control_progress = {
+    .name = "cgb-control-progress",
+    .rom_sha256 = CGB_CONTROL_SHA256,
+    .evaluate = cgb_control_progress_eval,
+    .observation_policy = GBB_ACCEPT_OBSERVE_PROGRESS_ONLY,
+    .source_rows = {
+        {"ready", 0xC000u, "Authored SM83 writes A5 to C000 before enabling the LCD.",
+         0x15Fu, 8, {0x3E, 0xA5, 0xEA, 0x00, 0xC0, 0xAF, 0xEA, 0x01}},
+        {"progress", 0xC001u, "A debounced RIGHT press stores one at C001 exactly once.",
+         0x17Cu, 5, {0x3E, 0x01, 0xEA, 0x01, 0xC0}},
+        {"right_input", 0x0000u, "Selects direction input and tests active-low RIGHT at JOYP.",
+         0x16Cu, 8, {0x3E, 0x20, 0xE0, 0x00, 0xF0, 0x00, 0xCB, 0x47}},
+    },
+};
+
+static const gbb_accept_predicate cgb_control_impossible = {
+    .name = "cgb-control-impossible",
+    .rom_sha256 = CGB_CONTROL_SHA256,
+    .evaluate = cgb_control_impossible_eval,
+    .observation_policy = GBB_ACCEPT_OBSERVE_PROGRESS_ONLY,
+    .source_rows = {
+        {"ready", 0xC000u, "Authored SM83 writes A5 to C000 before enabling the LCD.",
+         0x15Fu, 8, {0x3E, 0xA5, 0xEA, 0x00, 0xC0, 0xAF, 0xEA, 0x01}},
+        {"progress", 0xC001u, "A debounced RIGHT press stores one at C001 exactly once.",
+         0x17Cu, 5, {0x3E, 0x01, 0xEA, 0x01, 0xC0}},
+        {"right_input", 0x0000u, "Selects direction input and tests active-low RIGHT at JOYP.",
+         0x16Cu, 8, {0x3E, 0x20, 0xE0, 0x00, 0xF0, 0x00, 0xCB, 0x47}},
+    },
+};
+
+static bool predicate_row_anchor_match(const gbb_accept_predicate_row *row,
+                                       const uint8_t *rom, size_t length) {
+    if (row->anchor_length == 0) return true;
+    if (row->anchor_length > GBB_ACCEPT_ANCHOR_MAX) return false;
+    if (row->anchor_offset > length || length - row->anchor_offset < row->anchor_length) return false;
+    return memcmp(rom + row->anchor_offset, row->anchor, row->anchor_length) == 0;
+}
+
 const gbb_accept_predicate *gbb_accept_predicate_find(const char *name, const char *rom_sha256) {
     if (name == NULL || rom_sha256 == NULL) return NULL;
     if (strcmp(name, libbet_tutorial_cleared.name) == 0 &&
         strcmp(rom_sha256, libbet_tutorial_cleared.rom_sha256) == 0) {
         return &libbet_tutorial_cleared;
+    }
+    if (strcmp(name, cgb_control_progress.name) == 0 &&
+        strcmp(rom_sha256, cgb_control_progress.rom_sha256) == 0) {
+        return &cgb_control_progress;
+    }
+    if (strcmp(name, cgb_control_impossible.name) == 0 &&
+        strcmp(rom_sha256, cgb_control_impossible.rom_sha256) == 0) {
+        return &cgb_control_impossible;
     }
     return NULL;
 }
@@ -71,11 +131,10 @@ bool gbb_accept_predicate_anchors_match(const gbb_accept_predicate *predicate,
                                         const uint8_t *rom, size_t length) {
     if (predicate == NULL || (rom == NULL && length != 0)) return false;
     for (size_t i = 0; i < GBB_ACCEPT_ROLE_COUNT; i++) {
-        const gbb_accept_predicate_row *row = &predicate->rows[i];
-        if (row->anchor_length == 0) continue;
-        if (row->anchor_length > GBB_ACCEPT_ANCHOR_MAX) return false;
-        if (row->anchor_offset > length || length - row->anchor_offset < row->anchor_length) return false;
-        if (memcmp(rom + row->anchor_offset, row->anchor, row->anchor_length) != 0) return false;
+        if (!predicate_row_anchor_match(&predicate->rows[i], rom, length)) return false;
+    }
+    for (size_t i = 0; i < GBB_ACCEPT_SOURCE_ROW_COUNT; i++) {
+        if (!predicate_row_anchor_match(&predicate->source_rows[i], rom, length)) return false;
     }
     return true;
 }
@@ -92,6 +151,7 @@ bool gbb_accept_predicate_anchors_ok(const gbb_accept_predicate *predicate,
 bool gbb_accept_predicate_eval(const gbb_accept_predicate *predicate, gbb_accept_peek_fn peek,
                                void *context, uint8_t expect_hw) {
     if (predicate == NULL || peek == NULL) return false;
+    if (predicate->evaluate != NULL) return predicate->evaluate(peek, context, expect_hw);
 #define ADDR(role) predicate->rows[role].address
     uint8_t max_score = peek(context, ADDR(GBB_ACCEPT_ROLE_MAX_SCORE));
     return peek(context, ADDR(GBB_ACCEPT_ROLE_HW_CAPABILITY)) == expect_hw &&
