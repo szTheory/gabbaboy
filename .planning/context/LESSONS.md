@@ -1073,6 +1073,13 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applies when:** A test compares paths emitted by native tools or creates Git-pinned synthetic text fixtures on Windows. Treat generated fixture bytes as data; do not let host newline conversion silently alter them.
 - **Verification:** At `e0b5305d787407907f77a38bbf475f3d222b25bc`, scene-report and candidate/admission controls passed, and the complete local CTest suite passed 1724/1724. Exact-head Windows PR rerun remains the cross-platform confirmation.
 
+### GB-CGB-017 / 2026-11-02 / Match Windows synthetic test launch and inventory configuration
+
+- **Cause and evidence:** The exact-source Windows diagnostic tried to launch a repository-contained Python synthetic runner as a Win32 executable and queried the default CTest configuration even though the scene test ran with `Debug`; those two Phase 21 controls failed while the remaining Windows inventory passed.
+- **Remedy:** Invoke `.py` test runners with the current `sys.executable -I`, and pass the exercised `-C Debug` configuration to both CTest execution and inventory lookup. Keep the repository-contained runner check and the test source/command assertions intact.
+- **Applies when:** A cross-platform contract executes Python helpers or inspects multi-configuration CTest inventory. The helper must use the same interpreter/configuration contract on every host.
+- **Verification:** At `9bed35ce6e80e407ea31543cf986c795c9da061d`, both focused Phase 21 controls passed and the full local serial CTest suite passed 1724/1724 under the unchanged 60-second cap. The exact-head pull-request Windows matrix is the required hosted confirmation.
+
 
 ## v0.3 milestone-boundary exchange / 2026-10-31
 

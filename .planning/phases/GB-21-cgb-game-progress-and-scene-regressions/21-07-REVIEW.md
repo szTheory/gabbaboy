@@ -156,3 +156,10 @@ _Depth: deep_
 - Synthetic admission manifests/notices are serialized directly to UTF-8 bytes, preserving exact Git-pinned bytes on Windows. Production notice and admission policy are unchanged.
 - Focused scene and candidate controls pass locally; the full final-head CTest suite passes 1724/1724. This change adds no network, filesystem, or authorization surface.
 - **Disposition:** No new findings. Independent review remains at `893ecac8`; the exact-head Windows PR rerun is pending.
+
+## Executor Follow-up — 9bed35ce
+
+- Windows CI showed that `.py` synthetic runners cannot be launched directly as Win32 executables. The candidate checker now invokes them with the current Python interpreter in isolated mode.
+- The synthetic scene checker ran CTest with `-C Debug`, but its inventory query omitted the configuration. The inventory query now uses the same `Debug` configuration.
+- The two focused Phase 21 controls pass, and the complete serial local suite passes 1,724/1,724 under the unchanged 60-second CTest cap. The source-bound receipt identifies this source as `game=not-admitted`, `CGB-CPU-E`, native `cgb`.
+- The changes add no network, file-access, authorization, or dependency surface. Independent review at `893ecac8` remains clean; final exact-head PR Windows and installed-consumer checks remain necessary.
