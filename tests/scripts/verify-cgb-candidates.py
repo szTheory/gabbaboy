@@ -228,6 +228,16 @@ def validate_attempt_order(records: object) -> str | None:
     return None
 
 
+def validate_build_isolation(value: object) -> str | None:
+    """Validate the confined build and probe evidence required for executed builds."""
+    return "candidate-validation-unimplemented"
+
+
+def validate_admitted_contract(record: object) -> str | None:
+    """Validate the Phase 20 admission, native-mode and progress evidence for an admitted record."""
+    return "candidate-validation-unimplemented"
+
+
 def validate_record_minimal(record: dict[str, Any], expected_id: str, stage: str | None,
                             require_final: bool) -> None:
     expected = candidate_metadata(expected_id)
