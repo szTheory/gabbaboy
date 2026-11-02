@@ -79,9 +79,9 @@ coverage:
 
 ## TDD Gate Compliance
 
-- **Task 1 RED:** The test-only tracer commit `3e19a388` preceded implementation. The real runner rejected the positive route with exit 2 and `reason=predicate-not-bound`; CTest failed on the intended positive tracer assertion. This was an attributable missing-predicate failure, not a setup or discovery failure.
+- **Task 1 RED:** The test-only tracer commit `3e19a388` preceded implementation. The real runner rejected the positive route with exit 2 and `reason=predicate-not-bound`; CTest failed on the intended positive tracer assertion. This was an attributable missing-predicate failure, not a setup or discovery failure. The raw reporter output was not retained as a `tdd-red-evidence` record, so this is semantic evidence from the execution log rather than machine-classified RED evidence.
 - **Task 1 GREEN:** The predicate registry, observation policy, loaded-mode check, and RGB555/PCM runner path made the positive route pass while no-input and impossible-predicate controls returned `predicate-not-reached`.
-- **Task 2:** The initial compatibility assumption was disproved by the checked-in Libbet header, which declares native CGB. The corrected control uses a checksum-valid compatibility header variant of the same authored program and verifies the API-reported `cgb-dmg-compat` refusal. The checker self-test and focused integration suite pass.
+- **Task 2:** The initial compatibility assumption was disproved by the checked-in Libbet header, which declares native CGB. The corrected control uses a checksum-valid compatibility header variant of the same authored program and verifies the API-reported `cgb-dmg-compat` refusal. The checker self-test and focused integration suite pass; a separate machine-classified RED record for the corrected variant was not retained.
 - **Refactor:** No separate refactor commit was needed.
 
 ## Source-Qualified Evidence
