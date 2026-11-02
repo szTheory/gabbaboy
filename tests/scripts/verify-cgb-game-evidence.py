@@ -319,7 +319,7 @@ def _has_unqualified_license_prohibition(text: str) -> bool:
     if LEGAL_ILLEGAL_USE_PATTERN.search(text):
         return True
 
-    contrast_boundary_pattern = re.compile(r"\b(?:but|however|yet|nevertheless)\b", re.I)
+    contrast_boundary_pattern = re.compile(r"\b(?:and|but|however|yet|nevertheless)\b", re.I)
     for verb in LEGAL_PROHIBITION_VERB_PATTERN.finditer(text):
         sentence_start = max(
             (boundary.end() for boundary in LEGAL_SENTENCE_BOUNDARY_PATTERN.finditer(
@@ -354,8 +354,16 @@ def _has_unqualified_license_prohibition(text: str) -> bool:
             clause_boundaries = [
                 claim_prefix.rfind(";") + 1,
                 claim_prefix.rfind(":") + 1,
-                *(match.end() for match in contrast_boundary_pattern.finditer(claim_prefix)),
             ]
+            for boundary in contrast_boundary_pattern.finditer(claim_prefix):
+                if boundary.group(0).casefold() != "and":
+                    clause_boundaries.append(boundary.end())
+                    continue
+                preceding_claim = claim_prefix[:boundary.start()]
+                has_license = LEGAL_LICENSE_PATTERN.search(preceding_claim) is not None
+                has_prohibition = LEGAL_PROHIBITION_VERB_PATTERN.search(preceding_claim) is not None
+                if not has_license or has_prohibition:
+                    clause_boundaries.append(boundary.end())
             clause_prefix = claim_prefix[max(clause_boundaries, default=0):]
             negated_conclusion = re.search(
                 r"\bnot\s+(?:a\s+)?conclusion\s+that\b", clause_prefix, re.I)
@@ -611,6 +619,8 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
          "GPL-3.0 does not prohibit use. It prohibits use."),
         ("pronoun-after-semicolon",
          "GPL-3.0 does not prohibit use; it prohibits use."),
+        ("and-unrelated-negation",
+         "This is not a conclusion that rights are settled, and MIT License prohibits this use."),
     ):
         unrelated_negation = dict(base_docs)
         unrelated_negation["docs/game-acceptance.md"] += (
@@ -624,6 +634,7 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
         "This use is not prohibited by BSD-2-Clause.",
         "This is not a conclusion that CC BY-NC-SA prohibits this use.",
         "MIT never prohibits this use.",
+        "This is not a conclusion that GPL-3.0 and BSD-2-Clause terms prohibit this use.",
     ):
         if _has_unqualified_license_prohibition(explicit_negation):
             raise Reject("self-test-explicit-negation-failed", explicit_negation)
@@ -652,7 +663,7 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: safe_evidence_path(Path("/repo"),
                                               "build/phase21-evidence/../../escape.json"),
                     "evidence-path-traversal", "evidence-path-traversal")
-    print("game-evidence controls pass outcomes=3 accepted_negations=4 rejected_controls=29 subjects=synthetic-only")
+    print("game-evidence controls pass outcomes=3 accepted_negations=5 rejected_controls=30 subjects=synthetic-only")
 
 
 def _import_progress_checker(root: Path):
