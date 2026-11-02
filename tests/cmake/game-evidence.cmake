@@ -21,3 +21,11 @@ add_test(NAME phase21_fixture_admission_controls
           --source-revision "${GBB_CANDIDATE_SOURCE_REV}")
 set_tests_properties(phase21_fixture_admission_controls PROPERTIES
   TIMEOUT 180 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+
+# Phase 21 Plan 06 report intake begins with title, scene, and symptom only.
+set(GBB_SCENE_REPORT_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-scene-report.py")
+add_test(NAME phase21_scene_report_tracer
+  COMMAND ${Python3_EXECUTABLE} -I "${GBB_SCENE_REPORT_CHECKER}"
+          --self-test intake --repo-root "${PROJECT_SOURCE_DIR}")
+set_tests_properties(phase21_scene_report_tracer PROPERTIES
+  TIMEOUT 60 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
