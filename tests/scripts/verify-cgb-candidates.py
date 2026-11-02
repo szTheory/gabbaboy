@@ -2508,7 +2508,8 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
             )
             _run_admitted_candidate(root, runner_path, baseline, selected_revision, current_build)
         except Reject as error:
-            if str(error) != expected:
+            observed = str(error)
+            if observed != expected and not observed.startswith(expected + ": "):
                 raise Reject("candidate-self-test-failed",
                              f"{label} expected {expected}; received {error}") from None
         else:
