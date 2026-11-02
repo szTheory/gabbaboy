@@ -2409,6 +2409,16 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     control_count = 0
     runner_qualification_build_dir = root / "build" / "runner-input-qualification"
 
+    runner_path = root / "tests/scripts/synthetic-runner.py"
+    selected_revision = _current_revision(root)
+    _validate_admitted_cross_bindings(root, selected_revision, baseline)
+    _check_phase20_admission(root, baseline)
+    _validate_receipt(baseline["receipt"]["value"], baseline, selected_revision, root)
+    qualification_path = root / QUALIFICATION_RELATIVE_PATH
+    write_current_build_qualification(root, selected_revision, str(runner_path),
+                                      str(qualification_path), True, list(RUNNER_BUILD_INPUTS))
+    baseline_qualification = qualification_path.read_bytes()
+
     def cmake_runner_qualification(label: str, expected: str) -> None:
         result = run_process(
             ["cmake", "-S", str(root), "-B", str(runner_qualification_build_dir), "-G", "Ninja",
@@ -2472,7 +2482,6 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
 
     def runner_output_control(label: str, runner_bytes: bytes, expected: str) -> None:
         nonlocal control_count
-        runner_path = root / "tests/scripts/synthetic-runner.py"
         original_runner = runner_path.read_bytes()
         before_count = _runner_invocations(root)
         try:
@@ -2486,6 +2495,32 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
             runner_path.chmod(0o755)
         control_count += 1
 
+    def runner_observation_control(label: str, runner_bytes: bytes, expected: str) -> None:
+        nonlocal control_count
+        original_bytes = runner_path.read_bytes()
+        before_count = _runner_invocations(root)
+        try:
+            runner_path.write_bytes(runner_bytes)
+            runner_path.chmod(0o755)
+            current_build = write_current_build_qualification(
+                root, selected_revision, str(runner_path), str(qualification_path), True,
+                list(RUNNER_BUILD_INPUTS),
+            )
+            _run_admitted_candidate(root, runner_path, baseline, selected_revision, current_build)
+        except Reject as error:
+            if str(error) != expected:
+                raise Reject("candidate-self-test-failed",
+                             f"{label} expected {expected}; received {error}") from None
+        else:
+            raise Reject("candidate-self-test-failed", f"{label} accepted changed observation")
+        finally:
+            runner_path.write_bytes(original_bytes)
+            runner_path.chmod(0o755)
+            qualification_path.write_bytes(baseline_qualification)
+        if _runner_invocations(root) != before_count + 1:
+            raise Reject("candidate-self-test-failed", f"{label} did not invoke the replay runner")
+        control_count += 1
+
     original_runner = (root / "tests/scripts/synthetic-runner.py").read_bytes()
     wrong_mode_runner = original_runner.replace(b"execution_mode=cgb", b"execution_mode=native-cgb")
     if wrong_mode_runner == original_runner:
@@ -2497,7 +2532,7 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         mutated = original_runner.replace(old, new)
         if mutated == original_runner:
             raise Reject("candidate-self-test-failed", f"{label} mutation target missing")
-        runner_output_control(label, mutated, expected)
+        runner_observation_control(label, mutated, expected)
 
     runner_text_control(
         "historical-core-revision",
@@ -2574,42 +2609,6 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         "pcm-audibility-statistics", b"pcm_audible=false", b"pcm_audible=true",
         "candidate-runner-pcm-invalid",
     )
-
-    runner_path = root / "tests/scripts/synthetic-runner.py"
-    selected_revision = _current_revision(root)
-    _validate_admitted_cross_bindings(root, selected_revision, baseline)
-    _check_phase20_admission(root, baseline)
-    _validate_receipt(baseline["receipt"]["value"], baseline, selected_revision, root)
-    qualification_path = root / QUALIFICATION_RELATIVE_PATH
-    write_current_build_qualification(root, selected_revision, str(runner_path),
-                                      str(qualification_path), True, list(RUNNER_BUILD_INPUTS))
-    baseline_qualification = qualification_path.read_bytes()
-
-    def runner_observation_control(label: str, runner_bytes: bytes, expected: str) -> None:
-        nonlocal control_count
-        original_bytes = runner_path.read_bytes()
-        before_count = _runner_invocations(root)
-        try:
-            runner_path.write_bytes(runner_bytes)
-            runner_path.chmod(0o755)
-            current_build = write_current_build_qualification(
-                root, selected_revision, str(runner_path), str(qualification_path), True,
-                list(RUNNER_BUILD_INPUTS),
-            )
-            _run_admitted_candidate(root, runner_path, baseline, selected_revision, current_build)
-        except Reject as error:
-            if str(error) != expected:
-                raise Reject("candidate-self-test-failed",
-                             f"{label} expected {expected}; received {error}") from None
-        else:
-            raise Reject("candidate-self-test-failed", f"{label} accepted changed observation")
-        finally:
-            runner_path.write_bytes(original_bytes)
-            runner_path.chmod(0o755)
-            qualification_path.write_bytes(baseline_qualification)
-        if _runner_invocations(root) != before_count + 1:
-            raise Reject("candidate-self-test-failed", f"{label} did not invoke the replay runner")
-        control_count += 1
 
     def valid_output_change(label: str, replacements: tuple[tuple[bytes, bytes], ...],
                             mismatch_field: str) -> None:
