@@ -123,8 +123,10 @@ set_target_properties(gabbaboy-runner PROPERTIES C_EXTENSIONS OFF)
 
 set(GBB_RUNNER_BUILD_INPUTS
   CMakeLists.txt
+  cmake/StateVersion.cmake
   include/gabbaboy/gabbaboy.h
   src/core/gabbaboy.c
+  src/core/gbb_accept_input.h
   src/core/gabbaboy_test.h
   src/runner/main.c
   src/runner/acceptance.h

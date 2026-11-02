@@ -34,7 +34,8 @@ python3 -I tests/scripts/verify-cgb-candidates.py --check-all --require-final \
 ```
 
 The receipt is created by the normal CMake test build after linking `gabbaboy-runner`. It binds
-the selected full source revision, source qualification state, all runner build inputs, the
+the selected full source revision, source qualification state, all 24 runner build inputs (including
+`cmake/StateVersion.cmake` and `src/core/gbb_accept_input.h`), the
 qualification writer, the canonical target path and the measured executable digest. The checker
 validates those values against immutable Git blobs and the current files before replay, then checks
 the same executable digest afterward. CMake creates this receipt only with `BUILD_TESTING=ON`;

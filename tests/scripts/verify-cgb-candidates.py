@@ -82,8 +82,10 @@ CONTRACT_PATHS = (
 )
 RUNNER_BUILD_INPUTS = (
     "CMakeLists.txt",
+    "cmake/StateVersion.cmake",
     "include/gabbaboy/gabbaboy.h",
     "src/core/gabbaboy.c",
+    "src/core/gbb_accept_input.h",
     "src/core/gabbaboy_test.h",
     "src/runner/main.c",
     "src/runner/acceptance.h",
@@ -2872,6 +2874,9 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
     if selected_revision is not None:
         revision = resolve_source_revision(source_root, selected_revision)
         validate_source_contract(source_root, revision)
+        required_runner_inputs = {"cmake/StateVersion.cmake", "src/core/gbb_accept_input.h"}
+        if len(RUNNER_BUILD_INPUTS) != 24 or not required_runner_inputs.issubset(RUNNER_BUILD_INPUTS):
+            raise Reject("candidate-runner-build-input-inventory-invalid")
         if controls_only and runner is not None:
             if current_build_qualification is None:
                 raise Reject("candidate-current-build-qualification-required")
