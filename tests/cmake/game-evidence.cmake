@@ -21,6 +21,7 @@ add_test(NAME phase21_fixture_admission_controls
           --source-revision "${GBB_CANDIDATE_SOURCE_REV}"
           --runner "$<TARGET_FILE:gabbaboy-runner>"
           --current-build-qualification "${GBB_RUNNER_QUALIFICATION_PATH}")
+# Keep the 69-control check first among timeout-sensitive suites in the serial CTest order.
 set_tests_properties(phase21_fixture_admission_controls PROPERTIES
   TIMEOUT 60 COST 60 LABELS integration WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 

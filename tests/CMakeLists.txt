@@ -5653,7 +5653,7 @@ if(NOT WIN32)
   # Run this 95-control suite with the other long checks. It reached its unchanged 60-second cap
   # when CTest scheduled it after the full serial run; the COST hint front-loads it without
   # changing coverage, concurrency, or the timeout.
-  set_tests_properties(release_lifecycle_controls PROPERTIES RUN_SERIAL TRUE COST 60)
+  set_tests_properties(release_lifecycle_controls PROPERTIES RUN_SERIAL TRUE COST 45)
 endif()
 
 # D-27 (19-08): the Python-stdlib recovery controls run on every host, after the immutable
