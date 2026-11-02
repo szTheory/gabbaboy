@@ -59,6 +59,7 @@ FALSE_CLAIM_PATTERNS = (
 LICENSE_NAME_PATTERN = (
     r"(?:cc[\s-]*by(?:[\s-]*nc)?[\s-]*sa(?:[\s-]*4\.0)?"
     r"|creative\s+commons\s+attribution-noncommercial-sharealike\s+4\.0\s+international"
+    r"|mit(?:\s+license)?|bsd(?:[\s-]*2[\s-]*clause)?"
     r"|gpl[\s-]*(?:v[\s-]*)?3(?:\.0)?(?:[\s-]*(?:only|or[\s-]*later|\+))?)"
 )
 PROHIBITION_VERB_PATTERN = r"(?:prohibit(?:s|ed)?|forbid(?:s|den)?|ban(?:s|ned)?)"
@@ -526,6 +527,26 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: reject_claim_inflation(false_cc_inverse_rights),
                     "documentation-rights-conclusion-overstated", "inverse-creative-commons-prohibition-claim")
 
+    false_mit_rights = dict(base_docs)
+    false_mit_rights["docs/game-acceptance.md"] += "\nMIT License prohibits this use.\n"
+    _expect_reject(lambda: reject_claim_inflation(false_mit_rights),
+                    "documentation-rights-conclusion-overstated", "mit-license-prohibition-claim")
+
+    false_mit_inverse_rights = dict(base_docs)
+    false_mit_inverse_rights["docs/game-acceptance.md"] += "\nThis use is prohibited by MIT License.\n"
+    _expect_reject(lambda: reject_claim_inflation(false_mit_inverse_rights),
+                    "documentation-rights-conclusion-overstated", "inverse-mit-license-prohibition-claim")
+
+    false_bsd_rights = dict(base_docs)
+    false_bsd_rights["docs/game-acceptance.md"] += "\nBSD-2-Clause prohibits this use.\n"
+    _expect_reject(lambda: reject_claim_inflation(false_bsd_rights),
+                    "documentation-rights-conclusion-overstated", "bsd-license-prohibition-claim")
+
+    false_bsd_inverse_rights = dict(base_docs)
+    false_bsd_inverse_rights["docs/game-acceptance.md"] += "\nThis use is prohibited by BSD-2-Clause.\n"
+    _expect_reject(lambda: reject_claim_inflation(false_bsd_inverse_rights),
+                    "documentation-rights-conclusion-overstated", "inverse-bsd-license-prohibition-claim")
+
     admitted_but_no_game = dict(snapshot)
     admitted_but_no_game["docs/game-acceptance.md"] += b"\nAdmitted game: Potion Panic\n"
     _expect_reject(lambda: validate_documentation(admitted_but_no_game,
@@ -550,7 +571,7 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: safe_evidence_path(Path("/repo"),
                                               "build/phase21-evidence/../../escape.json"),
                     "evidence-path-traversal", "evidence-path-traversal")
-    print("game-evidence controls pass positives=3 rejected_controls=17 subjects=synthetic-only")
+    print("game-evidence controls pass positives=3 rejected_controls=21 subjects=synthetic-only")
 
 
 def _import_progress_checker(root: Path):
