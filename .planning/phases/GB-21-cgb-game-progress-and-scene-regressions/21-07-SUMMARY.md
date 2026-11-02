@@ -241,6 +241,14 @@ Task 2 and attributable follow-up fixes were committed individually:
 - The exact-head push diagnostic at `6d552502e3f079565add4fb4fead06cebb19dfb4` failed only `phase21_scene_report_controls`: CTest's Windows command path used different separators from the expected path. That caused Rule 1 fix `66ee663b`.
 - A later push diagnostic at `e2fbe20c7763b48314d63c804d52661cc6eb1357` passed native Linux, macOS, sanitizer, CMake-floor, and fixture-reproduction jobs but failed Windows `phase21_scene_report_controls` because nested CTest execution omitted the `Debug` configuration used for discovery. Rule 1 fix `fdd3454a` aligns the two commands; its focused controls and full local suite pass. The final exact-head hosted run remains required.
 
+## Post-merge local requalification
+
+- Merged current `main` (`9d3dbb3a`) into the Phase 21 branch at `f5c75096` to remove PR #140's base conflict. The merge tree matched the prior Phase 21 head; Phase 20 content was not duplicated.
+- Configured and built with Python 3.13, then ran all 1,718 tests registered on this host. The full run completed with 1,712 passing and six environment-related failures: five generated lifecycle helpers resolved system Python 3.9, and the source-archive control exceeded its existing 90-second limit during the full run.
+- Retested those six failures: all five lifecycle checks passed with Python 3.13 first on `PATH`, and the source-archive control passed alone in 83.62 seconds. All 1,718 registered checks therefore have passing evidence across the full run and focused retests. No test timeout or budget was changed.
+- Six fuzz-runtime-dependent tests were not registered because this host lacks the matching Clang libFuzzer runtime; hosted Linux sanitizer jobs remain required. The source-bound outcome checker also passed at merge source `f5c75096`, recording `game=not-admitted`, model `CGB-CPU-E`, mode `cgb`.
+- `git diff --check` passes after replacing Markdown trailing-space breaks with explicit `<br>` tags and removing an extra blank line at EOF.
+
 ## Threat and Review Status
 
 - Independent code review at `893ecac8` is clean with zero open findings; see `21-07-REVIEW.md`. Executor follow-up review through `fdd3454a` found no external input, endpoint, or trust-boundary changes.

@@ -6,11 +6,11 @@ current_phase: 21
 current_phase_name: CGB Game Progress and Scene Regressions
 current_plan: 7
 status: ready_for_verification
-stopped_at: "Plan 21-07 local configure/build/full CTest passed at fdd3454a; final PR #140 exact-head qualification pending"
-last_updated: "2026-11-02T12:52:25.373Z"
+stopped_at: "Plan 21-07 merged-main local requalification complete; final PR #140 exact-head qualification pending"
+last_updated: "2026-11-02T15:37:38.963Z"
 last_activity: 2026-11-02
 last_activity_desc: Completed GB-21 Plan 21-07 configure/build and 1724/1724 CTests at code source fdd3454a; exact-head PR qualification pending
-state_head: fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf
+state_head: f5c750962e05663be6df1b62741cedff9611c108
 progress:
   total_phases: 4
   completed_phases: 1
@@ -80,13 +80,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-02T12:52:25.271Z
-**Stopped at:** Plan 21-07 local configure/build/full CTest passed at fdd3454a; final PR #140 exact-head qualification pending
+**Last session:** 2026-11-02T15:38:39.078Z
+**Stopped at:** Plan 21-07 merged-main local requalification complete; final PR #140 exact-head qualification pending
 **Resume file:** .planning/phases/GB-21-cgb-game-progress-and-scene-regressions/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 21 Plan 21-07 local implementation and qualification are complete at code source `fdd3454a`: configure/build, the 1,724/1,724 full CTest suite, fixed 60-second budget, and source-bound receipt passed. A push diagnostic at `e2fbe20c` exposed a missing `-C Debug` on nested Windows CTest execution; commit `fdd3454a` fixes it. Check native/platform, fixture-reproduction, and installed-consumer jobs on the exact final PR #140 head. When those checks pass, hand off for **/gsd-verify-work 21** shared phase closure. Phase 22 — Composition and Microtest Evidence — remains not started; after Phase 21 closes, the owner-selected next phase command is **/gsd-discuss-phase 22**. Do not invoke that command automatically. Both auto-advance flags remain false.
+Phase 21 Plan 21-07 local implementation and qualification are complete. The earlier full suite and source-bound receipt passed at code source `fdd3454a`; after merging current `main`, all 1,718 tests registered on this host passed cumulatively across a full run and six focused retests. The source-archive control passed under its unchanged 90-second limit. A push diagnostic at `e2fbe20c` exposed a missing `-C Debug` on nested Windows CTest execution; commit `fdd3454a` fixes it. Check native/platform, fixture-reproduction, and installed-consumer jobs on the exact final PR #140 head. When those checks pass, hand off for **/gsd-verify-work 21** shared phase closure. Phase 22 — Composition and Microtest Evidence — remains not started; after Phase 21 closes, the owner-selected next phase command is **/gsd-discuss-phase 22**. Do not invoke that command automatically. Both auto-advance flags remain false.
 
 ## Decisions
 

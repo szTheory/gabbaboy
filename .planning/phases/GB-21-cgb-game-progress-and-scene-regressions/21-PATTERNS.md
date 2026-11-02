@@ -1,7 +1,7 @@
 # Phase 21: CGB Game Progress and Scene Regressions - Pattern Map
 
-**Mapped:** 2026-11-01  
-**Files analyzed:** 8 likely or conditional files  
+**Mapped:** 2026-11-01<br>
+**Files analyzed:** 8 likely or conditional files<br>
 **Analogs found:** 8 / 8
 
 ## File Classification
@@ -130,6 +130,6 @@ No current project file records a reproducible GabbaBoy scene defect with an ind
 
 ## Metadata
 
-**Analog search scope:** `src/runner/`, `include/gabbaboy/`, `tests/acceptance/`, `tests/scripts/`, `fixtures/`, `cmake/`, and `docs/`.  
-**Files scanned:** 12 tracked analogs plus the Phase 21 context and research documents.  
+**Analog search scope:** `src/runner/`, `include/gabbaboy/`, `tests/acceptance/`, `tests/scripts/`, `fixtures/`, `cmake/`, and `docs/`.<br>
+**Files scanned:** 12 tracked analogs plus the Phase 21 context and research documents.<br>
 **Pattern extraction date:** 2026-11-01

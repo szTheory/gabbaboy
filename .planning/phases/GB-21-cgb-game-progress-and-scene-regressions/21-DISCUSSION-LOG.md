@@ -69,4 +69,3 @@
 ## Deferred Ideas
 
 No new ideas were added. Third-candidate search, Libretro/Steam Deck qualification, Phase 22 diagnostics, and Phase 23 release work remain outside this phase.
-

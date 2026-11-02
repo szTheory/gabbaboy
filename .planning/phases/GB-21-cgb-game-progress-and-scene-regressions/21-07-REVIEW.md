@@ -131,8 +131,8 @@ Earlier findings WR-01 through WR-06 are closed. At `893ecac8`, the pin parser a
 
 ### WR-06: Admission pin accepts a lone carriage return terminator — CLOSED
 
-**Severity:** WARNING  
-**File:** `tests/scripts/verify-fixture-admission.py:767`  
+**Severity:** WARNING<br>
+**File:** `tests/scripts/verify-fixture-admission.py:767`<br>
 **Issue:** The expression `[0-9a-f]{40}\r?\n?` makes carriage return and newline independently optional, so it accepts 40 lowercase hex digits followed by a lone `\r`. `rstrip("\r\n")` then removes that character and `check_commit` accepts the otherwise valid commit. This format is outside the stated LF/CRLF normalization and malformed-pin rejection contract. Directly evaluating the parser pattern confirms LF, CRLF, and lone CR all match; the self-test only covers the first two positives and a symbolic negative.
 **Fix verified:** Commit `893ecac8` uses `[0-9a-f]{40}(?:\n|\r\n)?` and adds a bare-CR negative mutation. LF and CRLF positives, plus symbolic and bare-CR rejection, pass in the fixture-admission controls.
 
