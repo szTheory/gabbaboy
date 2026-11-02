@@ -894,6 +894,18 @@ def _check_phase20_admission(root: Path, record: dict[str, Any]) -> None:
         raise Reject("candidate-phase20-admission-failed", detail)
 
 
+def _parse_runner_fields(line: str, prefix: str) -> dict[str, str]:
+    if not line.startswith(prefix + " "):
+        raise Reject("candidate-runner-result-invalid", f"expected {prefix} line")
+    fields: dict[str, str] = {}
+    for token in line[len(prefix) + 1:].split():
+        key, separator, value = token.partition("=")
+        if not separator or not key or not value or key in fields:
+            raise Reject("candidate-runner-result-invalid", f"malformed {prefix} fields")
+        fields[key] = value
+    return fields
+
+
 def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) -> None:
     """Execute only an admitted subject, after the real Phase 20 check has passed."""
     progress = record["progress"]["value"]
@@ -905,12 +917,25 @@ def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) ->
     if runner.suffix.lower() == ".py":
         command = [sys.executable, "-I", str(runner)]
     result = run_process([*command, "--acceptance", progress["case_file"], "--case",
-                          progress["case_id"], "--receipt"], root,
+                          progress["case_id"], "--model", "cgb-cpu-e", "--receipt"], root,
                          timeout=MAX_SUBPROCESS_SECONDS, environment=environment)
-    output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
-    if result.returncode != 0 or "status=pass" not in output \
-            or not ("model=cgb-cpu-e" in output or "profile=CGB-CPU-E" in output) \
-            or "mode=native-cgb" not in output:
+    try:
+        stdout = result.stdout.decode("utf-8", errors="strict")
+        stderr = result.stderr.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        raise Reject("candidate-runner-result-invalid", "runner output encoding") from None
+    lines = [line for line in stdout.splitlines() if line]
+    if result.returncode != 0 or stderr or len(lines) != 2:
+        raise Reject("candidate-runner-result-invalid")
+    acceptance = _parse_runner_fields(lines[0], "acceptance")
+    receipt = _parse_runner_fields(lines[1], "receipt")
+    if acceptance.get("id") != progress["case_id"] or acceptance.get("status") != "pass" \
+            or acceptance.get("model") != "cgb-cpu-e" \
+            or acceptance.get("profile") != "CGB-CPU-E" \
+            or acceptance.get("execution_mode") != "cgb" \
+            or receipt.get("id") != progress["case_id"] \
+            or receipt.get("profile") != "CGB-CPU-E" \
+            or receipt.get("execution_mode") != "cgb":
         raise Reject("candidate-runner-result-invalid")
 
 
@@ -1255,6 +1280,21 @@ def _commit_temp_paths(root: Path, paths: list[str], message: str) -> str:
     return git(root, "rev-parse", "HEAD").decode("ascii").strip()
 
 
+def _synthetic_candidate_rom() -> bytes:
+    rom = bytearray(32768)
+    rom[0x100:0x103] = b"\xC3\x50\x01"
+    rom[0x134:0x13C] = b"SYNTHCGB"
+    rom[0x143] = 0x80
+    rom[0x147] = 0x00
+    rom[0x148] = 0x00
+    rom[0x149] = 0x00
+    checksum = 0
+    for value in rom[0x134:0x14D]:
+        checksum = (checksum - value - 1) & 0xFF
+    rom[0x14D] = checksum
+    return bytes(rom)
+
+
 def _prepare_temp_repo(source_root: Path, root: Path) -> str:
     result = run_process(["git", "clone", "--quiet", "--shared", str(source_root), str(root)],
                          source_root, timeout=MAX_SUBPROCESS_SECONDS)
@@ -1270,20 +1310,57 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
     input_script = root / "tests/acceptance/inputs/synthetic-cgb-candidate.input"
     case_file.parent.mkdir(parents=True, exist_ok=True)
     input_script.parent.mkdir(parents=True, exist_ok=True)
-    case_file.write_text("synthetic candidate case; no game bytes\n", encoding="utf-8")
-    input_script.write_text("gbinput 1\n0 A down\n100 A up\n", encoding="ascii")
+    input_bytes = b"gbinput 1\n0 A down\n100 A up\n"
+    input_script.write_bytes(input_bytes)
+    synthetic_rom = _synthetic_candidate_rom()
+    case_file.write_text(
+        "id=synthetic-cgb-progress rom=fixtures/synthetic-cgb/candidate.gbc "
+        f"rom_sha256={sha256(synthetic_rom)} rom_size={len(synthetic_rom)} "
+        "oracle=progress-predicate predicate=synthetic-progress "
+        "input_script=tests/acceptance/inputs/synthetic-cgb-candidate.input "
+        f"input_sha256={sha256(input_bytes)} budget_half_dots=500000 model_pass=cgb-cpu-e\n",
+        encoding="ascii",
+    )
     runner = root / "tests/scripts/synthetic-runner.py"
     runner.write_text(
         "#!/usr/bin/env python3\n"
         "import os\n"
+        "import sys\n"
         "from pathlib import Path\n"
         "if any(key in os.environ for key in ('AWS_SECRET_ACCESS_KEY', 'GITHUB_TOKEN', 'GH_TOKEN')):\n"
         "    raise SystemExit(73)\n"
+        "args = sys.argv[1:]\n"
+        "if len(args) != 7 or args[0] != '--acceptance' or args[2] != '--case' or args[4] != '--model' or args[5] != 'cgb-cpu-e' or args[6] != '--receipt':\n"
+        "    raise SystemExit(74)\n"
+        "rows = []\n"
+        "for line in Path(args[1]).read_text(encoding='ascii').splitlines():\n"
+        "    if not line.strip() or line.lstrip().startswith('#'):\n"
+        "        continue\n"
+        "    row = dict(token.split('=', 1) for token in line.split())\n"
+        "    if row.get('id') == args[3]:\n"
+        "        rows.append(row)\n"
+        "if len(rows) != 1:\n"
+        "    raise SystemExit(75)\n"
+        "case = rows[0]\n"
         "marker = Path('tests/data/cgb-candidates/runner-invocations.txt')\n"
         "marker.parent.mkdir(parents=True, exist_ok=True)\n"
         "with marker.open('a', encoding='utf-8') as stream:\n"
         "    stream.write('invoked\\n')\n"
-        "print('acceptance id=synthetic-cgb-progress status=pass model=cgb-cpu-e profile=CGB-CPU-E mode=native-cgb')\n",
+        "print(f\"acceptance id={case['id']} status=pass model=cgb-cpu-e profile=CGB-CPU-E \"\n"
+        "      f\"execution_mode=cgb frame_format=GBB-RGB555LE-v1 \"\n"
+        "      f\"evidence_class=original-harness-only t_hit_half_dots=200\")\n"
+        "print(f\"receipt id={case['id']} profile=CGB-CPU-E execution_mode=cgb \"\n"
+        "      f\"frame_format=GBB-RGB555LE-v1 evidence_class=original-harness-only \"\n"
+        "      f\"rom_sha256={case['rom_sha256']} rom_size={case['rom_size']} \"\n"
+        "      f\"input_sha256={case['input_sha256']} predicate={case['predicate']} \"\n"
+        "      f\"budget_half_dots={case['budget_half_dots']} end_half_dots=400 \"\n"
+        "      f\"t_hit_half_dots=200 core_revision=synthetic build_qualified=true \"\n"
+        "      f\"checkpoint_play_start_requested_half_dots=100 \"\n"
+        "      f\"checkpoint_play_start_completion_half_dots=100 \"\n"
+        "      f\"checkpoint_play_start_frame={'0' * 64} frame_rolling555={'1' * 64} \"\n"
+        "      f\"pcm_sha256={'2' * 64} pcm_samples=1 pcm_audible=false \"\n"
+        "      f\"pcm_left_peak_to_peak=0 pcm_left_changes=0 \"\n"
+        "      f\"pcm_right_peak_to_peak=0 pcm_right_changes=0\")\n",
         encoding="utf-8",
     )
     runner.chmod(0o755)
@@ -1298,24 +1375,14 @@ def _write_synthetic_admission_fixture(root: Path) -> dict[str, Any]:
     fixture_dir = root / fixture
     (fixture_dir / "evidence").mkdir(parents=True, exist_ok=True)
     (fixture_dir / "sandbox").mkdir(parents=True, exist_ok=True)
-    rom = bytearray(32768)
-    rom[0x100:0x103] = b"\xC3\x50\x01"
-    rom[0x134:0x13C] = b"SYNTHCGB"
-    rom[0x143] = 0x80
-    rom[0x147] = 0x00
-    rom[0x148] = 0x00
-    rom[0x149] = 0x00
-    checksum = 0
-    for value in rom[0x134:0x14D]:
-        checksum = (checksum - value - 1) & 0xFF
-    rom[0x14D] = checksum
+    rom = _synthetic_candidate_rom()
     source_files = {
         f"{fixture}/program.asm": b"; synthetic candidate build input; never executed\n",
         f"{fixture}/predicate.asm": b"; synthetic source anchor for a bounded progress predicate\n",
         f"{fixture}/sandbox/launcher-policy.json": b'{"environment":["PATH","LANG"],"network":false}\n',
     }
     other_files = {
-        f"{fixture}/candidate.gbc": bytes(rom),
+        f"{fixture}/candidate.gbc": rom,
         f"{fixture}/LICENSE.txt": b"Synthetic test terms; not a candidate license decision.\n",
         f"{fixture}/evidence/grant.txt": b"Temporary synthetic fixture evidence only.\n",
     }
@@ -1388,8 +1455,8 @@ def _write_synthetic_admission_fixture(root: Path) -> dict[str, Any]:
     pin = git(root, "rev-parse", "HEAD").decode("ascii").strip()
     (root / f"{fixture}/admission.commit").write_text(pin + "\n", encoding="ascii")
     return {
-        "fixture": fixture, "rom_path": f"{fixture}/candidate.gbc", "rom": bytes(rom),
-        "rom_sha256": sha256(bytes(rom)), "manifest_path": manifest_path,
+        "fixture": fixture, "rom_path": f"{fixture}/candidate.gbc", "rom": rom,
+        "rom_sha256": sha256(rom), "manifest_path": manifest_path,
         "manifest_sha256": manifest_digest, "pin_path": f"{fixture}/admission.commit",
         "pin_commit": pin, "source_files": source_files, "inputs": inputs,
         "source_repository": manifest["source"]["repository"], "source_revision": "a" * 40,
@@ -1694,6 +1761,42 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     primary_record_path = root / primary_path
     baseline_bytes = primary_record_path.read_bytes()
     control_count = 0
+
+    def runner_output_control(label: str, runner_bytes: bytes, expected: str) -> None:
+        nonlocal control_count
+        runner_path = root / "tests/scripts/synthetic-runner.py"
+        receipt_relative = baseline["receipt"]["value"]["path"]
+        receipt_file = root / receipt_relative
+        original_runner = runner_path.read_bytes()
+        original_receipt = receipt_file.read_bytes()
+        original_record = primary_record_path.read_bytes()
+        try:
+            runner_path.write_bytes(runner_bytes)
+            runner_path.chmod(0o755)
+            changed_hash = sha256(runner_bytes)
+            receipt_doc = parse_json(original_receipt, receipt_relative)
+            receipt_doc["runner_sha256"] = changed_hash
+            receipt_doc["binary_sha256"] = changed_hash
+            write_json(receipt_file, receipt_doc)
+            subject = copy.deepcopy(baseline)
+            subject["receipt"]["value"]["runner_sha256"] = changed_hash
+            subject["receipt"]["value"]["binary_sha256"] = changed_hash
+            subject["receipt"]["value"]["sha256"] = sha256(receipt_file.read_bytes())
+            write_json(primary_record_path, subject)
+            _run_all(root, expected_code=1, expected_text=expected)
+        finally:
+            runner_path.write_bytes(original_runner)
+            runner_path.chmod(0o755)
+            receipt_file.write_bytes(original_receipt)
+            primary_record_path.write_bytes(original_record)
+        control_count += 1
+
+    original_runner = (root / "tests/scripts/synthetic-runner.py").read_bytes()
+    wrong_mode_runner = original_runner.replace(b"execution_mode=cgb", b"execution_mode=native-cgb")
+    if wrong_mode_runner == original_runner:
+        raise Reject("candidate-self-test-failed", "CGB mode negative control target missing")
+    runner_output_control("runner-native-mode-marker", wrong_mode_runner,
+                          "candidate-runner-result-invalid")
 
     def mutation(label: str, change, expected: str, *, mutate_notices: bool = False) -> None:
         nonlocal control_count
