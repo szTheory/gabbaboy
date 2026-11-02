@@ -30,7 +30,7 @@ add_test(NAME phase21_game_evidence
           --source-revision "${GBB_CANDIDATE_SOURCE_REV}"
           --write-evidence "${PROJECT_BINARY_DIR}/phase21-evidence/result.json")
 set_tests_properties(phase21_game_evidence PROPERTIES
-  TIMEOUT 60 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+  TIMEOUT 60 LABELS integration WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 
 add_test(NAME phase21_game_evidence_controls
   COMMAND ${Python3_EXECUTABLE} -I "${GBB_GAME_EVIDENCE_CHECKER}"

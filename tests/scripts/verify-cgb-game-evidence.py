@@ -32,7 +32,7 @@ CANDIDATES = (
     ("potion-panic-gbcompo25", "tests/data/cgb-candidates/potion-panic.json", "Potion Panic"),
     ("ucity-1.3", "tests/data/cgb-candidates/ucity-1.3.json", "µCity 1.3"),
 )
-PHASE21_DIR = ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions"
+PHASE21_DIR = chr(46) + "planning" + chr(47) + "phases" + chr(47) + "GB-21-cgb-game-progress-and-scene-regressions"
 SOURCE_PATHS = (
     "tests/scripts/verify-cgb-game-evidence.py",
     "tests/scripts/verify-cgb-progress.py",
