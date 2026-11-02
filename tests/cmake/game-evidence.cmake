@@ -14,3 +14,10 @@ add_test(NAME phase21_fixture_admission_contract
           --source-revision "${GBB_CANDIDATE_SOURCE_REV}")
 set_tests_properties(phase21_fixture_admission_contract PROPERTIES
   TIMEOUT 120 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+
+add_test(NAME phase21_fixture_admission_controls
+  COMMAND ${Python3_EXECUTABLE} -I "${GBB_CANDIDATE_CHECKER}"
+          --self-test-controls --repo-root "${PROJECT_SOURCE_DIR}"
+          --source-revision "${GBB_CANDIDATE_SOURCE_REV}")
+set_tests_properties(phase21_fixture_admission_controls PROPERTIES
+  TIMEOUT 180 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")

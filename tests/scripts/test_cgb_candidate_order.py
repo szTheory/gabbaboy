@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -69,11 +70,15 @@ def admitted_record() -> dict[str, object]:
         "progress": {
             "state": "observed",
             "value": {
-                "positive": {"control_id": "positive", "status": "pass", "raw_reason": "predicate-reached"},
+                "positive": {"control_id": "positive", "status": "pass", "raw_reason": "predicate-reached",
+                             "observation_sha256": "2" * 64},
                 "controls": {
-                    "no_input": {"control_id": "no-input", "status": "fail", "raw_reason": "predicate-not-reached"},
-                    "wrong_input": {"control_id": "wrong-input", "status": "fail", "raw_reason": "predicate-not-reached"},
-                    "impossible_predicate": {"control_id": "impossible", "status": "fail", "raw_reason": "predicate-not-reached"},
+                    "no_input": {"control_id": "no-input", "status": "fail", "raw_reason": "predicate-not-reached",
+                                 "observation_sha256": "3" * 64},
+                    "wrong_input": {"control_id": "wrong-input", "status": "fail", "raw_reason": "predicate-not-reached",
+                                    "observation_sha256": "4" * 64},
+                    "impossible_predicate": {"control_id": "impossible-predicate", "status": "fail",
+                                             "raw_reason": "predicate-not-reached", "observation_sha256": "5" * 64},
                 },
             },
         },
@@ -103,6 +108,20 @@ class CandidateOrderTests(unittest.TestCase):
         ]
         self.assertEqual(
             CHECKER_MODULE.validate_attempt_order(records), "candidate-fallback-not-eligible"
+        )
+
+    def test_primary_admission_makes_only_the_fallback_not_needed(self) -> None:
+        records = [
+            record("potion-panic-gbcompo25", "admitted"),
+            record("ucity-1.3", "not-needed"),
+        ]
+        self.assertIsNone(CHECKER_MODULE.validate_attempt_order(records))
+
+    def test_partial_pair_is_stage_only_and_cannot_close_final_state(self) -> None:
+        records = [record("potion-panic-gbcompo25", "partial"), record("ucity-1.3", "partial")]
+        self.assertIsNone(CHECKER_MODULE.validate_attempt_order(records, require_final=False))
+        self.assertEqual(
+            CHECKER_MODULE.validate_attempt_order(records), "candidate-partial-not-final"
         )
 
     def test_admitted_subject_requires_phase20_native_progress_controls(self) -> None:
@@ -145,6 +164,20 @@ class CandidateOrderTests(unittest.TestCase):
         for subject, expected in mutations:
             with self.subTest(expected=expected):
                 self.assertEqual(CHECKER_MODULE.validate_build_isolation(subject), expected)
+
+    def test_subprocess_output_limit_is_enforced_while_child_runs(self) -> None:
+        with self.assertRaisesRegex(CHECKER_MODULE.Reject, "candidate-subprocess-output-limit"):
+            CHECKER_MODULE.run_process(
+                [sys.executable, "-c", "import sys; sys.stdout.write('x' * 1000000)"],
+                Path.cwd(), output_limit=64,
+            )
+
+    def test_subprocess_timeout_kills_and_reaps_child(self) -> None:
+        with self.assertRaisesRegex(CHECKER_MODULE.Reject, "candidate-subprocess-timeout"):
+            CHECKER_MODULE.run_process(
+                [sys.executable, "-c", "import time; time.sleep(5)"],
+                Path.cwd(), timeout=0.05,
+            )
 
 
 if __name__ == "__main__":
