@@ -1976,7 +1976,7 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
         "        f'checkpoint_{label}_completion_half_dots={checkpoint_completion[label]}',\n"
         "        f'checkpoint_{label}_frame={checkpoint_frames[label]}',\n"
         "    ))\n"
-        "print('receipt ' + ' '.join(receipt_fields))\n",
+        "print('receipt ' + ' '.join(receipt_fields))\n"
     ).encode("utf-8"))
     runner.chmod(0o755)
     paths = [*CONTRACT_PATHS, "tests/scripts/test_cgb_candidate_order.py",
