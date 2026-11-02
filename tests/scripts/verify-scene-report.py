@@ -2,12 +2,14 @@
 """Create and check bounded, local scene reports without discovering game media."""
 
 import argparse
+import copy
 import datetime
 import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -28,13 +30,15 @@ STAGES = {"triage", "reproduced", "regression-ready"}
 CLASSIFICATIONS = {"core", "conversion", "host", "original-behavior", "unknown"}
 FIELDS = {
     "schema_version", "report_id", "synthetic", "created_at", "title", "scene", "symptom",
-    "stage", "classification", "metadata", "reproduction", "privacy",
+    "stage", "classification", "metadata", "reproduction", "privacy", "promotion",
 }
 METADATA_FIELDS = {
     "public_release", "source_revision", "build_id", "rom_sha256", "model_profile",
     "execution_mode", "route",
 }
-REPRODUCTION_FIELDS = {"status", "boundary", "sequence", "budget_master_ticks", "evidence", "blocker"}
+REPRODUCTION_FIELDS = {
+    "status", "boundary", "behavior_kind", "sequence", "budget_master_ticks", "evidence", "blocker",
+}
 PRIVACY_FIELDS = {"private_media_used", "private_media_refs"}
 
 
@@ -167,7 +171,8 @@ def validate_report(value):
     if value["stage"] == "triage":
         if value["classification"] != "unknown" or reproduction["status"] != "not-run":
             raise Reject("scene-report-triage-must-remain-unresolved")
-        if reproduction["boundary"] != "unknown" or sequence or budget is not None or evidence:
+        if (reproduction["boundary"] != "unknown" or reproduction["behavior_kind"] != "unknown" or
+                sequence or budget is not None or evidence):
             raise Reject("scene-report-triage-has-reproduction-claims")
         if not blocker.strip():
             raise Reject("scene-report-triage-next-action-required")
@@ -215,6 +220,7 @@ def initial_report(title, scene, symptom, synthetic=False):
         "reproduction": {
             "status": "not-run",
             "boundary": "unknown",
+            "behavior_kind": "unknown",
             "sequence": [],
             "budget_master_ticks": None,
             "evidence": [],
@@ -224,6 +230,7 @@ def initial_report(title, scene, symptom, synthetic=False):
             ),
         },
         "privacy": {"private_media_used": False, "private_media_refs": []},
+        "promotion": None,
     }
 
 
@@ -421,6 +428,210 @@ def intake_self_test():
     print(f"scene-report intake self-test pass controls={controls} subjects=synthetic-only")
 
 
+def synthetic_source_file(root, relative, content):
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content if isinstance(content, bytes) else content.encode("utf-8"))
+    return path
+
+
+def create_synthetic_promotion_subject(root):
+    """Create a throwaway source-pinned CTest subject; it is never game evidence."""
+    root.mkdir(parents=True, exist_ok=True)
+    source_root = Path(__file__).resolve().parents[2]
+    synthetic_source_file(root, ".gitignore", "/build/\n")
+    for relative in SOURCE_CONTRACT_PATHS:
+        synthetic_source_file(root, relative, (source_root / relative).read_bytes())
+    fixture = b"synthetic scene control bytes\n"
+    fixture_path = "tests/fixtures/synthetic-scene.gb"
+    fixture_digest = hashlib.sha256(fixture).hexdigest()
+    synthetic_source_file(root, fixture_path, fixture)
+    rights_path = "tests/fixtures/synthetic-scene-rights.json"
+    rights = {
+        "schema_version": 1,
+        "origin": "project-authored",
+        "license": "MIT",
+        "permissions": {"repository": True, "public_ci": True},
+        "files": [{"path": fixture_path, "sha256": fixture_digest}],
+    }
+    rights_raw = (json.dumps(rights, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    synthetic_source_file(root, rights_path, rights_raw)
+    oracle_path = "docs/synthetic-scene-oracle.json"
+    oracle_raw = b'{"expected":"blue","basis":"synthetic independent author specification"}\n'
+    synthetic_source_file(root, oracle_path, oracle_raw)
+    check_path = "tests/scene/scene-check.py"
+    check_source = (
+        "from pathlib import Path\n"
+        "import sys\n"
+        "mode = sys.argv[1]\n"
+        "expected_marker = 'expected-static-blue'\n"
+        "mutation_marker = 'mutated-static-green'\n"
+        "expected = 'blue'\n"
+        "if mode == 'positive':\n"
+        "    actual = 'blue'\n"
+        "    assert actual == expected, expected_marker\n"
+        "elif mode == 'negative':\n"
+        "    mutated = 'green'\n"
+        "    assert mutated != expected, mutation_marker\n"
+        "else:\n"
+        "    raise SystemExit(2)\n"
+    )
+    check_bytes = check_source.encode("utf-8")
+    synthetic_source_file(root, check_path, check_bytes)
+    registration_path = "tests/cmake/synthetic-scenes.cmake"
+    registration = (
+        'add_test(NAME synthetic_scene_positive COMMAND "${Python3_EXECUTABLE}" -I '
+        '"${CMAKE_SOURCE_DIR}/tests/scene/scene-check.py" positive)\n'
+        'add_test(NAME synthetic_scene_negative COMMAND "${Python3_EXECUTABLE}" -I '
+        '"${CMAKE_SOURCE_DIR}/tests/scene/scene-check.py" negative)\n'
+        'set_tests_properties(synthetic_scene_positive synthetic_scene_negative PROPERTIES TIMEOUT 5)\n'
+    )
+    synthetic_source_file(root, registration_path, registration)
+    top_level = (
+        "cmake_minimum_required(VERSION 3.25)\n"
+        "project(SceneReportSynthetic NONE)\n"
+        "find_package(Python3 COMPONENTS Interpreter REQUIRED)\n"
+        "enable_testing()\n"
+        f'include("${{CMAKE_SOURCE_DIR}}/{registration_path}")\n'
+    )
+    synthetic_source_file(root, "CMakeLists.txt", top_level)
+    configured = subprocess.run(["cmake", "-S", str(root), "-B", str(root / "build")],
+                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, timeout=15, check=False)
+    if configured.returncode != 0:
+        raise Reject("scene-report-synthetic-configure-failed:" + configured.stderr.strip()[-160:])
+    exercised = subprocess.run(["ctest", "--test-dir", str(root / "build"), "--output-on-failure",
+                                "--no-tests=error"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, text=True, timeout=15, check=False)
+    if exercised.returncode != 0:
+        raise Reject("scene-report-synthetic-tests-failed:" + exercised.stderr.strip()[-160:])
+    init = subprocess.run(["git", "init", "-q", str(root)], stdin=subprocess.DEVNULL,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5, check=False)
+    if init.returncode != 0:
+        raise Reject("scene-report-synthetic-git-init-failed")
+    add = subprocess.run(["git", "-C", str(root), "add", "CMakeLists.txt", ".gitignore", "docs",
+                          "tests", "tests/cmake", "tests/fixtures", "tests/scene", "tests/scripts"],
+                         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         timeout=5, check=False)
+    if add.returncode != 0:
+        raise Reject("scene-report-synthetic-git-add-failed")
+    commit = subprocess.run(["git", "-C", str(root), "-c", "user.name=Scene Control",
+                             "-c", "user.email=scene-control@example.invalid", "commit", "-q", "-m",
+                             "synthetic scene control"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, timeout=5, check=False)
+    if commit.returncode != 0:
+        raise Reject("scene-report-synthetic-git-commit-failed")
+    revision = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
+                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              text=True, timeout=5, check=False)
+    if revision.returncode != 0:
+        raise Reject("scene-report-synthetic-revision-unavailable")
+    revision = revision.stdout.strip()
+    output = root / "build" / "scene-reports"
+    output.mkdir(parents=True, exist_ok=True)
+    report = {
+        "schema_version": 1,
+        "report_id": "scene-" + "1" * 32,
+        "synthetic": True,
+        "created_at": "2026-01-01T00:00:00Z",
+        "title": "Synthetic title",
+        "scene": "Synthetic static scene",
+        "symptom": "A synthetic static scene expectation differs",
+        "stage": "regression-ready",
+        "classification": "core",
+        "metadata": {
+            "public_release": "synthetic fixture release",
+            "source_revision": revision,
+            "build_id": "synthetic-build-1",
+            "rom_sha256": fixture_digest,
+            "model_profile": "synthetic-model",
+            "execution_mode": "synthetic-mode",
+            "route": "one deterministic synthetic scene step",
+        },
+        "reproduction": {
+            "status": "reproduced",
+            "boundary": "core",
+            "behavior_kind": "static",
+            "sequence": ["load the synthetic fixture and observe the fixed scene"],
+            "budget_master_ticks": 1,
+            "evidence": ["synthetic fixture and independent oracle"],
+            "blocker": "",
+        },
+        "privacy": {"private_media_used": False, "private_media_refs": []},
+        "promotion": {
+            "fixture": {
+                "kind": "original",
+                "path": fixture_path,
+                "sha256": fixture_digest,
+                "permission_evidence_path": rights_path,
+                "permission_evidence_sha256": hashlib.sha256(rights_raw).hexdigest(),
+                "minimized": True,
+                "deterministic": True,
+            },
+            "expectation": {
+                "kind": "static-pixels",
+                "behavior": "The independently specified scene pixel is blue.",
+                "independent_basis": "Synthetic author specification defines blue before emulator output.",
+                "basis_path": oracle_path,
+                "basis_sha256": hashlib.sha256(oracle_raw).hexdigest(),
+            },
+            "registration_path": registration_path,
+            "positive": {
+                "test_name": "synthetic_scene_positive",
+                "source_path": check_path,
+                "source_sha256": hashlib.sha256(check_bytes).hexdigest(),
+                "assertion_marker": "expected-static-blue",
+                "status": "pass",
+            },
+            "negative": {
+                "test_name": "synthetic_scene_negative",
+                "source_path": check_path,
+                "source_sha256": hashlib.sha256(check_bytes).hexdigest(),
+                "assertion_marker": "mutated-static-green",
+                "status": "pass",
+                "mutation_kind": "pixel",
+                "mutation": "Change the expected pixel from blue to green.",
+                "targets_expectation": True,
+            },
+        },
+    }
+    report_path = output / "synthetic-scene.json"
+    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return revision, report_path, report
+
+
+def promotion_self_test():
+    with tempfile.TemporaryDirectory(prefix="gbb-scene-promotion-") as directory:
+        root = Path(directory).resolve() / "subject"
+        revision, report_path, _ = create_synthetic_promotion_subject(root)
+        result = run_cli(root, "--promotion-check", str(report_path), "--source-revision", revision)
+        if result.returncode != 0 or "synthetic contract accepted" not in result.stdout:
+            raise Reject("scene-report-synthetic-promotion-rejected:" + (result.stderr or result.stdout).strip()[-200:])
+    print("scene-report promotion self-test pass subjects=synthetic-only")
+
+
+def verify_document_contract(text):
+    raise Reject("scene-report-document-contract-not-implemented")
+
+
+def documentation_self_test(root, source_revision=None):
+    if source_revision is not None:
+        verify_source_contract(root, source_revision)
+    try:
+        text = (root / "docs/scene-feedback.md").read_text(encoding="utf-8")
+    except OSError:
+        raise Reject("scene-report-document-unavailable") from None
+    verify_document_contract(text)
+    try:
+        verify_document_contract(text.replace("--promotion-check", "--promotion-option-removed", 1))
+    except Reject as error:
+        if "--promotion-check" not in str(error):
+            raise
+    else:
+        raise Reject("scene-report-document-negative-control-failed")
+    print("scene-report documentation contract self-test pass subjects=synthetic-only")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group(required=True)
@@ -443,6 +654,10 @@ def main(argv=None):
         if args.self_test:
             if args.self_test in ("all", "intake"):
                 intake_self_test()
+            if args.self_test in ("all", "controls"):
+                promotion_self_test()
+            if args.self_test in ("all", "contract"):
+                documentation_self_test(root, args.source_revision)
             return 0
         if args.source_revision is not None:
             verify_source_contract(root, args.source_revision)

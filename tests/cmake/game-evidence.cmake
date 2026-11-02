@@ -29,3 +29,15 @@ add_test(NAME phase21_scene_report_tracer
           --self-test intake --repo-root "${PROJECT_SOURCE_DIR}")
 set_tests_properties(phase21_scene_report_tracer PROPERTIES
   TIMEOUT 60 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+
+add_test(NAME phase21_scene_report_controls
+  COMMAND ${Python3_EXECUTABLE} -I "${GBB_SCENE_REPORT_CHECKER}"
+          --self-test controls --repo-root "${PROJECT_SOURCE_DIR}")
+set_tests_properties(phase21_scene_report_controls PROPERTIES
+  TIMEOUT 60 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+
+add_test(NAME phase21_scene_report_contract
+  COMMAND ${Python3_EXECUTABLE} -I "${GBB_SCENE_REPORT_CHECKER}"
+          --self-test contract --repo-root "${PROJECT_SOURCE_DIR}")
+set_tests_properties(phase21_scene_report_contract PROPERTIES
+  TIMEOUT 60 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
