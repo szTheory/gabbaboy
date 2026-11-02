@@ -149,3 +149,10 @@ Earlier findings WR-01 through WR-06 are closed. At `893ecac8`, the pin parser a
 _Reviewed: 2026-11-02T08:24:05Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: deep_
+
+## Executor Follow-up — e0b5305d
+
+- The final delta normalizes the configured CMake source directory using the host platform's path rules before comparison. It reads one cache value and continues rejecting a source/build mismatch.
+- Synthetic admission manifests/notices are serialized directly to UTF-8 bytes, preserving exact Git-pinned bytes on Windows. Production notice and admission policy are unchanged.
+- Focused scene and candidate controls pass locally; the full final-head CTest suite passes 1724/1724. This change adds no network, filesystem, or authorization surface.
+- **Disposition:** No new findings. Independent review remains at `893ecac8`; the exact-head Windows PR rerun is pending.

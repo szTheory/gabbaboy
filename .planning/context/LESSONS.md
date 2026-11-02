@@ -1066,6 +1066,13 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Applicability:** Whenever a test corpus or acceptance case changes and an immutable inventory binds its bytes, update the source identity in the same integration plan. Do not refresh expected outcomes without evidence that their meaning changed.
 - **Verification:** At `1e328e66cd08196921018d9666f8ecc677635af5`, the state-fork checks and full CTest suite passed 1724/1724; the expected-result baselines were not refreshed.
 
+### GB-CGB-016 / 2026-11-02 / Keep Windows synthetic evidence byte-identical to its Git pin
+
+- **Cause and evidence:** Phase 21's first Windows host diagnostic failed two synthetic controls. The scene checker compared `CMAKE_HOME_DIRECTORY` byte-for-byte even though CMake normalizes Windows separators. Separately, Python `Path.write_text()` translated LF to CRLF on Windows while the repository's Git attributes stored the generated root notice as LF, so current bytes differed from the synthetic pinned blob.
+- **Remedy:** Compare paths with `os.path.normpath()` and `os.path.normcase()`. Write synthetic files whose bytes are hashed or pinned with explicit encoded `write_bytes()`.
+- **Applies when:** A test compares paths emitted by native tools or creates Git-pinned synthetic text fixtures on Windows. Treat generated fixture bytes as data; do not let host newline conversion silently alter them.
+- **Verification:** At `e0b5305d787407907f77a38bbf475f3d222b25bc`, scene-report and candidate/admission controls passed, and the complete local CTest suite passed 1724/1724. Exact-head Windows PR rerun remains the cross-platform confirmation.
+
 
 ## v0.3 milestone-boundary exchange / 2026-10-31
 

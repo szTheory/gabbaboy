@@ -11,9 +11,9 @@ provides:
   - Current Phase 21 outcome documentation, qualification evidence, and an explicit phase-boundary handoff.
 affects: [Phase 22 composition evidence, Phase 23 release evidence]
 actuals:
-  tokens: 31682
+  tokens: 37776
   tasks: 2
-  commits: 21
+  commits: 23
 tech-stack:
   added: []
   patterns:
@@ -57,7 +57,7 @@ coverage:
         ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_game_evidence(_controls)?$'"
         status: pass
       - kind: other
-        ref: "verify-cgb-game-evidence.py --check at source 893ecac8f70b2b6484c17686548f5ad091b7733b; build/phase21-evidence/result.json"
+        ref: "verify-cgb-game-evidence.py --check at source e0b5305d787407907f77a38bbf475f3d222b25bc; build/phase21-evidence/result.json"
         status: pass
     human_judgment: false
   - id: D2
@@ -80,24 +80,24 @@ coverage:
     requirement: GAME-01
     verification:
       - kind: integration
-        ref: "cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error — source 893ecac8f70b2b6484c17686548f5ad091b7733b"
+        ref: "cmake -S . -B build && cmake --build build --parallel 8 && ctest --test-dir build --output-on-failure --parallel 8 — source e0b5305d787407907f77a38bbf475f3d222b25bc"
         status: pass
     human_judgment: false
-duration: 293min
+duration: 338min
 completed: 2026-11-02
-commits: 21
+commits: 23
 plan_head_before: 9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63
-plan_head_after: 893ecac8f70b2b6484c17686548f5ad091b7733b
+plan_head_after: e0b5305d787407907f77a38bbf475f3d222b25bc
 status: complete
 ---
 
 # Phase GB-21 Plan 21-07: Source-Bound Outcome and Qualification Summary
 
-**The final receipt records a harness-only CGB result and two bounded rights/source-scope no-go outcomes without implying game progress or license prohibition.**
+**The final receipt binds a harness-only CGB result and two rights/source-scope no-go outcomes to the reviewed source without implying game progress or license prohibition.**
 
 ## Performance
 
-- **Duration:** 293 minutes
+- **Duration:** 338 minutes
 - **Started:** 2026-11-02T03:58:54Z
 - **Completed:** 2026-11-02
 - **Tasks:** 2
@@ -108,10 +108,11 @@ status: complete
 - Added a source-bound outcome composer that reuses the progress, candidate, and scene-report checkers and rejects missing evidence, contradictory candidate claims, and overbroad accuracy, hardware, or game-progress language.
 - Recorded the final no-go outcome with its evidence limits. Potion Panic's exact source/component grants and repository/public-CI scope were not established after the creator-linked repository fetch failed. µCity 1.3 source commit `d1880a2a112d7c26f16c0fc06a15b6c32fdc9137` was identified, but the required `source/engine/hardware.inc` has no identified grant or notice. These are unresolved rights/source-scope outcomes, not claims that either license prohibits use.
 - Kept both game's build, ROM, digest, cartridge-header and execution facts `not_observed`; no third candidate or fallback fixture/case/input/predicate/notice row was created. `FIXT-01` therefore remains pending.
-- Qualified the original authored CGB control at source `893ecac8f70b2b6484c17686548f5ad091b7733b`. It remains harness-only under model `CGB-CPU-E`, native CGB mode; digest repeatability does not establish game progress, rendering accuracy, physical hardware behavior, perceptual quality, mode-3 timing, or general compatibility.
+- Qualified the original authored CGB control at source `e0b5305d787407907f77a38bbf475f3d222b25bc`. It remains harness-only under model `CGB-CPU-E`, native CGB mode; digest repeatability does not establish game progress, rendering accuracy, physical hardware behavior, perceptual quality, mode-3 timing, or general compatibility.
 - Preserved the existing DMG baseline and the scene workflow's independent expectation, owner-agency, and private-media boundaries. Both descriptor-less plan prohibitions remain explicitly unresolved.
-- Configured and built the final implementation, then passed all 1,724 registered CTests in 1,256.12 seconds. The deterministic `test_budget` check passed. The fixture-admission contract and mutation controls took 3.44 and 18.48 seconds under their unchanged 60-second limits.
-- Produced a source-qualified receipt at `build/phase21-evidence/result.json` and updated the independent review report. Exact-head hosted/platform and installed-consumer qualification is still pending on PR #140 at the time of this summary; stale earlier workflow results are not used as proof.
+- Configured and built the final implementation, then passed all 1,724 registered CTests in 323.78 seconds using eight workers. The deterministic `test_budget` check passed. The fixture-admission contract and mutation controls took about 3 and 14 seconds under their unchanged 60-second limits.
+- Fixed Windows-only contract failures found in the first host diagnostic: compare CMake source paths after platform normalization, and write byte-pinned synthetic notices as explicit UTF-8 bytes so Windows newline translation cannot change the checkout bytes. Focused controls and the full suite pass at the fixed source.
+- Produced a source-qualified receipt at `build/phase21-evidence/result.json`. The existing independent review is clean at `893ecac8`; executor follow-up review found no new security surface in the final portability fix. Exact-head hosted/platform and installed-consumer qualification is still pending on PR #140 after this summary commit; push-event runs are not used as proof.
 
 ## Task Commits
 
@@ -134,8 +135,9 @@ Task 2 and attributable follow-up fixes were committed individually:
 13. `3713b8e5` record local qualification evidence.
 14. `b8f80f48` accept CRLF admission pins.
 15. `893ecac8` reject bare-CR admission pins.
+16. `e0b5305d` normalize CMake source paths and preserve exact synthetic pin bytes on Windows.
 
-**Plan commit range:** 21 commits from `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `893ecac8f70b2b6484c17686548f5ad091b7733b`, measured before the plan-metadata commit.
+**Plan commit range:** 23 commits measured from `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `e0b5305d787407907f77a38bbf475f3d222b25bc`; this includes the plan metadata commit recorded during the first summary write.
 
 ## Files Created/Modified
 
@@ -143,6 +145,7 @@ Task 2 and attributable follow-up fixes were committed individually:
 - `tests/scripts/verify-cgb-candidates.py`, `verify-cgb-progress.py`, `verify-fixture-admission.py`, `verify-scene-report.py`, `tests/CMakeLists.txt`, `tests/expected-tests.txt`, and `tests/data/state-forks.json` — complete platform, source-pin, timing, and test-inventory coverage.
 - `docs/game-acceptance.md`, `docs/cgb-profile.md`, and `docs/support/unreleased.md` — state the actual candidate/harness outcome and limits.
 - `21-VALIDATION.md`, `21-07-REVIEW.md`, `deferred-items.md`, `.continue-here.md`, and `.planning/context/LESSONS.md` — record local evidence, review, budget resolution, causes, and handoff.
+- Windows synthetic-control portability fix: `tests/scripts/verify-scene-report.py`, `verify-fixture-admission.py`, and `verify-cgb-candidates.py`.
 
 ## Decisions Made
 
@@ -191,18 +194,26 @@ Task 2 and attributable follow-up fixes were committed individually:
    - **Files modified:** `.planning/context/LESSONS.md`.
    - **Commit:** `3713b8e5`.
 
-**Total deviations:** 5 directly attributable fixes. **Impact:** Kept the planned evidence scope and project limits; no baseline, timeout budget, dependency, third candidate, or unrelated release debt was added.
+6. **Rule 1 — Windows synthetic controls compared platform-formatted paths and newline-translated pinned bytes.**
+   - **Found during:** Exact-source host diagnostic on Windows, after Task 2.
+   - **Issue:** CMake writes its cache path with normalized separators; the checker used a byte-for-byte path comparison. Windows `Path.write_text()` also translated synthetic LF text to CRLF before Git's explicit `eol=lf` attribute stored LF, making the current notice differ from its immutable synthetic pin.
+   - **Fix:** Compare the configured source path using `os.path.normpath()` and `os.path.normcase()`. Serialize byte-pinned generated manifests/notices with explicit UTF-8 `write_bytes()`.
+   - **Files modified:** `tests/scripts/verify-scene-report.py`, `tests/scripts/verify-fixture-admission.py`, `tests/scripts/verify-cgb-candidates.py`.
+   - **Commit:** `e0b5305d`.
+
+**Total deviations:** 6 directly attributable fixes. **Impact:** Kept the planned evidence scope and project limits; no baseline, timeout budget, dependency, third candidate, or unrelated release debt was added.
 
 ## Issues Encountered
 
 - The TDD RED evidence record is a replay of the immutable test-only snapshot because the initial harness output was not retained. The recorded target failed specifically because the candidate-outcome function returned `None`; the semantic assessment ruled out discovery/setup failures. The GREEN implementation passed.
 - The plan's example source argument `HEAD` did not always match the runner's build-stamped source after documentation commits. Final receipt uses the full immutable source hash explicitly.
 - One earlier full-suite run found the lesson-ID collision; after its fix, the final source run passed completely.
+- The first sandbox-restricted final CTest attempt had five unrelated v0.2/performance/release-review controls fail because the sandbox denied writes to `.git/worktrees`; rerunning the same full suite with repository-write permission passed 1724/1724. No timeout or budget was changed.
 - Earlier hosted workflow failures were investigated and fixed where attributable, but those runs are stale. They are not cited as proof for the current revision.
 
 ## Threat and Review Status
 
-- Independent code review at `893ecac8` is clean with zero open findings; see `21-07-REVIEW.md`.
+- Independent code review at `893ecac8` is clean with zero open findings; see `21-07-REVIEW.md`. The final `e0b5305d` portability delta was reviewed locally and adds no external input, endpoint, or trust boundary.
 - Security review closed T-21-15 and T-21-SC. T-21-16 remains open until exact-head hosted and installed-consumer checks pass. T-21-17 is the shared verify-work/closure step.
 - The new checker consumes existing CLIs and the Python standard library; it adds no network endpoint or third-party dependency.
 
@@ -217,4 +228,4 @@ Plan 21-07 implementation and local qualification are complete. Exact-head hoste
 
 ## Self-Check: PASSED
 
-The summary, evidence checker, CMake registration, and source-bound receipt exist. All 21 task commits are ancestors of the recorded plan head. The six summary-coverage checks passed after the summary was written.
+The summary, evidence checker, CMake registration, and source-bound receipt exist. All 22 task commits are ancestors of the recorded plan head. The six summary-coverage checks passed after the summary was written.

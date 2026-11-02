@@ -36,7 +36,7 @@ created: "2026-11-01"
 
 ## Per-Task Verification Map
 
-Plan 21-07 implementation and local qualification are complete. The table records passing automated contracts; exact-head hosted qualification remains pending in Task 21-07-02. Commands below are focused selectors; each PLAN carries its full configure/build prerequisites, additional checks and observable `fails_when` condition.
+Plan 21-07 implementation and local qualification are complete. The table records passing automated contracts; exact-head hosted qualification remains pending after the final plan metadata commit. Commands below are focused selectors; each PLAN carries its full configure/build prerequisites, additional checks and observable `fails_when` condition.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
@@ -89,16 +89,20 @@ The six spec-less edge assumptions and two descriptor-less values prohibitions r
 
 ## Final Local Evidence
 
-Implementation source and runner identity: `893ecac8f70b2b6484c17686548f5ad091b7733b`.
+Implementation source and runner identity: `e0b5305d787407907f77a38bbf475f3d222b25bc`.
 
-- Configure: `cmake --preset phase1` — passed.
-- Build: `cmake --build --preset phase1` — passed (637 Ninja build steps).
-- Full CTest: `ctest --preset phase1 --output-on-failure --no-tests=error --output-junit build/phase21-ctest-final-893ecac8.xml` — passed 1724/1724 in 1256.12 seconds. This final run includes the lesson-ID correction and the Windows CRLF/bare-CR pin parser controls. The run used the elevated sandbox permission needed by tests that create temporary Git worktrees.
-- Fixture-admission budget: `phase21_fixture_admission_contract` took 3.44 seconds and `phase21_fixture_admission_controls` took 18.48 seconds; both retain explicit 60-second CTest limits. The full run's `test_budget` check passed in 0.12 seconds. The earlier 120/180-second declarations were brought within the fixed 60-second budget by removing redundant full-checker work from each mutation; neither the budget nor its baseline was raised or refreshed, and no unrelated v0.3 debt was changed.
-- Source-bound receipt: `python3 -I tests/scripts/verify-cgb-game-evidence.py --check --runner build/gabbaboy-runner --repo-root . --source-revision 893ecac8f70b2b6484c17686548f5ad091b7733b --write-evidence build/phase21-evidence/result.json` — passed at the same source and runner identity. Outcome is `game=not-admitted`, model `CGB-CPU-E`, mode `cgb`.
+- Configure: `cmake -S . -B build` — passed.
+- Build: `cmake --build build --parallel 8` — passed (638 Ninja build steps).
+- Full CTest: `ctest --test-dir build --output-on-failure --parallel 8` — passed 1724/1724 in 323.78 seconds. The first sandbox-restricted run failed five pre-existing worktree-based v0.2/performance/release-review controls because it could not write under `.git/worktrees`; the same full suite then passed with the required repository-write permission. The final run includes the lesson-ID correction, Windows CRLF/bare-CR pin controls, and the Windows CMake-path/byte-pinned synthetic-control fixes.
+- Fixture-admission budget: `phase21_fixture_admission_contract` took about 3 seconds and `phase21_fixture_admission_controls` about 14 seconds; both retain explicit 60-second CTest limits. The full run's `test_budget` check passed. Earlier 120/180-second declarations were brought within the fixed 60-second budget by removing redundant full-checker work per mutation; neither the budget nor its baseline was raised or refreshed, and no unrelated v0.3 debt was changed.
+- Source-bound receipt: `python3 -I tests/scripts/verify-cgb-game-evidence.py --check --runner build/gabbaboy-runner --repo-root . --source-revision e0b5305d787407907f77a38bbf475f3d222b25bc --write-evidence build/phase21-evidence/result.json` — passed at the same source and runner identity. Outcome is `game=not-admitted`, model `CGB-CPU-E`, mode `cgb`.
 - Candidate result: Potion Panic is no-go because exact source/component grants and repository/public-CI rights scope could not be established after its author-linked source fetch failed. µCity 1.3 is no-go because required `source/engine/hardware.inc` has no identified grant or notice, leaving complete build-source scope unestablished. These are rights/source-scope no-go decisions, not claims that either license prohibits use.
 - Neither game source was run. Fallback toolchain/build/run facts remain `not_observed`; no fallback fixture, acceptance case, input, predicate, or notice row exists. Original ROM progress remains harness-only. RGB555/PCM digests show repeatability only; no accuracy, physical-hardware, perceptual, mode-3 timing, or general-compatibility claim is made.
-- Independent code review: clean, 0 findings after the final path-with-spaces and CTest-registration fixes; see `21-07-REVIEW.md`. Security review closed implementation mitigations for T-21-15 and T-21-SC. Exact-head hosted/platform/installed-consumer checks remain open for T-21-16; shared verify-work closure remains for T-21-17.
+- Independent code review at `893ecac8`: clean, 0 findings after the final path-with-spaces and CTest-registration fixes; the final portability delta was executor-reviewed and adds no security surface. See `21-07-REVIEW.md`. Security review closed implementation mitigations for T-21-15 and T-21-SC. Exact-head hosted/platform/installed-consumer checks remain open for T-21-16; shared verify-work closure remains for T-21-17.
+
+## CI/CD Efficiency
+
+Diagnostic push run 41416394413 on `951dc8b` took 21m22s for Linux native and 19m05s for ASan tests; Windows and macOS native jobs took about 23 minutes before failing. CI already runs native CTest with four workers. A local same-machine run with eight workers completed the whole suite in 5m24s versus the earlier serial 20m56s run, but this does not establish a safe CI concurrency change: the host failures included an unrelated fixed-budget release test, and higher concurrency may increase per-test contention. No workflow, cache, timeout, or membership change is justified within Phase 21. Exact PR qualification after the final metadata commit remains required.
 - CI efficiency: the latest full local run measured 1256.12 seconds. Its slowest test was `workflow_policy_group_release_jobs` at 63.62 seconds; the two fixture-admission checks remained below 60 seconds. At this record update, no current exact-head hosted queue/job timings are available; the previous PR run is stale and cannot establish current performance or qualification. No cache, concurrency, dependency, or other speculative optimization was justified by the local measurements. Reassess exact-head hosted timings before changing workflow structure.
 
 ## Hosted Qualification
