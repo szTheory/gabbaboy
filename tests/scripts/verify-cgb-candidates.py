@@ -2406,6 +2406,47 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     baseline_bytes = primary_record_path.read_bytes()
     control_count = 0
 
+    def cmake_runner_qualification(label: str, expected: str) -> None:
+        build_dir = root / "build" / f"runner-input-qualification-{label}"
+        result = run_process(
+            ["cmake", "-S", str(root), "-B", str(build_dir), "-G", "Ninja",
+             "-DBUILD_TESTING=OFF", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"],
+            root, timeout=MAX_SUBPROCESS_SECONDS,
+        )
+        if result.returncode != 0:
+            detail = (result.stdout + result.stderr).decode("utf-8", errors="replace").strip()[-512:]
+            raise Reject("candidate-self-test-failed", f"{label} CMake configure failed: {detail}")
+        commands_path = build_dir / "compile_commands.json"
+        commands = parse_json(read_regular(root, commands_path.relative_to(root).as_posix()),
+                              "CMake compile commands")
+        if not isinstance(commands, list):
+            raise Reject("candidate-self-test-failed", f"{label} compile commands are invalid")
+        core_command = next((entry.get("command", "") for entry in commands
+                             if isinstance(entry, dict)
+                             and entry.get("file") == str(root / "src/core/gabbaboy.c")), "")
+        observed = re.search(r"(?:^|\s)-DGBB_BUILD_QUALIFIED=([01])(?:\s|$)", core_command)
+        if observed is None or observed.group(1) != expected:
+            actual = observed.group(1) if observed is not None else "missing"
+            raise Reject("candidate-self-test-failed",
+                         f"{label} expected GBB_BUILD_QUALIFIED={expected}, received {actual}")
+
+    source_control_invocations = _runner_invocations(root)
+    cmake_runner_qualification("clean", "1")
+    for index, relative in enumerate(("src/core/gbb_accept_input.h", "cmake/StateVersion.cmake")):
+        source_path = root / relative
+        original = read_regular(root, relative)
+        marker = b"\n/* synthetic qualification-input mutation */\n" \
+            if relative.endswith(".h") else b"\n# synthetic qualification-input mutation\n"
+        try:
+            source_path.write_bytes(original + marker)
+            cmake_runner_qualification(f"dirty-{index}", "0")
+        finally:
+            source_path.write_bytes(original)
+        if _runner_invocations(root) != source_control_invocations:
+            raise Reject("candidate-self-test-failed", f"dirty {relative} executed a candidate")
+        control_count += 1
+    cmake_runner_qualification("restored", "1")
+
     for field, relative in (
         ("case_file", baseline["progress"]["value"]["case_file"]),
         ("input_script", baseline["progress"]["value"]["input_script"]["path"]),
@@ -2607,6 +2648,40 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     write_current_build_qualification(root, _current_revision(root), str(runner_path),
                                       str(qualification_path), True, list(RUNNER_BUILD_INPUTS))
     qualification_bytes = qualification_path.read_bytes()
+
+    qualification_args = [
+        "--check-all", "--repo-root", str(root), "--source-revision", _current_revision(root),
+        "--require-final", "--runner", str(runner_path),
+        "--current-build-qualification", str(qualification_path),
+    ]
+    before_clean = _runner_invocations(root)
+    run_checker(root, *qualification_args, expect_text="PASS: candidate records")
+    if _runner_invocations(root) != before_clean + 1:
+        raise Reject("candidate-self-test-failed", "clean runner-input positive did not execute once")
+
+    def current_input_source_drift_control(relative: str) -> None:
+        nonlocal control_count
+        source_path = root / relative
+        original = read_regular(root, relative)
+        marker = b"\n/* synthetic qualification-input mutation */\n" \
+            if relative.endswith(".h") else b"\n# synthetic qualification-input mutation\n"
+        before_mutation = _runner_invocations(root)
+        try:
+            source_path.write_bytes(original + marker)
+            run_checker(
+                root, *qualification_args, expect_code=1,
+                expect_text=f"candidate-current-build-qualification-source-drift: {relative}",
+            )
+        finally:
+            source_path.write_bytes(original)
+        if source_path.read_bytes() != original:
+            raise Reject("candidate-self-test-failed", f"{relative} was not restored")
+        if _runner_invocations(root) != before_mutation:
+            raise Reject("candidate-self-test-failed", f"dirty {relative} reached candidate execution")
+        control_count += 1
+
+    current_input_source_drift_control("src/core/gbb_accept_input.h")
+    current_input_source_drift_control("cmake/StateVersion.cmake")
 
     def current_qualification_control(label: str, mutate, expected: str,
                                       supplied_runner: Path | None = None) -> None:
@@ -2832,7 +2907,7 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
             # Keep a known no-go fallback reference valid in the synthetic history.
             _ = primary_no_go_commit
     if controls_only:
-        print(f"PASS: candidate contract controls positives=5 negative_controls={controls} synthetic_only=true")
+        print(f"PASS: candidate contract controls positives=6 negative_controls={controls} synthetic_only=true")
     else:
         print(f"PASS: candidate contract synthetic=2 order-controls={controls}")
 
