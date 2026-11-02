@@ -18,7 +18,9 @@ set_tests_properties(phase21_fixture_admission_contract PROPERTIES
 add_test(NAME phase21_fixture_admission_controls
   COMMAND ${Python3_EXECUTABLE} -I "${GBB_CANDIDATE_CHECKER}"
           --self-test-controls --repo-root "${PROJECT_SOURCE_DIR}"
-          --source-revision "${GBB_CANDIDATE_SOURCE_REV}")
+          --source-revision "${GBB_CANDIDATE_SOURCE_REV}"
+          --runner "$<TARGET_FILE:gabbaboy-runner>"
+          --current-build-qualification "${GBB_RUNNER_QUALIFICATION_PATH}")
 set_tests_properties(phase21_fixture_admission_controls PROPERTIES
   TIMEOUT 60 LABELS planning WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
 
@@ -26,6 +28,7 @@ set(GBB_GAME_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-ga
 add_test(NAME phase21_game_evidence
   COMMAND ${Python3_EXECUTABLE} -I "${GBB_GAME_EVIDENCE_CHECKER}"
           --check --runner "$<TARGET_FILE:gabbaboy-runner>"
+          --current-build-qualification "${GBB_RUNNER_QUALIFICATION_PATH}"
           --repo-root "${PROJECT_SOURCE_DIR}"
           --source-revision "${GBB_CANDIDATE_SOURCE_REV}"
           --write-evidence "${PROJECT_SOURCE_DIR}/build/phase21-evidence/result.json")

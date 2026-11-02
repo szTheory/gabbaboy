@@ -850,13 +850,31 @@ def scene_phase_facts(snapshot: dict[str, bytes]) -> dict[str, str]:
 
 
 def collect_check_result(root: Path, runner: Path, revision: str,
+                         current_build_qualification: str,
                          snapshot: dict[str, bytes]) -> dict[str, Any]:
     records = parse_snapshot_records(snapshot)
     outcome = validate_documentation(snapshot, records)
+    qualification_output = run_cli(
+        root, "verify-cgb-candidates.py",
+        ["--check-build-qualification", "--runner", str(runner),
+         "--current-build-qualification", current_build_qualification,
+         "--repo-root", str(root), "--source-revision", revision],
+        "PASS: current runner qualification",
+    )
+    qualification_match = re.search(r"artifact=([0-9a-f]{64})\b", qualification_output)
+    if qualification_match is None:
+        raise Reject("current-runner-qualification-output-invalid")
+    qualified_runner_sha = qualification_match.group(1)
+    if _file_sha256(runner) != qualified_runner_sha:
+        raise Reject("current-runner-changed-before-harness-preflight")
+    harness, runner_sha = collect_harness_observation(root, runner, revision)
+    if runner_sha != qualified_runner_sha or _file_sha256(runner) != qualified_runner_sha:
+        raise Reject("current-runner-changed-before-harness-preflight")
     candidate_args = ["--check-all", "--require-final", "--repo-root", str(root),
                       "--source-revision", revision]
     if outcome["status"] == "admitted":
-        candidate_args.extend(("--runner", str(runner)))
+        candidate_args.extend(("--runner", str(runner), "--current-build-qualification",
+                               current_build_qualification))
     run_cli(root, "verify-cgb-progress.py",
             ["--discrimination", "--runner", str(runner), "--repo-root", str(root),
              "--source-revision", revision], "cgb-discrimination status=pass")
@@ -868,11 +886,12 @@ def collect_check_result(root: Path, runner: Path, revision: str,
              "--source-revision", revision], "cgb-observations status=pass")
     run_cli(root, "verify-cgb-candidates.py", candidate_args,
             f"PASS: candidate records count=2 source={revision}")
+    if _file_sha256(runner) != qualified_runner_sha:
+        raise Reject("current-runner-changed-after-candidate-check")
     run_cli(root, "verify-scene-report.py",
             ["--self-test", "contract", "--repo-root", str(root), "--source-revision", revision],
             "scene-report documentation contract self-test pass")
 
-    harness, runner_sha = collect_harness_observation(root, runner, revision)
     source_hashes = {path: hashlib.sha256(snapshot[path]).hexdigest() for path in SOURCE_PATHS}
     game_record: dict[str, Any] = {
         "status": "not-admitted" if outcome["status"] == "no-game" else "admitted",
@@ -886,6 +905,11 @@ def collect_check_result(root: Path, runner: Path, revision: str,
         "schema_version": 1,
         "source_revision": revision,
         "runner_sha256": runner_sha,
+        "current_build_qualification": {
+            "source_revision": revision,
+            "qualified": True,
+            "artifact_sha256": qualified_runner_sha,
+        },
         "source_files": source_hashes,
         "game_result": game_record,
         "candidate_attempts": _candidate_summary(records),
@@ -966,7 +990,8 @@ def write_evidence(root: Path, requested: str, value: dict[str, Any]) -> str:
 
 
 def run_check(args: argparse.Namespace) -> int:
-    if not args.runner or not args.repo_root or not args.source_revision or not args.write_evidence:
+    if not args.runner or not args.current_build_qualification or not args.repo_root \
+            or not args.source_revision or not args.write_evidence:
         raise Reject("check-arguments-required")
     try:
         root = Path(args.repo_root).resolve(strict=True)
@@ -975,7 +1000,8 @@ def run_check(args: argparse.Namespace) -> int:
     revision = resolve_source_revision(root, args.source_revision)
     snapshot = load_snapshot(root, revision)
     runner = check_runner_path(root, args.runner)
-    receipt = collect_check_result(root, runner, revision, snapshot)
+    receipt = collect_check_result(root, runner, revision, args.current_build_qualification,
+                                   snapshot)
     output = write_evidence(root, args.write_evidence, receipt)
     print(f"PASS: game-evidence source={revision} model=CGB-CPU-E mode=cgb "
           f"game={receipt['game_result']['status']} evidence={output}")
@@ -1000,6 +1026,7 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument("--self-test", action="store_true")
     modes.add_argument("--self-test-controls", action="store_true")
     parser.add_argument("--runner")
+    parser.add_argument("--current-build-qualification")
     parser.add_argument("--repo-root", type=Path)
     parser.add_argument("--source-revision")
     parser.add_argument("--write-evidence")

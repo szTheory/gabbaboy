@@ -11,12 +11,14 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 import time
@@ -65,6 +67,34 @@ CONTRACT_PATHS = (
     "tests/cmake/game-evidence.cmake",
     "docs/cgb-game-candidates.md",
 )
+RUNNER_BUILD_INPUTS = (
+    "CMakeLists.txt",
+    "include/gabbaboy/gabbaboy.h",
+    "src/core/gabbaboy.c",
+    "src/core/gabbaboy_test.h",
+    "src/runner/main.c",
+    "src/runner/acceptance.h",
+    "src/runner/cases.c",
+    "src/runner/acceptance.c",
+    "src/accept/gbb_accept.h",
+    "src/accept/sha256.c",
+    "src/accept/input_script.c",
+    "src/accept/stepper.c",
+    "src/accept/predicate.c",
+    "src/accept/digest.c",
+    "src/host/gbb_host.h",
+    "src/host/host_exit.h",
+    "src/host/host_cadence.c",
+    "src/host/host_run.c",
+    "src/host/host_save_format.c",
+    "src/host/host_save_io.c",
+    "src/host/host_signal.c",
+    "src/host/host_basename.c",
+)
+QUALIFICATION_VERSION = 1
+QUALIFICATION_RELATIVE_PATH = "build/phase21-evidence/current-runner-qualification.json"
+MAX_RUNNER_BYTES = 128 * 1024 * 1024
+MAX_SOURCE_ARCHIVE_BYTES = 16 * 1024 * 1024
 ALLOWED_NO_GO_CATEGORIES = {"rights", "source", "build", "identity", "mode", "predicate"}
 FACT_FIELDS = ("source", "build", "admission", "rom", "execution", "progress", "observations", "receipt")
 FACT_STAGE_ORDER = {
@@ -272,16 +302,205 @@ def immutable_blob(root: Path, revision: str, path: str) -> bytes:
     return git(root, "show", f"{revision}:{path}", output_limit=MAX_FILE_BYTES)
 
 
+def immutable_blobs(root: Path, revision: str, paths: tuple[str, ...] | list[str]) -> dict[str, bytes]:
+    """Read a bounded set of immutable source blobs from one Git archive process."""
+    if not paths or len(set(paths)) != len(paths):
+        raise Reject("candidate-source-file-set-invalid")
+    result = run_process(["git", "archive", "--format=tar", revision, *paths], root,
+                         timeout=MAX_SUBPROCESS_SECONDS, output_limit=MAX_SOURCE_ARCHIVE_BYTES)
+    if result.returncode != 0:
+        raise Reject("candidate-source-file-unavailable")
+    blobs: dict[str, bytes] = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:") as archive:
+            for member in archive:
+                name = PurePosixPath(member.name).as_posix()
+                if member.isdir() and any(path.startswith(name.rstrip("/") + "/") for path in paths):
+                    continue
+                if name not in paths or name in blobs or not member.isreg() \
+                        or member.size > MAX_FILE_BYTES:
+                    raise Reject("candidate-source-file-invalid", name)
+                stream = archive.extractfile(member)
+                if stream is None:
+                    raise Reject("candidate-source-file-unavailable", name)
+                data = stream.read(MAX_FILE_BYTES + 1)
+                if len(data) != member.size or len(data) > MAX_FILE_BYTES:
+                    raise Reject("candidate-source-file-limit", name)
+                blobs[name] = data
+    except (tarfile.TarError, OSError):
+        raise Reject("candidate-source-archive-invalid") from None
+    if set(blobs) != set(paths):
+        raise Reject("candidate-source-file-unavailable")
+    return blobs
+
+
 def validate_source_contract(root: Path, revision: str) -> dict[str, str]:
     """Read all checker authorities from one commit and compare executable files to the checkout."""
     digests: dict[str, str] = {}
-    for path in CONTRACT_PATHS:
-        pinned = immutable_blob(root, revision, path)
+    pinned_sources = immutable_blobs(root, revision, CONTRACT_PATHS)
+    for path, pinned in pinned_sources.items():
         current = read_regular(root, path)
         if current != pinned:
             raise Reject("candidate-source-drift", path)
         digests[path] = sha256(pinned)
     return digests
+
+
+def read_historical_source_contract(root: Path, revision: str) -> dict[str, str]:
+    """Validate that a historical source snapshot exists without comparing it to current files."""
+    return {path: sha256(value) for path, value in
+            immutable_blobs(root, revision, CONTRACT_PATHS).items()}
+
+
+def _runner_path(root: Path, requested: str | Path) -> Path:
+    path = Path(requested)
+    if not path.is_absolute():
+        path = root / path
+    try:
+        canonical_root = root.resolve(strict=True)
+        canonical = path.resolve(strict=True)
+        relative = canonical.relative_to(canonical_root)
+    except (OSError, ValueError):
+        raise Reject("candidate-runner-path-invalid")
+    if not relative.parts:
+        raise Reject("candidate-runner-path-invalid")
+    try:
+        metadata = canonical.stat()
+        if not canonical.is_file() or metadata.st_size <= 0 \
+                or metadata.st_size > MAX_RUNNER_BYTES or not os.access(canonical, os.X_OK):
+            raise Reject("candidate-runner-unavailable")
+    except OSError:
+        raise Reject("candidate-runner-unavailable") from None
+    return canonical
+
+
+def _qualification_path(root: Path, requested: str | Path) -> Path:
+    path = Path(requested)
+    if not path.is_absolute():
+        path = root / path
+    try:
+        canonical_root = root.resolve(strict=True)
+        canonical = path.resolve(strict=False)
+        relative = canonical.relative_to(canonical_root).as_posix()
+    except (OSError, ValueError):
+        raise Reject("candidate-current-build-qualification-path-invalid") from None
+    if relative != QUALIFICATION_RELATIVE_PATH:
+        raise Reject("candidate-current-build-qualification-path-invalid")
+    parent = canonical_root
+    for component in PurePosixPath(relative).parts[:-1]:
+        parent = parent / component
+        if parent.exists() and (parent.is_symlink() or not parent.is_dir()):
+            raise Reject("candidate-current-build-qualification-path-invalid")
+    if canonical.is_symlink():
+        raise Reject("candidate-current-build-qualification-path-invalid")
+    return canonical
+
+
+def _write_qualification_atomic(path: Path, value: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    payload = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    temporary: str | None = None
+    try:
+        descriptor, temporary = tempfile.mkstemp(prefix=".runner-qualification-", suffix=".tmp",
+                                                 dir=path.parent)
+        try:
+            os.fchmod(descriptor, 0o600)
+        except (AttributeError, OSError):
+            pass
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        temporary = None
+    except OSError as error:
+        raise Reject("candidate-current-build-qualification-write-failed",
+                     error.strerror or "write") from error
+    finally:
+        if temporary is not None:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+
+
+def write_current_build_qualification(root: Path, source_revision: str, runner: str,
+                                      qualification: str, build_qualified: bool,
+                                      input_paths: list[str]) -> dict[str, Any]:
+    revision = resolve_source_revision(root, source_revision)
+    if input_paths != list(RUNNER_BUILD_INPUTS):
+        raise Reject("candidate-current-build-qualification-input-set-invalid")
+    runner_path = _runner_path(root, runner)
+    qualification_path = _qualification_path(root, qualification)
+    inputs: dict[str, str] = {}
+    for relative in RUNNER_BUILD_INPUTS:
+        relative_path(relative, "runner build input")
+        inputs[relative] = sha256(read_regular(root, relative))
+    writer_sha = sha256(read_regular(root, "tests/scripts/verify-cgb-candidates.py"))
+    try:
+        artifact_sha = sha256(runner_path.read_bytes())
+    except OSError:
+        raise Reject("candidate-runner-identity-unavailable") from None
+    value = {
+        "schema_version": QUALIFICATION_VERSION,
+        "source_revision": revision,
+        "build_qualified": build_qualified,
+        "build_inputs": inputs,
+        "writer_sha256": writer_sha,
+        "artifact_path": str(runner_path),
+        "artifact_sha256": artifact_sha,
+    }
+    _write_qualification_atomic(qualification_path, value)
+    return value
+
+
+def validate_current_build_qualification(root: Path, source_revision: str, runner: Path,
+                                         qualification: str | Path) -> dict[str, Any]:
+    revision = resolve_source_revision(root, source_revision)
+    canonical_runner = _runner_path(root, runner)
+    qualification_path = _qualification_path(root, qualification)
+    raw = read_regular(root, qualification_path.relative_to(root).as_posix())
+    value = parse_json(raw, "current runner qualification")
+    require_keys(value, {
+        "schema_version", "source_revision", "build_qualified", "build_inputs",
+        "writer_sha256", "artifact_path", "artifact_sha256",
+    }, "current runner qualification")
+    if isinstance(value["schema_version"], bool) or value["schema_version"] != QUALIFICATION_VERSION:
+        raise Reject("candidate-current-build-qualification-version-invalid")
+    if value["source_revision"] != revision:
+        raise Reject("candidate-current-build-qualification-source-mismatch")
+    if value["build_qualified"] is not True:
+        raise Reject("candidate-current-build-unqualified")
+    inputs = value["build_inputs"]
+    if not isinstance(inputs, dict) or set(inputs) != set(RUNNER_BUILD_INPUTS):
+        raise Reject("candidate-current-build-qualification-input-set-invalid")
+    selected_sources = immutable_blobs(
+        root, revision, [*RUNNER_BUILD_INPUTS, "tests/scripts/verify-cgb-candidates.py"],
+    )
+    for relative in RUNNER_BUILD_INPUTS:
+        digest = inputs[relative]
+        if not isinstance(digest, str) or not HEX64.fullmatch(digest):
+            raise Reject("candidate-current-build-qualification-input-invalid", relative)
+        pinned = selected_sources[relative]
+        if digest != sha256(pinned) or read_regular(root, relative) != pinned:
+            raise Reject("candidate-current-build-qualification-source-drift", relative)
+    writer = selected_sources["tests/scripts/verify-cgb-candidates.py"]
+    writer_sha = value["writer_sha256"]
+    if not isinstance(writer_sha, str) or not HEX64.fullmatch(writer_sha) \
+            or writer_sha != sha256(writer) \
+            or read_regular(root, "tests/scripts/verify-cgb-candidates.py") != writer:
+        raise Reject("candidate-current-build-qualification-writer-mismatch")
+    if value["artifact_path"] != str(canonical_runner) \
+            or not isinstance(value["artifact_sha256"], str) \
+            or not HEX64.fullmatch(value["artifact_sha256"]):
+        raise Reject("candidate-current-build-qualification-artifact-mismatch")
+    try:
+        artifact_sha = sha256(canonical_runner.read_bytes())
+    except OSError:
+        raise Reject("candidate-runner-identity-unavailable") from None
+    if artifact_sha != value["artifact_sha256"]:
+        raise Reject("candidate-current-build-qualification-artifact-mismatch")
+    return value
 
 
 def candidate_metadata(candidate_id: object) -> tuple[str, str, str]:
@@ -762,7 +981,7 @@ def _validate_receipt(value: dict[str, Any], record: dict[str, Any],
     ancestor = run_process(["git", "merge-base", "--is-ancestor", project_revision, selected_revision], root)
     if ancestor.returncode != 0:
         raise Reject("candidate-receipt-source-mismatch")
-    validate_source_contract(root, project_revision)
+    read_historical_source_contract(root, project_revision)
     if value["case_sha256"] != progress["case_sha256"] or value["input_sha256"] != progress["input_script"]["sha256"] \
             or value["predicate_sha256"] != progress["predicate"]["sha256"]:
         raise Reject("candidate-receipt-progress-mismatch")
@@ -1140,7 +1359,7 @@ def _validate_runner_output_values(acceptance: dict[str, str], receipt: dict[str
 
 
 def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any],
-                            selected_revision: str) -> None:
+                            selected_revision: str, current_build: dict[str, Any]) -> None:
     """Execute only an admitted subject, after the real Phase 20 check has passed."""
     progress = record["progress"]["value"]
     rom = record["rom"]["value"]
@@ -1167,11 +1386,8 @@ def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any],
         runner_sha = sha256(runner.read_bytes())
     except OSError:
         raise Reject("candidate-runner-identity-unavailable") from None
-    if runner_sha != receipt_value["runner_sha256"] \
-            or runner_sha != receipt_value["binary_sha256"] \
-            or runner_sha != receipt_document.get("runner_sha256") \
-            or runner_sha != receipt_document.get("binary_sha256"):
-        raise Reject("candidate-runner-identity-mismatch")
+    if runner_sha != current_build["artifact_sha256"]:
+        raise Reject("candidate-current-build-qualification-artifact-mismatch")
     isolation = record["build"]["value"]["build_isolation"]
     environment = {
         name: os.environ[name] for name in isolation["environment_allowlist"] if name in os.environ
@@ -1186,7 +1402,7 @@ def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any],
         runner_after_sha = sha256(runner.read_bytes())
     except OSError:
         raise Reject("candidate-runner-identity-unavailable") from None
-    if runner_after_sha != runner_sha:
+    if runner_after_sha != runner_sha or runner_after_sha != current_build["artifact_sha256"]:
         raise Reject("candidate-runner-changed-during-replay")
     try:
         stdout = result.stdout.decode("utf-8", errors="strict")
@@ -1310,7 +1526,8 @@ def _validate_not_observed(record: dict[str, Any], status: str) -> None:
 
 
 def validate_record(root: Path, revision: str, record: dict[str, Any], expected_id: str,
-                    stage: str | None, require_final: bool, runner: Path | None = None) -> str:
+                    stage: str | None, require_final: bool, runner: Path | None = None,
+                    current_build_qualification: str | None = None) -> str:
     expected = candidate_metadata(expected_id)
     require_keys(record, {
         "schema_version", "candidate_id", "release", "preferred_artifact", "stage", "partial",
@@ -1439,7 +1656,12 @@ def validate_record(root: Path, revision: str, record: dict[str, Any], expected_
             raise Reject("candidate-receipt-source-missing")
         _validate_receipt(record["receipt"]["value"], record, revision, root)
     if status == "admitted" and runner is not None:
-        _run_admitted_candidate(root, runner, record, revision)
+        if current_build_qualification is None:
+            raise Reject("candidate-current-build-qualification-required")
+        current_build = validate_current_build_qualification(
+            root, revision, runner, current_build_qualification,
+        )
+        _run_admitted_candidate(root, runner, record, revision, current_build)
     if status == "not-needed":
         _validate_not_needed_reference(root, revision, record)
     if expected_id == CANDIDATES[1][0] and status in {"admitted", "no-go"}:
@@ -1469,7 +1691,8 @@ def _validate_record_set(root: Path) -> None:
 
 
 def validate_all(root: Path, revision: str, stage: str | None,
-                 require_final: bool, runner: Path | None = None) -> tuple[list[dict[str, Any]], dict[str, str]]:
+                 require_final: bool, runner: Path | None = None,
+                 current_build_qualification: str | None = None) -> tuple[list[dict[str, Any]], dict[str, str]]:
     contract = validate_source_contract(root, revision)
     _validate_record_set(root)
     records: list[dict[str, Any]] = []
@@ -1485,12 +1708,14 @@ def validate_all(root: Path, revision: str, stage: str | None,
     if error:
         raise Reject(error)
     for candidate, record in zip(CANDIDATES, records):
-        validate_record(root, revision, record, candidate[0], stage, require_final, runner)
+        validate_record(root, revision, record, candidate[0], stage, require_final, runner,
+                        current_build_qualification)
     return records, contract
 
 
 def validate_one(root: Path, revision: str, relative: str, stage: str | None,
-                 require_final: bool, runner: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]:
+                 require_final: bool, runner: Path | None = None,
+                 current_build_qualification: str | None = None) -> tuple[dict[str, Any], dict[str, str]]:
     contract = validate_source_contract(root, revision)
     record = record_path(root, relative)
     candidate_id = record.get("candidate_id")
@@ -1498,7 +1723,8 @@ def validate_one(root: Path, revision: str, relative: str, stage: str | None,
         raise Reject("candidate-identity-invalid", "record path has no fixed candidate identity")
     if relative != RECORDS[candidate_id]:
         raise Reject("candidate-record-path-mismatch", candidate_id)
-    validate_record(root, revision, record, candidate_id, stage, require_final, runner)
+    validate_record(root, revision, record, candidate_id, stage, require_final, runner,
+                    current_build_qualification)
     return record, contract
 
 
@@ -1631,7 +1857,6 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
     runner.write_text(
         "#!/usr/bin/env python3\n"
         "import os\n"
-        "import subprocess\n"
         "import sys\n"
         "from pathlib import Path\n"
         "if any(key in os.environ for key in ('AWS_SECRET_ACCESS_KEY', 'GITHUB_TOKEN', 'GH_TOKEN')):\n"
@@ -1653,10 +1878,11 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
         "marker.parent.mkdir(parents=True, exist_ok=True)\n"
         "with marker.open('a', encoding='utf-8') as stream:\n"
         "    stream.write('invoked\\n')\n"
+        "BUILD_REVISION = '0000000000000000000000000000000000000000'\n"
         f"checkpoint_frames = {checkpoint_frames!r}\n"
         f"checkpoint_requested = {SYNTHETIC_REPLAY_REQUESTED!r}\n"
         f"checkpoint_completion = {SYNTHETIC_REPLAY_COMPLETION!r}\n"
-        "current_revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()\n"
+        "current_revision = BUILD_REVISION\n"
         "print(f\"acceptance id={case['id']} status=pass model=cgb-cpu-e profile=CGB-CPU-E \"\n"
         "      f\"execution_mode=cgb frame_format=GBB-RGB555LE-v1 \"\n"
         "      f\"evidence_class=original-harness-only t_hit_half_dots=900000\")\n"
@@ -1942,6 +2168,20 @@ def _current_revision(root: Path) -> str:
     return git(root, "rev-parse", "HEAD").decode("ascii").strip()
 
 
+def _pin_synthetic_runner_build_revision(root: Path) -> None:
+    runner_path = root / "tests/scripts/synthetic-runner.py"
+    raw = runner_path.read_bytes()
+    expected = _current_revision(root).encode("ascii")
+    updated, substitutions = re.subn(
+        rb"BUILD_REVISION = '[0-9a-f]{40}'",
+        b"BUILD_REVISION = '" + expected + b"'", raw, count=1,
+    )
+    if substitutions != 1:
+        raise Reject("candidate-self-test-failed", "synthetic runner build identity missing")
+    runner_path.write_bytes(updated)
+    runner_path.chmod(0o755)
+
+
 def _record_ref(root: Path, path: str, commit: str) -> dict[str, str]:
     raw = immutable_blob(root, commit, path)
     return {"path": path, "commit": commit, "sha256": sha256(raw)}
@@ -1952,7 +2192,13 @@ def _run_all(root: Path, *, runner: bool = True, expected_code: int = 0,
     args = ["--check-all", "--repo-root", str(root), "--source-revision", _current_revision(root),
             "--require-final"]
     if runner:
-        args.extend(("--runner", "tests/scripts/synthetic-runner.py"))
+        runner_path = root / "tests/scripts/synthetic-runner.py"
+        write_current_build_qualification(
+            root, _current_revision(root), str(runner_path),
+            str(root / QUALIFICATION_RELATIVE_PATH), True, list(RUNNER_BUILD_INPUTS),
+        )
+        args.extend(("--runner", str(runner_path), "--current-build-qualification",
+                     str(root / QUALIFICATION_RELATIVE_PATH)))
     return run_checker(root, *args, expect_code=expected_code, expect_text=expected_text)
 
 
@@ -2052,6 +2298,7 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     )
     fallback_commit = _commit_record(root, fallback_admitted, admitted_path, (receipt_path,))
     del fallback_commit
+    _pin_synthetic_runner_build_revision(root)
     before = _runner_invocations(root)
     _run_all(root, runner=True)
     if _runner_invocations(root) != before + 1:
@@ -2071,8 +2318,9 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     # current artifact with different bytes. This must succeed without rewriting history.
     current_runner = root / "tests/scripts/synthetic-runner.py"
     historical_runner_sha = admitted_primary["receipt"]["value"]["runner_sha256"]
-    current_runner.write_bytes(current_runner.read_bytes() + b"\n# current synthetic build artifact\n")
-    current_runner.chmod(0o755)
+    _pin_synthetic_runner_build_revision(root)
+    current_bytes = current_runner.read_bytes()
+    built_revision = _current_revision(root)
     current_runner_sha = sha256(current_runner.read_bytes())
     if current_runner_sha == historical_runner_sha:
         raise Reject("candidate-self-test-failed", "cross-revision runner hashes were not distinct")
@@ -2109,33 +2357,17 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     def runner_output_control(label: str, runner_bytes: bytes, expected: str) -> None:
         nonlocal control_count
         runner_path = root / "tests/scripts/synthetic-runner.py"
-        receipt_relative = baseline["receipt"]["value"]["path"]
-        receipt_file = root / receipt_relative
         original_runner = runner_path.read_bytes()
-        original_receipt = receipt_file.read_bytes()
-        original_record = primary_record_path.read_bytes()
         before_count = _runner_invocations(root)
         try:
             runner_path.write_bytes(runner_bytes)
             runner_path.chmod(0o755)
-            changed_hash = sha256(runner_bytes)
-            receipt_doc = parse_json(original_receipt, receipt_relative)
-            receipt_doc["runner_sha256"] = changed_hash
-            receipt_doc["binary_sha256"] = changed_hash
-            write_json(receipt_file, receipt_doc)
-            subject = copy.deepcopy(baseline)
-            subject["receipt"]["value"]["runner_sha256"] = changed_hash
-            subject["receipt"]["value"]["binary_sha256"] = changed_hash
-            subject["receipt"]["value"]["sha256"] = sha256(receipt_file.read_bytes())
-            write_json(primary_record_path, subject)
             _run_all(root, expected_code=1, expected_text=expected)
             if _runner_invocations(root) != before_count + 1:
                 raise Reject("candidate-self-test-failed", f"{label} was not rejected after replay")
         finally:
             runner_path.write_bytes(original_runner)
             runner_path.chmod(0o755)
-            receipt_file.write_bytes(original_receipt)
-            primary_record_path.write_bytes(original_record)
         control_count += 1
 
     original_runner = (root / "tests/scripts/synthetic-runner.py").read_bytes()
@@ -2153,8 +2385,8 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
 
     runner_text_control(
         "historical-core-revision",
-        b"['git', 'rev-parse', 'HEAD']",
-        b"['git', 'rev-parse', 'HEAD~1']",
+        f"BUILD_REVISION = '{built_revision}'".encode("ascii"),
+        b"BUILD_REVISION = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
         "candidate-runner-qualification-invalid",
     )
     runner_text_control(
@@ -2187,9 +2419,9 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     )
     runner_text_control(
         "checkpoint-frame-digest",
-        b"current_revision = subprocess.check_output",
+        b"current_revision = BUILD_REVISION",
         b"checkpoint_frames['title'] = 'f' * 64" + bytes([10]) +
-        b"current_revision = subprocess.check_output",
+        b"current_revision = BUILD_REVISION",
         "candidate-runner-checkpoint-invalid",
     )
     runner_text_control(
@@ -2226,18 +2458,67 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     )
 
     runner_path = root / "tests/scripts/synthetic-runner.py"
-    altered_runner = original_runner + b"\n# synthetic executable identity mutation\n"
-    before_count = _runner_invocations(root)
-    runner_path.write_bytes(altered_runner)
-    runner_path.chmod(0o755)
-    try:
-        _run_all(root, expected_code=1, expected_text="candidate-runner-identity-mismatch")
-    finally:
-        runner_path.write_bytes(original_runner)
-        runner_path.chmod(0o755)
-    if _runner_invocations(root) != before_count:
-        raise Reject("candidate-self-test-failed", "runner identity mismatch executed the runner")
-    control_count += 1
+    self_mutating_runner = original_runner.replace(
+        b"with marker.open('a', encoding='utf-8') as stream:\n",
+        b"Path(__file__).write_bytes(Path(__file__).read_bytes() + b'\\n# changed during replay\\n')\n"
+        b"with marker.open('a', encoding='utf-8') as stream:\n",
+    )
+    if self_mutating_runner == original_runner:
+        raise Reject("candidate-self-test-failed", "mid-run runner mutation target missing")
+    runner_output_control("mid-run-executable-mutation", self_mutating_runner,
+                          "candidate-runner-changed-during-replay")
+
+    qualification_path = root / QUALIFICATION_RELATIVE_PATH
+    write_current_build_qualification(root, _current_revision(root), str(runner_path),
+                                      str(qualification_path), True, list(RUNNER_BUILD_INPUTS))
+    qualification_bytes = qualification_path.read_bytes()
+
+    def current_qualification_control(label: str, mutate, expected: str,
+                                      supplied_runner: Path | None = None) -> None:
+        nonlocal control_count
+        subject = parse_json(qualification_bytes, "synthetic current qualification")
+        mutate(subject)
+        write_json(qualification_path, subject)
+        before_count = _runner_invocations(root)
+        args = ["--check-all", "--repo-root", str(root), "--source-revision", _current_revision(root),
+                "--require-final", "--runner", str(supplied_runner or runner_path),
+                "--current-build-qualification", str(qualification_path)]
+        try:
+            run_checker(root, *args, expect_code=1, expect_text=expected)
+        finally:
+            qualification_path.write_bytes(qualification_bytes)
+        if _runner_invocations(root) != before_count:
+            raise Reject("candidate-self-test-failed", f"{label} reached the candidate runner")
+        control_count += 1
+
+    other_runner = root / "tests/scripts/other-synthetic-runner.py"
+    other_runner.write_bytes(original_runner)
+    other_runner.chmod(0o755)
+    current_qualification_control(
+        "current-artifact-path", lambda value: None,
+        "candidate-current-build-qualification-artifact-mismatch", other_runner,
+    )
+    current_qualification_control(
+        "current-artifact-hash", lambda value: value.update(artifact_sha256="f" * 64),
+        "candidate-current-build-qualification-artifact-mismatch",
+    )
+    current_qualification_control(
+        "stale-current-source", lambda value: value.update(source_revision="a" * 40),
+        "candidate-current-build-qualification-source-mismatch",
+    )
+    current_qualification_control(
+        "unqualified-current-build", lambda value: value.update(build_qualified=False),
+        "candidate-current-build-unqualified",
+    )
+    current_qualification_control(
+        "current-build-source-drift",
+        lambda value: value["build_inputs"].update({"src/core/gabbaboy.c": "e" * 64}),
+        "candidate-current-build-qualification-source-drift",
+    )
+    current_qualification_control(
+        "current-writer-hash", lambda value: value.update(writer_sha256="d" * 64),
+        "candidate-current-build-qualification-writer-mismatch",
+    )
 
     marker_only_runner = (
         b"#!/usr/bin/env python3\n"
@@ -2344,11 +2625,29 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     return control_count
 
 
-def self_test(source_root: Path, selected_revision: str | None, controls_only: bool = False) -> None:
+def self_test(source_root: Path, selected_revision: str | None, controls_only: bool = False,
+              runner: Path | None = None,
+              current_build_qualification: str | None = None) -> None:
     """Exercise the public CLI with only synthetic records in a private disposable clone."""
     if selected_revision is not None:
         revision = resolve_source_revision(source_root, selected_revision)
         validate_source_contract(source_root, revision)
+        if controls_only and runner is not None:
+            if current_build_qualification is None:
+                raise Reject("candidate-current-build-qualification-required")
+            validate_current_build_qualification(
+                source_root, revision, runner, current_build_qualification,
+            )
+            progress_checker = source_root / "tests/scripts/verify-cgb-progress.py"
+            native = run_process(
+                [sys.executable, "-I", str(progress_checker), "--observations", "--runner",
+                 str(runner), "--repo-root", str(source_root), "--source-revision", revision],
+                source_root,
+            )
+            native_output = (native.stdout + native.stderr).decode("utf-8", errors="replace")
+            if native.returncode != 0 or "cgb-observations status=pass" not in native_output:
+                detail = native_output.strip().replace("\n", " ")[-384:]
+                raise Reject("candidate-native-build-qualification-failed", detail)
     with tempfile.TemporaryDirectory(prefix="gbb-candidate-contract-") as temporary:
         root = Path(temporary)
         project_revision = _prepare_temp_repo(source_root, root)
@@ -2382,9 +2681,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     modes.add_argument("--self-test-controls", action="store_true")
     modes.add_argument("--check-record", metavar="PATH")
     modes.add_argument("--check-all", action="store_true")
+    modes.add_argument("--write-build-qualification", action="store_true")
+    modes.add_argument("--check-build-qualification", action="store_true")
     parser.add_argument("--stage", choices=("source", "rights", "build", "identity", "mode", "progress", "final"))
     parser.add_argument("--require-final", action="store_true")
     parser.add_argument("--runner", help="optional repository-contained acceptance runner executable or Python script")
+    parser.add_argument("--current-build-qualification")
+    parser.add_argument("--qualification")
+    parser.add_argument("--build-qualified", choices=("0", "1"))
+    parser.add_argument("--input-path", action="append", default=[])
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--source-revision", help="full immutable project source commit")
     return parser.parse_args(argv)
@@ -2396,31 +2701,51 @@ def main(argv: list[str] | None = None) -> int:
         root = args.repo_root.resolve(strict=True)
         runner_path: Path | None = None
         if args.runner:
-            runner = Path(args.runner)
-            if not runner.is_absolute():
-                runner = root / runner
-            runner = runner.resolve(strict=True)
-            if root != runner and root not in runner.parents:
-                raise Reject("candidate-runner-path-invalid")
-            if not runner.is_file() or not os.access(runner, os.X_OK):
-                raise Reject("candidate-runner-unavailable")
-            runner_path = runner
+            runner_path = _runner_path(root, args.runner)
+        if args.write_build_qualification:
+            if not args.source_revision or not runner_path or not args.qualification \
+                    or args.build_qualified is None:
+                raise Reject("candidate-current-build-qualification-arguments-required")
+            qualification = write_current_build_qualification(
+                root, args.source_revision, str(runner_path), args.qualification,
+                args.build_qualified == "1", args.input_path,
+            )
+            print(f"PASS: current runner qualification source={qualification['source_revision']} "
+                  f"artifact={qualification['artifact_sha256']}")
+            return 0
+        if args.check_build_qualification:
+            if not args.source_revision or not runner_path or not args.current_build_qualification:
+                raise Reject("candidate-current-build-qualification-arguments-required")
+            revision = resolve_source_revision(root, args.source_revision)
+            qualification = validate_current_build_qualification(
+                root, revision, runner_path, args.current_build_qualification,
+            )
+            print(f"PASS: current runner qualification source={revision} "
+                  f"artifact={qualification['artifact_sha256']}")
+            return 0
         if args.self_test:
             self_test(root, args.source_revision, controls_only=False)
             return 0
         if args.self_test_controls:
-            self_test(root, args.source_revision, controls_only=True)
+            self_test(root, args.source_revision, controls_only=True, runner=runner_path,
+                      current_build_qualification=args.current_build_qualification)
             return 0
         if not args.source_revision:
             raise Reject("candidate-source-revision-required")
         revision = resolve_source_revision(root, args.source_revision)
         if args.check_all:
-            records, contract = validate_all(root, revision, args.stage, args.require_final, runner_path)
+            records, contract = validate_all(
+                root, revision, args.stage, args.require_final, runner_path,
+                args.current_build_qualification,
+            )
             print(f"PASS: candidate records count={len(records)} source={revision} "
                   f"checker={contract['tests/scripts/verify-cgb-candidates.py']}")
         else:
             relative = relative_path(args.check_record, "--check-record")
-            record, contract = validate_one(root, revision, relative, args.stage, args.require_final, runner_path)
+            record, contract = validate_one(
+                root, revision, relative, args.stage, args.require_final, runner_path,
+                args.current_build_qualification,
+            )
             print(f"PASS: candidate record id={record['candidate_id']} stage={record['stage']} "
                   f"source={revision} checker={contract['tests/scripts/verify-cgb-candidates.py']}")
         return 0

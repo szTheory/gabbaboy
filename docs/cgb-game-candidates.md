@@ -23,11 +23,27 @@ python3 -I tests/scripts/verify-cgb-candidates.py --self-test-controls --repo-ro
   --source-revision "$(git rev-parse HEAD)"
 ```
 
-Inspect one stage or both fixed records with `--check-record PATH` or `--check-all`. A partial
-record names its current `stage` and every field beyond its cutoff as `not_observed`, with the
-earlier blocking stage and a concrete reason. `--require-final` rejects partial records and
-unresolved defects. Candidate records may be staged during an attempt, but project case/input and
-receipt identities remain tied to immutable project source commits.
+Inspect one stage or both fixed records with `--check-record PATH` or `--check-all`. An admitted
+replay also requires the exact CMake-built runner and its current test-build qualification receipt:
+
+```sh
+python3 -I tests/scripts/verify-cgb-candidates.py --check-all --require-final \
+  --runner build/phase1/gabbaboy-runner \
+  --current-build-qualification build/phase21-evidence/current-runner-qualification.json \
+  --repo-root . --source-revision "$(git rev-parse HEAD)"
+```
+
+The receipt is created by the normal CMake test build after linking `gabbaboy-runner`. It binds
+the selected full source revision, source qualification state, all runner build inputs, the
+qualification writer, the canonical target path and the measured executable digest. The checker
+validates those values against immutable Git blobs and the current files before replay, then checks
+the same executable digest afterward. CMake creates this receipt only with `BUILD_TESTING=ON`;
+`BUILD_TESTING=OFF` builds have no Python dependency or qualification writer.
+
+A partial record names its current `stage` and every field beyond its cutoff as `not_observed`,
+with the earlier blocking stage and a concrete reason. `--require-final` rejects partial records
+and unresolved defects. Candidate records may be staged during an attempt, but project case/input
+and receipt identities remain tied to immutable project source commits.
 
 ## Admission and native progress
 
@@ -45,10 +61,12 @@ requires distinct `no-input`, `wrong-input` and `impossible-predicate` controls 
 `predicate-not-reached` reasons. The positive and each negative control have distinct observation
 digests. A bounded half-dot budget and ordered checkpoints bind RGB555 frame and PCM digests.
 
-The receipt document repeats the ROM, case, input, predicate, recipe, project/game source, runner,
-binary, mode, positive/control and checkpoint identities. The checker requires those values to
-match the record. A receipt or its RGB555/PCM digests establish repeatability only; they do not
-establish rendering accuracy.
+The historical receipt document repeats the ROM, case, input, predicate, recipe, project/game
+source, runner, binary, mode, positive/control and checkpoint identities. Those historical source
+IDs and executable hashes remain immutable and are validated against the historical receipt.
+Current replay uses the separate CMake qualification receipt above, so a newer current artifact
+can replay older admitted evidence without rewriting its provenance. A receipt or its RGB555/PCM
+digests establish repeatability only; they do not establish rendering accuracy.
 
 An executed build records its mechanism, acquired source and tool identities, source-qualified
 launcher-policy digest, explicit environment allowlist, privilege-escalation status, exact mounts,
