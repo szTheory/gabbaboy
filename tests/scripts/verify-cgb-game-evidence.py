@@ -63,11 +63,12 @@ LICENSE_NAME_PATTERN = (
     r"|gpl[\s-]*(?:v[\s-]*)?3(?:\.0)?(?:[\s-]*(?:only|or[\s-]*later|\+))?)"
 )
 PROHIBITION_VERB_PATTERN = r"(?:prohibit(?:s|ed)?|forbid(?:s|den)?|ban(?:s|ned)?)"
-LEGAL_PROHIBITION_PATTERNS = (
-    re.compile(rf"\b{LICENSE_NAME_PATTERN}\b[^.!?\n]{{0,80}}\b(?:categorically\s+)?{PROHIBITION_VERB_PATTERN}\b", re.I),
-    re.compile(rf"\b{PROHIBITION_VERB_PATTERN}\b[^.!?\n]{{0,80}}\b{LICENSE_NAME_PATTERN}\b", re.I),
-    re.compile(r"\b(?:use|repository use|public-ci use)\s+(?:is|was)\s+illegal\b", re.I),
-)
+LEGAL_LICENSE_PATTERN = re.compile(rf"\b{LICENSE_NAME_PATTERN}\b", re.I)
+LEGAL_PROHIBITION_VERB_PATTERN = re.compile(
+    rf"\b(?:categorically\s+)?{PROHIBITION_VERB_PATTERN}\b", re.I)
+LEGAL_ILLEGAL_USE_PATTERN = re.compile(
+    r"\b(?:use|repository use|public-ci use)\s+(?:is|was)\s+illegal\b", re.I)
+LEGAL_SENTENCE_BOUNDARY_PATTERN = re.compile(r"[.!?](?=\s|$)|\n")
 
 
 class Reject(Exception):
@@ -315,28 +316,51 @@ def _reject_markers(text: str, markers: tuple[str, ...], label: str) -> None:
 
 
 def _has_unqualified_license_prohibition(text: str) -> bool:
-    for pattern in LEGAL_PROHIBITION_PATTERNS:
-        for match in pattern.finditer(text):
-            matched_text = match.group(0)
-            sentence_start = max(
-                text.rfind(".", 0, match.start()),
-                text.rfind("!", 0, match.start()),
-                text.rfind("?", 0, match.start()),
-                text.rfind("\n", 0, match.start()),
-            ) + 1
-            prefix = text[sentence_start:match.start()]
-            clause_prefix = re.split(r"[;:]", prefix)[-1]
-            explicit_negation = (
-                re.search(r"\bnot\s+(?:a\s+)?conclusion\s+that\b",
-                          clause_prefix + matched_text, re.I)
-                or re.search(r"\b(?:does|do|did|is|are|was|were)\s+not\b|\bnever\b",
-                             matched_text, re.I)
-                or re.search(r"\b(?:does|do|did|is|are|was|were)\s+not\s*$|\bnever\s*$",
-                             clause_prefix, re.I)
-            )
-            if explicit_negation is not None:
+    if LEGAL_ILLEGAL_USE_PATTERN.search(text):
+        return True
+
+    contrast_boundary_pattern = re.compile(r"\b(?:but|however|yet|nevertheless)\b", re.I)
+    for verb in LEGAL_PROHIBITION_VERB_PATTERN.finditer(text):
+        sentence_start = max(
+            (boundary.end() for boundary in LEGAL_SENTENCE_BOUNDARY_PATTERN.finditer(
+                text, 0, verb.start())),
+            default=0,
+        )
+        sentence_end = min(
+            (boundary.start() for boundary in LEGAL_SENTENCE_BOUNDARY_PATTERN.finditer(
+                text, verb.end())),
+            default=len(text),
+        )
+        sentence = text[sentence_start:sentence_end]
+        verb_start = verb.start() - sentence_start
+        verb_end = verb.end() - sentence_start
+        verb_prefix = sentence[max(0, verb_start - 64):verb_start]
+        directly_negated = re.search(
+            r"\b(?:does|do|did|is|are|was|were|will|would|can|could|should|might|may|must)"
+            r"\s+not(?:\s+categorically)?\s*$|\bnever(?:\s+categorically)?\s*$",
+            verb_prefix, re.I)
+
+        for license_match in LEGAL_LICENSE_PATTERN.finditer(sentence):
+            if license_match.end() <= verb_start:
+                gap = verb_start - license_match.end()
+            elif verb_end <= license_match.start():
+                gap = license_match.start() - verb_end
+            else:
                 continue
-            return True
+            if gap > 80:
+                continue
+
+            claim_prefix = sentence[:min(license_match.start(), verb_start)]
+            clause_boundaries = [
+                claim_prefix.rfind(";") + 1,
+                claim_prefix.rfind(":") + 1,
+                *(match.end() for match in contrast_boundary_pattern.finditer(claim_prefix)),
+            ]
+            clause_prefix = claim_prefix[max(clause_boundaries, default=0):]
+            negated_conclusion = re.search(
+                r"\bnot\s+(?:a\s+)?conclusion\s+that\b", clause_prefix, re.I)
+            if directly_negated is None and negated_conclusion is None:
+                return True
     return False
 
 
@@ -563,6 +587,10 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
         ("gpl", "GPL-3.0 prohibits this use."),
         ("bsd", "BSD-2-Clause forbids repository use."),
         ("cc-by-nc-sa", "CC BY-NC-SA prohibits this use."),
+        ("contrastive-not-conclusion",
+         "This is not a conclusion that the rights are settled, but GPL-3.0 prohibits this use."),
+        ("contrastive-second-verb",
+         "GPL-3.0 does not prohibit documenting its terms, but it prohibits this use."),
     ):
         unrelated_negation = dict(base_docs)
         unrelated_negation["docs/game-acceptance.md"] += (
