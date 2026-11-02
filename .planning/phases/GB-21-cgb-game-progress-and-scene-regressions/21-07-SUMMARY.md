@@ -11,9 +11,9 @@ provides:
   - Current Phase 21 outcome documentation, qualification evidence, and an explicit phase-boundary handoff.
 affects: [Phase 22 composition evidence, Phase 23 release evidence]
 actuals:
-  tokens: 38540
+  tokens: 38597
   tasks: 2
-  commits: 30
+  commits: 31
 tech-stack:
   added: []
   patterns:
@@ -90,9 +90,9 @@ coverage:
     human_judgment: false
 duration: 533min
 completed: 2026-11-02
-commits: 30
+commits: 31
 plan_head_before: 9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63
-plan_head_after: fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf
+plan_head_after: 5c5c99ab20e810f3478fae3b884031e3c81f564b
 status: complete
 ---
 
@@ -145,7 +145,7 @@ Task 2 and attributable follow-up fixes were committed individually:
 18. `66ee663b` normalize CTest command-path separators and add a Windows mixed-separator synthetic control.
 19. `fdd3454a` run the nested scene CTest checks in the same Debug configuration used for discovery and preserve failure output.
 
-**Plan commit range:** 30 commits measured from the persisted ledger base `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf`; the final metadata commit follows this measured endpoint.
+**Plan commit range:** 31 commits measured from the persisted ledger base `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `5c5c99ab20e810f3478fae3b884031e3c81f564b`; the final metadata commit follows this measured endpoint.
 
 ## Files Created/Modified
 
@@ -235,7 +235,7 @@ Task 2 and attributable follow-up fixes were committed individually:
 ## Issues Encountered
 
 - The TDD RED evidence record is a replay of the immutable test-only snapshot because the initial harness output was not retained. The recorded target failed specifically because the candidate-outcome function returned `None`; the semantic assessment ruled out discovery/setup failures. The GREEN implementation passed.
-- The plan's example source argument `HEAD` did not always match the runner's build-stamped source after documentation commits. Final receipt uses the full immutable source hash explicitly.
+- The checker rejects the symbolic source argument `HEAD` because its interface requires a full immutable commit ID. Final receipt invocation used the exact full SHA, preserving the source pin.
 - One earlier full-suite run found the lesson-ID collision; after its fix, the final source run passed completely.
 - The first sandbox-restricted final CTest attempt had five unrelated v0.2/performance/release-review controls fail because the sandbox denied writes to `.git/worktrees`; rerunning the same full suite with repository-write permission passed 1724/1724. No timeout or budget was changed.
 - The exact-head push diagnostic at `6d552502e3f079565add4fb4fead06cebb19dfb4` failed only `phase21_scene_report_controls`: CTest's Windows command path used different separators from the expected path. That caused Rule 1 fix `66ee663b`.
@@ -258,4 +258,4 @@ Plan 21-07 implementation and local qualification are complete. Read hosted nati
 
 ## Self-Check: PASSED
 
-The summary, evidence checker, CMake registration, and source-bound receipt exist. The persisted ledger measures 30 plan commits from `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf`. That implementation source configured and built, all 1,724 CTests passed in 1,220.71 seconds, the source-bound receipt passes at the same source, and the updated summary/lesson plus Phase 21 focused selection passed 16/16. Exact-head hosted/platform and installed-consumer status is reported by PR #140 at its current head SHA.
+The summary, evidence checker, CMake registration, and source-bound receipt exist. At this summary update, the persisted ledger measures 31 plan commits from `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through metadata head `5c5c99ab20e810f3478fae3b884031e3c81f564b`. Implementation source `fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf` configured and built, and all 1,724 CTests passed in 1,220.71 seconds. At `5c5c99ab`, configure/build passed again, the source-bound receipt accepted the exact full commit, and the Phase 21/summary/lesson focus passed 16/16 in 24.86 seconds. Exact-head hosted/platform and installed-consumer status is reported by PR #140 at its current head SHA.
