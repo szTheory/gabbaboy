@@ -906,9 +906,99 @@ def _parse_runner_fields(line: str, prefix: str) -> dict[str, str]:
     return fields
 
 
+def _candidate_case_entry(raw: bytes, case_id: str) -> dict[str, str]:
+    if len(raw) > 65536:
+        raise Reject("candidate-runner-case-invalid", "case file size")
+    try:
+        text = raw.decode("ascii", errors="strict")
+    except UnicodeDecodeError:
+        raise Reject("candidate-runner-case-invalid", "case file encoding") from None
+    matches: list[dict[str, str]] = []
+    for line in text.splitlines():
+        if line.endswith("\r"):
+            line = line[:-1]
+        if len(line) > 1024 or any(ord(char) < 0x20 or ord(char) > 0x7e for char in line):
+            raise Reject("candidate-runner-case-invalid", "case line encoding")
+        if not line.strip() or line.lstrip(" ").startswith("#"):
+            continue
+        fields: dict[str, str] = {}
+        for token in line.split():
+            key, separator, value = token.partition("=")
+            if not separator or not key or not value or key in fields:
+                raise Reject("candidate-runner-case-invalid", "case fields")
+            fields[key] = value
+        if fields.get("id") == case_id:
+            matches.append(fields)
+    if len(matches) != 1:
+        raise Reject("candidate-runner-case-invalid", "case id is not unique")
+    case = matches[0]
+    required = {"id", "rom", "rom_sha256", "rom_size", "oracle", "predicate",
+                "input_script", "input_sha256", "budget_half_dots", "model_pass"}
+    if required - set(case):
+        raise Reject("candidate-runner-case-invalid", "case fields missing")
+    return case
+
+
+def _validate_runner_output_shape(acceptance: dict[str, str],
+                                  receipt: dict[str, str]) -> None:
+    acceptance_fields = {
+        "id", "status", "model", "profile", "execution_mode", "frame_format",
+        "evidence_class", "t_hit_half_dots",
+    }
+    if set(acceptance) != acceptance_fields:
+        raise Reject("candidate-runner-result-invalid", "acceptance fields")
+    receipt_fields = {
+        "id", "profile", "execution_mode", "frame_format", "evidence_class", "rom_sha256",
+        "rom_size", "input_sha256", "predicate", "budget_half_dots", "end_half_dots",
+        "t_hit_half_dots", "core_revision", "build_qualified", "frame_rolling555",
+        "pcm_sha256", "pcm_samples", "pcm_audible", "pcm_left_peak_to_peak",
+        "pcm_left_changes", "pcm_right_peak_to_peak", "pcm_right_changes",
+    }
+    checkpoint_parts: dict[str, set[str]] = {}
+    for key in receipt:
+        if key in receipt_fields or key in {"hw_f90", "sgb_reset_pulses"}:
+            continue
+        match = re.fullmatch(r"checkpoint_([a-z0-9_-]+)_(requested_half_dots|completion_half_dots|frame)", key)
+        if match is None:
+            raise Reject("candidate-runner-result-invalid", f"receipt field {key}")
+        checkpoint_parts.setdefault(match.group(1), set()).add(match.group(2))
+    if receipt_fields - set(receipt) or not checkpoint_parts \
+            or any(parts != {"requested_half_dots", "completion_half_dots", "frame"}
+                   for parts in checkpoint_parts.values()):
+        raise Reject("candidate-runner-result-invalid", "receipt fields")
+
+
 def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) -> None:
     """Execute only an admitted subject, after the real Phase 20 check has passed."""
     progress = record["progress"]["value"]
+    rom = record["rom"]["value"]
+    execution = record["execution"]["value"]
+    receipt_value = record["receipt"]["value"]
+    receipt_document = parse_json(read_regular(root, receipt_value["path"]), receipt_value["path"])
+    project_revision = receipt_value["project_source_revision"]
+    case = _candidate_case_entry(
+        immutable_blob(root, project_revision, progress["case_file"]), progress["case_id"],
+    )
+    expected_profile = "CGB-CPU-E" if execution["profile"] == "cgb-cpu-e" else ""
+    expected_mode = "cgb" if execution["actual_mode"] == "native-cgb" else ""
+    if case["rom"] != rom["path"] or case["rom_sha256"] != rom["sha256"] \
+            or case["rom_size"] != str(rom["size_bytes"]) \
+            or case["input_script"] != progress["input_script"]["path"] \
+            or case["input_sha256"] != progress["input_script"]["sha256"] \
+            or case["predicate"] == "" or case["oracle"] != "progress-predicate" \
+            or case["budget_half_dots"] != str(progress["budget_half_dots"]) \
+            or "cgb-cpu-e" not in case["model_pass"].split(",") \
+            or not expected_profile or not expected_mode:
+        raise Reject("candidate-runner-case-mismatch")
+    try:
+        runner_sha = sha256(runner.read_bytes())
+    except OSError:
+        raise Reject("candidate-runner-identity-unavailable") from None
+    if runner_sha != receipt_value["runner_sha256"] \
+            or runner_sha != receipt_value["binary_sha256"] \
+            or runner_sha != receipt_document.get("runner_sha256") \
+            or runner_sha != receipt_document.get("binary_sha256"):
+        raise Reject("candidate-runner-identity-mismatch")
     isolation = record["build"]["value"]["build_isolation"]
     environment = {
         name: os.environ[name] for name in isolation["environment_allowlist"] if name in os.environ
@@ -920,6 +1010,12 @@ def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) ->
                           progress["case_id"], "--model", "cgb-cpu-e", "--receipt"], root,
                          timeout=MAX_SUBPROCESS_SECONDS, environment=environment)
     try:
+        runner_after_sha = sha256(runner.read_bytes())
+    except OSError:
+        raise Reject("candidate-runner-identity-unavailable") from None
+    if runner_after_sha != runner_sha:
+        raise Reject("candidate-runner-changed-during-replay")
+    try:
         stdout = result.stdout.decode("utf-8", errors="strict")
         stderr = result.stderr.decode("utf-8", errors="strict")
     except UnicodeDecodeError:
@@ -929,13 +1025,32 @@ def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) ->
         raise Reject("candidate-runner-result-invalid")
     acceptance = _parse_runner_fields(lines[0], "acceptance")
     receipt = _parse_runner_fields(lines[1], "receipt")
+    _validate_runner_output_shape(acceptance, receipt)
     if acceptance.get("id") != progress["case_id"] or acceptance.get("status") != "pass" \
             or acceptance.get("model") != "cgb-cpu-e" \
-            or acceptance.get("profile") != "CGB-CPU-E" \
-            or acceptance.get("execution_mode") != "cgb" \
+            or acceptance.get("profile") != expected_profile \
+            or acceptance.get("execution_mode") != expected_mode \
+            or acceptance.get("frame_format") != "GBB-RGB555LE-v1" \
+            or acceptance.get("evidence_class") != "original-harness-only" \
             or receipt.get("id") != progress["case_id"] \
-            or receipt.get("profile") != "CGB-CPU-E" \
-            or receipt.get("execution_mode") != "cgb":
+            or receipt.get("profile") != expected_profile \
+            or receipt.get("execution_mode") != expected_mode \
+            or receipt.get("frame_format") != "GBB-RGB555LE-v1" \
+            or receipt.get("evidence_class") != "original-harness-only" \
+            or receipt.get("rom_sha256") != rom["sha256"] \
+            or receipt.get("rom_size") != str(rom["size_bytes"]) \
+            or receipt.get("input_sha256") != progress["input_script"]["sha256"] \
+            or receipt.get("predicate") != case["predicate"] \
+            or receipt.get("budget_half_dots") != str(progress["budget_half_dots"]) \
+            or acceptance.get("status") != receipt_document.get("status") \
+            or receipt_document.get("case_id") != progress["case_id"] \
+            or receipt_document.get("rom_sha256") != rom["sha256"] \
+            or receipt_document.get("profile") != execution["profile"] \
+            or receipt_document.get("actual_mode") != execution["actual_mode"] \
+            or receipt_document.get("status") != "pass" \
+            or receipt_document.get("input_sha256") != progress["input_script"]["sha256"] \
+            or receipt_document.get("budget_half_dots") != progress["budget_half_dots"] \
+            or progress["positive"].get("status") != "pass":
         raise Reject("candidate-runner-result-invalid")
 
 
@@ -1796,6 +1911,28 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     if wrong_mode_runner == original_runner:
         raise Reject("candidate-self-test-failed", "CGB mode negative control target missing")
     runner_output_control("runner-native-mode-marker", wrong_mode_runner,
+                          "candidate-runner-result-invalid")
+
+    runner_path = root / "tests/scripts/synthetic-runner.py"
+    altered_runner = original_runner + b"\n# synthetic executable identity mutation\n"
+    before_count = _runner_invocations(root)
+    runner_path.write_bytes(altered_runner)
+    runner_path.chmod(0o755)
+    try:
+        _run_all(root, expected_code=1, expected_text="candidate-runner-identity-mismatch")
+    finally:
+        runner_path.write_bytes(original_runner)
+        runner_path.chmod(0o755)
+    if _runner_invocations(root) != before_count:
+        raise Reject("candidate-self-test-failed", "runner identity mismatch executed the runner")
+    control_count += 1
+
+    marker_only_runner = (
+        b"#!/usr/bin/env python3\n"
+        b"print('acceptance id=synthetic-cgb-progress status=pass model=cgb-cpu-e "
+        b"profile=CGB-CPU-E mode=native-cgb')\n"
+    )
+    runner_output_control("marker-only-runner", marker_only_runner,
                           "candidate-runner-result-invalid")
 
     def mutation(label: str, change, expected: str, *, mutate_notices: bool = False) -> None:
