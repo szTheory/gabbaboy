@@ -581,7 +581,7 @@ def verify_ctest_build(root, names, source_paths):
         if not isinstance(command_parts, list) or any(not isinstance(part, str) for part in command_parts):
             raise Reject(f"scene-report-test-command-invalid:{name}")
         command = " ".join(command_parts)
-        if str(root / source_path) not in command:
+        if not command_contains_source_path(command, root / source_path):
             raise Reject(f"scene-report-test-command-source-mismatch:{name}")
         properties_list = item.get("properties", [])
         if not isinstance(properties_list, list):
@@ -606,6 +606,12 @@ def verify_ctest_build(root, names, source_paths):
     for name in names:
         if not re.search(r"\b" + re.escape(name) + r"\b.*Passed", result.stdout):
             raise Reject(f"scene-report-executable-check-incomplete:{name}")
+
+
+def command_contains_source_path(command, source_path):
+    source_token = os.path.normcase(str(source_path)).replace("\\", "/")
+    command_token = os.path.normcase(command).replace("\\", "/")
+    return source_token in command_token
 
 
 def validate_promotion(root, revision, report):
@@ -984,13 +990,18 @@ def create_synthetic_promotion_subject(root):
 
 
 def promotion_self_test():
+    windows_source = r"C:\agent\source\tests\scene\scene-check.py"
+    windows_command = r"C:\Python\python.exe -I C:\agent\source\tests\scene\scene-check.py positive"
+    if not command_contains_source_path(windows_command, windows_source):
+        raise Reject("scene-report-windows-command-path-control-failed")
+    controls = 1
     with tempfile.TemporaryDirectory(prefix="gbb-scene-promotion-") as directory:
         root = Path(directory).resolve() / "subject"
         revision, report_path, original = create_synthetic_promotion_subject(root)
         result = run_cli(root, "--promotion-check", str(report_path), "--source-revision", revision)
         if result.returncode != 0 or "synthetic contract accepted" not in result.stdout:
             raise Reject("scene-report-synthetic-promotion-rejected:" + (result.stderr or result.stdout).strip()[-200:])
-        controls = 1
+        controls += 1
 
         def reject_mutation(label, mutate, reason):
             nonlocal controls
