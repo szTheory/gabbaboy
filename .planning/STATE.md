@@ -4,18 +4,18 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 21
 current_phase_name: CGB Game Progress and Scene Regressions
-current_plan: 2
+current_plan: 3
 status: executing
-stopped_at: Completed GB-21-01-PLAN.md
-last_updated: "2026-11-02T02:07:33.017Z"
+stopped_at: Completed GB-21-03-PLAN.md
+last_updated: "2026-11-02T02:41:18.843Z"
 last_activity: 2026-11-02
 last_activity_desc: Completed GB-21 Plan 21-01
-state_head: 7e345595ecc3d1e0bdb075d0a31c34b895389930
+state_head: 51fd58086ac7b70a8a52d4c844942156717e17d9
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 16
-  completed_plans: 10
+  completed_plans: 11
   percent: 25
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 ## Current Position
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 7
 Phase: GB-21 (CGB Game Progress and Scene Regressions) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
@@ -50,6 +50,7 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 21 P01 | 16min | 2 tasks | 6 files |
+| Phase GB-21 P03 | 32min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -74,8 +75,8 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-02T02:07:04.030Z
-**Stopped at:** Completed GB-21-01-PLAN.md
+**Last session:** 2026-11-02T02:41:18.749Z
+**Stopped at:** Completed GB-21-03-PLAN.md
 **Resume file:** .planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-02-PLAN.md
 
 ## Operator Next Steps
@@ -85,3 +86,4 @@ Phase 20 is complete and verified. The owner reviewed the two judgment findings;
 ## Decisions
 
 - [Phase 21]: The compatibility refusal control derives a valid compatibility-header variant from the same authored ROM so the loaded API mode is independently observable.
+- [Phase 21]: Plan 21-03 self-tests remain synthetic-only; FIXT-01 stays pending for Plans 21-04, 21-05 and final composition.
