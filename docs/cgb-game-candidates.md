@@ -62,11 +62,24 @@ requires distinct `no-input`, `wrong-input` and `impossible-predicate` controls 
 digests. A bounded half-dot budget and ordered checkpoints bind RGB555 frame and PCM digests.
 
 The historical receipt document repeats the ROM, case, input, predicate, recipe, project/game
-source, runner, binary, mode, positive/control and checkpoint identities. Those historical source
+source, runner, binary, mode, positive/control and observation identities. Those historical source
 IDs and executable hashes remain immutable and are validated against the historical receipt.
 Current replay uses the separate CMake qualification receipt above, so a newer current artifact
-can replay older admitted evidence without rewriting its provenance. A receipt or its RGB555/PCM
-digests establish repeatability only; they do not establish rendering accuracy.
+can replay older admitted evidence without rewriting its provenance.
+
+Admitted observations use one strict `aggregate` object and named RGB555 checkpoints. The aggregate
+binds `end_half_dots`, `frame_rolling555`, `pcm_sha256`, `pcm_samples`, `pcm_audible`, and each
+channel's peak-to-peak range and change count. The rolling RGB555 digest and PCM digest/sample count
+cover the runner's full emitted stream; audibility and per-channel statistics cover the runner's
+PCM window from `play_start` through the one-second tail after the hit. Checkpoints retain only
+their name, completion time and RGB555 digest because the runner does not emit per-checkpoint PCM.
+The checker validates bounds and PCM audibility coherence, then requires every fresh aggregate
+value to equal the immutable admitted observation. RGB555 and PCM values establish repeatability,
+not rendering accuracy or perceptual quality. The synthetic replay controls run valid changed
+rolling and PCM digests, sample counts, and silent/audible channel statistics through the replay
+entry point and require an observation mismatch. They also reject missing or extra aggregate
+fields and coordinated observation edits that no longer match the receipt digest. These controls
+use only the private synthetic subject; neither named game record is changed or executed.
 
 An executed build records its mechanism, acquired source and tool identities, source-qualified
 launcher-policy digest, explicit environment allowlist, privilege-escalation status, exact mounts,

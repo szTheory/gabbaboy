@@ -27,6 +27,7 @@ EXPECTED_HARNESS_INPUT_SHA256 = "0ccfce12e082a0d6bf52ee6a0867b62beb096f5b9403d71
 UCITY_13_REVISION = "d1880a2a112d7c26f16c0fc06a15b6c32fdc9137"
 UCITY_HARDWARE_SHA256 = "05f43643bf29459f6a86b2fedf00b887133b98038fa4f51112ced0f01a762715"
 EVIDENCE_OUTPUT_ROOT = "build/phase21-evidence"
+DEFAULT_CURRENT_RUNNER_QUALIFICATION = "build/phase21-evidence/current-runner-qualification.json"
 
 CANDIDATES = (
     ("potion-panic-gbcompo25", "tests/data/cgb-candidates/potion-panic.json", "Potion Panic"),
@@ -850,10 +851,14 @@ def scene_phase_facts(snapshot: dict[str, bytes]) -> dict[str, str]:
 
 
 def collect_check_result(root: Path, runner: Path, revision: str,
-                         current_build_qualification: str,
+                         current_build_qualification: str | None,
                          snapshot: dict[str, bytes]) -> dict[str, Any]:
     records = parse_snapshot_records(snapshot)
     outcome = validate_documentation(snapshot, records)
+    if current_build_qualification is None:
+        if outcome["status"] == "admitted":
+            raise Reject("current-runner-qualification-required-for-admitted-replay")
+        current_build_qualification = DEFAULT_CURRENT_RUNNER_QUALIFICATION
     qualification_output = run_cli(
         root, "verify-cgb-candidates.py",
         ["--check-build-qualification", "--runner", str(runner),
@@ -990,8 +995,7 @@ def write_evidence(root: Path, requested: str, value: dict[str, Any]) -> str:
 
 
 def run_check(args: argparse.Namespace) -> int:
-    if not args.runner or not args.current_build_qualification or not args.repo_root \
-            or not args.source_revision or not args.write_evidence:
+    if not args.runner or not args.repo_root or not args.source_revision or not args.write_evidence:
         raise Reject("check-arguments-required")
     try:
         root = Path(args.repo_root).resolve(strict=True)

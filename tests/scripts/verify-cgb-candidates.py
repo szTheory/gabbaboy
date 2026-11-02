@@ -38,6 +38,8 @@ REPLAY_HALF_DOTS_PER_SECOND = 8_388_608
 REPLAY_MAX_SCRIPT_HALF_DOTS = 600 * REPLAY_HALF_DOTS_PER_SECOND
 REPLAY_CGB_TAIL_HALF_DOTS = REPLAY_HALF_DOTS_PER_SECOND
 REPLAY_CHECKPOINT_LABELS = ("title", "play_start", "mid", "hit")
+REPLAY_PCM_MIN_PEAK_TO_PEAK = 2048
+REPLAY_PCM_MIN_CHANGES = 4800
 SYNTHETIC_REPLAY_HIT = 900_000
 SYNTHETIC_REPLAY_REQUESTED = {
     "title": REPLAY_HALF_DOTS_PER_FRAME,
@@ -50,6 +52,17 @@ SYNTHETIC_REPLAY_COMPLETION = {
     "play_start": 3 * REPLAY_HALF_DOTS_PER_FRAME + 100,
     "mid": 6 * REPLAY_HALF_DOTS_PER_FRAME + 100,
     "hit": SYNTHETIC_REPLAY_HIT + 100,
+}
+SYNTHETIC_REPLAY_AGGREGATE = {
+    "end_half_dots": SYNTHETIC_REPLAY_HIT + REPLAY_CGB_TAIL_HALF_DOTS,
+    "frame_rolling555": "1" * 64,
+    "pcm_sha256": "2" * 64,
+    "pcm_samples": 10_000,
+    "pcm_audible": False,
+    "pcm_left_peak_to_peak": 0,
+    "pcm_left_changes": 0,
+    "pcm_right_peak_to_peak": 0,
+    "pcm_right_changes": 0,
 }
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
@@ -936,7 +949,7 @@ def _validate_progress(value: dict[str, Any], source: dict[str, Any]) -> None:
 
 
 def _validate_observation(value: dict[str, Any]) -> None:
-    require_keys(value, {"checkpoints"}, "observations")
+    require_keys(value, {"checkpoints", "aggregate"}, "observations")
     checkpoints = value["checkpoints"]
     if not isinstance(checkpoints, list) or not checkpoints or len(checkpoints) > 128:
         raise Reject("candidate-observations-invalid")
@@ -944,7 +957,7 @@ def _validate_observation(value: dict[str, Any]) -> None:
     for index, checkpoint in enumerate(checkpoints):
         if not isinstance(checkpoint, dict):
             raise Reject("candidate-observations-invalid")
-        require_keys(checkpoint, {"name", "half_dots", "rgb555_sha256", "pcm_sha256"},
+        require_keys(checkpoint, {"name", "half_dots", "rgb555_sha256"},
                      f"observations.checkpoints[{index}]")
         name = safe_text(checkpoint["name"], f"observations.checkpoints[{index}].name", 128)
         if name in names:
@@ -953,9 +966,44 @@ def _validate_observation(value: dict[str, Any]) -> None:
         time_value = checkpoint["half_dots"]
         if isinstance(time_value, bool) or not isinstance(time_value, int) or time_value < 0 or time_value > 10**13:
             raise Reject("candidate-observations-invalid", name)
-        for key in ("rgb555_sha256", "pcm_sha256"):
-            if not isinstance(checkpoint[key], str) or not HEX64.fullmatch(checkpoint[key]):
-                raise Reject("candidate-observations-invalid", key)
+        if not isinstance(checkpoint["rgb555_sha256"], str) \
+                or not HEX64.fullmatch(checkpoint["rgb555_sha256"]):
+            raise Reject("candidate-observations-invalid", "rgb555_sha256")
+
+    aggregate = value["aggregate"]
+    if not isinstance(aggregate, dict):
+        raise Reject("candidate-observations-invalid", "aggregate")
+    require_keys(aggregate, {
+        "end_half_dots", "frame_rolling555", "pcm_sha256", "pcm_samples", "pcm_audible",
+        "pcm_left_peak_to_peak", "pcm_left_changes", "pcm_right_peak_to_peak",
+        "pcm_right_changes",
+    }, "observations.aggregate")
+    end = aggregate["end_half_dots"]
+    if isinstance(end, bool) or not isinstance(end, int) or end <= 0 or end > 10**13:
+        raise Reject("candidate-observations-invalid", "aggregate.end_half_dots")
+    for key in ("frame_rolling555", "pcm_sha256"):
+        if not isinstance(aggregate[key], str) or not HEX64.fullmatch(aggregate[key]):
+            raise Reject("candidate-observations-invalid", f"aggregate.{key}")
+    samples = aggregate["pcm_samples"]
+    max_samples = (end * 48_000) // REPLAY_HALF_DOTS_PER_SECOND + 1
+    if isinstance(samples, bool) or not isinstance(samples, int) or samples <= 0 \
+            or samples > max_samples or not isinstance(aggregate["pcm_audible"], bool):
+        raise Reject("candidate-observations-invalid", "aggregate PCM sample window")
+    channel_values: list[int] = []
+    for key, maximum in (
+        ("pcm_left_peak_to_peak", 65535), ("pcm_right_peak_to_peak", 65535),
+        ("pcm_left_changes", samples), ("pcm_right_changes", samples),
+    ):
+        item = aggregate[key]
+        if isinstance(item, bool) or not isinstance(item, int) or item < 0 or item > maximum:
+            raise Reject("candidate-observations-invalid", f"aggregate.{key}")
+        channel_values.append(item)
+    audible = channel_values[0] >= REPLAY_PCM_MIN_PEAK_TO_PEAK \
+        and channel_values[1] >= REPLAY_PCM_MIN_PEAK_TO_PEAK \
+        and channel_values[2] >= REPLAY_PCM_MIN_CHANGES \
+        and channel_values[3] >= REPLAY_PCM_MIN_CHANGES
+    if aggregate["pcm_audible"] is not audible:
+        raise Reject("candidate-observations-invalid", "aggregate PCM audibility mismatch")
 
 
 def _validate_receipt(value: dict[str, Any], record: dict[str, Any],
@@ -1293,7 +1341,9 @@ def _validate_runner_output_values(acceptance: dict[str, str], receipt: dict[str
                                    record: dict[str, Any], case: dict[str, str],
                                    input_script: bytes, selected_revision: str) -> None:
     progress = record["progress"]["value"]
-    observations = record["observations"]["value"]["checkpoints"]
+    observations_value = record["observations"]["value"]
+    observations = observations_value["checkpoints"]
+    expected_aggregate = observations_value["aggregate"]
     if receipt.get("core_revision") != selected_revision or receipt.get("build_qualified") != "true":
         raise Reject("candidate-runner-qualification-invalid")
 
@@ -1348,9 +1398,24 @@ def _validate_runner_output_values(acceptance: dict[str, str], receipt: dict[str
              for key in ("pcm_left_peak_to_peak", "pcm_right_peak_to_peak")]
     changes = [_runner_uint(receipt, key, "candidate-runner-pcm-invalid", samples)
                for key in ("pcm_left_changes", "pcm_right_changes")]
-    audible = all(value >= 2048 for value in peaks) and all(value >= 4800 for value in changes)
+    audible = all(value >= REPLAY_PCM_MIN_PEAK_TO_PEAK for value in peaks) \
+        and all(value >= REPLAY_PCM_MIN_CHANGES for value in changes)
     if receipt["pcm_audible"] != ("true" if audible else "false"):
         raise Reject("candidate-runner-pcm-invalid", "audibility does not match channel statistics")
+    actual_aggregate = {
+        "end_half_dots": end,
+        "frame_rolling555": receipt["frame_rolling555"],
+        "pcm_sha256": receipt["pcm_sha256"],
+        "pcm_samples": samples,
+        "pcm_left_peak_to_peak": peaks[0],
+        "pcm_left_changes": changes[0],
+        "pcm_right_peak_to_peak": peaks[1],
+        "pcm_right_changes": changes[1],
+        "pcm_audible": receipt["pcm_audible"] == "true",
+    }
+    for key, actual in actual_aggregate.items():
+        if actual != expected_aggregate[key]:
+            raise Reject("candidate-runner-observation-mismatch", key)
     if "hw_f90" in receipt:
         if not re.fullmatch(r"[0-9a-f]{2}", receipt["hw_f90"]) \
                 or _runner_uint(receipt, "sgb_reset_pulses", "candidate-runner-result-invalid",
@@ -1816,7 +1881,6 @@ def _synthetic_replay_observations() -> list[dict[str, Any]]:
             "name": label,
             "half_dots": SYNTHETIC_REPLAY_COMPLETION[label],
             "rgb555_sha256": sha256(f"synthetic {label} RGB555".encode("ascii")),
-            "pcm_sha256": sha256(f"synthetic {label} PCM".encode("ascii")),
         }
         for label in REPLAY_CHECKPOINT_LABELS
     ]
@@ -1853,6 +1917,7 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
     )
     synthetic_observations = _synthetic_replay_observations()
     checkpoint_frames = {item["name"]: item["rgb555_sha256"] for item in synthetic_observations}
+    aggregate = SYNTHETIC_REPLAY_AGGREGATE
     runner = root / "tests/scripts/synthetic-runner.py"
     runner.write_text(
         "#!/usr/bin/env python3\n"
@@ -1891,12 +1956,15 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
         "    'frame_format=GBB-RGB555LE-v1', 'evidence_class=original-harness-only',\n"
         "    f\"rom_sha256={case['rom_sha256']}\", f\"rom_size={case['rom_size']}\",\n"
         "    f\"input_sha256={case['input_sha256']}\", f\"predicate={case['predicate']}\",\n"
-        "    f\"budget_half_dots={case['budget_half_dots']}\", 'end_half_dots=9288608',\n"
+        f"    f\"budget_half_dots={{case['budget_half_dots']}}\", 'end_half_dots={aggregate['end_half_dots']}',\n"
         "    't_hit_half_dots=900000', f'core_revision={current_revision}',\n"
-        "    'build_qualified=true', f\"frame_rolling555={'1' * 64}\",\n"
-        "    f\"pcm_sha256={'2' * 64}\", 'pcm_samples=100', 'pcm_audible=false',\n"
-        "    'pcm_left_peak_to_peak=0', 'pcm_left_changes=0',\n"
-        "    'pcm_right_peak_to_peak=0', 'pcm_right_changes=0',\n"
+        f"    'build_qualified=true', 'frame_rolling555={aggregate['frame_rolling555']}',\n"
+        f"    'pcm_sha256={aggregate['pcm_sha256']}', 'pcm_samples={aggregate['pcm_samples']}', "
+        f"'pcm_audible={str(aggregate['pcm_audible']).lower()}',\n"
+        f"    'pcm_left_peak_to_peak={aggregate['pcm_left_peak_to_peak']}', "
+        f"'pcm_left_changes={aggregate['pcm_left_changes']}',\n"
+        f"    'pcm_right_peak_to_peak={aggregate['pcm_right_peak_to_peak']}', "
+        f"'pcm_right_changes={aggregate['pcm_right_changes']}',\n"
         "]\n"
         "for label in ('title', 'play_start', 'mid', 'hit'):\n"
         "    receipt_fields.extend((\n"
@@ -2062,7 +2130,10 @@ def synthetic_admitted_record(root: Path, project_revision: str,
     }
     positive = {"control_id": "positive", "status": "pass", "raw_reason": "predicate-reached",
                 "observation_sha256": sha256(b"synthetic positive observation")}
-    observations = {"checkpoints": _synthetic_replay_observations()}
+    observations = {
+        "checkpoints": _synthetic_replay_observations(),
+        "aggregate": copy.deepcopy(SYNTHETIC_REPLAY_AGGREGATE),
+    }
     receipt_name = "potion-panic" if candidate == CANDIDATES[0] else "ucity-1.3"
     receipt_path = f"tests/data/cgb-candidates/evidence/{receipt_name}.receipt.json"
     receipt_doc = {
@@ -2425,15 +2496,17 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         "candidate-runner-checkpoint-invalid",
     )
     runner_text_control(
-        "rolling-frame-digest", b"{'1' * 64}", b"{'x' * 64}",
+        "rolling-frame-digest", b"frame_rolling555=" + b"1" * 64,
+        b"frame_rolling555=" + b"x" * 64,
         "candidate-runner-digest-invalid",
     )
     runner_text_control(
-        "pcm-digest", b"{'2' * 64}", b"{'x' * 64}",
+        "pcm-digest", b"pcm_sha256=" + b"2" * 64,
+        b"pcm_sha256=" + b"x" * 64,
         "candidate-runner-digest-invalid",
     )
     runner_text_control(
-        "pcm-sample-count", b"pcm_samples=100", b"pcm_samples=0",
+        "pcm-sample-count", b"pcm_samples=10000", b"pcm_samples=0",
         "candidate-runner-pcm-invalid",
     )
     runner_text_control(
@@ -2445,11 +2518,11 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         "candidate-runner-pcm-invalid",
     )
     runner_text_control(
-        "pcm-change-count-exceeds-samples", b"pcm_left_changes=0", b"pcm_left_changes=101",
+        "pcm-change-count-exceeds-samples", b"pcm_left_changes=0", b"pcm_left_changes=10001",
         "candidate-runner-pcm-invalid",
     )
     runner_text_control(
-        "pcm-sample-count-exceeds-duration", b"pcm_samples=100", b"pcm_samples=999999999",
+        "pcm-sample-count-exceeds-duration", b"pcm_samples=10000", b"pcm_samples=999999999",
         "candidate-runner-pcm-invalid",
     )
     runner_text_control(
@@ -2457,30 +2530,70 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         "candidate-runner-pcm-invalid",
     )
 
-    def valid_output_change(label: str, replacements: tuple[tuple[bytes, bytes], ...]) -> None:
+    runner_path = root / "tests/scripts/synthetic-runner.py"
+    selected_revision = _current_revision(root)
+    _validate_admitted_cross_bindings(root, selected_revision, baseline)
+    _check_phase20_admission(root, baseline)
+    _validate_receipt(baseline["receipt"]["value"], baseline, selected_revision, root)
+    qualification_path = root / QUALIFICATION_RELATIVE_PATH
+    write_current_build_qualification(root, selected_revision, str(runner_path),
+                                      str(qualification_path), True, list(RUNNER_BUILD_INPUTS))
+    baseline_qualification = qualification_path.read_bytes()
+
+    def runner_observation_control(label: str, runner_bytes: bytes, expected: str) -> None:
+        nonlocal control_count
+        original_bytes = runner_path.read_bytes()
+        before_count = _runner_invocations(root)
+        try:
+            runner_path.write_bytes(runner_bytes)
+            runner_path.chmod(0o755)
+            current_build = write_current_build_qualification(
+                root, selected_revision, str(runner_path), str(qualification_path), True,
+                list(RUNNER_BUILD_INPUTS),
+            )
+            _run_admitted_candidate(root, runner_path, baseline, selected_revision, current_build)
+        except Reject as error:
+            if str(error) != expected:
+                raise Reject("candidate-self-test-failed",
+                             f"{label} expected {expected}; received {error}") from None
+        else:
+            raise Reject("candidate-self-test-failed", f"{label} accepted changed observation")
+        finally:
+            runner_path.write_bytes(original_bytes)
+            runner_path.chmod(0o755)
+            qualification_path.write_bytes(baseline_qualification)
+        if _runner_invocations(root) != before_count + 1:
+            raise Reject("candidate-self-test-failed", f"{label} did not invoke the replay runner")
+        control_count += 1
+
+    def valid_output_change(label: str, replacements: tuple[tuple[bytes, bytes], ...],
+                            mismatch_field: str) -> None:
         mutated = original_runner
         for old, new in replacements:
             if old not in mutated:
                 raise Reject("candidate-self-test-failed", f"{label} mutation target missing")
             mutated = mutated.replace(old, new, 1)
-        runner_output_control(label, mutated, "candidate-runner-observation-mismatch")
+        runner_observation_control(label, mutated,
+                                   f"candidate-runner-observation-mismatch: {mismatch_field}")
 
-    valid_output_change("changed-rolling-digest", ((b"{'1' * 64}", b"{'3' * 64}"),))
-    valid_output_change("changed-pcm-digest", ((b"{'2' * 64}", b"{'4' * 64}"),))
-    valid_output_change("changed-in-range-sample-count", ((b"pcm_samples=100", b"pcm_samples=101"),))
+    valid_output_change("changed-rolling-digest", ((b"frame_rolling555=" + b"1" * 64,
+                                                      b"frame_rolling555=" + b"3" * 64),),
+                        "frame_rolling555")
+    valid_output_change("changed-pcm-digest", ((b"pcm_sha256=" + b"2" * 64,
+                                                 b"pcm_sha256=" + b"4" * 64),), "pcm_sha256")
+    valid_output_change("changed-in-range-sample-count",
+                        ((b"pcm_samples=10000", b"pcm_samples=10001"),), "pcm_samples")
     valid_output_change("changed-consistent-silent-statistics", (
         (b"pcm_left_peak_to_peak=0", b"pcm_left_peak_to_peak=1"),
-    ))
+    ), "pcm_left_peak_to_peak")
     valid_output_change("changed-consistent-audible-statistics", (
-        (b"pcm_samples=100", b"pcm_samples=10000"),
         (b"pcm_audible=false", b"pcm_audible=true"),
         (b"pcm_left_peak_to_peak=0", b"pcm_left_peak_to_peak=2048"),
         (b"pcm_left_changes=0", b"pcm_left_changes=4800"),
         (b"pcm_right_peak_to_peak=0", b"pcm_right_peak_to_peak=2048"),
         (b"pcm_right_changes=0", b"pcm_right_changes=4800"),
-    ))
+    ), "pcm_left_peak_to_peak")
 
-    runner_path = root / "tests/scripts/synthetic-runner.py"
     self_mutating_runner = original_runner.replace(
         b"with marker.open('a', encoding='utf-8') as stream:\n",
         b"Path(__file__).write_bytes(Path(__file__).read_bytes() + b'\\n# changed during replay\\n')\n"
@@ -2491,7 +2604,6 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     runner_output_control("mid-run-executable-mutation", self_mutating_runner,
                           "candidate-runner-changed-during-replay")
 
-    qualification_path = root / QUALIFICATION_RELATIVE_PATH
     write_current_build_qualification(root, _current_revision(root), str(runner_path),
                                       str(qualification_path), True, list(RUNNER_BUILD_INPUTS))
     qualification_bytes = qualification_path.read_bytes()
@@ -2616,8 +2728,36 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         sha256="d" * 64), "candidate-predicate-not-source-anchored")
     mutation("rewritten-input-binding", lambda value: value["progress"]["value"]["input_script"].update(
         sha256="c" * 64), "candidate-progress-project-source-mismatch")
-    mutation("altered-pcm-checkpoint", lambda value: value["observations"]["value"]["checkpoints"][0].update(
-        pcm_sha256="b" * 64), "candidate-receipt-content-invalid")
+    mutation("missing-aggregate-observations",
+             lambda value: value["observations"]["value"].pop("aggregate"),
+             "candidate-field-missing")
+    mutation("extra-aggregate-observation",
+             lambda value: value["observations"]["value"]["aggregate"].update(unknown=1),
+             "candidate-field-unknown")
+    mutation("unsupported-checkpoint-pcm",
+             lambda value: value["observations"]["value"]["checkpoints"][0].update(
+                 pcm_sha256="b" * 64), "candidate-field-unknown")
+
+    receipt_relative = baseline["receipt"]["value"]["path"]
+    receipt_file = root / receipt_relative
+    original_receipt = receipt_file.read_bytes()
+    original_record = primary_record_path.read_bytes()
+    changed_receipt = parse_json(original_receipt, receipt_relative)
+    changed_receipt["observations"]["aggregate"]["pcm_sha256"] = "f" * 64
+    changed_subject = copy.deepcopy(baseline)
+    changed_subject["observations"]["value"]["aggregate"]["pcm_sha256"] = "f" * 64
+    write_json(receipt_file, changed_receipt)
+    write_json(primary_record_path, changed_subject)
+    before_count = _runner_invocations(root)
+    try:
+        _run_all(root, expected_code=1, expected_text="candidate-receipt-digest-mismatch")
+    finally:
+        receipt_file.write_bytes(original_receipt)
+        primary_record_path.write_bytes(original_record)
+    if _runner_invocations(root) != before_count:
+        raise Reject("candidate-self-test-failed", "coordinated receipt drift reached the runner")
+    control_count += 1
+
     mutation("recipe-rom-mismatch", lambda value: value["build"]["value"].update(recipe="changed recipe"),
         "candidate-build-recipe-mismatch")
     mutation("blocked-defect-cannot-close", lambda value: value.update(disposition={
