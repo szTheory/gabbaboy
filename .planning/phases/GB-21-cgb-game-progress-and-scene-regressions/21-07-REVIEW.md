@@ -170,3 +170,10 @@ _Depth: deep_
 - The fix only changes local path matching inside the source-bound test checker; it adds no new inputs, filesystem access, network, authorization, or dependency surface.
 - The synthetic controls report 17 passing controls. Configure, build, and all 1,724 CTests pass at the unchanged 60-second project budget on this revision. Exact-head Windows PR status must be read on PR #140's current head.
 - **Disposition:** No security or correctness findings remain locally; the PR event must confirm the Windows behavior on the hosted runner.
+
+## Executor Follow-up — fdd3454a
+
+- The exact-head Windows push diagnostic at `e2fbe20c` showed that the nested scene checker discovered tests with `-C Debug` but executed them without that configuration. The run now uses the same explicit configuration and retains bounded nested CTest output in its rejection reason.
+- The change is confined to the existing source-bound synthetic checker; it adds no input channel, network access, filesystem authority, or dependency. Error detail is emitted only in the existing local checker failure diagnostic.
+- The three focused scene-report CTests and full local suite passed at `fdd3454a`; all 1,724 tests passed under the unchanged 60-second cap. Exact-head hosted qualification for the final PR head remains required.
+- **Disposition:** No new correctness or security findings from this follow-up; the hosted Windows job must confirm the correction.

@@ -11,9 +11,9 @@ provides:
   - Current Phase 21 outcome documentation, qualification evidence, and an explicit phase-boundary handoff.
 affects: [Phase 22 composition evidence, Phase 23 release evidence]
 actuals:
-  tokens: 34665
+  tokens: 38540
   tasks: 2
-  commits: 28
+  commits: 30
 tech-stack:
   added: []
   patterns:
@@ -48,6 +48,7 @@ key-decisions:
   - "Keep both descriptor-less plan prohibitions visible and unresolved as required by the plan."
   - "Windows synthetic controls invoke Python scripts through the active interpreter and query the same CTest configuration they execute."
   - "Normalize Windows CTest command separators before matching synthetic scene source paths, with an explicit mixed-separator control."
+  - "Run nested scene CTests with the same explicit Debug configuration used for discovery and retain CTest diagnostics on rejection."
 patterns-established:
   - "A result receipt binds candidate facts, harness evidence, runner identity, and documentation to one full source revision."
   - "Claim mutations target each candidate/license statement independently so one valid claim cannot mask an unsupported one."
@@ -61,7 +62,7 @@ coverage:
         ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_game_evidence(_controls)?$'"
         status: pass
       - kind: other
-        ref: "verify-cgb-game-evidence.py --check at source 66ee663ba8f7a505d67871fab7163b57306d0dd2; build/phase21-evidence/result.json"
+        ref: "verify-cgb-game-evidence.py --check at source fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf; build/phase21-evidence/result.json"
         status: pass
     human_judgment: false
   - id: D2
@@ -84,14 +85,14 @@ coverage:
     requirement: GAME-01
     verification:
       - kind: integration
-        ref: "cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure --timeout 60 --parallel 1 — source 66ee663ba8f7a505d67871fab7163b57306d0dd2; 1724/1724 in 1204.93s"
+        ref: "cmake -S . -B build && cmake --build build && ctest --test-dir build --output-on-failure --timeout 60 --parallel 1 — source fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf; 1724/1724 in 1220.71s"
         status: pass
     human_judgment: false
-duration: 462min
+duration: 533min
 completed: 2026-11-02
-commits: 28
+commits: 30
 plan_head_before: 9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63
-plan_head_after: 66ee663ba8f7a505d67871fab7163b57306d0dd2
+plan_head_after: fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf
 status: complete
 ---
 
@@ -101,7 +102,7 @@ status: complete
 
 ## Performance
 
-- **Duration:** 462 minutes
+- **Duration:** 533 minutes
 - **Started:** 2026-11-02T03:58:54Z
 - **Completed:** 2026-11-02
 - **Tasks:** 2
@@ -114,7 +115,7 @@ status: complete
 - Kept both game's build, ROM, digest, cartridge-header and execution facts `not_observed`; no third candidate or fallback fixture/case/input/predicate/notice row was created. `FIXT-01` therefore remains pending.
 - Qualified the original authored CGB control at source `66ee663ba8f7a505d67871fab7163b57306d0dd2`. It remains harness-only under model `CGB-CPU-E`, native CGB mode; digest repeatability does not establish game progress, rendering accuracy, physical hardware behavior, perceptual quality, mode-3 timing, or general compatibility.
 - Preserved the existing DMG baseline and the scene workflow's independent expectation, owner-agency, and private-media boundaries. Both descriptor-less plan prohibitions remain explicitly unresolved.
-- Configured and built the final implementation at `66ee663ba8f7a505d67871fab7163b57306d0dd2`, then passed all 1,724 registered CTests serially in 1,204.93 seconds with the per-test timeout fixed at 60 seconds. `test_budget` passed; no budget baseline refresh or unrelated v0.3 repair was made.
+- Configured and built the implementation at `fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf`, then passed all 1,724 registered CTests serially in 1,220.71 seconds with the per-test timeout fixed at 60 seconds. `test_budget` passed; no budget baseline refresh or unrelated v0.3 repair was made.
 - Closed Windows-only synthetic-control failures found in host diagnostics: normalize CMake and CTest command paths, preserve explicit UTF-8 bytes in pinned fixtures, execute Python test runners through the active interpreter, and inspect CTest in the same Debug configuration used to run it. The mixed-separator control and full local suite pass at the fixed source.
 - Produced a source-qualified receipt at `build/phase21-evidence/result.json`; it records `game=not-admitted`, model `CGB-CPU-E`, and mode `cgb`. The independent review is clean at `893ecac8`; executor follow-up review found no new security surface in the Windows fixes. PR #140 remains the authority for exact-head hosted/platform and installed-consumer status; push-event results are diagnostic only.
 
@@ -142,8 +143,9 @@ Task 2 and attributable follow-up fixes were committed individually:
 16. `e0b5305d` normalize CMake source paths and preserve exact synthetic pin bytes on Windows.
 17. `9bed35ce` invoke Python synthetic runners through the active interpreter and list tests in the matching Debug configuration.
 18. `66ee663b` normalize CTest command-path separators and add a Windows mixed-separator synthetic control.
+19. `fdd3454a` run the nested scene CTest checks in the same Debug configuration used for discovery and preserve failure output.
 
-**Plan commit range:** 28 commits measured from the persisted ledger base `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `66ee663ba8f7a505d67871fab7163b57306d0dd2`; the final metadata commit follows this measured endpoint.
+**Plan commit range:** 30 commits measured from the persisted ledger base `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf`; the final metadata commit follows this measured endpoint.
 
 ## Files Created/Modified
 
@@ -221,7 +223,14 @@ Task 2 and attributable follow-up fixes were committed individually:
    - **Files modified:** `tests/scripts/verify-scene-report.py`.
    - **Commit:** `66ee663b`.
 
-**Total deviations:** 8 recorded fixes across the two tasks and hosted diagnostics. **Impact:** Kept the planned evidence scope and project limits; no baseline, timeout budget, dependency, third candidate, or unrelated release debt was added.
+9. **Rule 1 — the synthetic scene promotion control listed and executed CTest in different configurations.**
+   - **Found during:** Exact-head Windows diagnostic at `e2fbe20c`.
+   - **Issue:** Test discovery explicitly selected `Debug`, but the nested execution omitted `-C Debug`; Windows CTest then failed the synthetic positive promotion check.
+   - **Fix:** Pass the same `Debug` configuration to the nested run and retain its stdout/stderr in the bounded rejection reason. The three focused scene-report CTests and all 1,724 local CTests pass.
+   - **Files modified:** `tests/scripts/verify-scene-report.py`.
+   - **Commit:** `fdd3454a`.
+
+**Total deviations:** 9 recorded fixes across the two tasks and hosted diagnostics. **Impact:** Kept the planned evidence scope and project limits; no baseline, timeout budget, dependency, third candidate, or unrelated release debt was added.
 
 ## Issues Encountered
 
@@ -229,11 +238,12 @@ Task 2 and attributable follow-up fixes were committed individually:
 - The plan's example source argument `HEAD` did not always match the runner's build-stamped source after documentation commits. Final receipt uses the full immutable source hash explicitly.
 - One earlier full-suite run found the lesson-ID collision; after its fix, the final source run passed completely.
 - The first sandbox-restricted final CTest attempt had five unrelated v0.2/performance/release-review controls fail because the sandbox denied writes to `.git/worktrees`; rerunning the same full suite with repository-write permission passed 1724/1724. No timeout or budget was changed.
-- The exact-head push diagnostic at `6d552502e3f079565add4fb4fead06cebb19dfb4` failed only `phase21_scene_report_controls`: CTest's Windows command path used different separators from the expected path. That failure caused Rule 1 fix `66ee663b`; the diagnostic is not accepted as proof for the new revision.
+- The exact-head push diagnostic at `6d552502e3f079565add4fb4fead06cebb19dfb4` failed only `phase21_scene_report_controls`: CTest's Windows command path used different separators from the expected path. That caused Rule 1 fix `66ee663b`.
+- A later push diagnostic at `e2fbe20c7763b48314d63c804d52661cc6eb1357` passed native Linux, macOS, sanitizer, CMake-floor, and fixture-reproduction jobs but failed Windows `phase21_scene_report_controls` because nested CTest execution omitted the `Debug` configuration used for discovery. Rule 1 fix `fdd3454a` aligns the two commands; its focused controls and full local suite pass. The final exact-head hosted run remains required.
 
 ## Threat and Review Status
 
-- Independent code review at `893ecac8` is clean with zero open findings; see `21-07-REVIEW.md`. Executor follow-up review of `e0b5305d`, `9bed35ce`, and `66ee663b` found no external input, endpoint, or trust-boundary changes.
+- Independent code review at `893ecac8` is clean with zero open findings; see `21-07-REVIEW.md`. Executor follow-up review through `fdd3454a` found no external input, endpoint, or trust-boundary changes.
 - Security review closed T-21-15 and T-21-SC. T-21-16 closes only with exact-head hosted and installed-consumer evidence attached to PR #140. T-21-17 is the shared verify-work/closure step.
 - The new checker consumes existing CLIs and the Python standard library; it adds no network endpoint or third-party dependency.
 
@@ -248,4 +258,4 @@ Plan 21-07 implementation and local qualification are complete. Read hosted nati
 
 ## Self-Check: PASSED
 
-The summary, evidence checker, CMake registration, and source-bound receipt exist. The persisted ledger measures 28 plan commits from `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `66ee663ba8f7a505d67871fab7163b57306d0dd2`. That implementation source configured and built, all 1,724 CTests passed in 1,204.93 seconds, the source-bound receipt passes at the same source, and the updated summary/lesson plus Phase 21 focused selection passed 16/16. Exact-head hosted/platform and installed-consumer status is reported by PR #140 at its current head SHA.
+The summary, evidence checker, CMake registration, and source-bound receipt exist. The persisted ledger measures 30 plan commits from `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf`. That implementation source configured and built, all 1,724 CTests passed in 1,220.71 seconds, the source-bound receipt passes at the same source, and the updated summary/lesson plus Phase 21 focused selection passed 16/16. Exact-head hosted/platform and installed-consumer status is reported by PR #140 at its current head SHA.
