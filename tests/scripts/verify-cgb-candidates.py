@@ -31,6 +31,24 @@ MAX_FILES = 4096
 MAX_ARRAY_ITEMS = 4096
 MAX_SUBPROCESS_SECONDS = 30
 MAX_SUBPROCESS_OUTPUT = 1_048_576
+REPLAY_HALF_DOTS_PER_FRAME = 140_448
+REPLAY_HALF_DOTS_PER_SECOND = 8_388_608
+REPLAY_MAX_SCRIPT_HALF_DOTS = 600 * REPLAY_HALF_DOTS_PER_SECOND
+REPLAY_CGB_TAIL_HALF_DOTS = REPLAY_HALF_DOTS_PER_SECOND
+REPLAY_CHECKPOINT_LABELS = ("title", "play_start", "mid", "hit")
+SYNTHETIC_REPLAY_HIT = 900_000
+SYNTHETIC_REPLAY_REQUESTED = {
+    "title": REPLAY_HALF_DOTS_PER_FRAME,
+    "play_start": 3 * REPLAY_HALF_DOTS_PER_FRAME,
+    "mid": 6 * REPLAY_HALF_DOTS_PER_FRAME,
+    "hit": SYNTHETIC_REPLAY_HIT,
+}
+SYNTHETIC_REPLAY_COMPLETION = {
+    "title": REPLAY_HALF_DOTS_PER_FRAME + 100,
+    "play_start": 3 * REPLAY_HALF_DOTS_PER_FRAME + 100,
+    "mid": 6 * REPLAY_HALF_DOTS_PER_FRAME + 100,
+    "hit": SYNTHETIC_REPLAY_HIT + 100,
+}
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 CANDIDATES = (
@@ -971,9 +989,158 @@ def _validate_runner_output_shape(acceptance: dict[str, str],
             or any(parts != {"requested_half_dots", "completion_half_dots", "frame"}
                    for parts in checkpoint_parts.values()):
         raise Reject("candidate-runner-result-invalid", "receipt fields")
+    if ("hw_f90" in receipt) != ("sgb_reset_pulses" in receipt):
+        raise Reject("candidate-runner-result-invalid", "incomplete SGB probe fields")
 
 
-def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) -> None:
+def _runner_script_mark_times(raw: bytes) -> dict[str, int]:
+    if len(raw) > 65536:
+        raise Reject("candidate-runner-input-invalid", "input script size")
+    try:
+        lines = raw.decode("ascii", errors="strict").split("\n")
+    except UnicodeDecodeError:
+        raise Reject("candidate-runner-input-invalid", "input script encoding") from None
+    if raw.endswith(b"\n"):
+        lines.pop()
+    if len(lines) > 4096:
+        raise Reject("candidate-runner-input-invalid", "input script line count")
+    cursor = 0
+    header_seen = False
+    marks: dict[str, int] = {}
+    buttons = {"RIGHT", "LEFT", "UP", "DOWN", "A", "B", "SELECT", "START"}
+
+    def duration_half_dots(value: str) -> int:
+        match = re.fullmatch(r"([0-9]+)(hd|f|s)", value)
+        if match is None:
+            raise Reject("candidate-runner-input-invalid", "input duration")
+        if len(match.group(1)) > 20:
+            raise Reject("candidate-runner-input-invalid", "input duration overflow")
+        number = int(match.group(1))
+        unit = {"hd": 1, "f": REPLAY_HALF_DOTS_PER_FRAME,
+                "s": REPLAY_HALF_DOTS_PER_SECOND}[match.group(2)]
+        if number > ((1 << 64) - 1) // unit:
+            raise Reject("candidate-runner-input-invalid", "input duration overflow")
+        duration = number * unit
+        if duration > REPLAY_MAX_SCRIPT_HALF_DOTS:
+            raise Reject("candidate-runner-input-invalid", "input duration limit")
+        return duration
+
+    for raw_line in lines:
+        line = raw_line[:-1] if raw_line.endswith("\r") else raw_line
+        if len(line) > 128 or any(ord(char) > 0x7e or ord(char) < 0x20 and char != "\t"
+                                  for char in line):
+            raise Reject("candidate-runner-input-invalid", "input line encoding")
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        tokens = line.split()
+        if not header_seen:
+            if tokens != ["gbinput", "1"]:
+                raise Reject("candidate-runner-input-invalid", "input header")
+            header_seen = True
+            continue
+        if tokens[0] == "wait" and len(tokens) == 2:
+            cursor += duration_half_dots(tokens[1])
+        elif tokens[0] == "tap" and len(tokens) == 3 and tokens[1] in buttons:
+            cursor += duration_half_dots(tokens[2])
+        elif tokens[0] in {"press", "release"} and len(tokens) == 2 and tokens[1] in buttons:
+            pass
+        elif tokens[0] == "mark" and len(tokens) == 2 \
+                and re.fullmatch(r"[a-z0-9_]{1,32}", tokens[1]):
+            if tokens[1] in marks:
+                raise Reject("candidate-runner-input-invalid", "duplicate input mark")
+            marks[tokens[1]] = cursor
+        else:
+            raise Reject("candidate-runner-input-invalid", "input instruction")
+        if cursor > REPLAY_MAX_SCRIPT_HALF_DOTS:
+            raise Reject("candidate-runner-input-invalid", "input timeline limit")
+    if not header_seen or set(marks) != {"title", "play_start", "mid"}:
+        raise Reject("candidate-runner-input-invalid", "required input marks")
+    return marks
+
+
+def _runner_uint(fields: dict[str, str], key: str, code: str,
+                 maximum: int = 10**13) -> int:
+    value = fields.get(key, "")
+    if not re.fullmatch(r"(?:0|[1-9][0-9]{0,15})", value):
+        raise Reject(code, key)
+    number = int(value)
+    if number > maximum:
+        raise Reject(code, key)
+    return number
+
+
+def _validate_runner_output_values(acceptance: dict[str, str], receipt: dict[str, str],
+                                   record: dict[str, Any], case: dict[str, str],
+                                   input_script: bytes, selected_revision: str) -> None:
+    progress = record["progress"]["value"]
+    observations = record["observations"]["value"]["checkpoints"]
+    if receipt.get("core_revision") != selected_revision or receipt.get("build_qualified") != "true":
+        raise Reject("candidate-runner-qualification-invalid")
+
+    budget = _runner_uint(receipt, "budget_half_dots", "candidate-runner-timing-invalid",
+                          REPLAY_MAX_SCRIPT_HALF_DOTS)
+    hit = _runner_uint(receipt, "t_hit_half_dots", "candidate-runner-timing-invalid",
+                       REPLAY_MAX_SCRIPT_HALF_DOTS)
+    acceptance_hit = _runner_uint(acceptance, "t_hit_half_dots",
+                                  "candidate-runner-timing-invalid", REPLAY_MAX_SCRIPT_HALF_DOTS)
+    end = _runner_uint(receipt, "end_half_dots", "candidate-runner-timing-invalid")
+    if budget != progress["budget_half_dots"] or budget != int(case["budget_half_dots"]) \
+            or hit <= 0 or hit > budget or acceptance_hit != hit \
+            or end != hit + REPLAY_CGB_TAIL_HALF_DOTS:
+        raise Reject("candidate-runner-timing-invalid")
+
+    expected_marks = _runner_script_mark_times(input_script)
+    expected_requested = {**expected_marks, "hit": hit}
+    observed = {item["name"]: item for item in observations}
+    if set(observed) != set(REPLAY_CHECKPOINT_LABELS):
+        raise Reject("candidate-runner-checkpoint-invalid", "admitted checkpoint labels")
+    emitted_labels = set()
+    for key in receipt:
+        match = re.fullmatch(
+            r"checkpoint_([a-z0-9_-]+)_(requested_half_dots|completion_half_dots|frame)", key,
+        )
+        if match is not None:
+            emitted_labels.add(match.group(1))
+    if emitted_labels != set(REPLAY_CHECKPOINT_LABELS):
+        raise Reject("candidate-runner-checkpoint-invalid", "runner checkpoint labels")
+    for label in REPLAY_CHECKPOINT_LABELS:
+        requested = _runner_uint(receipt, f"checkpoint_{label}_requested_half_dots",
+                                 "candidate-runner-checkpoint-invalid")
+        completion = _runner_uint(receipt, f"checkpoint_{label}_completion_half_dots",
+                                  "candidate-runner-checkpoint-invalid")
+        frame = receipt[f"checkpoint_{label}_frame"]
+        checkpoint = observed[label]
+        if requested != expected_requested[label] or completion < requested or completion > end \
+                or completion != checkpoint["half_dots"] \
+                or not HEX64.fullmatch(frame) or frame != checkpoint["rgb555_sha256"]:
+            raise Reject("candidate-runner-checkpoint-invalid", label)
+
+    for key in ("frame_rolling555", "pcm_sha256"):
+        if not HEX64.fullmatch(receipt.get(key, "")):
+            raise Reject("candidate-runner-digest-invalid", key)
+
+    samples = _runner_uint(receipt, "pcm_samples", "candidate-runner-pcm-invalid")
+    maximum_samples = (end * 48_000) // REPLAY_HALF_DOTS_PER_SECOND + 1
+    if samples <= 0 or samples > maximum_samples \
+            or receipt.get("pcm_audible") not in {"true", "false"}:
+        raise Reject("candidate-runner-pcm-invalid")
+    peaks = [_runner_uint(receipt, key, "candidate-runner-pcm-invalid", 65535)
+             for key in ("pcm_left_peak_to_peak", "pcm_right_peak_to_peak")]
+    changes = [_runner_uint(receipt, key, "candidate-runner-pcm-invalid", samples)
+               for key in ("pcm_left_changes", "pcm_right_changes")]
+    audible = all(value >= 2048 for value in peaks) and all(value >= 4800 for value in changes)
+    if receipt["pcm_audible"] != ("true" if audible else "false"):
+        raise Reject("candidate-runner-pcm-invalid", "audibility does not match channel statistics")
+    if "hw_f90" in receipt:
+        if not re.fullmatch(r"[0-9a-f]{2}", receipt["hw_f90"]) \
+                or _runner_uint(receipt, "sgb_reset_pulses", "candidate-runner-result-invalid",
+                                1_000_000) <= 0:
+            raise Reject("candidate-runner-result-invalid", "SGB probe values")
+
+
+def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any],
+                            selected_revision: str) -> None:
     """Execute only an admitted subject, after the real Phase 20 check has passed."""
     progress = record["progress"]["value"]
     rom = record["rom"]["value"]
@@ -984,6 +1151,7 @@ def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) ->
     case = _candidate_case_entry(
         immutable_blob(root, project_revision, progress["case_file"]), progress["case_id"],
     )
+    input_script = immutable_blob(root, project_revision, progress["input_script"]["path"])
     expected_profile = "CGB-CPU-E" if execution["profile"] == "cgb-cpu-e" else ""
     expected_mode = "cgb" if execution["actual_mode"] == "native-cgb" else ""
     if case["rom"] != rom["path"] or case["rom_sha256"] != rom["sha256"] \
@@ -1057,6 +1225,7 @@ def _run_admitted_candidate(root: Path, runner: Path, record: dict[str, Any]) ->
             or receipt_document.get("budget_half_dots") != progress["budget_half_dots"] \
             or progress["positive"].get("status") != "pass":
         raise Reject("candidate-runner-result-invalid")
+    _validate_runner_output_values(acceptance, receipt, record, case, input_script, selected_revision)
 
 
 def _validate_commit_record_ref(root: Path, revision: str, value: object,
@@ -1270,7 +1439,7 @@ def validate_record(root: Path, revision: str, record: dict[str, Any], expected_
             raise Reject("candidate-receipt-source-missing")
         _validate_receipt(record["receipt"]["value"], record, revision, root)
     if status == "admitted" and runner is not None:
-        _run_admitted_candidate(root, runner, record)
+        _run_admitted_candidate(root, runner, record, revision)
     if status == "not-needed":
         _validate_not_needed_reference(root, revision, record)
     if expected_id == CANDIDATES[1][0] and status in {"admitted", "no-go"}:
@@ -1415,6 +1584,18 @@ def _synthetic_candidate_rom() -> bytes:
     return bytes(rom)
 
 
+def _synthetic_replay_observations() -> list[dict[str, Any]]:
+    return [
+        {
+            "name": label,
+            "half_dots": SYNTHETIC_REPLAY_COMPLETION[label],
+            "rgb555_sha256": sha256(f"synthetic {label} RGB555".encode("ascii")),
+            "pcm_sha256": sha256(f"synthetic {label} PCM".encode("ascii")),
+        }
+        for label in REPLAY_CHECKPOINT_LABELS
+    ]
+
+
 def _prepare_temp_repo(source_root: Path, root: Path) -> str:
     result = run_process(["git", "clone", "--quiet", "--shared", str(source_root), str(root)],
                          source_root, timeout=MAX_SUBPROCESS_SECONDS)
@@ -1430,7 +1611,10 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
     input_script = root / "tests/acceptance/inputs/synthetic-cgb-candidate.input"
     case_file.parent.mkdir(parents=True, exist_ok=True)
     input_script.parent.mkdir(parents=True, exist_ok=True)
-    input_bytes = b"gbinput 1\n0 A down\n100 A up\n"
+    input_bytes = (
+        b"gbinput 1\nwait 1f\nmark title\nwait 2f\nmark play_start\n"
+        b"wait 3f\nmark mid\ntap A 1f\n"
+    )
     input_script.write_bytes(input_bytes)
     synthetic_rom = _synthetic_candidate_rom()
     case_file.write_text(
@@ -1438,13 +1622,16 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
         f"rom_sha256={sha256(synthetic_rom)} rom_size={len(synthetic_rom)} "
         "oracle=progress-predicate predicate=synthetic-progress "
         "input_script=tests/acceptance/inputs/synthetic-cgb-candidate.input "
-        f"input_sha256={sha256(input_bytes)} budget_half_dots=500000 model_pass=cgb-cpu-e\n",
+        f"input_sha256={sha256(input_bytes)} budget_half_dots=2000000 model_pass=cgb-cpu-e\n",
         encoding="ascii",
     )
+    synthetic_observations = _synthetic_replay_observations()
+    checkpoint_frames = {item["name"]: item["rgb555_sha256"] for item in synthetic_observations}
     runner = root / "tests/scripts/synthetic-runner.py"
     runner.write_text(
         "#!/usr/bin/env python3\n"
         "import os\n"
+        "import subprocess\n"
         "import sys\n"
         "from pathlib import Path\n"
         "if any(key in os.environ for key in ('AWS_SECRET_ACCESS_KEY', 'GITHUB_TOKEN', 'GH_TOKEN')):\n"
@@ -1466,21 +1653,32 @@ def _prepare_temp_repo(source_root: Path, root: Path) -> str:
         "marker.parent.mkdir(parents=True, exist_ok=True)\n"
         "with marker.open('a', encoding='utf-8') as stream:\n"
         "    stream.write('invoked\\n')\n"
+        f"checkpoint_frames = {checkpoint_frames!r}\n"
+        f"checkpoint_requested = {SYNTHETIC_REPLAY_REQUESTED!r}\n"
+        f"checkpoint_completion = {SYNTHETIC_REPLAY_COMPLETION!r}\n"
+        "current_revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()\n"
         "print(f\"acceptance id={case['id']} status=pass model=cgb-cpu-e profile=CGB-CPU-E \"\n"
         "      f\"execution_mode=cgb frame_format=GBB-RGB555LE-v1 \"\n"
-        "      f\"evidence_class=original-harness-only t_hit_half_dots=200\")\n"
-        "print(f\"receipt id={case['id']} profile=CGB-CPU-E execution_mode=cgb \"\n"
-        "      f\"frame_format=GBB-RGB555LE-v1 evidence_class=original-harness-only \"\n"
-        "      f\"rom_sha256={case['rom_sha256']} rom_size={case['rom_size']} \"\n"
-        "      f\"input_sha256={case['input_sha256']} predicate={case['predicate']} \"\n"
-        "      f\"budget_half_dots={case['budget_half_dots']} end_half_dots=400 \"\n"
-        "      f\"t_hit_half_dots=200 core_revision=synthetic build_qualified=true \"\n"
-        "      f\"checkpoint_play_start_requested_half_dots=100 \"\n"
-        "      f\"checkpoint_play_start_completion_half_dots=100 \"\n"
-        "      f\"checkpoint_play_start_frame={'0' * 64} frame_rolling555={'1' * 64} \"\n"
-        "      f\"pcm_sha256={'2' * 64} pcm_samples=1 pcm_audible=false \"\n"
-        "      f\"pcm_left_peak_to_peak=0 pcm_left_changes=0 \"\n"
-        "      f\"pcm_right_peak_to_peak=0 pcm_right_changes=0\")\n",
+        "      f\"evidence_class=original-harness-only t_hit_half_dots=900000\")\n"
+        "receipt_fields = [\n"
+        "    f\"id={case['id']}\", 'profile=CGB-CPU-E', 'execution_mode=cgb',\n"
+        "    'frame_format=GBB-RGB555LE-v1', 'evidence_class=original-harness-only',\n"
+        "    f\"rom_sha256={case['rom_sha256']}\", f\"rom_size={case['rom_size']}\",\n"
+        "    f\"input_sha256={case['input_sha256']}\", f\"predicate={case['predicate']}\",\n"
+        "    f\"budget_half_dots={case['budget_half_dots']}\", 'end_half_dots=9288608',\n"
+        "    't_hit_half_dots=900000', f'core_revision={current_revision}',\n"
+        "    'build_qualified=true', f\"frame_rolling555={'1' * 64}\",\n"
+        "    f\"pcm_sha256={'2' * 64}\", 'pcm_samples=100', 'pcm_audible=false',\n"
+        "    'pcm_left_peak_to_peak=0', 'pcm_left_changes=0',\n"
+        "    'pcm_right_peak_to_peak=0', 'pcm_right_changes=0',\n"
+        "]\n"
+        "for label in ('title', 'play_start', 'mid', 'hit'):\n"
+        "    receipt_fields.extend((\n"
+        "        f'checkpoint_{label}_requested_half_dots={checkpoint_requested[label]}',\n"
+        "        f'checkpoint_{label}_completion_half_dots={checkpoint_completion[label]}',\n"
+        "        f'checkpoint_{label}_frame={checkpoint_frames[label]}',\n"
+        "    ))\n"
+        "print('receipt ' + ' '.join(receipt_fields))\n",
         encoding="utf-8",
     )
     runner.chmod(0o755)
@@ -1638,17 +1836,12 @@ def synthetic_admitted_record(root: Path, project_revision: str,
     }
     positive = {"control_id": "positive", "status": "pass", "raw_reason": "predicate-reached",
                 "observation_sha256": sha256(b"synthetic positive observation")}
-    observations = {"checkpoints": [
-        {"name": "play-start", "half_dots": 100, "rgb555_sha256": sha256(b"synthetic RGB555"),
-         "pcm_sha256": sha256(b"synthetic PCM")},
-        {"name": "progress-hit", "half_dots": 200, "rgb555_sha256": sha256(b"synthetic RGB555 hit"),
-         "pcm_sha256": sha256(b"synthetic PCM hit")},
-    ]}
+    observations = {"checkpoints": _synthetic_replay_observations()}
     receipt_name = "potion-panic" if candidate == CANDIDATES[0] else "ucity-1.3"
     receipt_path = f"tests/data/cgb-candidates/evidence/{receipt_name}.receipt.json"
     receipt_doc = {
         "case_id": case_id, "rom_sha256": fixture["rom_sha256"], "profile": "cgb-cpu-e",
-        "actual_mode": "native-cgb", "status": "pass", "budget_half_dots": 500000,
+        "actual_mode": "native-cgb", "status": "pass", "budget_half_dots": 2000000,
         "input_sha256": input_sha, "predicate_sha256": predicate_sha,
         "build_recipe_sha256": sha256(fixture["recipe"].encode("utf-8")),
         "project_source_revision": project_revision, "game_source_revision": fixture["source_revision"],
@@ -1684,7 +1877,7 @@ def synthetic_admitted_record(root: Path, project_revision: str,
             "input_script": {"path": input_path, "sha256": input_sha},
             "predicate": {"path": predicate_path, "sha256": predicate_sha,
                           "anchors": [{"offset": 0x100, "bytes_hex": "C3 50 01"}]},
-            "budget_half_dots": 500000, "positive": positive, "controls": controls,
+            "budget_half_dots": 2000000, "positive": positive, "controls": controls,
         }},
         "observations": {"state": "observed", "value": observations},
         "receipt": {"state": "observed", "value": {
@@ -1871,6 +2064,8 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     primary_ref = _record_ref(root, primary_path, primary_commit)
     not_needed = synthetic_not_needed_record(primary_ref)
     _commit_record(root, not_needed, admitted_path)
+    if admitted_primary["receipt"]["value"]["project_source_revision"] == _current_revision(root):
+        raise Reject("candidate-self-test-failed", "historical evidence revision did not differ from replay head")
 
     before = _runner_invocations(root)
     _run_all(root, runner=True)
@@ -1909,6 +2104,7 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         original_runner = runner_path.read_bytes()
         original_receipt = receipt_file.read_bytes()
         original_record = primary_record_path.read_bytes()
+        before_count = _runner_invocations(root)
         try:
             runner_path.write_bytes(runner_bytes)
             runner_path.chmod(0o755)
@@ -1923,6 +2119,8 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
             subject["receipt"]["value"]["sha256"] = sha256(receipt_file.read_bytes())
             write_json(primary_record_path, subject)
             _run_all(root, expected_code=1, expected_text=expected)
+            if _runner_invocations(root) != before_count + 1:
+                raise Reject("candidate-self-test-failed", f"{label} was not rejected after replay")
         finally:
             runner_path.write_bytes(original_runner)
             runner_path.chmod(0o755)
@@ -1936,6 +2134,86 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         raise Reject("candidate-self-test-failed", "CGB mode negative control target missing")
     runner_output_control("runner-native-mode-marker", wrong_mode_runner,
                           "candidate-runner-result-invalid")
+
+    def runner_text_control(label: str, old: bytes, new: bytes, expected: str) -> None:
+        mutated = original_runner.replace(old, new)
+        if mutated == original_runner:
+            raise Reject("candidate-self-test-failed", f"{label} mutation target missing")
+        runner_output_control(label, mutated, expected)
+
+    runner_text_control(
+        "historical-core-revision",
+        b"['git', 'rev-parse', 'HEAD']",
+        b"['git', 'rev-parse', 'HEAD~1']",
+        "candidate-runner-qualification-invalid",
+    )
+    runner_text_control(
+        "unqualified-build", b"build_qualified=true", b"build_qualified=false",
+        "candidate-runner-qualification-invalid",
+    )
+    runner_text_control(
+        "negative-hit-time", b"t_hit_half_dots=900000", b"t_hit_half_dots=-1",
+        "candidate-runner-timing-invalid",
+    )
+    runner_text_control(
+        "malformed-hit-time", b"t_hit_half_dots=900000", b"t_hit_half_dots=not-a-time",
+        "candidate-runner-timing-invalid",
+    )
+    runner_text_control(
+        "inconsistent-end-time", b"end_half_dots=9288608", b"end_half_dots=9288607",
+        "candidate-runner-timing-invalid",
+    )
+    runner_text_control(
+        "checkpoint-request-time", b"'play_start': 421344", b"'play_start': 421345",
+        "candidate-runner-checkpoint-invalid",
+    )
+    runner_text_control(
+        "checkpoint-completion-time", b"'play_start': 421444", b"'play_start': 421445",
+        "candidate-runner-checkpoint-invalid",
+    )
+    runner_text_control(
+        "negative-checkpoint-time", b"'play_start': 421444", b"'play_start': -1",
+        "candidate-runner-checkpoint-invalid",
+    )
+    runner_text_control(
+        "checkpoint-frame-digest",
+        b"current_revision = subprocess.check_output",
+        b"checkpoint_frames['title'] = 'f' * 64" + bytes([10]) +
+        b"current_revision = subprocess.check_output",
+        "candidate-runner-checkpoint-invalid",
+    )
+    runner_text_control(
+        "rolling-frame-digest", b"{'1' * 64}", b"{'x' * 64}",
+        "candidate-runner-digest-invalid",
+    )
+    runner_text_control(
+        "pcm-digest", b"{'2' * 64}", b"{'x' * 64}",
+        "candidate-runner-digest-invalid",
+    )
+    runner_text_control(
+        "pcm-sample-count", b"pcm_samples=100", b"pcm_samples=0",
+        "candidate-runner-pcm-invalid",
+    )
+    runner_text_control(
+        "negative-pcm-range", b"pcm_left_peak_to_peak=0", b"pcm_left_peak_to_peak=-1",
+        "candidate-runner-pcm-invalid",
+    )
+    runner_text_control(
+        "pcm-range-overflow", b"pcm_left_peak_to_peak=0", b"pcm_left_peak_to_peak=65536",
+        "candidate-runner-pcm-invalid",
+    )
+    runner_text_control(
+        "pcm-change-count-exceeds-samples", b"pcm_left_changes=0", b"pcm_left_changes=101",
+        "candidate-runner-pcm-invalid",
+    )
+    runner_text_control(
+        "pcm-sample-count-exceeds-duration", b"pcm_samples=100", b"pcm_samples=999999999",
+        "candidate-runner-pcm-invalid",
+    )
+    runner_text_control(
+        "pcm-audibility-statistics", b"pcm_audible=false", b"pcm_audible=true",
+        "candidate-runner-pcm-invalid",
+    )
 
     runner_path = root / "tests/scripts/synthetic-runner.py"
     altered_runner = original_runner + b"\n# synthetic executable identity mutation\n"
@@ -1953,6 +2231,11 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
 
     marker_only_runner = (
         b"#!/usr/bin/env python3\n"
+        b"from pathlib import Path\n"
+        b"marker = Path('tests/data/cgb-candidates/runner-invocations.txt')\n"
+        b"marker.parent.mkdir(parents=True, exist_ok=True)\n"
+        b"with marker.open('a', encoding='utf-8') as stream:\n"
+        b"    stream.write('invoked\\n')\n"
         b"print('acceptance id=synthetic-cgb-progress status=pass model=cgb-cpu-e "
         b"profile=CGB-CPU-E mode=native-cgb')\n"
     )
