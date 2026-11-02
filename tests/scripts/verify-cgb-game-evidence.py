@@ -64,8 +64,8 @@ LICENSE_NAME_PATTERN = (
 )
 PROHIBITION_VERB_PATTERN = r"(?:prohibit(?:s|ed)?|forbid(?:s|den)?|ban(?:s|ned)?)"
 LEGAL_PROHIBITION_PATTERNS = (
-    re.compile(rf"\b{LICENSE_NAME_PATTERN}\b[\s\S]{{0,80}}\b(?:categorically\s+)?{PROHIBITION_VERB_PATTERN}\b", re.I),
-    re.compile(rf"\b{PROHIBITION_VERB_PATTERN}\b[\s\S]{{0,80}}\b{LICENSE_NAME_PATTERN}\b", re.I),
+    re.compile(rf"\b{LICENSE_NAME_PATTERN}\b[^.!?\n]{{0,80}}\b(?:categorically\s+)?{PROHIBITION_VERB_PATTERN}\b", re.I),
+    re.compile(rf"\b{PROHIBITION_VERB_PATTERN}\b[^.!?\n]{{0,80}}\b{LICENSE_NAME_PATTERN}\b", re.I),
     re.compile(r"\b(?:use|repository use|public-ci use)\s+(?:is|was)\s+illegal\b", re.I),
 )
 
@@ -318,7 +318,13 @@ def _has_unqualified_license_prohibition(text: str) -> bool:
     for pattern in LEGAL_PROHIBITION_PATTERNS:
         for match in pattern.finditer(text):
             matched_text = match.group(0)
-            prefix = text[max(0, match.start() - 160):match.start()]
+            sentence_start = max(
+                text.rfind(".", 0, match.start()),
+                text.rfind("!", 0, match.start()),
+                text.rfind("?", 0, match.start()),
+                text.rfind("\n", 0, match.start()),
+            ) + 1
+            prefix = text[sentence_start:match.start()]
             explicit_negation = re.search(
                 r"\b(?:not\s+(?:a\s+)?conclusion\s+that|(?:does|do|did|is|are|was|were)\s+not|never)\b",
                 prefix + matched_text, re.I)
@@ -547,6 +553,18 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: reject_claim_inflation(false_bsd_inverse_rights),
                     "documentation-rights-conclusion-overstated", "inverse-bsd-license-prohibition-claim")
 
+    for label, claim in (
+        ("gpl", "GPL-3.0 prohibits this use."),
+        ("bsd", "BSD-2-Clause forbids repository use."),
+        ("cc-by-nc-sa", "CC BY-NC-SA prohibits this use."),
+    ):
+        unrelated_negation = dict(base_docs)
+        unrelated_negation["docs/game-acceptance.md"] += (
+            f"\nThe source does not establish rights. {claim}\n")
+        _expect_reject(lambda: reject_claim_inflation(unrelated_negation),
+                       "documentation-rights-conclusion-overstated",
+                       f"unrelated-negation-{label}-license-prohibition-claim")
+
     admitted_but_no_game = dict(snapshot)
     admitted_but_no_game["docs/game-acceptance.md"] += b"\nAdmitted game: Potion Panic\n"
     _expect_reject(lambda: validate_documentation(admitted_but_no_game,
@@ -571,7 +589,7 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: safe_evidence_path(Path("/repo"),
                                               "build/phase21-evidence/../../escape.json"),
                     "evidence-path-traversal", "evidence-path-traversal")
-    print("game-evidence controls pass positives=3 rejected_controls=21 subjects=synthetic-only")
+    print("game-evidence controls pass positives=3 rejected_controls=24 subjects=synthetic-only")
 
 
 def _import_progress_checker(root: Path):
