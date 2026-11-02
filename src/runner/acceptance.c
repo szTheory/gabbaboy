@@ -335,8 +335,9 @@ static const char *execution_mode_name(uint32_t mode) {
     }
 }
 
-static void print_observation(const gbb_case *c, const gbb_accept_predicate *predicate,
-                              gbb_instance *instance, const run_state *st, bool hit, uint64_t t_hit,
+static void print_observation(const gbb_case *c, const gbb_acceptance_options *options,
+                              const gbb_accept_predicate *predicate, gbb_instance *instance,
+                              const run_state *st, bool hit, uint64_t t_hit, uint64_t end_half_dots,
                               bool pcm_only, const char pcm_hex[65], const char rolling_hex[65]) {
     observe_lines *out = malloc(sizeof(*out));
     if (out == NULL) {
@@ -355,6 +356,16 @@ static void print_observation(const gbb_case *c, const gbb_accept_predicate *pre
             emit_line(out, c->id, "execution_mode", "%s", execution_mode_name(st->execution_mode));
             emit_line(out, c->id, "frame_format", "%s", "GBB-RGB555LE-v1");
             emit_line(out, c->id, "evidence_class", "%s", "original-harness-only");
+            emit_line(out, c->id, "rom_sha256", "%s", c->rom_sha256);
+            emit_line(out, c->id, "rom_size", "%u", (unsigned)c->rom_size);
+            emit_line(out, c->id, "input_sha256", "%s", c->input_sha256);
+            emit_line(out, c->id, "predicate_name", "%s", c->predicate);
+            emit_line(out, c->id, "budget_half_dots", "%llu", (unsigned long long)c->budget_half_dots);
+            emit_line(out, c->id, "end_half_dots", "%llu", (unsigned long long)end_half_dots);
+            emit_line(out, c->id, "core_revision", "%s",
+                      options != NULL && options->core_revision != NULL ? options->core_revision : "unknown");
+            emit_line(out, c->id, "build_qualified", "%s",
+                      options != NULL && options->build_qualified ? "true" : "false");
             for (size_t i = 0; i < GBB_ACCEPT_SOURCE_ROW_COUNT; ++i) {
                 const gbb_accept_predicate_row *row = &predicate->source_rows[i];
                 if (row->name == NULL || row->address < 0xC000u || row->address > 0xDFFFu) continue;
@@ -377,7 +388,10 @@ static void print_observation(const gbb_case *c, const gbb_accept_predicate *pre
         emit_line(out, c->id, progress_only ? "frame.rolling555" : "frame.rolling", "%s", rolling_hex);
     }
     emit_line(out, c->id, "pcm_sha256", "%s", pcm_hex);
-    if (progress_only) emit_line(out, c->id, "pcm_samples", "%llu", (unsigned long long)st->pcm_samples);
+    if (progress_only) {
+        emit_line(out, c->id, "pcm_samples", "%llu", (unsigned long long)st->pcm_samples);
+        emit_line(out, c->id, "pcm_audible", "%s", gbb_accept_pcm_audible(&st->window) ? "true" : "false");
+    }
     emit_line(out, c->id, "pcm.window.left.peak_to_peak", "%d",
               (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples));
     emit_line(out, c->id, "pcm.window.left.changes", "%llu", (unsigned long long)st->window.left.changes);
@@ -1208,9 +1222,38 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
     }
 
     if (observe && (result.status == GBB_ACCEPT_DRIVE_HIT || result.status == GBB_ACCEPT_DRIVE_NOT_REACHED)) {
-        print_observation(c, predicate, instance, st,
+        print_observation(c, options, predicate, instance, st,
                           result.status == GBB_ACCEPT_DRIVE_HIT, result.t_hit_half_dots,
+                          result.end_half_dots,
                           options->pcm_only, pcm_hex, rolling_hex);
+        if (options->receipt && predicate->observation_policy == GBB_ACCEPT_OBSERVE_PROGRESS_ONLY) {
+            printf("receipt id=%s profile=CGB-CPU-E execution_mode=cgb frame_format=GBB-RGB555LE-v1 "
+                   "evidence_class=original-harness-only rom_sha256=%s rom_size=%u input_sha256=%s "
+                   "predicate=%s budget_half_dots=%llu end_half_dots=%llu t_hit_half_dots=%llu "
+                   "core_revision=%s build_qualified=%s",
+                   c->id, c->rom_sha256, (unsigned)c->rom_size, c->input_sha256, c->predicate,
+                   (unsigned long long)c->budget_half_dots, (unsigned long long)result.end_half_dots,
+                   (unsigned long long)result.t_hit_half_dots,
+                   options->core_revision != NULL ? options->core_revision : "unknown",
+                   options->build_qualified ? "true" : "false");
+            for (size_t i = 0; i < st->checkpoint_count; ++i) {
+                const checkpoint *cp = &st->checkpoints[i];
+                printf(" checkpoint_%s_requested_half_dots=%llu checkpoint_%s_completion_half_dots=%llu "
+                       "checkpoint_%s_frame=%s",
+                       cp->label, (unsigned long long)cp->requested_half_dots,
+                       cp->label, (unsigned long long)cp->completion_half_dots,
+                       cp->label, cp->digest);
+            }
+            printf(" frame_rolling555=%s pcm_sha256=%s pcm_samples=%llu pcm_audible=%s "
+                   "pcm_left_peak_to_peak=%d pcm_left_changes=%llu "
+                   "pcm_right_peak_to_peak=%d pcm_right_changes=%llu\n",
+                   rolling_hex, pcm_hex, (unsigned long long)st->pcm_samples,
+                   gbb_accept_pcm_audible(&st->window) ? "true" : "false",
+                   (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples),
+                   (unsigned long long)st->window.left.changes,
+                   (int)gbb_accept_pcm_peak_to_peak(&st->window.right, st->window.samples),
+                   (unsigned long long)st->window.right.changes);
+        }
         code = EXIT_PASS;
         goto done;
     }
@@ -1288,14 +1331,17 @@ int gbb_acceptance_run_case(const gbb_case *c, const gbb_acceptance_options *opt
                        options->build_qualified ? "true" : "false");
                 for (size_t i = 0; i < st->checkpoint_count; ++i) {
                     const checkpoint *cp = &st->checkpoints[i];
-                    printf(" checkpoint_%s_completion_half_dots=%llu checkpoint_%s_frame=%s",
+                    printf(" checkpoint_%s_requested_half_dots=%llu checkpoint_%s_completion_half_dots=%llu "
+                           "checkpoint_%s_frame=%s",
+                           cp->label, (unsigned long long)cp->requested_half_dots,
                            cp->label, (unsigned long long)cp->completion_half_dots,
                            cp->label, cp->digest);
                 }
-                printf(" frame_rolling555=%s pcm_sha256=%s pcm_samples=%llu "
+                printf(" frame_rolling555=%s pcm_sha256=%s pcm_samples=%llu pcm_audible=%s "
                        "pcm_left_peak_to_peak=%d pcm_left_changes=%llu "
                        "pcm_right_peak_to_peak=%d pcm_right_changes=%llu",
                        rolling_hex, pcm_hex, (unsigned long long)st->pcm_samples,
+                       gbb_accept_pcm_audible(&st->window) ? "true" : "false",
                        (int)gbb_accept_pcm_peak_to_peak(&st->window.left, st->window.samples),
                        (unsigned long long)st->window.left.changes,
                        (int)gbb_accept_pcm_peak_to_peak(&st->window.right, st->window.samples),

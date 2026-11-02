@@ -25,6 +25,12 @@ NINTENDO_LOGO = bytes.fromhex(
 ROM_SIZE = 32768
 HALF_DOTS_PER_FRAME = 140448
 BUDGET_HALF_DOTS = 120 * HALF_DOTS_PER_FRAME
+CGB_TAIL_HALF_DOTS = 8388608
+RGB555_HEADER = b"GBB-RGB555LE-v1 160x144\n"
+PPM_HEADER = b"P6\n160 144\n255\n"
+FRAME_PIXELS = 160 * 144
+MAX_OBSERVATIONS = 64
+CHECKPOINT_COLORS = {"title": 0x001F, "play_start": 0x001F, "mid": 0x001F, "hit": 0x03E0}
 CONTROL_SHA256 = "17822873ec8641280d9504229d96850414e872bc90de5431469a498e5271db7e"
 CONTROL_COMPAT_SHA256 = "6a1d4a1ed58e8a51f3a5be1283a2226775867fc1373b628ecbc798d12d3ca5fc"
 SOURCE_ANCHORS = (
@@ -173,43 +179,205 @@ def validate_source_anchors(rom: bytes) -> None:
             raise CheckError("predicate-anchor-mismatch")
 
 
-def validate_native_receipt(receipt: str) -> None:
-    fields = dict(re.findall(r"(?:^|\s)([a-zA-Z0-9_]+)=([^\s]+)", receipt))
-    required = {
-        "profile": "CGB-CPU-E",
-        "execution_mode": "cgb",
-        "frame_format": "GBB-RGB555LE-v1",
-        "evidence_class": "original-harness-only",
-    }
-    for key, value in required.items():
-        if fields.get(key) != value:
-            raise CheckError(f"native-mode-receipt-missing:{key}")
-    if not re.fullmatch(r"[0-9a-f]{64}", fields.get("rom_sha256", "")):
-        raise CheckError("native-mode-receipt-missing:rom_sha256")
-    if not re.fullmatch(r"[0-9a-f]{64}", fields.get("input_sha256", "")):
-        raise CheckError("native-mode-receipt-missing:input_sha256")
-    for label in ("title", "play_start", "mid", "hit"):
-        if not re.fullmatch(r"[0-9]+", fields.get(f"checkpoint_{label}_completion_half_dots", "")):
-            raise CheckError(f"native-mode-receipt-missing:checkpoint_{label}_completion_half_dots")
-        if not re.fullmatch(r"[0-9a-f]{64}", fields.get(f"checkpoint_{label}_frame", "")):
-            raise CheckError(f"native-mode-receipt-missing:checkpoint_{label}_frame")
-    blue = expected_solid_rgb555_digest(0x001F)
-    green = expected_solid_rgb555_digest(0x03E0)
-    if any(fields.get(f"checkpoint_{label}_frame") != blue for label in ("title", "play_start", "mid")):
-        raise CheckError("native-mode-receipt-unexpected-pre-input-frame")
-    if fields.get("checkpoint_hit_frame") != green:
-        raise CheckError("native-mode-receipt-unexpected-post-input-frame")
+def token_fields(line: str, prefix: str) -> dict[str, str]:
+    if not line.startswith(prefix + " "):
+        raise CheckError("observation-record-missing")
+    fields: dict[str, str] = {}
+    for token in line.split()[1:]:
+        if "=" not in token:
+            continue
+        key, value = token.split("=", 1)
+        if key in fields:
+            raise CheckError(f"duplicate-field:{key}")
+        fields[key] = value
+    return fields
+
+
+def parse_observation(output: str) -> dict[str, str]:
+    rows: list[tuple[str, str]] = []
+    prefix = "acceptance.cgb-control-progress."
+    for line in output.splitlines():
+        if not line.startswith(prefix):
+            continue
+        if "\t" not in line:
+            raise CheckError("observation-record-malformed")
+        key, value = line[len(prefix):].split("\t", 1)
+        rows.append((key, value))
+    if not rows or len(rows) > MAX_OBSERVATIONS or rows != sorted(rows):
+        raise CheckError("observation-record-order-or-count-invalid")
+    fields: dict[str, str] = {}
+    for key, value in rows:
+        if key in fields:
+            raise CheckError(f"duplicate-observation:{key}")
+        fields[key] = value
+    return fields
+
+
+def expected_mark_times(script: bytes) -> dict[str, int]:
     try:
-        pcm_samples = int(fields.get("pcm_samples", ""))
-    except ValueError as error:
-        raise CheckError("native-mode-receipt-missing:pcm_samples") from error
-    if pcm_samples <= 0:
-        raise CheckError("native-mode-receipt-missing:pcm_samples")
+        lines = script.decode("ascii").splitlines()
+    except UnicodeDecodeError as error:
+        raise CheckError("script-format-invalid") from error
+    elapsed_frames = 0
+    marks: dict[str, int] = {}
+    for line in lines[1:]:
+        wait = re.fullmatch(r"wait ([0-9]+)f", line)
+        mark = re.fullmatch(r"mark ([a-z_]+)", line)
+        if wait:
+            elapsed_frames += int(wait.group(1))
+        elif mark:
+            if mark.group(1) in marks:
+                raise CheckError("script-duplicate-mark")
+            marks[mark.group(1)] = elapsed_frames * HALF_DOTS_PER_FRAME
+        elif not re.fullmatch(r"tap (LEFT|RIGHT|UP|DOWN) [0-9]+f", line):
+            raise CheckError("script-format-invalid")
+    if set(marks) != {"title", "play_start", "mid"}:
+        raise CheckError("script-checkpoint-marks-invalid")
+    return marks
 
 
 def expected_solid_rgb555_digest(color: int) -> str:
-    pixels = color.to_bytes(2, "little") * (160 * 144)
-    return hashlib.sha256(b"GBB-RGB555LE-v1 160x144\n" + pixels).hexdigest()
+    pixels = color.to_bytes(2, "little") * FRAME_PIXELS
+    return hashlib.sha256(RGB555_HEADER + pixels).hexdigest()
+
+
+def expand5(channel: int) -> int:
+    return (channel << 3) | (channel >> 2)
+
+
+def solid_rgb555_ppm(color: int) -> bytes:
+    red = expand5(color & 0x1F)
+    green = expand5((color >> 5) & 0x1F)
+    blue = expand5((color >> 10) & 0x1F)
+    return PPM_HEADER + bytes((red, green, blue)) * FRAME_PIXELS
+
+
+def validate_checkpoint_dump(path: Path, label: str, expected_digest: str) -> None:
+    try:
+        data = path.read_bytes()
+    except OSError as error:
+        raise CheckError(f"checkpoint-dump-missing:{label}") from error
+    expected_color = CHECKPOINT_COLORS[label]
+    expected_ppm = solid_rgb555_ppm(expected_color)
+    if len(data) != len(expected_ppm):
+        raise CheckError(f"checkpoint-dump-size-invalid:{label}")
+    if not data.startswith(PPM_HEADER):
+        raise CheckError(f"checkpoint-dump-format-invalid:{label}")
+    if data != expected_ppm:
+        raise CheckError(f"checkpoint-dump-color-invalid:{label}")
+    if expected_solid_rgb555_digest(expected_color) != expected_digest:
+        raise CheckError(f"checkpoint-dump-digest-mismatch:{label}")
+
+
+def validate_progress_fields(fields: dict[str, str], *, observation: bool, rom: bytes,
+                             script: bytes, source_commit: str,
+                             require_predicate_state: bool = False) -> None:
+    key = (lambda name: name) if observation else (lambda name: name)
+    expected_identity = {
+        key("profile"): "CGB-CPU-E",
+        key("execution_mode"): "cgb",
+        key("frame_format"): "GBB-RGB555LE-v1",
+        key("evidence_class"): "original-harness-only",
+        key("rom_sha256"): hashlib.sha256(rom).hexdigest(),
+        key("rom_size"): str(len(rom)),
+        key("input_sha256"): hashlib.sha256(script).hexdigest(),
+        key("predicate_name" if observation else "predicate"): "cgb-control-progress",
+        key("budget_half_dots"): str(BUDGET_HALF_DOTS),
+        key("core_revision"): source_commit,
+        key("build_qualified"): "true",
+    }
+    if observation:
+        expected_identity[key("class")] = "regression"
+    for name, expected in expected_identity.items():
+        if fields.get(name) != expected:
+            raise CheckError(f"progress-field-mismatch:{name}")
+    try:
+        hit = int(fields.get("t_hit_half_dots", ""))
+        end = int(fields.get("end_half_dots", ""))
+    except ValueError as error:
+        raise CheckError("progress-time-invalid") from error
+    if hit <= 0 or hit > BUDGET_HALF_DOTS or end != hit + CGB_TAIL_HALF_DOTS:
+        raise CheckError("progress-time-out-of-bounds")
+    marks = expected_mark_times(script)
+    expected_digests = {label: expected_solid_rgb555_digest(color)
+                        for label, color in CHECKPOINT_COLORS.items()}
+    for label in CHECKPOINT_COLORS:
+        requested_name = (f"checkpoint.{label}.requested_half_dots" if observation else
+                          f"checkpoint_{label}_requested_half_dots")
+        completion_name = (f"checkpoint.{label}.completion_half_dots" if observation else
+                           f"checkpoint_{label}_completion_half_dots")
+        frame_name = (f"checkpoint.{label}.frame555" if observation else f"checkpoint_{label}_frame")
+        try:
+            requested = int(fields.get(requested_name, ""))
+            completion = int(fields.get(completion_name, ""))
+        except ValueError as error:
+            raise CheckError(f"checkpoint-time-invalid:{label}") from error
+        expected_requested = hit if label == "hit" else marks[label]
+        if requested != expected_requested or completion < requested or completion > end:
+            raise CheckError(f"checkpoint-time-mismatch:{label}")
+        if fields.get(frame_name) != expected_digests[label]:
+            raise CheckError(f"checkpoint-digest-mismatch:{label}")
+    rolling_name = "frame.rolling555" if observation else "frame_rolling555"
+    pcm_name = "pcm_sha256"
+    if not re.fullmatch(r"[0-9a-f]{64}", fields.get(rolling_name, "")):
+        raise CheckError("rolling-frame-digest-invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}", fields.get(pcm_name, "")):
+        raise CheckError("pcm-digest-invalid")
+    samples_name = "pcm_samples"
+    audible_name = "pcm_audible"
+    try:
+        samples = int(fields.get(samples_name, ""))
+    except ValueError as error:
+        raise CheckError("pcm-samples-invalid") from error
+    if samples <= 0 or fields.get(audible_name) != "false":
+        raise CheckError("pcm-contract-invalid")
+    pcm_keys = ("pcm.window.left.peak_to_peak", "pcm.window.left.changes",
+                "pcm.window.right.peak_to_peak", "pcm.window.right.changes") if observation else (
+                "pcm_left_peak_to_peak", "pcm_left_changes", "pcm_right_peak_to_peak", "pcm_right_changes")
+    if any(fields.get(name) != "0" for name in pcm_keys):
+        raise CheckError("pcm-window-not-silent")
+    if require_predicate_state:
+        if fields.get("predicate.ready") != "a5" or fields.get("predicate.progress") != "01":
+            raise CheckError("predicate-final-state-mismatch")
+
+
+def receipt_to_observation_fields(receipt: dict[str, str]) -> dict[str, str]:
+    fields = dict(receipt)
+    fields.pop("id", None)
+    fields["class"] = "regression"
+    fields["predicate_name"] = fields.pop("predicate", "")
+    for label in CHECKPOINT_COLORS:
+        fields[f"checkpoint.{label}.requested_half_dots"] = fields.pop(
+            f"checkpoint_{label}_requested_half_dots", "")
+        fields[f"checkpoint.{label}.completion_half_dots"] = fields.pop(
+            f"checkpoint_{label}_completion_half_dots", "")
+        fields[f"checkpoint.{label}.frame555"] = fields.pop(f"checkpoint_{label}_frame", "")
+    fields["frame.rolling555"] = fields.pop("frame_rolling555", "")
+    fields["pcm.window.left.peak_to_peak"] = fields.pop("pcm_left_peak_to_peak", "")
+    fields["pcm.window.left.changes"] = fields.pop("pcm_left_changes", "")
+    fields["pcm.window.right.peak_to_peak"] = fields.pop("pcm_right_peak_to_peak", "")
+    fields["pcm.window.right.changes"] = fields.pop("pcm_right_changes", "")
+    return fields
+
+
+def validate_native_receipt(receipt: str, rom: bytes, script: bytes, source_commit: str) -> dict[str, str]:
+    fields = token_fields(receipt, "receipt")
+    validate_progress_fields(receipt_to_observation_fields(fields), observation=True,
+                             rom=rom, script=script, source_commit=source_commit)
+    return fields
+
+
+def validate_observation(output: str, rom: bytes, script: bytes, source_commit: str) -> dict[str, str]:
+    fields = parse_observation(output)
+    validate_progress_fields(fields, observation=True, rom=rom, script=script,
+                             source_commit=source_commit, require_predicate_state=True)
+    return fields
+
+
+def compare_observation_receipt(observation: dict[str, str], receipt: dict[str, str]) -> None:
+    normalized_receipt = receipt_to_observation_fields(receipt)
+    if any(observation.get(key) != value for key, value in normalized_receipt.items()):
+        raise CheckError("observation-receipt-mismatch")
 
 
 def git_text(repo_root: Path, args: list[str]) -> str:
@@ -243,6 +411,8 @@ SOURCE_FACTS = {
     "src/runner/acceptance.c": (
         "execution-mode-mismatch", "GBB_MODE_CGB", "GBB_ACCEPT_OBSERVE_PROGRESS_ONLY",
         "gbb_copy_frame_rgb555", "gbb_accept_rgb555_digest_bin", "pcm_samples",
+        "checkpoint_%s_requested_half_dots=%llu checkpoint_%s_completion_half_dots=%llu",
+        "pcm_audible=%s", "rom_sha256", "predicate_name", "build_qualified",
     ),
     "include/gabbaboy/gabbaboy.h": (
         "GBB_MODE_CGB = 2", "GBB_MODE_CGB_DMG_COMPAT = 3", "GBB_INFO_SIZE_V1",
@@ -258,13 +428,26 @@ def verify_source_identity(repo_root: Path, revision: str, checker_path: Path) -
         raise CheckError("checker-outside-repository") from error
     committed_checker = git_text_bytes(repo_root, ["show", f"{commit}:{relative}"])
     current_checker = checker_path.read_bytes()
+    committed_sources = {
+        path: git_text_bytes(repo_root, ["show", f"{commit}:{path}"]).decode("utf-8", errors="strict")
+        for path in SOURCE_FACTS
+    }
+    validate_source_snapshot(committed_checker, current_checker, committed_sources)
+    return commit, hashlib.sha256(current_checker).hexdigest()
+
+
+def validate_source_snapshot(committed_checker: bytes, current_checker: bytes,
+                             committed_sources: dict[str, str],
+                             facts_by_path: dict[str, tuple[str, ...]] | None = None) -> None:
     if committed_checker != current_checker:
         raise CheckError("checker-source-mismatch")
-    for path, facts in SOURCE_FACTS.items():
-        source = git_text_bytes(repo_root, ["show", f"{commit}:{path}"]).decode("utf-8", errors="strict")
+    facts_map = SOURCE_FACTS if facts_by_path is None else facts_by_path
+    for path, facts in facts_map.items():
+        source = committed_sources.get(path)
+        if source is None:
+            raise CheckError(f"source-evidence-missing:{path}")
         if any(fact not in source for fact in facts):
             raise CheckError(f"source-fact-missing:{path}")
-    return commit, hashlib.sha256(current_checker).hexdigest()
 
 
 def git_text_bytes(repo_root: Path, args: list[str]) -> bytes:
@@ -273,6 +456,79 @@ def git_text_bytes(repo_root: Path, args: list[str]) -> bytes:
     if result.returncode != 0:
         raise CheckError("source-revision-invalid")
     return result.stdout
+
+
+def expect_rejected(action, reason_prefix: str, control: str) -> None:
+    try:
+        action()
+    except CheckError as error:
+        if not error.reason.startswith(reason_prefix):
+            raise
+    else:
+        raise CheckError(f"self-test-{control}-control-failed")
+
+
+def synthetic_progress_fields(rom: bytes, script: bytes, source_commit: str) -> dict[str, str]:
+    hit = 4 * HALF_DOTS_PER_FRAME
+    fields = {
+        "class": "regression",
+        "t_hit_half_dots": str(hit),
+        "profile": "CGB-CPU-E",
+        "execution_mode": "cgb",
+        "frame_format": "GBB-RGB555LE-v1",
+        "evidence_class": "original-harness-only",
+        "rom_sha256": hashlib.sha256(rom).hexdigest(),
+        "rom_size": str(len(rom)),
+        "input_sha256": hashlib.sha256(script).hexdigest(),
+        "predicate_name": "cgb-control-progress",
+        "budget_half_dots": str(BUDGET_HALF_DOTS),
+        "end_half_dots": str(hit + CGB_TAIL_HALF_DOTS),
+        "core_revision": source_commit,
+        "build_qualified": "true",
+        "predicate.ready": "a5",
+        "predicate.progress": "01",
+        "frame.rolling555": "c" * 64,
+        "pcm_sha256": "d" * 64,
+        "pcm_samples": "1",
+        "pcm_audible": "false",
+        "pcm.window.left.peak_to_peak": "0",
+        "pcm.window.left.changes": "0",
+        "pcm.window.right.peak_to_peak": "0",
+        "pcm.window.right.changes": "0",
+    }
+    marks = expected_mark_times(script)
+    for label, color in CHECKPOINT_COLORS.items():
+        requested = hit if label == "hit" else marks[label]
+        fields[f"checkpoint.{label}.requested_half_dots"] = str(requested)
+        fields[f"checkpoint.{label}.completion_half_dots"] = str(requested + 100)
+        fields[f"checkpoint.{label}.frame555"] = expected_solid_rgb555_digest(color)
+    return fields
+
+
+def synthetic_receipt(fields: dict[str, str]) -> str:
+    receipt = {
+        "profile": fields["profile"], "execution_mode": fields["execution_mode"],
+        "frame_format": fields["frame_format"], "evidence_class": fields["evidence_class"],
+        "rom_sha256": fields["rom_sha256"], "rom_size": fields["rom_size"],
+        "input_sha256": fields["input_sha256"], "predicate": fields["predicate_name"],
+        "budget_half_dots": fields["budget_half_dots"], "end_half_dots": fields["end_half_dots"],
+        "t_hit_half_dots": fields["t_hit_half_dots"], "core_revision": fields["core_revision"],
+        "build_qualified": fields["build_qualified"], "frame_rolling555": fields["frame.rolling555"],
+        "pcm_sha256": fields["pcm_sha256"], "pcm_samples": fields["pcm_samples"],
+        "pcm_audible": fields["pcm_audible"],
+        "pcm_left_peak_to_peak": fields["pcm.window.left.peak_to_peak"],
+        "pcm_left_changes": fields["pcm.window.left.changes"],
+        "pcm_right_peak_to_peak": fields["pcm.window.right.peak_to_peak"],
+        "pcm_right_changes": fields["pcm.window.right.changes"],
+    }
+    for label in CHECKPOINT_COLORS:
+        receipt[f"checkpoint_{label}_requested_half_dots"] = fields[
+            f"checkpoint.{label}.requested_half_dots"]
+        receipt[f"checkpoint_{label}_completion_half_dots"] = fields[
+            f"checkpoint.{label}.completion_half_dots"]
+        receipt[f"checkpoint_{label}_frame"] = fields[f"checkpoint.{label}.frame555"]
+    return "receipt id=cgb-control-progress " + " ".join(
+        f"{name}={value}" for name, value in receipt.items())
 
 
 def self_test(repo_root: Path) -> None:
@@ -321,29 +577,100 @@ def self_test(repo_root: Path) -> None:
             raise
     else:
         raise CheckError("self-test-predicate-anchor-control-failed")
-    blue = expected_solid_rgb555_digest(0x001F)
-    green = expected_solid_rgb555_digest(0x03E0)
-    complete = ("profile=CGB-CPU-E execution_mode=cgb frame_format=GBB-RGB555LE-v1 "
-                "evidence_class=original-harness-only rom_sha256=" + "a" * 64 + " input_sha256=" + "b" * 64 +
-                " checkpoint_title_completion_half_dots=1 checkpoint_title_frame=" + blue +
-                " checkpoint_play_start_completion_half_dots=2 checkpoint_play_start_frame=" + blue +
-                " checkpoint_mid_completion_half_dots=3 checkpoint_mid_frame=" + blue +
-                " checkpoint_hit_completion_half_dots=4 checkpoint_hit_frame=" + green + " pcm_samples=1")
-    validate_native_receipt(complete)
-    try:
-        validate_native_receipt(complete.replace("execution_mode=cgb ", ""))
-    except CheckError as error:
-        if error.reason != "native-mode-receipt-missing:execution_mode":
-            raise
-    else:
-        raise CheckError("self-test-native-mode-receipt-control-failed")
-    try:
-        resolve_source_commit(repo_root, "gsd-invalid-cgb-progress-source-revision")
-    except CheckError as error:
-        if error.reason != "source-revision-invalid":
-            raise
-    else:
-        raise CheckError("self-test-source-revision-control-failed")
+    source_commit = "a" * 40
+    complete = synthetic_progress_fields(rom, positive, source_commit)
+    validate_progress_fields(complete, observation=True, rom=rom, script=positive,
+                             source_commit=source_commit, require_predicate_state=True)
+    receipt = synthetic_receipt(complete)
+    validate_native_receipt(receipt, rom, positive, source_commit)
+    compare_observation_receipt(complete, token_fields(receipt, "receipt"))
+
+    fields_to_mutate = (
+        "profile", "execution_mode", "frame_format", "evidence_class", "rom_sha256", "rom_size",
+        "input_sha256", "predicate_name", "budget_half_dots", "core_revision", "build_qualified",
+        "t_hit_half_dots", "end_half_dots", "frame.rolling555",
+        "pcm_sha256", "pcm_samples", "pcm_audible", "pcm.window.left.peak_to_peak",
+        "pcm.window.left.changes", "pcm.window.right.peak_to_peak", "pcm.window.right.changes",
+        "predicate.ready", "predicate.progress",
+    ) + tuple(f"checkpoint.{label}.{field}" for label in CHECKPOINT_COLORS
+              for field in ("requested_half_dots", "completion_half_dots", "frame555"))
+    for field in fields_to_mutate:
+        mutated = dict(complete)
+        mutated[field] = "1" if mutated[field] != "1" else "0"
+        expect_rejected(lambda: validate_progress_fields(
+            mutated, observation=True, rom=rom, script=positive, source_commit=source_commit,
+            require_predicate_state=True), "", f"observation-{field}")
+
+    receipt_fields = token_fields(receipt, "receipt")
+    receipt_fields_to_mutate = (
+        "profile", "execution_mode", "frame_format", "evidence_class", "rom_sha256", "rom_size",
+        "input_sha256", "predicate", "budget_half_dots", "core_revision", "build_qualified",
+        "t_hit_half_dots", "end_half_dots", "frame_rolling555", "pcm_sha256", "pcm_samples", "pcm_audible",
+        "pcm_left_peak_to_peak", "pcm_left_changes", "pcm_right_peak_to_peak", "pcm_right_changes",
+    ) + tuple(f"checkpoint_{label}_{field}" for label in CHECKPOINT_COLORS
+              for field in ("requested_half_dots", "completion_half_dots", "frame"))
+    for field in receipt_fields_to_mutate:
+        mutated = dict(receipt_fields)
+        mutated[field] = "1" if mutated[field] != "1" else "0"
+        line = "receipt id=cgb-control-progress " + " ".join(
+            f"{name}={value}" for name, value in mutated.items())
+        expect_rejected(lambda: validate_native_receipt(line, rom, positive, source_commit),
+                        "", f"receipt-{field}")
+
+    with tempfile.TemporaryDirectory(prefix="gbb-cgb-observation-self-test-") as temp:
+        ppm = Path(temp) / "checkpoint.ppm"
+        expected_blue = solid_rgb555_ppm(CHECKPOINT_COLORS["title"])
+        ppm.write_bytes(expected_blue)
+        validate_checkpoint_dump(ppm, "title", complete["checkpoint.title.frame555"])
+        ppm.write_bytes(solid_rgb555_ppm(0x001E))
+        expect_rejected(lambda: validate_checkpoint_dump(
+            ppm, "title", complete["checkpoint.title.frame555"]),
+            "checkpoint-dump-color-invalid", "dump-stale")
+        source_color = CHECKPOINT_COLORS["title"]
+        CHECKPOINT_COLORS["title"] = 0x001E
+        try:
+            ppm.write_bytes(expected_blue)
+            expect_rejected(lambda: validate_checkpoint_dump(
+                ppm, "title", complete["checkpoint.title.frame555"]),
+                "checkpoint-dump-color-invalid", "expected-color")
+        finally:
+            CHECKPOINT_COLORS["title"] = source_color
+        wrong_format = bytearray(expected_blue)
+        wrong_format[:len(PPM_HEADER)] = b"P5\n160 144\n255\n"
+        ppm.write_bytes(wrong_format)
+        expect_rejected(lambda: validate_checkpoint_dump(
+            ppm, "title", complete["checkpoint.title.frame555"]),
+            "checkpoint-dump-format-invalid", "dump-format")
+        ppm.write_bytes(expected_blue[:-1])
+        expect_rejected(lambda: validate_checkpoint_dump(
+            ppm, "title", complete["checkpoint.title.frame555"]),
+            "checkpoint-dump-size-invalid", "dump-truncated")
+        ppm.unlink()
+        expect_rejected(lambda: validate_checkpoint_dump(
+            ppm, "title", complete["checkpoint.title.frame555"]),
+            "checkpoint-dump-missing", "dump-missing")
+
+    expect_rejected(lambda: validate_source_snapshot(b"committed", b"changed", {}),
+                    "checker-source-mismatch", "source-mismatch")
+    expect_rejected(lambda: validate_source_snapshot(b"committed", b"committed", {},
+                    {"src/runner/acceptance.c": ("missing-source-evidence",)}),
+                    "source-evidence-missing", "missing-committed-evidence")
+    checker_path = Path(__file__).resolve()
+    current_commit_checker = git_text_bytes(
+        repo_root, ["show", f"HEAD:{checker_path.relative_to(repo_root).as_posix()}"])
+    if current_commit_checker == checker_path.read_bytes():
+        expect_rejected(lambda: verify_source_identity(repo_root, "HEAD^", checker_path),
+                        "checker-source-mismatch", "source-revision-mismatch")
+        original_runner_facts = SOURCE_FACTS["src/runner/acceptance.c"]
+        SOURCE_FACTS["src/runner/acceptance.c"] = (*original_runner_facts, "missing-evidence-control")
+        try:
+            expect_rejected(lambda: verify_source_identity(repo_root, "HEAD", checker_path),
+                            "source-fact-missing", "missing-committed-source-fact")
+        finally:
+            SOURCE_FACTS["src/runner/acceptance.c"] = original_runner_facts
+    expect_rejected(lambda: resolve_source_commit(repo_root, "gsd-invalid-cgb-progress-source-revision"),
+                    "source-revision-invalid", "source-revision")
+    print("observation-contract=pass observation-controls=pass")
 
 
 def load_host_fixture(repo_root: Path):
@@ -398,7 +725,7 @@ def run_tracer(runner: Path, repo_root: Path, source_revision: str, checker_path
             raise CheckError("positive-native-cgb-route-failed:" +
                              positive_out.replace(str(work), "<temp>").strip() + ":" +
                              positive_err.replace(str(work), "<temp>").strip())
-        validate_native_receipt(receipt_lines[0])
+        validate_native_receipt(receipt_lines[0], rom, positive, source_commit)
         for name, code, stdout, stderr in (
             ("no-input", no_input_code, no_input_out, no_input_err),
             ("impossible", impossible_code, impossible_out, impossible_err),
@@ -475,7 +802,7 @@ def run_discrimination(runner: Path, repo_root: Path, source_revision: str,
                 len(positive_receipts) != 1):
             raise CheckError("positive-native-cgb-route-failed:" +
                              positive_out.strip() + ":" + positive_err.strip())
-        validate_native_receipt(positive_receipts[0])
+        validate_native_receipt(positive_receipts[0], rom, positive, source_commit)
 
         negative_specs = (
             ("no-input", "cgb-discrimination-no-input", "final_ready=a5 final_progress=00"),
@@ -507,6 +834,86 @@ def run_discrimination(runner: Path, repo_root: Path, source_revision: str,
           f"source_revision={source_commit} checker_sha256={checker_sha} runner_sha256={runner_sha} "
           f"rom_sha256={hashlib.sha256(rom).hexdigest()} positive_input_sha256={hashlib.sha256(positive).hexdigest()} "
           f"no_input_sha256={hashlib.sha256(no_input).hexdigest()} wrong_input_sha256={hashlib.sha256(wrong_input).hexdigest()}")
+    return 0
+
+
+def run_observations(runner: Path, repo_root: Path, source_revision: str,
+                     checker_path: Path) -> int:
+    self_test(repo_root)
+    source_commit, checker_sha = verify_source_identity(repo_root, source_revision, checker_path)
+    if not runner.is_file():
+        raise CheckError("runner-unavailable")
+    runner_sha = hashlib.sha256(runner.read_bytes()).hexdigest()
+    rom, _ = build_rom()
+    script = input_script(True)
+    no_input = input_script(False)
+    if hashlib.sha256(rom).hexdigest() != CONTROL_SHA256:
+        raise CheckError("rom-source-identity-mismatch")
+    with tempfile.TemporaryDirectory(prefix="gbb-cgb-observations-") as temp:
+        work = Path(temp)
+        work.chmod(0o700)
+        (work / "control.gb").write_bytes(rom)
+        (work / "positive.input").write_bytes(script)
+        (work / "no-input.input").write_bytes(no_input)
+        cases = (
+            case_line("cgb-control-progress", "cgb-control-progress", "positive.input", rom, script) +
+            case_line("cgb-control-no-input", "cgb-control-progress", "no-input.input", rom, no_input)
+        )
+        (work / "cases.txt").write_text(cases, encoding="ascii")
+        helper = load_host_fixture(repo_root)
+        base = ["--acceptance", "cases.txt", "--case", "cgb-control-progress", "--model", "cgb-cpu-e"]
+        observed_runs: list[dict[str, str]] = []
+        receipt_runs: list[dict[str, str]] = []
+        dump_runs: list[Path] = []
+        for run_name in ("first", "repeat"):
+            dump_dir = work / f"dumps-{run_name}"
+            dump_dir.mkdir(mode=0o700)
+            code, stdout, stderr = helper.run_runner(
+                str(runner), [*base, "--observe", "--receipt", "--dump-checkpoints", str(dump_dir)],
+                str(work), 30)
+            if code != 0 or stderr:
+                raise CheckError(f"observation-run-failed:{run_name}:{code}:{stdout.strip()}:{stderr.strip()}")
+            observed_runs.append(validate_observation(stdout, rom, script, source_commit))
+            receipt_lines = [line for line in stdout.splitlines() if line.startswith("receipt id=")]
+            if len(receipt_lines) != 1:
+                raise CheckError(f"observation-receipt-missing:{run_name}")
+            receipt_runs.append(validate_native_receipt(receipt_lines[0], rom, script, source_commit))
+            dump_runs.append(dump_dir)
+
+        first, repeat = observed_runs
+        if first != repeat:
+            raise CheckError("observation-repeat-mismatch")
+        if receipt_runs[0] != receipt_runs[1]:
+            raise CheckError("receipt-repeat-mismatch")
+        compare_observation_receipt(first, receipt_runs[0])
+        for label, expected_color in CHECKPOINT_COLORS.items():
+            expected_digest = expected_solid_rgb555_digest(expected_color)
+            for dump_dir in dump_runs:
+                validate_checkpoint_dump(dump_dir / f"cgb-control-progress.{label}.ppm",
+                                         label, expected_digest)
+                if (dump_dir / f"cgb-control-progress.{label}.ppm").read_bytes() != (
+                        dump_runs[0] / f"cgb-control-progress.{label}.ppm").read_bytes():
+                    raise CheckError(f"observation-repeat-dump-mismatch:{label}")
+
+        failure_dir = work / "failure-dumps"
+        failure_dir.mkdir(mode=0o700)
+        failure_ppm = failure_dir / "cgb-control-no-input.ppm"
+        stale_failure = solid_rgb555_ppm(CHECKPOINT_COLORS["hit"])
+        failure_ppm.write_bytes(stale_failure)
+        failure_code, failure_out, failure_err = helper.run_runner(
+            str(runner), ["--acceptance", "cases.txt", "--case", "cgb-control-no-input",
+                          "--model", "cgb-cpu-e", "--failure-dir", str(failure_dir)], str(work), 30)
+        if (failure_code != 1 or status_reason(failure_out) != "predicate-not-reached" or failure_err or
+                "final_ready=a5 final_progress=00" not in failure_out or
+                f"ppm={failure_ppm}" not in failure_out):
+            raise CheckError("cgb-failure-dump-control-failed:" + failure_out.strip() + ":" + failure_err.strip())
+        validate_checkpoint_dump(failure_ppm, "title", expected_solid_rgb555_digest(CHECKPOINT_COLORS["title"]))
+        if failure_ppm.read_bytes() == stale_failure:
+            raise CheckError("cgb-failure-dump-stale")
+
+    print("cgb-observations status=pass controls=same-run-identity,receipt,repeat,pixel-colors,fresh-failure-dump "
+          f"source_revision={source_commit} checker_sha256={checker_sha} runner_sha256={runner_sha} "
+          f"rom_sha256={hashlib.sha256(rom).hexdigest()} input_sha256={hashlib.sha256(script).hexdigest()}")
     return 0
 
 
@@ -552,6 +959,7 @@ def main() -> int:
     parser.add_argument("--tracer", action="store_true")
     parser.add_argument("--discrimination", action="store_true")
     parser.add_argument("--compatibility", action="store_true")
+    parser.add_argument("--observations", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     try:
@@ -560,7 +968,7 @@ def main() -> int:
         repo_root = args.repo_root.resolve()
         if args.self_test:
             self_test(repo_root)
-            print("verify-cgb-progress self-test pass controls=source-revision,rom-identity,script-identity,anchor,native-mode-receipt")
+            print("verify-cgb-progress self-test pass controls=observation-identity,time,digest,pcm,dumps,source-revision")
             return 0
         if args.tracer:
             if args.runner is None or args.source_revision is None:
@@ -577,6 +985,11 @@ def main() -> int:
                 raise CheckError("runner-and-source-revision-required")
             return run_compatibility(args.runner.resolve(), repo_root, args.source_revision,
                                      Path(__file__).resolve())
+        if args.observations:
+            if args.runner is None or args.source_revision is None:
+                raise CheckError("runner-and-source-revision-required")
+            return run_observations(args.runner.resolve(), repo_root, args.source_revision,
+                                    Path(__file__).resolve())
         raise CheckError("select-self-test-or-tracer")
     except (CheckError, OSError, TimeoutError, ValueError) as error:
         reason = error.reason if isinstance(error, CheckError) else str(error)
