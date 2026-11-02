@@ -56,9 +56,15 @@ FALSE_CLAIM_PATTERNS = (
     re.compile(r"\bmode[- ]3\s+timing\s+(?:is|was)\s+(?:qualified|proven|established)\b", re.I),
     re.compile(r"\bperceptual\s+(?:audio|video|colour|color)?\s*quality\s+(?:is|was)\s+(?:qualified|proven|established)\b", re.I),
 )
+LICENSE_NAME_PATTERN = (
+    r"(?:cc[\s-]*by(?:[\s-]*nc)?[\s-]*sa(?:[\s-]*4\.0)?"
+    r"|creative\s+commons\s+attribution-noncommercial-sharealike\s+4\.0\s+international"
+    r"|gpl[\s-]*(?:v[\s-]*)?3(?:\.0)?(?:[\s-]*(?:only|or[\s-]*later|\+))?)"
+)
+PROHIBITION_VERB_PATTERN = r"(?:prohibit(?:s|ed)?|forbid(?:s|den)?|ban(?:s|ned)?)"
 LEGAL_PROHIBITION_PATTERNS = (
-    re.compile(r"\b(?:cc[\s-]*by[\s-]*nc[\s-]*sa(?:[\s-]*4\.0)?|gpl[\s-]*(?:v[\s-]*)?3(?:\.0)?(?:[\s-]*(?:only|or[\s-]*later|\+))?)\b[\s\S]{0,80}\b(?:categorically\s+)?(?:prohibit(?:s|ed)?|forbid(?:s|den)?|ban(?:s|ned)?)\b", re.I),
-    re.compile(r"\b(?:prohibit(?:s|ed)?|forbid(?:s|den)?|ban(?:s|ned)?)\b[\s\S]{0,80}\b(?:cc[\s-]*by[\s-]*nc[\s-]*sa(?:[\s-]*4\.0)?|gpl[\s-]*(?:v[\s-]*)?3(?:\.0)?(?:[\s-]*(?:only|or[\s-]*later|\+))?)\b", re.I),
+    re.compile(rf"\b{LICENSE_NAME_PATTERN}\b[\s\S]{{0,80}}\b(?:categorically\s+)?{PROHIBITION_VERB_PATTERN}\b", re.I),
+    re.compile(rf"\b{PROHIBITION_VERB_PATTERN}\b[\s\S]{{0,80}}\b{LICENSE_NAME_PATTERN}\b", re.I),
     re.compile(r"\b(?:use|repository use|public-ci use)\s+(?:is|was)\s+illegal\b", re.I),
 )
 
@@ -269,8 +275,8 @@ def validate_no_go_record(record: dict[str, Any], expected_id: str) -> None:
             raise Reject("fallback-upstream-execution-inflated")
     else:
         raise Reject("candidate-identity-invalid")
-    combined = (reason + " " + str(admission.get("reason", ""))).casefold()
-    if any(pattern.search(combined) for pattern in LEGAL_PROHIBITION_PATTERNS):
+    combined = reason + " " + str(admission.get("reason", ""))
+    if _has_unqualified_license_prohibition(combined):
         raise Reject("candidate-rights-conclusion-overstated", expected_id)
 
 
@@ -307,6 +313,20 @@ def _reject_markers(text: str, markers: tuple[str, ...], label: str) -> None:
             raise Reject("documentation-outcome-contradiction", f"{label}:{marker}")
 
 
+def _has_unqualified_license_prohibition(text: str) -> bool:
+    for pattern in LEGAL_PROHIBITION_PATTERNS:
+        for match in pattern.finditer(text):
+            matched_text = match.group(0)
+            prefix = text[max(0, match.start() - 160):match.start()]
+            explicit_negation = re.search(
+                r"\b(?:not\s+(?:a\s+)?conclusion\s+that|(?:does|do|did|is|are|was|were)\s+not|never)\b",
+                prefix + matched_text, re.I)
+            if explicit_negation is not None:
+                continue
+            return True
+    return False
+
+
 def validate_scene_privacy(text: str) -> None:
     _require_markers(text, (
         "owner play is optional",
@@ -322,9 +342,8 @@ def reject_claim_inflation(documents: dict[str, str]) -> None:
         for pattern in FALSE_CLAIM_PATTERNS:
             if pattern.search(text):
                 raise Reject("documentation-claim-inflation", path)
-        for pattern in LEGAL_PROHIBITION_PATTERNS:
-            if pattern.search(text):
-                raise Reject("documentation-rights-conclusion-overstated", path)
+        if _has_unqualified_license_prohibition(text):
+            raise Reject("documentation-rights-conclusion-overstated", path)
 
 
 def validate_documentation(snapshot: dict[str, bytes], records: list[dict[str, Any]]) -> dict[str, str]:
@@ -490,6 +509,23 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: reject_claim_inflation(false_gpl_rights_inverse),
                     "documentation-rights-conclusion-overstated", "inverse-gpl-license-prohibition-claim")
 
+    false_cc_full_rights = dict(base_docs)
+    false_cc_full_rights["docs/game-acceptance.md"] += (
+        "\nCreative Commons Attribution-NonCommercial-ShareAlike 4.0 International prohibits this use.\n")
+    _expect_reject(lambda: reject_claim_inflation(false_cc_full_rights),
+                    "documentation-rights-conclusion-overstated", "full-creative-commons-prohibition-claim")
+
+    false_cc_by_sa_rights = dict(base_docs)
+    false_cc_by_sa_rights["docs/game-acceptance.md"] += "\nCC BY-SA 4.0 prohibits this use.\n"
+    _expect_reject(lambda: reject_claim_inflation(false_cc_by_sa_rights),
+                    "documentation-rights-conclusion-overstated", "cc-by-sa-prohibition-claim")
+
+    false_cc_inverse_rights = dict(base_docs)
+    false_cc_inverse_rights["docs/game-acceptance.md"] += (
+        "\nThis use is prohibited by Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International.\n")
+    _expect_reject(lambda: reject_claim_inflation(false_cc_inverse_rights),
+                    "documentation-rights-conclusion-overstated", "inverse-creative-commons-prohibition-claim")
+
     admitted_but_no_game = dict(snapshot)
     admitted_but_no_game["docs/game-acceptance.md"] += b"\nAdmitted game: Potion Panic\n"
     _expect_reject(lambda: validate_documentation(admitted_but_no_game,
@@ -514,7 +550,7 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: safe_evidence_path(Path("/repo"),
                                               "build/phase21-evidence/../../escape.json"),
                     "evidence-path-traversal", "evidence-path-traversal")
-    print("game-evidence controls pass positives=3 rejected_controls=14 subjects=synthetic-only")
+    print("game-evidence controls pass positives=3 rejected_controls=17 subjects=synthetic-only")
 
 
 def _import_progress_checker(root: Path):
