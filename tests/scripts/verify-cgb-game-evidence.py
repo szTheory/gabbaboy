@@ -57,7 +57,8 @@ FALSE_CLAIM_PATTERNS = (
     re.compile(r"\bperceptual\s+(?:audio|video|colour|color)?\s*quality\s+(?:is|was)\s+(?:qualified|proven|established)\b", re.I),
 )
 LEGAL_PROHIBITION_PATTERNS = (
-    re.compile(r"\b(?:cc by-nc-sa(?:\s+4\.0)?|gpl(?:v)?3\+?)\s+(?:categorically\s+)?(?:prohibits?|forbids?|bans?)\b", re.I),
+    re.compile(r"\b(?:cc[\s-]*by[\s-]*nc[\s-]*sa(?:[\s-]*4\.0)?|gpl[\s-]*(?:v[\s-]*)?3(?:\.0)?(?:[\s-]*(?:only|or[\s-]*later|\+))?)\b[\s\S]{0,80}\b(?:categorically\s+)?(?:prohibit(?:s|ed)?|forbid(?:s|den)?|ban(?:s|ned)?)\b", re.I),
+    re.compile(r"\b(?:prohibit(?:s|ed)?|forbid(?:s|den)?|ban(?:s|ned)?)\b[\s\S]{0,80}\b(?:cc[\s-]*by[\s-]*nc[\s-]*sa(?:[\s-]*4\.0)?|gpl[\s-]*(?:v[\s-]*)?3(?:\.0)?(?:[\s-]*(?:only|or[\s-]*later|\+))?)\b", re.I),
     re.compile(r"\b(?:use|repository use|public-ci use)\s+(?:is|was)\s+illegal\b", re.I),
 )
 
@@ -299,6 +300,13 @@ def _require_markers(text: str, markers: tuple[str, ...], label: str) -> None:
             raise Reject("documentation-contract-missing", f"{label}:{marker}")
 
 
+def _reject_markers(text: str, markers: tuple[str, ...], label: str) -> None:
+    folded = re.sub(r"\s+", " ", text.casefold())
+    for marker in markers:
+        if re.sub(r"\s+", " ", marker.casefold()) in folded:
+            raise Reject("documentation-outcome-contradiction", f"{label}:{marker}")
+
+
 def validate_scene_privacy(text: str) -> None:
     _require_markers(text, (
         "owner play is optional",
@@ -372,6 +380,7 @@ def validate_documentation(snapshot: dict[str, bytes], records: list[dict[str, A
         "UNKNOWN/POLICY",
     ), "unreleased-support")
     if outcome["status"] == "no-game":
+        _reject_markers(game, ("Admitted game:",), "no-game-outcome")
         primary = records[0]
         fallback = records[1]
         primary_evidence = _nested(primary, "admission", "value", "evidence")
@@ -397,6 +406,8 @@ def validate_documentation(snapshot: dict[str, bytes], records: list[dict[str, A
             raise Reject("fallback-document-evidence-mismatch")
     else:
         display = next(name for candidate_id, _, name in CANDIDATES if candidate_id == outcome["candidate_id"])
+        _reject_markers(game, ("No CGB game-level evidence exists", "Phase 21 admitted no game"),
+                        "admitted-game-outcome")
         _require_markers(game, (f"Admitted game: {display}",), "admitted-game-outcome")
 
     return outcome
@@ -469,6 +480,27 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     false_rights["docs/game-acceptance.md"] += "\nCC BY-NC-SA prohibits this use.\n"
     _expect_reject(lambda: reject_claim_inflation(false_rights), "documentation-rights-conclusion-overstated", "license-prohibition-claim")
 
+    false_gpl_rights = dict(base_docs)
+    false_gpl_rights["docs/game-acceptance.md"] += "\nGPL-3.0-only prohibits this use.\n"
+    _expect_reject(lambda: reject_claim_inflation(false_gpl_rights), "documentation-rights-conclusion-overstated",
+                    "gpl-license-prohibition-claim")
+
+    false_gpl_rights_inverse = dict(base_docs)
+    false_gpl_rights_inverse["docs/game-acceptance.md"] += "\nThis use is prohibited by GPL-3.0-only.\n"
+    _expect_reject(lambda: reject_claim_inflation(false_gpl_rights_inverse),
+                    "documentation-rights-conclusion-overstated", "inverse-gpl-license-prohibition-claim")
+
+    admitted_but_no_game = dict(snapshot)
+    admitted_but_no_game["docs/game-acceptance.md"] += b"\nAdmitted game: Potion Panic\n"
+    _expect_reject(lambda: validate_documentation(admitted_but_no_game,
+                                                  _synthetic_records(("admitted", "not-needed"))),
+                    "documentation-outcome-contradiction", "admitted-result-with-no-game-claims")
+
+    no_game_but_admitted = dict(snapshot)
+    no_game_but_admitted["docs/game-acceptance.md"] += b"\nAdmitted game: Potion Panic\n"
+    _expect_reject(lambda: validate_documentation(no_game_but_admitted, parse_snapshot_records(snapshot)),
+                    "documentation-outcome-contradiction", "no-game-result-with-admitted-claim")
+
     scene = _decode_doc(snapshot, "docs/scene-feedback.md")
     owner_play_removed = scene.replace("Owner play is optional and is never a recurring prerequisite.",
                                        "Owner play is required for every report.")
@@ -482,7 +514,7 @@ def self_test_controls(snapshot: dict[str, bytes]) -> None:
     _expect_reject(lambda: safe_evidence_path(Path("/repo"),
                                               "build/phase21-evidence/../../escape.json"),
                     "evidence-path-traversal", "evidence-path-traversal")
-    print("game-evidence controls pass positives=3 rejected_controls=10 subjects=synthetic-only")
+    print("game-evidence controls pass positives=3 rejected_controls=14 subjects=synthetic-only")
 
 
 def _import_progress_checker(root: Path):
