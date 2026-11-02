@@ -540,6 +540,12 @@ def self_test(repo_root: Path) -> None:
     if normalized_host_path(r"C:\Runner\Temp\failure-dumps\control.ppm") != \
             normalized_host_path(r"C:\Runner\Temp\failure-dumps/control.ppm"):
         raise CheckError("self-test-host-path-normalization-failed")
+    expected_path = r"C:\Users\Jane Doe\Temp\failure-dumps\control.ppm"
+    mixed_path = "acceptance id=control ppm=C:\\Users\\Jane Doe\\Temp\\failure-dumps/control.ppm\n"
+    parsed_path = re.search(r"(?:^|\s)ppm=([^\r\n]+)", mixed_path)
+    if parsed_path is None or normalized_host_path(parsed_path.group(1).rstrip()) != \
+            normalized_host_path(expected_path):
+        raise CheckError("self-test-host-path-with-spaces-failed")
     rom, labels = build_rom()
     if len(NINTENDO_LOGO) != 48 or len(rom) != ROM_SIZE or rom[0x143] != 0x80:
         raise CheckError("header-invalid")
@@ -917,11 +923,11 @@ def run_observations(runner: Path, repo_root: Path, source_revision: str,
         failure_code, failure_out, failure_err = helper.run_runner(
             str(runner), ["--acceptance", "cases.txt", "--case", "cgb-control-no-input",
                           "--model", "cgb-cpu-e", "--failure-dir", str(failure_dir)], str(work), 30)
-        reported_ppm = re.search(r"(?:^|\s)ppm=(\S+)", failure_out)
+        reported_ppm = re.search(r"(?:^|\s)ppm=([^\r\n]+)", failure_out)
         if (failure_code != 1 or status_reason(failure_out) != "predicate-not-reached" or failure_err or
                 "final_ready=a5 final_progress=00" not in failure_out or
                 reported_ppm is None or
-                normalized_host_path(reported_ppm.group(1)) != normalized_host_path(str(failure_ppm))):
+                normalized_host_path(reported_ppm.group(1).rstrip()) != normalized_host_path(str(failure_ppm))):
             raise CheckError("cgb-failure-dump-control-failed:" + failure_out.strip() + ":" + failure_err.strip())
         validate_checkpoint_dump(failure_ppm, "title", expected_solid_rgb555_digest(CHECKPOINT_COLORS["title"]))
         if failure_ppm.read_bytes() == stale_failure:
