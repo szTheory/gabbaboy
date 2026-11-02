@@ -80,3 +80,25 @@ _Depth: standard_
 All 17 runner text controls still execute `_run_admitted_candidate` and check their expected rejection codes, including optional validator detail suffixes; this count includes the separate `unqualified-build` mutation. Existing CLI and end-to-end controls remain registered. The focused synthetic control test passed with 69 negative controls and six replay positives. No candidate ROM or upstream source was executed.
 
 The delta review made no source edits.
+
+## Supplemental Delta Review — Windows CMake paths and fixture bytes
+
+**Reviewed source:** `bbd8f8390cb197840ad4091de8bd70170015516a` (delta from `ca17216b22d0d9f2fb742c8baed3e1543bc307e1`).
+**Scope:** `tests/scripts/verify-cgb-candidates.py` and `tests/scripts/test_cgb_candidate_order.py`; Windows CMake path matching and synthetic fixture byte serialization are the changed behavior.
+**Result at reviewed HEAD:** 1 warning; the current working-diff follow-up below resolves it.
+
+The supplied local full-suite evidence is 1,718/1,718 CTests at this HEAD. That local result does not qualify Windows behavior.
+
+### WARNING — Path keys fold case on case-sensitive filesystems
+
+**File:** `tests/scripts/verify-cgb-candidates.py:2245-2247,2444-2449`
+**Issue:** `cmake_source_path_key` case-folds every path, including POSIX paths where case distinguishes files. If a compile database contains distinct case-only source paths, the `next` lookup can select the wrong translation unit and inspect its `GBB_BUILD_QUALIFIED` flag. The new unit control rejects a different suffix, but does not test a case-only neighbor.
+**Fix:** Normalize slash styles, then use `os.path.normcase(PureWindowsPath(...).as_posix())` so case folding follows the host platform. Add a case-only neighbor negative control.
+
+The LF-byte changes write the synthetic JSON, case file, runner, and admission pin as explicit bytes, avoiding Windows text-mode newline translation before Git pinning. Existing synthetic fixture controls exercise those files. The Windows path unit control covers slash variants and a non-case-only neighbor. **Pre-existing context:** subprocess timeout cleanup still targets only the direct child, and its unit control uses a single sleeping child; both are unchanged from the prior reviewed source and excluded from delta findings. No Windows qualification is claimed here.
+
+### Follow-up — case-aware path normalization
+
+The current working diff resolves the warning above: `cmake_source_path_key` now applies `os.path.normcase` after slash normalization with `PureWindowsPath`. Its unit control asserts that backslash and forward-slash variants match, a different suffix does not match, case variants match on Windows, and case variants remain distinct on POSIX.
+
+Focused unit evidence after this edit: 11 tests passed. A full CTest rerun is pending. The earlier 1,718/1,718 result predates this working edit and does not qualify it or establish Windows qualification.

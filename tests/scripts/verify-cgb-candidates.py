@@ -2243,8 +2243,8 @@ def _current_revision(root: Path) -> str:
 
 
 def cmake_source_path_key(path: str | Path) -> str:
-    """Normalize CMake compile-database paths across Windows slash styles and case."""
-    return PureWindowsPath(str(path)).as_posix().casefold()
+    """Normalize slash styles everywhere and case only where the host path rules do."""
+    return os.path.normcase(PureWindowsPath(str(path)).as_posix())
 
 
 def _pin_synthetic_runner_build_revision(root: Path) -> None:

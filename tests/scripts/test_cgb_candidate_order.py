@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -92,6 +93,7 @@ class CandidateOrderTests(unittest.TestCase):
         backslash = r"C:\build\synthetic\src\core\gabbaboy.c"
         forward_slash = "C:/build/synthetic/src/core/gabbaboy.c"
         wrong_source = "C:/build/synthetic/src/core/gabbaboy_test.c"
+        case_variant = "c:/BUILD/SYNTHETIC/src/core/gabbaboy.c"
 
         self.assertEqual(
             CHECKER_MODULE.cmake_source_path_key(backslash),
@@ -101,6 +103,16 @@ class CandidateOrderTests(unittest.TestCase):
             CHECKER_MODULE.cmake_source_path_key(forward_slash),
             CHECKER_MODULE.cmake_source_path_key(wrong_source),
         )
+        if os.name == "nt":
+            self.assertEqual(
+                CHECKER_MODULE.cmake_source_path_key(forward_slash),
+                CHECKER_MODULE.cmake_source_path_key(case_variant),
+            )
+        else:
+            self.assertNotEqual(
+                CHECKER_MODULE.cmake_source_path_key(forward_slash),
+                CHECKER_MODULE.cmake_source_path_key(case_variant),
+            )
 
     def test_primary_and_fallback_no_go_form_a_valid_absence(self) -> None:
         records = [
