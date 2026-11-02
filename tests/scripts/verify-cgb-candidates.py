@@ -874,11 +874,16 @@ def _validate_admitted_cross_bindings(root: Path, revision: str, record: dict[st
     project_revision = receipt_value.get("project_source_revision")
     if not isinstance(project_revision, str) or not HEX40.fullmatch(project_revision):
         raise Reject("candidate-receipt-source-mismatch")
-    if sha256(immutable_blob(root, project_revision, progress["case_file"])) != progress["case_sha256"]:
+    case_source = immutable_blob(root, project_revision, progress["case_file"])
+    if sha256(case_source) != progress["case_sha256"]:
         raise Reject("candidate-progress-project-source-mismatch", "case_file")
-    if sha256(immutable_blob(root, project_revision, progress["input_script"]["path"])) \
-            != progress["input_script"]["sha256"]:
+    if read_regular(root, progress["case_file"]) != case_source:
+        raise Reject("candidate-progress-working-copy-mismatch", "case_file")
+    input_source = immutable_blob(root, project_revision, progress["input_script"]["path"])
+    if sha256(input_source) != progress["input_script"]["sha256"]:
         raise Reject("candidate-progress-project-source-mismatch", "input_script")
+    if read_regular(root, progress["input_script"]["path"]) != input_source:
+        raise Reject("candidate-progress-working-copy-mismatch", "input_script")
     source_inventory = {item["path"]: item["sha256"] for item in source["inventory"]}
     if source_inventory.get(progress["predicate"]["path"]) != progress["predicate"]["sha256"]:
         raise Reject("candidate-predicate-not-source-anchored")
@@ -1876,6 +1881,25 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     primary_record_path = root / primary_path
     baseline_bytes = primary_record_path.read_bytes()
     control_count = 0
+
+    for field, relative in (
+        ("case_file", baseline["progress"]["value"]["case_file"]),
+        ("input_script", baseline["progress"]["value"]["input_script"]["path"]),
+    ):
+        pinned = immutable_blob(root, project_revision, relative)
+        checkout_file = root / relative
+        original = read_regular(root, relative)
+        if original != pinned:
+            raise Reject("candidate-self-test-failed", f"{field} began with mutable drift")
+        before_count = _runner_invocations(root)
+        checkout_file.write_bytes(pinned + b"\n# synthetic working-copy mutation\n")
+        try:
+            _run_all(root, expected_code=1, expected_text="candidate-progress-working-copy-mismatch")
+        finally:
+            checkout_file.write_bytes(original)
+        if _runner_invocations(root) != before_count:
+            raise Reject("candidate-self-test-failed", f"mutated {field} reached the runner")
+        control_count += 1
 
     def runner_output_control(label: str, runner_bytes: bytes, expected: str) -> None:
         nonlocal control_count
