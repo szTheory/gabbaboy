@@ -167,6 +167,16 @@ class CandidateOrderTests(unittest.TestCase):
         }
         self.assertIsNone(CHECKER_MODULE.cmake_build_qualified_value(embedded_text))
 
+        quoted_argv_item = {"arguments": ["cc", '"-DGBB_BUILD_QUALIFIED=1"', "source.c"]}
+        self.assertIsNone(CHECKER_MODULE.cmake_build_qualified_value(quoted_argv_item))
+
+        unsupported_redefinition = {
+            "arguments": [
+                "cc", "-DGBB_BUILD_QUALIFIED=1", "-DGBB_BUILD_QUALIFIED=0x0", "source.c",
+            ],
+        }
+        self.assertIsNone(CHECKER_MODULE.cmake_build_qualified_value(unsupported_redefinition))
+
     def test_cmake_build_flag_does_not_match_text_inside_one_command_argument(self) -> None:
         command = {
             "command": 'cc "literal -DGBB_BUILD_QUALIFIED=1 text" '

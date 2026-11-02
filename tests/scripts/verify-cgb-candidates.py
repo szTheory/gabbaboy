@@ -2290,6 +2290,7 @@ def cmake_build_qualified_value(entry: dict[str, Any]) -> str | None:
         if not isinstance(arguments, list) or not all(isinstance(item, str) for item in arguments):
             return None
         argv = arguments
+        strip_command_quotes = False
     else:
         command = entry.get("command")
         if not isinstance(command, str):
@@ -2298,12 +2299,14 @@ def cmake_build_qualified_value(entry: dict[str, Any]) -> str | None:
             argv = shlex.split(command, posix=os.name != "nt")
         except ValueError:
             return None
+        strip_command_quotes = os.name == "nt"
 
-    values: list[str] = []
+    definitions: list[str] = []
     index = 0
     while index < len(argv):
         argument = argv[index]
-        if len(argument) >= 2 and argument[0] in "\"'" and argument[-1] == argument[0]:
+        if (strip_command_quotes and len(argument) >= 2
+                and argument[0] in "\"'" and argument[-1] == argument[0]):
             argument = argument[1:-1]
         prefix = next((flag for flag in ("-D", "/D") if argument.startswith(flag)), None)
         if prefix is not None:
@@ -2311,13 +2314,17 @@ def cmake_build_qualified_value(entry: dict[str, Any]) -> str | None:
             if not definition and index + 1 < len(argv):
                 index += 1
                 definition = argv[index]
-                if len(definition) >= 2 and definition[0] in "\"'" and definition[-1] == definition[0]:
+                if (strip_command_quotes and len(definition) >= 2
+                        and definition[0] in "\"'" and definition[-1] == definition[0]):
                     definition = definition[1:-1]
-            match = re.fullmatch(r"GBB_BUILD_QUALIFIED=([01])", definition)
-            if match is not None:
-                values.append(match.group(1))
+            if definition == "GBB_BUILD_QUALIFIED":
+                definitions.append("")
+            elif definition.startswith("GBB_BUILD_QUALIFIED="):
+                definitions.append(definition.partition("=")[2])
         index += 1
-    return values[0] if len(values) == 1 else None
+    if len(definitions) == 1 and definitions[0] in {"0", "1"}:
+        return definitions[0]
+    return None
 
 
 def _cmake_source_candidates_for_diagnostic(commands: list[Any]) -> str:
