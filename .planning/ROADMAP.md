@@ -69,11 +69,11 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
 **Plan cap**: 12
-**Plans**: 7 plans — within the cap; the primary and fallback candidate attempts each occupy one conditional plan.
+**Plans**: 1/7 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan.
 
 Plans:
 **Wave 1**
-- [ ] 21-01-PLAN.md — Shared native-CGB progress tracer, original generated control and preserved Libbet/DMG policy.
+- [x] 21-01-PLAN.md — Shared native-CGB progress tracer, original generated control and preserved Libbet/DMG policy.
 - [ ] 21-03-PLAN.md — Source-bound two-candidate record/admission contract with real-CLI controls.
 
 **Wave 2** *(blocked on the indicated Wave 1 dependencies)*
@@ -141,7 +141,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
-| 21. CGB Game Progress and Scene Regressions | 0/TBD | Not started | - |
+| 21. CGB Game Progress and Scene Regressions | 1/7 | In Progress | - |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
@@ -152,4 +152,4 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
 - Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
 
-Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`. Its nine plans, final local review/security evidence, exact-head pull-request and push CI matrices, and the Linux/macOS/player consumer smoke checks passed. The full CTest run passed 1,708 cases; its three configure-time revision-snapshot controls passed after reconfigure/build and focused retest. The archive-controls self-test now reuses its prevalidated fixture-policy baseline and passed in 52.11 seconds. No fixture was admitted; RIGHTS-01 remains pending, with no legal-clearance claim. Phase 21 stays unstarted; use **/gsd-discuss-phase 21** when the owner chooses to continue.
+Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`. Its nine plans, final local review/security evidence, exact-head pull-request and push CI matrices, and the Linux/macOS/player consumer smoke checks passed. The full CTest run passed 1,708 cases; its three configure-time revision-snapshot controls passed after reconfigure/build and focused retest. The archive-controls self-test now reuses its prevalidated fixture-policy baseline and passed in 52.11 seconds. No fixture was admitted; RIGHTS-01 remains pending, with no legal-clearance claim. Phase 21 is active: Plan 21-01 completed the native-CGB progress tracer, and Plan 21-02 remains next. Continue with **/gsd-execute-phase 21** when the orchestrator dispatches it; do not advance to another phase automatically.
