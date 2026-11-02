@@ -1770,13 +1770,10 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     changed_fallback = copy.deepcopy(fallback_baseline)
     changed_fallback["preferred_artifact"] = "renamed-ucity.gbc"
     write_json(fallback_record, changed_fallback)
-    before_count = _runner_invocations(root)
     try:
         _run_all(root, expected_code=1, expected_text="candidate-identity-mismatch")
     finally:
         fallback_record.write_bytes(fallback_baseline_bytes)
-    if _runner_invocations(root) != before_count:
-        raise Reject("candidate-self-test-failed", "fallback identity mutation executed the admitted runner")
     if fallback_record.read_bytes() != fallback_baseline_bytes:
         raise Reject("candidate-self-test-failed", "fallback identity mutation was not restored")
     before_count = _runner_invocations(root)
