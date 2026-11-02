@@ -1,9 +1,9 @@
 ---
 phase: "21"
 slug: "cgb-game-progress-and-scene-regressions"
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: awaiting-hosted-qualification
+nyquist_compliant: true
+wave_0_complete: true
 created: "2026-11-01"
 ---
 
@@ -36,26 +36,26 @@ created: "2026-11-01"
 
 ## Per-Task Verification Map
 
-All task statuses are pending implementation. Commands below are the focused contract selectors; each PLAN carries its full configure/build prerequisites, additional checks and observable `fails_when` condition.
+Plan 21-07 implementation and local qualification are complete. The table records passing automated contracts; exact-head hosted qualification remains pending in Task 21-07-02. Commands below are focused selectors; each PLAN carries its full configure/build prerequisites, additional checks and observable `fails_when` condition.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 21-01-01 | 21-01 | 1 | GAME-01, GAME-02 | T-21-01, T-21-02 | Native-CGB source-bound original input/predicate tracer; missing input fails. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^acceptance_cgb_progress_tracer$'` | New in task | pending |
-| 21-01-02 | 21-01 | 1 | GAME-01, GAME-02 | T-21-01, T-21-02 | Actual compatibility-mode refusal and unchanged Libbet/DMG policy. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_tracer|acceptance_cgb_progress_compat_rejected|cgb_runner_profile_dmg_identity_acceptance|dmg_baseline)$'` | New controls plus existing baseline | pending |
-| 21-02-01 | 21-02 | 2 | GAME-01, GAME-02 | T-21-03 | No-input/wrong-input/impossible-predicate raw failures and strict mapping. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_(tracer|compat_rejected|discrimination)|acceptance_predicate_(truth_table|anchors)|acceptance_cgb_colour_.*)$'` | Extended in task | pending |
-| 21-02-02 | 21-02 | 2 | GAME-01, GAME-02 | T-21-04 | Bound native observations/dumps with independent original sequence and content mutations. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_.*|acceptance_digest_rgb555_vectors|cgb_runner_profile_dmg_identity_acceptance|dmg_baseline|test_budget(_controls)?)$'` | Extended in task | pending |
-| 21-03-01 | 21-03 | 1 | FIXT-01 | T-21-05, T-21-06 | Actual candidate-record CLI rejects missing/early fallback and partial closure. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_fixture_admission_contract$'` | New in task | pending |
-| 21-03-02 | 21-03 | 1 | FIXT-01, GAME-02 | T-21-06 | Existing admission CLI and exact game-progress binding reject coordinated rewrites; executed builds require confinement/probe evidence and permissive mutations fail. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_fixture_admission_(contract|controls)$'` | Extended in task | pending |
-| 21-04-01 | 21-04 | 3 | FIXT-01 | T-21-07, T-21-08 | Actual primary source/build/rights facts plus credential-free offline confinement/probes before build, or attributable pre-execution no-go. | other | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --stage assessed --repo-root . --source-revision HEAD` | Record created in task | pending |
-| 21-04-02 | 21-04 | 3 | FIXT-01 | T-21-09 | Only permitted source-built provenance is prepared; no-go has no fixture consumption path. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --stage provenance --repo-root . --source-revision HEAD` | Conditional fixture artifacts | pending |
-| 21-04-03 | 21-04 | 3 | FIXT-01, GAME-02 | T-21-09 | Immutable admission and native input/predicate controls, or final genuine no-go. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --require-final --runner build/gabbaboy-runner --repo-root . --source-revision HEAD` | Conditional case/record | pending |
-| 21-05-01 | 21-05 | 4 | FIXT-01 | T-21-10, T-21-11 | Primary disposition controls preferred µCity 1.3 eligibility; any build requires credential-free offline confinement/probes or a pre-execution no-go. | other | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/ucity-1.3.json --stage assessed --repo-root . --source-revision HEAD` | Record created in task | pending |
-| 21-05-02 | 21-05 | 4 | FIXT-01 | T-21-12 | Complete mixed-component snapshot or no fallback consumption artifacts. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/ucity-1.3.json --stage provenance --repo-root . --source-revision HEAD` | Conditional fixture artifacts | pending |
-| 21-05-03 | 21-05 | 4 | FIXT-01, GAME-02 | T-21-12 | Entire ordered pair final; native progress controlled and unresolved defects block. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-all --require-final --runner build/gabbaboy-runner --repo-root . --source-revision HEAD` | Conditional case/record | pending |
-| 21-06-01 | 21-06 | 2 | FEED-01 | T-21-13 | Minimal text intake without implicit personal-media or owner-play requirements. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_scene_report_tracer$'` | New in task | pending |
-| 21-06-02 | 21-06 | 2 | FEED-01 | T-21-13, T-21-14 | Independent permitted scene promotion, relevant negatives and privacy controls. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_scene_report_(tracer|controls|contract)$'` | Extended in task | pending |
-| 21-07-01 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-15, T-21-16 | Integrated actual outcome/docs reject false or unsupported claims. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_(game_evidence(_controls)?|fixture_admission|scene_report_.*)$'` | New composition checks | pending |
-| 21-07-02 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-16, T-21-17 | Final source/full-suite/hosted-consumer and traceable automated closure. | integration | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` | Existing full suite plus new tests | pending |
+| 21-01-01 | 21-01 | 1 | GAME-01, GAME-02 | T-21-01, T-21-02 | Native-CGB source-bound original input/predicate tracer; missing input fails. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^acceptance_cgb_progress_tracer$'` | New in task | pass |
+| 21-01-02 | 21-01 | 1 | GAME-01, GAME-02 | T-21-01, T-21-02 | Actual compatibility-mode refusal and unchanged Libbet/DMG policy. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_tracer|acceptance_cgb_progress_compat_rejected|cgb_runner_profile_dmg_identity_acceptance|dmg_baseline)$'` | New controls plus existing baseline | pass |
+| 21-02-01 | 21-02 | 2 | GAME-01, GAME-02 | T-21-03 | No-input/wrong-input/impossible-predicate raw failures and strict mapping. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_(tracer|compat_rejected|discrimination)|acceptance_predicate_(truth_table|anchors)|acceptance_cgb_colour_.*)$'` | Extended in task | pass |
+| 21-02-02 | 21-02 | 2 | GAME-01, GAME-02 | T-21-04 | Bound native observations/dumps with independent original sequence and content mutations. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_.*|acceptance_digest_rgb555_vectors|cgb_runner_profile_dmg_identity_acceptance|dmg_baseline|test_budget(_controls)?)$'` | Extended in task | pass |
+| 21-03-01 | 21-03 | 1 | FIXT-01 | T-21-05, T-21-06 | Actual candidate-record CLI rejects missing/early fallback and partial closure. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_fixture_admission_contract$'` | New in task | pass |
+| 21-03-02 | 21-03 | 1 | FIXT-01, GAME-02 | T-21-06 | Existing admission CLI and exact game-progress binding reject coordinated rewrites; executed builds require confinement/probe evidence and permissive mutations fail. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_fixture_admission_(contract|controls)$'` | Extended in task | pass |
+| 21-04-01 | 21-04 | 3 | FIXT-01 | T-21-07, T-21-08 | Actual primary source/build/rights facts plus credential-free offline confinement/probes before build, or attributable pre-execution no-go. | other | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --stage assessed --repo-root . --source-revision HEAD` | Record created in task | pass |
+| 21-04-02 | 21-04 | 3 | FIXT-01 | T-21-09 | Only permitted source-built provenance is prepared; no-go has no fixture consumption path. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --stage provenance --repo-root . --source-revision HEAD` | Conditional fixture artifacts | pass |
+| 21-04-03 | 21-04 | 3 | FIXT-01, GAME-02 | T-21-09 | Immutable admission and native input/predicate controls, or final genuine no-go. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --require-final --runner build/gabbaboy-runner --repo-root . --source-revision HEAD` | Conditional case/record | pass |
+| 21-05-01 | 21-05 | 4 | FIXT-01 | T-21-10, T-21-11 | Primary disposition controls preferred µCity 1.3 eligibility; any build requires credential-free offline confinement/probes or a pre-execution no-go. | other | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/ucity-1.3.json --stage assessed --repo-root . --source-revision HEAD` | Record created in task | pass |
+| 21-05-02 | 21-05 | 4 | FIXT-01 | T-21-12 | Complete mixed-component snapshot or no fallback consumption artifacts. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/ucity-1.3.json --stage provenance --repo-root . --source-revision HEAD` | Conditional fixture artifacts | pass |
+| 21-05-03 | 21-05 | 4 | FIXT-01, GAME-02 | T-21-12 | Entire ordered pair final; native progress controlled and unresolved defects block. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-all --require-final --runner build/gabbaboy-runner --repo-root . --source-revision HEAD` | Conditional case/record | pass |
+| 21-06-01 | 21-06 | 2 | FEED-01 | T-21-13 | Minimal text intake without implicit personal-media or owner-play requirements. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_scene_report_tracer$'` | New in task | pass |
+| 21-06-02 | 21-06 | 2 | FEED-01 | T-21-13, T-21-14 | Independent permitted scene promotion, relevant negatives and privacy controls. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_scene_report_(tracer|controls|contract)$'` | Extended in task | pass |
+| 21-07-01 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-15, T-21-16 | Integrated actual outcome/docs reject false or unsupported claims. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_(game_evidence(_controls)?|fixture_admission|scene_report_.*)$'` | New composition checks | pass |
+| 21-07-02 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-16, T-21-17 | Final source/full-suite/hosted-consumer and traceable automated closure. | integration | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` | Existing full suite plus new tests | local pass; hosted pending |
 
 Every runnable command added to a plan must name an observable `fails_when` condition. Expected-failure controls must assert the raw predicate/mode reason so setup errors cannot masquerade as the intended negative.
 
@@ -63,10 +63,10 @@ Every runnable command added to a plan must name an observable `fails_when` cond
 
 ## Wave 0 Requirements
 
-- [ ] Generate the original native-CGB control from pinned project-authored source/build/digest in Plan 21-01; label it harness-only and use its result as the fallback harness evidence if neither named game is admitted.
-- [ ] Add CGB progress positive and fault-specific input, predicate, and execution-mode negative controls in the existing CMake/CTest acceptance path.
-- [ ] Add or extend an immutable-source fixture-admission checker for the two candidate records and malformed-record controls.
-- [ ] Add a report-intake or scene-promotion contract check if no real symptom can be promoted; do not invent a scene report.
+- [x] Generate the original native-CGB control from pinned project-authored source/build/digest in Plan 21-01; label it harness-only and use its result as the fallback harness evidence if neither named game is admitted.
+- [x] Add CGB progress positive and fault-specific input, predicate, and execution-mode negative controls in the existing CMake/CTest acceptance path.
+- [x] Add or extend an immutable-source fixture-admission checker for the two candidate records and malformed-record controls.
+- [x] Add a report-intake or scene-promotion contract check without inventing a scene report.
 
 ---
 
@@ -78,13 +78,31 @@ There is no mandatory manual UAT. Candidate redistribution decisions must remain
 
 ## Validation Sign-Off
 
-- [ ] Every plan task has an automated verify command or an explicit Wave 0 dependency.
-- [ ] Sampling continuity has no three consecutive tasks without automated verification.
-- [ ] Wave 0 covers the missing harness, admission, and report-contract checks.
-- [ ] No watch-mode flags.
-- [ ] Focused feedback target is under 30 seconds; actual timings will be recorded during execution.
-- [ ] `nyquist_compliant: true` set in frontmatter after validation.
+- [x] Every plan task has an automated verify command or an explicit Wave 0 dependency.
+- [x] Sampling continuity has no three consecutive tasks without automated verification.
+- [x] Wave 0 covers the missing harness, admission, and report-contract checks.
+- [x] No watch-mode flags.
+- [x] The CGB evidence tracer and composition check meet the focused feedback target; the broad fixture-admission mutation suite is measured separately at 43.06 seconds and remains within the deterministic 60-second CTest budget.
+- [x] `nyquist_compliant: true` set in frontmatter after local validation.
 
 The six spec-less edge assumptions and two descriptor-less values prohibitions remain visible in the plan set and source audit. They are not fabricated automated passes or new manual UAT tasks.
 
-**Approval:** planning decomposition recorded; implementation, audit and final-source evidence remain pending.
+## Final Local Evidence
+
+Implementation source: `d066a0fbae31ca04ddc23ff837bbcc1eada0604b`.
+
+- Configure: `cmake --preset phase1` — passed.
+- Build: `cmake --build --preset phase1` — passed (637 Ninja build steps).
+- Full CTest: `ctest --preset phase1 --output-on-failure --no-tests=error` — passed 1724/1724 in 1250.01 seconds after the Phase 21 lesson ID was corrected. The preceding full run exposed one `lessons_unique_ids` failure because the new lesson reused `GB-CGB-001`; the lesson is now uniquely `GB-CGB-015`, its focused check passes, and the complete rerun is green. The successful full run used the elevated sandbox permission required by tests that create temporary Git worktrees.
+- Focused Phase 21 selection: all nine progress, budget, admission, evidence-composition and scene-report checks passed. In the full run, `phase21_fixture_admission_contract` took 3.38 seconds and its mutation controls took 13.29 seconds. Both declared fixture-admission timeouts remain 60 seconds; `test_budget` passed. No timeout was increased, no budget baseline was refreshed, and no unrelated v0.3 debt was changed.
+- Source-bound receipt: `python3 -I tests/scripts/verify-cgb-game-evidence.py --check --runner build/gabbaboy-runner --repo-root . --source-revision d066a0fbae31ca04ddc23ff837bbcc1eada0604b --write-evidence build/phase21-evidence/result.json` — passed at the same source and runner identity. Outcome is `game=not-admitted`, model `CGB-CPU-E`, mode `cgb`.
+- Candidate result: Potion Panic is no-go because exact source/component grants and repository/public-CI rights scope could not be established after its author-linked source fetch failed. µCity 1.3 is no-go because required `source/engine/hardware.inc` has no identified grant or notice, leaving complete build-source scope unestablished. These are rights/source-scope no-go decisions, not claims that either license prohibits use.
+- Neither game source was run. Fallback toolchain/build/run facts remain `not_observed`; no fallback fixture, acceptance case, input, predicate, or notice row exists. Original ROM progress remains harness-only. RGB555/PCM digests show repeatability only; no accuracy, physical-hardware, perceptual, mode-3 timing, or general-compatibility claim is made.
+- Independent code review: clean, 0 findings after the final path-with-spaces and CTest-registration fixes; see `21-07-REVIEW.md`. Security review closed implementation mitigations for T-21-15 and T-21-SC. Exact-head hosted/platform/installed-consumer checks remain open for T-21-16; shared verify-work closure remains for T-21-17.
+- CI efficiency: the full local serial suite measured 1250.01 seconds; the longest observed suite check was the release-workflow policy control at 63.47 seconds, and the fixture-admission mutation control took 13.29 seconds. No hosted queue or job-duration evidence is available yet, so these observations do not justify speculative caching or concurrency changes. Reassess against exact-head PR timings.
+
+## Hosted Qualification
+
+Pending exact-head required native/platform checks and installed-consumer evidence on PR #140. The earlier push-event run is stale and is not evidence for this source. Local results do not substitute for the hosted pull-request checks. Phase status remains awaiting hosted qualification and the later shared verify-work closure.
+
+**Approval:** local implementation and automated validation are recorded; hosted qualification and phase closure remain pending.

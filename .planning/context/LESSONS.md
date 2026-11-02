@@ -1059,6 +1059,13 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:** Phase 20 Plan 20-02 final source-archive runtime follow-up and exact-head CI runs 41334163805 / 41334157283.
 - **Status:** Measured and adopted for this control harness.
 
+### GB-CGB-015 / 2026-11-02 / Re-pin state-fork source identities when acceptance bytes change
+
+- **Cause and evidence:** Phase 21-02 changed the acceptance case bytes, but the state-fork inventory still pinned the prior case SHA (`ce3f…`) instead of the current source SHA (`09030b4d…`). The full suite exposed the stale source identity across the state-fork matrix; expected outputs themselves had not changed.
+- **Remedy:** Update only the current source SHA in `tests/data/state-forks.json`. Preserve all result baselines and rerun the shard, matrix, census and mutant controls before the full suite.
+- **Applicability:** Whenever a test corpus or acceptance case changes and an immutable inventory binds its bytes, update the source identity in the same integration plan. Do not refresh expected outcomes without evidence that their meaning changed.
+- **Verification:** At `1e328e66cd08196921018d9666f8ecc677635af5`, the state-fork checks and full CTest suite passed 1724/1724; the expected-result baselines were not refreshed.
+
 
 ## v0.3 milestone-boundary exchange / 2026-10-31
 
