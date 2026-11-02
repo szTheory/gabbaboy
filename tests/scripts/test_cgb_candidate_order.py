@@ -137,6 +137,15 @@ class CandidateOrderTests(unittest.TestCase):
             wrong_entry["file"] = os.path.relpath(wrong_source, start=build_dir)
             self.assertFalse(CHECKER_MODULE.cmake_source_entry_matches(wrong_entry, expected, root))
 
+            wrong_directory_entry = {"directory": str(build_dir), "file": "src/core/gabbaboy.c"}
+            self.assertFalse(
+                CHECKER_MODULE.cmake_source_entry_matches(wrong_directory_entry, expected, root)
+            )
+            root_relative_entry = {"file": "src/core/gabbaboy.c"}
+            self.assertTrue(
+                CHECKER_MODULE.cmake_source_entry_matches(root_relative_entry, expected, root)
+            )
+
             case_variant = dict(relative_entry)
             case_variant["file"] = str(expected).swapcase()
             self.assertEqual(
@@ -144,12 +153,36 @@ class CandidateOrderTests(unittest.TestCase):
                 os.name == "nt",
             )
 
-    def test_cmake_compile_command_accepts_arguments_form(self) -> None:
+    def test_cmake_build_flag_reads_exact_argv_items(self) -> None:
         entry = {"arguments": ["cc", "-DGBB_BUILD_QUALIFIED=1", "-c", "source.c"]}
         self.assertEqual(
-            CHECKER_MODULE.cmake_compile_command(entry),
-            "cc -DGBB_BUILD_QUALIFIED=1 -c source.c",
+            CHECKER_MODULE.cmake_build_qualified_value(entry),
+            "1",
         )
+        split_flag = {"arguments": ["cc", "-D", "GBB_BUILD_QUALIFIED=0", "source.c"]}
+        self.assertEqual(CHECKER_MODULE.cmake_build_qualified_value(split_flag), "0")
+
+        embedded_text = {
+            "arguments": ["cc", "source -DGBB_BUILD_QUALIFIED=1", "source.c"],
+        }
+        self.assertIsNone(CHECKER_MODULE.cmake_build_qualified_value(embedded_text))
+
+    def test_cmake_build_flag_does_not_match_text_inside_one_command_argument(self) -> None:
+        command = {
+            "command": 'cc "literal -DGBB_BUILD_QUALIFIED=1 text" '
+                       '-DGBB_BUILD_QUALIFIED=0 -c source.c',
+        }
+        self.assertEqual(CHECKER_MODULE.cmake_build_qualified_value(command), "0")
+
+        duplicate = {
+            "command": "cc -DGBB_BUILD_QUALIFIED=0 -DGBB_BUILD_QUALIFIED=1 -c source.c",
+        }
+        self.assertIsNone(CHECKER_MODULE.cmake_build_qualified_value(duplicate))
+
+    def test_cmake_source_candidate_diagnostic_has_a_total_size_bound(self) -> None:
+        commands = [{"file": f"{index}-{'x' * 2000}/gabbaboy.c"} for index in range(20)]
+        diagnostic = CHECKER_MODULE._cmake_source_candidates_for_diagnostic(commands)
+        self.assertLessEqual(len(diagnostic), 384)
 
     def test_primary_and_fallback_no_go_form_a_valid_absence(self) -> None:
         records = [
