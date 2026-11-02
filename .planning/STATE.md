@@ -4,16 +4,16 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 21
 current_phase_name: CGB Game Progress and Scene Regressions
-status: planning
+status: executing
 stopped_at: Phase 21 context gathered
-last_updated: "2026-11-02T00:27:58.775Z"
+last_updated: "2026-11-02T01:43:44.716Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 20 verification passed after owner review; RIGHTS-01 stays pending and Phase 21 is unstarted
-state_head: a0b81749e19056bf0d8555256e5d64da89017555
+state_head: f44355c7432ad431daf005783af8df10123ba9fc
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 9
+  total_plans: 16
   completed_plans: 9
   percent: 25
 ---
@@ -29,9 +29,9 @@ See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 ## Current Position
 
-Phase: 20 — Fixture Admission Tune-up verification complete
+Phase: GB-21 (CGB Game Progress and Scene Regressions) — READY TO EXECUTE
 Plans: Phase 20-01 through 20-09 have summaries; all nine plans are complete under the approved cap.
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-11-01 — owner reviewed two judgment findings; Phase 20 verifier passed
 
 Completed stage: **Phase 20 — Fixture Admission Tune-up, implementation and final verification**. All nine plans are complete. All 1,711 CTests have passing evidence across two partial full runs and six focused retests; no single full-suite invocation was all-green. Exact-head pull/push CI, preview-package, and fixture-reproduction runs passed; the security audit had no open items and final code review was clean. The final GSD verifier passes all 35 implementation truths with no human checkpoint. The owner reviewed the two judgment findings: public availability or matching hashes do not establish legal permission, and historical fixture approvals were preserved without extending them to new evidence. This review resolves those verification findings only. No fixture was admitted, no legal permission was granted, and `RIGHTS-01` remains Pending. Phase 21 has not started.
