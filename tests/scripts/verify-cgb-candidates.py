@@ -1689,11 +1689,12 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
         raise Reject("candidate-self-test-failed", "not-needed fallback invoked or suppressed the primary runner")
 
     baseline = copy.deepcopy(admitted_primary)
+    primary_record_path = root / primary_path
+    baseline_bytes = primary_record_path.read_bytes()
     control_count = 0
 
     def mutation(label: str, change, expected: str, *, mutate_notices: bool = False) -> None:
         nonlocal control_count
-        _run_all(root, runner=True)
         before_count = _runner_invocations(root)
         if mutate_notices:
             notice_path = root / "THIRD_PARTY_NOTICES.md"
@@ -1704,14 +1705,17 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
             finally:
                 notice_path.write_bytes(notice)
         else:
+            if primary_record_path.read_bytes() != baseline_bytes:
+                raise Reject("candidate-self-test-failed", f"{label} started from a mutated record")
             subject = copy.deepcopy(baseline)
             change(subject)
             write_json(root / primary_path, subject)
-            _run_all(root, expected_code=1, expected_text=expected)
-            write_json(root / primary_path, baseline)
+            try:
+                _run_all(root, expected_code=1, expected_text=expected)
+            finally:
+                primary_record_path.write_bytes(baseline_bytes)
         if _runner_invocations(root) != before_count:
             raise Reject("candidate-self-test-failed", f"{label} executed the admitted runner")
-        _run_all(root, runner=True)
         control_count += 1
 
     mutation("missing-isolation", lambda value: value["build"]["value"].pop("build_isolation"),
@@ -1762,12 +1766,23 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
 
     fallback_baseline = copy.deepcopy(not_needed)
     fallback_record = root / admitted_path
+    fallback_baseline_bytes = fallback_record.read_bytes()
     changed_fallback = copy.deepcopy(fallback_baseline)
     changed_fallback["preferred_artifact"] = "renamed-ucity.gbc"
     write_json(fallback_record, changed_fallback)
-    _run_all(root, expected_code=1, expected_text="candidate-identity-mismatch")
-    write_json(fallback_record, fallback_baseline)
+    before_count = _runner_invocations(root)
+    try:
+        _run_all(root, expected_code=1, expected_text="candidate-identity-mismatch")
+    finally:
+        fallback_record.write_bytes(fallback_baseline_bytes)
+    if _runner_invocations(root) != before_count:
+        raise Reject("candidate-self-test-failed", "fallback identity mutation executed the admitted runner")
+    if fallback_record.read_bytes() != fallback_baseline_bytes:
+        raise Reject("candidate-self-test-failed", "fallback identity mutation was not restored")
+    before_count = _runner_invocations(root)
     _run_all(root, runner=True)
+    if _runner_invocations(root) != before_count + 1:
+        raise Reject("candidate-self-test-failed", "restored evidence did not run exactly once")
     control_count += 1
 
     return control_count
