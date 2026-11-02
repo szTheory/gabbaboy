@@ -2407,18 +2407,18 @@ def _admission_controls(root: Path, project_revision: str, fixture: dict[str, An
     primary_record_path = root / primary_path
     baseline_bytes = primary_record_path.read_bytes()
     control_count = 0
+    runner_qualification_build_dir = root / "build" / "runner-input-qualification"
 
     def cmake_runner_qualification(label: str, expected: str) -> None:
-        build_dir = root / "build" / f"runner-input-qualification-{label}"
         result = run_process(
-            ["cmake", "-S", str(root), "-B", str(build_dir), "-G", "Ninja",
+            ["cmake", "-S", str(root), "-B", str(runner_qualification_build_dir), "-G", "Ninja",
              "-DBUILD_TESTING=OFF", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"],
             root, timeout=MAX_SUBPROCESS_SECONDS,
         )
         if result.returncode != 0:
             detail = (result.stdout + result.stderr).decode("utf-8", errors="replace").strip()[-512:]
             raise Reject("candidate-self-test-failed", f"{label} CMake configure failed: {detail}")
-        commands_path = build_dir / "compile_commands.json"
+        commands_path = runner_qualification_build_dir / "compile_commands.json"
         try:
             commands = json.loads(read_regular(root, commands_path.relative_to(root).as_posix()))
         except (json.JSONDecodeError, UnicodeDecodeError):
