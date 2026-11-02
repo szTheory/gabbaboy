@@ -11,9 +11,9 @@ provides:
   - Current Phase 21 outcome documentation, qualification evidence, and an explicit phase-boundary handoff.
 affects: [Phase 22 composition evidence, Phase 23 release evidence]
 actuals:
-  tokens: 39128
+  tokens: 39357
   tasks: 2
-  commits: 25
+  commits: 26
 tech-stack:
   added: []
   patterns:
@@ -60,7 +60,7 @@ coverage:
         ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_game_evidence(_controls)?$'"
         status: pass
       - kind: other
-        ref: "verify-cgb-game-evidence.py --check at source 9bed35ce6e80e407ea31543cf986c795c9da061d; build/phase21-evidence/result.json"
+        ref: "verify-cgb-game-evidence.py --check at source f9711ea86b22b9fb33ba5516fe3d5d33c1538b1b; build/phase21-evidence/result.json"
         status: pass
     human_judgment: false
   - id: D2
@@ -86,11 +86,11 @@ coverage:
         ref: "cmake -S . -B build && cmake --build build --parallel 8 && ctest --test-dir build --output-on-failure --timeout 60 --parallel 1 — source 9bed35ce6e80e407ea31543cf986c795c9da061d"
         status: pass
     human_judgment: false
-duration: 393min
+duration: 401min
 completed: 2026-11-02
-commits: 25
+commits: 26
 plan_head_before: 9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63
-plan_head_after: 9bed35ce6e80e407ea31543cf986c795c9da061d
+plan_head_after: f9711ea86b22b9fb33ba5516fe3d5d33c1538b1b
 status: complete
 ---
 
@@ -100,7 +100,7 @@ status: complete
 
 ## Performance
 
-- **Duration:** 393 minutes
+- **Duration:** 401 minutes
 - **Started:** 2026-11-02T03:58:54Z
 - **Completed:** 2026-11-02
 - **Tasks:** 2
@@ -111,7 +111,7 @@ status: complete
 - Added a source-bound outcome composer that reuses the progress, candidate, and scene-report checkers and rejects missing evidence, contradictory candidate claims, and overbroad accuracy, hardware, or game-progress language.
 - Recorded the final no-go outcome with its evidence limits. Potion Panic's exact source/component grants and repository/public-CI scope were not established after the creator-linked repository fetch failed. µCity 1.3 source commit `d1880a2a112d7c26f16c0fc06a15b6c32fdc9137` was identified, but the required `source/engine/hardware.inc` has no identified grant or notice. These are unresolved rights/source-scope outcomes, not claims that either license prohibits use.
 - Kept both game's build, ROM, digest, cartridge-header and execution facts `not_observed`; no third candidate or fallback fixture/case/input/predicate/notice row was created. `FIXT-01` therefore remains pending.
-- Qualified the original authored CGB control at source `9bed35ce6e80e407ea31543cf986c795c9da061d`. It remains harness-only under model `CGB-CPU-E`, native CGB mode; digest repeatability does not establish game progress, rendering accuracy, physical hardware behavior, perceptual quality, mode-3 timing, or general compatibility.
+- Qualified the original authored CGB control at source `f9711ea86b22b9fb33ba5516fe3d5d33c1538b1b`. It remains harness-only under model `CGB-CPU-E`, native CGB mode; digest repeatability does not establish game progress, rendering accuracy, physical hardware behavior, perceptual quality, mode-3 timing, or general compatibility.
 - Preserved the existing DMG baseline and the scene workflow's independent expectation, owner-agency, and private-media boundaries. Both descriptor-less plan prohibitions remain explicitly unresolved.
 - Configured and built the final implementation at `9bed35ce6e80e407ea31543cf986c795c9da061d`, then passed all 1,724 registered CTests serially in 1,227.20 seconds with the per-test timeout fixed at 60 seconds. `test_budget` passed; no budget baseline refresh or unrelated v0.3 repair was made.
 - Closed Windows-only synthetic-control failures found in the first host diagnostic: normalize CMake paths, preserve explicit UTF-8 bytes in pinned fixtures, execute Python test runners through the active interpreter, and inspect CTest in the same Debug configuration used to run it. The focused controls and the complete local suite pass at the fixed source.
@@ -141,7 +141,7 @@ Task 2 and attributable follow-up fixes were committed individually:
 16. `e0b5305d` normalize CMake source paths and preserve exact synthetic pin bytes on Windows.
 17. `9bed35ce` invoke Python synthetic runners through the active interpreter and list tests in the matching Debug configuration.
 
-**Plan commit range:** Measured from the persisted plan ledger base `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through the final metadata commit; the frontmatter records the measured count and endpoints.
+**Plan commit range:** 26 commits measured from the persisted ledger base `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `f9711ea86b22b9fb33ba5516fe3d5d33c1538b1b`; the final metadata commit follows this measured endpoint.
 
 ## Files Created/Modified
 
@@ -239,4 +239,4 @@ Plan 21-07 implementation and local qualification are complete. Accept hosted na
 
 ## Self-Check: PASSED
 
-The summary, evidence checker, CMake registration, and source-bound receipt exist. The persisted ledger measures 25 plan commits from `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `9bed35ce6e80e407ea31543cf986c795c9da061d`. The final source configured and built, all 1,724 CTests passed, and the source-bound receipt identifies that same implementation source. After the documentation/state edits, all eight summary-coverage, lesson-ID, and state-size CTests passed.
+The summary, evidence checker, CMake registration, and source-bound receipt exist. The persisted ledger measures 26 plan commits from `9f7bda3787d69f726a7ef2e63fa4b2c65be7ad63` through `f9711ea86b22b9fb33ba5516fe3d5d33c1538b1b`. The implementation source `9bed35ce` configured and built, all 1,724 CTests passed, and the final source-bound receipt plus all 16 Phase 21/planning checks pass at `f9711ea`. The eight summary-coverage, lesson-ID, and state-size checks pass.
