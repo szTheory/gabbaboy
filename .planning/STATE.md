@@ -4,18 +4,18 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 21
 current_phase_name: CGB Game Progress and Scene Regressions
-current_plan: 3
+current_plan: 4
 status: executing
-stopped_at: Completed GB-21-03-PLAN.md
-last_updated: "2026-11-02T02:41:18.843Z"
+stopped_at: Completed GB-21-02-PLAN.md
+last_updated: "2026-11-02T03:07:12.223Z"
 last_activity: 2026-11-02
-last_activity_desc: Completed GB-21 Plan 21-01
-state_head: 51fd58086ac7b70a8a52d4c844942156717e17d9
+last_activity_desc: Completed GB-21 Plan 21-02
+state_head: 703d8f84e134b3330241084c376a16273f88395a
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 16
-  completed_plans: 11
+  completed_plans: 12
   percent: 25
 ---
 
@@ -30,7 +30,7 @@ See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 ## Current Position
 
-Current Plan: 3
+Current Plan: 4
 Total Plans in Phase: 7
 Phase: GB-21 (CGB Game Progress and Scene Regressions) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
@@ -40,7 +40,7 @@ Last activity: 2026-11-02 — Completed Phase GB-21 Plan 21-01
 
 Completed stage: **Phase 20 — Fixture Admission Tune-up, implementation and final verification**. All nine plans are complete. All 1,711 CTests have passing evidence across two partial full runs and six focused retests; no single full-suite invocation was all-green. Exact-head pull/push CI, preview-package, and fixture-reproduction runs passed; the security audit had no open items and final code review was clean. The final GSD verifier passes all 35 implementation truths with no human checkpoint. The owner reviewed the two judgment findings: public availability or matching hashes do not establish legal permission, and historical fixture approvals were preserved without extending them to new evidence. This review resolves those verification findings only. No fixture was admitted, no legal permission was granted, and `RIGHTS-01` remains Pending. Phase 21 planning is complete; Plan 21-01 now supplies the native-CGB progress tracer and loaded-mode refusal control.
 
-Current stage: Phase 21 — CGB Game Progress and Scene Regressions, execution. Plan 21-01 is complete; Plans 21-02 through 21-07 remain. The next planned slice is 21-02; no later plan or phase has started. Both workflow.auto_advance and workflow._auto_chain_active remain false.
+Current stage: Phase 21 — CGB Game Progress and Scene Regressions, execution. Plans 21-01, 21-02 and 21-03 are complete. Plan 21-06 is the next Wave 2 scope; Plans 21-04, 21-05 and 21-07 remain. This executor did not start Plan 21-06 or either candidate attempt. Both workflow.auto_advance and workflow._auto_chain_active remain false.
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 |------|----------|-------|-------|
 | Phase 21 P01 | 16min | 2 tasks | 6 files |
 | Phase GB-21 P03 | 32min | 2 tasks | 5 files |
+| Phase GB-21 P02 | 25min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -75,15 +76,16 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-02T02:41:18.749Z
-**Stopped at:** Completed GB-21-03-PLAN.md
-**Resume file:** .planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-02-PLAN.md
+**Last session:** 2026-11-02T03:07:12.123Z
+**Stopped at:** Completed GB-21-02-PLAN.md
+**Resume file:** .planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-06-PLAN.md
 
 ## Operator Next Steps
 
-Phase 20 is complete and verified. The owner reviewed the two judgment findings; this does not admit a fixture or resolve `RIGHTS-01`, which remains Pending. Phase 21 — CGB Game Progress and Scene Regressions — has seven reviewed plans across five waves. Plan 21-01 is complete and its native-CGB progress evidence is committed; resume at Plan 21-02. When the orchestrator dispatches the next slice, use **/gsd-execute-phase 21**. Phase 21 remains active and both auto-advance flags remain false.
+Phase 20 is complete and verified. The owner reviewed the two judgment findings; this does not admit a fixture or resolve `RIGHTS-01`, which remains Pending. Phase 21 — CGB Game Progress and Scene Regressions — has seven reviewed plans across five waves. Plans 21-01, 21-02 and 21-03 are complete; Plan 21-06 is the next Wave 2 scope. No candidate attempt or Plan 21-06 started in this execution. When the owner chooses to continue Phase 21, use **/gsd-execute-phase 21**. Phase 21 remains active and both auto-advance flags remain false.
 
 ## Decisions
 
 - [Phase 21]: The compatibility refusal control derives a valid compatibility-header variant from the same authored ROM so the loaded API mode is independently observable.
 - [Phase 21]: Plan 21-03 self-tests remain synthetic-only; FIXT-01 stays pending for Plans 21-04, 21-05 and final composition.
+- [Phase GB-21]: Emit each CGB receipt alongside --observe so identity, timing, digests, and PCM describe the same runner execution; compare a separate repeat only for reproducibility.
