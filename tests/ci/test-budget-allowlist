@@ -5,7 +5,6 @@
 # Seeded from a fresh ctest json-v1 scan; a test with no TIMEOUT is never allowlisted (the default-budget sweep gives it 60 s).
 accept_event_limit_link_control	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 accept_event_limit_link_violation	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_cgb_colour_progress_refused	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_core_mutant	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_dense_input_controls	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_dense_script_delivered	400	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s

@@ -700,13 +700,13 @@ add_test(NAME acceptance_cgb_progress_discrimination
           --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
           --source-revision HEAD --discrimination)
 set_tests_properties(acceptance_cgb_progress_discrimination PROPERTIES
-  TIMEOUT 90 LABELS acceptance_cgb_progress WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+  TIMEOUT 60 LABELS acceptance_cgb_progress WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 add_test(NAME acceptance_cgb_progress_observations
   COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
           --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
           --source-revision HEAD --observations)
 set_tests_properties(acceptance_cgb_progress_observations PROPERTIES
-  TIMEOUT 90 LABELS acceptance_cgb_progress
+  TIMEOUT 60 LABELS acceptance_cgb_progress
   PASS_REGULAR_EXPRESSION "cgb-observations status=pass"
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 add_test(NAME acceptance_cgb_progress_controls
