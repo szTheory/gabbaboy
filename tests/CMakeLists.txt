@@ -5714,6 +5714,7 @@ gabbaboy_verify_registered_tests()
 # slower, and the whole-run acceptance and RTC cases reached their 300 s limits on a slow hosted
 # runner (LESSONS GB-CI-004). Apply one shared multiplier after every test registration.
 include("${PROJECT_SOURCE_DIR}/cmake/ScaleSanitizerTimeouts.cmake")
+include("${PROJECT_SOURCE_DIR}/tests/cmake/game-evidence.cmake")
 
 # Default budget (Phase 16 D-18). A test that sets no TIMEOUT keeps CTest's 1500 s default, and the
 # scaler skips unset tests, so such a test would also stay at 1500 s under ASan. Give every unset test
