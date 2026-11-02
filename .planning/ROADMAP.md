@@ -69,7 +69,7 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
 **Plan cap**: 12
-**Plans**: 4/7 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan.
+**Plans**: 5/7 plans executed — within the cap; the primary and fallback candidate attempts each occupy one conditional plan.
 
 Plans:
 **Wave 1**
@@ -81,7 +81,7 @@ Plans:
 - [x] 21-06-PLAN.md — Minimal scene intake, agent-owned reproduction procedure and independent/private-data promotion gates.
 
 **Wave 3** *(blocked on Plans 21-02 and 21-03)*
-- [ ] 21-04-PLAN.md — One bounded Potion Panic GB Compo 2025 source/build/rights/native-progress attempt or actual no-go.
+- [x] 21-04-PLAN.md — One bounded Potion Panic GB Compo 2025 source/build/rights/native-progress attempt or actual no-go.
 
 **Wave 4** *(blocked on the primary's final disposition)*
 - [ ] 21-05-PLAN.md — Sole conditional preferred µCity 1.3 fallback or checked not-needed outcome.
@@ -141,7 +141,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
-| 21. CGB Game Progress and Scene Regressions | 4/7 | In Progress | - |
+| 21. CGB Game Progress and Scene Regressions | 5/7 | In Progress | - |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
@@ -152,4 +152,4 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
 - Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
 
-Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`. Its nine plans, final local review/security evidence, exact-head pull-request and push CI matrices, and the Linux/macOS/player consumer smoke checks passed. The full CTest run passed 1,708 cases; its three configure-time revision-snapshot controls passed after reconfigure/build and focused retest. The archive-controls self-test now reuses its prevalidated fixture-policy baseline and passed in 52.11 seconds. No fixture was admitted; RIGHTS-01 remains pending, with no legal-clearance claim. Phase 21 is active: Plan 21-01 completed the native-CGB progress tracer, and Plan 21-02 remains next. Continue with **/gsd-execute-phase 21** when the orchestrator dispatches it; do not advance to another phase automatically.
+Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`. Its nine plans, final local review/security evidence, exact-head pull-request and push CI matrices, and the Linux/macOS/player consumer smoke checks passed. The full CTest run passed 1,708 cases; its three configure-time revision-snapshot controls passed after reconfigure/build and focused retest. The archive-controls self-test now reuses its prevalidated fixture-policy baseline and passed in 52.11 seconds. No fixture was admitted; RIGHTS-01 remains pending, with no legal-clearance claim. Phase 21 is active: Plans 21-01, 21-02, 21-03, 21-04 and 21-06 are complete. Plan 21-04 recorded a primary Potion Panic rights no-go after the creator-linked Codeberg source could not be reached; exact component scope and downstream facts remain unobserved. Plan 21-05 is the sole eligible fallback, and Plan 21-07 remains for final composition and the `test_budget` finding. Phase 22 — Composition and Microtest Evidence — is next after Phase 21 closes. Continue Phase 21 with **/gsd-execute-phase 21** when the owner/orchestrator chooses; do not advance to another phase automatically.
