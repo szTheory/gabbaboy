@@ -69,7 +69,25 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
 **Plan cap**: 12
-**Plans**: TBD — within the cap; the primary and fallback candidate attempts each occupy at most one plan.
+**Plans**: 7 plans — within the cap; the primary and fallback candidate attempts each occupy one conditional plan.
+
+Plans:
+**Wave 1**
+- [ ] 21-01-PLAN.md — Shared native-CGB progress tracer, original generated control and preserved Libbet/DMG policy.
+- [ ] 21-03-PLAN.md — Source-bound two-candidate record/admission contract with real-CLI controls.
+
+**Wave 2** *(blocked on the indicated Wave 1 dependencies)*
+- [ ] 21-02-PLAN.md — Input/predicate discrimination and independently specified original RGB555 observation controls.
+- [ ] 21-06-PLAN.md — Minimal scene intake, agent-owned reproduction procedure and independent/private-data promotion gates.
+
+**Wave 3** *(blocked on Plans 21-02 and 21-03)*
+- [ ] 21-04-PLAN.md — One bounded Potion Panic GB Compo 2025 source/build/rights/native-progress attempt or actual no-go.
+
+**Wave 4** *(blocked on the primary's final disposition)*
+- [ ] 21-05-PLAN.md — Sole conditional preferred µCity 1.3 fallback or checked not-needed outcome.
+
+**Wave 5** *(blocked on controls, the final candidate pair and scene workflow)*
+- [ ] 21-07-PLAN.md — Actual outcome/documentation composition, final source qualification and Phase 21 handoff.
 
 Captured frame and PCM digests establish reproducibility. They do not independently establish rendering accuracy, perceptual quality, physical CGB-E behavior, or general compatibility. A newly reproduced correctness/security issue must be fixed within scope or trigger a rescope; the candidate absence exit cannot silently defer it. Optional direct Steam Deck/SSH exploration is neither a completion gate nor a qualified Linux/Deck path.
 

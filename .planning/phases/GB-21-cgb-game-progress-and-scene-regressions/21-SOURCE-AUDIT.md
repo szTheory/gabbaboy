@@ -1,0 +1,89 @@
+# Phase 21 — Source Coverage and Planning Decisions
+
+Planning covers seven plans and sixteen tasks in five waves. The phase cap is twelve plans, including its reserved gap allowance; the primary and fallback attempts each occupy exactly one plan. No implementation, candidate admission, game progress or phase-completion claim is made by this planning artifact.
+
+## Source Coverage
+
+| Source | Item | Plans | Disposition |
+|--------|------|-------|-------------|
+| GOAL | Reproducible shared CGB progress, bounded game outcome and controlled scene-report workflow | 01–07 | Covered |
+| REQ | GAME-01 — RGB555 progress and preserved DMG acceptance | 01, 02, 07 | Covered |
+| REQ | GAME-02 — exact bindings and meaningful positive/input/predicate controls | 01–05, 07 | Covered |
+| REQ | FIXT-01 — primary, sole eligible fallback, exact gates and justified absence | 03–05, 07 | Covered |
+| REQ | FEED-01 — concise intake, agent-owned reproduction, independent regression and privacy | 06, 07 | Covered |
+| CONTEXT | D-01 — Potion Panic first, µCity 1.3 only after primary no-go, no third game | 03–05, 07 | Covered |
+| CONTEXT | D-02 — Phase 20 component terms, exact source/build/ROM/header/mode and notices | 03–05, 07 | Covered |
+| CONTEXT | D-03 — shared runner/API seams, actual loaded mode, preserve DMG | 01, 02, 07 | Covered |
+| CONTEXT | D-04 — shortest meaningful input-driven in-game state change and independent predicate | 01, 02, 04, 05 | Covered |
+| CONTEXT | D-05 — independent original native-CGB harness proof and honest harness-only label | 01, 02, 07 | Covered |
+| CONTEXT | D-06 — RGB555/PCM observations bound for repeatability, without accuracy promotion | 01, 02, 04, 05, 07 | Covered |
+| CONTEXT | D-07 — static independent pixels or relevant bounded semantic/sequence expectation, targeted negative | 02, 06, 07 | Covered |
+| CONTEXT | D-08 — title/scene/symptom starts agent metadata/reproduction, no recurring owner-play gate | 06, 07 | Covered |
+| CONTEXT | D-09 — explicit provision before specific private-media reads, no tracked/hosted personal data | 06, 07 | Covered |
+| CONTEXT | D-10 — existing C/CMake/CTest and stdlib, no new dependency by default | All | Covered |
+| RESEARCH | Existing CGB progress callback refusal versus working separate RGB555 capture | 01, 02 | Covered |
+| RESEARCH | Mode must come from sized loaded gbb_info, not selected profile/header | 01–05 | Covered |
+| RESEARCH | Exact receipt/predicate/script/frame/PCM bindings and valid raw negatives | 01–05, 07 | Covered |
+| RESEARCH | Potion Panic upstream/fork mismatch, recursive inputs and missing-tool caveats | 04 | Covered by actual bounded source/build gate; scouting facts do not predetermine no-go |
+| RESEARCH | µCity preferred artifact, exact 1.3 identity, mixed terms and short predicate feasibility | 05 | Covered conditionally after checked primary no-go |
+| RESEARCH | No current actionable GabbaBoy scene defect or independent live scene oracle | 06, 07 | Covered by tested intake/promotion contracts and honest no-live-report status |
+| RESEARCH | ASVS L1 bounded native parsing, identity, false assurance and private-data risks | All threat registers | Covered |
+| CODE DISCOVERY | Fixed Libbet predicate evaluator, semantic role diagnostics and shade/audible/SGB success gates | 01, 02 | Covered by appended internal evaluator/observation policy with unchanged legacy defaults |
+| PROJECT | D-069 automated checks/negatives, shared UAT closure and SUMMARY coverage schema | All; final closure 07 | Covered |
+| PROJECT | Deterministic performance, state continuation, exact-source consumer/CI and phase stop | 07 | Covered |
+
+RIGHTS-01 retains Phase 20 ownership; it is reused as a mandatory admission boundary, not reassigned or marked satisfied by these plans. Phase 22 diagnostics and Phase 23 release, third-candidate search, supported Deck/Linux gameplay, Libretro, timing rewrites, root licence migration and new consumer/state freezes remain outside scope.
+
+## Discretion Applied
+
+- Generate the original native-CGB test ROM in a private temporary directory from documented project-authored SM83 bytes, following `host_fixture.py`. Pin its source/build/digest and compiled predicate. This proves the implementation independently before external candidates; if both fail, the final outcome cites this same result as harness-only. It does not add a fixture-directory exemption, vendor a ROM, or create game evidence.
+- Use one readiness byte and one input-driven progress byte; RIGHT changes an authored uniform RGB555 screen from 0x001F to 0x03E0. This independently specified sequence also demonstrates why Libbet's shade/audible gates must remain case-specific. Its impossible predicate expects the unreachable value 0xFF.
+- Keep candidate source/build inspection and tool execution in private temporary directories. A necessary pinned build-only tool may be acquired there; missing tooling alone does not excuse an uninvestigated no-go. No application package dependency or global installation is planned.
+- Keep three established checkpoint names (`title`, `play_start`, `mid`) and `hit` for the shared path. Candidate budgets derive from the shortest meaningful source route; the original control has a fixed 120-frame budget including the existing tail.
+- Implement scene intake and promotion contracts without inventing a current report. Synthetic checker subjects are explicitly controls. A real report remains unresolved unless permitted reproduction and an independent expectation support promotion.
+
+## Dependency and Ownership Check
+
+| Wave | Plans | Dependency/ownership |
+|------|-------|----------------------|
+| 1 | 01, 03 | Runner/acceptance files versus separate candidate checker and test-area include; no overlapping modified paths |
+| 2 | 02, 06 | 02 expands 01; 06 consumes 01/03 and owns separate scene checker/docs/test-area file; no same-wave overlap |
+| 3 | 04 | Primary candidate consumes complete harness and candidate contract |
+| 4 | 05 | Sole fallback consumes primary final disposition; shared predicate/notices writes are sequential |
+| 5 | 07 | Final composition/docs/qualification waits for controls, candidate pair and scene contract |
+
+All tasks modify at most five named files; plans have two or three tasks. Existing paths were grounded through `git ls-files`; other paths are intentional new artifacts. `CMakePresets.json` declares phase1 binaryDir `${sourceDir}/build`, grounding local `build/gabbaboy-runner`; CTest registrations use `$<TARGET_FILE:gabbaboy-runner>` across platforms. Estimate calibration returned factor 1 with zero samples and `confidence: low`; all estimate blocks preserve that derived confidence.
+
+## Spec-less Edge Coverage
+
+The default-on probe emitted six unresolved rows. Every row is retained as a flagged assumption in plan frontmatter; none is dismissed or auto-resolved.
+
+| Requirement | Probe category | Status | Plan |
+|-------------|----------------|--------|------|
+| GAME-01 | unclassified | unresolved; verification null | 01 |
+| GAME-02 | unclassified | unresolved; verification null | 02 |
+| FIXT-01 | adjacency | unresolved; verification null | 03 |
+| FIXT-01 | empty | unresolved; verification null | 03 |
+| FIXT-01 | ordering | unresolved; verification null | 03 |
+| FEED-01 | unclassified | unresolved; verification null | 06 |
+
+Surfaced edges 6 = authored flagged assumptions 6. The concrete tests do not claim to have resolved the generic probe classification.
+
+## Prohibition Recall and Precision
+
+The recall considered: cross-model/accuracy claim inflation; a new public ABI without need; RGB555 byte-order changes; a self-derived golden mistaken for progress; missing-input positives; unbound input identities; third-game expansion; using absence to hide a defect; licence labels mistaken for permission; recurring compulsory owner play; implicit private-media collection; and screenshot hashes mistaken for scene oracles.
+
+Routine implementation/scope items (ABI, byte order, input binding, false positives, candidate count, defect lifecycle) are covered by task/edge/review contracts rather than minted as values prohibitions. Canon-referral breadcrumb: generic legal grant authority and personal-data access/disclosure are covered by the adopted fixture/privacy boundaries and their existing security/compliance controls; no new canon prohibition is minted.
+
+Two bespoke values/transparency constraints survive precision: honest evidence-class claims and owner agency in the report workflow. They were projected through the installed `projectProhibitions` serializer into Plan 21-07 with `status: unresolved`, `verification: judgment`, explicit flagged-unverified reasons and no `check_*` descriptor. They restate locked D-05/D-06/D-08/D-09 and do not introduce a new decision. Surfaced prohibitions 2 = authored items 2. The final checker has concrete claim/privacy contract negatives, but planning does not fabricate a wired-check descriptor or silently mark a judgment resolved.
+
+## Capability Decisions
+
+- API-coverage detector examined the actual phase scope/plans and returned `detected: false`; exit 1 is its documented negative verdict, not a missing probe. No external API/SDK/service is integrated and no coverage matrix is needed.
+- Assumption-delta detected `fallback` and `optional`. Plan 21-03 records `no-change`: exact candidate attempt remains the primary identity, D-01 already fixes the ordered conditional pair, and optional Deck exploration is outside the qualified path. No additional owner choice is required.
+- No listed ORM/schema path exists in the phase scope, so schema-push guidance does not apply.
+- Security enforcement is active at ASVS 1/high. All seven plans have threat registers; ordinary IDs T-21-01 through T-21-17 are unique and only reserved T-21-SC repeats.
+
+## Planning Validation
+
+The installed OpenGSD runtime validates all seven plan frontmatters and task structures; each task has read-first, acceptance criteria, automated verification and an observable fails_when condition. All files end in `</output>`. This validates executable planning shape only. No implementation tests or candidate builds are run by planning; independent plan-checker review remains the orchestrator's next gate.

@@ -19,7 +19,7 @@ created: "2026-11-01"
 |----------|-------|
 | **Framework** | CMake/CTest; Python standard-library checker tests where a source-bound fixture or report contract needs a dedicated validator. |
 | **Config file** | `CMakePresets.json` (`phase1`); acceptance registrations in `tests/acceptance/CMakeLists.txt`. |
-| **Quick run command** | `ctest --preset phase1 --output-on-failure -R 'acceptance_cgb_progress|cgb_runner_profile_dmg_identity_acceptance'` after configure/build. |
+| **Quick run command** | `ctest --preset phase1 --output-on-failure --no-tests=error -R 'acceptance_cgb_progress|cgb_runner_profile_dmg_identity_acceptance'` after configure/build. |
 | **Full suite command** | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error`. |
 | **Feedback target** | Keep focused progress and contract checks under 30 seconds; measure and record actual full-suite runtime during execution. |
 
@@ -34,16 +34,28 @@ created: "2026-11-01"
 
 ---
 
-## Per-Requirement Verification Map
+## Per-Task Verification Map
 
-The planner will assign exact plan/task IDs and waves after decomposition; the following contract map is the validation target.
+All task statuses are pending implementation. Commands below are the focused contract selectors; each PLAN carries its full configure/build prerequisites, additional checks and observable `fails_when` condition.
 
-| Requirement | Behavior | Threat Ref | Secure Behavior | Test Type | Automated Command | Existing Coverage |
-|-------------|----------|------------|-----------------|-----------|-------------------|-------------------|
-| GAME-01 | CGB progress copies RGB555 observations and preserves the existing DMG receipt/output behavior. | Plan threat register | Keep profile-aware frame dispatch bounded; preserve the DMG path and identity assertion. | integration | `ctest --preset phase1 --output-on-failure -R 'acceptance_cgb_progress|acceptance_cgb_colour|cgb_runner_profile_dmg_identity_acceptance'` | CGB digest and DMG identity patterns exist; CGB progress integration is new. |
-| GAME-02 | Positive scripted input reaches an independently specified guest predicate; no/wrong input, broken predicate, and wrong-mode controls fail for their intended reasons; receipt binds ROM, input, predicate, profile, mode, and observations. | Plan threat register | Reject malformed or mismatched inputs before guest creation; distinguish expected predicate failure from setup failure. | integration | `ctest --preset phase1 --output-on-failure -R 'acceptance_cgb_progress'` | DMG predicate controls exist; CGB progress controls are new. |
-| FIXT-01 | Only the ordered Potion Panic attempt and, after its recorded no-go, µCity 1.3 fallback run; each has exact source/build/ROM/header/mode and rights evidence or a concrete no-go. | Plan threat register | Fail closed on incomplete identity, component terms, or notices; keep candidate ROMs out of installed/release products. | unit/integration | `ctest --preset phase1 --output-on-failure -R 'phase21_fixture_admission'` | Phase 20 fixture manifest and product-policy patterns exist; Phase 21 candidate records/checks are new. |
-| FEED-01 | A title/scene/symptom report starts agent-owned reproduction and classification; any promoted regression has an independent expectation and targeted negative; private media stays outside repository and CI. | Plan threat register | Use only original or rights-admitted fixtures; preserve report data without copying personal ROMs, saves, states, or captures. | unit/automated | `ctest --preset phase1 --output-on-failure -R 'phase21_scene_report'` | No current actionable GabbaBoy scene report was found; retain triage when no independent regression can be justified. |
+| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
+|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
+| 21-01-01 | 21-01 | 1 | GAME-01, GAME-02 | T-21-01, T-21-02 | Native-CGB source-bound original input/predicate tracer; missing input fails. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^acceptance_cgb_progress_tracer$'` | New in task | pending |
+| 21-01-02 | 21-01 | 1 | GAME-01, GAME-02 | T-21-01, T-21-02 | Actual compatibility-mode refusal and unchanged Libbet/DMG policy. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_tracer|acceptance_cgb_progress_compat_rejected|cgb_runner_profile_dmg_identity_acceptance|dmg_baseline)$'` | New controls plus existing baseline | pending |
+| 21-02-01 | 21-02 | 2 | GAME-01, GAME-02 | T-21-03 | No-input/wrong-input/impossible-predicate raw failures and strict mapping. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_(tracer|compat_rejected|discrimination)|acceptance_predicate_(truth_table|anchors)|acceptance_cgb_colour_.*)$'` | Extended in task | pending |
+| 21-02-02 | 21-02 | 2 | GAME-01, GAME-02 | T-21-04 | Bound native observations/dumps with independent original sequence and content mutations. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_.*|acceptance_digest_rgb555_vectors|cgb_runner_profile_dmg_identity_acceptance|dmg_baseline|test_budget(_controls)?)$'` | Extended in task | pending |
+| 21-03-01 | 21-03 | 1 | FIXT-01 | T-21-05, T-21-06 | Actual candidate-record CLI rejects missing/early fallback and partial closure. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_fixture_admission_contract$'` | New in task | pending |
+| 21-03-02 | 21-03 | 1 | FIXT-01, GAME-02 | T-21-06 | Existing admission CLI and exact game-progress binding reject coordinated rewrites. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_fixture_admission_(contract|controls)$'` | Extended in task | pending |
+| 21-04-01 | 21-04 | 3 | FIXT-01 | T-21-07, T-21-08 | Actual primary source/build/rights facts or attributable no-go. | other | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --stage assessed --repo-root . --source-revision HEAD` | Record created in task | pending |
+| 21-04-02 | 21-04 | 3 | FIXT-01 | T-21-09 | Only permitted source-built provenance is prepared; no-go has no fixture consumption path. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --stage provenance --repo-root . --source-revision HEAD` | Conditional fixture artifacts | pending |
+| 21-04-03 | 21-04 | 3 | FIXT-01, GAME-02 | T-21-09 | Immutable admission and native input/predicate controls, or final genuine no-go. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/potion-panic.json --require-final --runner build/gabbaboy-runner --repo-root . --source-revision HEAD` | Conditional case/record | pending |
+| 21-05-01 | 21-05 | 4 | FIXT-01 | T-21-10, T-21-11 | Primary disposition controls preferred µCity 1.3 eligibility. | other | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/ucity-1.3.json --stage assessed --repo-root . --source-revision HEAD` | Record created in task | pending |
+| 21-05-02 | 21-05 | 4 | FIXT-01 | T-21-12 | Complete mixed-component snapshot or no fallback consumption artifacts. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-record tests/data/cgb-candidates/ucity-1.3.json --stage provenance --repo-root . --source-revision HEAD` | Conditional fixture artifacts | pending |
+| 21-05-03 | 21-05 | 4 | FIXT-01, GAME-02 | T-21-12 | Entire ordered pair final; native progress controlled and unresolved defects block. | integration | `python3 -I tests/scripts/verify-cgb-candidates.py --check-all --require-final --runner build/gabbaboy-runner --repo-root . --source-revision HEAD` | Conditional case/record | pending |
+| 21-06-01 | 21-06 | 2 | FEED-01 | T-21-13 | Minimal text intake without implicit personal-media or owner-play requirements. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_scene_report_tracer$'` | New in task | pending |
+| 21-06-02 | 21-06 | 2 | FEED-01 | T-21-13, T-21-14 | Independent permitted scene promotion, relevant negatives and privacy controls. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_scene_report_(tracer|controls|contract)$'` | Extended in task | pending |
+| 21-07-01 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-15, T-21-16 | Integrated actual outcome/docs reject false or unsupported claims. | integration | `ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_(game_evidence(_controls)?|fixture_admission|scene_report_.*)$'` | New composition checks | pending |
+| 21-07-02 | 21-07 | 5 | GAME-01, GAME-02, FIXT-01, FEED-01 | T-21-16, T-21-17 | Final source/full-suite/hosted-consumer and traceable automated closure. | integration | `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error` | Existing full suite plus new tests | pending |
 
 Every runnable command added to a plan must name an observable `fails_when` condition. Expected-failure controls must assert the raw predicate/mode reason so setup errors cannot masquerade as the intended negative.
 
@@ -51,7 +63,7 @@ Every runnable command added to a plan must name an observable `fails_when` cond
 
 ## Wave 0 Requirements
 
-- [ ] Add an original native-CGB control ROM with fixed provenance/build/digest if neither named game is admitted; label it harness-only.
+- [ ] Generate the original native-CGB control from pinned project-authored source/build/digest in Plan 21-01; label it harness-only and use its result as the fallback harness evidence if neither named game is admitted.
 - [ ] Add CGB progress positive and fault-specific input, predicate, and execution-mode negative controls in the existing CMake/CTest acceptance path.
 - [ ] Add or extend an immutable-source fixture-admission checker for the two candidate records and malformed-record controls.
 - [ ] Add a report-intake or scene-promotion contract check if no real symptom can be promoted; do not invent a scene report.
@@ -73,4 +85,6 @@ There is no mandatory manual UAT. Candidate redistribution decisions must remain
 - [ ] Focused feedback target is under 30 seconds; actual timings will be recorded during execution.
 - [ ] `nyquist_compliant: true` set in frontmatter after validation.
 
-**Approval:** pending planning decomposition and execution evidence.
+The six spec-less edge assumptions and two descriptor-less values prohibitions remain visible in the plan set and source audit. They are not fabricated automated passes or new manual UAT tasks.
+
+**Approval:** planning decomposition recorded; implementation, audit and final-source evidence remain pending.
