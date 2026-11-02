@@ -5,11 +5,11 @@ milestone_name: Evidence Floor
 current_phase: 21
 current_phase_name: CGB Game Progress and Scene Regressions
 status: planning
-stopped_at: Phase 20 verification passed; stopped at the Phase 21 boundary
-last_updated: "2026-11-01T23:18:57.555Z"
+stopped_at: Phase 21 context gathered
+last_updated: "2026-11-02T00:27:58.775Z"
 last_activity: 2026-11-01
 last_activity_desc: Phase 20 verification passed after owner review; RIGHTS-01 stays pending and Phase 21 is unstarted
-state_head: 20e34d9a09b63059b34188c8fb486b5df50c2999
+state_head: a0b81749e19056bf0d8555256e5d64da89017555
 progress:
   total_phases: 4
   completed_phases: 1
@@ -36,7 +36,7 @@ Last activity: 2026-11-01 — owner reviewed two judgment findings; Phase 20 ver
 
 Completed stage: **Phase 20 — Fixture Admission Tune-up, implementation and final verification**. All nine plans are complete. All 1,711 CTests have passing evidence across two partial full runs and six focused retests; no single full-suite invocation was all-green. Exact-head pull/push CI, preview-package, and fixture-reproduction runs passed; the security audit had no open items and final code review was clean. The final GSD verifier passes all 35 implementation truths with no human checkpoint. The owner reviewed the two judgment findings: public availability or matching hashes do not establish legal permission, and historical fixture approvals were preserved without extending them to new evidence. This review resolves those verification findings only. No fixture was admitted, no legal permission was granted, and `RIGHTS-01` remains Pending. Phase 21 has not started.
 
-Next workflow stage: **Phase 21 — CGB Game Progress and Scene Regressions, discussion**. Phase 20 is complete; Phase 21 remains unstarted. When the owner chooses to continue, run **/gsd-discuss-phase 21**. Do not advance automatically; both `workflow.auto_advance` and `workflow._auto_chain_active` remain false.
+Next workflow stage: Phase 21 — CGB Game Progress and Scene Regressions, planning. Phase 21 context gathering is complete; implementation is still unstarted. When ready, run /gsd-plan-phase 21. Do not auto-advance; both workflow.auto_advance and workflow._auto_chain_active remain false.
 
 ## Performance Metrics
 
@@ -65,9 +65,9 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-01T23:18:57Z
-**Stopped at:** Phase 20 verification passed; stopped at the Phase 21 boundary
-**Resume file:** .planning/phases/GB-20-fixture-admission-tune-up/continue.md
+**Last session:** 2026-11-02T00:27:01.307Z
+**Stopped at:** Phase 21 context gathered
+**Resume file:** .planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-CONTEXT.md
 
 ## Operator Next Steps
 
