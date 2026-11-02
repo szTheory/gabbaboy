@@ -9,6 +9,7 @@
 
 #define LIBBET_SHA256 "3607412031c8287cf878299ce96e581e85b852dde703806343b95576fa3ff1a9"
 #define CGB_CONTROL_SHA256 "17822873ec8641280d9504229d96850414e872bc90de5431469a498e5271db7e"
+#define CGB_CONTROL_COMPAT_SHA256 "6a1d4a1ed58e8a51f3a5be1283a2226775867fc1373b628ecbc798d12d3ca5fc"
 
 static const gbb_accept_predicate libbet_tutorial_cleared = {
     "libbet-tutorial-cleared",
@@ -102,6 +103,23 @@ static const gbb_accept_predicate cgb_control_impossible = {
     },
 };
 
+/* A temporary header variant of the authored control exercises the actual API-reported
+ * compatibility-mode refusal. It shares the same executable bytes and source anchors. */
+static const gbb_accept_predicate cgb_control_compatibility = {
+    .name = "cgb-control-compatibility",
+    .rom_sha256 = CGB_CONTROL_COMPAT_SHA256,
+    .evaluate = cgb_control_progress_eval,
+    .observation_policy = GBB_ACCEPT_OBSERVE_PROGRESS_ONLY,
+    .source_rows = {
+        {"ready", 0xC000u, "Authored SM83 writes A5 to C000 before enabling the LCD.",
+         0x15Fu, 8, {0x3E, 0xA5, 0xEA, 0x00, 0xC0, 0xAF, 0xEA, 0x01}},
+        {"progress", 0xC001u, "A debounced RIGHT press stores one at C001 exactly once.",
+         0x17Cu, 5, {0x3E, 0x01, 0xEA, 0x01, 0xC0}},
+        {"right_input", 0x0000u, "Selects direction input and tests active-low RIGHT at JOYP.",
+         0x16Cu, 8, {0x3E, 0x20, 0xE0, 0x00, 0xF0, 0x00, 0xCB, 0x47}},
+    },
+};
+
 static bool predicate_row_anchor_match(const gbb_accept_predicate_row *row,
                                        const uint8_t *rom, size_t length) {
     if (row->anchor_length == 0) return true;
@@ -123,6 +141,10 @@ const gbb_accept_predicate *gbb_accept_predicate_find(const char *name, const ch
     if (strcmp(name, cgb_control_impossible.name) == 0 &&
         strcmp(rom_sha256, cgb_control_impossible.rom_sha256) == 0) {
         return &cgb_control_impossible;
+    }
+    if (strcmp(name, cgb_control_compatibility.name) == 0 &&
+        strcmp(rom_sha256, cgb_control_compatibility.rom_sha256) == 0) {
+        return &cgb_control_compatibility;
     }
     return NULL;
 }

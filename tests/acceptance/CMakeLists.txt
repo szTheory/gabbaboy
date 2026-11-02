@@ -693,6 +693,13 @@ add_test(NAME acceptance_cgb_progress_tracer
           --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
           --source-revision HEAD --tracer)
 set_tests_properties(acceptance_cgb_progress_tracer PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+add_test(NAME acceptance_cgb_progress_compat_rejected
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
+          --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
+          --source-revision HEAD --compatibility)
+set_tests_properties(acceptance_cgb_progress_compat_rejected PROPERTIES
+  TIMEOUT 60 PASS_REGULAR_EXPRESSION "compatibility-control pass actual=cgb-dmg-compat"
+  FAIL_REGULAR_EXPRESSION "status=pass|receipt id=" WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 gbb_add_acceptance_exit(acceptance_cgb_colour_hblank 0
   "acceptance id=cgb-colour-hblank status=pass model=cgb-cpu-e.*frame555=${gbb_hex64_re}" 60
   "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--model;cgb-cpu-e")
@@ -717,7 +724,9 @@ add_test(NAME acceptance_cgb_colour_flipped_ppm
     -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(acceptance_cgb_colour_flipped_ppm PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-gbb_add_acceptance_exit(acceptance_cgb_colour_progress_refused 3
-  "frame-unsupported-profile" 300
+# Historical case remains until Plan 21-02 performs the test-name cleanup. CGB capture is now
+# supported; this native-CGB Libbet run reaches its guest predicate but no-input never satisfies it.
+gbb_add_acceptance_exit(acceptance_cgb_colour_progress_refused 1
+  "reason=predicate-not-reached" 300
   "--acceptance;${GBB_CGB_COLOUR_CASES};--case;libbet-cgb-progress;--model;cgb-cpu-e")
 # --- Phase 11 plan 11-09 end ---

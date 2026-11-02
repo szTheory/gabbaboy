@@ -26,6 +26,7 @@ ROM_SIZE = 32768
 HALF_DOTS_PER_FRAME = 140448
 BUDGET_HALF_DOTS = 120 * HALF_DOTS_PER_FRAME
 CONTROL_SHA256 = "17822873ec8641280d9504229d96850414e872bc90de5431469a498e5271db7e"
+CONTROL_COMPAT_SHA256 = "6a1d4a1ed58e8a51f3a5be1283a2226775867fc1373b628ecbc798d12d3ca5fc"
 SOURCE_ANCHORS = (
     ("ready", 0x15F, bytes.fromhex("3e a5 ea 00 c0 af ea 01")),
     ("right_input", 0x16C, bytes.fromhex("3e 20 e0 00 f0 00 cb 47")),
@@ -128,6 +129,15 @@ def build_rom() -> tuple[bytes, dict[str, int]]:
     return bytes(rom), labels
 
 
+def build_compat_rom() -> tuple[bytes, dict[str, int]]:
+    """Derive a header-valid compatibility-mode control from the authored native-CGB image."""
+    native, labels = build_rom()
+    rom = bytearray(native)
+    rom[0x143] = 0x00
+    rom[0x14D] = header_checksum(rom)
+    return bytes(rom), labels
+
+
 def input_script(with_right: bool) -> bytes:
     lines = ["gbinput 1", "wait 1f", "mark title", "wait 1f", "mark play_start",
              "wait 1f", "mark mid"]
@@ -217,7 +227,8 @@ def resolve_source_commit(repo_root: Path, revision: str) -> str:
 
 SOURCE_FACTS = {
     "src/accept/predicate.c": (
-        CONTROL_SHA256, '"cgb-control-progress"', '"cgb-control-impossible"',
+        CONTROL_SHA256, CONTROL_COMPAT_SHA256, '"cgb-control-progress"',
+        '"cgb-control-impossible"', '"cgb-control-compatibility"',
         "0x15Fu", "0x16Cu", "0x17Cu",
         "0x3E, 0xA5, 0xEA, 0x00, 0xC0, 0xAF, 0xEA, 0x01",
         "0x3E, 0x01, 0xEA, 0x01, 0xC0",
@@ -275,6 +286,12 @@ def self_test(repo_root: Path) -> None:
                   "vblank_wait": 0x181, "spin": 0x193}:
         raise CheckError("rom-anchor-layout-mismatch")
     validate_source_anchors(rom)
+    compat_rom, compat_labels = build_compat_rom()
+    if (hashlib.sha256(compat_rom).hexdigest() != CONTROL_COMPAT_SHA256 or
+            compat_rom[0x143] != 0 or compat_rom[0x14D] != header_checksum(bytearray(compat_rom)) or
+            compat_labels != labels):
+        raise CheckError("compatibility-rom-identity-mismatch")
+    validate_source_anchors(compat_rom)
     positive = input_script(True)
     line = case_line("cgb-control-progress", "cgb-control-progress", "positive.input", rom, positive)
     validate_case_identity(line, rom, positive)
@@ -395,12 +412,47 @@ def run_tracer(runner: Path, repo_root: Path, source_revision: str, checker_path
     return 0
 
 
+def run_compatibility(runner: Path, repo_root: Path, source_revision: str,
+                      checker_path: Path) -> int:
+    self_test(repo_root)
+    source_commit, checker_sha = verify_source_identity(repo_root, source_revision, checker_path)
+    if not runner.is_file():
+        raise CheckError("runner-unavailable")
+    runner_sha = hashlib.sha256(runner.read_bytes()).hexdigest()
+    rom, _ = build_compat_rom()
+    script = input_script(True)
+    if hashlib.sha256(rom).hexdigest() != CONTROL_COMPAT_SHA256:
+        raise CheckError("compatibility-rom-identity-mismatch")
+    with tempfile.TemporaryDirectory(prefix="gbb-cgb-mode-control-") as temp:
+        work = Path(temp)
+        work.chmod(0o700)
+        (work / "compat.gb").write_bytes(rom)
+        (work / "positive.input").write_bytes(script)
+        case = case_line("cgb-control-compatibility", "cgb-control-compatibility",
+                         "positive.input", rom, script)
+        (work / "cases.txt").write_text(case, encoding="ascii")
+        helper = load_host_fixture(repo_root)
+        code, stdout, stderr = helper.run_runner(
+            str(runner), ["--acceptance", "cases.txt", "--case", "cgb-control-compatibility",
+                          "--model", "cgb-cpu-e", "--receipt"], str(work), 30)
+    expected = "reason=execution-mode-mismatch expected=cgb actual=cgb-dmg-compat"
+    if code != 3 or expected not in stdout or "status=pass" in stdout or "receipt id=" in stdout or stderr:
+        safe_out = stdout.replace(str(work), "<temp>").strip()
+        safe_err = stderr.replace(str(work), "<temp>").strip()
+        raise CheckError(f"compatibility-mode-control-failed:exit={code}:{safe_out}:{safe_err}")
+    print("compatibility-control pass actual=cgb-dmg-compat "
+          f"source_revision={source_commit} checker_sha256={checker_sha} runner_sha256={runner_sha} "
+          f"rom_sha256={hashlib.sha256(rom).hexdigest()} input_sha256={hashlib.sha256(script).hexdigest()}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runner", type=Path)
     parser.add_argument("--repo-root", type=Path)
     parser.add_argument("--source-revision")
     parser.add_argument("--tracer", action="store_true")
+    parser.add_argument("--compatibility", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     try:
@@ -416,6 +468,11 @@ def main() -> int:
                 raise CheckError("runner-and-source-revision-required")
             return run_tracer(args.runner.resolve(), repo_root, args.source_revision,
                               Path(__file__).resolve())
+        if args.compatibility:
+            if args.runner is None or args.source_revision is None:
+                raise CheckError("runner-and-source-revision-required")
+            return run_compatibility(args.runner.resolve(), repo_root, args.source_revision,
+                                     Path(__file__).resolve())
         raise CheckError("select-self-test-or-tracer")
     except (CheckError, OSError, TimeoutError, ValueError) as error:
         reason = error.reason if isinstance(error, CheckError) else str(error)
