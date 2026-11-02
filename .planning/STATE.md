@@ -4,18 +4,18 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 21
 current_phase_name: CGB Game Progress and Scene Regressions
-current_plan: 6
+current_plan: 7
 status: executing
-stopped_at: Completed GB-21-04-PLAN.md
-last_updated: "2026-11-02T03:38:33.345Z"
+stopped_at: Completed GB-21-05-PLAN.md
+last_updated: "2026-11-02T03:56:47.481Z"
 last_activity: 2026-11-02
 last_activity_desc: Completed GB-21 Plan 21-04
-state_head: 1ab7180e9f35c70246e62c252d3dd4851fa77473
+state_head: c0fa267be2f14c632ef2208354a4267ef2edd6e0
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 25
 ---
 
@@ -30,17 +30,17 @@ See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 ## Current Position
 
-Current Plan: 6
+Current Plan: 7
 Total Plans in Phase: 7
 Phase: GB-21 (CGB Game Progress and Scene Regressions) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: seven reviewed plans across five dependency waves; all four requirements are covered.
 Status: Executing Phase GB-21
-Last activity: 2026-11-02 — Completed Phase GB-21 Plan 21-06
+Last activity: 2026-11-02 — Completed Phase GB-21 Plan 21-05
 
 Completed stage: **Phase 20 — Fixture Admission Tune-up, implementation and final verification**. All nine plans are complete. All 1,711 CTests have passing evidence across two partial full runs and six focused retests; no single full-suite invocation was all-green. Exact-head pull/push CI, preview-package, and fixture-reproduction runs passed; the security audit had no open items and final code review was clean. The final GSD verifier passes all 35 implementation truths with no human checkpoint. The owner reviewed the two judgment findings: public availability or matching hashes do not establish legal permission, and historical fixture approvals were preserved without extending them to new evidence. This review resolves those verification findings only. No fixture was admitted, no legal permission was granted, and `RIGHTS-01` remains Pending. Phase 21 planning is complete; Plan 21-01 now supplies the native-CGB progress tracer and loaded-mode refusal control.
 
-Current stage: Phase 21 — CGB Game Progress and Scene Regressions, execution. Plans 21-01, 21-02, 21-03, 21-04 and 21-06 are complete. Plan 21-04 records a Potion Panic rights no-go because exact component scope and repository/public-CI rights could not be established from the unavailable creator-linked Codeberg source; downstream source/build/game facts remain not observed. Plan 21-05 is the sole eligible µCity 1.3 fallback, and Plan 21-07 owns final composition and the existing `test_budget` finding. The scene-report workflow is synthetic-only and no live defect is claimed. Both workflow.auto_advance and workflow._auto_chain_active remain false.
+Current stage: Phase 21 — CGB Game Progress and Scene Regressions, execution. Plans 21-01 through 21-06 are complete. Plan 21-04 records the Potion Panic no-go because the inaccessible creator-linked source prevented verification of exact component scope; that fetch failure does not establish a license restriction. Plan 21-05 pinned author-linked µCity 1.3 source `d1880a2a112d7c26f16c0fc06a15b6c32fdc9137`, but the required `source/engine/hardware.inc` has no identified grant or notice, so repository/public-CI rights scope remains unestablished. Toolchain, build confinement, ROM and game facts remain not observed. Plan 21-07 owns final composition and the existing `test_budget` finding. The scene-report workflow is synthetic-only and no live defect is claimed. Both workflow.auto_advance and workflow._auto_chain_active remain false.
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 | Phase GB-21 P02 | 25min | 2 tasks | 8 files |
 | Phase GB-21 P06 | 17min | 2 tasks | 4 files |
 | Phase GB-21 P04 | 4min | 3 tasks | 2 files |
+| Phase GB-21 P05 | 15min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -78,13 +79,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-02T03:38:33.256Z
-**Stopped at:** Completed GB-21-04-PLAN.md
+**Last session:** 2026-11-02T03:56:47.390Z
+**Stopped at:** Completed GB-21-05-PLAN.md
 **Resume file:** None
 
 ## Operator Next Steps
 
-Phase 20 is complete and verified. The owner reviewed the two judgment findings; this does not admit a fixture or resolve `RIGHTS-01`, which remains Pending. Phase 21 — CGB Game Progress and Scene Regressions — has seven reviewed plans across five waves. Plans 21-01, 21-02, 21-03, 21-04 and 21-06 are complete. The primary Potion Panic attempt is a final rights no-go with later facts not observed. Plan 21-05 is the sole eligible fallback; Plan 21-07 remains for final composition. The scene-report workflow makes no live-defect or private-media claim, and `test_budget` still has two existing over-limit fixture-admission tests assigned to Plan 21-07. Phase 22 — Composition and Microtest Evidence — is next after Phase 21 closes. When the owner chooses to continue Phase 21, use **/gsd-execute-phase 21**. Phase 21 remains active and both auto-advance flags remain false.
+Phase 20 is complete and verified. The owner reviewed the two judgment findings; this does not admit a fixture or resolve `RIGHTS-01`, which remains Pending. Phase 21 — CGB Game Progress and Scene Regressions — has seven reviewed plans across five waves; Plans 21-01 through 21-06 are complete. Both bounded candidate attempts are no-go: Potion Panic stopped before source verification, while µCity 1.3 was source-pinned but stopped at the unestablished grant scope for a required hardware include. Neither no-go claims that an inaccessible fetch itself is a license restriction; downstream build/game facts remain unobserved. Plan 21-07 remains for final composition and the existing `test_budget` finding. The scene-report workflow makes no live-defect or private-media claim. Phase 22 — Composition and Microtest Evidence — is next after Phase 21 closes. When the owner chooses to continue Phase 21, use **/gsd-execute-phase 21**. Phase 21 remains active and both auto-advance flags remain false.
 
 ## Decisions
 
@@ -96,4 +97,5 @@ Phase 20 is complete and verified. The owner reviewed the two judgment findings;
 - [Phase GB-21]: Personal ROMs, saves, states and captures remain outside repository and hosted regression evidence; owner play is optional.
 - [Phase GB-21]: Carry the existing test_budget timeout finding into Plan 21-07 without changing unrelated test declarations or adding an exception.
 - [Phase GB-21]: Potion Panic stopped at the rights gate because the creator-linked exact source and component-level repository/public-CI scope could not be established; downstream facts remain not observed.
-- [Phase GB-21]: Keep µCity 1.3 as the sole eligible fallback after the committed primary no-go; do not start it until the owner/orchestrator continues Phase 21.
+- [Phase GB-21]: After Potion Panic's checked no-go, assess only µCity 1.3's preferred `ucity.gbc`; the required hardware include has no identified grant or notice, so record a rights-scope no-go before build and keep downstream facts not observed.
+- [Phase GB-21]: µCity 1.3 remains a concrete rights-scope no-go: required source/engine/hardware.inc has no identified grant or notice; do not infer license restriction from prior Codeberg reachability, and keep toolchain/build/game fields not observed.
