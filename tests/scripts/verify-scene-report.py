@@ -553,7 +553,11 @@ def verify_ctest_build(root, names, source_paths):
         cache_text = cache.read_text(encoding="utf-8")
     except OSError:
         raise Reject("scene-report-build-unavailable") from None
-    if f"CMAKE_HOME_DIRECTORY:INTERNAL={root}" not in cache_text:
+    home_prefix = "CMAKE_HOME_DIRECTORY:INTERNAL="
+    home_directory = next((line[len(home_prefix):] for line in cache_text.splitlines()
+                           if line.startswith(home_prefix)), None)
+    if home_directory is None or os.path.normcase(os.path.normpath(home_directory)) != \
+            os.path.normcase(os.path.normpath(str(root))):
         raise Reject("scene-report-build-source-mismatch")
     try:
         listing = subprocess.run(

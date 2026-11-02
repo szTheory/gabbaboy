@@ -1601,13 +1601,14 @@ def _write_synthetic(root: Path) -> str:
                     "index_path": "THIRD_PARTY_NOTICES.md"},
     }
     manifest_path = root / "fixtures/synthetic/manifest.json"
-    manifest_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest_path.write_bytes((json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8"))
     manifest_digest = sha256(manifest_path.read_bytes())
-    (root / "THIRD_PARTY_NOTICES.md").write_text(
+    (root / "THIRD_PARTY_NOTICES.md").write_bytes((
         "### Manifest and notice digests\n\n"
         "| Fixture directory | `manifest.json` SHA-256 | `LICENSE.txt` SHA-256 |\n"
         "|---|---|---|\n"
-        f"| `synthetic` | `{manifest_digest}` | `{sha256(license_bytes)}` |\n", encoding="utf-8")
+        f"| `synthetic` | `{manifest_digest}` | `{sha256(license_bytes)}` |\n"
+    ).encode("utf-8"))
     git(root, "add", "fixtures/synthetic", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json")
     tree = git(root, "write-tree").decode("ascii").strip()
     commit = git(root, "commit-tree", tree, "-p", BASELINE_COMMIT, "-m",

@@ -1373,13 +1373,12 @@ def _write_synthetic_admission_fixture(root: Path) -> dict[str, Any]:
     (root / manifest_path).write_bytes(manifest_raw)
     manifest_digest = sha256(manifest_raw)
     license_digest = manifest["notices"]["sha256"]
-    (root / "THIRD_PARTY_NOTICES.md").write_text(
+    (root / "THIRD_PARTY_NOTICES.md").write_bytes((
         "### Manifest and notice digests\n\n"
         "| Fixture directory | `manifest.json` SHA-256 | `LICENSE.txt` SHA-256 |\n"
         "|---|---|---|\n"
-        f"| `synthetic-cgb` | `{manifest_digest}` | `{license_digest}` |\n",
-        encoding="utf-8",
-    )
+        f"| `synthetic-cgb` | `{manifest_digest}` | `{license_digest}` |\n"
+    ).encode("utf-8"))
     git(root, "add", fixture, "THIRD_PARTY_NOTICES.md")
     git(root, "add", "-f", f"{fixture}/candidate.gbc")
     git(root, "commit", "--quiet", "-m", "synthetic admitted CGB fixture")
