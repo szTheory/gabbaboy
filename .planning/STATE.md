@@ -6,16 +6,16 @@ current_phase: 21
 current_phase_name: CGB Game Progress and Scene Regressions
 current_plan: 7
 status: executing
-stopped_at: Completed GB-21-05-PLAN.md
-last_updated: "2026-11-02T03:56:47.481Z"
+stopped_at: Completed GB-21-07-PLAN.md
+last_updated: "2026-11-02T08:51:18.912Z"
 last_activity: 2026-11-02
-last_activity_desc: Completed GB-21 Plan 21-04
-state_head: c0fa267be2f14c632ef2208354a4267ef2edd6e0
+last_activity_desc: Completed GB-21 Plan 21-07 local qualification; exact-head hosted checks are the remaining gate
+state_head: 893ecac8f70b2b6484c17686548f5ad091b7733b
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
   percent: 25
 ---
 
@@ -32,15 +32,15 @@ See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 Current Plan: 7
 Total Plans in Phase: 7
-Phase: GB-21 (CGB Game Progress and Scene Regressions) — EXECUTING
+Phase: GB-21 (CGB Game Progress and Scene Regressions) — FINAL QUALIFICATION
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: seven reviewed plans across five dependency waves; all four requirements are covered.
-Status: Executing Phase GB-21
-Last activity: 2026-11-02 — Completed Phase GB-21 Plan 21-05
+Status: Local execution complete; exact-head hosted and installed-consumer qualification pending
+Last activity: 2026-11-02 — Completed Phase GB-21 Plan 21-07 local qualification
 
 Completed stage: **Phase 20 — Fixture Admission Tune-up, implementation and final verification**. All nine plans are complete. All 1,711 CTests have passing evidence across two partial full runs and six focused retests; no single full-suite invocation was all-green. Exact-head pull/push CI, preview-package, and fixture-reproduction runs passed; the security audit had no open items and final code review was clean. The final GSD verifier passes all 35 implementation truths with no human checkpoint. The owner reviewed the two judgment findings: public availability or matching hashes do not establish legal permission, and historical fixture approvals were preserved without extending them to new evidence. This review resolves those verification findings only. No fixture was admitted, no legal permission was granted, and `RIGHTS-01` remains Pending. Phase 21 planning is complete; Plan 21-01 now supplies the native-CGB progress tracer and loaded-mode refusal control.
 
-Current stage: Phase 21 — CGB Game Progress and Scene Regressions, execution. Plans 21-01 through 21-06 are complete. Plan 21-04 records the Potion Panic no-go because the inaccessible creator-linked source prevented verification of exact component scope; that fetch failure does not establish a license restriction. Plan 21-05 pinned author-linked µCity 1.3 source `d1880a2a112d7c26f16c0fc06a15b6c32fdc9137`, but the required `source/engine/hardware.inc` has no identified grant or notice, so repository/public-CI rights scope remains unestablished. Toolchain, build confinement, ROM and game facts remain not observed. Plan 21-07 owns final composition and the existing `test_budget` finding. The scene-report workflow is synthetic-only and no live defect is claimed. Both workflow.auto_advance and workflow._auto_chain_active remain false.
+Current stage: Phase 21 — CGB Game Progress and Scene Regressions, final qualification. Plans 21-01 through 21-07 are summarized; local configure/build, all 1,724 CTests, the fixed 60-second test-budget gate, source-bound receipt, and clean implementation review pass at source `893ecac8f70b2b6484c17686548f5ad091b7733b`. Exact-head hosted native/platform and installed-consumer checks remain pending on PR #140; earlier stale workflows are not proof. Potion Panic is a no-go because exact component grants and repository/public-CI source scope were not established after its creator-linked source fetch failed. µCity 1.3 is a no-go because required `source/engine/hardware.inc` has no identified grant or notice. Neither outcome asserts license prohibition; neither game was run and downstream tool/build/ROM facts remain not observed. FIXT-01 remains pending. The CGB ROM result is harness-only, and the scene workflow is synthetic-only with no live defect claimed. Both workflow.auto_advance and workflow._auto_chain_active remain false.
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 | Phase GB-21 P06 | 17min | 2 tasks | 4 files |
 | Phase GB-21 P04 | 4min | 3 tasks | 2 files |
 | Phase GB-21 P05 | 15min | 3 tasks | 1 files |
+| Phase 21 P07 | 293min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -79,13 +80,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-02T03:56:47.390Z
-**Stopped at:** Completed GB-21-05-PLAN.md
-**Resume file:** None
+**Last session:** 2026-11-02T08:51:18.815Z
+**Stopped at:** Completed GB-21-07-PLAN.md
+**Resume file:** .planning/phases/GB-21-cgb-game-progress-and-scene-regressions/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 20 is complete and verified. The owner reviewed the two judgment findings; this does not admit a fixture or resolve `RIGHTS-01`, which remains Pending. Phase 21 — CGB Game Progress and Scene Regressions — has seven reviewed plans across five waves; Plans 21-01 through 21-06 are complete. Both bounded candidate attempts are no-go: Potion Panic stopped before source verification, while µCity 1.3 was source-pinned but stopped at the unestablished grant scope for a required hardware include. Neither no-go claims that an inaccessible fetch itself is a license restriction; downstream build/game facts remain unobserved. Plan 21-07 remains for final composition and the existing `test_budget` finding. The scene-report workflow makes no live-defect or private-media claim. Phase 22 — Composition and Microtest Evidence — is next after Phase 21 closes. When the owner chooses to continue Phase 21, use **/gsd-execute-phase 21**. Phase 21 remains active and both auto-advance flags remain false.
+Phase 21 Plan 21-07 local implementation and qualification are complete. The final source passed configure/build, 1,724/1,724 CTests, the unchanged 60-second budget, and the source-bound receipt; exact-head hosted native/platform and installed-consumer checks still need to pass on PR #140. Earlier workflow runs are stale. Once those checks pass, run **/gsd-verify-work 21** for shared phase closure. Phase 22 — Composition and Microtest Evidence — remains not started; after Phase 21 closes, the owner-selected next phase command is **/gsd-discuss-phase 22**. Do not invoke that command automatically. Both auto-advance flags remain false.
 
 ## Decisions
 
@@ -99,3 +100,6 @@ Phase 20 is complete and verified. The owner reviewed the two judgment findings;
 - [Phase GB-21]: Potion Panic stopped at the rights gate because the creator-linked exact source and component-level repository/public-CI scope could not be established; downstream facts remain not observed.
 - [Phase GB-21]: After Potion Panic's checked no-go, assess only µCity 1.3's preferred `ucity.gbc`; the required hardware include has no identified grant or notice, so record a rights-scope no-go before build and keep downstream facts not observed.
 - [Phase GB-21]: µCity 1.3 remains a concrete rights-scope no-go: required source/engine/hardware.inc has no identified grant or notice; do not infer license restriction from prior Codeberg reachability, and keep toolchain/build/game fields not observed.
+- [Phase 21]: Potion Panic and µCity 1.3 remain rights/source-scope no-go outcomes; neither license prohibition is inferred, and FIXT-01 stays pending because required game build and ROM facts were not observed.
+- [Phase 21]: The original CGB control remains harness-only under CGB-CPU-E; repeatable frame/audio digests do not qualify accuracy, physical hardware, perceptual behavior, mode-3 timing, or general compatibility.
+- [Phase 21]: Fixture-admission mutation work was reduced to fit the unchanged deterministic 60-second budget without a baseline refresh or unrelated v0.3 repair.

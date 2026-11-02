@@ -1,9 +1,9 @@
 ---
 phase: GB-21-cgb-game-progress-and-scene-regressions
-reviewed: 2026-11-02T07:03:26Z
-source_revision: d066a0fbae31ca04ddc23ff837bbcc1eada0604b
+reviewed: 2026-11-02T08:24:05Z
+source_revision: 893ecac8f70b2b6484c17686548f5ad091b7733b
 depth: deep
-files_reviewed: 11
+files_reviewed: 12
 files_reviewed_list:
   - docs/cgb-profile.md
   - docs/game-acceptance.md
@@ -15,6 +15,7 @@ files_reviewed_list:
   - tests/scripts/verify-cgb-candidates.py
   - tests/scripts/verify-cgb-game-evidence.py
   - tests/scripts/verify-cgb-progress.py
+  - tests/scripts/verify-fixture-admission.py
   - tests/scripts/verify-scene-report.py
 findings:
   critical: 0
@@ -26,14 +27,14 @@ status: clean
 
 # Phase GB-21 Plan 21-07: Code Review Report
 
-**Reviewed:** 2026-11-02T07:03:26Z
+**Reviewed:** 2026-11-02T08:24:05Z
 **Depth:** deep
-**Files Reviewed:** 11
+**Files Reviewed:** 12
 **Status:** clean
 
 ## Summary
 
-Earlier findings WR-01 through WR-04 are closed. At `d066a0fb`, the CTest inventory/order and Debug scene-report changes work, all nine focused tests pass, and the Windows failure-dump parser now preserves unquoted paths containing spaces.
+Earlier findings WR-01 through WR-06 are closed. At `893ecac8`, the pin parser accepts only no terminator, LF, or CRLF; malformed and symbolic pins reject, while immutable commit, ancestry, manifest, and blob checks remain intact.
 
 ## Narrative Findings (AI reviewer)
 
@@ -122,8 +123,29 @@ Earlier findings WR-01 through WR-04 are closed. At `d066a0fb`, the CTest invent
 - **Focused verification:** `ctest --test-dir build -C Debug --output-on-failure -R '^(phase21_.*|acceptance_cgb_progress_(controls|tracer))$'` passed all nine tests on this revision.
 - **Disposition:** No remaining findings.
 
+
+## Follow-up Review — b8f80f48
+
+- **Line-ending handling:** LF and CRLF positive pin controls pass, as does the focused `fixture_admission_controls` CTest (1/1). The textual `refs/heads/main` symbolic pin is rejected. After pin parsing, `check_commit` still requires a full lowercase 40-hex commit object; ancestry and exact pinned manifest/file bytes are still checked, so LF/CRLF support does not loosen the immutable source binding.
+- **Full-suite evidence:** The execution record for this head reports the full CTest suite passed 1724/1724; this review independently reran the fixture-admission controls.
+
+### WR-06: Admission pin accepts a lone carriage return terminator — CLOSED
+
+**Severity:** WARNING  
+**File:** `tests/scripts/verify-fixture-admission.py:767`  
+**Issue:** The expression `[0-9a-f]{40}\r?\n?` makes carriage return and newline independently optional, so it accepts 40 lowercase hex digits followed by a lone `\r`. `rstrip("\r\n")` then removes that character and `check_commit` accepts the otherwise valid commit. This format is outside the stated LF/CRLF normalization and malformed-pin rejection contract. Directly evaluating the parser pattern confirms LF, CRLF, and lone CR all match; the self-test only covers the first two positives and a symbolic negative.
+**Fix verified:** Commit `893ecac8` uses `[0-9a-f]{40}(?:\n|\r\n)?` and adds a bare-CR negative mutation. LF and CRLF positives, plus symbolic and bare-CR rejection, pass in the fixture-admission controls.
+
+
+## Follow-up Review — 893ecac8
+
+- **Pin endings:** The grouped ending accepts no terminator, LF, and CRLF; it rejects a lone CR and symbolic content. The focused `fixture_admission_controls` CTest passed 1/1, and direct pattern checks confirmed each form.
+- **Immutable admission binding:** The pin remains constrained to a full lowercase 40-hex commit; the checker still verifies that commit exists, is in current history, and contains byte-identical manifest and fixture blobs. The line-ending allowance applies only to the pin text.
+- **Focused suite:** The execution record for this head reports the 10-test selection passed. This review independently reran `fixture_admission_controls` successfully.
+- **Disposition:** No remaining findings.
+
 ---
 
-_Reviewed: 2026-11-02T07:03:26Z_
+_Reviewed: 2026-11-02T08:24:05Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 _Depth: deep_
