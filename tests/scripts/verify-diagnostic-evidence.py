@@ -856,7 +856,7 @@ def run_check(args: argparse.Namespace) -> int:
     root = args.repo_root.resolve(strict=True)
     revision = resolve_revision(root, args.source_revision)
     snapshot = load_snapshot(root, revision)
-    build = (args.build_dir or root / "build/phase1").resolve(strict=True)
+    build = (args.build_dir or root / "build").resolve(strict=True)
     result = check_snapshot(snapshot, revision, root, build, complete_docs=True)
     if args.write_evidence:
         if args.write_evidence.is_absolute():
