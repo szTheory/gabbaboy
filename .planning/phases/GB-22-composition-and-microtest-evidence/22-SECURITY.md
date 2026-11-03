@@ -1,12 +1,31 @@
 ---
 phase: GB-22-composition-and-microtest-evidence
-reviewed_source: 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04
+reviewed_source: 93004a65143a4bc3199e1f028b003e2d3dd11ef6
 review_level: ASVS 1
 source_review: clean
 status: source-review-clean
+verdict: SECURED
+blocking_findings: 0
+threats_open: 0
+exception_review: D-143 (1 of 1; ordinary review/gap counts unchanged)
 ---
 
 # Phase 22 Security Review
+
+## Current D-143 C1 Review
+
+- **Reviewed source:** `93004a65143a4bc3199e1f028b003e2d3dd11ef6`
+- **Review level:** ASVS 1
+- **Verdict:** SECURED; zero blocking findings
+- **Scope:** The C1 OSC payload-disclosure edge of T-22-38 in `tests/scripts/verify-diagnostic-evidence.py`.
+
+The independent security auditor confirmed that the C1 OSC payload and delimiters are removed after UTF-8 decoding and before generic control cleanup, while ordinary surrounding text survives. Existing ESC CSI/OSC handling, native/Windows/home-root replacement, whitespace cleanup, and the 700-character limit remain. The augmented byte control is called from the existing `phase22_evidence_controls` self-test.
+
+The reviewed source's direct control passes. Disabling only the C1 matcher produces `diagnostic-sanitization-control-failed`, and restoring it passes. The amended regression also fails against the exact pre-C1 sanitizer at `f59ebd166a354537343dd9e87b870698cc686b2b`. The ignored records `build/phase22/c1-fail-first.json` and `build/phase22/c1-direct-and-mutation.json` retain the local results. AST comparison found changes only in `sanitized_diagnostic` and `diagnostic_sanitization_control`; registrations, expected-test policy, presets, CI workflow and the existing 60-second CTest limit are unchanged. Output draining, caps, termination, reader joins, child timeouts and retained causal controls remain intact.
+
+The earlier ASVS result at `f59ebd166a354537343dd9e87b870698cc686b2b` did not cover the C1 form and is not used as evidence for this closure. This is the single D-143 exception review; the two ordinary review-fix rounds and one gap round remain used. Final local full-suite, live Windows/remote and merge qualification are separate outstanding gates, so Phase 22 remains open until they pass.
+
+## Historical Security Review — 06d2cbc1
 
 The independent source audit reviewed exact source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`. No unresolved source-level correctness or security findings remain. This audit occurred before the Phase 22 PR was opened; the final operational status of T-22-32 is recorded in `build/phase22/remote-evidence.json`.
 

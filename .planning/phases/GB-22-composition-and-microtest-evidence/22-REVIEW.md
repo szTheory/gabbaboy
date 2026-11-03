@@ -1,20 +1,31 @@
 ---
 phase: GB-22-composition-and-microtest-evidence
-reviewed: 2026-11-03
-depth: updated-source scoped review
-reviewed_source: f59ebd166a354537343dd9e87b870698cc686b2b
+reviewed: 2026-11-03T16:57:11Z
+depth: standard
+reviewed_source: 93004a65143a4bc3199e1f028b003e2d3dd11ef6
+review_base: f59ebd166a354537343dd9e87b870698cc686b2b
 review_round: 2 of 2
-files_reviewed: 3
+exception_review: D-143 (1 of 1; ordinary review-round count unchanged)
+files_reviewed: 1
 files_reviewed_list:
-  - tests/scripts/verify-cgb-progress.py
   - tests/scripts/verify-diagnostic-evidence.py
-  - tests/scripts/verify-planning-labels.py
 findings:
   critical: 0
-  warning: 1
+  warning: 0
   info: 0
-  total: 1
-status: blocked
+  necessity: 0
+  total: 0
+status: clean
+prior_source_review:
+  reviewed_source: f59ebd166a354537343dd9e87b870698cc686b2b
+  review_round: 2 of 2
+  files_reviewed: 3
+  findings:
+    critical: 0
+    warning: 1
+    info: 0
+    total: 1
+  status: blocked
 historical_review:
   reviewed: 2026-11-03T13:00:48Z
   reviewed_source: 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04
@@ -91,3 +102,30 @@ The D-142 review used the second and final review-fix round. At source `4e532d76
 ## D-143 Owner-Approved Exception
 
 On 2026-11-03, the owner authorized exactly one additional fix-and-independent-review cycle, limited to the C1 OSC payload leak. Amend the existing 22-12 plan in place. The prior two review-fix rounds and the single gap round remain used; no new plan, gap round, broader source repair, or review-cap reset is authorized. If the C1 correction or its fresh independent review surfaces another blocking correctness/security issue, stop Phase 22 for owner scope resolution. If the C1 review is clean, continue the already approved final local and exact-head PR qualification. No final full-suite or fresh remote qualification has started at the source named above.
+
+## D-143 Exception Review (one exception review)
+
+**Reviewed:** 2026-11-03T16:57:11Z
+
+**Depth:** standard, focused exact-source review
+
+**Source identity:** `93004a65143a4bc3199e1f028b003e2d3dd11ef6`
+
+**Review base:** `f59ebd166a354537343dd9e87b870698cc686b2b`
+
+**Files reviewed:** `tests/scripts/verify-diagnostic-evidence.py`
+
+**Ordinary review-fix ledger:** 2 of 2 used; unchanged. This is the single D-143 exception review and does not reset the ordinary-round or gap-round counters.
+
+**Status:** clean; no findings.
+
+### Review Evidence
+
+- The checker decodes byte diagnostics as UTF-8 with replacement before applying the C1 OSC expression. The expression removes the complete `U+009D … U+009C` span non-greedily across line breaks before roots are replaced and remaining controls are normalized.
+- The synthetic diagnostic is UTF-8 bytes. Its sentinels before and after the OSC remain required, while the title payload and both C1 delimiters must be absent. The control also retains coverage for existing 7-bit CSI/OSC handling, Unix/Windows/home-root redaction, and the 700-character output cap.
+- The fail-first mutation replaces only `C1_OSC_ESCAPE` with a never-match expression and requires the sanitization assertion to reject the surviving printable C1 payload; the original expression is restored in `finally`.
+- `tests/CMakeLists.txt` is byte-for-byte unchanged between the review base and source. The existing `phase22_evidence_controls` CTest still invokes `--self-test-controls` with its 60-second timeout and planning label; no CTest wiring or limit changed in this delta.
+
+### Narrative Findings (AI reviewer)
+
+All reviewed changes meet the scoped requirements. No issues found.
