@@ -1,21 +1,21 @@
 ---
 phase: GB-22-composition-and-microtest-evidence
-reviewed: 2026-11-03T12:04:42Z
+reviewed: 2026-11-03T13:00:48Z
 depth: deep
 files_reviewed: 12
 files_reviewed_list:
   - CMakeLists.txt
-  - docs/cgb-profile.md
-  - docs/diagnostic-evidence.md
   - tests/CMakeLists.txt
-  - tests/acid2/control.asm
+  - tests/cmake/ci-lanes.cmake
+  - tests/data/cgb-candidates/ucity-1.3.json
   - tests/expected-tests.txt
-  - tests/external/diagnostic-assessment.json
-  - tests/external/gbmicrotest-inventory.json
   - tests/scripts/run-acid2-local.py
-  - tests/scripts/verify-acid2-masks.py
+  - tests/scripts/verify-cgb-candidates.py
+  - tests/scripts/verify-cgb-progress.py
   - tests/scripts/verify-diagnostic-admission.py
   - tests/scripts/verify-diagnostic-evidence.py
+  - tests/scripts/verify-no-phase-paths.py
+  - tests/scripts/verify-planning-labels.py
 findings:
   critical: 0
   warning: 0
@@ -26,32 +26,56 @@ status: clean
 
 # Phase GB-22: Code Review Report
 
-**Reviewed:** 2026-11-03T12:04:42Z
-**Depth:** deep  
-**Files Reviewed:** 12  
-**Source identity:** `25f8966cdbb34733b7e51f58f97182caa2b9ea39`
+**Reviewed:** 2026-11-03T13:00:48Z
+
+**Depth:** deep
+
+**Files Reviewed:** 12
+
+**Source identity:** `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`
+
+**Review base:** `7f57dcc3542fb274f74257f48c6cd9d1c7e49741`
+
 **Status:** clean
 
 ## Summary
 
-Re-ran the scoped Phase 22 source review at exact head `25f8966cdbb34733b7e51f58f97182caa2b9ea39`. No source files changed since the prior clean review at `ab3fafb9`; the intervening commit only changed planning artifacts. The immutable evidence check passes without classifying the checker’s SVG self-test literals as payloads. UTF-8 SVG roots, namespace-prefixed SVG, internal-subset doctypes, UTF-16LE/BE SVGs with and without BOMs, AVIF/HEIC/ICO signatures, and the Game Boy ROM logo are refused under extensionless names. Source-code text containing SVG examples remains allowed.
+Reviewed the Phase 22 source delta through `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`, including the CTest inventory wiring and the planning-label exception. The build-directory regression and inventory-only command bypasses found during review are fixed and covered by causal controls. All reviewed files meet quality standards. No unresolved findings remain.
 
-Added blobs are processed one at a time with a per-blob output cap. Admission assessment, inventory, Phase 20 checker, policy and manifest inputs are bound to the immutable source revision. Source-archive configuration and bounded subprocess controls pass. The no-go remains effective: all seven gates are unresolved, admitted=0 and executed=0. No upstream payload was fetched or admitted, and no real diagnostic result was produced. All reviewed files meet quality standards. No issues found.
+The evidence contract remains metadata-only: 513 named cases, seven unresolved real-fixture gates, zero admissions, and zero executions. No upstream payload was fetched or run, and no real diagnostic result was produced.
 
 ## Verification Evidence
 
-- `python3 -I tests/scripts/verify-diagnostic-admission.py --self-test-controls` — passed all 12 tests, including `test_uncommitted_approval_mutants_cannot_authorize_real_inputs`; its otherwise plausible approved assessment/inventory mutant is refused after separate Phase 20 checker and policy mutations.
-- `python3 -I tests/scripts/verify-diagnostic-evidence.py --self-test-controls --repo-root . --source-revision 25f8966cdbb34733b7e51f58f97182caa2b9ea39` — passed; controls explicitly reject renamed `.gb`, `.zip`, `.rar`, `.zst`, `.dat`, WebP/SVG, extensionless ROM/image signatures, and SVG variants; bounded output, immutable boundary and no-Git source-archive controls also pass.
-- `python3 -I tests/scripts/verify-diagnostic-evidence.py --check --repo-root . --source-revision 25f8966cdbb34733b7e51f58f97182caa2b9ea39 --build-dir build` — passed with 513 cases, seven unresolved gates, admitted=0 and executed=0.
-- `python3 -I tests/scripts/verify-diagnostic-admission.py --require-approved --repo-root . --source-revision 25f8966cdbb34733b7e51f58f97182caa2b9ea39` — refused with exit 2 and all seven gates unresolved.
-- Direct content probes: UTF-16LE and UTF-16BE SVG with and without BOM were refused; standard UTF-8 SVG was refused; the checker’s source-code example was not classified as SVG payload.
+- `verify-diagnostic-evidence.py --check --repo-root . --source-revision 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04 --build-dir build` passed with 513 cases, seven unresolved gates, admitted=0, and executed=0.
+- `verify-planning-labels.py --self-test` passed 17 positive and negative controls, including missing classification, a build-executable injection, extra evidence-write flags, Python `-c` pass-output substitution, and an absolute Python stub.
+- In a clean detached checkout configured only in `build-cmake-3.25.3`, the configured CTest contract, immutable evidence controls, live planning-label check, and planning-label controls all passed. This confirms the checker uses the active CMake binary directory even when `<repo>/build` is absent.
+- `verify-diagnostic-evidence.py --self-test-controls` passed in the clean configured checkout, including immutable boundary, source-archive, and payload-rejection controls.
+- `verify-cgb-candidates.py --self-test-controls` passed with 71 negative controls in an isolated temporary Git configuration. `verify-diagnostic-admission.py --self-test-controls` passed 12 controls.
+- `verify-cgb-progress.py --self-test --repo-root .` passed its observation, identity, timing, digest, PCM, dump, source-history, and Git-hook controls under an isolated temporary Git configuration.
+- `verify-no-phase-paths.py --self-test` passed 19 controls and `--check` scanned 594 files. `run-acid2-local.py --self-test` passed six checks.
+
+## Finding Dispositions
+
+- **CR-01, immutable Phase 20 checker/policy binding:** Closed; exact-head admission controls reject worktree mutations to the checker and policy.
+- **T-22-30, renamed ROM/archive/payload guard:** Closed; immutable evidence controls cover renamed and extensionless payloads.
+- **CR-02, SVG root and encoding coverage:** Closed for the reviewed UTF-8, namespaced, internal-subset doctype, and UTF-16 variants.
+- **CR-03, checker self-classification as SVG:** Closed; the immutable evidence check passes.
+- **CR-04, no-Git source-archive configure:** Closed; the source-archive control passes.
+- **WR-01, bounded subprocess output:** Closed in the reviewed source.
+- **WR-02, aggregate added-file buffering:** Closed; added blobs are inspected one at a time.
+- **CR-05, temporary Git hook/signing execution:** Closed; the exact-head controls use isolated Git configuration and pass.
+- **CR-06, evidence CTest using the wrong build directory:** Closed at `24c4e191`; the contract passes from a clean alternate binary directory.
+- **WR-03, inventory-only command accepted extra flags:** Closed at `9d39195a`; an output-flag mutation is rejected.
+- **CR-07, inventory-only command could replace the checker invocation:** Closed at `06d2cbc1`; the verifier binds to the current absolute Python executable and rejects both `python -c` and a Python stub.
 
 ## Narrative Findings (AI reviewer)
 
-All previously recorded review findings are closed at this exact source. No unresolved findings.
+All reviewed files meet quality standards. No unresolved findings.
 
 ---
 
-_Reviewed: 2026-11-03T12:04:42Z_
-_Reviewer: the agent (gsd-code-reviewer)_  
+_Reviewed: 2026-11-03T13:00:48Z_
+
+_Reviewer: the agent (gsd-code-reviewer)_
+
 _Depth: deep_

@@ -1,44 +1,47 @@
 # Phase 22 Final Evidence
 
-**Scope:** Owner-approved D-141 synthetic-plus-metadata closeout. DIAG-01, DIAG-02, and RIGHTS-01 remain Pending with their original definitions. The seven real-fixture evidence gates remain a no-go; no license prohibition is inferred.
+**Scope:** Owner-approved D-141 synthetic-plus-metadata closeout. DIAG-01, DIAG-02, and RIGHTS-01 retain their original definitions and remain Pending. All seven real-fixture gates remain unresolved; no license prohibition is inferred.
 
 ## Immutable Source and Metadata
 
-The metadata assessment retains its historical source revision `559b5f7296f957a1a1fea278056a908f9a3d9339`. The current source and local evidence checks below use commit `25f8966cdbb34733b7e51f58f97182caa2b9ea39`; the exact final boundary source and its full-suite result are recorded with the PR run record.
+The source-bound metadata assessment preserves historical source revision `559b5f7296f957a1a1fea278056a908f9a3d9339`. Local immutable checks at reviewed source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04` report 513 named metadata cases: 480 shared-macro, two inline, and 31 initial no-protocol exclusions. All seven required gates remain unresolved, admitted = 0, and executed = 0. Approval exits 2 with `scope-resolution-required` and the exact seven-gate list.
 
-The generated local snapshot is `build/phase22/evidence.json`, SHA-256 `9f06ec7c479524f9ea8bfaf6b9ef1f71c92d17f07d75bb6da81ab123b1d93cec`. At the recorded source it reports:
+The generated snapshot is `build/phase22/evidence.json`, SHA-256 `2f059fe21aac5131c96d4547a9937428d64911502e4ba5b85ba124e9e126223b`. It records the checker digest and immutable case/requirement/source-boundary results. DIAG-01/02 and RIGHTS-01 remain Pending; the underlying definitions and package boundary records are unchanged.
 
-- 513 named metadata cases: 480 shared-macro, two inline, and 31 initial no-protocol exclusions.
-- 482 candidates remain blocked/not observed; final suite accounting is incomplete.
-- All seven required gates are unresolved; admitted = 0 and executed = 0.
-- Real approval exits 2 with `scope-resolution-required` and the exact seven-gate list.
-- Requirement definitions and source/package boundaries remain unchanged; DIAG-01/02 and RIGHTS-01 are Pending.
+## Phase 21 Squash-Reference Reconciliation
+
+The fallback `ucity-1.3.json` points to the primary no-go record `tests/data/cgb-candidates/potion-panic.json`. Its historical reference used Phase 21 branch commit `1ab7180e9f35c70246e62c252d3dd4851fa77473`, which ceased to be an ancestor after PR #140 was squash-merged. The record is now pinned to the squash merge commit `bef2cfbdbdd0fc9b2d78631586827e29e0241b3b`; only the commit pointer changed. The referenced record's Git blob is `f3583f2933e48479b275e68beb275cfd1f356c01` at the squash commit and in the current source, and its SHA-256 is `9a23c0c13dba57f7806b19501756f09616c6cbbebe1e4bcef04eb099bf8ca352`. The verifier reads only that immutable path and digest, while separately binding the selected project source. Candidate controls reject a non-ancestor reference even when the blob is present and reject a mismatched record digest.
 
 ## Local Checks
 
 | Check | Source | Result |
 |---|---|---|
-| `verify-diagnostic-evidence.py --check --repo-root . --source-revision HEAD --write-evidence build/phase22/evidence.json` | `25f8966c` | Passed; immutable inventory, claims, no-go, requirement and source/product boundary checks. |
-| `verify-diagnostic-evidence.py --self-test-controls --repo-root . --source-revision 25f8966cdbb34733b7e51f58f97182caa2b9ea39` | `25f8966c` | Passed; roster/gate/boundary mutations, renamed payloads, UTF-8/UTF-16 SVG, AVIF/HEIC/ICO/ROM, bounded subprocess, source archive, and checker self-scan. |
-| `verify-diagnostic-admission.py --self-test-controls --repo-root . --source-revision HEAD` | `25f8966c` | Passed 12 controls, including mutable assessment, inventory, Phase 20 checker, and policy substitutions. |
-| `verify-diagnostic-admission.py --require-approved --repo-root . --source-revision HEAD` | `25f8966c` | Correctly refused with exit 2 and all seven unresolved gates. |
-| Focused phase1 CTest fixture repository/product and Phase 22 controls | `25f8966c` | Passed; zero newly admitted fixture changes against the existing baseline and package/control boundaries pass. |
-| `verify-summary-coverage.py --file 22-01/02/10-SUMMARY.md` | current summaries | Passed; D2 in Plan 22-02 has automated passing references and `human_judgment: false`. |
+| `cmake --preset phase1` | `06d2cbc1` | Configure passed in 13.2 seconds; the exact final configure/build/full-suite run is still required after the evidence commit. |
+| `cmake --build --preset phase1` | `24c4e191` | All 339 build targets passed during the focused check cycle; later changes only tightened the Python planning-label checker and its control floor. |
+| `ctest --test-dir build --parallel 4 --output-on-failure --no-tests=error -R '^(planning_labels|planning_labels_controls|phase22_evidence_contract|phase22_evidence_controls)$'` | `06d2cbc1` | Passed 4/4; the explicit configured build inventory, 17 label-policy controls, immutable no-go contract, and evidence mutants passed. |
+| Focused Phase 22/fixture/product/budget/Phase 21 selection | `24c4e191` | Passed 23/23 in 42.98 seconds; included exact Phase 21 game-reference and candidate controls, no-phase-path controls, cap, fixture admission, core/player product, and Phase 22 contracts. The final full suite below supersedes this focused result for completion. |
+| `verify-diagnostic-evidence.py --check --repo-root . --source-revision 06d2cbc1... --build-dir build --write-evidence build/phase22/evidence.json` | `06d2cbc1` | Passed: 513 cases, seven unresolved gates, admitted=0, executed=0. |
+| `verify-diagnostic-admission.py --self-test-controls` | `06d2cbc1` | Passed all 12 mutation controls, including mutable Phase 20 checker and policy substitutions. |
+| `verify-diagnostic-admission.py --require-approved` | `06d2cbc1` | Correctly refused with exit 2 and all seven unresolved gates. |
+| `verify-planning-labels.py --build-dir build` | `06d2cbc1` | Passed with 1,732 configured CTests and 47 planning-labelled tests. |
+| `verify-no-phase-paths.py --self-test` and `--check --report` | `06d2cbc1` | Passed 19 controls; scanned 594 tracked files with the pinned allowlist. |
+| `verify-planning-hygiene.py --check plan-cap` | `06d2cbc1` | Passed: four phases and 28 plan files under the combined cap of 40. Phase 21 uses 8 of 10 slots, keeping two reserve slots; Phase caps are 9/10/12/9. |
+| `verify-summary-coverage.py` for 22-01, 22-02, 22-10, and 22-11 | Current live summaries | Passed; Plan 22-02 D2 is automated with `human_judgment: false`. |
 
-The latest complete focused CTest selection at source `25f8966c` passed 14/14 in 59.08 seconds. It included fixture-admission controls, core/player package controls, budget controls, and Phase 22 synthetic/evidence contracts. The final full CTest result and exact-head CI outcomes are carried in the final PR run record, which is the completion gate for the committed boundary.
+The final full local CTest suite and exact-head PR qualification are the remaining completion gates. Their exact-source outcomes and sanitized run identities are recorded in `build/phase22/remote-evidence.json`; a local pass does not substitute for required remote evidence.
 
 ## Review and Security
 
-The independent scoped code and security reviews are recorded in `22-REVIEW.md` and `22-SECURITY.md` at exact reviewed source `25f8966cdbb34733b7e51f58f97182caa2b9ea39`. They confirm the immutable checker/policy and renamed-payload controls, with no unresolved source finding. The live exact-head PR gate remains a separate required check and is recorded with the PR run record.
+The independent scoped code review and security review are clean at source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`. The fixed inventory-only exception pins the exact checker, command shape, source revision, active build directory, and configured Python interpreter; its negative controls reject build executables, extra output flags, `python -c` pass-output substitution, and an absolute Python stub. T-22-32 remains open until exact-head remote checks, artifacts, reviews, and merge-tree equivalence pass.
 
 ## Build and Feedback Cost
 
-The latest focused run measured a 13.5-second configure and rebuilt 339 targets because the configured evidence identity changed. The selected CTests took 59.08 seconds; fixture-admission controls took 16.45 seconds, core/player product controls about 11.15 seconds each, and Phase 22 evidence controls 13.48 seconds. No evidence supports changing existing budgets, adding a cache, or changing job scheduling. The exact final full-suite and CI durations are recorded with the PR's final run record.
+The latest measured focused run configured in 13.2 seconds, built 339 targets after the configured source identity changed, and passed its selected 23 CTests in 42.98 seconds at four-way parallelism. The longest selected controls were the Phase 21 fixture admission controls (22.67 seconds) and fixture repository controls (18.34 seconds). The separate current-source planning/evidence selection passed 4/4 in 13.10 seconds; `phase22_evidence_controls` accounted for 13.09 seconds. No measured evidence supports increasing timeouts, adding a build cache, or changing CI scheduling. Record full-suite and hosted run durations in the remote evidence file; preserve existing budgets and required coverage.
 
 ## Exact-Head Qualification
 
-The candidate boundary snapshot is commit `4ac46e7406329efbd4fb6ac0dc39c86c14156691`. `verify-diagnostic-evidence.py --check-boundary --repo-root . --source-revision HEAD --boundary-revision HEAD` passed against that immutable commit, preserving the Pending requirements, seven-gate stop, false automatic-advance flags, and owner-controlled Phase 23 route. This is a conditional boundary only: the final full local suite and exact-head remote PR qualification remain outstanding.
+The immutable boundary candidate is commit `4ac46e7406329efbd4fb6ac0dc39c86c14156691`. The boundary check against that point-in-time commit passed, preserving Pending requirements, all seven no-go gates, both false automatic-advance flags, Phase 23 unstarted, and `/gsd-discuss-phase 23`. It is a candidate boundary until final exact-head qualification succeeds.
 
-The final PR record will carry sanitized exact-head local/remote run, job, package artifact, review, and merge-tree identities; `build/phase22/remote-evidence.json` is the local machine-readable capture. A failed, inaccessible, stale, skipped, or unsuccessful required lane leaves Phase 22 unclosed.
+`build/phase22/remote-evidence.json` records sanitized repository, PR, head, required run/job/check, package artifact, review, merge-tree, and duration identities. `.github/scripts/verify-pr-evidence.sh` is authoritative for exact-head equality, required checks, package sidecars/archives, and same-head CI, fixture, and preview jobs. Any missing, stale, skipped, inaccessible, failed, or mismatched evidence leaves Phase 22 unclosed.
 
-**Phase 23 handoff:** Phase 23 — Qualified v0.4.0 Release — remains unstarted. The owner-controlled next command is `/gsd-discuss-phase 23`; both automatic-advance flags stay false.
+**Phase 23 handoff:** Phase 23 — Qualified v0.4.0 Release — remains unstarted and owner-controlled through `/gsd-discuss-phase 23`. Both automatic-advance flags remain false.
