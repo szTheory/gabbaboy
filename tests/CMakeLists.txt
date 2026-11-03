@@ -3678,7 +3678,7 @@ add_test(NAME phase22_admission_assessment
 set_tests_properties(phase22_acid2_contract phase22_acid2_controls
   phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
 set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
-  PASS_REGULAR_EXPRESSION "diagnostic assessment valid status=blocked unresolved_gates=6 gbmicrotest_cases=513")
+  PASS_REGULAR_EXPRESSION "diagnostic assessment valid status=blocked unresolved_gates=7 gbmicrotest_cases=513")
 # The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
 add_test(NAME cgb_acid2_local_refuses_unpinned
   COMMAND ${CMAKE_COMMAND}

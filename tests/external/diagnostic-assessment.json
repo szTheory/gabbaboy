@@ -186,6 +186,16 @@
       "blocker": null
     },
     {
+      "id": "acid2_derivative_build_reproducibility",
+      "status": "unresolved",
+      "evidence": [
+        "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/Makefile",
+        "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/Makefile",
+        "The project RGBDS 1.0.1 pin is recorded by the existing reproduction tooling; compatibility with these exact source commits was not tested."
+      ],
+      "blocker": "The Phase 22 goal requires reproducible source-built derivatives with verified tool inputs, but RGBDS compatibility, original replacement-glyph inputs, and derivative output identities have not been established. No upstream build was executed."
+    },
+    {
       "id": "acid2_component_rights_and_output_scope",
       "status": "unresolved",
       "evidence": ["The pinned MIT license references and upstream image directories are recorded in the components table."],

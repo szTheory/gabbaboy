@@ -56,6 +56,7 @@ GBMICROTEST_INITIAL_EXCLUSIONS = frozenset((
 ))
 REQUIRED_GATE_IDS = (
     "acid2_source_and_gitlink_identity",
+    "acid2_derivative_build_reproducibility",
     "acid2_component_rights_and_output_scope",
     "acid2_profile_applicability",
     "gbmicrotest_complete_roster_identity",

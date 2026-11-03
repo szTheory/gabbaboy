@@ -24,7 +24,7 @@ The pinned `gbmicrotest` commit `463eb6bc0fe31d61781ef63060ad6d74090c0255` has 5
 | embedded Nintendo logo | The pinned sources use the `.nintendologo` header directive; no explicit grant for the resulting logo bytes was identified. | Unresolved. |
 | notices and derivative outputs | No complete positive component scope is available while art, references, ROMs, and logo remain unresolved. | Unresolved; no notice row or admitted derivative was created. |
 
-The acid2 Makefiles use RGBDS tools. The project already pins RGBDS 1.0.1, but compatibility and output reproduction for these source commits have not been verified. The pinned `gbmicrotest` README instructs users to install WLA-DX and run `build.sh`; it does not pin the tool version or build closure. WLA-DX is treated as a build-only tool and is not copied, linked, or shipped. No reproducible-build claim is made. Existing upstream prebuilt identity records are distinct from a reproducible-build result.
+The acid2 Makefiles use RGBDS tools. The project already pins RGBDS 1.0.1, but compatibility and output reproduction for these source commits have not been verified; this remains a required build gate because Phase 22 promises source-built reproducible derivatives. The pinned `gbmicrotest` README instructs users to install WLA-DX and run `build.sh`; it does not pin the tool version or build closure. WLA-DX is treated as a build-only tool and is not copied, linked, or shipped. No reproducible-build claim is made. Exact prebuilt identities remain separate from any build claim, though their current SHA-256 values are also not observed here.
 
 ## Microtest roster and accounting
 
