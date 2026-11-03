@@ -39,7 +39,7 @@ Plans:
 **Wave 1**
 - [x] 20-01-PLAN.md — Versioned admission records, independent identity pins and shared exact product policy.
 
-**Wave 2** *(blocked on Wave 1 completion)*
+**Wave 2** *(ready after Wave 1 completion)*
 - [x] 20-02-PLAN.md — Actual core install/archive/release boundary; metadata and archive-wide extension-header bounds delivered with long-path compatibility.
 - [x] 20-03-PLAN.md — Actual macOS player package and notice boundary with mutation controls; hosted final qualification remains an orchestration gate.
 
@@ -179,7 +179,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
-| 22. Composition and Microtest Evidence | 1/9 | In Progress; implementation not started | - |
+| 22. Composition and Microtest Evidence | 1/9 | In Progress; Plan 22-01 synthetic tracer and controls passed; rights remain pending | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
 ## Planning and Approval Boundary
