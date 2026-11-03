@@ -93,16 +93,19 @@ def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str]
     if name != "phase22_evidence_contract" or "planning" not in labels or "ctest-inventory-only" not in labels:
         return False
     expected_script = _norm(str(Path(source) / "tests/scripts/verify-diagnostic-evidence.py"))
-    if expected_script not in [_norm(token) for token in command] or command.count("--check") != 1:
+    normalized = [_norm(token) for token in command]
+    if normalized.count(expected_script) != 1:
         return False
-    if command.count("--repo-root") != 1 or command.count("--build-dir") != 1:
+    script_index = normalized.index(expected_script)
+    expected_tail = ["--check", "--repo-root", _norm(source), "--source-revision"]
+    tail = command[script_index + 1:]
+    if len(tail) != 7 or tail[:4] != expected_tail or tail[5] != "--build-dir":
         return False
-    try:
-        root_value = command[command.index("--repo-root") + 1]
-        build_value = command[command.index("--build-dir") + 1]
-    except IndexError:
+    source_revision = tail[4]
+    build_value = tail[6]
+    if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
         return False
-    if _norm(root_value) != _norm(source) or _norm(build_value) != _norm(build):
+    if _norm(build_value) != _norm(build):
         return False
     build_tokens = [token for token in _tokens(command) if _under(token, build)]
     return build_tokens == [build_value]
@@ -196,6 +199,11 @@ def self_test() -> int:
              [test("other_contract",
                    [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
                     "--build-dir", str(build)], ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("inventory-only classification rejects extra output or approval flags",
+             [test("phase22_evidence_contract",
+                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build), "--write-evidence", "unexpected.json"],
+                   ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
         ]
         for label, tests, expected in cases:
             try:
