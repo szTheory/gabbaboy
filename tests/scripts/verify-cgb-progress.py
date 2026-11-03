@@ -503,9 +503,34 @@ def source_history_controls() -> None:
     relative = "tests/scripts/verify-cgb-progress.py"
     with tempfile.TemporaryDirectory(prefix="gbb-cgb-source-history-") as temporary:
         root = Path(temporary)
+        empty_hooks = root / "empty-hooks"
+        empty_hooks.mkdir()
+        global_hooks = root / "global-hooks"
+        global_hooks.mkdir()
+        hook_marker = root / "global-hook-ran"
+        global_hook = global_hooks / "pre-commit"
+        global_hook.write_text(
+            "#!/bin/sh\nprintf '%s\\n' ran > \"$SYNTHETIC_HOOK_MARKER\"\n", encoding="utf-8")
+        global_hook.chmod(0o700)
+        global_config = root / "global.gitconfig"
+        global_config.write_text(
+            f"[core]\n\thooksPath = {global_hooks}\n[commit]\n\tgpgsign = true\n",
+            encoding="utf-8")
+        git_environment = os.environ.copy()
+        git_environment["GIT_CONFIG_GLOBAL"] = str(global_config)
+        git_environment["GIT_CONFIG_NOSYSTEM"] = "1"
+        git_environment["SYNTHETIC_HOOK_MARKER"] = str(hook_marker)
+
+        def run_fixture_git(args: list[str]):
+            return subprocess.run(
+                ["git", "-C", str(root), *args], stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+                env=git_environment,
+            )
+
         initialized = subprocess.run(
             ["git", "-C", str(root), "init", "--quiet"], stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, env=git_environment,
         )
         if initialized.returncode != 0:
             raise CheckError("self-test-source-history-git-init-failed")
@@ -516,37 +541,31 @@ def source_history_controls() -> None:
             source_file = root / source_path
             source_file.parent.mkdir(parents=True, exist_ok=True)
             source_file.write_bytes(b"synthetic committed source\n")
-        staged = subprocess.run(
-            ["git", "-C", str(root), "add", relative, *SOURCE_FACTS.keys()], stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-        )
+        staged = run_fixture_git(["add", relative, *SOURCE_FACTS.keys()])
         if staged.returncode != 0:
             raise CheckError("self-test-source-history-stage-failed")
-        first_commit = subprocess.run(
-            ["git", "-C", str(root), "-c", "user.name=OpenGSD Test", "-c",
-             "user.email=opengsd-test@example.invalid", "commit", "--quiet", "-m",
-             "synthetic checker source"], stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-        )
+        first_commit = run_fixture_git(
+            ["-c", f"core.hooksPath={empty_hooks}", "-c", "user.name=OpenGSD Test", "-c",
+             "user.email=opengsd-test@example.invalid", "commit", "--no-gpg-sign", "--quiet",
+             "-m", "synthetic checker source"])
         if first_commit.returncode != 0:
             raise CheckError("self-test-source-history-commit-failed")
+        if hook_marker.exists():
+            raise CheckError("self-test-source-history-global-hook-ran")
         stale_revision = git_text(root, ["rev-parse", "HEAD"])
 
         checker.unlink()
-        removed = subprocess.run(
-            ["git", "-C", str(root), "rm", "--quiet", relative], stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-        )
+        removed = run_fixture_git(["rm", "--quiet", relative])
         if removed.returncode != 0:
             raise CheckError("self-test-source-history-remove-failed")
-        second_commit = subprocess.run(
-            ["git", "-C", str(root), "-c", "user.name=OpenGSD Test", "-c",
-             "user.email=opengsd-test@example.invalid", "commit", "--quiet", "-m",
-             "synthetic checker predates file"], stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-        )
+        second_commit = run_fixture_git(
+            ["-c", f"core.hooksPath={empty_hooks}", "-c", "user.name=OpenGSD Test", "-c",
+             "user.email=opengsd-test@example.invalid", "commit", "--no-gpg-sign", "--quiet",
+             "-m", "synthetic checker predates file"])
         if second_commit.returncode != 0:
             raise CheckError("self-test-source-history-commit-failed")
+        if hook_marker.exists():
+            raise CheckError("self-test-source-history-global-hook-ran")
         missing_revision = git_text(root, ["rev-parse", "HEAD"])
         checker.parent.mkdir(parents=True, exist_ok=True)
         checker.write_bytes(b"mutable checker version\n")
@@ -1101,7 +1120,8 @@ def main() -> int:
         repo_root = args.repo_root.resolve()
         if args.self_test:
             self_test(repo_root)
-            print("verify-cgb-progress self-test pass controls=observation-identity,time,digest,pcm,dumps,source-revision")
+            print("verify-cgb-progress self-test pass "
+                  "controls=observation-identity,time,digest,pcm,dumps,source-history,git-hooks")
             return 0
         if args.tracer:
             if args.runner is None or args.source_revision is None:
