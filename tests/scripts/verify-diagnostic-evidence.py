@@ -338,6 +338,7 @@ def validate_docs(snapshot: dict[str, bytes], *, complete: bool = False) -> dict
         ("cgb-profile", profile, "Phase 22 diagnostic evidence"),
     ):
         current = section(text, heading, label)
+        normalized = " ".join(current.casefold().split())
         clauses = (
             "original synthetic DMG composition and controls passed",
             "metadata-only assessment retained all 513 source/ROM names",
@@ -347,11 +348,22 @@ def validate_docs(snapshot: dict[str, bytes], *, complete: bool = False) -> dict
             "31 initial exclusions", "482 blocked and not observed",
             "zero admitted and zero executed", "DIAG-01 and DIAG-02 remain Pending",
             "RIGHTS-01 remains Pending under Phase 20 ownership", "a separately selected scope",
+            "does not conclude that license terms prohibit use",
             "CPU-08", "DMG-CPU-B", "CGB-CPU-E",
         )
         for clause in clauses:
-            if clause.casefold() not in current.casefold():
+            if " ".join(clause.casefold().split()) not in normalized:
                 raise Reject(f"documentation-current-claim-missing:{label}:{clause}")
+        claim_fields = (
+            "synthetic composition | supported",
+            "source metadata | supported",
+            "real diagnostic bytes/results | unsupported",
+            "rights and profile applicability | unresolved",
+            "DIAG/RIGHTS requirement completion | pending",
+        )
+        for field in claim_fields:
+            if " ".join(field.casefold().split()) not in normalized:
+                raise Reject(f"documentation-claim-field-missing:{label}:{field}")
         for gate in GATES:
             if gate not in current:
                 raise Reject(f"documentation-gate-missing:{label}:{gate}")
@@ -359,7 +371,7 @@ def validate_docs(snapshot: dict[str, bytes], *, complete: bool = False) -> dict
                        "license prohibition", "DIAG-01 is complete", "DIAG-02 is complete",
                        "hardware qualified", "mode-3 timing passed",
                        "broad compatibility established"):
-            if phrase.casefold() in current.casefold():
+            if phrase.casefold() in normalized:
                 raise Reject(f"documentation-claim-overstated:{label}:{phrase}")
     return {"diagnostic-evidence": "Phase 22 disposition",
             "cgb-profile": "Phase 22 diagnostic evidence"}
@@ -680,7 +692,7 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     if len(inventory.get("cases", [])) != 513:
         raise Reject("self-test-positive-inventory-failed")
     validate_metadata(snapshot, revision, repo)
-    validate_docs(snapshot)
+    validate_docs(snapshot, complete=True)
     if not controls:
         print("diagnostic evidence self-test pass metadata=513 gates=7")
         return
@@ -765,12 +777,28 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: require_no_diagnostic_payload(
         ["fixtures/acid2/diagnostics.tar"]),
         "diagnostic-payload-added", "fixture-path")
-    doc = dict(snapshot)
-    doc["docs/diagnostic-evidence.md"] = snapshot["docs/diagnostic-evidence.md"].replace(
-        b"not a finding that an upstream license prohibits use",
-        b"an upstream license prohibits use", 1)
-    expect_reject(lambda: validate_docs(doc),
-                  "documentation-rights-conclusion-overstated", "license-prohibition-claim")
+    docs_mutations = (
+        ("docs/diagnostic-evidence.md", b"No real diagnostic result exists",
+         b"No real diagnostic result exists. Real diagnostic result passed.",
+         "documentation-claim-overstated:diagnostic-evidence:real diagnostic result passed",
+         "real-pass-claim"),
+        ("docs/diagnostic-evidence.md",
+         b"requires new source-backed evidence and a separately selected scope.",
+         b"requires new source-backed evidence and a separately selected scope. License prohibits use.",
+         "documentation-claim-overstated:diagnostic-evidence:license prohibits use",
+         "license-prohibition-claim"),
+        ("docs/cgb-profile.md", b"DIAG-01 and DIAG-02 remain Pending",
+         b"DIAG-01 and DIAG-02 remain Pending. DIAG-01 is complete.",
+         "documentation-claim-overstated:cgb-profile:DIAG-01 is complete",
+         "requirement-completion-claim"),
+    )
+    for path, old, new, reason, label in docs_mutations:
+        doc = dict(snapshot)
+        if old not in doc[path]:
+            raise Reject(f"self-test-document-anchor-missing:{label}")
+        doc[path] = doc[path].replace(old, new, 1)
+        expect_reject(lambda candidate=doc: validate_docs(candidate, complete=True),
+                      reason, label)
     for path in ("LICENSE", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json"):
         value = dict(snapshot)
         value[path] += b"\nmutated\n"
@@ -829,7 +857,7 @@ def run_check(args: argparse.Namespace) -> int:
     revision = resolve_revision(root, args.source_revision)
     snapshot = load_snapshot(root, revision)
     build = (args.build_dir or root / "build/phase1").resolve(strict=True)
-    result = check_snapshot(snapshot, revision, root, build, complete_docs=False)
+    result = check_snapshot(snapshot, revision, root, build, complete_docs=True)
     if args.write_evidence:
         if args.write_evidence.is_absolute():
             raise Reject("evidence-path-must-be-repository-relative")

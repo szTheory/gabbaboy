@@ -20,6 +20,40 @@ The pinned acid2 tags still resolve to `dmg-acid2` v1.0 commit `dc2295408f881637
 
 The pinned `gbmicrotest` commit `463eb6bc0fe31d61781ef63060ad6d74090c0255` has 513 exact source/ROM pairs in complete Git tree metadata. The inventory records every source path, ROM path, byte size, Git blob identity, and reviewed protocol class. This assessment did not calculate SHA-256 values from raw ROM payloads; those remain required before Phase 20 can admit any ROM bytes.
 
+## Phase 22 disposition
+
+| Claim area | Phase 22 disposition |
+|---|---|
+| synthetic composition | supported: original synthetic DMG composition and controls passed |
+| source metadata | supported: metadata-only assessment retained all 513 source/ROM names |
+| real diagnostic bytes/results | unsupported: no real diagnostic payload or real diagnostic result exists |
+| rights and profile applicability | unresolved: the metadata does not supply output rights or model qualification |
+| DIAG/RIGHTS requirement completion | pending: DIAG-01 and DIAG-02 remain Pending; RIGHTS-01 remains Pending under Phase 20 ownership |
+
+The original synthetic DMG composition and controls passed. The metadata-only assessment retained all
+513 source/ROM names. No real upstream diagnostic payload was fetched, retained, built, run, or
+admitted. No real diagnostic result exists.
+
+The seven unresolved gates are acid2_derivative_build_reproducibility,
+acid2_component_rights_and_output_scope, acid2_profile_applicability,
+gbmicrotest_component_rights_and_output_scope, gbmicrotest_prebuilt_rom_sha256,
+gbmicrotest_case_applicability, and gbmicrotest_independent_oracle.
+
+The inventory retains 480 shared-macro verdict cases, two inline FF80–FF82 cases, 31 initial
+exclusions, and 482 blocked and not observed protocol candidates. There are zero admitted
+and zero executed cases; final suite accounting is incomplete. Git blob IDs and sizes do not provide
+ROM SHA-256 values, reproducibility, or redistribution rights.
+
+The source review's DMG-CPU-08 statement is uncertain and suite-wide only. It does not establish
+per-case applicability to DMG-CPU-B or CGB-CPU-E. The synthetic result establishes only its
+project-authored mask and comparison control; glyph rendering, mode-3 timing, hardware
+qualification, game behavior, and broad compatibility remain unqualified. This is insufficient
+evidence and does not conclude that license terms prohibit use.
+
+D-141 accepts the revised Phase 22 acceptance criteria only. The original DIAG-01 and DIAG-02
+definitions remain unchanged and Pending, and RIGHTS-01 remains Pending under Phase 20 ownership.
+Any future real-fixture attempt requires new source-backed evidence and a separately selected scope.
+
 ## Component and build scope
 
 | Component | Current evidence | Admission status |
