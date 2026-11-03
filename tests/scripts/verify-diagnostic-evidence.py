@@ -69,8 +69,18 @@ PAYLOAD_SUFFIXES = {
     ".gb", ".gbc", ".rom", ".bin", ".png", ".rgb", ".tar", ".zip",
     ".gz", ".tgz", ".7z", ".bz2", ".xz", ".bmp", ".ppm", ".pbm",
     ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff", ".svg", ".ico",
-    ".avif", ".heic",
+    ".avif", ".heic", ".rar", ".zst", ".lz4", ".lz", ".arj", ".cab",
+    ".iso", ".dmg", ".dat", ".img", ".raw",
 }
+GB_ROM_LOGO = bytes.fromhex(
+    "ceed6666cc0d000b03730083000c000d0008111f8889000edccc6ee6dddd9999bbbb67636e0eecccdddc999fbbb9333e"
+)
+PAYLOAD_SIGNATURES = (
+    b"\x89PNG\r\n\x1a\n", b"GIF87a", b"GIF89a", b"\xff\xd8\xff", b"BM",
+    b"II*\x00", b"MM\x00*", b"RIFF", b"PK\x03\x04", b"PK\x05\x06",
+    b"Rar!\x1a\x07", b"7z\xbc\xaf\x27\x1c", b"\x1f\x8b", b"BZh",
+    b"\xfd7zXZ\x00", b"\x28\xb5\x2f\xfd", b"\x04\x22\x4d\x18",
+)
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -544,20 +554,36 @@ def validate_tests(snapshot: dict[str, bytes], build: pathlib.Path) -> int:
     return len(names)
 
 
-def forbidden_fixture_path(path: str) -> bool:
+def forbidden_fixture_path(path: str, content: bytes = b"") -> bool:
     value = path.casefold()
     if any(value == item or value.startswith(item + "/")
            for item in (*FORBIDDEN_DIRS, *FORBIDDEN_FILES)):
         return True
     if value == "tests/acid2/control.asm":
         return False
-    # Added binary/reference payloads are prohibited by type even when renamed into
-    # an unrelated directory; path names alone cannot establish their identity.
-    return pathlib.PurePosixPath(value).suffix in PAYLOAD_SUFFIXES
+    # Reject recognizable payload extensions and known ROM, image, or archive
+    # signatures when a payload is renamed to an unrelated or extensionless path.
+    if pathlib.PurePosixPath(value).suffix in PAYLOAD_SUFFIXES:
+        return True
+    prefix = content[:4096]
+    logo_end = 0x104 + len(GB_ROM_LOGO)
+    if len(prefix) >= logo_end and prefix[0x104:logo_end] == GB_ROM_LOGO:
+        return True
+    if any(prefix.startswith(signature) for signature in PAYLOAD_SIGNATURES):
+        return True
+    if len(prefix) >= 262 and prefix[257:262] == b"ustar":
+        return True
+    if re.search(rb"<svg\b", prefix, re.IGNORECASE):
+        return True
+    if re.match(rb"\s*P[1-6][\s\r\n]", prefix):
+        return True
+    return False
 
 
-def require_no_diagnostic_payload(paths: list[str]) -> None:
-    rejected = [path for path in paths if forbidden_fixture_path(path)]
+def require_no_diagnostic_payload(paths: list[str],
+                                  contents: dict[str, bytes] | None = None) -> None:
+    by_path = contents or {}
+    rejected = [path for path in paths if forbidden_fixture_path(path, by_path.get(path, b""))]
     if rejected:
         raise Reject("diagnostic-payload-added:" + ",".join(rejected))
 
@@ -567,7 +593,19 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
               BASELINE, revision, "--")
     paths = [item.decode("utf-8", "strict") for item in raw.split(b"\0") if item]
     entries = tree_entries(root, revision)
-    require_no_diagnostic_payload(paths)
+    contents = {}
+    for path in paths:
+        entry = entries.get(path)
+        if entry is None:
+            raise Reject("added-path-missing-from-tree:" + path)
+        oid, size, mode = entry
+        if mode == "120000" or size > MAX_OUTPUT:
+            raise Reject("added-path-content-unavailable:" + path)
+        content = git(root, "cat-file", "blob", oid, limit=MAX_OUTPUT)
+        if len(content) != size:
+            raise Reject("added-path-size-mismatch:" + path)
+        contents[path] = content
+    require_no_diagnostic_payload(paths, contents)
     return [{"path": path, "size_bytes": entries.get(path, ("", 0, ""))[1]} for path in paths]
 
 
@@ -966,6 +1004,27 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: require_no_diagnostic_payload(
         ["misc/unrelated-data.zip"]),
         "diagnostic-payload-added", "renamed-archive-path")
+    for path, control in (
+        ("assets/renamed-reference.webp", "renamed-webp-reference"),
+        ("assets/renamed-reference.svg", "renamed-svg-reference"),
+        ("assets/reference.rar", "renamed-rar-archive"),
+        ("assets/reference.zst", "renamed-zstd-archive"),
+        ("assets/reference.dat", "renamed-data-payload"),
+    ):
+        expect_reject(lambda path=path: require_no_diagnostic_payload([path]),
+                      "diagnostic-payload-added", control)
+    hidden_rom = bytes(0x104) + GB_ROM_LOGO + bytes(64)
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["assets/notes.md"], {"assets/notes.md": hidden_rom}),
+        "diagnostic-payload-added", "extension-renamed-rom-content")
+    hidden_image = b"\x89PNG\r\n\x1a\nsynthetic-image"
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["assets/reference"], {"assets/reference": hidden_image}),
+        "diagnostic-payload-added", "extensionless-image-content")
+    hidden_svg = b"<?xml version='1.0'?><svg xmlns='http://www.w3.org/2000/svg'/>"
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["assets/reference.md"], {"assets/reference.md": hidden_svg}),
+        "diagnostic-payload-added", "renamed-svg-content")
     docs_mutations = (
         ("docs/diagnostic-evidence.md", b"No real diagnostic result exists",
          b"No real diagnostic result exists. Real diagnostic result passed.",

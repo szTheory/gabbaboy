@@ -19,6 +19,8 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ADMISSION_CHECKER_PATH = "tests/scripts/verify-diagnostic-admission.py"
+PHASE20_CHECKER_PATH = "tests/scripts/verify-fixture-admission.py"
+PHASE20_POLICY_PATH = "cmake/FixtureAdmissionPolicy.json"
 PHASE20 = ROOT / "tests/scripts/verify-fixture-admission.py"
 ACID2_TOOL = ROOT / "tests/scripts/run-acid2-local.py"
 CONTROL_SOURCE = ROOT / "tests/acid2/control.asm"
@@ -663,9 +665,10 @@ def _write_synthetic_admission_repo(root: pathlib.Path, source: bytes, rom: byte
     return manifest_path, manifest
 
 
-def check_synthetic_admission(root: pathlib.Path, manifest_path: pathlib.Path) -> tuple[int, bytes]:
+def check_synthetic_admission(root: pathlib.Path, manifest_path: pathlib.Path,
+                              checker_path: pathlib.Path = PHASE20) -> tuple[int, bytes]:
     relative = manifest_path.relative_to(root).as_posix()
-    code, stdout, stderr = _bounded_run([sys.executable, "-I", str(PHASE20), "--check-manifest",
+    code, stdout, stderr = _bounded_run([sys.executable, "-I", str(checker_path), "--check-manifest",
                                          relative, "--repo-root", str(root)], cwd=root)
     return code, stdout + stderr
 
@@ -678,7 +681,14 @@ def _commit_test_admission_source(root: pathlib.Path, *, inventory: bool = False
     checker = root / ADMISSION_CHECKER_PATH
     checker.parent.mkdir(parents=True, exist_ok=True)
     checker.write_bytes(pathlib.Path(__file__).read_bytes())
+    phase20_checker = root / PHASE20_CHECKER_PATH
+    phase20_checker.parent.mkdir(parents=True, exist_ok=True)
+    phase20_checker.write_bytes(PHASE20.read_bytes())
+    phase20_policy = root / PHASE20_POLICY_PATH
+    phase20_policy.parent.mkdir(parents=True, exist_ok=True)
+    phase20_policy.write_bytes((ROOT / PHASE20_POLICY_PATH).read_bytes())
     files = [ADMISSION_CHECKER_PATH, "tests/external/diagnostic-assessment.json"]
+    files.extend((PHASE20_CHECKER_PATH, PHASE20_POLICY_PATH))
     if inventory:
         files.append("tests/external/gbmicrotest-inventory.json")
     _git(root, "add", *files)
@@ -702,6 +712,13 @@ def require_approved(root: pathlib.Path, source_revision: str,
         source_root, source_revision, ADMISSION_CHECKER_PATH, pathlib.Path(__file__))
     for relative, path in source_paths:
         require_worktree_source_file(source_root, source_revision, relative, path)
+    # The Phase 20 checker is the policy implementation invoked for the synthetic
+    # manifest gate. Its product policy file is another executable input to that
+    # decision, so neither may come from an uncommitted worktree edit.
+    require_worktree_source_file(source_root, source_revision, PHASE20_CHECKER_PATH,
+                                 source_root / PHASE20_CHECKER_PATH)
+    require_worktree_source_file(source_root, source_revision, PHASE20_POLICY_PATH,
+                                 source_root / PHASE20_POLICY_PATH)
     if manifest_path is not None:
         relative = repository_relative_path(source_root, manifest_path)
         require_worktree_source_file(source_root, source_revision, relative, manifest_path)
@@ -739,7 +756,8 @@ def require_approved(root: pathlib.Path, source_revision: str,
     if manifest_path is not None:
         if not manifest_path.is_file():
             raise AdmissionRefused("diagnostic-manifest-missing")
-        code, output = check_synthetic_admission(root, manifest_path)
+        code, output = check_synthetic_admission(
+            root, manifest_path, source_root / PHASE20_CHECKER_PATH)
         if code or b"PASS: fixture admission" not in output:
             raise AdmissionRefused("fixture-admission-refused")
     return record
@@ -1078,6 +1096,21 @@ class AdmissionControlTests(unittest.TestCase):
             # Prove the working-tree mutant is internally plausible to the legacy schema checks.
             mutable_record, _ = validate_assessment(root)
             self.assertEqual(mutable_record["status"], "approved")
+
+            checker_path = root / PHASE20_CHECKER_PATH
+            checker_bytes = checker_path.read_bytes()
+            checker_path.write_bytes(checker_bytes[:2] + b"x" + checker_bytes[3:])
+            with self.assertRaisesRegex(AdmissionRefused, "source file differs from commit: tests/scripts/verify-fixture-admission.py"):
+                require_approved(root, revision)
+            checker_path.write_bytes(checker_bytes)
+
+            policy_path = root / PHASE20_POLICY_PATH
+            policy_bytes = policy_path.read_bytes()
+            policy_path.write_bytes(b"[" + policy_bytes[1:])
+            with self.assertRaisesRegex(AdmissionRefused, "source file differs from commit: cmake/FixtureAdmissionPolicy.json"):
+                require_approved(root, revision)
+            policy_path.write_bytes(policy_bytes)
+
             with self.assertRaisesRegex(AdmissionRefused, "scope-resolution-required.*unresolved gates") as caught:
                 require_approved(root, revision)
             self.assertIn("gbmicrotest_case_applicability", str(caught.exception))
