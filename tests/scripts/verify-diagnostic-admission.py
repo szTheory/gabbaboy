@@ -29,10 +29,16 @@ MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_PROCESS_OUTPUT = 64 * 1024
 CONTROL_BUDGET_HALF_DOTS = 350_000
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+IDENTITY_FIELDS = ("rom", "reference", "source", "layout", "glyph", "allowlist", "mask", "overlay")
 
 
 class AdmissionRefused(ValueError):
     pass
+
+
+def validate_identity_bundle(expected: dict[str, str], candidate: dict[str, str]) -> None:
+    """Red-phase scaffold; candidate identities are intentionally not checked yet."""
+    return None
 
 
 def sha256(data: bytes) -> str:
@@ -499,6 +505,17 @@ class AdmissionContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AdmissionRefused, "synthetic-only-record-refused"):
                 require_approved(root, "a" * 40)
 
+
+class AdmissionControlTests(unittest.TestCase):
+    def test_each_mutated_identity_refuses(self) -> None:
+        expected = {name: sha256(("expected:" + name).encode("ascii")) for name in IDENTITY_FIELDS}
+        for name in IDENTITY_FIELDS:
+            with self.subTest(identity=name):
+                candidate = dict(expected)
+                candidate[name] = sha256(("mutated:" + name).encode("ascii"))
+                with self.assertRaisesRegex(AdmissionRefused, f"identity-mismatch:{name}"):
+                    validate_identity_bundle(expected, candidate)
+
     def test_absent_approval_fails_before_runner_path_is_used(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gbb-admission-gate-") as name:
             root = pathlib.Path(name)
@@ -522,7 +539,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--self-test-tracer requires --runner")
         return run_tracer(args.runner.resolve())
     if args.self_test or args.self_test_controls:
-        suite = unittest.defaultTestLoader.loadTestsFromTestCase(AdmissionContractTests)
+        suite_class = AdmissionContractTests if args.self_test else AdmissionControlTests
+        suite = unittest.defaultTestLoader.loadTestsFromTestCase(suite_class)
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         return 0 if result.wasSuccessful() else 1
     try:

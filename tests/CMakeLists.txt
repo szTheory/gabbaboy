@@ -3662,6 +3662,18 @@ add_test(NAME phase22_acid2_tracer
 set_tests_properties(phase22_acid2_tracer PROPERTIES
   PASS_REGULAR_EXPRESSION "acid2 tracer pass origin=synthetic-only profile=dmg-cpu-b rom_sha256=[0-9a-f]+ mask_sha256=[0-9a-f]+"
   TIMEOUT 60)
+set(GBB_PHASE22_ACID2_MASKS "${PROJECT_SOURCE_DIR}/tests/scripts/verify-acid2-masks.py")
+set(GBB_PHASE22_DIAGNOSTIC_ADMISSION "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-admission.py")
+add_test(NAME phase22_acid2_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test)
+add_test(NAME phase22_acid2_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test-controls)
+add_test(NAME phase22_fixture_admission_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test)
+add_test(NAME phase22_fixture_admission_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls)
+set_tests_properties(phase22_acid2_contract phase22_acid2_controls
+  phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
 # The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
 add_test(NAME cgb_acid2_local_refuses_unpinned
   COMMAND ${CMAKE_COMMAND}
