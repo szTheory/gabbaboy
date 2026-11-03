@@ -83,13 +83,39 @@ PAYLOAD_SIGNATURES = (
     b"\xfd7zXZ\x00", b"\x28\xb5\x2f\xfd", b"\x04\x22\x4d\x18",
 )
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\\\))")
+DIAGNOSTIC_CONTROLS = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
 
 
 class Reject(ValueError):
     pass
 
 
+def sanitized_diagnostic(value: bytes | str,
+                         roots: tuple[tuple[str | pathlib.Path, str], ...]) -> str:
+    """Return at most 700 characters without escape sequences or local roots."""
+    text = value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value)
+    text = ANSI_ESCAPE.sub("", text)
+    replacements: dict[str, str] = {}
+    for root, token in roots:
+        native = os.fspath(root)
+        if not native:
+            continue
+        for spelling in {native, native.replace("\\", "/"), native.replace("/", "\\")}:
+            if spelling:
+                replacements[spelling] = token
+    for spelling, token in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(spelling, token)
+    return " ".join(DIAGNOSTIC_CONTROLS.sub(" ", text).split())[:700]
+
+
+def cmake_path_literal(path: str | pathlib.Path) -> str:
+    """Serialize a path into a CMake quoted argument using portable separators."""
+    return os.fspath(path).replace("\\", "/").replace('"', '\\"')
+
+
 def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
+        operation: str = "child-process",
         limit: int = MAX_OUTPUT) -> tuple[int, bytes, bytes]:
     if not argv or any("\x00" in arg for arg in argv):
         raise Reject("subprocess-arguments-invalid")
@@ -148,7 +174,7 @@ def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
                 stream.close()
         raise Reject("subprocess-output-reader-stuck")
     if timed_out:
-        raise Reject("subprocess-timeout") from None
+        raise Reject(f"subprocess-timeout:{operation}") from None
     if exceeded.is_set():
         raise Reject("subprocess-output-limit")
     if read_errors:
@@ -528,8 +554,9 @@ def check_expected_policy(snapshot: dict[str, bytes], actual: list[str],
     cmake_exe = shutil.which("cmake")
     if not cmake_exe:
         raise Reject("cmake-unavailable")
+    cmake_exe_literal = cmake_path_literal(cmake_exe)
     add_tests = "\n".join(
-        f'add_test(NAME "{name}" COMMAND "{cmake_exe}" -E true)' for name in sorted(actual)
+        f'add_test(NAME "{name}" COMMAND "{cmake_exe_literal}" -E true)' for name in sorted(actual)
     )
     project_file = (
         "cmake_minimum_required(VERSION 3.20)\nproject(Inventory NONE)\n"
@@ -539,12 +566,15 @@ def check_expected_policy(snapshot: dict[str, bytes], actual: list[str],
         "gabbaboy_verify_registered_tests()\n"
     )
     (project / "CMakeLists.txt").write_text(project_file, encoding="utf-8")
-    code, out, err = run(["cmake", "-S", str(project), "-B", str(project / "build")], project)
+    code, out, err = run(["cmake", "-S", str(project), "-B", str(project / "build")], project,
+                         operation="expected-test-policy-configure")
     if code:
         output = (out + err).decode("utf-8", "replace").casefold()
         if "registered ctest cases differ" in output:
             raise Reject("configured-ctest-inventory-mismatch")
-        raise Reject("expected-test-policy-failed")
+        detail = sanitized_diagnostic(out + err, ((temp, "<temp>"),
+                                                   (pathlib.Path.home(), "<home>")))
+        raise Reject(f"expected-test-policy-failed:{detail}")
 
 
 def validate_tests(snapshot: dict[str, bytes], build: pathlib.Path) -> int:
@@ -793,7 +823,8 @@ def source_archive_configure_control(root: pathlib.Path, revision: str) -> None:
                     raise Reject("source-archive-member-type-invalid")
         if (source / ".git").exists():
             raise Reject("source-archive-unexpected-git-metadata")
-        code, out, err = run(["cmake", "--preset", "phase1"], source, timeout=50)
+        code, out, err = run(["cmake", "--preset", "phase1"], source, timeout=50,
+                             operation="source-archive-configure")
         if code:
             detail = (out + err).decode("utf-8", "replace")[-700:]
             raise Reject(f"source-archive-configure-failed:{detail}")
@@ -990,6 +1021,52 @@ def validate_preserved(snapshot: dict[str, bytes], root: pathlib.Path) -> None:
             raise Reject(f"source-package-boundary-changed:{path}")
 
 
+def diagnostic_sanitization_control(root: pathlib.Path) -> None:
+    windows_root = r"C:\Users\runneradmin\AppData\Local\Temp\gbb-diagnostic-probe"
+    raw = (f"\x1b[31mconfigure failed at {root}/project\x1b[0m\t"
+           f"{windows_root}\\project\n" + "x" * 900)
+    detail = sanitized_diagnostic(
+        raw, ((root, "<temp>"), (windows_root, "<windows-temp>"),
+              (pathlib.Path.home(), "<home>")),
+    )
+    if (len(detail) > 700 or "\x1b" in detail or "\n" in detail or "\t" in detail
+            or str(root) in detail or windows_root in detail
+            or "<temp>" not in detail or "<windows-temp>" not in detail):
+        raise Reject("diagnostic-sanitization-control-failed")
+
+
+def cmake_path_serialization_controls(root: pathlib.Path) -> None:
+    cmake = shutil.which("cmake")
+    if not cmake:
+        raise Reject("cmake-unavailable")
+    synthetic_executable = r"C:\Program Files\CMake\bin\cmake.exe"
+
+    def configure(label: str, executable: str) -> tuple[int, bytes, bytes]:
+        project = root / label
+        project.mkdir()
+        (project / "CMakeLists.txt").write_text(
+            "cmake_minimum_required(VERSION 3.20)\nproject(PathProbe NONE)\n"
+            f'add_test(NAME path_probe COMMAND "{executable}" -E true)\n',
+            encoding="utf-8",
+        )
+        return run([cmake, "-S", str(project), "-B", str(project / "build")], project,
+                   timeout=15, operation="self-test-cmake-path-probe")
+
+    raw_code, raw_out, raw_err = configure("raw-windows-cmake-path", synthetic_executable)
+    raw_detail = sanitized_diagnostic(raw_out + raw_err,
+                                      ((root, "<temp>"), (pathlib.Path.home(), "<home>")))
+    if raw_code == 0 or "invalid character escape" not in raw_detail.casefold():
+        raise Reject("cmake-path-serialization-negative-control-failed")
+    portable = cmake_path_literal(synthetic_executable)
+    if "\\" in portable:
+        raise Reject("cmake-path-serialization-helper-control-failed")
+    portable_code, portable_out, portable_err = configure("portable-windows-cmake-path", portable)
+    if portable_code != 0:
+        detail = sanitized_diagnostic(portable_out + portable_err,
+                                      ((root, "<temp>"), (pathlib.Path.home(), "<home>")))
+        raise Reject(f"cmake-path-serialization-positive-control-failed:{detail}")
+
+
 def self_test(snapshot: dict[str, bytes], controls: bool,
               revision: str, repo: pathlib.Path) -> None:
     inventory = parse_json(snapshot[INVENTORY], "self-test-inventory")
@@ -1079,10 +1156,17 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: validate_test_text(expected_duplicate),
                   "ctest-inventory-membership-invalid", "duplicate-expected-test")
     with tempfile.TemporaryDirectory(prefix="gbb-bounded-process-") as name:
+        temporary = pathlib.Path(name)
+        diagnostic_sanitization_control(temporary)
+        cmake_path_serialization_controls(temporary)
         expect_reject(
             lambda: run([sys.executable, "-I", "-c", "import sys; sys.stdout.write('x' * 4096)"],
-                        pathlib.Path(name), limit=64),
+                        temporary, limit=64),
             "subprocess-output-limit", "bounded-subprocess-output")
+        expect_reject(
+            lambda: run([sys.executable, "-I", "-c", "import time; time.sleep(2)"],
+                        temporary, timeout=0.1, operation="self-test-slow-child"),
+            "subprocess-timeout:self-test-slow-child", "bounded-subprocess-timeout")
     expect_reject(lambda: require_no_diagnostic_payload(
         ["fixtures/acid2/diagnostics.tar"]),
         "diagnostic-payload-added", "fixture-path")

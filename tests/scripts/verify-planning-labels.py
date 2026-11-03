@@ -108,7 +108,7 @@ def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str]
     except (OSError, RuntimeError):
         return False
     expected_tail = ["--check", "--repo-root", _norm(source), "--source-revision"]
-    tail = command[script_index + 1:]
+    tail = normalized[script_index + 1:]
     if len(tail) != 7 or tail[:4] != expected_tail or tail[5] != "--build-dir":
         return False
     source_revision = tail[4]
@@ -117,8 +117,8 @@ def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str]
         return False
     if _norm(build_value) != _norm(build):
         return False
-    build_tokens = [token for token in _tokens(command) if _under(token, build)]
-    return build_tokens == [build_value]
+    build_tokens = [_norm(token) for token in _tokens(command) if _under(token, build)]
+    return build_tokens == [_norm(build_value)]
 
 
 def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:

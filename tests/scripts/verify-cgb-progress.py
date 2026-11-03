@@ -41,12 +41,33 @@ SOURCE_ANCHORS = (
     ("right_input", 0x16C, bytes.fromhex("3e 20 e0 00 f0 00 cb 47")),
     ("progress", 0x17C, bytes.fromhex("3e 01 ea 01 c0")),
 )
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\\\))")
+DIAGNOSTIC_CONTROLS = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
 
 
 class CheckError(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
+
+
+def sanitized_diagnostic(value: bytes | str,
+                         roots: tuple[tuple[str | Path, str], ...]) -> str:
+    """Return bounded diagnostic text without control sequences or local roots."""
+    text = value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value)
+    text = ANSI_ESCAPE.sub("", text)
+    replacements: dict[str, str] = {}
+    for root, token in roots:
+        native = os.fspath(root)
+        if not native:
+            continue
+        for spelling in {native, native.replace("\\", "/"), native.replace("/", "\\")}:
+            if spelling:
+                replacements[spelling] = token
+    for spelling, token in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(spelling, token)
+    text = " ".join(DIAGNOSTIC_CONTROLS.sub(" ", text).split())
+    return text[:700]
 
 
 def parse_runner_timeout(raw: str) -> int:
@@ -503,6 +524,44 @@ def source_history_controls() -> None:
     relative = "tests/scripts/verify-cgb-progress.py"
     with tempfile.TemporaryDirectory(prefix="gbb-cgb-source-history-") as temporary:
         root = Path(temporary)
+        synthetic_windows_root = r"C:\Users\runneradmin\AppData\Local\Temp\gbb-cgb-probe"
+        diagnostic = sanitized_diagnostic(
+            f"\x1b[31mfailed at {root}/repo\x1b[0m\t{synthetic_windows_root}\\repo\n" + "x" * 900,
+            ((root, "<temp>"), (synthetic_windows_root, "<windows-temp>"),
+             (Path.home(), "<home>")),
+        )
+        if (len(diagnostic) > 700 or "\x1b" in diagnostic or "\n" in diagnostic
+                or str(root) in diagnostic or synthetic_windows_root in diagnostic
+                or "<temp>" not in diagnostic or "<windows-temp>" not in diagnostic):
+            raise CheckError("self-test-source-history-diagnostic-sanitizer-failed")
+
+        def git_init_probe(label: str, hooks_path: str) -> subprocess.CompletedProcess:
+            probe_root = root / f"{label}-git-config-probe"
+            probe_root.mkdir()
+            probe_config = root / f"{label}.gitconfig"
+            probe_config.write_text(
+                f"[core]\n\thooksPath = {hooks_path}\n", encoding="utf-8")
+            probe_environment = {**os.environ, "GIT_CONFIG_GLOBAL": str(probe_config),
+                                "GIT_CONFIG_NOSYSTEM": "1"}
+            return subprocess.run(
+                ["git", "-C", str(probe_root), "init", "--quiet"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=False, env=probe_environment,
+            )
+
+        raw_windows_hooks = (
+            r"C:\Users\runneradmin\AppData\Local\Temp\gbb-cgb-probe\global-hooks")
+        raw_probe = git_init_probe("raw-windows", raw_windows_hooks)
+        raw_error = sanitized_diagnostic(raw_probe.stderr, ((root, "<temp>"),
+                                                              (Path.home(), "<home>")))
+        if raw_probe.returncode == 0 or "bad config line" not in raw_error.casefold():
+            raise CheckError(f"self-test-source-history-windows-config-negative-failed:{raw_error}")
+        normalized_probe = git_init_probe("normalized-windows", raw_windows_hooks.replace("\\", "/"))
+        if normalized_probe.returncode != 0:
+            detail = sanitized_diagnostic(normalized_probe.stderr, ((root, "<temp>"),
+                                                                      (Path.home(), "<home>")))
+            raise CheckError(f"self-test-source-history-windows-config-positive-failed:{detail}")
+
         empty_hooks = root / "empty-hooks"
         empty_hooks.mkdir()
         global_hooks = root / "global-hooks"
@@ -514,7 +573,7 @@ def source_history_controls() -> None:
         global_hook.chmod(0o700)
         global_config = root / "global.gitconfig"
         global_config.write_text(
-            f"[core]\n\thooksPath = {global_hooks}\n[commit]\n\tgpgsign = true\n",
+            f"[core]\n\thooksPath = {global_hooks.as_posix()}\n[commit]\n\tgpgsign = true\n",
             encoding="utf-8")
         git_environment = os.environ.copy()
         git_environment["GIT_CONFIG_GLOBAL"] = str(global_config)
@@ -533,7 +592,11 @@ def source_history_controls() -> None:
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, env=git_environment,
         )
         if initialized.returncode != 0:
-            raise CheckError("self-test-source-history-git-init-failed")
+            detail = sanitized_diagnostic(
+                initialized.stdout + initialized.stderr,
+                ((root, "<temp>"), (Path.home(), "<home>")),
+            )
+            raise CheckError(f"self-test-source-history-git-init-failed:{detail}")
         checker = root / relative
         checker.parent.mkdir(parents=True)
         checker.write_bytes(b"committed checker version\n")
