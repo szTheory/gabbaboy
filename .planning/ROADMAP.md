@@ -104,7 +104,41 @@ Captured frame and PCM digests establish reproducibility. They do not independen
   2. The admitted gbmicrotest cohort records exact source/ROM identities, redistribution terms, model applicability, and named eligible/executed/excluded cases; missing required cases or unexplained exclusions cannot yield a successful suite result.
   3. Automated negative controls detect altered fixture/reference/mask identities and incorrect case applicability or accounting; neither diagnostic results nor cross-model comparisons are reported as mode-3 timing, game-level, or physical CGB-E qualification.
 **Plan cap**: 10
-**Plans**: TBD — within the cap.
+**Plans**: 9 plans
+**Execution waves**: 9 sequential waves; Plan 22-08 inserts the trusted downloaded core/player byte gate after the complete identity projection and before final evidence/PR handoff. Plan 22-09 owns source-bound final evidence, measured CI-efficiency assessment, and the Phase 22 stop. Existing admission, root MIT, platform, release-authority, and phase-pause constraints remain in force.
+
+Plans:
+**Wave 1**
+- [ ] 22-01-PLAN.md — Original end-to-end composition tracer and identity/mask controls.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 22-02-PLAN.md — Complete source/rights/applicability assessment and blocking admission gate.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 22-03-PLAN.md — Original glyph/source-cell inputs and reproducible acid2 candidate derivatives.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 22-04-PLAN.md — Immutable acid2 admission and both independent masked comparison CTests.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 22-05-PLAN.md — Source-reviewed microtest runner protocol and complete-set refusal controls.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 22-06-PLAN.md — Immutable microtest admission, every eligible case registration and complete required execution.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 22-07-PLAN.md — Actual source/product distribution boundary and diagnostic byte exclusions.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 22-08-PLAN.md — Trusted downloaded core/player verification consumes the complete diagnostic identity view, with disguised-byte and lifecycle-order controls.
+
+**Wave 9** *(blocked on Wave 8 completion)*
+- [ ] 22-09-PLAN.md — Source-bound evidence, exact-head remote/review verification, measured CI-efficiency record, and Phase 22 handoff.
+
+**Cross-cutting constraints:**
+- Both derivatives reproduce from pinned source, submodule, original glyph source, patch/build inputs and verified RGBDS tools.
+- Source-anchored cells cover only substituted displayed text, including greeting/footer where affected, with independently bounded coverage.
+- The two inline MBC1 verdict implementations are reviewed separately from the 480 macro callers; the other 31 retain concrete oracle exclusions.
 
 Fixture admission uses Phase 20's contract. An unresolved acid2 or gbmicrotest rights/model/oracle gate requires scope resolution; it is not satisfied by capturing a new golden from GabbaBoy or by borrowing another silicon model's expected image.
 
@@ -145,7 +179,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
-| 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
+| 22. Composition and Microtest Evidence | 0/9 | Planned; implementation not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
 ## Planning and Approval Boundary
@@ -155,4 +189,4 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
 - Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
 
-Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`; no fixture was admitted and RIGHTS-01 remains pending. Phase 21's eight plans and five roadmap criteria are verified. Implementation source `e0845db5` passed configure/build, focused checks, and independent review/security. PR #140 final head `507019f9` passed exact-head native/platform/sanitizer/CMake-floor CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`. The first hosted macOS CTest attempt timed out the Phase 21 fixture-admission controls at 60.08 seconds; the same-head full-suite rerun passed all 1,724 tests. The full local CTest run passed 1,717/1,718 before one unchanged 90-second timeout; that exact test passed its 77.17-second isolated retry, so all local tests have passing evidence across those runs but no single full invocation was all-green. The verifier's owner-approved override keeps FIXT-01 Pending without claiming a license grant or candidate ROM. Phase 22 — Composition and Microtest Evidence — remains unstarted; the owner-selected next command is **/gsd-discuss-phase 22**. Both automatic-advance flags remain false.
+Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`; no fixture was admitted and RIGHTS-01 remains pending. Phase 21's eight plans and five roadmap criteria are verified. Implementation source `e0845db5` passed configure/build, focused checks, and independent review/security. PR #140 final head `507019f9` passed exact-head native/platform/sanitizer/CMake-floor CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`. The first hosted macOS CTest attempt timed out the Phase 21 fixture-admission controls at 60.08 seconds; the same-head full-suite rerun passed all 1,724 tests. The full local CTest run passed 1,717/1,718 before one unchanged 90-second timeout; that exact test passed its 77.17-second isolated retry, so all local tests have passing evidence across those runs but no single full invocation was all-green. The verifier's owner-approved override keeps FIXT-01 Pending without claiming a license grant or candidate ROM. Phase 22 — Composition and Microtest Evidence — has nine plans across nine sequential waves and passed independent planning review; implementation is not started. The owner-selected next command is **/gsd-execute-phase 22**. Both automatic-advance flags remain false.
