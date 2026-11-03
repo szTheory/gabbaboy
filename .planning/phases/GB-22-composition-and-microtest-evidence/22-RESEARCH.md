@@ -404,16 +404,19 @@ Questions 1-4 concern original fixture admission, rights, build reproducibility,
    - What we know: the checker captures stderr but reports only `self-test-source-history-git-init-failed`; the remote test log repeats that code for seven CTests.
    - What's unclear: the underlying Git error, whether it is path/config/environment-specific, and whether Git itself or the synthetic configuration fails before repository setup.
    - Recommendation: use bounded, sanitized error context and reproduce `acceptance_cgb_progress_controls` on Windows before changing the control. If no cause-compatible fix fits the one plan and remaining review limits, report the blocker rather than suppressing the control.
+   - **Planning disposition: RESOLVED for planning.** 22-12 Task 1 requires bounded sanitized Git diagnostics and real-parser discrimination before a cause-compatible fix; hosted Windows evidence remains mandatory. The actual initialization cause is still unknown. If diagnosis or correction exceeds D-142's one plan or remaining review allowance, execution stops for scope resolution without suppressing the control.
 
 6. **Why does the generated expected-test CMake project fail on Windows?**
    - What we know: the generated project interpolates the resolved CMake executable into a quoted argument, and its generic error branch discards configure output.
    - What's unclear: whether the executable path's backslashes, another path, or another CMake diagnostic is the actual cause.
    - Recommendation: retain a bounded configure diagnostic, reproduce on Windows, then add a platform-neutral regression for the proven path-serialization case while preserving the canonical exact inventory policy.
+   - **Planning disposition: RESOLVED for planning.** 22-12 Task 1 requires bounded CMake diagnostics and a discriminating serialization probe using the real parser, followed only by an evidence-supported correction and current policy mutants. The actual configure cause is still unknown; absent local proof requires Windows diagnosis, and any policy/inventory/limit change or excess scope stops execution.
 
 7. **Which existing evidence sub-control causes the near-60-second timeout?**
    - What we know: the self-test runs the history-boundary check and then source-archive configure; child subprocesses use 30-second defaults, with a 50-second archive configure, all under CTest's unchanged 60-second limit.
    - What's unclear: the remote error omits the timed-out argv and per-control durations.
    - Recommendation: attribute time per existing stage and remove only demonstrated redundant work. Do not raise a child/CTest limit, delete a control, or convert timeout into success.
+   - **Planning disposition: RESOLVED for planning.** 22-12 Task 1 times the existing stages, permits only removal of demonstrated redundant work, and retains every control with the current child and 60-second CTest limits. The actual expensive/timed-out stage is still unknown. If complete controls cannot pass within those unchanged limits under D-142 and the remaining review allowance, execution stops for scope resolution.
 
 ## Environment Availability
 
