@@ -97,6 +97,13 @@ def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str]
     if normalized.count(expected_script) != 1:
         return False
     script_index = normalized.index(expected_script)
+    if script_index != 2 or command[1] != "-I":
+        return False
+    interpreter = _norm(command[0])
+    interpreter_name = Path(command[0]).name.casefold()
+    if (not (interpreter.startswith("/") or re.match(r"^[A-Za-z]:/", interpreter))
+            or not interpreter_name.startswith("python")):
+        return False
     expected_tail = ["--check", "--repo-root", _norm(source), "--source-revision"]
     tail = command[script_index + 1:]
     if len(tail) != 7 or tail[:4] != expected_tail or tail[5] != "--build-dir":
@@ -184,25 +191,30 @@ def self_test() -> int:
              [test("a", [py, f"{build}-other/x"], ["planning"])], None),
             ("the exact Phase 22 planning contract may read its configured CTest inventory",
              [test("phase22_evidence_contract",
-                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
                     "--build-dir", str(build)], ["planning", "ctest-inventory-only"])], None),
             ("the inventory-only classification is required for build-tree access",
              [test("phase22_evidence_contract",
-                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
                     "--build-dir", str(build)], ["planning"])], "planning-test-needs-build"),
             ("inventory-only cannot smuggle a built executable into the command",
              [test("phase22_evidence_contract",
-                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
                     "--build-dir", str(build), str(build / "gabbaboy-runner")],
                    ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
             ("inventory-only classification cannot be reused by another test",
              [test("other_contract",
-                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
                     "--build-dir", str(build)], ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
             ("inventory-only classification rejects extra output or approval flags",
              [test("phase22_evidence_contract",
-                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
                     "--build-dir", str(build), "--write-evidence", "unexpected.json"],
+                   ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("inventory-only classification rejects a Python -c pass-output bypass",
+             [test("phase22_evidence_contract",
+                   [py, "-c", "print('diagnostic evidence pass')", str(evidence), "--check", "--repo-root",
+                    str(source), "--source-revision", "a" * 40, "--build-dir", str(build)],
                    ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
         ]
         for label, tests, expected in cases:
