@@ -649,6 +649,21 @@ class AdmissionControlTests(unittest.TestCase):
             with self.assertRaisesRegex(AdmissionRefused, "scope-resolution-required"):
                 require_approved(root, "a" * 40)
 
+    def test_unresolved_gate_refuses_even_when_status_claims_approved(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-unresolved-") as name:
+            root = pathlib.Path(name)
+            assessment = root / "tests/external/diagnostic-assessment.json"
+            assessment.parent.mkdir(parents=True)
+            assessment.write_text(json.dumps({
+                "origin": "upstream",
+                "status": "approved",
+                "source_revision": "a" * 40,
+                "gates": [{"id": "reference-art", "status": "unresolved",
+                           "reason": "repository and public-CI grant scope not established"}],
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(AdmissionRefused, "scope-resolution-required.*reference-art"):
+                require_approved(root, "a" * 40)
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
