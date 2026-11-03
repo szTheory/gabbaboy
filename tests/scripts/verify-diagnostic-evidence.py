@@ -84,6 +84,7 @@ PAYLOAD_SIGNATURES = (
 )
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
+C1_OSC_ESCAPE = re.compile(r"\u009d.*?\u009c", re.DOTALL)
 DIAGNOSTIC_CONTROLS = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
 
 
@@ -96,6 +97,7 @@ def sanitized_diagnostic(value: bytes | str,
     """Return at most 700 characters without escape sequences or local roots."""
     text = value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value)
     text = ANSI_ESCAPE.sub("", text)
+    text = C1_OSC_ESCAPE.sub("", text)
     replacements: dict[str, str] = {}
     for root, token in roots:
         native = os.fspath(root)
@@ -1023,18 +1025,42 @@ def validate_preserved(snapshot: dict[str, bytes], root: pathlib.Path) -> None:
 
 def diagnostic_sanitization_control(root: pathlib.Path) -> None:
     windows_root = r"C:\Users\runneradmin\AppData\Local\Temp\gbb-diagnostic-probe"
+    c1_prefix = "C1_PREFIX_KEEP"
+    c1_suffix = "C1_SUFFIX_KEEP"
     raw = (f"\x1b[31mconfigure failed at {root}/project\x1b[0m\t"
            f"{windows_root}\\project\n"
-           "\x1b]0;synthetic-secret-title\x1b\\\x1b]0;synthetic-bel-title\x07" + "x" * 900)
-    detail = sanitized_diagnostic(
-        raw, ((root, "<temp>"), (windows_root, "<windows-temp>"),
-              (pathlib.Path.home(), "<home>")),
-    )
-    if (len(detail) > 700 or "\x1b" in detail or "\n" in detail or "\t" in detail
-            or str(root) in detail or windows_root in detail
-            or "synthetic-secret-title" in detail or "synthetic-bel-title" in detail
-            or "<temp>" not in detail or "<windows-temp>" not in detail):
-        raise Reject("diagnostic-sanitization-control-failed")
+           "\x1b]0;synthetic-secret-title\x1b\\\x1b]0;synthetic-bel-title\x07"
+           f"{pathlib.Path.home()}/home-project {c1_prefix}"
+           "\u009d0;synthetic-c1-title\u009c"
+           f"{c1_suffix}" + "x" * 900).encode("utf-8")
+    roots = ((root, "<temp>"), (windows_root, "<windows-temp>"),
+             (pathlib.Path.home(), "<home>"))
+
+    def assert_sanitized() -> None:
+        detail = sanitized_diagnostic(raw, roots)
+        if (len(detail) > 700 or "\x1b" in detail or "\n" in detail or "\t" in detail
+                or str(root) in detail or windows_root in detail
+                or str(pathlib.Path.home()) in detail
+                or "synthetic-secret-title" in detail or "synthetic-bel-title" in detail
+                or "0;synthetic-c1-title" in detail or "\u009d" in detail or "\u009c" in detail
+                or c1_prefix not in detail or c1_suffix not in detail
+                or "<temp>" not in detail or "<windows-temp>" not in detail or "<home>" not in detail
+                or any(ord(char) < 0x20 or 0x7f <= ord(char) <= 0x9f for char in detail)):
+            raise Reject("diagnostic-sanitization-control-failed")
+
+    assert_sanitized()
+    original_c1_osc_escape = C1_OSC_ESCAPE
+    try:
+        globals()["C1_OSC_ESCAPE"] = re.compile(r"(?!)")
+        try:
+            assert_sanitized()
+        except Reject as exc:
+            if str(exc) != "diagnostic-sanitization-control-failed":
+                raise Reject("diagnostic-sanitization-mutation-control-failed") from exc
+        else:
+            raise Reject("diagnostic-sanitization-mutation-control-failed")
+    finally:
+        globals()["C1_OSC_ESCAPE"] = original_c1_osc_escape
 
 
 def cmake_path_serialization_controls(root: pathlib.Path) -> None:
