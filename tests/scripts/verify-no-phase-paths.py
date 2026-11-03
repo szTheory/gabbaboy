@@ -43,6 +43,8 @@ ALLOWLIST = (
      "PHASE constant: Phase 8 boundary-commit reads, a point-in-time git show path (D-06)"),
     ("tests/scripts/verify-planning-hygiene.py", 1,
      "PHASES_AT_REV constant: plan names listed with git inside one named commit (--rev), a point-in-time path (D-06, WR-05)"),
+    ("tests/scripts/verify-diagnostic-evidence.py", 1,
+     "BOUNDARY_PATHS reads one Phase 22 boundary file through the selected immutable commit snapshot"),
     ("tests/scripts/state_boundary.py", 1,
      "PHASES_AT_REV constant: Phase 17 boundary facts listed with git inside one named commit (--rev), a point-in-time path (D-06, 17-11)"),
     ("tests/scripts/verify-closeout-dispositions.py", 1,
@@ -51,7 +53,7 @@ ALLOWLIST = (
      "temp-fixture layout strings built inside a throwaway repository, not reads of the live tree"),
     ("tests/data/closeout-scan-14-uat-review.md", 6,
      "byte copy of the archived 14-UAT-REVIEW.md seed for verify-closeout-scan.py, D-08"),
-    ("tests/scripts/verify-no-phase-paths.py", 12,
+    ("tests/scripts/verify-no-phase-paths.py", 13,
      "the lint's own spelling patterns and self-test fixture text"),
 )
 
@@ -60,6 +62,7 @@ MUST_SCAN = (
     "tests/CMakeLists.txt",
     "tests/scripts/verify-summary-coverage.py",
     "tests/scripts/verify-closeout-dispositions.py",
+    "tests/scripts/verify-diagnostic-evidence.py",
 )
 
 # One alternation so each spot is counted once. The prefixed form is tried first.
@@ -227,6 +230,21 @@ def self_test() -> int:
         files = mutated(CLEAN_FILES, "tests/scripts/reader.py", "ARCHIVE = '.planning/milestones/v0.2-phases/GB-15'\n", body)
         expect_rejected("spelling " + label, "REJECT phase-path", files)
         controls += 1
+
+    boundary_file = "tests/scripts/verify-diagnostic-evidence.py"
+    boundary_path = 'BOUNDARY_PATHS = (".planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md",)\n'
+    boundary_fixture = dict(CLEAN_FILES)
+    boundary_fixture[boundary_file] = boundary_path
+    expect_accepted("immutable boundary path pin", boundary_fixture,
+                    allowlist=((boundary_file, 1, "point-in-time boundary path"),),
+                    must_scan=(boundary_file,))
+    controls += 1
+    over_pinned_boundary = dict(boundary_fixture)
+    over_pinned_boundary[boundary_file] += boundary_path
+    expect_rejected("boundary path over-max", "REJECT over-max", over_pinned_boundary,
+                    allowlist=((boundary_file, 1, "point-in-time boundary path"),),
+                    must_scan=(boundary_file,))
+    controls += 1
 
     leak = "OLD = '.planning/phases/GB-07'\n"
     for name in ("tests/scripts/reader.py", "cmake/module.cmake", ".github/workflows/ci.yml", "docs/evidence.md", "README.md"):

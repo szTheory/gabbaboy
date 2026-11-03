@@ -2929,7 +2929,7 @@ add_test(NAME no_phase_paths_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_NO_PHASE_PATHS_CHECKER};--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=no-phase-paths self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=12
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=14
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(no_phase_paths_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 # The tree check: every tracked text file outside the planning tree, with a floor on the files scanned.
@@ -3653,7 +3653,7 @@ add_test(NAME cgb_external_dispositions_image_contract
 set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
 add_test(NAME cgb_acid2_local_selftest COMMAND "${Python3_EXECUTABLE}" -I "${GBB_ACID2_LOCAL}" --self-test)
 set_tests_properties(cgb_acid2_local_selftest PROPERTIES
-  PASS_REGULAR_EXPRESSION "self-test pass checks=5" TIMEOUT 30)
+  PASS_REGULAR_EXPRESSION "self-test pass checks=6" TIMEOUT 30)
 # Phase 22 proves one original synthetic path through admission, the compiled runner,
 # independent masked comparison, receipt binding and the real product byte scanner.
 add_test(NAME phase22_acid2_tracer
@@ -3711,7 +3711,7 @@ add_test(NAME phase22_evidence_contract
 add_test(NAME phase22_evidence_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --self-test-controls
     --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}")
-set_tests_properties(phase22_evidence_contract PROPERTIES TIMEOUT 60
+set_tests_properties(phase22_evidence_contract PROPERTIES TIMEOUT 60 LABELS planning
   PASS_REGULAR_EXPRESSION "diagnostic evidence pass source=[0-9a-f]+ assessment=blocked cases=513 unresolved_gates=7 admitted=0 executed=0 assessment_checker_sha256=[0-9a-f]+")
 set_tests_properties(phase22_evidence_controls PROPERTIES TIMEOUT 60
   PASS_REGULAR_EXPRESSION "diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable")
@@ -3722,13 +3722,15 @@ add_test(NAME cgb_acid2_local_refuses_unpinned
     -DGBB_EXPECT_CODE=2
     "-DGBB_EXPECT_REGEX=acid2 refused"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-# WR-02: a manifest the harness cannot use is a harness error (exit 3), never "frames differ" (1).
+# Phase 22 binds the manifest to an immutable source before parsing it; this untracked build
+# artifact must be refused at the earlier source-scope gate. The self-test separately covers
+# malformed-manifest exit 3 with synthetic bytes.
 file(WRITE "${PROJECT_BINARY_DIR}/acid2-bad-manifest.json" "{\"kinds\": {}}")
-add_test(NAME cgb_acid2_local_bad_manifest
+add_test(NAME cgb_acid2_local_manifest_scope_refusal
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_ACID2_LOCAL};--rom;${PROJECT_SOURCE_DIR}/LICENSE;--reference;${PROJECT_SOURCE_DIR}/LICENSE;--runner;$<TARGET_FILE:gabbaboy-runner>;--rom-kind;cgb-acid2;--manifest;${PROJECT_BINARY_DIR}/acid2-bad-manifest.json"
-    -DGBB_EXPECT_CODE=3
-    "-DGBB_EXPECT_REGEX=acid2 error: manifest unusable"
+    -DGBB_EXPECT_CODE=2
+    "-DGBB_EXPECT_REGEX=acid2 refused: scope-resolution-required"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # WR-03: the colour fixture reproduction script must report harness failures as result=error.
 if(NOT WIN32)

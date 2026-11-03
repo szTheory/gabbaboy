@@ -32,6 +32,22 @@ class Refused(Exception):
     pass
 
 
+class ManifestInvalid(Exception):
+    def __init__(self, error_type: str):
+        self.error_type = error_type
+
+
+def parse_manifest(manifest_bytes: bytes, rom_kind: str) -> tuple[dict, int]:
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8", "strict"))
+        kind = manifest["kinds"][rom_kind]
+        budget = manifest["ldbb_budget_half_dots"]
+        kind["rom_sha256"], kind["reference_sha256"], kind["runner_model"], kind["rom_size"]
+        return kind, budget
+    except (UnicodeError, ValueError, KeyError, TypeError) as exc:
+        raise ManifestInvalid(exc.__class__.__name__) from None
+
+
 def read_pinned(path: pathlib.Path, pin: str, what: str, limit: int = 1 << 20) -> bytes:
     """Read the file once, hash those bytes, and return them: the bytes that were checked are the
     bytes that get used, so a file swapped after the check cannot bypass the pin."""
@@ -203,12 +219,21 @@ def run_core(runner: pathlib.Path, kind: dict, rom: bytes, budget: int, timeout:
 
 
 def self_test() -> int:
-    manifest = json.loads(DEFAULT_MANIFEST.read_text())
-    kind = manifest["kinds"]["cgb-acid2"]
+    kind, _budget = parse_manifest(DEFAULT_MANIFEST.read_bytes(), "cgb-acid2")
     checks = 0
     pixels = [((x * 7) & 255, (y * 5) & 255, (x ^ y) & 255) for y in range(H) for x in range(W)]
     if decode_png(encode_png_rgb(pixels)) != pixels:
         print("acid2-local self-test fail: png round trip")
+        return 1
+    checks += 1
+    try:
+        parse_manifest(b'{"kinds": {}}', "cgb-acid2")
+    except ManifestInvalid as exc:
+        if exc.error_type != "KeyError":
+            print("acid2-local self-test fail: wrong malformed-manifest failure")
+            return 1
+    else:
+        print("acid2-local self-test fail: malformed manifest accepted")
         return 1
     checks += 1
     ppm = PPM_HEADER + bytes(c for px in pixels for c in px)
@@ -298,12 +323,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"acid2 refused: scope-resolution-required ({exc})")
         return 2
     try:
-        manifest = json.loads(manifest_bytes.decode("utf-8", "strict"))
-        kind = manifest["kinds"][args.rom_kind]
-        budget = manifest["ldbb_budget_half_dots"]
-        kind["rom_sha256"], kind["reference_sha256"], kind["runner_model"], kind["rom_size"]
-    except (UnicodeError, ValueError, KeyError, TypeError) as exc:
-        print(f"acid2 error: manifest unusable ({exc.__class__.__name__})")
+        kind, budget = parse_manifest(manifest_bytes, args.rom_kind)
+    except ManifestInvalid as exc:
+        print(f"acid2 error: manifest unusable ({exc.error_type})")
         return 3
     try:
         rom_bytes, ref_bytes = check_pins(kind, args.rom, args.reference)
