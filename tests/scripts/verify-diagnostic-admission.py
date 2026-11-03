@@ -30,6 +30,8 @@ MAX_PROCESS_OUTPUT = 64 * 1024
 CONTROL_BUDGET_HALF_DOTS = 350_000
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 IDENTITY_FIELDS = ("rom", "reference", "source", "layout", "glyph", "allowlist", "mask", "overlay")
+SOURCE_CELL_ALLOWLIST = ((2, 3),)
+CONTROL_GLYPH_BYTES = b"\x80" + bytes(15)
 
 
 class AdmissionRefused(ValueError):
@@ -37,8 +39,38 @@ class AdmissionRefused(ValueError):
 
 
 def validate_identity_bundle(expected: dict[str, str], candidate: dict[str, str]) -> None:
-    """Red-phase scaffold; candidate identities are intentionally not checked yet."""
-    return None
+    """Compare receipt identities to independently computed inputs and fixed controls."""
+    if not isinstance(expected, dict) or not isinstance(candidate, dict):
+        raise AdmissionRefused("identity-bundle-invalid")
+    if set(expected) != set(IDENTITY_FIELDS) or set(candidate) != set(IDENTITY_FIELDS):
+        raise AdmissionRefused("identity-field-set-invalid")
+    for name in IDENTITY_FIELDS:
+        expected_digest, candidate_digest = expected[name], candidate[name]
+        if (not isinstance(expected_digest, str) or not HEX64.fullmatch(expected_digest)
+                or not isinstance(candidate_digest, str) or not HEX64.fullmatch(candidate_digest)):
+            raise AdmissionRefused(f"identity-invalid:{name}")
+        if candidate_digest != expected_digest:
+            raise AdmissionRefused(f"identity-mismatch:{name}")
+
+
+def composition_identity_bundle(source: bytes, rom: bytes, reference: bytes,
+                                cells: list[tuple[int, int]], mask: bytes, overlay: bytes) -> dict[str, str]:
+    if tuple(cells) != SOURCE_CELL_ALLOWLIST:
+        raise AdmissionRefused("source-cell-allowlist-mismatch")
+    canonical = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii")
+    layout = canonical({"width": 160, "height": 144, "cell_size": 8,
+                        "cells": [[column, row] for column, row in cells]})
+    allowlist = canonical([[column, row] for column, row in SOURCE_CELL_ALLOWLIST])
+    return {
+        "rom": sha256(rom),
+        "reference": sha256(reference),
+        "source": sha256(source),
+        "layout": sha256(layout),
+        "glyph": sha256(CONTROL_GLYPH_BYTES),
+        "allowlist": sha256(allowlist),
+        "mask": sha256(mask),
+        "overlay": sha256(overlay),
+    }
 
 
 def sha256(data: bytes) -> str:
@@ -207,8 +239,9 @@ def build_control_rom(source: bytes) -> bytes:
 
 def expected_frame() -> list[tuple[int, int, int]]:
     """Independent analytical DMG frame: shade 0 everywhere, tile 1's first pixel at shade 1."""
-    pixels = [(255, 255, 255)] * (160 * 144)
-    pixels[24 * 160 + 16] = (170, 170, 170)
+    shade_colours = ((255, 255, 255), (170, 170, 170), (85, 85, 85), (0, 0, 0))
+    pixels = [shade_colours[0]] * (160 * 144)
+    pixels[24 * 160 + 16] = shade_colours[1]
     return pixels
 
 
@@ -389,8 +422,16 @@ def run_tracer(runner_path: pathlib.Path) -> int:
     expected = expected_frame()
     reference = bytes(channel for pixel in expected for channel in pixel)
     cells = mask_tool.source_cells(source)
+    if tuple(cells) != SOURCE_CELL_ALLOWLIST:
+        print("acid2 tracer refused: source-cell-allowlist-mismatch")
+        return 2
     mask = mask_tool.build_mask(cells)
     overlay = mask_tool.overlay_png(expected, mask)
+    try:
+        identities = composition_identity_bundle(source, rom, reference, cells, mask, overlay)
+    except AdmissionRefused as error:
+        print(f"acid2 tracer refused: {error}")
+        return 2
     with tempfile.TemporaryDirectory(prefix="gbb-phase22-synthetic-") as name:
         temp = pathlib.Path(name)
         admission_root = temp / "admission-repo"
@@ -434,6 +475,7 @@ def run_tracer(runner_path: pathlib.Path) -> int:
             "budget_half_dots": CONTROL_BUDGET_HALF_DOTS,
             "mask": {"cells": [{"column": column, "row": row} for column, row in cells],
                      "sha256": sha256(mask), "overlay_sha256": sha256(overlay)},
+            "identities": identities,
             "expected_frame_sha256": sha256(reference),
             "observed_frame_sha256": sha256(bytes(channel for pixel in actual for channel in pixel)),
             "comparison": compare_result,
@@ -448,6 +490,11 @@ def run_tracer(runner_path: pathlib.Path) -> int:
             return 3
         receipt_path.write_bytes(receipt_bytes)
         checked_receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        try:
+            validate_identity_bundle(identities, checked_receipt.get("identities"))
+        except AdmissionRefused:
+            print("acid2 tracer error: receipt-identity-mismatch")
+            return 3
         if (checked_receipt.get("origin") != "synthetic-test-only"
                 or checked_receipt.get("rom", {}).get("sha256") != sha256(rom)
                 or checked_receipt.get("runner", {}).get("sha256") != sha256(runner_bytes)
@@ -495,6 +542,17 @@ def _unapproved_input_control(acid2, temp: pathlib.Path, rom: bytes,
 
 
 class AdmissionContractTests(unittest.TestCase):
+    def test_original_synthetic_record_passes_real_phase20_cli(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-positive-") as name:
+            root = pathlib.Path(name)
+            source = CONTROL_SOURCE.read_bytes()
+            rom = build_control_rom(source)
+            reference = bytes(channel for pixel in expected_frame() for channel in pixel)
+            manifest, _record = _write_synthetic_admission_repo(root, source, rom, reference)
+            code, output = check_synthetic_admission(root, manifest)
+            self.assertEqual(code, 0, output.decode("utf-8", "replace"))
+            self.assertIn(b"PASS: fixture admission", output)
+
     def test_synthetic_origin_never_satisfies_real_approval(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gbb-admission-gate-") as name:
             root = pathlib.Path(name)
@@ -505,16 +563,85 @@ class AdmissionContractTests(unittest.TestCase):
             with self.assertRaisesRegex(AdmissionRefused, "synthetic-only-record-refused"):
                 require_approved(root, "a" * 40)
 
+    def test_malformed_approval_json_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-json-") as name:
+            root = pathlib.Path(name)
+            assessment = root / "tests/external/diagnostic-assessment.json"
+            assessment.parent.mkdir(parents=True)
+            assessment.write_bytes(b'{"origin":')
+            with self.assertRaisesRegex(AdmissionRefused, "diagnostic-assessment-invalid"):
+                require_approved(root, "a" * 40)
+
 
 class AdmissionControlTests(unittest.TestCase):
     def test_each_mutated_identity_refuses(self) -> None:
         expected = {name: sha256(("expected:" + name).encode("ascii")) for name in IDENTITY_FIELDS}
+        validate_identity_bundle(expected, dict(expected))
         for name in IDENTITY_FIELDS:
             with self.subTest(identity=name):
                 candidate = dict(expected)
                 candidate[name] = sha256(("mutated:" + name).encode("ascii"))
                 with self.assertRaisesRegex(AdmissionRefused, f"identity-mismatch:{name}"):
                     validate_identity_bundle(expected, candidate)
+
+    def test_identity_bundle_rejects_missing_extra_and_malformed_fields(self) -> None:
+        expected = {name: sha256(("expected:" + name).encode("ascii")) for name in IDENTITY_FIELDS}
+        missing = dict(expected)
+        del missing["overlay"]
+        with self.assertRaisesRegex(AdmissionRefused, "identity-field-set-invalid"):
+            validate_identity_bundle(expected, missing)
+        extra = dict(expected, extra=sha256(b"extra"))
+        with self.assertRaisesRegex(AdmissionRefused, "identity-field-set-invalid"):
+            validate_identity_bundle(expected, extra)
+        malformed = dict(expected, mask="not-a-digest")
+        with self.assertRaisesRegex(AdmissionRefused, "identity-invalid:mask"):
+            validate_identity_bundle(expected, malformed)
+
+    def test_altered_admission_pin_and_notice_index_are_refused(self) -> None:
+        source = CONTROL_SOURCE.read_bytes()
+        rom = build_control_rom(source)
+        reference = bytes(channel for pixel in expected_frame() for channel in pixel)
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-pins-") as name:
+            root = pathlib.Path(name)
+            manifest, _record = _write_synthetic_admission_repo(root, source, rom, reference)
+            pin = manifest.parent / "admission.commit"
+            pin.write_text("0" * 40 + "\n", encoding="ascii")
+            code, output = check_synthetic_admission(root, manifest)
+            self.assertNotEqual(code, 0)
+            self.assertIn(b"admission-pin-invalid", output)
+        with tempfile.TemporaryDirectory(prefix="gbb-notice-pin-") as name:
+            root = pathlib.Path(name)
+            manifest, _record = _write_synthetic_admission_repo(root, source, rom, reference)
+            index = root / "THIRD_PARTY_NOTICES.md"
+            index.write_bytes(index.read_bytes() + b"\nchanged synthetic notice pin\n")
+            code, output = check_synthetic_admission(root, manifest)
+            self.assertNotEqual(code, 0)
+            self.assertIn(b"admission-pin-mismatch", output)
+
+    def test_unsafe_manifest_path_is_refused_before_commit_comparison(self) -> None:
+        source = CONTROL_SOURCE.read_bytes()
+        rom = build_control_rom(source)
+        reference = bytes(channel for pixel in expected_frame() for channel in pixel)
+        with tempfile.TemporaryDirectory(prefix="gbb-unsafe-admission-") as name:
+            root = pathlib.Path(name)
+            manifest_path, manifest = _write_synthetic_admission_repo(root, source, rom, reference)
+            manifest["files"][0]["path"] = "../unsafe.bin"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            code, output = check_synthetic_admission(root, manifest_path)
+            self.assertNotEqual(code, 0)
+            self.assertIn(b"path-invalid", output)
+
+    def test_malformed_synthetic_manifest_json_is_refused(self) -> None:
+        source = CONTROL_SOURCE.read_bytes()
+        rom = build_control_rom(source)
+        reference = bytes(channel for pixel in expected_frame() for channel in pixel)
+        with tempfile.TemporaryDirectory(prefix="gbb-malformed-admission-") as name:
+            root = pathlib.Path(name)
+            manifest_path, _manifest = _write_synthetic_admission_repo(root, source, rom, reference)
+            manifest_path.write_bytes(b'{"')
+            code, output = check_synthetic_admission(root, manifest_path)
+            self.assertNotEqual(code, 0)
+            self.assertIn(b"json-invalid", output)
 
     def test_absent_approval_fails_before_runner_path_is_used(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gbb-admission-gate-") as name:
