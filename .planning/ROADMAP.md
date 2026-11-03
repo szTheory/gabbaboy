@@ -105,13 +105,11 @@ Captured frame and PCM digests establish reproducibility. They do not independen
   3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending.
 **Phase-scoped acceptance override**: Owner-approved on 2026-11-03; see [22-RESCOPE.md](phases/GB-22-composition-and-microtest-evidence/22-RESCOPE.md) and D-141. Phase 22's revised roadmap criteria are the acceptance contract. The original meanings of DIAG-01/02 and RIGHTS-01 are unchanged and remain Pending. No real upstream diagnostic payload is fetched, built, run, admitted, or claimed.
 **Plan cap**: 12
-**Plans**: 4 live plans (22-01, 22-02, 22-10 complete; 22-11 closure and boundary prepared; full local suite evidence recorded, final exact-head PR gate determines boundary status); 7 original plans are superseded under D-141 and excluded from execution.
+**Plans**: Five live plans. 22-01, 22-02, 22-10 and 22-11 have summaries; 22-12 is the active fifth plan for the D-143 C1 correction, independent review and final qualification. Seven original plans are superseded under D-141 and excluded from execution.
 **Boundary candidate**: Phase 22 is complete only after the final exact-head required checks, package artifacts, reviews, and merge-tree equivalence pass. Until then, Phase 22 remains conditional and Phase 23 stays unstarted.
-**Execution waves**: Four sequential dependency waves: 22-01 (complete) → 22-02 (close the existing metadata assessment) → 22-10 (immutable no-go contract and public claims) → 22-11 (local/review/security/exact-head remote qualification and boundary). Original 22-03 through 22-09 carry machine-readable `status: superseded` and must not dispatch.
+**Execution waves**: Five sequential dependency waves: 22-01 (complete) → 22-02 (close the existing metadata assessment) → 22-10 (immutable no-go contract and public claims) → 22-11 (initial qualification) → 22-12 (D-143 C1 correction, independent review and final qualification). Original 22-03 through 22-09 carry machine-readable `status: superseded` and must not dispatch.
 
 Plans:
-- [ ] 22-12-PLAN.md
-
 **Wave 1**
 - [x] 22-01-PLAN.md — Preserve the completed original synthetic composition tracer and controls.
 
@@ -123,6 +121,9 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [x] 22-11-PLAN.md — Qualify final local/review/security/remote evidence, generate automated closure and pause before `/gsd-discuss-phase 23`.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 22-12-PLAN.md
 
 The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-composition-and-microtest-evidence/22-SOURCE-AUDIT.md). Completed tracer and assessment commits are preserved; real-fixture build/admission/execution and downloaded-lifecycle work are outside the approved Phase 22 scope. Original requirement definitions and existing fixture-admission/package boundaries remain intact.
 
