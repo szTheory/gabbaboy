@@ -86,6 +86,9 @@ status: complete
 3. **Task 2 RED:** `ce2b2140` — add identity corruption controls.
 4. **Task 2 GREEN:** `e0cf205d` — reject altered composition identities.
 
+**Plan metadata:** `351ce5b9` (summary, state, and roadmap update).
+**Roadmap correction:** `29649e3a` (mark Wave 2 ready and clarify Phase 22 progress).
+
 The two RED checks failed on their intended assertions: the mask control first observed no marked source pixels, and the identity control accepted all eight changed identity candidates. The GSD RED-evidence checker accepted both records before their GREEN implementations.
 
 ## Files Created/Modified
@@ -125,7 +128,7 @@ This plan adds synthetic diagnostic infrastructure only. **DIAG-01 and RIGHTS-01
 
 ## Self-Check: PASSED
 
-The summary exists, all four task commits are ancestors of the current plan branch, and the summary coverage checker accepts both deliverables.
+The summary exists, all four task commits and both metadata commits are ancestors of the current plan branch, and the summary coverage checker accepts both deliverables.
 
 ## Next Phase Readiness
 
