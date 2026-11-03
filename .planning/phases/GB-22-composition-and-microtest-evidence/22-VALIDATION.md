@@ -48,7 +48,7 @@ Plans 22-03 through 22-09 are marked `superseded` in the roadmap under D-141. Th
 | T-22-01 / T-22-02 / T-22-03 | Fixed source-cell allowlist and independent receipt identities; bounded image, JSON, subprocess, and admission paths; Phase 20 CLI refuses before real runner use. Verified by 22-01 contract/control coverage. |
 | T-22-04 / T-22-05 / T-22-06 / T-22-26 / T-22-27 | Full named metadata projection, seven unresolved gates, exact Pending dispositions, and source/history accounting. Verified by 22-02 assessment and immutable evidence checks. |
 | T-22-28 / T-22-29 / T-22-30 / T-22-31 | Full-commit snapshots, exact roster and refusal, unchanged source/product boundary, no added payloads, bounded per-blob inspection, claim and historical-boundary mutations. Verified by 22-10/11 controls. |
-| T-22-32 | Exact local HEAD equals PR head; required same-head CI, fixture, preview jobs and package artifacts; independently inspect current runs/reviews and merge-tree equivalence. Status is pending until Task 3 obtains the live remote evidence. |
+| T-22-32 | Exact local HEAD equals PR head; required same-head CI, fixture, preview jobs and package artifacts; independently inspect current runs/reviews and merge-tree equivalence. The exact-head outcome is recorded in the final PR record. |
 | T-22-33 / T-22-34 / T-22-35 | Automated coverage and Pending definitions, exact Phase 23 owner route with both automatic flags false, and sanitized repository-relative records. Verified by closure and immutable boundary controls. |
 | T-22-SC | No package install or new dependency; use the existing Python, Git, CMake, and CTest toolchain. |
 
@@ -56,10 +56,10 @@ Plans 22-03 through 22-09 are marked `superseded` in the roadmap under D-141. Th
 
 After a task commit, run its direct contract and negative control. Before final qualification, run the configured full preset once at the final tracked source, with the exact expected inventory and `--no-tests=error`. Preserve the existing platform, sanitizer, fuzz, fixture, consumer, player-package, and budget policy.
 
-The observed focused run at source `e320af1d` passed 14/14 selected tests in 58.74 seconds. In that run, the existing fixture-admission controls took 16.37 seconds, core/player product controls took about 11 seconds each, and the Phase 22 evidence controls took 13.44 seconds. Configure took 13.3 seconds; the build rebuilt 339 targets because the configured evidence identity changed. This does not establish a safe cache or parallelism improvement; keep existing budgets and scheduling. Record final full-suite and exact-head CI durations in `22-EVIDENCE.md` after the final run.
+The latest focused run at source `25f8966c` passed 14/14 selected tests in 59.08 seconds. Fixture-admission controls took 16.45 seconds, core/player product controls about 11.15 seconds each, and Phase 22 evidence controls 13.48 seconds. Configure took 13.5 seconds; the build rebuilt 339 targets because the configured evidence identity changed. This does not establish a safe cache or parallelism improvement; keep existing budgets and scheduling. The final full-suite and exact-head CI durations are reported with the PR's final run record.
 
 ## UAT and Limitations
 
 No manual or game/perceptual/hardware UAT is planned. The shared closure is generated from live SUMMARY block coverage and its self-test proves that weakened coverage is refused. Synthetic runner evidence and metadata are not a real diagnostic result. No upstream ROM/reference payload, upstream build/program, real fixture admission, license prohibition, or completed DIAG/RIGHTS requirement is claimed.
 
-The final validation sign-off remains pending until Plan 22-11 completes exact-head local and remote qualification. Phase 23 remains unstarted and owner-controlled at `/gsd-discuss-phase 23`.
+Final validation is governed by Plan 22-11's immutable local and exact-head remote gates. Phase 23 remains unstarted and owner-controlled at `/gsd-discuss-phase 23`.
