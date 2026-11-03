@@ -83,7 +83,7 @@ PAYLOAD_SIGNATURES = (
     b"\xfd7zXZ\x00", b"\x28\xb5\x2f\xfd", b"\x04\x22\x4d\x18",
 )
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
-ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\\\))")
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 DIAGNOSTIC_CONTROLS = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
 
 
@@ -1024,13 +1024,15 @@ def validate_preserved(snapshot: dict[str, bytes], root: pathlib.Path) -> None:
 def diagnostic_sanitization_control(root: pathlib.Path) -> None:
     windows_root = r"C:\Users\runneradmin\AppData\Local\Temp\gbb-diagnostic-probe"
     raw = (f"\x1b[31mconfigure failed at {root}/project\x1b[0m\t"
-           f"{windows_root}\\project\n" + "x" * 900)
+           f"{windows_root}\\project\n"
+           "\x1b]0;synthetic-secret-title\x1b\\\x1b]0;synthetic-bel-title\x07" + "x" * 900)
     detail = sanitized_diagnostic(
         raw, ((root, "<temp>"), (windows_root, "<windows-temp>"),
               (pathlib.Path.home(), "<home>")),
     )
     if (len(detail) > 700 or "\x1b" in detail or "\n" in detail or "\t" in detail
             or str(root) in detail or windows_root in detail
+            or "synthetic-secret-title" in detail or "synthetic-bel-title" in detail
             or "<temp>" not in detail or "<windows-temp>" not in detail):
         raise Reject("diagnostic-sanitization-control-failed")
 

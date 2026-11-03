@@ -41,7 +41,7 @@ SOURCE_ANCHORS = (
     ("right_input", 0x16C, bytes.fromhex("3e 20 e0 00 f0 00 cb 47")),
     ("progress", 0x17C, bytes.fromhex("3e 01 ea 01 c0")),
 )
-ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\\\))")
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
 DIAGNOSTIC_CONTROLS = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
 
 
@@ -526,12 +526,14 @@ def source_history_controls() -> None:
         root = Path(temporary)
         synthetic_windows_root = r"C:\Users\runneradmin\AppData\Local\Temp\gbb-cgb-probe"
         diagnostic = sanitized_diagnostic(
-            f"\x1b[31mfailed at {root}/repo\x1b[0m\t{synthetic_windows_root}\\repo\n" + "x" * 900,
+            f"\x1b[31mfailed at {root}/repo\x1b[0m\t{synthetic_windows_root}\\repo\n"
+            "\x1b]0;synthetic-secret-title\x1b\\\x1b]0;synthetic-bel-title\x07" + "x" * 900,
             ((root, "<temp>"), (synthetic_windows_root, "<windows-temp>"),
              (Path.home(), "<home>")),
         )
         if (len(diagnostic) > 700 or "\x1b" in diagnostic or "\n" in diagnostic
                 or str(root) in diagnostic or synthetic_windows_root in diagnostic
+                or "synthetic-secret-title" in diagnostic or "synthetic-bel-title" in diagnostic
                 or "<temp>" not in diagnostic or "<windows-temp>" not in diagnostic):
             raise CheckError("self-test-source-history-diagnostic-sanitizer-failed")
 
