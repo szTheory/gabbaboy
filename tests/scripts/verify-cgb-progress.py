@@ -476,6 +476,92 @@ def git_text_bytes(repo_root: Path, args: list[str]) -> bytes:
     return result.stdout
 
 
+def committed_path_bytes(repo_root: Path, revision: str, relative: str) -> bytes | None:
+    """Read a committed file, returning None when that revision predates the file."""
+    tree = subprocess.run(
+        ["git", "-C", str(repo_root), "ls-tree", "-r", "--name-only", revision, "--", relative],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    if tree.returncode != 0:
+        raise CheckError("source-revision-invalid")
+    if not tree.stdout.strip():
+        return None
+    return git_text_bytes(repo_root, ["show", f"{revision}:{relative}"])
+
+
+def find_stale_source_revision(repo_root: Path, revisions: list[str], relative: str,
+                               current_source: bytes) -> str | None:
+    for revision in revisions:
+        committed_source = committed_path_bytes(repo_root, revision, relative)
+        if committed_source is not None and committed_source != current_source:
+            return revision
+    return None
+
+
+def source_history_controls() -> None:
+    """Verify stale-source scans skip commits predating the checker file."""
+    relative = "tests/scripts/verify-cgb-progress.py"
+    with tempfile.TemporaryDirectory(prefix="gbb-cgb-source-history-") as temporary:
+        root = Path(temporary)
+        initialized = subprocess.run(
+            ["git", "-C", str(root), "init", "--quiet"], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        if initialized.returncode != 0:
+            raise CheckError("self-test-source-history-git-init-failed")
+        checker = root / relative
+        checker.parent.mkdir(parents=True)
+        checker.write_bytes(b"committed checker version\n")
+        for source_path in SOURCE_FACTS:
+            source_file = root / source_path
+            source_file.parent.mkdir(parents=True, exist_ok=True)
+            source_file.write_bytes(b"synthetic committed source\n")
+        staged = subprocess.run(
+            ["git", "-C", str(root), "add", relative, *SOURCE_FACTS.keys()], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        if staged.returncode != 0:
+            raise CheckError("self-test-source-history-stage-failed")
+        first_commit = subprocess.run(
+            ["git", "-C", str(root), "-c", "user.name=OpenGSD Test", "-c",
+             "user.email=opengsd-test@example.invalid", "commit", "--quiet", "-m",
+             "synthetic checker source"], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        if first_commit.returncode != 0:
+            raise CheckError("self-test-source-history-commit-failed")
+        stale_revision = git_text(root, ["rev-parse", "HEAD"])
+
+        checker.unlink()
+        removed = subprocess.run(
+            ["git", "-C", str(root), "rm", "--quiet", relative], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        if removed.returncode != 0:
+            raise CheckError("self-test-source-history-remove-failed")
+        second_commit = subprocess.run(
+            ["git", "-C", str(root), "-c", "user.name=OpenGSD Test", "-c",
+             "user.email=opengsd-test@example.invalid", "commit", "--quiet", "-m",
+             "synthetic checker predates file"], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        if second_commit.returncode != 0:
+            raise CheckError("self-test-source-history-commit-failed")
+        missing_revision = git_text(root, ["rev-parse", "HEAD"])
+        checker.parent.mkdir(parents=True, exist_ok=True)
+        checker.write_bytes(b"mutable checker version\n")
+
+        if committed_path_bytes(root, missing_revision, relative) is not None:
+            raise CheckError("self-test-source-history-missing-path-not-skipped")
+        selected = find_stale_source_revision(
+            root, [missing_revision, stale_revision], relative, checker.read_bytes())
+        if selected != stale_revision:
+            raise CheckError("self-test-source-history-stale-revision-not-found")
+        expect_rejected(
+            lambda: verify_source_identity(root, selected, checker),
+            "checker-source-mismatch", "source-history-stale-checker")
+
+
 def expect_rejected(action, reason_prefix: str, control: str) -> None:
     try:
         action()
@@ -692,17 +778,16 @@ def self_test(repo_root: Path) -> None:
                     {"src/runner/acceptance.c": ("missing-source-evidence",)}),
                     "source-evidence-missing", "missing-committed-evidence")
     checker_path = Path(__file__).resolve()
+    checker_relative = checker_path.relative_to(repo_root).as_posix()
     current_commit_checker = git_text_bytes(
-        repo_root, ["show", f"HEAD:{checker_path.relative_to(repo_root).as_posix()}"])
+        repo_root, ["show", f"HEAD:{checker_relative}"])
     if current_commit_checker == checker_path.read_bytes():
-        stale_revision = next((revision for revision in git_text(
-            repo_root, ["rev-list", "--max-count=64", "HEAD"]).splitlines()
-            if git_text_bytes(repo_root, ["show", f"{revision}:{checker_path.relative_to(repo_root).as_posix()}"])
-            != current_commit_checker), None)
-        if stale_revision is None:
-            raise CheckError("self-test-stale-source-revision-unavailable")
-        expect_rejected(lambda: verify_source_identity(repo_root, stale_revision, checker_path),
-                        "checker-source-mismatch", "source-revision-mismatch")
+        stale_revision = find_stale_source_revision(
+            repo_root, git_text(repo_root, ["rev-list", "--max-count=64", "HEAD"]).splitlines(),
+            checker_relative, current_commit_checker)
+        if stale_revision is not None:
+            expect_rejected(lambda: verify_source_identity(repo_root, stale_revision, checker_path),
+                            "checker-source-mismatch", "source-revision-mismatch")
         original_runner_facts = SOURCE_FACTS["src/runner/acceptance.c"]
         SOURCE_FACTS["src/runner/acceptance.c"] = (*original_runner_facts, "missing-evidence-control")
         try:
@@ -710,6 +795,7 @@ def self_test(repo_root: Path) -> None:
                             "source-fact-missing", "missing-committed-source-fact")
         finally:
             SOURCE_FACTS["src/runner/acceptance.c"] = original_runner_facts
+    source_history_controls()
     expect_rejected(lambda: resolve_source_commit(repo_root, "gsd-invalid-cgb-progress-source-revision"),
                     "source-revision-invalid", "source-revision")
     print("observation-contract=pass observation-controls=pass")
