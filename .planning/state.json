@@ -16,7 +16,7 @@
     {
       "number": "22",
       "name": "Synthetic Composition and Diagnostic Gate Assessment",
-      "status": "complete"
+      "status": "in_progress"
     },
     {
       "number": "23",
@@ -29,5 +29,5 @@
     "label": "Owner-controlled Phase 23 discussion",
     "reason": "Candidate Phase 22 boundary only; final exact-head remote qualification remains pending"
   },
-  "updated_at": "2026-11-03T12:14:35.566Z"
+  "updated_at": "2026-11-03T13:12:32Z"
 }

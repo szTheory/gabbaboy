@@ -7,10 +7,10 @@ current_phase_name: Synthetic Composition and Diagnostic Gate Assessment
 current_plan: 4
 status: Phase GB-22 candidate boundary prepared; Phase 22 is complete only after exact-head PR checks, required artifacts and merge-tree equivalence pass
 stopped_at: Prepared conditional Phase 22 boundary; exact-head qualification remains
-last_updated: "2026-11-03T12:13:18.460Z"
+last_updated: "2026-11-03T13:11:56.089Z"
 last_activity: 2026-11-03
-last_activity_desc: Plan 22-10 immutable metadata/no-go contract complete
-state_head: 6447839b8d5e4435f209c790ae350ace4388a591
+last_activity_desc: Plan 22-11 candidate boundary prepared; final local and exact-head qualification pending
+state_head: 9bca04b26a7d123fa9b85f588cdf90c279a32feb
 progress:
   total_phases: 4
   completed_phases: 2
@@ -58,6 +58,7 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 | Phase GB-21 P07 | 533min | 2 tasks | 17 files |
 | Phase GB-22 P01 | 19min | 2 tasks | 6 files |
 | Phase 22 P10 | about 24 min | 2 tasks | 5 files |
+| Phase GB-22 P11 | about 90 min through local evidence preparation | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,9 @@ Plan 22-11 has prepared the machine-checked closure and conditional boundary. Co
 - [Phase GB-22]: Assert specific refusal reasons for identity, mask, image, path, and admission-pin mutants.
 - [Phase GB-22]: Owner approved the Phase 22 synthetic-plus-metadata rescope; DIAG-01, DIAG-02, and RIGHTS-01 remain Pending and real fixture admission remains refused. — D-141 records that the metadata review could not establish the seven required real-fixture evidence gates. See .planning/phases/GB-22-composition-and-microtest-evidence/22-RESCOPE.md.
 - [Phase 22]: Plan 22-10 checks the immutable metadata inventory and exact no-go claims while DIAG-01, DIAG-02, and RIGHTS-01 remain Pending.
+- [Phase GB-22]: Retarget the Phase 21 primary-record pointer to PR #140’s squash commit only after exact record-blob identity was established; keep digest and ancestry mutants.
+- [Phase GB-22]: Reduce the completed Phase 21 plan cap to 10, leaving two reserve slots and a four-phase total cap of 40.
+- [Phase GB-22]: Allow planning inventory inspection only through the narrowly pinned configured CTest inventory invocation.
 
 ### Blockers
 

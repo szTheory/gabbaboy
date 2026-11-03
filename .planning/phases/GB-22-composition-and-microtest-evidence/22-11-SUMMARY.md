@@ -7,138 +7,165 @@ requires:
   - phase: GB-22-composition-and-microtest-evidence
     provides: Synthetic tracer, metadata assessment, immutable no-go checker and mutation controls
 provides:
-  - Fixed renamed-payload admission scan and immutable Phase 20 checker/policy binding
-  - Reviewed synthetic-plus-metadata evidence and automated UAT closure
-  - Candidate Phase 22 boundary and owner-controlled Phase 23 handoff
+  - Independently reviewed synthetic-plus-metadata evidence and conditional Phase 22 boundary
+  - Exact record-blob and ancestry controls for the Phase 21 squash-reference mapping
+  - Narrow configured-inventory planning classification with interpreter and argv controls
 affects: [diagnostic-admission, phase-23-release-evidence]
-actuals:
-  tokens: 20575
-  tasks: 3
-  commits: 9
 tech-stack:
   added: []
   patterns:
-    - Immutable commit blobs bind every diagnostic admission checker and policy dependency
-    - Added payloads are scanned individually with bounded content signatures
+    - Bind admission checker, policy, evidence records and interpreter to immutable identities
+    - Keep fixture no-go separate from synthetic runner and metadata evidence
+    - Planning inventory exceptions require the exact configured checker invocation
 key-files:
   created:
     - .planning/phases/GB-22-composition-and-microtest-evidence/22-UAT.md
   modified:
+    - CMakeLists.txt
     - tests/scripts/verify-diagnostic-admission.py
     - tests/scripts/verify-diagnostic-evidence.py
+    - tests/scripts/verify-cgb-progress.py
+    - tests/scripts/verify-cgb-candidates.py
+    - tests/scripts/verify-planning-labels.py
+    - tests/scripts/verify-no-phase-paths.py
+    - tests/scripts/run-acid2-local.py
+    - tests/CMakeLists.txt
+    - tests/cmake/ci-lanes.cmake
+    - tests/data/cgb-candidates/ucity-1.3.json
+    - tests/expected-tests.txt
+    - .planning/ROADMAP.md
+    - .planning/STATE.md
+    - .planning/state.json
+    - .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
     - .planning/phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md
     - .planning/phases/GB-22-composition-and-microtest-evidence/22-VALIDATION.md
     - .planning/phases/GB-22-composition-and-microtest-evidence/22-REVIEW.md
     - .planning/phases/GB-22-composition-and-microtest-evidence/22-SECURITY.md
-    - .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
-    - .planning/STATE.md
-    - .planning/state.json
-    - .planning/ROADMAP.md
+actuals:
+  tokens: 35529
+  tasks: 3
+  commits: 20
 key-decisions:
-  - "Reject renamed archives and diagnostic payloads by suffix and content signatures, with per-blob bounds."
-  - "Bind the Phase 20 checker and policy to the immutable selected source before invoking the checker."
   - "Keep all seven real-fixture gates unresolved and stop at Phase 22; Phase 23 remains owner-controlled."
+  - "Retarget the Phase 21 primary-record pointer to PR #140's squash commit only after exact record-blob identity was established; keep digest and ancestry mutants."
+  - "Reduce the completed Phase 21 plan cap to 10, preserving two reserve slots and a four-phase combined cap of 40."
+  - "Allow the planning lane to inspect only the configured CTest inventory through a tightly pinned command; compiled artifacts remain excluded."
 requirements-completed: []
 coverage:
   - id: D1
-    description: "The immutable diagnostic assessment retains 513 metadata cases and refuses real admission with all seven gates unresolved; renamed payload and dependency mutants are refused."
+    description: "The immutable assessment retains 513 metadata cases and refuses real admission with all seven gates unresolved; payload and dependency mutants are refused."
     human_judgment: false
     verification:
       - kind: integration
-        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase22_.*$': immutable evidence contract, added-payload controls and source-archive control"
+        ref: "ctest --preset phase1 --output-on-failure --no-tests=error -R '^(phase22_.*)$': immutable evidence contract, payload controls, and source-archive controls"
         status: pass
       - kind: other
-        ref: "python3 -I tests/scripts/verify-diagnostic-evidence.py --check --repo-root . --source-revision HEAD --write-evidence build/phase22/evidence.json"
+        ref: "python3 -I tests/scripts/verify-diagnostic-evidence.py --check --repo-root . --source-revision 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04 --build-dir build"
         status: pass
       - kind: other
-        ref: "verify-diagnostic-admission.py --self-test-controls: 12 mutation controls; --require-approved exits 2 with all seven gates"
+        ref: "verify-diagnostic-admission.py --self-test-controls passed 12 controls; --require-approved exited 2 with the seven unresolved gates"
         status: pass
   - id: D2
-    description: "Synthetic tracer, current fixture/product boundaries and fixed test budgets pass; independent code and security reviews close the source findings."
+    description: "Synthetic composition, existing fixture/product boundaries and fixed budgets pass; independent source and security reviews found no unresolved source issue."
     human_judgment: false
     verification:
       - kind: integration
-        ref: "cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error -R '^(phase22_.*|fixture_admission_(repository|controls)|fixture_product_(core|player)_controls|test_budget(_controls)?)$'"
+        ref: "Focused phase1 CTest selection at 24c4e191 passed 23/23, including Phase 22, Phase 21 candidate/history, fixture repository, core/player product, planning-label, cap, path and budget controls"
+        status: pass
+      - kind: integration
+        ref: "At reviewed source 06d2cbc1, the configured planning/evidence CTest selection passed 4/4; the planning inventory check passed for 1732 tests / 47 planning labels"
         status: pass
       - kind: other
-        ref: "22-REVIEW.md and 22-SECURITY.md: exact reviewed source 25f8966cdbb34733b7e51f58f97182caa2b9ea39; no unresolved source findings"
+        ref: "22-REVIEW.md and 22-SECURITY.md: exact reviewed source 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04; source findings clean"
         status: pass
       - kind: other
-        ref: "verify-summary-coverage.py for 22-01, 22-02, 22-10 and this block; D2 in 22-02 has human_judgment: false"
+        ref: "verify-summary-coverage.py passed for 22-01, 22-02, 22-10 and this block; Plan 22-02 D2 is automated with human_judgment false"
         status: pass
   - id: D3
-    description: "The candidate boundary preserves Pending requirements, false automatic-advance flags, all seven no-go gates, and the exact owner-controlled Phase 23 route."
+    description: "The point-in-time boundary preserves Pending requirements, false automatic advance, all seven no-go gates and the owner-controlled Phase 23 route."
     human_judgment: false
     verification:
       - kind: other
-        ref: "verify-diagnostic-evidence.py --check-boundary --repo-root . --source-revision HEAD --boundary-revision 4ac46e7406329efbd4fb6ac0dc39c86c14156691"
+        ref: "verify-diagnostic-evidence.py --check-boundary --repo-root . --source-revision 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04 --boundary-revision 4ac46e7406329efbd4fb6ac0dc39c86c14156691"
         status: pass
       - kind: other
-        ref: "verify-uat-closure.py for this phase: shared closure self-test and full live-summary coverage pass"
+        ref: "verify-uat-closure.py generated 10/10 automated entries; self-test passed 21 controls"
         status: pass
-duration: candidate
-completed: 2026-11-03
-status: candidate
+metrics:
+  duration: "about 90 minutes through local evidence preparation"
+  completed: "2026-11-03"
+status: complete
 plan_head_before: 7f57dcc3542fb274f74257f48c6cd9d1c7e49741
-plan_head_after: 6447839b8d5e4435f209c790ae350ace4388a591
-commits: 9
+plan_head_after: 9bca04b26a7d123fa9b85f588cdf90c279a32feb
+commits: 20
 ---
 
-# Phase GB-22 Plan 11: Final Qualification and Boundary Summary
+# Phase 22 Plan 11: Final Qualification and Boundary Summary
 
-**Immutable admission now refuses renamed payloads and mutable Phase 20 checker/policy substitutions; the no-go stays in force while exact-head remote qualification remains outstanding.**
+**The immutable diagnostic no-go and synthetic evidence remain independently checked; Phase 22 stays conditional on the exact final local and remote qualification.**
 
 ## Accomplishments
 
-- Closed the renamed-payload and mutable Phase 20 dependency findings with negative controls, keeping admission bound to immutable source blobs and rejecting newly added archives or diagnostic payloads by path and content.
-- Re-ran independent code and security reviews on the fixed source. Source review is clean; only the live exact-head PR qualification remains an operational gate.
-- Reconciled the local evidence with the 513-case metadata inventory, seven unresolved real-fixture gates, zero admitted or executed cases, and unchanged Pending requirements.
-- Prepared automated closure and a candidate Phase 22 handoff that keeps Phase 23 unstarted and owner-controlled.
+- Closed the renamed-payload and mutable Phase 20 dependency findings with negative controls. Admission remains bound to immutable source blobs and refuses added payload variants.
+- Fixed Phase 21 history checks to skip commits predating the checker, isolated synthetic history tests from global Git hooks/signing, and kept controls for stale source bytes and hook non-execution.
+- Retargeted only the fallback's primary no-go commit pointer to PR #140's squash merge after verifying that the referenced JSON record's Git blob and SHA-256 match. Candidate controls reject non-ancestor references and digest mismatches.
+- Added a narrowly scoped planning-inventory classification for the immutable Phase 22 contract. Its 17 controls reject missing classification, binary paths, extra output flags, `python -c` substitution and an absolute Python stub; the active configured Python and build directory are pinned.
+- Recorded the Phase 21 cap reduction to 10: eight plan files leave two reserve slots, keeping the four-phase total at 40.
+- Refreshed source review, security, evidence, validation and automated closure while retaining all Pending requirements and the Phase 23 owner route.
 
 ## Verification
 
-- The focused phase1 CTest selection passed 14/14 checks on source `25f8966c`; the exact final full-suite and remote results remain pending and must be recorded for the final source before Phase 22 can close.
-- Immutable evidence passed on source `6447839b`: 513 cases, seven unresolved gates, admitted=0 and executed=0.
-- The admission mutation suite passed 12/12 controls, including independent Phase 20 checker and policy substitutions. Real approval correctly refused with exit 2.
-- The candidate boundary is point-in-time checked. Any completed Phase 22 claim remains conditional until exact-head required PR checks and merge-tree equivalence pass.
+- The broad focused CTest selection passed 23/23 in 42.98 seconds. The latest source-specific planning/evidence selection passed 4/4, and the configured inventory contained 1,732 tests with 47 planning-labelled tests.
+- The immutable diagnostic evidence check reports 513 metadata cases, seven unresolved gates, zero admitted, and zero executed. The admission mutation suite passed 12/12; real approval correctly refuses with exit 2.
+- Phase21 candidate/history, no-phase-path, plan-cap, Acid2 malformed-manifest, fixture-admission, core/player product, and budget controls passed. Plan cap check reports four phases and 28 plan files.
+- Independent code and security reviews are clean at source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`. The exact full-suite and exact-head remote outcomes are recorded at `build/phase22/remote-evidence.json`; both are required to close the phase boundary.
 
 ## Decisions and Limits
 
-- DIAG-01, DIAG-02, and RIGHTS-01 remain Pending with their original definitions; RIGHTS-01 remains owned by Phase 20.
+- DIAG-01, DIAG-02 and RIGHTS-01 remain Pending with their original definitions; RIGHTS-01 remains owned by Phase 20.
 - No upstream ROM/reference payload, upstream build or program, real fixture admission, real diagnostic result, or license prohibition is claimed.
-- Phase 23 — Qualified v0.4.0 Release — remains unstarted. The exact owner route is `/gsd-discuss-phase 23`; both automatic-advance flags remain false.
+- Phase 23 — Qualified v0.4.0 Release — remains unstarted. Its owner-controlled route is `/gsd-discuss-phase 23`; both automatic-advance flags remain false.
 
 ## Deviations from Plan
 
 ### Auto-fixed Issues
 
-**1. [Rule 1 - Bug] Reject renamed archive and diagnostic payload additions**
-- **Found during:** Task 1 review of the scoped changes.
-- **Issue:** The path guard did not cover `.rar`, `.zst`, `.dat`, and extensionless payload variants.
-- **Fix:** Added suffix and bounded content-signature checks with negative controls for these forms and SVG/image/ROM variants.
+**1. [Rule 1 - Bug] Reject renamed archives and diagnostic payloads**
+- **Found during:** Task 1 review.
+- **Issue:** The path guard accepted `.rar`, `.zst`, `.dat`, and extensionless payload variants.
+- **Fix:** Added bounded path/content signature checks and negative controls for archive, image, ROM and SVG variants.
 - **Files modified:** `tests/scripts/verify-diagnostic-evidence.py`.
-- **Verification:** Immutable evidence controls, focused CTest, and independent review/security audit.
 
 **2. [Rule 2 - Security] Bind Phase 20 checker and policy to immutable source**
-- **Found during:** Task 1 scoped security review.
-- **Issue:** A mutable Phase 20 checker or policy could otherwise affect approval.
-- **Fix:** Compare both worktree files against blobs from the selected commit before invoking the checker; add independent mutation refusals.
+- **Found during:** Task 1 security review.
+- **Issue:** Mutable Phase 20 checker/policy bytes could affect approval.
+- **Fix:** Compare each worktree file with the selected commit blob before invoking the checker; add separate mutation refusals.
 - **Files modified:** `tests/scripts/verify-diagnostic-admission.py`.
-- **Verification:** All 12 admission controls passed, including separate checker and policy mutations.
 
-**3. [Rule 3 - Blocking issue] Permit tests-enabled source-archive configuration while evidence stays fail-closed**
-- **Found during:** Task 1 source-archive control.
-- **Issue:** The default CMake testing configuration required Git identity and prevented the planned no-Git source archive check.
-- **Fix:** Preserve revision-bound evidence enforcement when Git context exists and allow source-archive configuration; evidence tests still fail closed if revision identity is unavailable.
+**3. [Rule 3 - Blocking issue] Preserve source-archive configuration while evidence fails closed**
+- **Found during:** Source-archive control.
+- **Issue:** Tests-enabled no-Git archives could not configure.
+- **Fix:** Keep evidence source-bound and fail closed when revision identity is unavailable while allowing the existing source-archive control to configure.
 - **Files modified:** `CMakeLists.txt`, `tests/CMakeLists.txt`.
-- **Verification:** Source-archive configure control and focused Phase 22 CTest.
 
-**Total deviations:** 3 auto-fixed issues (Rules 1, 2 and 3). All fixes directly closed correctness, security, or verification blockers within the approved scope.
+**4. [Rule 1 - Bug] Skip history entries before the progress checker existed**
+- **Found during:** Full-suite gap round.
+- **Issue:** Missing historical paths were treated as invalid source bytes.
+- **Fix:** Skip commits without the checker path; retain absent-path and stale-source controls. Synthetic commits explicitly suppress hooks and signing even under hostile global configuration.
+- **Files modified:** `tests/scripts/verify-cgb-progress.py`.
+
+**5. [Rule 3 - Blocking issue] Reconcile the Phase 21 squash-reference and planning inventory checks**
+- **Found during:** Full-suite gap round and independent final review.
+- **Issue:** The historical pointer was no longer an ancestor after squash merge; planning evidence used the active configured CTest inventory but the generic lane checker classified any build-directory argument as a built-artifact dependency.
+- **Fix:** Retarget only the primary-record commit pointer after exact path/blob/digest verification and retain ancestry/digest mutants. Add an inventory-only classification pinned to one test name, exact checker, immutable source, active build directory, configured Python executable and exact argument sequence; keep executable/flag/interpreter bypass controls. The malformed Acid2 parser case remains a synthetic self-test; its production CTest asserts the earlier immutable scope refusal.
+- **Files modified:** `tests/data/cgb-candidates/ucity-1.3.json`, `tests/scripts/verify-cgb-candidates.py`, `tests/scripts/verify-planning-labels.py`, `tests/CMakeLists.txt`, `tests/cmake/ci-lanes.cmake`, `tests/scripts/run-acid2-local.py`, `tests/expected-tests.txt`.
+
+**Total deviations:** 5 scoped fixes within the authorized review/gap bounds. No package install, fixture addition, real diagnostic, or release action occurred.
 
 ## Deferred Issues
 
-- Final full-suite and exact-head remote PR qualification are still pending. If any required run, job, artifact, review, or merge-tree evidence is unavailable or does not match the final source, leave Phase 22 unclosed and record the concrete blocker.
+- Exact full-suite and exact-head PR evidence remain mandatory before Phase 22 can close. Any failed, stale, skipped, inaccessible or mismatched result leaves Phase 22 open and must be recorded in `build/phase22/remote-evidence.json`.
 
-## Next Phase Readiness
+## Self-Check: PASSED
 
-The local synthetic-plus-metadata evidence and independent source reviews are ready. Phase 22 remains conditional on the final local full suite and exact-head remote qualification. If they pass, stop at Phase 22 and hand back the owner-controlled `/gsd-discuss-phase 23` route; do not start Phase 23.
+The summary exists, its recorded task commits are ancestors of the current branch head, and its coverage uses the required block schema with automated passing references.
