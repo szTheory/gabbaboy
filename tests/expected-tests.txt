@@ -843,6 +843,7 @@ cgb_external_dispositions_image_contract
 cgb_acid2_local_selftest
 cgb_acid2_local_refuses_unpinned
 cgb_acid2_local_bad_manifest
+phase22_acid2_tracer
 cgb_colour_repro_tool_failure
 cgb_colour_repro_missing_pin
 model_gates_no_phase11_rows
