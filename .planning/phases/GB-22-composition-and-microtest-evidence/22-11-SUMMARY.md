@@ -7,7 +7,7 @@ requires:
   - phase: GB-22-composition-and-microtest-evidence
     provides: Synthetic tracer, metadata assessment, immutable no-go checker and mutation controls
 provides:
-  - Independently reviewed synthetic-plus-metadata evidence and conditional Phase 22 boundary
+  - Independently reviewed synthetic-plus-metadata evidence and Phase 22 boundary evidence
   - Exact record-blob and ancestry controls for the Phase 21 squash-reference mapping
   - Narrow configured-inventory planning classification with interpreter and argv controls
 affects: [diagnostic-admission, phase-23-release-evidence]
@@ -122,7 +122,7 @@ commits: 21
 - The configured full CTest suite passed 1,732/1,732 in 495.43 seconds at `042e7f34`; the authoritative final-head configure/build/full-suite result is recorded in `build/phase22/remote-evidence.json`.
 - The immutable diagnostic evidence check reports 513 metadata cases, seven unresolved gates, zero admitted, and zero executed. The admission mutation suite passed 12/12; real approval correctly refuses with exit 2.
 - Phase21 candidate/history, no-phase-path, plan-cap, Acid2 malformed-manifest, fixture-admission, core/player product, and budget controls passed. Plan cap check reports four phases and 28 plan files.
-- Independent code and security reviews are clean at source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`. The exact final local rerun and exact-head remote outcomes are recorded at `build/phase22/remote-evidence.json`; remote evidence is the boundary closure gate.
+- Independent code and security reviews are clean at source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`. The exact final local rerun and PR #142 exact-head outcomes are recorded in `build/phase22/remote-evidence.json`; those required checks, artifacts, reviews, protection checks, and merge-tree equality passed before the PR merged as `ca2f0be6`.
 
 ## Decisions and Limits
 
@@ -168,8 +168,12 @@ commits: 21
 
 ## Deferred Issues
 
-- Phase 22 closes only when the configured full suite is tied to the final source and exact-head PR evidence passes. Any failed, stale, skipped, inaccessible or mismatched result leaves Phase 22 open and must be recorded in `build/phase22/remote-evidence.json`.
+- The seven real-fixture evidence gates remain unresolved; no real diagnostic fixture was admitted or executed, and DIAG-01, DIAG-02, and RIGHTS-01 remain Pending. No license prohibition is inferred.
 
 ## Self-Check: PASSED
 
 The summary exists, its recorded task commits are ancestors of the current branch head, and its coverage uses the required block schema with automated passing references.
+
+## Final Phase Qualification
+
+The final configured suite passed 1,732/1,732 at exact PR #142 head `9cb92b0f344b884d5f3e7179740ff5bc87eae379`. The required CI, fixture-reproduction, and package-preview checks and artifacts passed for that exact head; the fresh code and security reviews were clean; strict branch protection was satisfied without bypass; and the merged tree matched the qualified tree. PR #142 squash-merged as `ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765`. Phase 22 is complete at the approved metadata-only scope. Phase 23 remains unstarted and owner-controlled through `/gsd-discuss-phase 23`.
