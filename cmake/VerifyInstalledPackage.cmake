@@ -2,7 +2,42 @@ if(NOT DEFINED GBB_INSTALL_PREFIX)
   message(FATAL_ERROR "GBB_INSTALL_PREFIX is required")
 endif()
 
+if(DEFINED GBB_SOURCE_DIR AND NOT "${GBB_SOURCE_DIR}" STREQUAL "")
+  get_filename_component(source_dir "${GBB_SOURCE_DIR}" ABSOLUTE)
+else()
+  get_filename_component(source_dir "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+endif()
+set(fixture_admission_checker "${source_dir}/tests/scripts/verify-fixture-admission.py")
+if(NOT EXISTS "${fixture_admission_checker}")
+  message(FATAL_ERROR "Fixture admission checker is missing: ${fixture_admission_checker}")
+endif()
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
 get_filename_component(prefix "${GBB_INSTALL_PREFIX}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_LIST_DIR}/..")
+set(product_policy_command
+  "${Python3_EXECUTABLE}" -I "${fixture_admission_checker}"
+  --check-product-tree "${prefix}" --layout core --repo-root "${source_dir}")
+if(DEFINED GBB_WRITE_PRODUCT_INVENTORY AND NOT "${GBB_WRITE_PRODUCT_INVENTORY}" STREQUAL "")
+  list(APPEND product_policy_command --write-inventory "${GBB_WRITE_PRODUCT_INVENTORY}")
+elseif(DEFINED GBB_PRODUCT_INVENTORY AND NOT "${GBB_PRODUCT_INVENTORY}" STREQUAL "")
+  list(APPEND product_policy_command --inventory "${GBB_PRODUCT_INVENTORY}")
+endif()
+if(DEFINED GBB_NOTICE_SIDECAR AND NOT "${GBB_NOTICE_SIDECAR}" STREQUAL "")
+  list(APPEND product_policy_command --notice-sidecar "${GBB_NOTICE_SIDECAR}")
+endif()
+execute_process(
+  COMMAND ${product_policy_command}
+  RESULT_VARIABLE product_policy_result
+  OUTPUT_VARIABLE product_policy_output
+  ERROR_VARIABLE product_policy_error
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_STRIP_TRAILING_WHITESPACE)
+if(NOT product_policy_result EQUAL 0)
+  message(FATAL_ERROR
+    "Core product policy rejected installed bytes (${product_policy_result}): ${product_policy_error}${product_policy_output}")
+endif()
+message(STATUS "Core product policy accepted actual installed bytes at ${prefix}")
+
 set(header "${prefix}/include/gabbaboy/gabbaboy.h")
 if(NOT DEFINED GBB_EXECUTABLE_SUFFIX)
   message(FATAL_ERROR "GBB_EXECUTABLE_SUFFIX is required")

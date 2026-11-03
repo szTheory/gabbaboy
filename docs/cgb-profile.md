@@ -28,11 +28,49 @@ mode reads `$FF`. Double-speed switching, GDMA and HBlank DMA run on the selecte
 and keep their budgets in master half-dots.
 
 These are limits, not omissions. No CGB game-level evidence exists: the CGB test-ROM corpus is
-software-model evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY. CGB mode-3
-timing is not claimed. No physical or perceptual audio/color qualification is claimed, and
-nothing here describes general game compatibility. The evidence rows below say which cells rest
-on a hardware-derived test, a document, a differential oracle or project policy.
+software-model evidence, not game acceptance. Phase 21 passed the original native-CGB harness
+under the CGB-CPU-E software model in native mode; that result is harness-only and does not add an
+admitted game. Potion Panic and µCity 1.3 both ended in documented rights/source-scope no-go
+outcomes; the component evidence and unobserved downstream facts are in
+[game acceptance](game-acceptance.md). Physical CGB-E remains UNKNOWN/POLICY. CGB mode-3 timing is
+not claimed. No physical or perceptual audio/color qualification is claimed, and nothing here
+describes general game compatibility. The evidence rows below say which cells rest on a
+hardware-derived test, a document, a differential oracle or project policy.
 <!-- adopter-model-summary-end -->
+
+## Phase 22 diagnostic evidence
+
+| Claim area | Phase 22 disposition |
+|---|---|
+| synthetic composition | supported: original synthetic DMG composition and controls passed |
+| source metadata | supported: metadata-only assessment retained all 513 source/ROM names |
+| real diagnostic bytes/results | unsupported: no real diagnostic payload or real diagnostic result exists |
+| rights and profile applicability | unresolved: the metadata does not supply output rights or model qualification |
+| DIAG/RIGHTS requirement completion | pending: DIAG-01 and DIAG-02 remain Pending; RIGHTS-01 remains Pending under Phase 20 ownership |
+
+The original synthetic DMG composition and controls passed. The metadata-only assessment retained all
+513 source/ROM names. No real upstream diagnostic payload was fetched, retained, built, run, or
+admitted. No real diagnostic result exists.
+
+The seven unresolved gates are acid2_derivative_build_reproducibility,
+acid2_component_rights_and_output_scope, acid2_profile_applicability,
+gbmicrotest_component_rights_and_output_scope, gbmicrotest_prebuilt_rom_sha256,
+gbmicrotest_case_applicability, and gbmicrotest_independent_oracle.
+
+The inventory retains 480 shared-macro verdict cases, two inline FF80–FF82 cases, 31 initial
+exclusions, and 482 blocked and not observed protocol candidates. There are zero admitted
+and zero executed cases; final suite accounting is incomplete. Git blob IDs and sizes do not provide
+ROM SHA-256 values, reproducibility, or redistribution rights.
+
+The source review's DMG-CPU-08 statement is uncertain and suite-wide only. It does not establish
+per-case applicability to DMG-CPU-B or CGB-CPU-E. The synthetic result establishes only its
+project-authored mask and comparison control; glyph rendering, mode-3 timing, hardware
+qualification, game behavior, and broad compatibility remain unqualified. This is insufficient
+evidence and does not conclude that license terms prohibit use.
+
+D-141 accepts the revised Phase 22 acceptance criteria only. The original DIAG-01 and DIAG-02
+definitions remain unchanged and Pending, and RIGHTS-01 remains Pending under Phase 20 ownership.
+Any future real-fixture attempt requires new source-backed evidence and a separately selected scope.
 
 ## Evidence classes
 

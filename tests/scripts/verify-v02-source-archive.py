@@ -7,7 +7,7 @@ Two contracts are checked here and they are deliberately not interchangeable:
   It must retain every admitted licensed fixture together with its notice and
   must match the notice digest table byte for byte.
 * A *product package* (`--check-product-archive`) is the installed core archive.
-  It must stay fixture-free except for the three original project fixtures.
+  It must match the shared exact core path and byte policy.
 
 Both inspect archive bytes by streaming; nothing is ever extracted.  The Python
 standard library is the only dependency.
@@ -18,6 +18,8 @@ Usage:
   verify-v02-source-archive.py --check-receipt RECEIPT --archive PATH
       --tag TAG --source-sha SHA
   verify-v02-source-archive.py --check-product-archive PATH [--repo-root DIR]
+      [--inventory PATH] [--notice-sidecar PATH] [--fixture-checker PATH]
+  verify-v02-source-archive.py --self-test-product-tree DIR --repo-root DIR
   verify-v02-source-archive.py --self-test
 
 Failures print `REJECT <code>: <reason>` on stderr and exit 1.
@@ -25,6 +27,7 @@ Failures print `REJECT <code>: <reason>` on stderr and exit 1.
 import argparse
 import gzip
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -37,6 +40,7 @@ import tarfile
 import tempfile
 import zipfile
 import zlib
+import shutil
 
 SCHEMA_VERSION = 1
 RECEIPT_KIND = "gabbaboy-source-archive-receipt"
@@ -44,18 +48,18 @@ MAX_ENTRIES = 100000
 MAX_TOTAL_BYTES = 1 << 30
 MAX_MEMBER_BYTES = 64 << 20
 MAX_PATH_BYTES = 4096
+MAX_TAR_STREAM_BYTES = MAX_TOTAL_BYTES + (128 << 20)
+MAX_TAR_EXTENSION_BYTES = 64 << 10
+MAX_TAR_TOTAL_EXTENSION_BYTES = 4 << 20
+MAX_TAR_EXTENSION_HEADERS = 128
+MAX_TAR_TOTAL_EXTENSION_HEADERS = 32_768
+MAX_TAR_READ_BYTES = 64 << 10
 KEEP_LIMIT = 4 << 20
 CHUNK = 1 << 20
 ROM_SUFFIXES = (".gb", ".gbc", ".sgb", ".rom", ".bin")
 DIGEST_DOCS = ("manifest.json", "SOURCES.md", "candidate-digests.json")
 NOTICE_NAME = "THIRD_PARTY_NOTICES.md"
-# The only fixtures a binary product package may carry (THIRD_PARTY_NOTICES.md).
-PRODUCT_FIXTURES = ("tracer", "visible-demo", "mbc1-continuation")
-PRODUCT_REQUIRED = (
-    "include/gabbaboy/gabbaboy.h",
-    "share/gabbaboy/fixtures/tracer/manifest.json",
-    "share/gabbaboy/fixtures/mbc1-continuation/manifest.json",
-)
+# Product paths and protected source bytes are governed by verify-fixture-admission.py.
 TAG_RE = re.compile(r"^v([0-9]+\.[0-9]+\.[0-9]+)$")
 SHA1_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -69,6 +73,75 @@ class Reject(Exception):
     def __init__(self, code, message):
         super().__init__(message)
         self.code = code
+
+
+class ArchiveLimitError(ValueError):
+    def __init__(self, reason, message):
+        super().__init__(message)
+        self.reason = reason
+
+
+class BoundedTarReader:
+    """Count decompressed TAR bytes and reject unbounded or over-budget reads."""
+    def __init__(self, source, limit, max_request):
+        self.source = source
+        self.limit = limit
+        self.max_request = max_request
+        self.bytes_read = 0
+
+    def read(self, size=-1):
+        if size is None or size < 0:
+            raise ValueError("unbounded reads are not allowed from the TAR stream")
+        if size == 0:
+            return b""
+        remaining = self.limit - self.bytes_read
+        data = self.source.read(min(size, self.max_request, remaining + 1))
+        if len(data) > remaining:
+            raise ArchiveLimitError("stream", f"TAR exceeds {self.limit}-byte decompressed-stream limit")
+        self.bytes_read += len(data)
+        return data
+
+
+def bounded_tarinfo_class(extension_headers=MAX_TAR_EXTENSION_HEADERS,
+                          total_extension_headers=MAX_TAR_TOTAL_EXTENSION_HEADERS,
+                          extension_bytes=MAX_TAR_EXTENSION_BYTES,
+                          total_extension_bytes=MAX_TAR_TOTAL_EXTENSION_BYTES):
+    """Check PAX and GNU extension declarations before tarfile consumes their payloads."""
+    stats = {"chain_headers": 0, "total_headers": 0, "bytes": 0}
+    extension_types = {
+        tarfile.GNUTYPE_LONGNAME,
+        tarfile.GNUTYPE_LONGLINK,
+        tarfile.GNUTYPE_SPARSE,
+        tarfile.XHDTYPE,
+        tarfile.XGLTYPE,
+        tarfile.SOLARIS_XHDTYPE,
+    }
+
+    class BoundedTarInfo(tarfile.TarInfo):
+        def _proc_member(self, archive):
+            if self.type in extension_types:
+                if self.size < 0 or self.size > extension_bytes:
+                    raise ArchiveLimitError("extension-header",
+                                            f"extended TAR header exceeds {extension_bytes}-byte limit")
+                if stats["chain_headers"] + 1 > extension_headers:
+                    raise ArchiveLimitError("extension-count",
+                                            f"TAR exceeds {extension_headers} extended-header limit")
+                if stats["total_headers"] + 1 > total_extension_headers:
+                    raise ArchiveLimitError("extension-total-count",
+                                            f"TAR exceeds {total_extension_headers} archive-wide extended-header limit")
+                if stats["bytes"] + self.size > total_extension_bytes:
+                    raise ArchiveLimitError("extension-total",
+                                            f"TAR exceeds {total_extension_bytes} aggregate extension-byte limit")
+                stats["chain_headers"] += 1
+                stats["total_headers"] += 1
+                stats["bytes"] += self.size
+            else:
+                # A source member may legitimately need one PAX path header (for long
+                # names); cap a hidden run per member, while keeping a separate archive total.
+                stats["chain_headers"] = 0
+            return super()._proc_member(archive)
+
+    return BoundedTarInfo
 
 
 class Limits:
@@ -89,6 +162,7 @@ class Inspection:
         self.unwrapped = unwrapped
         self.root = None
         self.entries = []
+        self.directories = []
         self.kept = {}
         self.commit = None
         self.total = 0
@@ -159,6 +233,7 @@ def register(inspection, seen, raw, kind, size, target, reader, mode, limits, wa
         account(inspection, len(seen), size, limits)
         rel = "/".join(parts)
         if kind == "dir":
+            inspection.directories.append(rel)
             return
     else:
         if inspection.root is None:
@@ -204,24 +279,45 @@ def register(inspection, seen, raw, kind, size, target, reader, mode, limits, wa
 def inspect_tar(path, limits, want_git, unwrapped=False):
     inspection, seen = Inspection(unwrapped), set()
     try:
-        with tarfile.open(path, "r:gz") as bundle:
-            for member in bundle:
-                if member.issparse() or member.islnk():
-                    raise Reject("link-not-allowed" if member.islnk() else "nonregular-member",
-                                 f"archive member is a hard link or sparse file: {member.name!r}")
-                if member.isdir():
-                    kind, target, reader = "dir", None, None
-                elif member.issym():
-                    kind, target, reader = "symlink", member.linkname, None
-                elif member.isreg():
-                    kind, target, reader = "file", None, bundle.extractfile(member)
-                else:
-                    raise Reject("nonregular-member", f"archive member is a device, FIFO or special file: {member.name!r}")
-                register(inspection, seen, member.name, kind, member.size if kind == "file" else 0,
-                         target, reader, member.mode, limits, want_git)
-            inspection.commit = bundle.pax_headers.get("comment")
+        with open(path, "rb") as compressed:
+            with gzip.GzipFile(fileobj=compressed, mode="rb") as decompressed:
+                bounded = BoundedTarReader(decompressed, MAX_TAR_STREAM_BYTES, MAX_TAR_READ_BYTES)
+                with tarfile.open(
+                        fileobj=bounded, mode="r|",
+                        tarinfo=bounded_tarinfo_class(extension_headers=MAX_TAR_EXTENSION_HEADERS,
+                                                      total_extension_headers=MAX_TAR_TOTAL_EXTENSION_HEADERS,
+                                                      extension_bytes=MAX_TAR_EXTENSION_BYTES,
+                                                      total_extension_bytes=MAX_TAR_TOTAL_EXTENSION_BYTES)) as bundle:
+                    for member in bundle:
+                        if member.issparse() or member.islnk():
+                            raise Reject("link-not-allowed" if member.islnk() else "nonregular-member",
+                                         f"archive member is a hard link or sparse file: {member.name!r}")
+                        if member.isdir():
+                            kind, target, reader = "dir", None, None
+                        elif member.issym():
+                            kind, target, reader = "symlink", member.linkname, None
+                        elif member.isreg():
+                            kind, target, reader = "file", None, bundle.extractfile(member)
+                        else:
+                            raise Reject("nonregular-member", f"archive member is a device, FIFO or special file: {member.name!r}")
+                        register(inspection, seen, member.name, kind, member.size if kind == "file" else 0,
+                                 target, reader, member.mode, limits, want_git)
+                    while bounded.read(MAX_TAR_READ_BYTES):
+                        pass
+                    inspection.commit = bundle.pax_headers.get("comment")
     except Reject:
         raise
+    except ArchiveLimitError as error:
+        code = {
+            "extension-header": "archive-extension-header-limit",
+            "extension-total": "archive-extension-total-limit",
+            "extension-count": "archive-extension-count-limit",
+            "extension-total-count": "archive-extension-total-count-limit",
+            "stream": "archive-stream-limit",
+        }[error.reason]
+        raise Reject(code, str(error)) from None
+    except ValueError as error:
+        raise Reject("archive-unreadable", f"archive cannot be read as a bounded gzip tarball: {error}") from None
     except (tarfile.TarError, EOFError, zlib.error, OSError) as error:
         raise Reject("archive-unreadable", f"archive cannot be read as a gzip tarball: {error}")
     return inspection
@@ -465,49 +561,53 @@ def check_receipt(receipt_path, archive, tag, source_sha, repo, limits):
     return receipt
 
 
-def collect_third_party_digests(repo_root):
-    digests = set()
-    fixtures = pathlib.Path(repo_root) / "fixtures"
-    for directory in sorted(fixtures.iterdir()) if fixtures.is_dir() else []:
-        if directory.name in PRODUCT_FIXTURES or not directory.is_dir():
-            continue
-        for doc in DIGEST_DOCS:
-            candidate = directory / doc
-            if candidate.is_file() and candidate.stat().st_size <= KEEP_LIMIT:
-                digests.update(HEX64_RE.findall(candidate.read_text(errors="replace")))
-        for rom in directory.rglob("*"):
-            if rom.is_file() and rom.name.lower().endswith(ROM_SUFFIXES) and rom.stat().st_size <= MAX_MEMBER_BYTES:
-                digests.add(sha256_path(rom))
-    return digests
+_PRODUCT_POLICY_MODULES = {}
 
 
-def check_product(archive, repo_root, limits):
+def _shared_policy_checker(checker_path=None):
+    path = (pathlib.Path(checker_path).resolve() if checker_path else
+            pathlib.Path(__file__).resolve().with_name("verify-fixture-admission.py"))
+    key = str(path)
+    if key in _PRODUCT_POLICY_MODULES:
+        return _PRODUCT_POLICY_MODULES[key]
+    spec = importlib.util.spec_from_file_location("gbb_fixture_admission_product", path)
+    if spec is None or spec.loader is None:
+        raise Reject("product-policy-unavailable", "shared fixture admission checker cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    _PRODUCT_POLICY_MODULES[key] = module
+    return module
+
+
+def check_product(archive, repo_root, limits, inventory_path=None, sidecar_path=None, fixture_checker=None):
     inspection = inspect_archive(archive, limits, unwrapped=True)
     if any(e.kind == "symlink" for e in inspection.entries):
         raise Reject("product-link-not-allowed", "product package contains a link")
-    files = inspection.files()
-    forbidden = collect_third_party_digests(repo_root) if repo_root else set()
-    for path, entry in sorted(files.items()):
-        parts = path.split("/")
-        in_fixtures = len(parts) > 3 and parts[:3] == ["share", "gabbaboy", "fixtures"]
-        if in_fixtures and parts[3] not in PRODUCT_FIXTURES:
-            raise Reject("product-fixture-leak", f"product package carries non-product fixture content: {path}")
-        if path.lower().endswith(ROM_SUFFIXES) and not (in_fixtures and parts[3] in PRODUCT_FIXTURES):
-            raise Reject("product-fixture-leak", f"product package carries a ROM-like file outside the original fixtures: {path}")
-        if entry.sha256 in forbidden:
-            raise Reject("product-fixture-leak", f"product package carries bytes of an admitted third-party fixture: {path}")
-        if parts[0] == "fixtures" or path == NOTICE_NAME:
-            raise Reject("product-fixture-leak", f"product package carries source-archive content: {path}")
-    for required in PRODUCT_REQUIRED:
-        if required not in files:
-            raise Reject("product-package-incomplete", f"product package lacks {required} (a source archive is not a product package)")
-    return {"inspected_members": len(inspection.entries), "root": inspection.root}
+    checker = _shared_policy_checker(fixture_checker)
+    if repo_root is None:
+        repo_root = pathlib.Path(__file__).resolve().parents[2]
+    root = pathlib.Path(repo_root).resolve()
+    if sidecar_path is not None and pathlib.Path(sidecar_path).name != "gabbaboy-notices.txt":
+        raise Reject("product-notice-sidecar-invalid", "sidecar must use the gabbaboy-notices.txt release asset name")
+    entries = {
+        entry.path: {"kind": "file", "size_bytes": entry.size, "sha256": entry.sha256}
+        for entry in inspection.entries
+    }
+    entries.update({path: {"kind": "directory"} for path in inspection.directories})
+    try:
+        inventory = checker._read_inventory(pathlib.Path(inventory_path)) if inventory_path else None
+        accepted = checker.check_product_entries(entries, "core", root, inventory=inventory, sidecar=sidecar_path)
+    except checker.Reject as rejection:
+        detail = str(rejection).partition(": ")[2] or str(rejection)
+        raise Reject(rejection.code, detail) from None
+    return {"inspected_members": len(inspection.entries) + len(inspection.directories),
+            "root": inspection.root, "inventory": accepted}
 
 
 # --------------------------------------------------------------------------- self-test
 
 
-def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
+def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT, extra_pax=None):
     """Build a gzip tarball from {relative path: bytes | ('symlink', target) | ...} like GitHub does."""
     raw = io.BytesIO()
     headers = {"comment": commit} if commit else {}
@@ -521,10 +621,16 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
             # A leading "@" supplies the raw member name (traversal, absolute and second-root controls).
             # root=None builds the installed product layout, whose members sit at the archive top level.
             info = tarfile.TarInfo(name[1:] if name.startswith("@") else (name if root is None else f"{root}/{name}"))
+            if extra_pax and name in extra_pax:
+                info.pax_headers = extra_pax[name]
             if isinstance(value, tuple) and value[0] == "file":
                 info.size = len(value[1])
                 info.mode = value[2]
                 bundle.addfile(info, io.BytesIO(value[1]))
+            elif isinstance(value, tuple) and value[0] == "dir":
+                info.type = tarfile.DIRTYPE
+                info.mode = 0o755
+                bundle.addfile(info)
             elif isinstance(value, tuple):
                 info.type = {"symlink": tarfile.SYMTYPE, "hardlink": tarfile.LNKTYPE, "device": tarfile.CHRTYPE}[value[0]]
                 info.linkname = value[1]
@@ -537,6 +643,188 @@ def tar_bytes(members, commit, root="gabbaboy-0.0.1", fmt=tarfile.PAX_FORMAT):
     with gzip.GzipFile(fileobj=compressed, mode="wb", mtime=0) as handle:
         handle.write(raw.getvalue())
     return compressed.getvalue()
+
+
+def pax_record(key, value):
+    body = key.encode("ascii") + b"=" + value + b"\n"
+    length = len(body) + 2
+    while True:
+        record = str(length).encode("ascii") + b" " + body
+        if len(record) == length:
+            return record
+        length = len(record)
+
+
+def chained_pax_tar_bytes(count, record):
+    raw = io.BytesIO()
+    with tarfile.open(fileobj=raw, mode="w", format=tarfile.PAX_FORMAT) as bundle:
+        top = tarfile.TarInfo("gabbaboy-0.0.1")
+        top.type = tarfile.DIRTYPE
+        bundle.addfile(top)
+        for index in range(count):
+            extension = tarfile.TarInfo(f"./PaxHeaders/{index}")
+            extension.type = tarfile.XHDTYPE
+            extension.size = len(record)
+            bundle.addfile(extension, io.BytesIO(record))
+        payload = tarfile.TarInfo("gabbaboy-0.0.1/README.md")
+        payload.size = 1
+        bundle.addfile(payload, io.BytesIO(b"x"))
+    return gzip.compress(raw.getvalue(), mtime=0)
+
+
+def _load_product_policy_module():
+    return _shared_policy_checker()
+
+
+def _private_baseline_repo(scratch, checker):
+    """Materialize a private working tree backed by only the immutable product baseline."""
+    project_root = pathlib.Path(__file__).resolve().parents[2]
+    repo = pathlib.Path(scratch) / "synthetic-policy-repository"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)
+    object_dir = subprocess.run(
+        ["git", "-C", str(project_root), "rev-parse", "--path-format=absolute", "--git-path", "objects"],
+        check=True, capture_output=True).stdout.rstrip(b"\r\n")
+    object_info = repo / ".git/objects/info"
+    object_info.mkdir(parents=True, exist_ok=True)
+    (object_info / "alternates").write_bytes(object_dir + b"\n")
+
+    paths = ["LICENSE", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json"]
+    raw_tree = checker.git(repo, "ls-tree", "-r", "-z", "--full-tree", checker.BASELINE_COMMIT, "--", "fixtures")
+    for record in raw_tree.split(b"\0"):
+        if not record:
+            continue
+        _metadata, raw_path = record.split(b"\t", 1)
+        paths.append(raw_path.decode("utf-8", "surrogateescape"))
+    for relative in paths:
+        target = repo.joinpath(*relative.split("/"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        data = (project_root / relative).read_bytes() if relative == "cmake/FixtureAdmissionPolicy.json" \
+            else checker.blob(repo, checker.BASELINE_COMMIT, relative)
+        target.write_bytes(data)
+    return repo
+
+
+def _synthetic_core_product(scratch):
+    checker = _load_product_policy_module()
+    repo = _private_baseline_repo(scratch, checker)
+    rules, _policy_bytes = checker._product_rules(repo)
+    source_contract = checker._product_source_expectations(repo, rules, "core")
+    tree = pathlib.Path(scratch) / "synthetic-core-product"
+    tree.mkdir()
+    checker._write_synthetic_product_tree(tree, repo, "core", rules, b"", source_contract)
+    entries = checker.product_tree_entries(tree)
+    product = {}
+    for relative, record in entries.items():
+        if record["kind"] == "directory":
+            product[relative] = ("dir",)
+        else:
+            product[relative] = tree.joinpath(*relative.split("/")).read_bytes()
+    inventory = checker.check_product_entries(entries, "core", repo)
+    forbidden_source = "fixtures/mooneye-cgb/boot_regs-cgb.gb"
+    forbidden_bytes = checker.blob(repo, checker.BASELINE_COMMIT, forbidden_source)
+    return checker, repo, product, inventory, forbidden_bytes, rules, source_contract
+
+
+def check_product_notice_contract(content):
+    try:
+        text = content.decode("utf-8", "strict") if isinstance(content, bytes) else content
+    except UnicodeDecodeError:
+        raise Reject("notice-contract-invalid", "THIRD_PARTY_NOTICES.md is not UTF-8") from None
+    paragraphs = [paragraph.strip() for paragraph in text.split("\n\n") if paragraph.strip()]
+    claims = [paragraph for paragraph in paragraphs
+              if "installed core packages" in paragraph.lower() and "binary products" in paragraph.lower()]
+    if len(claims) != 1:
+        raise Reject("notice-contract-invalid", "expected one explicit installed-product fixture claim")
+    claim = " ".join(claims[0].split()).lower()
+    required = ("exactly the original project-authored tracer, visible demo, and mbc1 continuation fixtures",
+                "their pinned notices", "controlled game and diagnostic bytes", "excluded from binary products",
+                "do not decide whether a grant's author had authority")
+    if any(phrase not in claim for phrase in required) or "fixture-free" in claim:
+        raise Reject("notice-contract-invalid", "product claim does not describe the exact fixtures, notices, exclusions, and review boundary")
+
+
+def self_test_product_tree(tree_path, repo_root):
+    """Run the shared product-entry checker against private mutations of a real staged tree."""
+    checker = _shared_policy_checker()
+    root = pathlib.Path(repo_root).resolve()
+    tree = pathlib.Path(tree_path).resolve(strict=True)
+    rules, _policy_bytes = checker._product_rules(root)
+    source_contract = checker._product_source_expectations(root, rules, "core")
+    clean_entries = checker.product_tree_entries(tree)
+    inventory = checker.check_product_entries(clean_entries, "core", root)
+
+    # Reuse the just-validated immutable baseline expectations across isolated controls. The
+    # public API name remains the call under test; only its deterministic baseline setup is held.
+    def check_cached(entries, layout, repo_root, inventory=None, sidecar=None):
+        return checker._validate_product_entries(
+            entries, layout, repo_root, inventory=inventory, sidecar=sidecar,
+            rules_override=rules, source_contract=source_contract)
+
+    checker.check_product_entries = check_cached
+    positives = 1
+    negatives = 0
+    print("accepted: actual extracted core product tree")
+
+    def reject_mutation(label, mutate, expected_code):
+        nonlocal negatives
+        with tempfile.TemporaryDirectory(prefix=f"gbb-real-core-{label}-") as directory:
+            candidate = pathlib.Path(directory) / "installed-prefix"
+            shutil.copytree(tree, candidate, symlinks=True)
+            mutate(candidate)
+            entries = checker.product_tree_entries(candidate)
+            try:
+                checker.check_product_entries(entries, "core", root, inventory=inventory)
+            except checker.Reject as error:
+                if error.code != expected_code:
+                    raise Reject("self-test-real-product", f"{label}: expected {expected_code}, got {error.code}") from None
+            else:
+                raise Reject("self-test-real-product", f"{label}: mutation was accepted")
+        negatives += 1
+        print(f"rejected: extracted product {label} ({expected_code})")
+
+    forbidden_bytes = (root / "fixtures/mooneye-cgb/boot_regs-cgb.gb").read_bytes()
+    fixture_dirs = ("tracer", "visible-demo", "mbc1-continuation")
+    for fixture_dir in fixture_dirs:
+        prefix = pathlib.Path("share/gabbaboy/fixtures") / fixture_dir
+        reject_mutation(f"extra-{fixture_dir}",
+                        lambda candidate, prefix=prefix: (candidate / prefix / "unregistered.bin").write_bytes(b"extra"),
+                        "product-path-unknown")
+        for disguise in ("renamed-payload.bin", "suffixless"):
+            reject_mutation(f"known-forbidden-{fixture_dir}-{disguise}",
+                            lambda candidate, prefix=prefix, disguise=disguise:
+                            (candidate / prefix / disguise).write_bytes(forbidden_bytes),
+                            "product-fixture-leak")
+    for disguise in ("renamed-payload.bin", "suffixless"):
+        reject_mutation(f"known-forbidden-outside-{disguise}",
+                        lambda candidate, disguise=disguise:
+                        (candidate / "share/gabbaboy" / disguise).write_bytes(forbidden_bytes),
+                        "product-fixture-leak")
+
+    fixture_sources = [(source, record) for source, record in rules["files"].items()
+                       if source.startswith("fixtures/") and record["destinations"].get("core")]
+    for index, (source, record) in enumerate(fixture_sources):
+        for destination in record["destinations"]["core"]:
+            if source.endswith("LICENSE.txt"):
+                reject_mutation(f"missing-fixture-notice-{index}",
+                                lambda candidate, destination=destination: (candidate / destination).unlink(),
+                                "product-path-missing")
+                reject_mutation(f"changed-fixture-notice-{index}",
+                                lambda candidate, destination=destination:
+                                (candidate / destination).write_bytes((candidate / destination).read_bytes() + b"changed"),
+                                "product-identity-mismatch")
+            elif source.endswith((".gb", ".gbc", ".sgb", ".rom", ".bin", ".asm")) or source.endswith("manifest.json"):
+                reject_mutation(f"changed-fixture-identity-{index}",
+                                lambda candidate, destination=destination:
+                                (candidate / destination).write_bytes((candidate / destination).read_bytes() + b"changed"),
+                                "product-identity-mismatch")
+    root_mit = "share/gabbaboy/LICENSE.txt"
+    reject_mutation("missing-root-mit", lambda candidate: (candidate / root_mit).unlink(), "product-path-missing")
+    reject_mutation("changed-root-mit", lambda candidate:
+                    (candidate / root_mit).write_bytes((candidate / root_mit).read_bytes() + b"changed"),
+                    "product-identity-mismatch")
+    print(f"PASS: actual extracted core product controls positives={positives} negative_controls={negatives}")
+    return negatives
 
 
 def synthetic_tree():
@@ -676,6 +964,26 @@ def self_test():
             negatives += 1
             print(f"rejected: {label} ({code_expected})")
 
+        def expect_inspect_reject(label, code_expected, archive, limits=None):
+            nonlocal negatives
+            try:
+                inspect_tar(archive, limits or Limits(), want_git=False)
+            except Reject as rejection:
+                if rejection.code != code_expected:
+                    raise SystemExit(f"self-test parser negative {label}: expected {code_expected}, got {rejection.code}: {rejection}")
+            else:
+                raise SystemExit(f"self-test parser negative {label}: archive was accepted")
+            negatives += 1
+            print(f"rejected: {label} ({code_expected})")
+
+        def with_tar_limit(name, value, operation):
+            original = globals()[name]
+            globals()[name] = value
+            try:
+                operation()
+            finally:
+                globals()[name] = original
+
         base = synthetic_tree()
 
         def variant(**changes):
@@ -719,6 +1027,64 @@ def self_test():
         if generated_receipt["source_tree_sha256"] != tgz_receipt["source_tree_sha256"]:
             raise SystemExit("self-test: generated and git archives of one tree disagree")
         expect_pass("generated-without-repo", write("plain.tar.gz", tar_bytes(base, sha)))
+
+        long_path_members = dict(base)
+        long_path_names = []
+        for index in range(256):
+            name = f"src/long-paths/{index:03d}-" + ("x" * 105) + ".txt"
+            long_path_names.append(name)
+            long_path_members[name] = f"long path member {index}\n".encode("ascii")
+        long_path_archive = write("many-long-paths.tar.gz", tar_bytes(long_path_members, sha))
+        extension_types = {
+            tarfile.GNUTYPE_LONGNAME, tarfile.GNUTYPE_LONGLINK, tarfile.GNUTYPE_SPARSE,
+            tarfile.XHDTYPE, tarfile.XGLTYPE, tarfile.SOLARIS_XHDTYPE,
+        }
+        base_proc_member = tarfile.TarInfo._proc_member
+        extension_payload_calls = []
+
+        def count_long_path_extensions(info, archive):
+            if info.type in extension_types:
+                extension_payload_calls.append(info.type)
+            return base_proc_member(info, archive)
+
+        tarfile.TarInfo._proc_member = count_long_path_extensions
+        try:
+            first_inspection = inspect_tar(long_path_archive, Limits(), want_git=False)
+            if sum(entry.path in long_path_names for entry in first_inspection.entries) != 256:
+                raise SystemExit("self-test 256-long-path positive did not retain all members")
+            exact_extension_count = len(extension_payload_calls)
+            if exact_extension_count <= 128:
+                raise SystemExit("self-test 256-long-path positive did not exercise more than 128 extension headers")
+            if exact_extension_count > MAX_TAR_TOTAL_EXTENSION_HEADERS:
+                raise SystemExit("self-test 256-long-path positive exceeded the default archive-wide header cap")
+            if first_inspection.commit != sha:
+                raise SystemExit("self-test 256-long-path positive lost global source identity metadata")
+            extension_payload_calls.clear()
+
+            def inspect_again_at_exact_total_cap():
+                second_inspection = inspect_tar(long_path_archive, Limits(), want_git=False)
+                if sum(entry.path in long_path_names for entry in second_inspection.entries) != 256:
+                    raise SystemExit("self-test repeated 256-long-path inspection lost members")
+                if len(extension_payload_calls) != exact_extension_count:
+                    raise SystemExit("self-test repeated 256-long-path inspection processed a different header count")
+                if second_inspection.commit != sha:
+                    raise SystemExit("self-test repeated 256-long-path inspection lost global source identity metadata")
+
+            # Requiring an exact-cap parse to succeed twice proves the archive-wide count is
+            # fresh for each inspect_tar call; a shared counter would reject the second pass.
+            with_tar_limit("MAX_TAR_TOTAL_EXTENSION_HEADERS", exact_extension_count,
+                           inspect_again_at_exact_total_cap)
+        finally:
+            tarfile.TarInfo._proc_member = base_proc_member
+        positives += 1
+        print("accepted: 256 long-path source members on independent inspections")
+        expect_pass("source-cli-256-long-paths", long_path_archive, sha_arg=sha)
+
+        large_source_metadata = write(
+            "source-with-large-pax.tar.gz",
+            tar_bytes(base, real_sha, extra_pax={"src/a.c": {"GBB.control": "x" * 70_000}}))
+        expect_reject("source-cli-oversized-pax", "archive-extension-header-limit", large_source_metadata,
+                      "--repo", str(repo), sha_arg=real_sha)
 
         # Rights and content mutations: each must fail for its own reason.
         expect_reject("missing-fixture-notice", "missing-notice", write("m1.tar.gz", tar_bytes(variant(fixtures__alpha__LICENSE_dot_txt=None), sha)))
@@ -770,6 +1136,75 @@ def self_test():
         # is refused before any allocation or read.
         bomb = top.tobuf(tarfile.GNU_FORMAT) + header.tobuf(tarfile.GNU_FORMAT)
         expect_reject("oversize-member-metadata", "member-oversize", write("p5.tar.gz", gzip.compress(bomb, mtime=0)))
+        oversized_global = write("oversized-global-pax.tar.gz",
+                                 tar_bytes({"README.md": b"x"}, "x" * 70_000))
+        base_proc_member = tarfile.TarInfo._proc_member
+        parser_body_calls = []
+
+        def count_extension_body_parser(info, archive):
+            parser_body_calls.append(info.type)
+            return base_proc_member(info, archive)
+
+        tarfile.TarInfo._proc_member = count_extension_body_parser
+        try:
+            inspect_tar(oversized_global, Limits(), want_git=False)
+        except Reject as rejection:
+            if rejection.code != "archive-extension-header-limit":
+                raise SystemExit(f"self-test 70KB PAX control rejected for wrong reason: {rejection}") from None
+            if parser_body_calls:
+                raise SystemExit("self-test 70KB PAX header reached TarInfo payload parsing before rejection")
+            negatives += 1
+            print("rejected: 70KB PAX header (archive-extension-header-limit)")
+        else:
+            raise SystemExit("self-test 70KB PAX header passed inspect_tar without a resource rejection")
+        finally:
+            tarfile.TarInfo._proc_member = base_proc_member
+
+        aggregate = write("aggregate-pax.tar.gz", tar_bytes(
+            {"one": b"1", "two": b"2", "three": b"3"}, None,
+            extra_pax={name: {"GBB.control": "x" * 60_000} for name in ("one", "two", "three")}))
+        with_tar_limit("MAX_TAR_TOTAL_EXTENSION_BYTES", 128 * 1024,
+                       lambda: expect_inspect_reject("aggregate extension payload", "archive-extension-total-limit", aggregate))
+
+        count_archive = write("extension-count.tar.gz", chained_pax_tar_bytes(129, b"5 x=\n"))
+        with_tar_limit("MAX_TAR_EXTENSION_HEADERS", 128,
+                       lambda: expect_inspect_reject("chained extension header count", "archive-extension-count-limit", count_archive))
+
+        interleaved_count_archive = write(
+            "interleaved-extension-count.tar.gz",
+            tar_bytes({"one": b"1", "two": b"2", "three": b"3"}, None,
+                      extra_pax={name: {"GBB.x": "y"} for name in ("one", "two", "three")}))
+        interleaved_record_size = len(pax_record("GBB.x", b"y"))
+        if (interleaved_count_archive.stat().st_size >= MAX_TOTAL_BYTES
+                or len(gzip.decompress(interleaved_count_archive.read_bytes())) >= MAX_TAR_STREAM_BYTES
+                or 3 > Limits().entries
+                or interleaved_record_size > MAX_TAR_EXTENSION_BYTES
+                or 3 * interleaved_record_size > MAX_TAR_TOTAL_EXTENSION_BYTES):
+            raise SystemExit("self-test interleaved count archive exceeded an unrelated archive limit")
+        interleaved_payload_calls = []
+
+        def count_interleaved_extension_payload(info, archive):
+            if info.type in extension_types:
+                interleaved_payload_calls.append(info.type)
+            return base_proc_member(info, archive)
+
+        tarfile.TarInfo._proc_member = count_interleaved_extension_payload
+        try:
+            with_tar_limit("MAX_TAR_TOTAL_EXTENSION_HEADERS", 2,
+                           lambda: expect_inspect_reject(
+                               "interleaved archive-wide extension header count",
+                               "archive-extension-total-count-limit", interleaved_count_archive))
+            if len(interleaved_payload_calls) != 2:
+                raise SystemExit("self-test archive-wide header cap parsed an over-limit extension payload")
+        finally:
+            tarfile.TarInfo._proc_member = base_proc_member
+
+        stream_archive = write("decompressed-stream.tar.gz",
+                               tar_bytes({"README.md": b"z" * (32 * 1024)}, None))
+        if stream_archive.stat().st_size >= 32 * 1024:
+            raise SystemExit("self-test decompressed-stream control is not highly compressible")
+        with_tar_limit("MAX_TAR_STREAM_BYTES", 4096,
+                       lambda: expect_inspect_reject("decompressed TAR stream", "archive-stream-limit", stream_archive))
         expect_reject("symlink-not-in-tree", "link-not-allowed", write("p6.tar.gz", tar_bytes({**base, "link": ("symlink", "/etc/passwd")}, sha)))
         expect_reject("hardlink-member", "link-not-allowed", write("p7.tar.gz", tar_bytes({**base, "hard": ("hardlink", "README.md")}, sha)))
         expect_reject("device-member", "nonregular-member", write("p8.tar.gz", tar_bytes({**base, "dev": ("device", "")}, sha)))
@@ -780,38 +1215,167 @@ def self_test():
         expect_reject("truncated-gzip", "archive-unreadable", write("t1.tar.gz", generated.read_bytes()[:200]))
         expect_reject("not-an-archive", "archive-unreadable", write("t2.tar.gz", b"plain text, not an archive"))
 
-        # Product package contract: separate from the source archive contract.
-        good_product = {
-            "include/gabbaboy/gabbaboy.h": b"/* header */\n",
-            "share/gabbaboy/fixtures/tracer/manifest.json": b"{}\n",
-            "share/gabbaboy/fixtures/tracer/tracer.gb": b"\x00T",
-            "share/gabbaboy/fixtures/mbc1-continuation/manifest.json": b"{}\n",
-        }
+        # Product package contract: build a complete accepted product from the pinned source baseline,
+        # independent of mutable files in the checkout under test.
+        product_checker, product_repo, good_product, good_inventory, forbidden_product_bytes, product_rules, source_contract = \
+            _synthetic_core_product(scratch)
 
-        def expect_product(label, files, expected, root_name=None):
+        # A release retry must use the trusted workflow-commit checker even when the tagged
+        # workspace sibling differs. Exercise the CLI with a deliberately unusable sibling.
+        tagged_dir = scratch / "tagged-checkout"
+        trusted_dir = scratch / "trusted-control-plane"
+        tagged_dir.mkdir()
+        trusted_dir.mkdir()
+        tagged_script = tagged_dir / "verify-v02-source-archive.py"
+        shutil.copyfile(script, tagged_script)
+        (tagged_dir / "verify-fixture-admission.py").write_text(
+            "raise RuntimeError('tagged sibling checker must not be imported')\n", encoding="utf-8")
+        trusted_checker = trusted_dir / "verify-fixture-admission.py"
+        shutil.copyfile(product_checker.__file__, trusted_checker)
+        trusted_archive = write("product-with-explicit-trusted-checker.tar.gz",
+                                tar_bytes(good_product, None, root=None))
+        code, err, stdout = run_cli(tagged_script, "--check-product-archive", str(trusted_archive),
+                                    "--repo-root", str(product_repo), "--fixture-checker", str(trusted_checker))
+        if code != 0 or not stdout.startswith("PASS: core product matches exact policy"):
+            raise SystemExit(f"self-test trusted fixture checker was not used: {err!r}, {stdout!r}")
+        positives += 1
+        print("accepted: archive policy uses the explicit trusted fixture checker")
+
+        def expect_product(label, files, expected, root_name=None, inventory=None,
+                           notice_sidecar=None, use_cli=False):
             nonlocal positives, negatives
             archive = write(f"{label}.tar.gz", tar_bytes(files, None, root=root_name))
-            code, err, stdout = run_cli(script, "--check-product-archive", str(archive))
+            inventory_path = None
+            args = ["--check-product-archive", str(archive), "--repo-root", str(product_repo)]
+            if inventory is not None:
+                inventory_path = scratch / f"{label}.inventory.json"
+                inventory_path.write_text(json.dumps(inventory, sort_keys=True), encoding="utf-8")
+                args.extend(("--inventory", str(inventory_path)))
+            if notice_sidecar is not None:
+                args.extend(("--notice-sidecar", str(notice_sidecar)))
+            if use_cli:
+                code, err, stdout = run_cli(script, *args)
+                if expected is None:
+                    if code != 0:
+                        raise SystemExit(f"self-test product positive {label} failed: {err}")
+                elif stdout or code != 1 or not err.startswith(f"REJECT {expected}:"):
+                    raise SystemExit(f"self-test product negative {label}: expected {expected}, got {code}: {err!r}")
+            else:
+                try:
+                    check_product(str(archive), str(product_repo), Limits(),
+                                  str(inventory_path) if inventory_path else None,
+                                  str(notice_sidecar) if notice_sidecar is not None else None)
+                except Reject as rejection:
+                    if expected is None or rejection.code != expected:
+                        raise SystemExit(f"self-test product {label}: expected {expected or 'accept'}, got {rejection.code}: {rejection}")
+                else:
+                    if expected is not None:
+                        raise SystemExit(f"self-test product {label}: mutation was accepted; expected {expected}")
             if expected is None:
-                if code != 0:
-                    raise SystemExit(f"self-test product positive {label} failed: {err}")
                 positives += 1
                 print(f"accepted: {label}")
             else:
-                if stdout:
-                    raise SystemExit(f"self-test product negative {label} printed success output: {stdout!r}")
-                if code != 1 or not err.startswith(f"REJECT {expected}:"):
-                    raise SystemExit(f"self-test product negative {label}: expected {expected}, got {code}: {err!r}")
                 negatives += 1
                 print(f"rejected: {label} ({expected})")
 
-        expect_product("product-fixture-free", good_product, None)
-        expect_product("product-wrapped-in-a-source-style-root", good_product, "product-fixture-leak", root_name="stage")
-        expect_product("product-with-third-party-fixture", {**good_product, "share/gabbaboy/fixtures/libbet/libbet.gb": b"\x00L"}, "product-fixture-leak")
-        expect_product("product-with-renamed-rom", {**good_product, "share/gabbaboy/renamed.gb": b"\x00L"}, "product-fixture-leak")
-        expect_product("product-with-notice-table", {**good_product, NOTICE_NAME: b"x"}, "product-fixture-leak")
-        expect_product("product-missing-header", {k: v for k, v in good_product.items() if "include" not in k}, "product-package-incomplete")
-        code, err, _ = run_cli(script, "--check-product-archive", str(generated))
+        # One CLI positive covers option parsing and inventory loading. Later archive mutations
+        # use the same production function with baseline expectations precomputed once, avoiding
+        # a full fixture-tree digest scan for every individual negative control.
+        expect_product("complete-core-product-from-pinned-baseline", good_product, None,
+                       inventory=good_inventory, use_cli=True)
+
+        def cached_product_entries(entries, layout, repo_root, inventory=None, sidecar=None):
+            return product_checker._validate_product_entries(
+                entries, layout, repo_root, inventory=inventory, sidecar=sidecar,
+                rules_override=product_rules, source_contract=source_contract)
+
+        product_checker.check_product_entries = cached_product_entries
+
+        good_sidecar = scratch / "gabbaboy-notices.txt"
+        good_sidecar.write_bytes(product_checker.blob(product_repo, product_checker.BASELINE_COMMIT, "LICENSE"))
+        expect_product("complete-core-product-with-release-sidecar", good_product, None,
+                       inventory=good_inventory, notice_sidecar=good_sidecar)
+        large_product_member = next(iter(good_product))
+        large_product_metadata = write(
+            "core-product-with-large-pax.tar.gz",
+            tar_bytes(good_product, None, root=None,
+                      extra_pax={large_product_member: {"GBB.control": "x" * 70_000}}))
+        code, err, stdout = run_cli(script, "--check-product-archive", str(large_product_metadata),
+                                    "--repo-root", str(product_repo))
+        if code != 1 or stdout or not err.startswith("REJECT archive-extension-header-limit:"):
+            raise SystemExit(f"self-test core product PAX negative expected metadata-limit rejection, got {code}: {err!r}, {stdout!r}")
+        negatives += 1
+        print("rejected: core-product CLI oversized PAX (archive-extension-header-limit)")
+        missing_sidecar = scratch / "missing-sidecar" / "gabbaboy-notices.txt"
+        expect_product("product-missing-release-sidecar", good_product, "product-notice-sidecar-invalid",
+                       notice_sidecar=missing_sidecar, use_cli=True)
+        altered_sidecar = scratch / "altered-sidecar" / "gabbaboy-notices.txt"
+        altered_sidecar.parent.mkdir()
+        altered_sidecar.write_bytes(good_sidecar.read_bytes() + b"altered\n")
+        expect_product("product-altered-release-sidecar", good_product, "product-notice-sidecar-mismatch",
+                       notice_sidecar=altered_sidecar)
+        wrong_name_sidecar = scratch / "notice.txt"
+        wrong_name_sidecar.write_bytes(good_sidecar.read_bytes())
+        expect_product("product-wrong-release-sidecar-name", good_product, "product-notice-sidecar-invalid",
+                       notice_sidecar=wrong_name_sidecar)
+        expect_product("product-wrapped-in-a-source-style-root", good_product, "product-path-unknown", root_name="stage")
+        for directory in ("tracer", "visible-demo", "mbc1-continuation"):
+            expect_product(f"product-extra-member-{directory}",
+                           {**good_product, f"share/gabbaboy/fixtures/{directory}/unregistered.bin": b"extra"},
+                           "product-path-unknown", use_cli=(directory == "tracer"))
+            for disguise in ("renamed-payload.bin", "suffixless"):
+                path = f"share/gabbaboy/fixtures/{directory}/{disguise}"
+                expect_product(f"product-known-forbidden-{directory}-{disguise}",
+                               {**good_product, path: forbidden_product_bytes}, "product-fixture-leak")
+
+        policy_rules, _ = product_checker._product_rules(product_repo)
+        fixture_records = [(source, record) for source, record in policy_rules["files"].items()
+                           if source.startswith("fixtures/") and record["destinations"].get("core")]
+        for index, (source, record) in enumerate(fixture_records):
+            destination = record["destinations"]["core"][0]
+            if source.endswith("LICENSE.txt"):
+                expect_product(f"product-missing-fixture-license-{index}",
+                               {path: value for path, value in good_product.items() if path != destination},
+                               "product-path-missing")
+                expect_product(f"product-altered-fixture-license-{index}",
+                               {**good_product, destination: good_product[destination] + b"altered\n"},
+                               "product-identity-mismatch")
+            elif source.endswith((".gb", ".gbc", ".sgb", ".rom", ".bin", ".asm")) or source.endswith("manifest.json"):
+                expect_product(f"product-altered-fixture-identity-{index}",
+                               {**good_product, destination: good_product[destination] + b"changed\n"},
+                               "product-identity-mismatch")
+
+        root_license = "share/gabbaboy/LICENSE.txt"
+        expect_product("product-missing-root-mit", {path: value for path, value in good_product.items()
+                                                      if path != root_license}, "product-path-missing")
+        expect_product("product-altered-root-mit", {**good_product, root_license: good_product[root_license] + b"altered\n"},
+                       "product-identity-mismatch")
+        expect_product("product-with-source-notice-index", {**good_product, NOTICE_NAME: b"x"}, "product-path-unknown")
+        expect_product("product-with-changed-inventory", good_product,
+                       "product-inventory-mismatch", inventory={**good_inventory, "policy_sha256": "0" * 64})
+        expect_product("product-missing-generated-header",
+                       {k: v for k, v in good_product.items() if k != "include/gabbaboy/gabbaboy.h"},
+                       "product-path-missing")
+
+        notices = (pathlib.Path(__file__).resolve().parents[2] / NOTICE_NAME).read_bytes()
+        check_product_notice_contract(notices)
+        positives += 1
+        altered_claim = notices.replace(
+            b"Controlled game and diagnostic bytes",
+            b"Approved game and diagnostic bytes")
+        if altered_claim == notices:
+            raise SystemExit("self-test notice-contract mutation did not alter its target claim")
+        try:
+            check_product_notice_contract(altered_claim)
+        except Reject as error:
+            if error.code != "notice-contract-invalid":
+                raise SystemExit(f"self-test notice-contract negative returned unrelated rejection: {error}")
+            negatives += 1
+            print("rejected: altered binary product claim (notice-contract-invalid)")
+        else:
+            raise SystemExit("self-test notice-contract negative accepted an altered product claim")
+
+        code, err, _ = run_cli(script, "--check-product-archive", str(generated), "--repo-root", str(product_repo))
         if code != 1 or not err.startswith("REJECT product-"):
             raise SystemExit(f"self-test: a licensed source archive was accepted as a product package: {err!r}")
         negatives += 1
@@ -844,6 +1408,9 @@ def self_test():
                 raise SystemExit(f"self-test receipt negative {label} printed success output: {stdout!r}")
             negatives += 1
             print(f"rejected: receipt {label} ({code_expected})")
+
+        expect_receipt_reject("oversized PAX source recheck", "archive-extension-header-limit", good,
+                              large_source_metadata, repo)
 
         receipt_cases = {
             "wrong-kind": lambda r: r.update(kind="gabbaboy-build-receipt"),
@@ -993,11 +1560,14 @@ def self_test():
         else:
             raise SystemExit("self-test: .gitattributes and the notice file are required in the source tree")
 
-        # Real tree: archive the committed repository at a private tag in a private clone.
+        # Real tree: archive the committed repository at a private tag in a lightweight clone.
+        # The test only reads Git objects, so share the checkout object store and skip
+        # materializing a worktree instead of copying the full object database on Windows.
         root = script.parents[2]
         if (root / ".git").exists():
             clone = scratch / "clone"
-            subprocess.run(["git", "clone", "-q", "--no-hardlinks", str(root), str(clone)], capture_output=True, check=False)
+            subprocess.run(["git", "clone", "-q", "--shared", "--no-checkout", str(root), str(clone)],
+                           capture_output=True, check=False)
             if (clone / ".git").exists():
                 head = private_git("rev-parse", "HEAD", cwd=clone).decode().strip()
                 private_git("tag", tag, cwd=clone)
@@ -1029,6 +1599,7 @@ def self_test():
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--self-test-product-tree")
     parser.add_argument("--archive")
     parser.add_argument("--tag")
     parser.add_argument("--source-sha")
@@ -1037,6 +1608,9 @@ def main(argv):
     parser.add_argument("--check-receipt")
     parser.add_argument("--check-product-archive")
     parser.add_argument("--repo-root")
+    parser.add_argument("--fixture-checker", help="explicit trusted shared fixture admission checker")
+    parser.add_argument("--inventory", help="compare actual archive paths and bytes with a producer stage inventory")
+    parser.add_argument("--notice-sidecar", help="validate the actual gabbaboy-notices.txt sidecar bytes")
     # Limits can only be tightened, never raised above the contract values.
     parser.add_argument("--max-entries", type=int, default=MAX_ENTRIES)
     parser.add_argument("--max-total-bytes", type=int, default=MAX_TOTAL_BYTES)
@@ -1048,15 +1622,24 @@ def main(argv):
     try:
         if args.self_test:
             self_test()
+        elif args.self_test_product_tree:
+            if not args.repo_root:
+                parser.error("--self-test-product-tree needs --repo-root")
+            self_test_product_tree(args.self_test_product_tree, args.repo_root)
         elif args.check_product_archive:
-            result = check_product(args.check_product_archive, args.repo_root, limits)
-            print(f"PASS: product package is fixture-free ({result['inspected_members']} members)")
+            result = check_product(args.check_product_archive, args.repo_root, limits,
+                                   args.inventory, args.notice_sidecar, args.fixture_checker)
+            print(f"PASS: core product matches exact policy ({result['inspected_members']} members)")
         elif args.check_receipt:
+            if args.inventory or args.notice_sidecar or args.fixture_checker:
+                parser.error("--inventory, --notice-sidecar and --fixture-checker are only valid with --check-product-archive")
             if not (args.archive and args.tag and args.source_sha):
                 parser.error("--check-receipt needs --archive, --tag and --source-sha")
             check_receipt(args.check_receipt, args.archive, args.tag, args.source_sha, args.repo, limits)
             print("PASS: source archive receipt matches the archive bytes")
         elif args.archive:
+            if args.inventory or args.notice_sidecar or args.fixture_checker:
+                parser.error("--inventory, --notice-sidecar and --fixture-checker are only valid with --check-product-archive")
             if not (args.tag and args.source_sha and args.output):
                 parser.error("--archive needs --tag, --source-sha and --output")
             output = pathlib.Path(args.output)

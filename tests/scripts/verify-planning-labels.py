@@ -6,6 +6,8 @@ The planning-only CI lane configures without building and runs `ctest -L plannin
 * every test that reads `.planning/` or `AGENTS.md` carries the `planning` label (else a planning change would
   skip a test that depends on it), and
 * no `planning`-labelled test needs a built artifact (else the unbuilt lane fails with "Could not find executable").
+  A narrowly classified CTest-inventory reader may name its configured build directory because `ctest --show-only`
+  reads the configured test list without requiring compiled artifacts.
 
 `--build-dir DIR` runs `ctest --test-dir DIR --show-only=json-v1`. A test is a planning reader when any command
 argument names `.planning` or ends with `AGENTS.md`, or when a repository file the command references (a script,
@@ -85,6 +87,40 @@ def uses_build_tree(command: list[str], build: str) -> bool:
     return any(_under(token, build) for token in _tokens(command))
 
 
+def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str],
+                                source: str, build: str) -> bool:
+    """Allow the Phase 22 contract to inspect CTest's configured inventory, not compiled artifacts."""
+    if name != "phase22_evidence_contract" or "planning" not in labels or "ctest-inventory-only" not in labels:
+        return False
+    expected_script = _norm(str(Path(source) / "tests/scripts/verify-diagnostic-evidence.py"))
+    normalized = [_norm(token) for token in command]
+    if normalized.count(expected_script) != 1:
+        return False
+    script_index = normalized.index(expected_script)
+    if script_index != 2 or command[1] != "-I":
+        return False
+    interpreter = _norm(command[0])
+    if not (interpreter.startswith("/") or re.match(r"^[A-Za-z]:/", interpreter)):
+        return False
+    try:
+        if Path(command[0]).resolve(strict=True) != Path(sys.executable).resolve(strict=True):
+            return False
+    except (OSError, RuntimeError):
+        return False
+    expected_tail = ["--check", "--repo-root", _norm(source), "--source-revision"]
+    tail = normalized[script_index + 1:]
+    if len(tail) != 7 or tail[:4] != expected_tail or tail[5] != "--build-dir":
+        return False
+    source_revision = tail[4]
+    build_value = tail[6]
+    if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
+        return False
+    if _norm(build_value) != _norm(build):
+        return False
+    build_tokens = [_norm(token) for token in _tokens(command) if _under(token, build)]
+    return build_tokens == [_norm(build_value)]
+
+
 def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
     planning = 0
     for test in tests:
@@ -98,7 +134,7 @@ def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
         labelled = "planning" in labels
         if labelled:
             planning += 1
-            if uses_build_tree(command, build):
+            if uses_build_tree(command, build) and not is_phase22_inventory_reader(name, command, labels, source, build):
                 raise Reject(f"REJECT planning-test-needs-build: {name} is labelled planning but its command references the build directory")
         elif is_planning_reader(command, source, build):
             raise Reject(f"REJECT unlabelled-planning-reader: {name} reads .planning/ or AGENTS.md but lacks the planning label")
@@ -132,12 +168,29 @@ def self_test() -> int:
         agents.write_text("cat AGENTS.md\n", encoding="utf-8")
         clean = source / "tests" / "clean.py"
         clean.write_text("print('ok')\n", encoding="utf-8")
+        evidence = source / "tests/scripts" / "verify-diagnostic-evidence.py"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text("open('.planning/STATE.md')\n", encoding="utf-8")
 
         def test(name: str, command: list[str], labels: list[str] | None = None) -> dict:
             props = [{"name": "LABELS", "value": labels}] if labels else []
             return {"name": name, "command": command, "properties": props}
 
-        py = "/usr/bin/python3"
+        py = sys.executable
+        fake_python = source / "python-stub"
+        fake_python.write_text("#!/bin/sh\nprintf 'diagnostic evidence pass\\n'\n", encoding="utf-8")
+        fake_python.chmod(0o755)
+        windows_command = [
+            py, "-I", str(evidence).replace("/", "\\"), "--check", "--repo-root",
+            str(source).replace("/", "\\"), "--source-revision", "a" * 40,
+            "--build-dir", str(build).replace("/", "\\"),
+        ]
+        mixed_separator_command = [
+            py, "-I", str(evidence).replace("/", "\\"), "--check", "--repo-root",
+            str(source), "--source-revision", "a" * 40,
+            "--build-dir", str(build).replace("/", "\\"),
+        ]
+        wrong_windows_build = str(build / "unexpected").replace("/", "\\")
         cases = [
             ("unlabelled test reading .planning/ is rejected", [test("a", [py, str(reader)])], "unlabelled-planning-reader"),
             ("unlabelled test passing a .planning path is rejected", [test("a", [py, str(clean), f"{source}/.planning/STATE.md"])],
@@ -153,6 +206,46 @@ def self_test() -> int:
             ("unlabelled test that reads nothing planning is accepted", [test("a", [py, str(clean)])], None),
             ("a sibling directory named like the build dir is not the build dir",
              [test("a", [py, f"{build}-other/x"], ["planning"])], None),
+            ("the exact Phase 22 planning contract may read its configured CTest inventory",
+             [test("phase22_evidence_contract",
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build)], ["planning", "ctest-inventory-only"])], None),
+            ("the exact Phase 22 planning contract accepts simulated Windows separators",
+             [test("phase22_evidence_contract", windows_command, ["planning", "ctest-inventory-only"])], None),
+            ("the exact Phase 22 planning contract accepts mixed path separators",
+             [test("phase22_evidence_contract", mixed_separator_command, ["planning", "ctest-inventory-only"])], None),
+            ("inventory-only classification rejects a configured build directory with a Windows-spelled substitution",
+             [test("phase22_evidence_contract",
+                   [*mixed_separator_command[:-1], wrong_windows_build], ["planning", "ctest-inventory-only"])],
+             "planning-test-needs-build"),
+            ("the inventory-only classification is required for build-tree access",
+             [test("phase22_evidence_contract",
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build)], ["planning"])], "planning-test-needs-build"),
+            ("inventory-only cannot smuggle a built executable into the command",
+             [test("phase22_evidence_contract",
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build), str(build / "gabbaboy-runner")],
+                   ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("inventory-only classification cannot be reused by another test",
+             [test("other_contract",
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build)], ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("inventory-only classification rejects extra output or approval flags",
+             [test("phase22_evidence_contract",
+                   [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build), "--write-evidence", "unexpected.json"],
+                   ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("inventory-only classification rejects a Python -c pass-output bypass",
+             [test("phase22_evidence_contract",
+                   [py, "-c", "print('diagnostic evidence pass')", str(evidence), "--check", "--repo-root",
+                    str(source), "--source-revision", "a" * 40, "--build-dir", str(build)],
+                   ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("inventory-only classification rejects an absolute Python stub",
+             [test("phase22_evidence_contract",
+                   [str(fake_python), "-I", str(evidence), "--check", "--repo-root", str(source),
+                    "--source-revision", "a" * 40, "--build-dir", str(build)],
+                   ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
         ]
         for label, tests, expected in cases:
             try:

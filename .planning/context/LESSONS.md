@@ -1050,6 +1050,53 @@ The implementation and planning lessons follow; retain their distinct evidence c
 - **Source:**19-CONSUMER-MARKER-RESCOPE.md;19-REVIEW.md; ignored consumer-marker-prep, consumer-marker-local and d136-hosted-native evidence.
 - **Status:** Adopted.
 
+### GB-CI-018 / 2026-11-01 / Reuse validated baselines inside mutation-heavy self-tests
+
+- **Cause and evidence:** The source-archive control self-test revalidated the same immutable fixture-policy baseline for each direct sidecar case. On the same implementation, `v02_source_archive_controls` took 62.45 seconds before the harness adjustment and 52.11 seconds after it at `39eb048e7770652b84a3fc5da7aaa3890adbd70c`.
+- **Remedy:** Validate an immutable baseline once per self-test run and reuse the validated value for direct mutation cases. Keep the real CLI positive, missing-sidecar CLI negative, source CLI cases, real archive checks, and the production-policy CTest intact.
+- **Applies when:** A mutation-heavy test repeats expensive validation of unchanged trusted setup data. Cache only data whose immutability and validation scope are explicit; do not cache the mutated subject or remove production-boundary controls.
+- **Verification:** `v02_source_archive_controls` passed at the recorded head; `bash tests/scripts/verify-release-candidate.sh --self-test` passed with the same source tree; exact-head Windows CI passed in both pull-request and push matrices.
+- **Source:** Phase 20 Plan 20-02 final source-archive runtime follow-up and exact-head CI runs 41334163805 / 41334157283.
+- **Status:** Measured and adopted for this control harness.
+
+### GB-CI-019 / 2026-11-02 / Align nested shell checks with CMake's Python and front-load long controls
+
+- **Cause and evidence:** CMake launched the release lifecycle checker with its selected Python, but the nested shell gate used bare `python3` from the host `PATH`. On a host where that resolved to Python 3.9, the gate failed on `Path.write_text(newline=...)`; putting CMake's Python directory first cleared the focused release checks. With that interpreter fixed, the 95-control test passed alone but hit its unchanged 60-second cap at the tail of the full serial run. The Phase 21 fixture controls also ran close to their existing cap when selected after other long checks.
+- **Remedy:** Give the release shell tests a `PATH` beginning with the configured `Python3_EXECUTABLE` directory. Assign both long control tests a CTest `COST` so the existing scheduler runs them with the other long checks; keep their serial execution, coverage, and 60-second timeouts.
+- **Applies when:** A CTest-launched Python checker invokes shell scripts that use bare `python3`, or measured serial controls risk their existing caps when left at the tail.
+- **Verification:** At final head `ca17216b`, configure/build and the focused Phase 21 admission selection passed (controls 39.02s, contract 3.75s). The first full serial CTest run completed 1,712/1,718; six controls timed out at their existing 90s/60s limits, and cleanup could not use `/bin/ps`. A separate CTest from another checkout and other project jobs were visible during that run, but this does not prove the cause. After those tests cleared, all six controls passed in one serial focused retry (84.77s, 11.83s, 12.88s, 17.57s, 21.45s, 26.90s). A final full serial configure/build/CTest run then passed 1718/1718 in 1665.95s with unchanged CTest timeouts and membership.
+- **Status:** Adopted for the release lifecycle test harness; no production runtime behavior changes.
+
+### GB-CGB-015 / 2026-11-02 / Re-pin state-fork source identities when acceptance bytes change
+
+- **Cause and evidence:** Phase 21-02 changed the acceptance case bytes, but the state-fork inventory still pinned the prior case SHA (`ce3f…`) instead of the current source SHA (`09030b4d…`). The full suite exposed the stale source identity across the state-fork matrix; expected outputs themselves had not changed.
+- **Remedy:** Update only the current source SHA in `tests/data/state-forks.json`. Preserve all result baselines and rerun the shard, matrix, census and mutant controls before the full suite.
+- **Applicability:** Whenever a test corpus or acceptance case changes and an immutable inventory binds its bytes, update the source identity in the same integration plan. Do not refresh expected outcomes without evidence that their meaning changed.
+- **Verification:** At `1e328e66cd08196921018d9666f8ecc677635af5`, the state-fork checks and full CTest suite passed 1724/1724; the expected-result baselines were not refreshed.
+
+### GB-CGB-016 / 2026-11-02 / Keep Windows synthetic evidence byte-identical to its Git pin
+
+- **Cause and evidence:** Phase 21's first Windows host diagnostic failed two synthetic controls. The scene checker compared `CMAKE_HOME_DIRECTORY` byte-for-byte even though CMake normalizes Windows separators. Separately, Python `Path.write_text()` translated LF to CRLF on Windows while the repository's Git attributes stored the generated root notice as LF, so current bytes differed from the synthetic pinned blob.
+- **Remedy:** Compare paths with `os.path.normpath()` and `os.path.normcase()`. Write synthetic files whose bytes are hashed or pinned with explicit encoded `write_bytes()`.
+- **Applies when:** A test compares paths emitted by native tools or creates Git-pinned synthetic text fixtures on Windows. Treat generated fixture bytes as data; do not let host newline conversion silently alter them.
+- **Verification:** At `e0b5305d787407907f77a38bbf475f3d222b25bc`, scene-report and candidate/admission controls passed, and the complete local CTest suite passed 1724/1724. Exact-head Windows PR rerun remains the cross-platform confirmation.
+
+### GB-CGB-017 / 2026-11-02 / Match Windows synthetic test launch and inventory configuration
+
+- **Cause and evidence:** The exact-source Windows diagnostic tried to launch a repository-contained Python synthetic runner as a Win32 executable and queried the default CTest configuration even though the scene test ran with `Debug`; those two Phase 21 controls failed while the remaining Windows inventory passed.
+- **Remedy:** Invoke `.py` test runners with the current `sys.executable -I`, and pass the exercised `-C Debug` configuration to both CTest execution and inventory lookup. Keep the repository-contained runner check and the test source/command assertions intact.
+- **Applies when:** A cross-platform contract executes Python helpers or inspects multi-configuration CTest inventory. The helper must use the same interpreter/configuration contract on every host.
+- **Verification:** At `9bed35ce6e80e407ea31543cf986c795c9da061d`, both focused Phase 21 controls passed and the full local serial CTest suite passed 1724/1724 under the unchanged 60-second cap. The exact-head pull-request Windows matrix is the required hosted confirmation.
+
+### GB-CGB-018 / 2026-11-02 / Normalize CTest command paths before matching Windows source arguments
+
+- **Cause and evidence:** Exact-head Windows push run `41430769014` failed only `phase21_scene_report_controls`. CTest's JSON command used forward slashes while `pathlib.Path` rendered the same source path with Windows backslashes, so the valid `synthetic_scene_positive` command was rejected. Linux formatting had hidden the mismatch.
+- **Remedy:** Normalize case and slash direction on both the expected source path and command text before matching. Keep a synthetic control that proves Windows-form separators match the same command path.
+- **Applies when:** A cross-platform checker matches paths emitted by native build/test tools. The check must compare equivalent path forms without weakening the source identity requirement.
+- **Verification:** At `66ee663ba8f7a505d67871fab7163b57306d0dd2`, the synthetic scene controls pass with 17 controls and the complete local CTest suite passes 1724/1724 in 1204.93 seconds under the unchanged 60-second budget. Exact-head Windows PR qualification is still required.
+- **Source:** Phase 21 Plan 21-07; push diagnostic `41430769014`.
+- **Status:** Adopted.
+
 
 ## v0.3 milestone-boundary exchange / 2026-10-31
 
@@ -1065,3 +1112,27 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Additional archival evidence:** The plan-cap gate rejected a deliberately collapsed roadmap, and the deferral omission control removed only one copy of a now-repeated marker. Read the matching archive only at an explicit completed boundary in the same commit with no active requirements/plans; reject missing archives and over-cap fixtures. Remove all marker copies for the omission mutant, with a repeated-marker positive twin. These changes extend the existing CTest checks rather than creating a new workflow.
 
 - **Clean-checkout correction:** The first push CMake-floor run failed only `summary_coverage_live`: the local empty phase directory survived the move, but Git does not preserve empty directories. Track a `.gitkeep` placeholder, treat only that exact marker as empty in the immutable plan-cap reader, and exercise the clean archive checkout before retrying CI. No missing-directory or live-plan refusal is weakened.
+
+## Phase 20 completion bookkeeping correction / 2026-11-01
+
+- **Cause and evidence:** OpenGSD `phase.complete 20` marked every requirement mapped to Phase 20 Complete, including `RIGHTS-01`, even though no fixture was admitted and the Phase 20 verifier explicitly retained that requirement as Pending. Phase completion and full requirement satisfaction are separate facts for a requirement that spans multiple conditions or phases.
+- **Remedy:** Compare each requirement changed by `phase.complete` with the final verification report. Use `gsd-tools requirements revert-phase <ID>` to clear an overclaimed checkbox, then keep its traceability row `Pending` when the remaining work is not a current-phase gap (`revert-phase` labels it `Gaps Found`). Reconcile STATE.md and state.json with the exact next phase route before committing.
+- **Applies when:** Completing a phase that maps a multi-part requirement, or where the phase verifies only a subset of its conditions.
+- **Verification:** `RIGHTS-01` is unchecked and Pending in REQUIREMENTS.md; Phase 20 verification remains passed and states that no fixture or legal permission was approved. Phase 21 remains unstarted.
+
+### GB-CI-020 / 2026-11-02 / Retest one serial CTest timeout before repeating the whole suite
+
+- **Cause and evidence:** At Phase 21 rescope source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`, the full serial CTest invocation passed 1,717/1,718; `v02_source_archive_controls` reached its existing 90-second limit. Read-only post-run process inspection found no leftover test child, and the exact test passed alone in 77.17 seconds under the same limit. This does not establish why the first invocation exceeded its limit.
+- **Remedy:** Inspect attributable processes after a timeout, then retry only that exact test once with unchanged membership, timeout, and budget. If it passes and no process residue remains, record both results instead of spending another full-suite run to hide the original timeout.
+- **Applies when:** A serial suite is long, one test times out, and an isolated bounded rerun can determine whether a targeted failure remains.
+- **Verification:** All 1,718 registered tests have passing evidence across the full run and isolated retry; no single full-suite invocation was all-green. The timeout and focused pass remain in [21-UAT-EVIDENCE.md](../phases/GB-21-cgb-game-progress-and-scene-regressions/21-UAT-EVIDENCE.md).
+- **Status:** Adopted; cause of the isolated timeout variance remains unknown.
+
+### GB-CI-021 / 2026-11-02 / Measure duplicate push and pull-request workflows before changing triggers
+
+- **Cause and evidence:** On exact source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`, both push run `41554953994` and pull-request run `41554959166` started the same `ci` workflow; both `fixture-repro` runs also started for that SHA. The PR/push CI run times included 38:41/26:00 for the sanitizer shard and 20:52/33:58 for the CMake-floor lane. PR preview run `41554959116` held its Linux and macOS installed-package jobs for 40:00/40:18 and player-package smoke for 40:34 while they waited on the same-head CI run. On docs-only PR #141 head `19e85cde01e658d27a020142634502ebc15fff61`, the pull-request `ci` run `41567863322` classified the change as planning and passed `required-native`, while push run `41567845666` selected the full path. Canceling that duplicate push run marked its platform and sanitizer jobs cancelled; its `required-native` then failed because `native-linux-x64` was cancelled, and GitHub marked the PR blocked despite the same-head PR aggregate passing. This was a CI-status effect, not a product-test failure.
+- **Remedy:** At the next CI-efficiency review, inspect measured run/job durations and GitHub event/token semantics, then propose the smallest trigger adjustment that removes redundant work while preserving all required PR checks. Do not infer merge qualification from a push run or change workflow triggers from this observation alone. Until duplicate status behavior is deliberately addressed, do not cancel same-SHA event runs by default: branch protection can see the cancelled required context and block the PR.
+- **Applies when:** A branch push also opens or updates a pull request and workflows run on both events.
+- **Verification:** The exact-head PR CI, fixture, installed-consumer, and player-package checks all passed at `e0845db5`; both event-level `ci` and fixture-reproduction runs were green. For PR #141, the job log confirms the canceled push aggregate rejected `NATIVE_LINUX: cancelled` while the same-SHA PR aggregate passed; the PR was blocked until that duplicate context is replaced with successful evidence. Compare completed run records for the same head SHA and confirm the required current-head PR contexts remain present and successful after any separately approved workflow change.
+- **Source:** Phase 21 PR #140, push run `41554953994`, pull-request run `41554959166`; fixture-reproduction runs `41554954013` and `41554959121`.
+- **Status:** Follow-up recorded; no CI workflow changed in Phase 21.

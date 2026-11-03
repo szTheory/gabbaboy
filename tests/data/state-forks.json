@@ -687,7 +687,7 @@
     },
     {
       "path": "tests/acceptance/cases-cgb-colour.txt",
-      "sha256": "ce3f1c84b47a71a489c14383f6ee6ce9243dba1c6e29c16d2b769818d6ff70aa",
+      "sha256": "09030b4da80237f1bd185ace9c722632701b264a3b32a7a0870a2b715f3cea36",
       "case_rows": 3
     }
   ],

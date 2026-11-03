@@ -254,6 +254,7 @@ jobs:
           git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
           git show "${GITHUB_SHA}:tests/scripts/test_installed_host.py" > tests/scripts/test_installed_host.py
           git show "${GITHUB_SHA}:cmake/VerifyReleaseReceipt.cmake" > cmake/VerifyReleaseReceipt.cmake
+          git show "${GITHUB_SHA}:tests/scripts/verify-fixture-admission.py" > "$RUNNER_TEMP/verify-fixture-admission.py"
       - name: Fetch a previously qualified candidate before retry
         env:
           GH_TOKEN: ${{ github.token }}
@@ -305,6 +306,10 @@ jobs:
           if receipt.get("release_notes_sha256") != notes_sha or receipt.get("notice_sha256") != notice_sha:
               raise SystemExit("Stored receipt does not match current release notes/notices.")
           PY
+            bash tests/scripts/verify-release-candidate.sh --extract \
+              build/reuse/gabbaboy-core-linux-x64.tar.gz build/reuse-extracted
+            python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/reuse-extracted \
+              --layout core --repo-root . --write-inventory build/core-product-inventory.json
           fi
       - name: Configure and build cache-free release core
         if: env.CANDIDATE_REUSED != 'true'
@@ -322,6 +327,8 @@ jobs:
           cmake --install build/release --prefix build/release-stage
           mkdir -p build/release-stage/share/gabbaboy
           cp LICENSE build/release-stage/share/gabbaboy/LICENSE.txt
+          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage \
+            --layout core --repo-root . --write-inventory build/core-product-inventory.json
           SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$SOURCE_SHA")
           export SOURCE_DATE_EPOCH
           tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
@@ -427,6 +434,8 @@ jobs:
           }
           bash tests/scripts/verify-release-candidate.sh --extract \
             build/downloaded/gabbaboy-core-linux-x64.tar.gz build/extracted
+          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/extracted \
+            --layout core --repo-root . --inventory build/core-product-inventory.json
           prefix="$PWD/build/extracted"
           cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX= \
             -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" \
@@ -725,6 +734,7 @@ jobs:
           git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
           git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
           git show "${GITHUB_SHA}:tests/scripts/test_installed_host.py" > tests/scripts/test_installed_host.py
+          git show "${GITHUB_SHA}:tests/scripts/verify-fixture-admission.py" > "$RUNNER_TEMP/verify-fixture-admission.py"
       - name: Select a complete existing macOS candidate or a clean build
         env:
           GH_TOKEN: ${{ github.token }}
@@ -759,6 +769,15 @@ jobs:
             echo "Draft contains a partial macOS candidate asset set; refusing to rebuild or replace bytes." >&2
             exit 1
           fi
+      - name: Validate reused macOS core package
+        if: env.REUSE_MACOS_CANDIDATE == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/scripts/verify-release-candidate.sh --extract \
+            build/reuse/gabbaboy-core-macos-arm64.tar.gz build/reuse-extracted-core
+          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/reuse-extracted-core \
+            --layout core --repo-root . --write-inventory build/core-product-inventory.json
       - name: Build and package macOS arm64 core once
         if: env.REUSE_MACOS_CANDIDATE != 'true'
         shell: bash
@@ -769,6 +788,8 @@ jobs:
           cmake --install build/release-core --prefix build/release-stage
           mkdir -p build/release-stage/share/gabbaboy
           cp LICENSE build/release-stage/share/gabbaboy/LICENSE.txt
+          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage \
+            --layout core --repo-root . --write-inventory build/core-product-inventory.json
           SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$SOURCE_SHA")
           export SOURCE_DATE_EPOCH
           python3 "$RUNNER_TEMP/create-deterministic-archive.py" \
@@ -836,6 +857,8 @@ jobs:
             build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 \
             build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz
           bash tests/scripts/verify-release-candidate.sh --extract build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz build/extracted-core
+          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/extracted-core \
+            --layout core --repo-root . --inventory build/core-product-inventory.json
           prefix="$PWD/build/extracted-core"
           cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX= -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" -P cmake/VerifyInstalledPackage.cmake
           for language in c cpp; do
@@ -896,6 +919,13 @@ jobs:
           set -euo pipefail
           source_version=$(sed -nE 's/^project\(GabbaBoy VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -n1)
           [[ "$source_version" == "${RELEASE_TAG#v}" ]] || exit 1
+      - name: Load trusted release verifiers and fixture admission checker
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
+          git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
+          git show "${GITHUB_SHA}:tests/scripts/verify-fixture-admission.py" > "$RUNNER_TEMP/verify-fixture-admission.py"
       - name: Select an existing Windows archive or a clean build
         env:
           GH_TOKEN: ${{ github.token }}
@@ -926,6 +956,15 @@ jobs:
             echo "Draft contains a partial Windows candidate asset set; refusing to rebuild or replace bytes." >&2
             exit 1
           fi
+      - name: Validate reused Windows core package
+        if: env.REUSE_WINDOWS_CANDIDATE == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tests/scripts/verify-release-candidate.sh --extract \
+            build/reuse/gabbaboy-core-windows-x64.tar.gz build/reuse-extracted
+          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/reuse-extracted \
+            --layout core --repo-root . --write-inventory build/core-product-inventory.json
       - name: Build and package Windows x64 core once
         if: env.REUSE_WINDOWS_CANDIDATE != 'true'
         shell: bash
@@ -936,6 +975,8 @@ jobs:
           cmake --install build/release-core --config Release --prefix build/release-stage
           mkdir -p build/release-stage/share/gabbaboy
           cp LICENSE build/release-stage/share/gabbaboy/LICENSE.txt
+          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/release-stage \
+            --layout core --repo-root . --write-inventory build/core-product-inventory.json
           tar -czf build/gabbaboy-core-windows-x64.tar.gz -C build/release-stage include lib bin share
           sha256sum build/gabbaboy-core-windows-x64.tar.gz | awk '{print $1}' > build/gabbaboy-core-windows-x64.tar.gz.sha256
           python3 - <<'PY'
@@ -997,13 +1038,6 @@ jobs:
           [[ $(jq -r .draft <<<"$current") == true && $(jq -r .tag_name <<<"$current") == "$RELEASE_TAG" ]] || exit 1
           mkdir -p build/downloaded build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-windows-x64.tar.gz --pattern gabbaboy-core-windows-x64.tar.gz.sha256 --pattern gabbaboy-build-receipt-windows-x64.json --dir build/downloaded
-      - name: Overlay the trusted release-candidate verifiers from the workflow commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The tagged tree is data here: run the workflow commit's copies of the verifiers that judge the downloaded bytes.
-          git show "${GITHUB_SHA}:tests/scripts/verify-release-candidate.sh" > tests/scripts/verify-release-candidate.sh
-          git show "${GITHUB_SHA}:tests/scripts/verify-v02-consumers.py" > tests/scripts/verify-v02-consumers.py
       - name: Qualify Windows release archive using the existing native consumer lane
         shell: bash
         run: |
@@ -1013,6 +1047,8 @@ jobs:
             build/downloaded/gabbaboy-core-windows-x64.tar.gz.sha256 \
             build/downloaded/gabbaboy-core-windows-x64.tar.gz
           bash tests/scripts/verify-release-candidate.sh --extract build/downloaded/gabbaboy-core-windows-x64.tar.gz build/extracted
+          python3 -I "$RUNNER_TEMP/verify-fixture-admission.py" --check-product-tree build/extracted \
+            --layout core --repo-root . --inventory build/core-product-inventory.json
           prefix="$PWD/build/extracted"
           cmake -DGBB_INSTALL_PREFIX="$prefix" -DGBB_EXECUTABLE_SUFFIX=.exe -DGBB_CONFIGURATION=Release -DGBB_RUNNER_WORKDIR="$PWD/build/consumer-work/runner" "-DGBB_FORBIDDEN_PATHS=$GITHUB_WORKSPACE;$GITHUB_WORKSPACE/build" -P cmake/VerifyInstalledPackage.cmake
           for language in c cpp; do
@@ -1364,13 +1400,14 @@ jobs:
       contents: write
       pull-requests: read
     env:
-      GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
       INPUT_RELEASE_ID: ${{ inputs.retry && inputs.release_id || '' }}
     steps:
       - name: Require trusted source and all candidate jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1408,6 +1445,66 @@ jobs:
           path: trusted
           fetch-depth: 0
           persist-credentials: false
+      - name: Download uploaded Linux candidate for an isolated product check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          for name in candidate-receipt.json gabbaboy-core-linux-x64.tar.gz gabbaboy-notices.txt source-receipt.json build-receipt.json; do
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" == 1 ]] || { echo "Expected exactly one draft asset named $name." >&2; exit 1; }
+          done
+          product_dir=trusted/build/linux-product
+          mkdir -p "$product_dir"
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern candidate-receipt.json --pattern gabbaboy-core-linux-x64.tar.gz \
+            --pattern gabbaboy-notices.txt --pattern source-receipt.json \
+            --pattern build-receipt.json --dir "$product_dir"
+      - name: Verify the uploaded Linux candidate with trusted checkers
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_version="${RELEASE_TAG#v}"
+          bash trusted/tests/scripts/verify-release-candidate.sh --verify \
+            trusted/build/linux-product/candidate-receipt.json trusted/build/linux-product/gabbaboy-core-linux-x64.tar.gz \
+            "$release_version" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+            trusted/build/linux-product/gabbaboy-notices.txt trusted/build/linux-product/source-receipt.json \
+            trusted/build/linux-product/build-receipt.json
+      - name: Download exact macOS and Windows product archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          assets=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100")
+          for name in gabbaboy-core-macos-arm64.tar.gz gabbaboy-preview-macos-arm64.tar.gz gabbaboy-core-windows-x64.tar.gz; do
+            count=$(jq --arg name "$name" '[.[] | select(.name == $name)] | length' <<<"$assets")
+            [[ "$count" == 1 ]] || { echo "Expected exactly one candidate product archive named $name." >&2; exit 1; }
+          done
+          mkdir -p build/platform-products/downloaded
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" \
+            --pattern gabbaboy-core-macos-arm64.tar.gz \
+            --pattern gabbaboy-preview-macos-arm64.tar.gz \
+            --pattern gabbaboy-core-windows-x64.tar.gz \
+            --dir build/platform-products/downloaded
+      - name: Verify downloaded macOS and Windows product bytes with trusted policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I trusted/.github/scripts/verify-workflow-policy.py \
+            --check-product-archive build/platform-products/downloaded/gabbaboy-core-macos-arm64.tar.gz \
+            --expected-name gabbaboy-core-macos-arm64.tar.gz --layout core --repo-root trusted \
+            --destination build/platform-products/extracted/macos-core
+          python3 -I trusted/.github/scripts/verify-workflow-policy.py \
+            --check-product-archive build/platform-products/downloaded/gabbaboy-preview-macos-arm64.tar.gz \
+            --expected-name gabbaboy-preview-macos-arm64.tar.gz --layout player --repo-root trusted \
+            --destination build/platform-products/extracted/macos-player
+          python3 -I trusted/.github/scripts/verify-workflow-policy.py \
+            --check-product-archive build/platform-products/downloaded/gabbaboy-core-windows-x64.tar.gz \
+            --expected-name gabbaboy-core-windows-x64.tar.gz --layout core --repo-root trusted \
+            --destination build/platform-products/extracted/windows-core
       - name: Load trusted release evidence verifiers
         shell: bash
         run: |
@@ -1419,9 +1516,13 @@ jobs:
           name: release-evidence-fuzz
           path: build/evidence-fuzz
       - name: Validate draft candidate and all downloaded platform bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh validate-draft
       - name: Recheck final API inventory and downloaded receipts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh final-gate
       - name: Persist the exact pre-publish asset inventory
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1433,8 +1534,12 @@ jobs:
       # RM-030 (D-22): the full ASan stall replay of the exact tagged tree must have succeeded, judged by the trusted
       # revision's gate immediately before the one publication transition.
       - name: Require the successful exact-tree nightly ASan replay
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh nightly-gate
       - name: Publish the one qualified draft
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: bash trusted/.github/scripts/release-evidence-lifecycle.sh publish-draft

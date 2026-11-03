@@ -21,7 +21,14 @@ endforeach()
 add_test(NAME acceptance_predicate_truth_table COMMAND test_acceptance_lib acceptance_predicate_truth_table)
 add_test(NAME acceptance_predicate_anchors
   COMMAND test_acceptance_lib acceptance_predicate_anchors ${GBB_ACCEPT_LIBBET_ROM})
-set_tests_properties(acceptance_predicate_truth_table acceptance_predicate_anchors PROPERTIES TIMEOUT 30)
+add_test(NAME acceptance_predicate_cgb_truth_table
+  COMMAND test_acceptance_lib acceptance_predicate_cgb_truth_table)
+add_test(NAME acceptance_predicate_cgb_anchors
+  COMMAND test_acceptance_lib acceptance_predicate_cgb_anchors)
+set_tests_properties(acceptance_predicate_truth_table acceptance_predicate_anchors
+  acceptance_predicate_cgb_truth_table acceptance_predicate_cgb_anchors PROPERTIES TIMEOUT 30)
+set_tests_properties(acceptance_predicate_cgb_truth_table acceptance_predicate_cgb_anchors
+  PROPERTIES LABELS acceptance_cgb_progress)
 
 # Runner acceptance case (D-23, D-28): paths in cases.txt resolve against the working directory,
 # so every acceptance CTest runs from the repository root.
@@ -688,14 +695,54 @@ set_tests_properties(cgb_runner_profile_dmg_identity_negative PROPERTIES TIMEOUT
 # GBB-RGB555LE-v1 digest under frame555/observed555, never the DMG RGB888 keys. --model cgb-cpu-e and
 # --profile cgb select the same run (main.c maps the profile to the model token).
 set(GBB_CGB_COLOUR_CASES tests/acceptance/cases-cgb-colour.txt)
+# Keep the child-process deadline aligned with the sanitizer test-timeout multiplier. The CTest
+# TIMEOUT is scaled independently by ScaleSanitizerTimeouts.cmake; this bounds only the runner.
+set(GBB_CGB_PROGRESS_RUNNER_TIMEOUT 30)
+if(GABBABOY_ENABLE_SANITIZERS)
+  math(EXPR GBB_CGB_PROGRESS_RUNNER_TIMEOUT "${GBB_CGB_PROGRESS_RUNNER_TIMEOUT} * 3")
+endif()
+add_test(NAME acceptance_cgb_progress_discrimination
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
+          --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
+          --source-revision HEAD --discrimination --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
+set_tests_properties(acceptance_cgb_progress_discrimination PROPERTIES
+  TIMEOUT 60 LABELS acceptance_cgb_progress WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+add_test(NAME acceptance_cgb_progress_observations
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
+          --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
+          --source-revision HEAD --observations --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
+set_tests_properties(acceptance_cgb_progress_observations PROPERTIES
+  TIMEOUT 60 LABELS acceptance_cgb_progress
+  PASS_REGULAR_EXPRESSION "cgb-observations status=pass"
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+add_test(NAME acceptance_cgb_progress_controls
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
+          --self-test --repo-root ${PROJECT_SOURCE_DIR}
+          --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
+set_tests_properties(acceptance_cgb_progress_controls PROPERTIES
+  TIMEOUT 60 LABELS acceptance_cgb_progress WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  PASS_REGULAR_EXPRESSION "verify-cgb-progress self-test pass")
+add_test(NAME acceptance_cgb_progress_tracer
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
+          --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
+          --source-revision HEAD --tracer --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
+set_tests_properties(acceptance_cgb_progress_tracer PROPERTIES
+  TIMEOUT 60 LABELS acceptance_cgb_progress WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+add_test(NAME acceptance_cgb_progress_compat_rejected
+  COMMAND ${Python3_EXECUTABLE} -I ${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-progress.py
+          --runner $<TARGET_FILE:gabbaboy-runner> --repo-root ${PROJECT_SOURCE_DIR}
+          --source-revision HEAD --compatibility --runner-timeout ${GBB_CGB_PROGRESS_RUNNER_TIMEOUT})
+set_tests_properties(acceptance_cgb_progress_compat_rejected PROPERTIES
+  TIMEOUT 60 PASS_REGULAR_EXPRESSION "compatibility-control pass actual=cgb-dmg-compat"
+  FAIL_REGULAR_EXPRESSION "status=pass|receipt id=" LABELS acceptance_cgb_progress
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 gbb_add_acceptance_exit(acceptance_cgb_colour_hblank 0
   "acceptance id=cgb-colour-hblank status=pass model=cgb-cpu-e.*frame555=${gbb_hex64_re}" 60
   "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--model;cgb-cpu-e")
 gbb_add_acceptance_exit(acceptance_cgb_colour_hblank_profile_flag 0
   "acceptance id=cgb-colour-hblank status=pass model=cgb-cpu-e.*frame555=${gbb_hex64_re}" 60
   "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--profile;cgb")
-# Controls: the wrong model is excluded, a flipped reference digest fails with an RGB555 failure image,
-# and a CGB progress-predicate observation is refused with an explicit reason.
+# Controls: the wrong model is excluded and a flipped reference digest fails with an RGB555 failure image.
 gbb_add_acceptance_exit(acceptance_cgb_colour_excluded_dmg 4
   "status=excluded reason=unsupported-model model=dmg-cpu-b" 30
   "--acceptance;${GBB_CGB_COLOUR_CASES};--case;cgb-colour-hblank;--model;dmg-cpu-b")
@@ -712,7 +759,6 @@ add_test(NAME acceptance_cgb_colour_flipped_ppm
     -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(acceptance_cgb_colour_flipped_ppm PROPERTIES TIMEOUT 60 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
-gbb_add_acceptance_exit(acceptance_cgb_colour_progress_refused 3
-  "frame-unsupported-profile" 300
-  "--acceptance;${GBB_CGB_COLOUR_CASES};--case;libbet-cgb-progress;--model;cgb-cpu-e")
+# The separate generated-header control in verify-cgb-progress.py checks the API-reported mode.
+# This legacy Libbet case remains as a no-input CGB predicate input but has no dedicated test entry.
 # --- Phase 11 plan 11-09 end ---

@@ -1,0 +1,259 @@
+{
+  "schema": "gabbaboy-diagnostic-assessment-v1",
+  "origin": "pinned-upstream-evidence",
+  "status": "blocked",
+  "source_revision": "559b5f7296f957a1a1fea278056a908f9a3d9339",
+  "assessed_at": "2026-11-03",
+  "assessment_method": "Read-only metadata and prior source-review evidence. No real ROM or reference-image payload was fetched, no upstream program or build tool was executed, and no fixture was admitted or run.",
+  "source_rechecks": {
+    "dmg_acid2": {
+      "repository": "https://github.com/mattcurrie/dmg-acid2",
+      "tag": "v1.0",
+      "commit": "dc2295408f881637ff69f784d8d93f3d2db30181",
+      "root_tree_sha1": "a59741f15579a82205fff557dd000a5ebb6d7f6e",
+      "mgblib_gitlink": "5d829bf2ffa1447dcfd63c5dab2c44488632617e",
+      "recheck": "The pinned tag and commit match; Git tree metadata confirms the exact mgblib gitlink."
+    },
+    "cgb_acid2": {
+      "repository": "https://github.com/mattcurrie/cgb-acid2",
+      "tag": "v1.1",
+      "commit": "fa5b7f86d6fb599f79e55169494d981a7af75a31",
+      "root_tree_sha1": "a541bf54356809dc04cc050f8fc14d9620649f88",
+      "mgblib_gitlink": "5d829bf2ffa1447dcfd63c5dab2c44488632617e",
+      "recheck": "The pinned tag and commit match; Git tree metadata confirms the exact mgblib gitlink."
+    },
+    "gbmicrotest": {
+      "repository": "https://github.com/aappleby/gbmicrotest",
+      "commit": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
+      "root_tree_sha1": "9b692d1a028beea00a9fc08b89bc6160dd268efa",
+      "recursive_tree_entries": 1034,
+      "matching_source_rom_pairs": 513,
+      "metadata_recheck": "GitHub Git-tree metadata at the pinned commit is complete and contains exactly 513 matching tests/*.s and bin/*.gb pairs. Source and ROM Git blob IDs and sizes are recorded in gbmicrotest-inventory.json; ROM payloads were not fetched."
+    },
+    "protocol_review_basis": "22-RESEARCH.md records a direct checkout review at the pinned gbmicrotest commit: 480 shared-macro verdict sources, two inline MBC1 FF80-FF82 verdicts, and 31 initial no-protocol exclusions. This execution rechecked immutable tree metadata, not source payloads."
+  },
+  "build_assessment": {
+    "acid2": {
+      "toolchain": "The upstream Makefiles use RGBDS tools. The project has an existing RGBDS 1.0.1 pin, but compatibility and output reproduction for these commits have not been verified.",
+      "font": "The source trees point to the pinned mgblib commit. The planned project-authored replacement font has not been created or built; mgblib font bytes are excluded by design.",
+      "build_only_tools": "RGBDS is not copied, linked, or shipped by the fixture plan. No tool was installed or executed.",
+      "reproducible_build": "not established; no source build or output identity was produced"
+    },
+    "gbmicrotest": {
+      "toolchain": "The pinned README directs maintainers to install WLA-DX and run build.sh; the repository does not pin a WLA-DX version or closure.",
+      "build_only_tools": "WLA-DX is not copied, linked, or shipped by the fixture plan. No tool was installed or executed.",
+      "prebuilt_identity": "Pinned Git blob IDs and sizes are recorded for all 513 prebuilt ROM paths; SHA-256 was not computed because no ROM payload was fetched.",
+      "reproducible_build": "not claimed; an unpinned build tool cannot establish a reproducible build"
+    }
+  },
+  "model_applicability": {
+    "acid2": {
+      "dmg": {
+        "source_claim": "The pinned README describes a DMG PPU test and a reference output.",
+        "current_profile": "DMG-CPU-B",
+        "status": "unresolved",
+        "reason": "The source establishes DMG-mode intent but does not identify a CPU-B hardware revision for the reference."
+      },
+      "cgb": {
+        "source_claim": "The pinned README describes a Game Boy Color PPU test and a reference captured from a real device.",
+        "current_profile": "CGB-CPU-E",
+        "status": "unresolved",
+        "reason": "The source establishes CGB-mode intent but does not identify a CGB-CPU-E hardware revision for the reference."
+      }
+    },
+    "gbmicrotest": {
+      "suite_claim": "The pinned README says tests were checked on real hardware and qualifies DMG-CPU-08 with 'I believe'.",
+      "selected_profile": "DMG-CPU-B diagnostic only; not hardware qualification",
+      "per_case_source_evidence": null,
+      "cgb_applicability": "not established",
+      "status": "unresolved",
+      "reason": "The available statement is uncertain and suite-wide; it does not establish case-specific applicability or CGB-CPU-E behavior."
+    }
+  },
+  "prebuilt_identity": {
+    "acid2": {
+      "existing_pins": "tests/acid2/manifest.json already records 32,768-byte ROM sizes and SHA-256 values for both releases and SHA-256 values for the upstream references.",
+      "this_assessment": "The prior digest evidence was not rehashed; no release or reference payload was fetched. These pins do not identify future font-substituted derivatives."
+    },
+    "gbmicrotest": {
+      "git_blob_identity": "All 513 source and ROM Git blob IDs and byte sizes are independently recorded from the pinned Git tree.",
+      "sha256": "not observed; raw ROM payloads were intentionally not fetched",
+      "admission": "blocked; a Git blob ID is recorded as source identity but the Phase 20 SHA-256 manifest contract has not been satisfied"
+    }
+  },
+  "components": [
+    {
+      "id": "acid2_source_code",
+      "status": "supported",
+      "terms": "MIT as recorded for the pinned upstream repositories; scope here is source code only.",
+      "scope": {"repository": true, "public_ci": true},
+      "evidence": [
+        "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/LICENSE",
+        "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/LICENSE"
+      ],
+      "blocker": null
+    },
+    {
+      "id": "acid2_footer_graphics",
+      "status": "unresolved",
+      "terms": "Repository MIT label recorded; specific rights scope for the remaining footer art is not established by the reviewed evidence.",
+      "scope": {"repository": null, "public_ci": null},
+      "evidence": [
+        "https://github.com/mattcurrie/dmg-acid2/tree/dc2295408f881637ff69f784d8d93f3d2db30181/img",
+        "https://github.com/mattcurrie/cgb-acid2/tree/fa5b7f86d6fb599f79e55169494d981a7af75a31/img"
+      ],
+      "blocker": "No source-grounded component grant reviewed here establishes repository and public-CI use of the remaining footer graphics."
+    },
+    {
+      "id": "acid2_reference_images",
+      "status": "unresolved",
+      "terms": "Upstream references are identified as expected/reference images; no separate repository/public-CI redistribution grant was established.",
+      "scope": {"repository": null, "public_ci": null},
+      "evidence": [
+        "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/README.md",
+        "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/README.md"
+      ],
+      "blocker": "The README use of a reference image does not itself establish permission to copy or distribute those image bytes in this repository or public CI."
+    },
+    {
+      "id": "mgblib_font_data",
+      "status": "excluded-by-design",
+      "terms": "Third-party font data is not part of the planned derivative.",
+      "scope": {"repository": false, "public_ci": false},
+      "evidence": ["Both pinned acid2 source trees use mgblib gitlink 5d829bf2ffa1447dcfd63c5dab2c44488632617e."],
+      "blocker": null
+    },
+    {
+      "id": "project_font_replacement",
+      "status": "not-created",
+      "terms": "Planned original project-authored source; not present or built yet.",
+      "scope": {"repository": null, "public_ci": null},
+      "evidence": ["Phase 22 D-01 requires original replacement glyphs and excludes mgblib font bytes."],
+      "blocker": null
+    },
+    {
+      "id": "gbmicrotest_source_code",
+      "status": "supported",
+      "terms": "MIT as recorded for the pinned repository; scope here is source code only.",
+      "scope": {"repository": true, "public_ci": true},
+      "evidence": [
+        "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE",
+        "https://github.com/aappleby/gbmicrotest/tree/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests"
+      ],
+      "blocker": null
+    },
+    {
+      "id": "gbmicrotest_prebuilt_roms",
+      "status": "unresolved",
+      "terms": "Repository MIT file is present per pinned source review; the scope for all generated prebuilt ROM content is not established.",
+      "scope": {"repository": null, "public_ci": null},
+      "evidence": [
+        "https://github.com/aappleby/gbmicrotest/tree/463eb6bc0fe31d61781ef63060ad6d74090c0255/bin",
+        "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE"
+      ],
+      "blocker": "No source-grounded grant reviewed here establishes repository and public-CI redistribution scope for every generated ROM byte."
+    },
+    {
+      "id": "gbmicrotest_nintendo_logo",
+      "status": "unresolved",
+      "terms": "The pinned source uses the WLA-DX .nintendologo header directive; no explicit grant for the embedded logo data was identified.",
+      "scope": {"repository": null, "public_ci": null},
+      "evidence": [
+        "https://github.com/aappleby/gbmicrotest/tree/463eb6bc0fe31d61781ef63060ad6d74090c0255/tests",
+        "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/build.sh"
+      ],
+      "blocker": "The repository-wide MIT label does not, by itself, establish a grant for embedded Nintendo logo bytes in the ROMs."
+    },
+    {
+      "id": "diagnostic_notices_and_derivative_outputs",
+      "status": "unresolved",
+      "terms": "No fixture notice or derivative/output scope is approved while component rights remain unresolved.",
+      "scope": {"repository": null, "public_ci": null},
+      "evidence": ["Phase 20 requires component-scoped grants, bound notices, and exact output identities before admission."],
+      "blocker": "Do not create an admission notice or claim rights for derivatives until each included component and output is covered by positive evidence."
+    }
+  ],
+  "required_gates": [
+    {
+      "id": "acid2_source_and_gitlink_identity",
+      "status": "supported",
+      "evidence": [
+        "https://github.com/mattcurrie/dmg-acid2/tree/v1.0",
+        "https://github.com/mattcurrie/cgb-acid2/tree/v1.1",
+        "https://api.github.com/repos/mattcurrie/dmg-acid2/git/trees/a59741f15579a82205fff557dd000a5ebb6d7f6e",
+        "https://api.github.com/repos/mattcurrie/cgb-acid2/git/trees/a541bf54356809dc04cc050f8fc14d9620649f88"
+      ],
+      "blocker": null
+    },
+    {
+      "id": "acid2_derivative_build_reproducibility",
+      "status": "unresolved",
+      "evidence": [
+        "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/Makefile",
+        "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/Makefile",
+        "The project RGBDS 1.0.1 pin is recorded by the existing reproduction tooling; compatibility with these exact source commits was not tested."
+      ],
+      "blocker": "The Phase 22 goal requires reproducible source-built derivatives with verified tool inputs, but RGBDS compatibility, original replacement-glyph inputs, and derivative output identities have not been established. No upstream build was executed."
+    },
+    {
+      "id": "acid2_component_rights_and_output_scope",
+      "status": "unresolved",
+      "evidence": ["The pinned MIT license references and upstream image directories are recorded in the components table."],
+      "blocker": "Remaining footer art, reference-image redistribution, and derivative/output scope do not have positive component-specific repository/public-CI evidence."
+    },
+    {
+      "id": "acid2_profile_applicability",
+      "status": "unresolved",
+      "evidence": [
+        "https://github.com/mattcurrie/dmg-acid2/blob/dc2295408f881637ff69f784d8d93f3d2db30181/README.md",
+        "https://github.com/mattcurrie/cgb-acid2/blob/fa5b7f86d6fb599f79e55169494d981a7af75a31/README.md"
+      ],
+      "blocker": "The READMEs establish DMG/CGB mode intent but do not establish the selected DMG-CPU-B and CGB-CPU-E reference hardware revisions."
+    },
+    {
+      "id": "gbmicrotest_complete_roster_identity",
+      "status": "supported",
+      "evidence": [
+        "https://api.github.com/repos/aappleby/gbmicrotest/commits/463eb6bc0fe31d61781ef63060ad6d74090c0255",
+        "https://api.github.com/repos/aappleby/gbmicrotest/git/trees/463eb6bc0fe31d61781ef63060ad6d74090c0255?recursive=1",
+        "The checker pins an independent SHA-256 projection of every name, source/ROM path, byte size, Git blob ID, and protocol class."
+      ],
+      "blocker": null
+    },
+    {
+      "id": "gbmicrotest_component_rights_and_output_scope",
+      "status": "unresolved",
+      "evidence": [
+        "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/LICENSE",
+        "https://github.com/aappleby/gbmicrotest/tree/463eb6bc0fe31d61781ef63060ad6d74090c0255/bin"
+      ],
+      "blocker": "The source-code grant does not establish rights for every prebuilt ROM byte, the embedded Nintendo logo, or the full derivative/output scope."
+    },
+    {
+      "id": "gbmicrotest_prebuilt_rom_sha256",
+      "status": "unresolved",
+      "evidence": ["Pinned Git tree metadata supplies each ROM size and Git blob ID; no raw ROM payload was fetched."],
+      "blocker": "All 513 prebuilt ROM SHA-256 values remain unobserved; Phase 20 requires SHA-256 identities before a real manifest can admit bytes."
+    },
+    {
+      "id": "gbmicrotest_case_applicability",
+      "status": "unresolved",
+      "evidence": ["https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md"],
+      "blocker": "The only hardware statement is uncertain DMG-CPU-08 suite-wide; none of the 513 rows has reviewed per-case source-backed model evidence, and CGB-CPU-E is not established."
+    },
+    {
+      "id": "gbmicrotest_independent_oracle",
+      "status": "unresolved",
+      "evidence": [
+        "https://github.com/aappleby/gbmicrotest/blob/463eb6bc0fe31d61781ef63060ad6d74090c0255/README.md",
+        "22-RESEARCH.md direct pinned-source protocol scan"
+      ],
+      "blocker": "The shared and inline result protocols expose verdicts but do not, by themselves, establish independent expected results for each case; the 31 initial no-protocol cases remain excluded."
+    }
+  ],
+  "downstream_not_observed": [
+    "No acid2 derivative source, replacement glyph, build, ROM digest, reference-image copy, mask result, or emulator comparison was produced in this assessment.",
+    "No gbmicrotest source or ROM payload SHA-256 values were calculated; no build, runner invocation, hardware result, or per-case diagnostic result was observed.",
+    "No fixture manifest, THIRD_PARTY_NOTICES row, admitted fixture directory, product-package identity, or DIAG-01/DIAG-02/RIGHTS-01 completion claim was created."
+  ]
+}

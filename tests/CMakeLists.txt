@@ -1271,8 +1271,10 @@ set_tests_properties(
 find_program(GBB_SAMESUITE_REPRO_BASH bash REQUIRED)
 add_test(NAME samesuite_repro_selfcheck
   COMMAND "${GBB_SAMESUITE_REPRO_BASH}" "${PROJECT_SOURCE_DIR}/tests/scripts/reproduce-samesuite.sh" --self-test)
+# This self-check launches many short subprocesses; keep parallel test load from consuming its timeout.
 set_tests_properties(samesuite_repro_selfcheck PROPERTIES
   TIMEOUT 30
+  RUN_SERIAL TRUE
   ENVIRONMENT "GBB_SAMESUITE_BASH=${GBB_SAMESUITE_REPRO_BASH}")
 
 # rtc3test v004 screen oracle (D-11). White-box single TU: it includes the core and the acceptance
@@ -1434,6 +1436,23 @@ function(gbb_add_v02_contract name timeout regex script)
   set_tests_properties(${name} PROPERTIES TIMEOUT ${timeout} LABELS "v02"
     ENVIRONMENT "${environment}")
 endfunction()
+
+# Phase 20 D-01/D-02: the real admission CLI checks one synthetic candidate plus a coherent rewrite
+# negative, while the repository gate preserves legacy fixture identities and rejects new evidence
+# before any fixture-consuming target is configured.
+gbb_add_v02_contract(fixture_admission_controls 90
+  [=[PASS: fixture admission self-test positives=[1-9][0-9]* negative_controls=[1-9][0-9]*]=]
+  verify-fixture-admission.py --self-test)
+gbb_add_v02_contract(fixture_admission_repository 30
+  [=[PASS: fixture admission repository legacy_files=[1-9][0-9]* admitted_changes=0 baseline=[0-9a-f]+]=]
+  verify-fixture-admission.py --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
+gbb_add_v02_contract(fixture_product_core_controls 120
+  [=[PASS: fixture admission product layout=core positive=1 negative_controls=[1-9][0-9]*]=]
+  verify-fixture-admission.py --self-test-packages --layout core)
+gbb_add_v02_contract(fixture_product_player_controls 120
+  [=[PASS: fixture admission product layout=player positive=1 negative_controls=[1-9][0-9]*]=]
+  verify-fixture-admission.py --self-test-packages --layout player)
+
 gbb_add_v02_contract(v02_game_claims 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "game"]=]
   verify-v02-adoption.py --check game)
@@ -1534,6 +1553,7 @@ gbb_add_v02_contract(v02_fuzz_controls 180
 gbb_add_v02_contract(v02_source_archive_controls 90
   [=[PASS: source archive checker accepted [1-9][0-9]* cases and rejected [1-9][0-9]* negative controls]=]
   verify-v02-source-archive.py --self-test)
+set_tests_properties(v02_source_archive_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_delivery_controls 90
   [=[PASS: delivery checker positives=[1-9][0-9]* rejected_controls=[1-9][0-9]* real_owner_rejections=[1-9]]=]
   verify-v02-delivery.py --self-test)
@@ -1895,6 +1915,7 @@ add_test(NAME preview_package_smoke
     -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
+set_tests_properties(preview_package_smoke PROPERTIES TIMEOUT 180)
 
 # Phase 16 D-18: the base TIMEOUT for tests that set none. The player child scope inherits it and
 # applies the same sweep, because this directory's pass cannot reach child-directory tests.
@@ -2908,7 +2929,7 @@ add_test(NAME no_phase_paths_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_NO_PHASE_PATHS_CHECKER};--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=no-phase-paths self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=12
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=14
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(no_phase_paths_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 # The tree check: every tracked text file outside the planning tree, with a floor on the files scanned.
@@ -3632,7 +3653,70 @@ add_test(NAME cgb_external_dispositions_image_contract
 set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
 add_test(NAME cgb_acid2_local_selftest COMMAND "${Python3_EXECUTABLE}" -I "${GBB_ACID2_LOCAL}" --self-test)
 set_tests_properties(cgb_acid2_local_selftest PROPERTIES
-  PASS_REGULAR_EXPRESSION "self-test pass checks=5" TIMEOUT 30)
+  PASS_REGULAR_EXPRESSION "self-test pass checks=6" TIMEOUT 30)
+# Phase 22 proves one original synthetic path through admission, the compiled runner,
+# independent masked comparison, receipt binding and the real product byte scanner.
+add_test(NAME phase22_acid2_tracer
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py"
+    --self-test-tracer --runner "$<TARGET_FILE:gabbaboy-runner>")
+set_tests_properties(phase22_acid2_tracer PROPERTIES
+  PASS_REGULAR_EXPRESSION "acid2 tracer pass origin=synthetic-only profile=dmg-cpu-b rom_sha256=[0-9a-f]+ mask_sha256=[0-9a-f]+"
+  TIMEOUT 60)
+set(GBB_PHASE22_ACID2_MASKS "${PROJECT_SOURCE_DIR}/tests/scripts/verify-acid2-masks.py")
+set(GBB_PHASE22_DIAGNOSTIC_ADMISSION "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-admission.py")
+add_test(NAME phase22_acid2_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test)
+add_test(NAME phase22_acid2_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test-controls)
+add_test(NAME phase22_fixture_admission_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test)
+add_test(NAME phase22_fixture_admission_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls)
+add_test(NAME phase22_admission_assessment
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}"
+    --check-assessment --repo-root "${PROJECT_SOURCE_DIR}")
+set_tests_properties(phase22_acid2_contract phase22_acid2_controls
+  phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
+set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "diagnostic assessment valid status=blocked unresolved_gates=7 gbmicrotest_cases=513")
+# The metadata no-go is checked at one immutable configure-time source revision. The checker
+# independently validates the historical assessment revision and never fetches upstream data.
+# Source archives have no Git metadata: keep configure/build usable and fail these source-bound
+# tests closed at execution unless the caller supplied an immutable revision explicitly.
+set(GBB_PHASE22_EVIDENCE_SOURCE_REV "" CACHE STRING
+  "Immutable Git commit for Phase 22 evidence tests (empty derives from Git)")
+if(GBB_PHASE22_EVIDENCE_SOURCE_REV STREQUAL "")
+  execute_process(COMMAND git rev-parse --verify HEAD
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    RESULT_VARIABLE GBB_PHASE22_EVIDENCE_REV_RESULT
+    OUTPUT_VARIABLE GBB_PHASE22_EVIDENCE_SOURCE_REV
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  string(LENGTH "${GBB_PHASE22_EVIDENCE_SOURCE_REV}" GBB_PHASE22_EVIDENCE_REV_LENGTH)
+  if(NOT GBB_PHASE22_EVIDENCE_REV_RESULT EQUAL 0 OR NOT GBB_PHASE22_EVIDENCE_REV_LENGTH EQUAL 40 OR
+     NOT GBB_PHASE22_EVIDENCE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+    set(GBB_PHASE22_EVIDENCE_SOURCE_REV "unknown")
+  endif()
+else()
+  string(LENGTH "${GBB_PHASE22_EVIDENCE_SOURCE_REV}" GBB_PHASE22_EVIDENCE_REV_LENGTH)
+  if(NOT GBB_PHASE22_EVIDENCE_REV_LENGTH EQUAL 40 OR
+     NOT GBB_PHASE22_EVIDENCE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+    message(FATAL_ERROR "GBB_PHASE22_EVIDENCE_SOURCE_REV must be a full immutable Git commit")
+  endif()
+endif()
+set(GBB_PHASE22_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-evidence.py")
+add_test(NAME phase22_evidence_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --check
+    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}"
+    --build-dir "${PROJECT_BINARY_DIR}")
+add_test(NAME phase22_evidence_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --self-test-controls
+    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}")
+# This planning check reads only CTest's configured JSON inventory from the build tree; it does
+# not execute built artifacts. verify-planning-labels checks the explicit inventory-only class.
+set_tests_properties(phase22_evidence_contract PROPERTIES TIMEOUT 60 LABELS "planning;ctest-inventory-only"
+  PASS_REGULAR_EXPRESSION "diagnostic evidence pass source=[0-9a-f]+ assessment=blocked cases=513 unresolved_gates=7 admitted=0 executed=0 assessment_checker_sha256=[0-9a-f]+")
+set_tests_properties(phase22_evidence_controls PROPERTIES TIMEOUT 60 LABELS planning
+  PASS_REGULAR_EXPRESSION "diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable")
 # The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
 add_test(NAME cgb_acid2_local_refuses_unpinned
   COMMAND ${CMAKE_COMMAND}
@@ -3640,13 +3724,15 @@ add_test(NAME cgb_acid2_local_refuses_unpinned
     -DGBB_EXPECT_CODE=2
     "-DGBB_EXPECT_REGEX=acid2 refused"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-# WR-02: a manifest the harness cannot use is a harness error (exit 3), never "frames differ" (1).
+# Phase 22 binds the manifest to an immutable source before parsing it; this untracked build
+# artifact must be refused at the earlier source-scope gate. The self-test separately covers
+# malformed-manifest exit 3 with synthetic bytes.
 file(WRITE "${PROJECT_BINARY_DIR}/acid2-bad-manifest.json" "{\"kinds\": {}}")
-add_test(NAME cgb_acid2_local_bad_manifest
+add_test(NAME cgb_acid2_local_manifest_scope_refusal
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_ACID2_LOCAL};--rom;${PROJECT_SOURCE_DIR}/LICENSE;--reference;${PROJECT_SOURCE_DIR}/LICENSE;--runner;$<TARGET_FILE:gabbaboy-runner>;--rom-kind;cgb-acid2;--manifest;${PROJECT_BINARY_DIR}/acid2-bad-manifest.json"
-    -DGBB_EXPECT_CODE=3
-    "-DGBB_EXPECT_REGEX=acid2 error: manifest unusable"
+    -DGBB_EXPECT_CODE=2
+    "-DGBB_EXPECT_REGEX=acid2 refused: scope-resolution-required"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # WR-03: the colour fixture reproduction script must report harness failures as result=error.
 if(NOT WIN32)
@@ -5572,6 +5658,7 @@ gbb_state_alloc_mutant(save_overwrites_tail "${GBB_STATE_SAVE_SUCCESS_ANCHOR}"
 # configure-time HEAD, read with git show; nothing falls back to the live tree.
 if(NOT WIN32)
   # Each case: name | checker mode | output regex | key whose value must reach a minimum | minimum.
+  set(gbb_release_shell_tests)
   foreach(gbb_lifecycle_case IN ITEMS
       "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0|uploads|7"
       "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95")
@@ -5589,6 +5676,7 @@ if(NOT WIN32)
         -DGBB_EXPECT_MIN_KEY=${gbb_lifecycle_key} -DGBB_EXPECT_MIN_VALUE=${gbb_lifecycle_min}
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
+    list(APPEND gbb_release_shell_tests "${gbb_lifecycle_name}")
   endforeach()
   # Keep each post-tag semantic family independently runnable at the existing fixed budget.
   # The immutable manifest checker proves exact registration and execution across all six groups.
@@ -5607,6 +5695,7 @@ if(NOT WIN32)
         "-DGBB_EXPECT_REGEX=release-lifecycle post-tag group=${gbb_post_tag_group} controls=[1-9][0-9]* positives=[0-9]+ endpoint_inventory=${gbb_post_tag_endpoint_inventory} ids_sha256=[0-9a-f]+"
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties("${gbb_post_tag_test}" PROPERTIES TIMEOUT 60 LABELS "v02" RUN_SERIAL TRUE)
+    list(APPEND gbb_release_shell_tests "${gbb_post_tag_test}")
   endforeach()
 
   add_test(NAME release_lifecycle_post_tag_coverage_controls
@@ -5617,10 +5706,19 @@ if(NOT WIN32)
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   set_tests_properties(release_lifecycle_post_tag_coverage_controls
     PROPERTIES TIMEOUT 60 LABELS "v02" RUN_SERIAL TRUE)
+  list(APPEND gbb_release_shell_tests release_lifecycle_post_tag_coverage_controls)
 
-  # These control suites launch many short subprocesses. Run each alone so parallel test load
-  # cannot push existing fixed 60-second budgets over their caps.
-  set_tests_properties(release_lifecycle_controls PROPERTIES RUN_SERIAL TRUE)
+  # The shell gates call bare `python3`; make that resolve to the same interpreter CMake selected.
+  # On hosts with an older system Python earlier on PATH, the nested gate can otherwise use an
+  # incompatible stdlib even though the outer test was launched with Python3_EXECUTABLE.
+  get_filename_component(gbb_cmake_python_bin "${Python3_EXECUTABLE}" DIRECTORY)
+  set_tests_properties(${gbb_release_shell_tests} PROPERTIES
+    ENVIRONMENT "PATH=${gbb_cmake_python_bin}:$ENV{PATH}")
+
+  # Run this 95-control suite with the other long checks. It reached its unchanged 60-second cap
+  # when CTest scheduled it after the full serial run; the COST hint front-loads it without
+  # changing coverage, concurrency, or the timeout.
+  set_tests_properties(release_lifecycle_controls PROPERTIES RUN_SERIAL TRUE COST 45)
 endif()
 
 # D-27 (19-08): the Python-stdlib recovery controls run on every host, after the immutable
@@ -5687,6 +5785,7 @@ add_test(NAME state_boundary_controls
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(state_boundary_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 
+include("${PROJECT_SOURCE_DIR}/tests/cmake/game-evidence.cmake")
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times

@@ -9,17 +9,39 @@ endif()
 
 get_filename_component(source_dir "${GBB_SOURCE_DIR}" ABSOLUTE)
 get_filename_component(binary_dir "${GBB_BINARY_DIR}" ABSOLUTE)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set(smoke_root "${binary_dir}/preview-package-smoke")
+set(package_build_dir "${smoke_root}/release-package-build")
 set(install_prefix "${smoke_root}/installed-prefix")
 set(extract_root "${smoke_root}/extracted")
 set(archive "${smoke_root}/installed-prefix.tar.gz")
+set(core_inventory "${smoke_root}/core-product-inventory.json")
 set(runner_workdir "${smoke_root}/unrelated-working-directory")
 
 file(REMOVE_RECURSE "${smoke_root}")
 file(MAKE_DIRECTORY "${smoke_root}" "${extract_root}" "${runner_workdir}")
 
 execute_process(
-  COMMAND "${GBB_CMAKE_COMMAND}" --install "${binary_dir}" --prefix "${install_prefix}"
+  COMMAND "${GBB_CMAKE_COMMAND}" -S "${source_dir}" -B "${package_build_dir}"
+    -G "${GBB_GENERATOR}" -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+  RESULT_VARIABLE package_configure_result
+  OUTPUT_VARIABLE package_configure_output
+  ERROR_VARIABLE package_configure_error)
+if(NOT package_configure_result EQUAL 0)
+  message(FATAL_ERROR
+    "Release package configure failed (${package_configure_result}): ${package_configure_output}${package_configure_error}")
+endif()
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}" --build "${package_build_dir}" --target gabbaboy-runner
+  RESULT_VARIABLE package_build_result
+  OUTPUT_VARIABLE package_build_output
+  ERROR_VARIABLE package_build_error)
+if(NOT package_build_result EQUAL 0)
+  message(FATAL_ERROR
+    "Release package build failed (${package_build_result}): ${package_build_output}${package_build_error}")
+endif()
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}" --install "${package_build_dir}" --prefix "${install_prefix}"
   RESULT_VARIABLE install_result OUTPUT_VARIABLE install_output ERROR_VARIABLE install_error)
 if(NOT install_result EQUAL 0)
   message(FATAL_ERROR "Clean package install failed (${install_result}): ${install_output}${install_error}")
@@ -48,6 +70,23 @@ if(NOT package_configs)
   message(FATAL_ERROR "Installed package export metadata is missing")
 endif()
 
+# Validate the producer's actual install tree before packaging it. The inventory is a
+# temporary identity check for extraction, not an alternate product-policy source.
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}"
+    "-DGBB_SOURCE_DIR=${source_dir}"
+    "-DGBB_INSTALL_PREFIX=${install_prefix}"
+    "-DGBB_EXECUTABLE_SUFFIX=${GBB_EXECUTABLE_SUFFIX}"
+    "-DGBB_WRITE_PRODUCT_INVENTORY=${core_inventory}"
+    -P "${source_dir}/cmake/VerifyInstalledPackage.cmake"
+  RESULT_VARIABLE stage_policy_result
+  OUTPUT_VARIABLE stage_policy_output
+  ERROR_VARIABLE stage_policy_error)
+if(NOT stage_policy_result EQUAL 0)
+  message(FATAL_ERROR
+    "Installed package stage failed exact product policy (${stage_policy_result}): ${stage_policy_output}${stage_policy_error}")
+endif()
+
 execute_process(
   COMMAND "${GBB_CMAKE_COMMAND}" -E tar czf "${archive}" -- installed-prefix
   WORKING_DIRECTORY "${smoke_root}"
@@ -64,6 +103,69 @@ if(NOT extract_result EQUAL 0)
 endif()
 
 set(extracted_prefix "${extract_root}/installed-prefix")
+# Check the product archive's actual bytes using the same fixed policy and the producer's
+# complete stage inventory. The existing wrapped archive remains the relocation smoke input;
+# this second archive uses the release layout with include/lib/bin/share at its root.
+set(core_layout_archive "${smoke_root}/core-layout.tar.gz")
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}" -E tar czf "${core_layout_archive}" -- include lib bin share
+  WORKING_DIRECTORY "${extracted_prefix}"
+  RESULT_VARIABLE core_layout_archive_result
+  OUTPUT_VARIABLE core_layout_archive_output
+  ERROR_VARIABLE core_layout_archive_error)
+if(NOT core_layout_archive_result EQUAL 0 OR NOT EXISTS "${core_layout_archive}")
+  message(FATAL_ERROR
+    "Extracted core product archive creation failed (${core_layout_archive_result}): ${core_layout_archive_output}${core_layout_archive_error}")
+endif()
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" -I "${source_dir}/tests/scripts/verify-v02-source-archive.py"
+    --check-product-archive "${core_layout_archive}"
+    --repo-root "${source_dir}"
+    --inventory "${core_inventory}"
+  RESULT_VARIABLE archive_policy_result
+  OUTPUT_VARIABLE archive_policy_output
+  ERROR_VARIABLE archive_policy_error)
+if(NOT archive_policy_result EQUAL 0)
+  message(FATAL_ERROR
+    "Extracted core archive failed exact product policy (${archive_policy_result}): ${archive_policy_output}${archive_policy_error}")
+endif()
+
+# Keep one control at the installed-prefix production boundary, and exercise the full byte
+# mutation matrix against private copies of this real extracted tree through the same shared API.
+set(product_policy_control_root "${smoke_root}/product-policy-control")
+set(product_policy_control_prefix "${product_policy_control_root}/installed-prefix")
+file(REMOVE_RECURSE "${product_policy_control_root}")
+file(MAKE_DIRECTORY "${product_policy_control_root}")
+file(COPY "${extracted_prefix}" DESTINATION "${product_policy_control_root}")
+file(COPY_FILE "${source_dir}/fixtures/mooneye-cgb/boot_regs-cgb.gb"
+  "${product_policy_control_prefix}/share/gabbaboy/fixtures/tracer/renamed-control")
+execute_process(
+  COMMAND "${GBB_CMAKE_COMMAND}"
+    "-DGBB_INSTALL_PREFIX=${product_policy_control_prefix}"
+    "-DGBB_EXECUTABLE_SUFFIX=${GBB_EXECUTABLE_SUFFIX}"
+    "-DGBB_SOURCE_DIR=${source_dir}"
+    -P "${source_dir}/cmake/VerifyInstalledPackage.cmake"
+  RESULT_VARIABLE product_policy_control_result
+  OUTPUT_VARIABLE product_policy_control_output
+  ERROR_VARIABLE product_policy_control_error)
+set(product_policy_control_diagnostic "${product_policy_control_output}${product_policy_control_error}")
+file(REMOVE_RECURSE "${product_policy_control_root}")
+if(product_policy_control_result EQUAL 0 OR
+   NOT product_policy_control_diagnostic MATCHES "product-fixture-leak")
+  message(FATAL_ERROR
+    "Installed-package verifier did not reject renamed fixture bytes for the expected policy reason (${product_policy_control_result}): ${product_policy_control_diagnostic}")
+endif()
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}" -I "${source_dir}/tests/scripts/verify-v02-source-archive.py"
+    --self-test-product-tree "${extracted_prefix}" --repo-root "${source_dir}"
+  RESULT_VARIABLE tree_controls_result
+  OUTPUT_VARIABLE tree_controls_output
+  ERROR_VARIABLE tree_controls_error)
+if(NOT tree_controls_result EQUAL 0)
+  message(FATAL_ERROR
+    "Actual extracted-tree product controls failed (${tree_controls_result}): ${tree_controls_output}${tree_controls_error}")
+endif()
+
 # D-32 / T-10-22: Mooneye MBC and CGB ROMs are repository fixtures only; prove they are absent from the
 # extracted package by name and digest, and that the installed fixture set is exactly as expected.
 set(mooneye_scan_command "${GBB_CMAKE_COMMAND}"
@@ -106,10 +208,12 @@ if(NOT cgb_hdma_scan_result EQUAL 0 OR
 endif()
 execute_process(
   COMMAND "${GBB_CMAKE_COMMAND}"
+    "-DGBB_SOURCE_DIR=${source_dir}"
     "-DGBB_INSTALL_PREFIX=${extracted_prefix}"
     "-DGBB_EXECUTABLE_SUFFIX=${GBB_EXECUTABLE_SUFFIX}"
+    "-DGBB_PRODUCT_INVENTORY=${core_inventory}"
     "-DGBB_RUNNER_WORKDIR=${runner_workdir}"
-    "-DGBB_FORBIDDEN_PATHS=${source_dir};${binary_dir}"
+    "-DGBB_FORBIDDEN_PATHS=${source_dir};${binary_dir};${package_build_dir}"
     -P "${source_dir}/cmake/VerifyInstalledPackage.cmake"
   RESULT_VARIABLE runner_result OUTPUT_VARIABLE runner_output ERROR_VARIABLE runner_error)
 if(NOT runner_result EQUAL 0)

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import pathlib
 import struct
@@ -22,11 +23,29 @@ HERE = pathlib.Path(__file__).resolve().parent
 DEFAULT_MANIFEST = HERE.parent / "acid2" / "manifest.json"
 PNG_SIG = b"\x89PNG\r\n\x1a\n"
 MAX_IDAT = 1 << 20
+MAX_RUNNER_OUTPUT = 1 << 16
 PPM_HEADER = b"P6\n160 144\n255\n"
+MAX_PPM_BYTES = len(PPM_HEADER) + W * H * 3
 
 
 class Refused(Exception):
     pass
+
+
+class ManifestInvalid(Exception):
+    def __init__(self, error_type: str):
+        self.error_type = error_type
+
+
+def parse_manifest(manifest_bytes: bytes, rom_kind: str) -> tuple[dict, int]:
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8", "strict"))
+        kind = manifest["kinds"][rom_kind]
+        budget = manifest["ldbb_budget_half_dots"]
+        kind["rom_sha256"], kind["reference_sha256"], kind["runner_model"], kind["rom_size"]
+        return kind, budget
+    except (UnicodeError, ValueError, KeyError, TypeError) as exc:
+        raise ManifestInvalid(exc.__class__.__name__) from None
 
 
 def read_pinned(path: pathlib.Path, pin: str, what: str, limit: int = 1 << 20) -> bytes:
@@ -172,7 +191,7 @@ def compare(frame, reference) -> tuple[int, str]:
     return 1, f"acid2 result=differs pixels={differing}"
 
 
-def run_core(runner: pathlib.Path, kind: dict, rom: bytes, budget: int) -> bytes:
+def run_core(runner: pathlib.Path, kind: dict, rom: bytes, budget: int, timeout: int = 300) -> bytes:
     """Run the pinned ROM to its ld b,b and return the newest frame PPM from the failure dir."""
     with tempfile.TemporaryDirectory(prefix="gbb-acid2-") as tmp:
         work = pathlib.Path(tmp)
@@ -184,21 +203,37 @@ def run_core(runner: pathlib.Path, kind: dict, rom: bytes, budget: int) -> bytes
         (work / "cases.txt").write_text(line)
         proc = subprocess.run([str(runner), "--acceptance", "cases.txt", "--case", "acid2",
                                "--model", kind["runner_model"], "--failure-dir", "out"],
-                              cwd=work, capture_output=True, timeout=300)
+                              cwd=work, capture_output=True, timeout=timeout)
+        if len(proc.stdout) > MAX_RUNNER_OUTPUT or len(proc.stderr) > MAX_RUNNER_OUTPUT:
+            raise RuntimeError("runner output limit exceeded")
         ppm = work / "out" / "acid2.ppm"
         if not ppm.is_file():
             detail = proc.stdout.decode("utf-8", "replace").strip().splitlines()[-1:] or ["no output"]
             raise RuntimeError(f"runner produced no frame (exit {proc.returncode}): {detail[0][:160]}")
+        if ppm.stat().st_size > MAX_PPM_BYTES:
+            raise RuntimeError("runner frame exceeds fixed PPM size")
+        if proc.returncode not in (0, 1):
+            detail = (proc.stderr or proc.stdout).decode("utf-8", "replace").strip().splitlines()[-1:]
+            raise RuntimeError(f"runner failed (exit {proc.returncode}): {(detail or ['no output'])[0][:160]}")
         return ppm.read_bytes()
 
 
 def self_test() -> int:
-    manifest = json.loads(DEFAULT_MANIFEST.read_text())
-    kind = manifest["kinds"]["cgb-acid2"]
+    kind, _budget = parse_manifest(DEFAULT_MANIFEST.read_bytes(), "cgb-acid2")
     checks = 0
     pixels = [((x * 7) & 255, (y * 5) & 255, (x ^ y) & 255) for y in range(H) for x in range(W)]
     if decode_png(encode_png_rgb(pixels)) != pixels:
         print("acid2-local self-test fail: png round trip")
+        return 1
+    checks += 1
+    try:
+        parse_manifest(b'{"kinds": {}}', "cgb-acid2")
+    except ManifestInvalid as exc:
+        if exc.error_type != "KeyError":
+            print("acid2-local self-test fail: wrong malformed-manifest failure")
+            return 1
+    else:
+        print("acid2-local self-test fail: malformed manifest accepted")
         return 1
     checks += 1
     ppm = PPM_HEADER + bytes(c for px in pixels for c in px)
@@ -237,28 +272,60 @@ def self_test() -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--self-test-tracer", action="store_true")
     ap.add_argument("--rom", type=pathlib.Path)
     ap.add_argument("--reference", type=pathlib.Path)
     ap.add_argument("--runner", type=pathlib.Path)
     ap.add_argument("--rom-kind", choices=("cgb-acid2", "dmg-acid2"))
     ap.add_argument("--manifest", type=pathlib.Path, default=DEFAULT_MANIFEST)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
+    if args.self_test_tracer:
+        if args.runner is None:
+            ap.error("--self-test-tracer requires --runner")
+        adapter_path = HERE / "verify-diagnostic-admission.py"
+        spec = importlib.util.spec_from_file_location("phase22_diagnostic_admission", adapter_path)
+        if spec is None or spec.loader is None:
+            print("acid2 tracer error: admission adapter unavailable")
+            return 3
+        adapter = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(adapter)
+        return adapter.run_tracer(args.runner.resolve())
     if args.self_test:
         return self_test()
     if not (args.rom and args.reference and args.runner and args.rom_kind):
         ap.error("--rom, --reference, --runner and --rom-kind are required")
     # Exit codes: 0 match, 1 frames differ, 2 refused (unpinned input), 3 harness error
     # (manifest, runner, decode). Nothing else may reach exit 1.
+    # No third-party bytes may reach the runner while the source/component approval record is
+    # absent or unresolved. Bind the runner policy and manifest to the immutable source commit
+    # before parsing the manifest or reading ROM/reference data.
     try:
-        manifest = json.loads(args.manifest.read_text())
-        kind = manifest["kinds"][args.rom_kind]
-        budget = manifest["ldbb_budget_half_dots"]
-        kind["rom_sha256"], kind["reference_sha256"], kind["runner_model"], kind["rom_size"]
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(f"acid2 error: manifest unusable ({exc.__class__.__name__})")
+        root = HERE.parent.parent
+        revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,
+                                  check=True, timeout=30).stdout.decode("ascii").strip()
+        adapter_path = HERE / "verify-diagnostic-admission.py"
+        spec = importlib.util.spec_from_file_location("phase22_diagnostic_admission", adapter_path)
+        if spec is None or spec.loader is None:
+            raise Refused("admission adapter unavailable")
+        adapter = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(adapter)
+        manifest_path = args.manifest.resolve(strict=True)
+        manifest_relative = adapter.repository_relative_path(root, manifest_path)
+        adapter.require_approved(
+            root, revision,
+            source_paths=(("tests/scripts/run-acid2-local.py", pathlib.Path(__file__)),
+                          (manifest_relative, manifest_path)))
+        manifest_bytes = adapter.read_source_file(root, revision, manifest_relative)
+    except (OSError, ValueError, subprocess.SubprocessError, RuntimeError) as exc:
+        print(f"acid2 refused: scope-resolution-required ({exc})")
+        return 2
+    try:
+        kind, budget = parse_manifest(manifest_bytes, args.rom_kind)
+    except ManifestInvalid as exc:
+        print(f"acid2 error: manifest unusable ({exc.error_type})")
         return 3
     try:
         rom_bytes, ref_bytes = check_pins(kind, args.rom, args.reference)

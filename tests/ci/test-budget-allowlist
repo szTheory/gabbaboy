@@ -5,7 +5,6 @@
 # Seeded from a fresh ctest json-v1 scan; a test with no TIMEOUT is never allowlisted (the default-budget sweep gives it 60 s).
 accept_event_limit_link_control	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 accept_event_limit_link_violation	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_cgb_colour_progress_refused	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_core_mutant	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_dense_input_controls	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 acceptance_dense_script_delivered	400	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
@@ -52,6 +51,9 @@ cgb_runner_profile_dmg_identity_mooneye	120	0.4	GB-CI-004	Lower when a measured 
 cgb_samesuite_apu_suite	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 cgb_speed_stall_static_assert_mutant	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 closeout_dispositions_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+fixture_admission_controls	90	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once the admission self-test fits within 60 s
+fixture_product_core_controls	120	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once configuration export and policy identity controls fit within 60 s
+fixture_product_player_controls	120	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once product notice and policy identity controls fit within 60 s
 core_linkage_controls	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
 dmg_baseline	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 libbet_install_tree	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
@@ -67,6 +69,7 @@ player_cgb_speed_smoke	120	0.4	GB-CI-004	Lower when a measured player run is und
 player_cgb_speed_smoke_mutant_ppu_follows_cpu	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
 player_cgb_speed_smoke_wrong_sha	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
 player_session_script_no_input	300	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+preview_package_smoke	180	0.4	16-04	Lower after measured Windows and macOS package builds stay comfortably under the 60 s default
 rtc3test_basic	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 rtc3test_negative_control	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 rtc3test_range	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s

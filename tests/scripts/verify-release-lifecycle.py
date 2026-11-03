@@ -62,6 +62,14 @@ SOURCES = "tests/data/release-api/SOURCES.md"
 RECOVERY_ADOPTION = "tests/scripts/verify-v02-adoption.py"
 RECOVERY_CLAIMS = "tests/scripts/verify-cgb-corpus-claims.py"
 RECOVERY_RELEASE_DOC = "docs/release.md"
+# The historical recovery source remains RECOVERY_SOURCE_SHA. Its adoption checker gained the
+# reviewed Phase 20 product-notice distinction, so pin that production checker separately.
+RECOVERY_ADOPTION_PIN_SHA = "802555ac42264561d6b3f6fbad233d9aac6db0a9"
+PLATFORM_PRODUCT_ARCHIVES = (
+    "gabbaboy-core-macos-arm64.tar.gz",
+    "gabbaboy-preview-macos-arm64.tar.gz",
+    "gabbaboy-core-windows-x64.tar.gz",
+)
 POST_TAG_COVERAGE = "tests/data/release-lifecycle-post-tag-coverage.json"
 # Production files the replay materializes from --rev into the judge checkout (the `trusted/` tree of every job).
 JUDGE_FILES = (
@@ -1065,9 +1073,9 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
     claims_source = git_show(rev, RECOVERY_CLAIMS)
     if b"\r" in release_doc or not release_doc:
         raise Reject("recovery-document", "release documentation must be readable immutable UTF-8 with LF endings")
-    if adoption_source != git_show(RECOVERY_SOURCE_SHA, RECOVERY_ADOPTION) \
+    if adoption_source != git_show(RECOVERY_ADOPTION_PIN_SHA, RECOVERY_ADOPTION) \
             or (ROOT / RECOVERY_ADOPTION).read_bytes() != adoption_source:
-        raise Reject("recovery-adoption-source", "the production adoption checker differs from immutable tagged S")
+        raise Reject("recovery-adoption-source", "the production adoption checker differs from its immutable policy pin")
     if claims_source != git_show(RECOVERY_SOURCE_SHA, RECOVERY_CLAIMS) \
             or (ROOT / RECOVERY_CLAIMS).read_bytes() != claims_source:
         raise Reject("recovery-adoption-source", "the production claim rules differ from immutable tagged S")
@@ -2155,6 +2163,12 @@ class Scenario:
         run_git(self.root, "clone", "-q", "--no-hardlinks", str(self.t.judge), str(ws))
         run_git(ws, "checkout", "-q", "--detach", self.t.source)
         self.trusted(ws, script)
+        # Model non-empty outputs from the preceding workflow byte-gate step. The archive bytes
+        # and their policy are exercised separately by the trusted workflow-policy test group.
+        platform_products = ws / "build/platform-products/downloaded"
+        platform_products.mkdir(parents=True, exist_ok=True)
+        for archive_name in PLATFORM_PRODUCT_ARCHIVES:
+            (platform_products / archive_name).write_bytes(b"qualified replay product archive\n")
         perf_dir = ws / "build/evidence-fuzz/perf-gate"
         perf_dir.mkdir(parents=True, exist_ok=True)
         (perf_dir / "perf-gate-receipt.json").write_bytes(self.t.perf_gate_receipt)
@@ -2443,6 +2457,28 @@ def c_missing_gate(ctx: Context) -> str:
             if len(s.state()["decisions"]) != 1:
                 raise Reject("mutant-unexercised", "without the final gate the tampered release did not reach the publish decision")
     return "a removed final gate lets an altered final receipt reach the publish decision; the production gate refuses it first"
+
+
+def c_missing_platform_archives(ctx: Context) -> list[ControlOutcome]:
+    """Each downloaded product must exist after the trusted byte gate and before draft validation."""
+    s = ctx.scenario("missing-platform-archive", "finalized")
+    ws = publish_from(ctx, s)
+    results: list[ControlOutcome] = []
+    for archive_name in PLATFORM_PRODUCT_ARCHIVES:
+        archive = ws / "build/platform-products/downloaded" / archive_name
+        data = archive.read_bytes()
+        archive.unlink()
+        outcome = s.run_mode(ws, "validate-draft", **PUBLISH_ENV)
+        expect_fail(outcome, f"missing downloaded product archive {archive_name}",
+                    "Trusted macOS and Windows product archives must pass the isolated byte gate before draft validation")
+        if outcome.calls or s.state()["decisions"] or s.mutations_logged():
+            raise Reject("control-effect", f"missing {archive_name}: the lifecycle touched GitHub or recorded a decision")
+        results.append(ControlOutcome(
+            _post_tag_case_id("platform-archive.required", archive_name),
+            f"draft validation refuses a missing downloaded product archive: {archive_name}",
+        ))
+        archive.write_bytes(data)
+    return results
 
 
 def c_advisory_consumers(ctx: Context) -> str:
@@ -3483,7 +3519,8 @@ def c_nightly_gate(ctx: Context) -> list[ControlOutcome]:
             for label, needle, change in NIGHTLY_CASES]
 
 
-TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_advisory_consumers, c_non_advisory,
+TASK1_CONTROLS = (c_wiring, c_wrong_repo, c_no_fallback, c_missing_attach, c_missing_gate, c_missing_platform_archives,
+                  c_advisory_consumers, c_non_advisory,
                   c_unexpected_endpoint_in_script, c_live_publication, c_nightly_gate)
 
 POST_TAG_GROUP_NAMES = ("trust", "capture_source", "draft_assets", "recovery_sums", "consumer", "publication")

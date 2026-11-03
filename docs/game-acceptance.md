@@ -13,9 +13,31 @@ This page states what the Phase 7 game acceptance evidence is, what each part pr
 
 No CGB game-level evidence exists.
 
-The bounded native-CGB candidate attempt closed without admitting any game bytes. Rebound was inspected at source commit `cc2966e1643d480d0780fb6cc5b9ef53d5ef6898`. Its pinned build attempt failed with RGBDS v1.0.4; the official RGBDS v1.0.1 archive (SHA-256 `2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`) was also checked and produced 494 assembler errors. No output ROM or ROM digest was produced. Per-asset rights remain unresolved. The older candidate digest `195765b8ca3b0fb7d37b7b92d0242d6c7e01ec71f27f93e565fa081e449cbb92` is unverified historical metadata and is not tied to an admitted ROM.
+### Phase 21 outcome
 
-This attempt ended at the build and rights gates. No broader candidate hunt or runner adaptation was performed, and no CGB game bytes were admitted. Libbet and the Magic Floor v0.08 remains the DMG game acceptance described below; its guest-memory progress predicate is separate from its RGB555 and PCM regression observations and from the CGB test-ROM corpus. See the [CGB corpus contract](cgb-corpus.md) for that software-model evidence.
+Phase 21 admitted no game. The ordered candidate records are [Potion Panic](../tests/data/cgb-candidates/potion-panic.json) and [µCity 1.3](../tests/data/cgb-candidates/ucity-1.3.json); the final source-bound checker requires exactly these two attempts and their recorded terminal causes.
+
+- Potion Panic is a rights/source-scope no-go. The creator-linked source could not be reached before a ref or commit identity was returned ([source](https://codeberg.org/DevEd/potion-panic)), so exact component coverage and grant authority remain unestablished. The component-level repository/public-CI scope remains unestablished. No source tree, build, ROM, execution, progress, observations, or receipt were observed. This does not establish a license prohibition.
+- µCity 1.3 is a rights/source-scope no-go at exact source commit `d1880a2a112d7c26f16c0fc06a15b6c32fdc9137`. Its required `source/engine/hardware.inc` has SHA-256 `05f43643bf29459f6a86b2fedf00b887133b98038fa4f51112ced0f01a762715`; no identified grant or notice establishes repository/public-CI scope for that component. Toolchain identity, build confinement, ROM bytes, cartridge header, loaded mode, progress, RGB555/PCM observations, and candidate receipt remain not observed. No upstream tool, script, or ROM was run. No fallback fixture, case, input, predicate, or notice row was created. This is an unresolved component-scope gap, not a conclusion that a license prohibits use.
+
+The original native-CGB harness passed on the CGB-CPU-E software model in native CGB mode. It is original harness-only evidence (evidence class `original-harness-only`): an authored control ROM and input test the runner's progress handling. Its independent no-input, wrong-input, impossible-predicate, strict-xfail, and compatibility-mode checks are controls for that authored fixture only. Named RGB555 and PCM digests record same-run reproducibility; they are not accuracy, perceptual, or scene oracles. Scene expectations require their own independent oracle. The harness does not admit a game or describe progress in any game, physical CGB-E behavior, mode-3 timing, perceptual audio/color quality, or general game compatibility.
+
+Reproduce the source-bound outcome and receipt from a configured checkout with:
+
+```sh
+cmake --preset phase1
+cmake --build --preset phase1
+python3 -I tests/scripts/verify-cgb-game-evidence.py --check --runner build/gabbaboy-runner --repo-root . --source-revision "$(git rev-parse HEAD)" --write-evidence build/phase21-evidence/result.json
+ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase21_(game_evidence(_controls)?|fixture_admission|scene_report_.*)$'
+```
+
+The checker reads the two candidate records, contract documentation, and scene workflow from the same immutable source revision, then runs the current progress, candidate, and scene checkers against that revision and the qualified runner. There is no third candidate. The checker rejects a changed candidate identity, a missing no-go cause or control, and claims that turn harness evidence into admitted-game progress or a claim that any license prohibits use. The complete CTest suite remains required for phase closure. Deck exploration and future Libretro work remain outside this CGB result.
+
+### Historical CGB candidate attempt
+
+Before Phase 21, Rebound was inspected at source commit `cc2966e1643d480d0780fb6cc5b9ef53d5ef6898`. Its pinned build attempt failed with RGBDS v1.0.4; the official RGBDS v1.0.1 archive (SHA-256 `2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`) was also checked and produced 494 assembler errors. No output ROM or ROM digest was produced. Per-asset rights remain unresolved. The older candidate digest `195765b8ca3b0fb7d37b7b92d0242d6c7e01ec71f27f93e565fa081e449cbb92` is unverified historical metadata and is not tied to an admitted ROM.
+
+The earlier attempt ended at the build and rights gates. No broader candidate hunt or runner adaptation was performed, and no CGB game bytes were admitted. Libbet and the Magic Floor v0.08 remains the DMG game acceptance described below; its guest-memory progress predicate is separate from its RGB555 and PCM regression observations and from the CGB test-ROM corpus. See the [CGB corpus contract](cgb-corpus.md) for that software-model evidence.
 
 Physical CGB-E remains UNKNOWN/POLICY. No physical or perceptual audio/color qualification is claimed.
 

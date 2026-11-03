@@ -1,0 +1,194 @@
+---
+status: complete
+phase: GB-22-composition-and-microtest-evidence
+source: 22-01-SUMMARY.md, 22-02-SUMMARY.md, 22-10-SUMMARY.md, 22-11-SUMMARY.md, 22-12-SUMMARY.md
+started: 2026-11-03T17:07:50.725546+00:00
+updated: 2026-11-03T17:07:50.725546+00:00
+---
+
+## Automated Evidence
+
+# Phase 22 Final Evidence
+
+**Scope:** Owner-approved D-141 synthetic-plus-metadata closeout plus the single D-143 C1 OSC correction/review cycle in existing Plan 22-12. DIAG-01, DIAG-02, and RIGHTS-01 retain their original definitions and remain Pending. All seven real-fixture gates remain unresolved; no license prohibition is inferred.
+
+## Immutable Source and Metadata
+
+The source-bound metadata assessment preserves historical source revision `559b5f7296f957a1a1fea278056a908f9a3d9339`. Local immutable checks at reviewed source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04` report 513 named metadata cases: 480 shared-macro, two inline, and 31 initial no-protocol exclusions. All seven required gates remain unresolved, admitted = 0, and executed = 0. Approval exits 2 with `scope-resolution-required` and the exact seven-gate list.
+
+The historical generated snapshot at `06d2cbc1` had SHA-256 `2f059fe21aac5131c96d4547a9937428d64911502e4ba5b85ba124e9e126223b`. At the D-143 C1 source `93004a65143a4bc3199e1f028b003e2d3dd11ef6`, the checker regenerated `build/phase22/evidence.json` with SHA-256 `19e846ed8dea0f94061e446ac956cd0843483ac427326c4f309103dffc14a3fe`; both snapshots preserve the same 513-case metadata-only no-go, seven unresolved gates, admitted=0, and executed=0.
+
+## D-143 C1 Sanitizer Evidence
+
+The last reviewed source `f59ebd166a354537343dd9e87b870698cc686b2b` left the printable body of a valid UTF-8 C1 OSC sequence after generic control cleanup removed U+009D and U+009C. The amended existing `diagnostic_sanitization_control` adds distinct prefix/suffix sentinels, supplied native/Windows/home roots, the byte sequence `U+009D 0;synthetic-c1-title U+009C`, and long trailing padding. The regression requires full payload/delimiter/control/root removal, both sentinels retained, and output at most 700 characters while preserving existing ESC CSI/OSC assertions.
+
+Before the correction, the direct control refused with `diagnostic-sanitization-control-failed`; `build/phase22/c1-fail-first.json` retains that result. At corrected source `93004a65143a4bc3199e1f028b003e2d3dd11ef6`, the direct control passes. An isolated in-memory mutation that disables only `C1_OSC_ESCAPE` returns the same specific refusal, then restoring the matcher passes; `build/phase22/c1-direct-and-mutation.json` retains those outcomes. The same augmented control runs inside the existing `phase22_evidence_controls` test identity; no new CTest or command was added.
+
+## Phase 21 Squash-Reference Reconciliation
+
+The fallback `ucity-1.3.json` points to the primary no-go record `tests/data/cgb-candidates/potion-panic.json`. Its historical reference used Phase 21 branch commit `1ab7180e9f35c70246e62c252d3dd4851fa77473`, which ceased to be an ancestor after PR #140 was squash-merged. The record is now pinned to the squash merge commit `bef2cfbdbdd0fc9b2d78631586827e29e0241b3b`; only the commit pointer changed. The referenced record's Git blob is `f3583f2933e48479b275e68beb275cfd1f356c01` at the squash commit and in the current source, and its SHA-256 is `9a23c0c13dba57f7806b19501756f09616c6cbbebe1e4bcef04eb099bf8ca352`. The verifier reads only that immutable path and digest, while separately binding the selected project source. Candidate controls reject a non-ancestor reference even when the blob is present and reject a mismatched record digest.
+
+## Local Checks
+
+| Check | Source | Result |
+|---|---|---|
+| `cmake --preset phase1` | `06d2cbc1` | Configure passed in 13.2 seconds; the exact final configure/build/full-suite run is still required after the evidence commit. |
+| `cmake --build --preset phase1` | `24c4e191` | All 339 build targets passed during the focused check cycle; later changes only tightened the Python planning-label checker and its control floor. |
+| `ctest --test-dir build --parallel 4 --output-on-failure --no-tests=error -R '^(planning_labels|planning_labels_controls|phase22_evidence_contract|phase22_evidence_controls)$'` | `06d2cbc1` | Passed 4/4; the explicit configured build inventory, 17 label-policy controls, immutable no-go contract, and evidence mutants passed. |
+| Focused Phase 22/fixture/product/budget/Phase 21 selection | `24c4e191` | Passed 23/23 in 42.98 seconds; included exact Phase 21 game-reference and candidate controls, no-phase-path controls, cap, fixture admission, core/player product, and Phase 22 contracts. The final full suite below supersedes this focused result for completion. |
+| `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --parallel 4 --output-on-failure --no-tests=error` | `042e7f34` | Passed 1,732/1,732 in 495.43 seconds; the final tracked-head run is captured in `build/phase22/remote-evidence.json`. |
+| `verify-diagnostic-evidence.py --check --repo-root . --source-revision 06d2cbc1... --build-dir build --write-evidence build/phase22/evidence.json` | `06d2cbc1` | Passed: 513 cases, seven unresolved gates, admitted=0, executed=0. |
+| `verify-diagnostic-admission.py --self-test-controls` | `06d2cbc1` | Passed all 12 mutation controls, including mutable Phase 20 checker and policy substitutions. |
+| `verify-diagnostic-admission.py --require-approved` | `06d2cbc1` | Correctly refused with exit 2 and all seven unresolved gates. |
+| `verify-planning-labels.py --build-dir build` | `06d2cbc1` | Passed with 1,732 configured CTests and 47 planning-labelled tests. |
+| `verify-no-phase-paths.py --self-test` and `--check --report` | `06d2cbc1` | Passed 19 controls; scanned 594 tracked files with the pinned allowlist. |
+| `verify-planning-hygiene.py --check plan-cap` | `06d2cbc1` | Passed: four phases and 28 plan files under the combined cap of 40. Phase 21 uses 8 of 10 slots, keeping two reserve slots; Phase caps are 9/10/12/9. |
+| `verify-summary-coverage.py` for 22-01, 22-02, 22-10, and 22-11 | Current live summaries | Passed; Plan 22-02 D2 is automated with `human_judgment: false`. |
+| Direct C1 fail-first control | Pre-correction working tree before commit `93004a65` | Failed with the required `diagnostic-sanitization-control-failed` refusal. |
+| Direct C1 control and disabled-matcher mutation | `93004a65143a4bc3199e1f028b003e2d3dd11ef6` | Corrected control passed; in-memory disabling of only the C1 matcher produced the required refusal; restored control passed. |
+| `phase22_evidence_controls` | `93004a65143a4bc3199e1f028b003e2d3dd11ef6` | Passed 1/1 in 14.00 seconds after configure; retained mutations and the C1 fail-first/mutation control run under the unchanged 60-second limit. |
+| Retained ten-test Phase 21/22 selection | `93004a65143a4bc3199e1f028b003e2d3dd11ef6` | Configure and all 339 build targets passed; all 10 selected tests passed in 57.27 seconds. |
+| Alternate `cmake-3.25.3` inventory selection | `93004a65143a4bc3199e1f028b003e2d3dd11ef6` | Configure passed in 14.0 seconds; all 4 selected tests passed in 16.25 seconds from the alternate build directory. |
+| Task 2 Phase 22/21/budget selection | `93004a65143a4bc3199e1f028b003e2d3dd11ef6` | All 19 selected tests passed in 56.00 seconds, including all `phase22_*`, planning-label, CGB-progress, fixture-admission, game-evidence, and budget tests. |
+| `verify-diagnostic-evidence.py --check --repo-root . --source-revision HEAD --build-dir build --write-evidence build/phase22/evidence.json` | `93004a65143a4bc3199e1f028b003e2d3dd11ef6` | Passed with assessment=blocked, cases=513, unresolved_gates=7, admitted=0, executed=0. |
+
+The historical full local CTest suite passed 1,732/1,732 on `042e7f34`, before the C1 correction. It does not qualify the changed source. The final configured full-suite run, fresh Windows/remote jobs and artifacts, exact-head review/protection checks, and merge-tree comparison remain required; `build/phase22/remote-evidence.json` retains the earlier failed remote attempt and must record any new attempt without rewriting that history.
+
+## Review and Security
+
+The fresh independent C1 code and ASVS 1 reviews are clean at `93004a65143a4bc3199e1f028b003e2d3dd11ef6`, with zero findings and zero blocking threats; see `22-REVIEW.md` and `22-SECURITY.md`. The earlier ASVS result at `f59ebd16` omitted C1 and remains historical. The prior inventory-only exception still pins the exact checker, command shape, source revision, active build directory, and configured Python interpreter; its negative controls remain intact. T-22-32 remains open until the final full local suite, exact-head remote checks/artifacts, review dispositions, protection checks, and merge-tree equivalence pass.
+
+## Build and Feedback Cost
+
+The D-143 configure took 14.0 seconds; the 339-target build passed. The ten-test selection passed in 57.27 seconds, the alternate four-test selection in 16.25 seconds, and the broader 19-test selection in 56.00 seconds. `phase22_evidence_controls` passed in 14.00–14.16 seconds under the unchanged 60-second limit. The historical 1,732-test suite at `042e7f34` predates C1 and is not final evidence. No measured evidence supports raising limits, adding a cache, or changing CI scheduling; record the final full-suite and hosted durations while preserving current budgets.
+
+## Exact-Head Qualification
+
+The prior immutable boundary candidate is commit `4ac46e7406329efbd4fb6ac0dc39c86c14156691`; it predates D-143 and is not the final boundary for the corrected source. Task 3 must prepare and retain a new point-in-time candidate after all tracked evidence is ready, preserving Pending requirements, all seven no-go gates, both false automatic-advance flags, Phase 23 unstarted, and `/gsd-discuss-phase 23`. Final exact-head qualification remains outstanding.
+
+`build/phase22/remote-evidence.json` records sanitized repository, PR, head, required run/job/check, package artifact, review, merge-tree, and duration identities. `.github/scripts/verify-pr-evidence.sh` is authoritative for exact-head equality, required checks, package sidecars/archives, and same-head CI, fixture, and preview jobs. Any missing, stale, skipped, inaccessible, failed, or mismatched evidence leaves Phase 22 unclosed.
+
+**Phase 23 handoff:** Phase 23 — Qualified v0.4.0 Release — remains unstarted and owner-controlled through `/gsd-discuss-phase 23`. Both automatic-advance flags remain false.
+
+## Current Test
+
+[testing complete]
+
+## Tests
+
+### 1. Original synthetic composition traverses admission, compiled runner, exact unmasked comparison, receipt binding, and product exclusion.
+expected: "Original synthetic composition traverses admission, compiled runner, exact unmasked comparison, receipt binding, and product exclusion."
+result: pass
+source: automated
+summary_file: 22-01-SUMMARY.md
+coverage_id: D1
+evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase22_(acid2_(tracer|contract|controls)|fixture_admission_(contract|controls))$'"]
+
+### 2. Changed identities, broadened masks, malformed images and admission pins are refused with specific controls.
+expected: "Changed identities, broadened masks, malformed images and admission pins are refused with specific controls."
+result: pass
+source: automated
+summary_file: 22-01-SUMMARY.md
+coverage_id: D2
+evidence: ["phase22_acid2_contract, phase22_acid2_controls, phase22_fixture_admission_contract, phase22_fixture_admission_controls"]
+
+### 3. The source-bound assessment and exact 513-case inventory remain blocked, with real-byte approval refused at the seven unresolved gates.
+expected: "The source-bound assessment and exact 513-case inventory remain blocked, with real-byte approval refused at the seven unresolved gates."
+result: pass
+source: automated
+summary_file: 22-02-SUMMARY.md
+coverage_id: D1
+evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase22_(admission_assessment|fixture_admission_(contract|controls))$'", "python3 -I tests/scripts/verify-diagnostic-admission.py --check-assessment --repo-root . --source-revision HEAD", "python3 -I tests/scripts/verify-diagnostic-admission.py --require-approved --repo-root . --source-revision HEAD (assert exit 2 and scope-resolution-required)"]
+
+### 4. The public evidence document states the approved synthetic-plus-metadata scope and accurately describes the no-go boundary.
+expected: "The public evidence document states the approved synthetic-plus-metadata scope and accurately describes the no-go boundary."
+result: pass
+source: automated
+summary_file: 22-02-SUMMARY.md
+coverage_id: D2
+evidence: ["phase22_evidence_controls CTest: public documentation and claim mutations are rejected", "python3 -I tests/scripts/verify-diagnostic-evidence.py --check --repo-root . --source-revision HEAD --write-evidence build/phase22/evidence.json"]
+
+### 5. Immutable snapshot proves the 513-name metadata inventory and exact seven-gate real-fixture refusal.
+expected: "Immutable snapshot proves the 513-name metadata inventory and exact seven-gate real-fixture refusal."
+result: pass
+source: automated
+summary_file: 22-10-SUMMARY.md
+coverage_id: D1
+evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase22_(evidence_(contract|controls)|acid2_(tracer|contract|controls)|fixture_admission_(contract|controls))$'", "python3 -I tests/scripts/verify-diagnostic-evidence.py --check --repo-root . --source-revision HEAD --write-evidence build/phase22/evidence.json"]
+
+### 6. Public diagnostic documents state the metadata-only no-go disposition and retain evidence and compatibility limits.
+expected: "Public diagnostic documents state the metadata-only no-go disposition and retain evidence and compatibility limits."
+result: pass
+source: automated
+summary_file: 22-10-SUMMARY.md
+coverage_id: D2
+evidence: ["phase22_evidence_controls CTest: documentation and claim mutations are rejected", "phase1 preset configure/build and immutable diagnostic evidence check"]
+
+### 7. Existing synthetic tracer and fixture-admission contracts remain passing, with boundary checks bound to an immutable supplied revision.
+expected: "Existing synthetic tracer and fixture-admission contracts remain passing, with boundary checks bound to an immutable supplied revision."
+result: pass
+source: automated
+summary_file: 22-10-SUMMARY.md
+coverage_id: D3
+evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^phase22_(evidence_(contract|controls)|acid2_(tracer|contract|controls)|fixture_admission_(contract|controls))$'", "phase22_evidence_controls CTest: immutable historical boundary and later-HEAD mutation controls"]
+
+### 8. The immutable assessment retains 513 metadata cases and refuses real admission with all seven gates unresolved; payload and dependency mutants are refused.
+expected: "The immutable assessment retains 513 metadata cases and refuses real admission with all seven gates unresolved; payload and dependency mutants are refused."
+result: pass
+source: automated
+summary_file: 22-11-SUMMARY.md
+coverage_id: D1
+evidence: ["ctest --preset phase1 --output-on-failure --no-tests=error -R '^(phase22_.*)$': immutable evidence contract, payload controls, and source-archive controls", "python3 -I tests/scripts/verify-diagnostic-evidence.py --check --repo-root . --source-revision 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04 --build-dir build", "verify-diagnostic-admission.py --self-test-controls passed 12 controls; --require-approved exited 2 with the seven unresolved gates"]
+
+### 9. Synthetic composition, existing fixture/product boundaries and fixed budgets pass; independent source and security reviews found no unresolved source issue.
+expected: "Synthetic composition, existing fixture/product boundaries and fixed budgets pass; independent source and security reviews found no unresolved source issue."
+result: pass
+source: automated
+summary_file: 22-11-SUMMARY.md
+coverage_id: D2
+evidence: ["Focused phase1 CTest selection at 24c4e191 passed 23/23, including Phase 22, Phase 21 candidate/history, fixture repository, core/player product, planning-label, cap, path and budget controls", "At reviewed source 06d2cbc1, the configured planning/evidence CTest selection passed 4/4; the planning inventory check passed for 1732 tests / 47 planning labels", "Configured full CTest suite at 042e7f34 passed 1732/1732 tests in 495.43 seconds; the exact final tracked head is checked once more before PR qualification", "22-REVIEW.md and 22-SECURITY.md: exact reviewed source 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04; source findings clean", "verify-summary-coverage.py passed for 22-01, 22-02, 22-10 and this block; Plan 22-02 D2 is automated with human_judgment false"]
+
+### 10. The point-in-time boundary preserves Pending requirements, false automatic advance, all seven no-go gates and the owner-controlled Phase 23 route.
+expected: "The point-in-time boundary preserves Pending requirements, false automatic advance, all seven no-go gates and the owner-controlled Phase 23 route."
+result: pass
+source: automated
+summary_file: 22-11-SUMMARY.md
+coverage_id: D3
+evidence: ["verify-diagnostic-evidence.py --check-boundary --repo-root . --source-revision 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04 --boundary-revision 4ac46e7406329efbd4fb6ac0dc39c86c14156691", "verify-uat-closure.py generated 10/10 automated entries; self-test passed 21 controls"]
+
+### 11. The C1 OSC sanitizer removes the full UTF-8 payload and delimiters, preserves surrounding text and redacts roots within 700 characters; the regression proves fail-first and correction-disabled behavior.
+expected: "The C1 OSC sanitizer removes the full UTF-8 payload and delimiters, preserves surrounding text and redacts roots within 700 characters; the regression proves fail-first and correction-disabled behavior."
+result: pass
+source: automated
+summary_file: 22-12-SUMMARY.md
+coverage_id: C1
+evidence: ["At pre-correction source, the augmented direct control refused with diagnostic-sanitization-control-failed; ignored record: build/phase22/c1-fail-first.json.", "At 93004a65143a4bc3199e1f028b003e2d3dd11ef6, direct control passed; disabling only C1_OSC_ESCAPE produced the same refusal and restoring it passed; see build/phase22/c1-direct-and-mutation.json.", "phase22_evidence_controls passed at the C1 source with its existing identity and 60-second limit; the in-control fail-first/mutation and all retained controls ran.", "22-REVIEW.md and 22-SECURITY.md record fresh exact-source clean code and ASVS 1 reviews, zero findings, and the consumed D-143 exception."]
+
+### 12. The completed D-142 checker remediation remains intact and passes its retained local focused, alternate-build, and broader Phase 21/22 controls without changing test identity, membership, policy, or timeouts.
+expected: "The completed D-142 checker remediation remains intact and passes its retained local focused, alternate-build, and broader Phase 21/22 controls without changing test identity, membership, policy, or timeouts."
+result: pass
+source: automated
+summary_file: 22-12-SUMMARY.md
+coverage_id: D142-REGRESSION
+evidence: ["The retained ten-test selection passed 10/10 after configure and the 339-target build at C1 source 93004a65143a4bc3199e1f028b003e2d3dd11ef6.", "The cmake-3.25.3 alternate-build selection passed 4/4 at the same C1 source.", "The Task 2 Phase 21/22/planning/budget CTest selection passed 19/19 at the same C1 source.", "The exact failed-head invariant diff passed for expected tests, CMake policy, registrations, presets, and CI workflow."]
+
+### 13. The C1 correction leaves the real-fixture no-go and requirement boundary unchanged: 513 metadata cases, seven unresolved gates, zero admission/execution, Pending requirements, and an owner-controlled Phase 23 route.
+expected: "The C1 correction leaves the real-fixture no-go and requirement boundary unchanged: 513 metadata cases, seven unresolved gates, zero admission/execution, Pending requirements, and an owner-controlled Phase 23 route."
+result: pass
+source: automated
+summary_file: 22-12-SUMMARY.md
+coverage_id: D141-NOGO
+evidence: ["verify-diagnostic-evidence.py --check at the C1 source passed with assessment=blocked, cases=513, unresolved_gates=7, admitted=0, executed=0.", "phase22_evidence_controls passed its retained immutable-boundary, public-claim, source/package, and mutation controls at the C1 source."]
+
+## Summary
+
+total: 13
+passed: 13
+issues: 0
+pending: 0
+skipped: 0
+blocked: 0
+
+## Gaps
+
+[none]

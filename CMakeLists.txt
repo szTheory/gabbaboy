@@ -26,10 +26,49 @@ if(GABBABOY_ENABLE_SANITIZERS)
 endif()
 
 option(GABBABOY_BUILD_PLAYER "Build the optional SDL3 player" OFF)
+set(GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT "" CACHE PATH
+  "Trusted local Git object store for immutable fixture-baseline reads in isolated source harnesses")
 
 include(CTest)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
+
+# New fixture evidence must pass the immutable admission check before any target or test can
+# consume fixture bytes. Non-testing source-library builds intentionally avoid a Git dependency.
+if(BUILD_TESTING)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  set(GBB_FIXTURE_ADMISSION_ARGS --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
+  # A Git source archive has no object database for the immutable fixture baseline.
+  # Let it configure so source consumers can build, while the phase evidence tests
+  # continue to fail closed when their exact source revision cannot be established.
+  execute_process(
+    COMMAND git rev-parse --show-toplevel
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    RESULT_VARIABLE GBB_FIXTURE_GIT_ROOT_RESULT
+    OUTPUT_QUIET
+    ERROR_QUIET)
+  if(GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT)
+    list(APPEND GBB_FIXTURE_ADMISSION_ARGS --baseline-object-root "${GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT}")
+  endif()
+  if(GBB_FIXTURE_GIT_ROOT_RESULT EQUAL 0 OR GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT)
+    execute_process(
+      COMMAND "${Python3_EXECUTABLE}" -I
+        "${PROJECT_SOURCE_DIR}/tests/scripts/verify-fixture-admission.py" ${GBB_FIXTURE_ADMISSION_ARGS}
+      RESULT_VARIABLE GBB_FIXTURE_ADMISSION_RESULT
+      OUTPUT_VARIABLE GBB_FIXTURE_ADMISSION_OUTPUT
+      ERROR_VARIABLE GBB_FIXTURE_ADMISSION_ERROR
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_STRIP_TRAILING_WHITESPACE)
+    if(NOT GBB_FIXTURE_ADMISSION_RESULT EQUAL 0)
+      message(FATAL_ERROR
+        "Fixture admission rejected the repository before test configuration: ${GBB_FIXTURE_ADMISSION_ERROR}${GBB_FIXTURE_ADMISSION_OUTPUT}")
+    endif()
+    message(STATUS "${GBB_FIXTURE_ADMISSION_OUTPUT}")
+  else()
+    message(STATUS
+      "Git source archive has no immutable fixture baseline; configuration is allowed, revision-bound evidence checks will fail closed")
+  endif()
+endif()
 
 add_library(gabbaboy_core STATIC src/core/gabbaboy.c)
 add_library(GabbaBoy::core ALIAS gabbaboy_core)
@@ -96,6 +135,32 @@ target_link_libraries(gabbaboy-runner PRIVATE gabbaboy_runner_support gabbaboy_h
 target_compile_features(gabbaboy-runner PRIVATE c_std_17)
 set_target_properties(gabbaboy-runner PROPERTIES C_EXTENSIONS OFF)
 
+set(GBB_RUNNER_BUILD_INPUTS
+  CMakeLists.txt
+  cmake/StateVersion.cmake
+  include/gabbaboy/gabbaboy.h
+  src/core/gabbaboy.c
+  src/core/gbb_accept_input.h
+  src/core/gabbaboy_test.h
+  src/runner/main.c
+  src/runner/acceptance.h
+  src/runner/cases.c
+  src/runner/acceptance.c
+  src/accept/gbb_accept.h
+  src/accept/sha256.c
+  src/accept/input_script.c
+  src/accept/stepper.c
+  src/accept/predicate.c
+  src/accept/digest.c
+  src/host/gbb_host.h
+  src/host/host_exit.h
+  src/host/host_cadence.c
+  src/host/host_run.c
+  src/host/host_save_format.c
+  src/host/host_save_io.c
+  src/host/host_signal.c
+  src/host/host_basename.c
+)
 execute_process(COMMAND git rev-parse --verify HEAD
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
   OUTPUT_VARIABLE GABBABOY_BUILD_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -107,10 +172,7 @@ if(NOT GABBABOY_GIT_RESULT EQUAL 0 OR
   set(GABBABOY_BUILD_REVISION "unknown")
   set(GABBABOY_BUILD_QUALIFIED 0)
 else()
-  execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/core/gabbaboy_test.h src/runner/main.c
-    src/runner/acceptance.h src/runner/cases.c src/runner/acceptance.c
-    src/accept/gbb_accept.h src/accept/sha256.c src/accept/input_script.c src/accept/stepper.c src/accept/predicate.c src/accept/digest.c
-    src/host/gbb_host.h src/host/host_exit.h src/host/host_cadence.c src/host/host_run.c src/host/host_save_format.c src/host/host_save_io.c src/host/host_signal.c src/host/host_basename.c
+  execute_process(COMMAND git diff --quiet HEAD -- ${GBB_RUNNER_BUILD_INPUTS}
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RESULT_VARIABLE GABBABOY_SOURCE_DIRTY ERROR_QUIET)
   if(GABBABOY_SOURCE_DIRTY EQUAL 0)
     set(GABBABOY_BUILD_QUALIFIED 1)
@@ -124,6 +186,30 @@ target_compile_definitions(gabbaboy_core PRIVATE
 target_compile_definitions(gabbaboy-runner PRIVATE
   GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
   GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+
+if(BUILD_TESTING)
+  set(GBB_RUNNER_QUALIFICATION_PATH
+    "${PROJECT_SOURCE_DIR}/build/phase21-evidence/current-runner-qualification.json")
+  set(GBB_RUNNER_QUALIFICATION_INPUT_ARGS)
+  set(GBB_RUNNER_QUALIFICATION_INPUT_FILES)
+  foreach(GBB_RUNNER_INPUT IN LISTS GBB_RUNNER_BUILD_INPUTS)
+    list(APPEND GBB_RUNNER_QUALIFICATION_INPUT_ARGS --input-path "${GBB_RUNNER_INPUT}")
+    list(APPEND GBB_RUNNER_QUALIFICATION_INPUT_FILES "${PROJECT_SOURCE_DIR}/${GBB_RUNNER_INPUT}")
+  endforeach()
+  add_custom_target(gabbaboy-runner-qualification ALL
+    COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-candidates.py"
+      --write-build-qualification
+      --repo-root "${PROJECT_SOURCE_DIR}"
+      --source-revision "${GABBABOY_BUILD_REVISION}"
+      --runner "$<TARGET_FILE:gabbaboy-runner>"
+      --qualification "${GBB_RUNNER_QUALIFICATION_PATH}"
+      --build-qualified "${GABBABOY_BUILD_QUALIFIED}"
+      ${GBB_RUNNER_QUALIFICATION_INPUT_ARGS}
+    DEPENDS gabbaboy-runner
+      "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-candidates.py"
+      ${GBB_RUNNER_QUALIFICATION_INPUT_FILES}
+    VERBATIM)
+endif()
 
 if(GABBABOY_BUILD_PLAYER)
   find_package(SDL3 3.4.18 EXACT CONFIG REQUIRED)
@@ -170,6 +256,7 @@ install(DIRECTORY include/gabbaboy DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(TARGETS gabbaboy-runner RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 # D-16: the machine-readable host contract (exit codes, cadence, save-format ids and sizes) ships with the runner.
 install(FILES docs/host-contract.json DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy")
+install(FILES LICENSE DESTINATION "${CMAKE_INSTALL_DATADIR}/gabbaboy" RENAME LICENSE.txt)
 install(FILES
   fixtures/tracer/tracer.gb
   fixtures/tracer/manifest.json
