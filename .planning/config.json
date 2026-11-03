@@ -51,7 +51,8 @@
     "tdd_mode": false,
     "ui_review": true,
     "_auto_chain_active": false,
-    "test_command": "cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error"
+    "test_command": "cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --output-on-failure --no-tests=error",
+    "use_worktrees": false
   },
   "ship": {
     "pr_body_sections": []
@@ -77,15 +78,15 @@
   "effort": {
     "default": "medium",
     "routing_tier_defaults": {
-      "light": "medium",
-      "standard": "medium",
-      "heavy": "medium"
+      "light": "xhigh",
+      "standard": "xhigh",
+      "heavy": "high"
     }
   },
   "granularity": "standard",
   "model_profile_overrides": {
     "codex": {
-      "opus": "gpt-6-sol",
+      "opus": "gpt-6.1-sol",
       "sonnet": "gpt-6-luna",
       "haiku": "gpt-6-luna"
     },
@@ -95,5 +96,5 @@
       "haiku": "claude-haiku-5-5"
     }
   },
-  "runtime": "claude"
+  "runtime": "codex"
 }

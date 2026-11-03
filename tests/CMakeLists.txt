@@ -2929,7 +2929,7 @@ add_test(NAME no_phase_paths_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_NO_PHASE_PATHS_CHECKER};--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=no-phase-paths self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=12
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=14
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(no_phase_paths_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 # The tree check: every tracked text file outside the planning tree, with a floor on the files scanned.
@@ -3653,7 +3653,70 @@ add_test(NAME cgb_external_dispositions_image_contract
 set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
 add_test(NAME cgb_acid2_local_selftest COMMAND "${Python3_EXECUTABLE}" -I "${GBB_ACID2_LOCAL}" --self-test)
 set_tests_properties(cgb_acid2_local_selftest PROPERTIES
-  PASS_REGULAR_EXPRESSION "self-test pass checks=5" TIMEOUT 30)
+  PASS_REGULAR_EXPRESSION "self-test pass checks=6" TIMEOUT 30)
+# Phase 22 proves one original synthetic path through admission, the compiled runner,
+# independent masked comparison, receipt binding and the real product byte scanner.
+add_test(NAME phase22_acid2_tracer
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py"
+    --self-test-tracer --runner "$<TARGET_FILE:gabbaboy-runner>")
+set_tests_properties(phase22_acid2_tracer PROPERTIES
+  PASS_REGULAR_EXPRESSION "acid2 tracer pass origin=synthetic-only profile=dmg-cpu-b rom_sha256=[0-9a-f]+ mask_sha256=[0-9a-f]+"
+  TIMEOUT 60)
+set(GBB_PHASE22_ACID2_MASKS "${PROJECT_SOURCE_DIR}/tests/scripts/verify-acid2-masks.py")
+set(GBB_PHASE22_DIAGNOSTIC_ADMISSION "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-admission.py")
+add_test(NAME phase22_acid2_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test)
+add_test(NAME phase22_acid2_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test-controls)
+add_test(NAME phase22_fixture_admission_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test)
+add_test(NAME phase22_fixture_admission_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}" --self-test-controls)
+add_test(NAME phase22_admission_assessment
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_DIAGNOSTIC_ADMISSION}"
+    --check-assessment --repo-root "${PROJECT_SOURCE_DIR}")
+set_tests_properties(phase22_acid2_contract phase22_acid2_controls
+  phase22_fixture_admission_contract phase22_fixture_admission_controls PROPERTIES TIMEOUT 30)
+set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
+  PASS_REGULAR_EXPRESSION "diagnostic assessment valid status=blocked unresolved_gates=7 gbmicrotest_cases=513")
+# The metadata no-go is checked at one immutable configure-time source revision. The checker
+# independently validates the historical assessment revision and never fetches upstream data.
+# Source archives have no Git metadata: keep configure/build usable and fail these source-bound
+# tests closed at execution unless the caller supplied an immutable revision explicitly.
+set(GBB_PHASE22_EVIDENCE_SOURCE_REV "" CACHE STRING
+  "Immutable Git commit for Phase 22 evidence tests (empty derives from Git)")
+if(GBB_PHASE22_EVIDENCE_SOURCE_REV STREQUAL "")
+  execute_process(COMMAND git rev-parse --verify HEAD
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    RESULT_VARIABLE GBB_PHASE22_EVIDENCE_REV_RESULT
+    OUTPUT_VARIABLE GBB_PHASE22_EVIDENCE_SOURCE_REV
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  string(LENGTH "${GBB_PHASE22_EVIDENCE_SOURCE_REV}" GBB_PHASE22_EVIDENCE_REV_LENGTH)
+  if(NOT GBB_PHASE22_EVIDENCE_REV_RESULT EQUAL 0 OR NOT GBB_PHASE22_EVIDENCE_REV_LENGTH EQUAL 40 OR
+     NOT GBB_PHASE22_EVIDENCE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+    set(GBB_PHASE22_EVIDENCE_SOURCE_REV "unknown")
+  endif()
+else()
+  string(LENGTH "${GBB_PHASE22_EVIDENCE_SOURCE_REV}" GBB_PHASE22_EVIDENCE_REV_LENGTH)
+  if(NOT GBB_PHASE22_EVIDENCE_REV_LENGTH EQUAL 40 OR
+     NOT GBB_PHASE22_EVIDENCE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+    message(FATAL_ERROR "GBB_PHASE22_EVIDENCE_SOURCE_REV must be a full immutable Git commit")
+  endif()
+endif()
+set(GBB_PHASE22_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-evidence.py")
+add_test(NAME phase22_evidence_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --check
+    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}"
+    --build-dir "${PROJECT_BINARY_DIR}")
+add_test(NAME phase22_evidence_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --self-test-controls
+    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}")
+# This planning check reads only CTest's configured JSON inventory from the build tree; it does
+# not execute built artifacts. verify-planning-labels checks the explicit inventory-only class.
+set_tests_properties(phase22_evidence_contract PROPERTIES TIMEOUT 60 LABELS "planning;ctest-inventory-only"
+  PASS_REGULAR_EXPRESSION "diagnostic evidence pass source=[0-9a-f]+ assessment=blocked cases=513 unresolved_gates=7 admitted=0 executed=0 assessment_checker_sha256=[0-9a-f]+")
+set_tests_properties(phase22_evidence_controls PROPERTIES TIMEOUT 60 LABELS planning
+  PASS_REGULAR_EXPRESSION "diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable")
 # The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
 add_test(NAME cgb_acid2_local_refuses_unpinned
   COMMAND ${CMAKE_COMMAND}
@@ -3661,13 +3724,15 @@ add_test(NAME cgb_acid2_local_refuses_unpinned
     -DGBB_EXPECT_CODE=2
     "-DGBB_EXPECT_REGEX=acid2 refused"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-# WR-02: a manifest the harness cannot use is a harness error (exit 3), never "frames differ" (1).
+# Phase 22 binds the manifest to an immutable source before parsing it; this untracked build
+# artifact must be refused at the earlier source-scope gate. The self-test separately covers
+# malformed-manifest exit 3 with synthetic bytes.
 file(WRITE "${PROJECT_BINARY_DIR}/acid2-bad-manifest.json" "{\"kinds\": {}}")
-add_test(NAME cgb_acid2_local_bad_manifest
+add_test(NAME cgb_acid2_local_manifest_scope_refusal
   COMMAND ${CMAKE_COMMAND}
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_ACID2_LOCAL};--rom;${PROJECT_SOURCE_DIR}/LICENSE;--reference;${PROJECT_SOURCE_DIR}/LICENSE;--runner;$<TARGET_FILE:gabbaboy-runner>;--rom-kind;cgb-acid2;--manifest;${PROJECT_BINARY_DIR}/acid2-bad-manifest.json"
-    -DGBB_EXPECT_CODE=3
-    "-DGBB_EXPECT_REGEX=acid2 error: manifest unusable"
+    -DGBB_EXPECT_CODE=2
+    "-DGBB_EXPECT_REGEX=acid2 refused: scope-resolution-required"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 # WR-03: the colour fixture reproduction script must report harness failures as result=error.
 if(NOT WIN32)

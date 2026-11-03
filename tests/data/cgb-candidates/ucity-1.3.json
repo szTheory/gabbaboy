@@ -2014,7 +2014,7 @@
     },
     "primary_no_go_ref": {
       "path": "tests/data/cgb-candidates/potion-panic.json",
-      "commit": "1ab7180e9f35c70246e62c252d3dd4851fa77473",
+      "commit": "bef2cfbdbdd0fc9b2d78631586827e29e0241b3b",
       "sha256": "9a23c0c13dba57f7806b19501756f09616c6cbbebe1e4bcef04eb099bf8ca352"
     }
   }

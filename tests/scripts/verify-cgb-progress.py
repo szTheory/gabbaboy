@@ -41,12 +41,33 @@ SOURCE_ANCHORS = (
     ("right_input", 0x16C, bytes.fromhex("3e 20 e0 00 f0 00 cb 47")),
     ("progress", 0x17C, bytes.fromhex("3e 01 ea 01 c0")),
 )
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
+DIAGNOSTIC_CONTROLS = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
 
 
 class CheckError(Exception):
     def __init__(self, reason: str):
         super().__init__(reason)
         self.reason = reason
+
+
+def sanitized_diagnostic(value: bytes | str,
+                         roots: tuple[tuple[str | Path, str], ...]) -> str:
+    """Return bounded diagnostic text without control sequences or local roots."""
+    text = value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value)
+    text = ANSI_ESCAPE.sub("", text)
+    replacements: dict[str, str] = {}
+    for root, token in roots:
+        native = os.fspath(root)
+        if not native:
+            continue
+        for spelling in {native, native.replace("\\", "/"), native.replace("/", "\\")}:
+            if spelling:
+                replacements[spelling] = token
+    for spelling, token in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(spelling, token)
+    text = " ".join(DIAGNOSTIC_CONTROLS.sub(" ", text).split())
+    return text[:700]
 
 
 def parse_runner_timeout(raw: str) -> int:
@@ -476,6 +497,155 @@ def git_text_bytes(repo_root: Path, args: list[str]) -> bytes:
     return result.stdout
 
 
+def committed_path_bytes(repo_root: Path, revision: str, relative: str) -> bytes | None:
+    """Read a committed file, returning None when that revision predates the file."""
+    tree = subprocess.run(
+        ["git", "-C", str(repo_root), "ls-tree", "-r", "--name-only", revision, "--", relative],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    if tree.returncode != 0:
+        raise CheckError("source-revision-invalid")
+    if not tree.stdout.strip():
+        return None
+    return git_text_bytes(repo_root, ["show", f"{revision}:{relative}"])
+
+
+def find_stale_source_revision(repo_root: Path, revisions: list[str], relative: str,
+                               current_source: bytes) -> str | None:
+    for revision in revisions:
+        committed_source = committed_path_bytes(repo_root, revision, relative)
+        if committed_source is not None and committed_source != current_source:
+            return revision
+    return None
+
+
+def source_history_controls() -> None:
+    """Verify stale-source scans skip commits predating the checker file."""
+    relative = "tests/scripts/verify-cgb-progress.py"
+    with tempfile.TemporaryDirectory(prefix="gbb-cgb-source-history-") as temporary:
+        root = Path(temporary)
+        synthetic_windows_root = r"C:\Users\runneradmin\AppData\Local\Temp\gbb-cgb-probe"
+        diagnostic = sanitized_diagnostic(
+            f"\x1b[31mfailed at {root}/repo\x1b[0m\t{synthetic_windows_root}\\repo\n"
+            "\x1b]0;synthetic-secret-title\x1b\\\x1b]0;synthetic-bel-title\x07" + "x" * 900,
+            ((root, "<temp>"), (synthetic_windows_root, "<windows-temp>"),
+             (Path.home(), "<home>")),
+        )
+        if (len(diagnostic) > 700 or "\x1b" in diagnostic or "\n" in diagnostic
+                or str(root) in diagnostic or synthetic_windows_root in diagnostic
+                or "synthetic-secret-title" in diagnostic or "synthetic-bel-title" in diagnostic
+                or "<temp>" not in diagnostic or "<windows-temp>" not in diagnostic):
+            raise CheckError("self-test-source-history-diagnostic-sanitizer-failed")
+
+        def git_init_probe(label: str, hooks_path: str) -> subprocess.CompletedProcess:
+            probe_root = root / f"{label}-git-config-probe"
+            probe_root.mkdir()
+            probe_config = root / f"{label}.gitconfig"
+            probe_config.write_text(
+                f"[core]\n\thooksPath = {hooks_path}\n", encoding="utf-8")
+            probe_environment = {**os.environ, "GIT_CONFIG_GLOBAL": str(probe_config),
+                                "GIT_CONFIG_NOSYSTEM": "1"}
+            return subprocess.run(
+                ["git", "-C", str(probe_root), "init", "--quiet"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=False, env=probe_environment,
+            )
+
+        raw_windows_hooks = (
+            r"C:\Users\runneradmin\AppData\Local\Temp\gbb-cgb-probe\global-hooks")
+        raw_probe = git_init_probe("raw-windows", raw_windows_hooks)
+        raw_error = sanitized_diagnostic(raw_probe.stderr, ((root, "<temp>"),
+                                                              (Path.home(), "<home>")))
+        if raw_probe.returncode == 0 or "bad config line" not in raw_error.casefold():
+            raise CheckError(f"self-test-source-history-windows-config-negative-failed:{raw_error}")
+        normalized_probe = git_init_probe("normalized-windows", raw_windows_hooks.replace("\\", "/"))
+        if normalized_probe.returncode != 0:
+            detail = sanitized_diagnostic(normalized_probe.stderr, ((root, "<temp>"),
+                                                                      (Path.home(), "<home>")))
+            raise CheckError(f"self-test-source-history-windows-config-positive-failed:{detail}")
+
+        empty_hooks = root / "empty-hooks"
+        empty_hooks.mkdir()
+        global_hooks = root / "global-hooks"
+        global_hooks.mkdir()
+        hook_marker = root / "global-hook-ran"
+        global_hook = global_hooks / "pre-commit"
+        global_hook.write_text(
+            "#!/bin/sh\nprintf '%s\\n' ran > \"$SYNTHETIC_HOOK_MARKER\"\n", encoding="utf-8")
+        global_hook.chmod(0o700)
+        global_config = root / "global.gitconfig"
+        global_config.write_text(
+            f"[core]\n\thooksPath = {global_hooks.as_posix()}\n[commit]\n\tgpgsign = true\n",
+            encoding="utf-8")
+        git_environment = os.environ.copy()
+        git_environment["GIT_CONFIG_GLOBAL"] = str(global_config)
+        git_environment["GIT_CONFIG_NOSYSTEM"] = "1"
+        git_environment["SYNTHETIC_HOOK_MARKER"] = str(hook_marker)
+
+        def run_fixture_git(args: list[str]):
+            return subprocess.run(
+                ["git", "-C", str(root), *args], stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+                env=git_environment,
+            )
+
+        initialized = subprocess.run(
+            ["git", "-C", str(root), "init", "--quiet"], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, env=git_environment,
+        )
+        if initialized.returncode != 0:
+            detail = sanitized_diagnostic(
+                initialized.stdout + initialized.stderr,
+                ((root, "<temp>"), (Path.home(), "<home>")),
+            )
+            raise CheckError(f"self-test-source-history-git-init-failed:{detail}")
+        checker = root / relative
+        checker.parent.mkdir(parents=True)
+        checker.write_bytes(b"committed checker version\n")
+        for source_path in SOURCE_FACTS:
+            source_file = root / source_path
+            source_file.parent.mkdir(parents=True, exist_ok=True)
+            source_file.write_bytes(b"synthetic committed source\n")
+        staged = run_fixture_git(["add", relative, *SOURCE_FACTS.keys()])
+        if staged.returncode != 0:
+            raise CheckError("self-test-source-history-stage-failed")
+        first_commit = run_fixture_git(
+            ["-c", f"core.hooksPath={empty_hooks}", "-c", "user.name=OpenGSD Test", "-c",
+             "user.email=opengsd-test@example.invalid", "commit", "--no-gpg-sign", "--quiet",
+             "-m", "synthetic checker source"])
+        if first_commit.returncode != 0:
+            raise CheckError("self-test-source-history-commit-failed")
+        if hook_marker.exists():
+            raise CheckError("self-test-source-history-global-hook-ran")
+        stale_revision = git_text(root, ["rev-parse", "HEAD"])
+
+        checker.unlink()
+        removed = run_fixture_git(["rm", "--quiet", relative])
+        if removed.returncode != 0:
+            raise CheckError("self-test-source-history-remove-failed")
+        second_commit = run_fixture_git(
+            ["-c", f"core.hooksPath={empty_hooks}", "-c", "user.name=OpenGSD Test", "-c",
+             "user.email=opengsd-test@example.invalid", "commit", "--no-gpg-sign", "--quiet",
+             "-m", "synthetic checker predates file"])
+        if second_commit.returncode != 0:
+            raise CheckError("self-test-source-history-commit-failed")
+        if hook_marker.exists():
+            raise CheckError("self-test-source-history-global-hook-ran")
+        missing_revision = git_text(root, ["rev-parse", "HEAD"])
+        checker.parent.mkdir(parents=True, exist_ok=True)
+        checker.write_bytes(b"mutable checker version\n")
+
+        if committed_path_bytes(root, missing_revision, relative) is not None:
+            raise CheckError("self-test-source-history-missing-path-not-skipped")
+        selected = find_stale_source_revision(
+            root, [missing_revision, stale_revision], relative, checker.read_bytes())
+        if selected != stale_revision:
+            raise CheckError("self-test-source-history-stale-revision-not-found")
+        expect_rejected(
+            lambda: verify_source_identity(root, selected, checker),
+            "checker-source-mismatch", "source-history-stale-checker")
+
+
 def expect_rejected(action, reason_prefix: str, control: str) -> None:
     try:
         action()
@@ -692,17 +862,16 @@ def self_test(repo_root: Path) -> None:
                     {"src/runner/acceptance.c": ("missing-source-evidence",)}),
                     "source-evidence-missing", "missing-committed-evidence")
     checker_path = Path(__file__).resolve()
+    checker_relative = checker_path.relative_to(repo_root).as_posix()
     current_commit_checker = git_text_bytes(
-        repo_root, ["show", f"HEAD:{checker_path.relative_to(repo_root).as_posix()}"])
+        repo_root, ["show", f"HEAD:{checker_relative}"])
     if current_commit_checker == checker_path.read_bytes():
-        stale_revision = next((revision for revision in git_text(
-            repo_root, ["rev-list", "--max-count=64", "HEAD"]).splitlines()
-            if git_text_bytes(repo_root, ["show", f"{revision}:{checker_path.relative_to(repo_root).as_posix()}"])
-            != current_commit_checker), None)
-        if stale_revision is None:
-            raise CheckError("self-test-stale-source-revision-unavailable")
-        expect_rejected(lambda: verify_source_identity(repo_root, stale_revision, checker_path),
-                        "checker-source-mismatch", "source-revision-mismatch")
+        stale_revision = find_stale_source_revision(
+            repo_root, git_text(repo_root, ["rev-list", "--max-count=64", "HEAD"]).splitlines(),
+            checker_relative, current_commit_checker)
+        if stale_revision is not None:
+            expect_rejected(lambda: verify_source_identity(repo_root, stale_revision, checker_path),
+                            "checker-source-mismatch", "source-revision-mismatch")
         original_runner_facts = SOURCE_FACTS["src/runner/acceptance.c"]
         SOURCE_FACTS["src/runner/acceptance.c"] = (*original_runner_facts, "missing-evidence-control")
         try:
@@ -710,6 +879,7 @@ def self_test(repo_root: Path) -> None:
                             "source-fact-missing", "missing-committed-source-fact")
         finally:
             SOURCE_FACTS["src/runner/acceptance.c"] = original_runner_facts
+    source_history_controls()
     expect_rejected(lambda: resolve_source_commit(repo_root, "gsd-invalid-cgb-progress-source-revision"),
                     "source-revision-invalid", "source-revision")
     print("observation-contract=pass observation-controls=pass")
@@ -1015,7 +1185,8 @@ def main() -> int:
         repo_root = args.repo_root.resolve()
         if args.self_test:
             self_test(repo_root)
-            print("verify-cgb-progress self-test pass controls=observation-identity,time,digest,pcm,dumps,source-revision")
+            print("verify-cgb-progress self-test pass "
+                  "controls=observation-identity,time,digest,pcm,dumps,source-history,git-hooks")
             return 0
         if args.tracer:
             if args.runner is None or args.source_revision is None:

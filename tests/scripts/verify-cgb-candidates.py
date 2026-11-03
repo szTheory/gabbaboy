@@ -2390,7 +2390,7 @@ def _commit_record(root: Path, record: dict[str, Any], path: str,
     return _commit_temp_paths(root, [path, *extra_paths], "synthetic candidate record")
 
 
-def _no_go_order_controls(root: Path) -> tuple[dict[str, str], str]:
+def _no_go_order_controls(root: Path) -> tuple[dict[str, str], str, int]:
     primary_path = RECORDS[CANDIDATES[0][0]]
     fallback_path = RECORDS[CANDIDATES[1][0]]
     primary_commit = _commit_record(root, synthetic_no_go_record(CANDIDATES[0]), primary_path)
@@ -2402,6 +2402,26 @@ def _no_go_order_controls(root: Path) -> tuple[dict[str, str], str]:
     _run_all(root, runner=True)
     if _runner_invocations(root) != before:
         raise Reject("candidate-self-test-failed", "a no-go record invoked the candidate runner")
+
+    primary_tree = git(root, "rev-parse", f"{primary_commit}^{{tree}}").decode("ascii").strip()
+    detached_primary_commit = git(
+        root, "-c", "commit.gpgSign=false", "commit-tree", primary_tree,
+        "-m", "synthetic detached primary no-go control",
+    ).decode("ascii").strip()
+    detached_reference = copy.deepcopy(fallback)
+    detached_reference["disposition"]["primary_no_go_ref"]["commit"] = detached_primary_commit
+    _commit_record(root, detached_reference, fallback_path)
+    _run_all(root, expected_code=1, expected_text="candidate-primary-record-not-in-history")
+
+    digest_reference = copy.deepcopy(fallback)
+    digest_reference["disposition"]["primary_no_go_ref"]["sha256"] = "0" * 64
+    _commit_record(root, digest_reference, fallback_path)
+    _run_all(root, expected_code=1, expected_text="candidate-primary-reference-mismatch")
+
+    _commit_record(root, fallback, fallback_path)
+    _run_all(root, runner=True)
+    if _runner_invocations(root) != before:
+        raise Reject("candidate-self-test-failed", "reference controls invoked the candidate runner")
 
     primary_file = root / primary_path
     valid_primary = synthetic_no_go_record(CANDIDATES[0])
@@ -2449,7 +2469,7 @@ def _no_go_order_controls(root: Path) -> tuple[dict[str, str], str]:
     _run_all(root, expected_code=1, expected_text="candidate-attempt-set")
     write_json(primary_file, valid_primary)
     _run_all(root)
-    return primary_ref, primary_commit
+    return primary_ref, primary_commit, 2
 
 
 def _admission_controls(root: Path, project_revision: str, fixture: dict[str, Any],
@@ -3003,7 +3023,7 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
         project_revision = _prepare_temp_repo(source_root, root)
         fixture = _write_synthetic_admission_fixture(root)
         (root / "tests/data/cgb-candidates").mkdir(parents=True, exist_ok=True)
-        primary_ref, primary_no_go_commit = _no_go_order_controls(root)
+        primary_ref, primary_no_go_commit, primary_reference_controls = _no_go_order_controls(root)
 
         unit_test = run_process(
             [sys.executable, "-I", str(source_root / "tests/scripts/test_cgb_candidate_order.py")],
@@ -3012,7 +3032,7 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
         if unit_test.returncode != 0:
             raise Reject("candidate-self-test-failed", "candidate contract assertions failed")
 
-        controls = 8
+        controls = 8 + primary_reference_controls
         if controls_only:
             controls += _admission_controls(root, project_revision, fixture, primary_ref)
         else:

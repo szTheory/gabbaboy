@@ -154,7 +154,7 @@ set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=planning -DGBB_EXPECT_MIN_VALUE=
 gbb_add_ci_lane_test(planning_labels 0 "planning-labels pass tests=[0-9]+ planning=[0-9]+" 60 planning
   "${GBB_PLANNING_LABELS_CHECKER}" --build-dir .)
 set_tests_properties(planning_labels PROPERTIES WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
-set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=3)
+set(GBB_CI_LANE_EXTRA_ARGS -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=17)
 gbb_add_ci_lane_test(planning_labels_controls 0 "planning-labels self-test pass controls=[0-9]+" 60 planning
   "${GBB_PLANNING_LABELS_CHECKER}" --self-test)
 set(GBB_CI_LANE_EXTRA_ARGS)
