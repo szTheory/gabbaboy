@@ -3654,11 +3654,14 @@ set(GBB_ACID2_LOCAL "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py")
 add_test(NAME cgb_acid2_local_selftest COMMAND "${Python3_EXECUTABLE}" -I "${GBB_ACID2_LOCAL}" --self-test)
 set_tests_properties(cgb_acid2_local_selftest PROPERTIES
   PASS_REGULAR_EXPRESSION "self-test pass checks=5" TIMEOUT 30)
-# Phase 22 tracer begins with a contract test for the source-cell mask generator.
-set(GBB_PHASE22_ACID2_MASKS "${PROJECT_SOURCE_DIR}/tests/scripts/verify-acid2-masks.py")
+# Phase 22 proves one original synthetic path through admission, the compiled runner,
+# independent masked comparison, receipt binding and the real product byte scanner.
 add_test(NAME phase22_acid2_tracer
-  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_ACID2_MASKS}" --self-test)
-set_tests_properties(phase22_acid2_tracer PROPERTIES TIMEOUT 60)
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/run-acid2-local.py"
+    --self-test-tracer --runner "$<TARGET_FILE:gabbaboy-runner>")
+set_tests_properties(phase22_acid2_tracer PROPERTIES
+  PASS_REGULAR_EXPRESSION "acid2 tracer pass origin=synthetic-only profile=dmg-cpu-b rom_sha256=[0-9a-f]+ mask_sha256=[0-9a-f]+"
+  TIMEOUT 60)
 # The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
 add_test(NAME cgb_acid2_local_refuses_unpinned
   COMMAND ${CMAKE_COMMAND}
