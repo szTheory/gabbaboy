@@ -15,8 +15,8 @@
     },
     {
       "number": "22",
-      "name": "Composition and Microtest Evidence",
-      "status": "pending"
+      "name": "Synthetic Composition and Diagnostic Gate Assessment",
+      "status": "in_progress"
     },
     {
       "number": "23",
@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 22",
-    "label": "Discuss Phase 22",
-    "reason": "Phase 21 is complete and merged; Phase 22 remains unstarted until the owner selects this command"
+    "command": "$gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 3 of 4 · 50% · executing"
   },
-  "updated_at": "2026-11-03T02:48:49Z"
+  "updated_at": "2026-11-03T11:00:06.976Z"
 }

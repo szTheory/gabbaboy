@@ -19,7 +19,7 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 
 - [x] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans and exact-head hosted platform/package qualification are complete; RIGHTS-01 remains pending because no fixture was admitted.
 - [x] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome. (completed 2026-11-02)
-- [ ] **Phase 22: Composition and Microtest Evidence** — Admitted acid2 derivatives and gbmicrotest expose their exact model and oracle limits.
+- [ ] **Phase 22: Synthetic Composition and Diagnostic Gate Assessment** — Preserve synthetic composition evidence and machine-check why the real diagnostic candidates remain unadmitted.
 - [ ] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established.
 
 ## Phase Details
@@ -69,7 +69,7 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
 **Plan cap**: 12
-**Plans**: 8/8 plans complete — within the cap; the primary and fallback candidate attempts each occupy one conditional plan. Plan 21-08 is the single reserved gap round; after CR-04/CR-05 closure it reopened within that same plan for CR-06 and completed with exact 24-input qualification and source-drift controls. No additional plan or gap round was added. PR #140 final head `507019f9` passed required exact-head CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`; Phase 22 remains unstarted.
+**Plans**: 8/8 plans complete — within the cap; the primary and fallback candidate attempts each occupy one conditional plan. Plan 21-08 is the single reserved gap round; after CR-04/CR-05 closure it reopened within that same plan for CR-06 and completed with exact 24-input qualification and source-drift controls. No additional plan or gap round was added. PR #140 final head `507019f9` passed required exact-head CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`; Phase 22 proceeds under the separate owner-approved D-141 scope.
 
 Plans:
 **Wave 1**
@@ -104,14 +104,21 @@ Captured frame and PCM digests establish reproducibility. They do not independen
   2. A source-bound metadata-only inventory retains all 513 named gbmicrotest source/ROM pairs and records each unresolved acid2/gbmicrotest admission gate; the approval command refuses while required evidence is unresolved.
   3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending.
 **Phase-scoped acceptance override**: Owner-approved on 2026-11-03; see [22-RESCOPE.md](phases/GB-22-composition-and-microtest-evidence/22-RESCOPE.md) and D-141. Phase 22's revised roadmap criteria are the acceptance contract. The original meanings of DIAG-01/02 and RIGHTS-01 are unchanged and remain Pending. No real upstream diagnostic payload is fetched, built, run, admitted, or claimed.
-**Plan cap**: 12
-**Plans**: 4 live plans (1 complete, 1 partial, 2 remaining); 7 original plans are superseded under D-141. Eleven plan files remain within the 12-plan cap.
+**Plan cap**: 10 (unchanged from the approved v0.4 allocation)
+**Plans**: 4 live plans (1 complete, 1 partial, 2 remaining); 7 original plans are superseded under D-141 and excluded from execution.
 **Execution waves**: Four sequential dependency waves: 22-01 (complete) → 22-02 (close the existing metadata assessment) → 22-10 (immutable no-go contract and public claims) → 22-11 (local/review/security/exact-head remote qualification and boundary). Original 22-03 through 22-09 carry machine-readable `status: superseded` and must not dispatch.
 
 Plans:
+**Wave 1**
 - [x] 22-01-PLAN.md — Preserve the completed original synthetic composition tracer and controls.
+
+**Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 22-02-PLAN.md — Close the committed metadata assessment under the approved rescope; preserve the seven refused gates and Pending requirements.
+
+**Wave 3** *(blocked on Wave 2 completion)*
 - [ ] 22-10-PLAN.md — Check immutable metadata, exact 513-name inventory, no-go/public claims, test membership and current source/package boundaries.
+
+**Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 22-11-PLAN.md — Qualify final local/review/security/remote evidence, generate automated closure and pause before `/gsd-discuss-phase 23`.
 
 The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-composition-and-microtest-evidence/22-SOURCE-AUDIT.md). Completed tracer and assessment commits are preserved; real-fixture build/admission/execution and downloaded-lifecycle work are outside the approved Phase 22 scope. Original requirement definitions and existing fixture-admission/package boundaries remain intact.
@@ -153,7 +160,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
-| 22. Composition and Microtest Evidence | 1/9 | In Progress; Plan 22-01 synthetic tracer and controls passed; rights remain pending | - |
+| 22. Synthetic Composition and Diagnostic Gate Assessment | 1/4 | In Progress under D-141; synthetic tracer complete, metadata assessment partially complete; DIAG-01/02 and RIGHTS-01 remain Pending | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
 ## Planning and Approval Boundary
@@ -163,4 +170,4 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
 - Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
 
-Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`; no fixture was admitted and RIGHTS-01 remains pending. Phase 21's eight plans and five roadmap criteria are verified. Implementation source `e0845db5` passed configure/build, focused checks, and independent review/security. PR #140 final head `507019f9` passed exact-head native/platform/sanitizer/CMake-floor CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`. The first hosted macOS CTest attempt timed out the Phase 21 fixture-admission controls at 60.08 seconds; the same-head full-suite rerun passed all 1,724 tests. The full local CTest run passed 1,717/1,718 before one unchanged 90-second timeout; that exact test passed its 77.17-second isolated retry, so all local tests have passing evidence across those runs but no single full invocation was all-green. The verifier's owner-approved override keeps FIXT-01 Pending without claiming a license grant or candidate ROM. Phase 22 — Composition and Microtest Evidence — has nine plans across nine sequential waves and passed independent planning review; implementation is not started. The owner-selected next command is **/gsd-execute-phase 22**. Both automatic-advance flags remain false.
+Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`; no fixture was admitted and RIGHTS-01 remains pending. Phase 21's eight plans and five roadmap criteria are verified. Implementation source `e0845db5` passed configure/build, focused checks, and independent review/security. PR #140 final head `507019f9` passed exact-head native/platform/sanitizer/CMake-floor CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`. The first hosted macOS CTest attempt timed out the Phase 21 fixture-admission controls at 60.08 seconds; the same-head full-suite rerun passed all 1,724 tests. The full local CTest run passed 1,717/1,718 before one unchanged 90-second timeout; that exact test passed its 77.17-second isolated retry, so all local tests have passing evidence across those runs but no single full invocation was all-green. The verifier's owner-approved override keeps FIXT-01 Pending without claiming a license grant or candidate ROM. Phase 22 — Synthetic Composition and Diagnostic Gate Assessment — has four live plans in four sequential waves under owner-approved D-141; the synthetic tracer is complete and the metadata-only assessment awaits its revised summary. Seven real-fixture gates remain unresolved, DIAG-01/02 and RIGHTS-01 remain Pending, and no real fixture/result is claimed. The current within-phase command is **/gsd-execute-phase 22**. Both automatic-advance flags remain false.
