@@ -6,6 +6,8 @@ The planning-only CI lane configures without building and runs `ctest -L plannin
 * every test that reads `.planning/` or `AGENTS.md` carries the `planning` label (else a planning change would
   skip a test that depends on it), and
 * no `planning`-labelled test needs a built artifact (else the unbuilt lane fails with "Could not find executable").
+  A narrowly classified CTest-inventory reader may name its configured build directory because `ctest --show-only`
+  reads the configured test list without requiring compiled artifacts.
 
 `--build-dir DIR` runs `ctest --test-dir DIR --show-only=json-v1`. A test is a planning reader when any command
 argument names `.planning` or ends with `AGENTS.md`, or when a repository file the command references (a script,
@@ -85,6 +87,27 @@ def uses_build_tree(command: list[str], build: str) -> bool:
     return any(_under(token, build) for token in _tokens(command))
 
 
+def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str],
+                                source: str, build: str) -> bool:
+    """Allow the Phase 22 contract to inspect CTest's configured inventory, not compiled artifacts."""
+    if name != "phase22_evidence_contract" or "planning" not in labels or "ctest-inventory-only" not in labels:
+        return False
+    expected_script = _norm(str(Path(source) / "tests/scripts/verify-diagnostic-evidence.py"))
+    if expected_script not in [_norm(token) for token in command] or command.count("--check") != 1:
+        return False
+    if command.count("--repo-root") != 1 or command.count("--build-dir") != 1:
+        return False
+    try:
+        root_value = command[command.index("--repo-root") + 1]
+        build_value = command[command.index("--build-dir") + 1]
+    except IndexError:
+        return False
+    if _norm(root_value) != _norm(source) or _norm(build_value) != _norm(build):
+        return False
+    build_tokens = [token for token in _tokens(command) if _under(token, build)]
+    return build_tokens == [build_value]
+
+
 def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
     planning = 0
     for test in tests:
@@ -98,7 +121,7 @@ def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
         labelled = "planning" in labels
         if labelled:
             planning += 1
-            if uses_build_tree(command, build):
+            if uses_build_tree(command, build) and not is_phase22_inventory_reader(name, command, labels, source, build):
                 raise Reject(f"REJECT planning-test-needs-build: {name} is labelled planning but its command references the build directory")
         elif is_planning_reader(command, source, build):
             raise Reject(f"REJECT unlabelled-planning-reader: {name} reads .planning/ or AGENTS.md but lacks the planning label")
@@ -132,6 +155,9 @@ def self_test() -> int:
         agents.write_text("cat AGENTS.md\n", encoding="utf-8")
         clean = source / "tests" / "clean.py"
         clean.write_text("print('ok')\n", encoding="utf-8")
+        evidence = source / "tests/scripts" / "verify-diagnostic-evidence.py"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text("open('.planning/STATE.md')\n", encoding="utf-8")
 
         def test(name: str, command: list[str], labels: list[str] | None = None) -> dict:
             props = [{"name": "LABELS", "value": labels}] if labels else []
@@ -153,6 +179,23 @@ def self_test() -> int:
             ("unlabelled test that reads nothing planning is accepted", [test("a", [py, str(clean)])], None),
             ("a sibling directory named like the build dir is not the build dir",
              [test("a", [py, f"{build}-other/x"], ["planning"])], None),
+            ("the exact Phase 22 planning contract may read its configured CTest inventory",
+             [test("phase22_evidence_contract",
+                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build)], ["planning", "ctest-inventory-only"])], None),
+            ("the inventory-only classification is required for build-tree access",
+             [test("phase22_evidence_contract",
+                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build)], ["planning"])], "planning-test-needs-build"),
+            ("inventory-only cannot smuggle a built executable into the command",
+             [test("phase22_evidence_contract",
+                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build), str(build / "gabbaboy-runner")],
+                   ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("inventory-only classification cannot be reused by another test",
+             [test("other_contract",
+                   [py, str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
+                    "--build-dir", str(build)], ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
         ]
         for label, tests, expected in cases:
             try:
