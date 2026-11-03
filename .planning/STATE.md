@@ -6,11 +6,11 @@ current_phase: 22
 current_phase_name: Synthetic Composition and Diagnostic Gate Assessment
 current_plan: 4
 status: Phase GB-22 candidate boundary prepared; Phase 22 is complete only after exact-head PR checks, required artifacts and merge-tree equivalence pass
-stopped_at: Plan 22-11 exact-head qualification
-last_updated: "2026-11-03T13:28:12.173Z"
+stopped_at: Phase 22 Windows-CI rescope approved; replan authorized
+last_updated: "2026-11-03T14:36:38.043Z"
 last_activity: 2026-11-03
 last_activity_desc: Plan 22-11 full-suite evidence recorded; exact-head PR gate controls Phase 22 closure
-state_head: 042e7f343ca6e956016226f7d6e427a36fa00f24
+state_head: 46c6696e57299be9601e88c17f0a19709a7f7367
 progress:
   total_phases: 4
   completed_phases: 2
@@ -83,9 +83,9 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-03T13:28:11.993Z
-**Stopped at:** Plan 22-11 exact-head qualification
-**Resume file:** .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
+**Last session:** 2026-11-03T14:36:37.844Z
+**Stopped at:** Phase 22 Windows-CI rescope approved; replan authorized
+**Resume file:** .planning/phases/GB-22-composition-and-microtest-evidence/22-CONTEXT.md
 
 ## Operator Next Steps
 

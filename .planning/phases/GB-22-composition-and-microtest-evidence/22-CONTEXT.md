@@ -1,9 +1,9 @@
 # Phase 22: Composition and Microtest Evidence - Context
 
-**Gathered:** 2026-11-02
-**Status:** Owner-approved rescope recorded 2026-11-03; Phase 21 is complete and merged on `main`
+**Gathered:** 2026-11-03
+**Status:** D-141 no-go scope and D-142 bounded Windows-CI rescope are owner-approved; PR #142 remains open and blocked pending a corrected exact head.
 
-**Scope amendment:** The owner accepted the Phase 22 rescope recorded in [22-RESCOPE.md](22-RESCOPE.md). For this phase, retain the synthetic tracer and source-bound metadata-only assessment, record the no-go for real diagnostic fixture admission, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending. The amendment supersedes the original admission/build/run deliverables below for Phase 22 only; their evidence requirements remain available for a future owner-selected scope.
+**Scope amendment:** The owner accepted the Phase 22 rescope recorded in [22-RESCOPE.md](22-RESCOPE.md). For this phase, retain the synthetic tracer and source-bound metadata-only assessment, record the no-go for real diagnostic fixture admission, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending. The amendment supersedes the original admission/build/run deliverables below for Phase 22 only; their evidence requirements remain available for a future owner-selected scope. On 2026-11-03, the owner also approved one bounded rescope plan to resolve the exact-head Windows CI failures recorded for PR #142. This follow-up changes no Phase 22 acceptance claim or admission gate.
 
 <domain>
 ## Phase Boundary
@@ -12,7 +12,7 @@ Establish model-qualified, independently expected diagnostic evidence from the f
 
 The admission contract from Phase 20 applies. If source, binary, art, reference-image, or model-applicability evidence remains unresolved, fail closed and request scope resolution; a populated manifest or matching digest does not clear a rights gate. Keep diagnostic ROMs out of installed and binary product packages and preserve the root MIT license.
 
-Phase 21 is complete and merged on `main`; the local workspace now starts from the fetched current `origin/main`. This context was gathered at the owner's direction. Phase 22 planning begins only when the owner selects its planning command. Both automatic-advance settings remain false.
+Phase 21 is complete and merged on `main`. The Phase 22 branch has a candidate boundary, but PR #142 at `46c6696e57299be9601e88c17f0a19709a7f7367` remains blocked: local CTest passed 1,732/1,732, while the exact-head Windows job failed 10 of 1,594 tests. The owner approved a bounded replan to address those failures. Keep the current PR open and update its existing phase branch after the revised plan is reviewed. Both automatic-advance settings remain false.
 
 </domain>
 
@@ -45,7 +45,14 @@ Phase 21 is complete and merged on `main`; the local workspace now starts from t
 - Preserve Phase 20's fixture manifests, notices, source-archive/binary-product separation, and package exclusions. Keep original authored code under the existing MIT license; third-party terms remain separate.
 - Prefer existing CMake/CTest and Python standard-library tooling. Do not add a dependency unless research demonstrates a need that the existing tools cannot meet.
 - The owner asked for parallel, role-relevant analysis, primary sources where useful, an adversarial pass, and automatic adoption of the coherent recommendation. The areas discussed were the independent acid2 oracle, text-mask scope, and microtest cohort/accounting; the decisions above apply that instruction.
-- The implementation may choose manifest field names, checker organization, exact mask encoding/overlay generation, and plan decomposition within the 10-plan cap, provided the invariants above remain automated and include meaningful negative controls.
+- The implementation may choose manifest field names, checker organization, exact mask encoding/overlay generation, and plan decomposition within the approved 12-plan Phase 22 cap, provided the invariants above remain automated and include meaningful negative controls.
+
+### Windows exact-head CI qualification
+
+- **D-04: Resolve the observed Windows failures without changing the evidence or gate contract.** The owner approved one bounded corrective plan after PR #142 head `46c6696e57299be9601e88c17f0a19709a7f7367` failed the protected Windows test-inventory job. Keep the 1,594-test Windows inventory, every CTest name and assertion, the existing 60-second control timeout, exact expected-test policy, and all required branch-protection checks. Do not skip or waive a test, raise a timeout/budget, or weaken the checker.
+- The reported Windows failures are: seven CGB progress/history checks fail with `self-test-source-history-git-init-failed`; `phase22_evidence_contract` fails with `expected-test-policy-failed`; `phase22_evidence_controls` hits `subprocess-timeout` at 58.81 seconds under its 60-second limit; and `planning_labels_controls` rejects the evidence test's configured build-directory reference. The preview workflow also failed at its required-CI aggregation step; its dependent artifact job did not independently run.
+- Keep the existing D-141 synthetic-plus-metadata/no-go boundary. No real upstream ROM/reference payload, upstream build/program, fixture admission, or diagnostic result is in scope. DIAG-01, DIAG-02, and RIGHTS-01 stay Pending.
+- Add one live plan within the existing 12-plan on-disk cap. It must target these Windows failures, preserve cross-platform build-directory behavior, and use the project's existing tests and negative-control patterns. Require focused Windows-relevant tests, independent review/security review, a final full local suite, and fresh exact-head required CI/artifacts for the updated PR. Prior review/fix/gap history remains historical; this rescope does not reset it. If resolution would exceed the approved plan or remaining review limits, stop and report the concrete blocker for owner scope resolution.
 
 </decisions>
 
@@ -55,11 +62,13 @@ Phase 21 is complete and merged on `main`; the local workspace now starts from t
 **Downstream agents MUST read these before planning or implementing.**
 
 ### Phase boundary and project policy
-- `.planning/ROADMAP.md` §Phase 22 — goal, DIAG-01/02 success criteria, rights/model/oracle scope-resolution rule, and 10-plan cap.
+- `.planning/ROADMAP.md` §Phase 22 — goal, DIAG-01/02 success criteria, rights/model/oracle scope-resolution rule, and 12-plan cap.
 - `.planning/REQUIREMENTS.md` §Diagnostic Evidence and §Fixture Admission and Rights — DIAG-01, DIAG-02, and RIGHTS-01.
 - `.planning/PROJECT.md` — v0.4 evidence scope and root MIT constraint.
 - `.planning/STATE.md` — Phase 21 closure, current Phase 22 route, and accepted evidence limits.
 - `.planning/phases/GB-21-cgb-game-progress-and-scene-regressions/.continue-here.md` — Phase 21 evidence and Phase 22 planning handoff.
+- `.planning/phases/GB-22-composition-and-microtest-evidence/22-11-SUMMARY.md` and `22-EVIDENCE.md` — candidate boundary, local suite result, and exact-head gate outcome.
+- `build/phase22/remote-evidence.json` — local PR #142 runs, job statuses, and Windows CTest failure record; ignored local evidence, not a source artifact.
 - `.planning/context/DECISIONS.md` D-026, D-069, D-096, and D-138–D-139 — mgblib/font fixture boundary, automated negative controls, dependency preference, and approved v0.4 scope.
 - `.planning/research/SUMMARY.md` — project evidence classes and confidence limits.
 
@@ -71,6 +80,9 @@ Phase 21 is complete and merged on `main`; the local workspace now starts from t
 - `tests/scripts/run-acid2-local.py` — standard-library PNG/PPM comparison, input pins, exact all-pixel comparator, and synthetic-only required CI controls.
 - `tests/scripts/verify-libbet-admission.py`, `cmake/VerifyFixtureManifest.cmake`, and `cmake/ScanForbiddenFixtures.cmake` — reusable provenance, identity, and package-boundary patterns.
 - `tests/external/cgb-corpus-inventory.json` and `tests/scripts/verify-cgb-corpus-inventory.py` — source-bound corpus accounting precedent.
+- `tests/scripts/verify-cgb-progress.py`, `verify-diagnostic-evidence.py`, `verify-planning-labels.py`, and `verify-no-phase-paths.py` — current self-test, immutable evidence, planning-inventory, and path contracts implicated by the Windows failures.
+- `tests/CMakeLists.txt`, `tests/cmake/ci-lanes.cmake`, and `tests/expected-tests.txt` — CTest registrations, lane configuration, labels, and exact test inventory.
+- `.github/workflows/ci.yml` and `.github/scripts/verify-pr-evidence.sh` — protected native, sanitizer, package, and exact-head qualification workflow.
 - `tests/acceptance/cases-cgb-colour.txt` and `tests/acceptance/CMakeLists.txt` — model-specific case and explicit-exclusion test patterns.
 - `docs/cgb-profile.md` — current CGB evidence labels and model-qualification limits.
 
@@ -101,6 +113,11 @@ Phase 21 is complete and merged on `main`; the local workspace now starts from t
 - Add any admitted fixture provenance to its own manifest and notices, then connect the source-qualified cohort to CTest and its case-accounting verifier.
 - Preserve the existing install/release package scans and source-archive notices. Keep Phase 22 claims and reports distinct from game acceptance and mode-3 timing evidence.
 
+### Windows qualification failure context
+- The Phase 1 local full suite passed 1,732/1,732 at the PR #142 source, but the protected Windows job ran 1,594 tests and failed ten. Seven history self-tests failed at temporary Git initialization; the Phase 22 immutable evidence contract refused the Windows expected-test policy; the controls reached their existing 60-second timeout at 58.81 seconds; and the planning-label control rejected the configured build-directory reference.
+- Linux, macOS, Linux ASan/UBSan, CMake-floor, and fixture-reproduction jobs passed at that PR head. Preview failed because its required-native prerequisite failed; it produced no independent preview artifact. The PR evidence helper therefore reports required checks incomplete, and no merge occurred.
+- The rescope targets cross-platform command/configuration behavior and control runtime. It preserves each assertion, test membership, fixed timeout/budget, all required jobs, and the PR branch-protection policy.
+
 </code_context>
 
 <specifics>
@@ -110,6 +127,7 @@ Phase 21 is complete and merged on `main`; the local workspace now starts from t
 - Use the upstream acid2 image as the pass/fail reference and keep every unmasked pixel exact.
 - Keep `gbmicrotest`'s upstream reference model distinct from the GabbaBoy execution profile; record the current CPU-08 versus CPU-B mismatch as a diagnostic limit, not a hardware result.
 - Treat unresolved component rights or model applicability as a scope-resolution gate rather than accepting a hash, MIT label, or partial denominator as proof.
+- Resolve the exact Windows failures in one bounded, reviewed plan. Keep all tests and budgets intact, require a fresh all-green exact-head CI run on the updated PR, and stop if the approved rescope or remaining review limits cannot contain the fix.
 </specifics>
 
 <deferred>
