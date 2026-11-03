@@ -1,127 +1,109 @@
-# Phase 22: Synthetic Composition and Diagnostic Gate Assessment — Pattern Map
+# Phase 22: Composition and Microtest Evidence — Pattern Map
 
 **Mapped:** 2026-11-03
-**Files analyzed:** 7
-**Analogs found:** 7 / 7
+**Files classified:** 3 existing Task 1 source files
+**Analogs found:** 3 / 3
 
-## Scope
-
-This map covers only the approved D-142 Windows CI remediation plan. The older Phase 22 acid2, fixture-admission, and microtest patterns remain historical context; they do not authorize real payload, build, admission, or execution work in this rescope.
-
-The exact CTest inventory, test names, assertions, 60-second CTest limits, expected-test policy, and protected CI checks are fixed. Add focused positive and negative cases inside the existing script self-tests and CTest registrations; do not add or remove CTest names.
+This map is for the D-143 addition to existing plan 22-12. Its only new source delta is the C1 OSC sanitizer correction and its regression inside `tests/scripts/verify-diagnostic-evidence.py`. The other two files remain part of the pre-existing D-142 Task 1 scope; they are listed here because they are in that task's `<files>` field, not because D-143 expands their scope.
 
 ## File Classification
 
-| New/Modified File | Role | Data Flow | Closest Analog | Match Quality |
-|------------------|------|-----------|----------------|---------------|
-| `tests/scripts/verify-planning-labels.py` | utility / test-inventory linter | request-response, transform | Same file; `tests/scripts/verify-state-forks.py` path normalization | exact |
-| `tests/scripts/verify-cgb-progress.py` | utility / immutable-source checker | file I/O, subprocess, batch | Same file; `tests/scripts/verify-phase8-closure-contract.py` disposable Git repository setup | exact |
-| `tests/scripts/verify-diagnostic-evidence.py` | utility / evidence checker | file I/O, subprocess, batch | Same file; `tests/scripts/verify-state-horizon.py` CMake path literal | exact |
-| `tests/CMakeLists.txt` | configuration / CTest registration | batch | Existing Phase 22 evidence registrations in the same file | boundary; preserve |
-| `tests/cmake/ci-lanes.cmake` | configuration / CTest lane registration | batch | Existing `planning_labels_controls` registration | boundary; preserve |
-| `tests/expected-tests.txt` | configuration / exact test inventory | batch | Existing immutable named inventory | boundary; preserve |
-| `.planning/phases/GB-22-composition-and-microtest-evidence/22-VALIDATION.md` | validation record | transform | Existing phase validation map | update without losing prior evidence |
-
-The three Python checkers are the likely source edits. The CMake files and expected-test list are protected integration boundaries: their current commands and inventory must continue to qualify unchanged. The validation record needs a D-142 entry while preserving its prior Phase 22 evidence.
+| New/Modified File | Role | Data Flow | Closest Analog | Match Quality / Scope |
+|---|---|---|---|---|
+| `tests/scripts/verify-cgb-progress.py` | utility / checker | request-response; bounded subprocess output is parsed into progress evidence | `tests/scripts/verify-diagnostic-evidence.py` | role-match; existing D-142 Task 1 only, not part of the C1 delta |
+| `tests/scripts/verify-diagnostic-evidence.py` | utility / checker | transform for the affected path: diagnostic bytes or text → sanitized bounded text | its existing `sanitized_diagnostic` and `diagnostic_sanitization_control` | exact; sole C1 source target |
+| `tests/scripts/verify-planning-labels.py` | utility / checker | request-response; configured CTest inventory → pass/reject result | its existing path normalization and self-test | exact; existing D-142 Task 1 only, not part of the C1 delta |
 
 ## Pattern Assignments
 
-### `tests/scripts/verify-planning-labels.py` — preserve exact command matching after path normalization
+### `tests/scripts/verify-diagnostic-evidence.py` (utility, bounded diagnostic transform)
 
-**Analog:** `tests/scripts/verify-planning-labels.py`, especially `is_phase22_inventory_reader()` (lines 90–121) and `self_test()` (lines 155–231).
+**Analog:** the existing implementation and synthetic control in the same tracked file. The implementation uses Python standard-library modules only (imports, lines 5–18); no new dependency or module is needed.
 
-The checker already normalizes command tokens before locating the evidence checker and validates the narrow exception by test name, labels, interpreter identity, argument order/count, source revision shape, and configured build directory. The current bug is that it then builds `tail` from the original `command` list and compares the raw path-bearing tokens against `expected_tail`. A Windows-spelled source/build directory can therefore fail even though the command was normalized earlier. This source-level cause is confirmed by the current implementation and Windows positive-control failure.
-
-```python
-normalized = [_norm(token) for token in command]
-if normalized.count(expected_script) != 1:
-    return False
-script_index = normalized.index(expected_script)
-...
-tail = command[script_index + 1:]
-if len(tail) != 7 or tail[:4] != expected_tail or tail[5] != "--build-dir":
-    return False
-```
-
-Use the existing `_norm()` convention (convert `\\` to `/`) consistently for comparisons of path-bearing arguments while retaining exact argument count and order. Extend the current self-test with a Windows-form positive case for the same narrowly allowed inventory reader. Preserve the existing rejection cases for missing `ctest-inventory-only`, executable smuggling, another test name, extra flags, `python -c`, an absolute Python stub, and sibling paths that only resemble the build directory.
-
-**Windows-path analog:** `tests/scripts/verify-state-forks.py` (lines 32–40, 839–841) validates repository paths in host-independent slash form and explicitly resolves a `PureWindowsPath` through Git. Keep path normalization scoped to comparison; do not loosen the exception's command shape.
-
-### `tests/scripts/verify-cgb-progress.py` — retain isolated synthetic Git semantics and expose bounded failure detail
-
-**Analogs:** `tests/scripts/verify-cgb-progress.py` itself (`source_history_controls()`, lines 479–578); `tests/scripts/verify-phase8-closure-contract.py` (`boundary_identity_self_test()`, lines 160–178).
-
-The existing history control uses a temporary repository and deliberately hostile global hook/signing settings. It must continue to prove that those hooks and signing settings cannot affect synthetic history creation. The initial `git init` captures both output streams but currently maps every non-zero result to the same error without including the Git diagnostic:
+**Current sanitizer order** (lines 85–109):
 
 ```python
-initialized = subprocess.run(
-    ["git", "-C", str(root), "init", "--quiet"], stdin=subprocess.DEVNULL,
-    stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, env=git_environment,
-)
-if initialized.returncode != 0:
-    raise CheckError("self-test-source-history-git-init-failed")
+HEX40 = re.compile(r"^[0-9a-f]{40}$")
+ANSI_ESCAPE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
+DIAGNOSTIC_CONTROLS = re.compile(r"[\x00-\x1f\x7f-\x9f]+")
+
+def sanitized_diagnostic(value: bytes | str,
+                         roots: tuple[tuple[str | pathlib.Path, str], ...]) -> str:
+    """Return at most 700 characters without escape sequences or local roots."""
+    text = value.decode("utf-8", "replace") if isinstance(value, bytes) else str(value)
+    text = ANSI_ESCAPE.sub("", text)
+    replacements: dict[str, str] = {}
+    for root, token in roots:
+        native = os.fspath(root)
+        if not native:
+            continue
+        for spelling in {native, native.replace("\\", "/"), native.replace("/", "\\")}:
+            if spelling:
+                replacements[spelling] = token
+    for spelling, token in sorted(replacements.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(spelling, token)
+    return " ".join(DIAGNOSTIC_CONTROLS.sub(" ", text).split())[:700]
 ```
 
-The remote logs confirm the failing step, not Git's underlying error. Do not assume a cause from this message. Use the existing bounded-output subprocess pattern in `verify-diagnostic-evidence.py:92–156` if useful, and preserve sanitized, bounded diagnostics so the next Windows failure distinguishes an environment/configuration error from another Git failure. The Phase 8 disposable-repository pattern builds a minimal environment with `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` redirected to null and explicit fixture identity; compare it with the Phase 22 hostile-global-config control before changing isolation, because the latter's hostile hook/signing negative controls are part of the contract.
+The correction belongs between the existing ESC-sequence removal and generic C0/C1 cleanup: consume the complete 8-bit OSC span (`U+009D` through `U+009C`) while its delimiters are still present. Preserve root substitutions, generic control cleanup, whitespace compaction, and the 700-character cap. Do not broaden the sanitizer or alter unrelated diagnostic call sites.
 
-Keep the current source-history cases: commits predating the checker are skipped, stale committed checker bytes are found, absent paths are distinguished from source errors, and the global hook marker remains absent. Do not turn Git initialization into a skipped or expected-failure path.
-
-### `tests/scripts/verify-diagnostic-evidence.py` — keep immutable policy checks, diagnose configure failures, and bound work
-
-**Analog:** `tests/scripts/verify-diagnostic-evidence.py`, especially `run()` (lines 92–156), `check_expected_policy()` (lines 496–550), `source_archive_configure_control()` (lines 764–800), and `boundary_history_control()` (lines 921–950).
-
-`run()` already drains stdout and stderr concurrently, caps retained output, applies the caller's existing timeout, and returns both streams. Preserve this bounded subprocess behavior. `check_expected_policy()` constructs a synthetic CMake project from the immutable `tests/expected-tests.txt` and `cmake/ExpectedTests.cmake` snapshot and applies the existing `gabbaboy_verify_registered_tests()` policy to the configured test names.
+**Existing synthetic regression control** (lines 1024–1037):
 
 ```python
-cmake_exe = shutil.which("cmake")
-if not cmake_exe:
-    raise Reject("cmake-unavailable")
-add_tests = "\n".join(
-    f'add_test(NAME "{name}" COMMAND "{cmake_exe}" -E true)' for name in sorted(actual)
-)
-...
-code, out, err = run(["cmake", "-S", str(project), "-B", str(project / "build")], project)
-if code:
-    output = (out + err).decode("utf-8", "replace").casefold()
-    if "registered ctest cases differ" in output:
-        raise Reject("configured-ctest-inventory-mismatch")
-    raise Reject("expected-test-policy-failed")
+def diagnostic_sanitization_control(root: pathlib.Path) -> None:
+    windows_root = r"C:\Users\runneradmin\AppData\Local\Temp\gbb-diagnostic-probe"
+    raw = (f"\x1b[31mconfigure failed at {root}/project\x1b[0m\t"
+           f"{windows_root}\\project\n"
+           "\x1b]0;synthetic-secret-title\x1b\\\x1b]0;synthetic-bel-title\x07" + "x" * 900)
+    detail = sanitized_diagnostic(
+        raw, ((root, "<temp>"), (windows_root, "<windows-temp>"),
+              (pathlib.Path.home(), "<home>")),
+    )
+    if (len(detail) > 700 or "\x1b" in detail or "\n" in detail or "\t" in detail
+            or str(root) in detail or windows_root in detail
+            or "synthetic-secret-title" in detail or "synthetic-bel-title" in detail
+            or "<temp>" not in detail or "<windows-temp>" not in detail):
+        raise Reject("diagnostic-sanitization-control-failed")
 ```
 
-The Windows job currently reports only `expected-test-policy-failed`; the exact CMake error is not in the report. Raw Windows executable-path insertion into a quoted CMake argument is a plausible path-escaping issue, not yet a proven cause. Preserve enough bounded configure detail to identify the error, then fix the demonstrated serialization problem. `tests/scripts/verify-state-horizon.py` provides a concrete CMake-literal pattern (`c_path_literal()`, lines 298–299): normalize backslashes to `/` and escape double quotes before inserting a path into CMake source. Keep the generated project and policy check semantically identical across platforms.
+Extend this existing control with one synthetic byte input that has an ordinary prefix, `\u009d0;synthetic-c1-title\u009c`, and an ordinary suffix. Assert that the payload is absent while the prefix and suffix survive, and retain the current checks for ESC controls, local roots, whitespace/control cleanup, and the 700-character bound. Feed UTF-8 bytes, matching the captured `out + err` input used by the production error path. Keep the current ESC CSI and ESC OSC examples.
 
-The controls also exercise immutable source-boundary checks, synthetic archive construction/configuration, and failure mutants. A synthetic source-archive configure uses an existing 50-second child limit immediately before the controls pass path; this makes it a candidate for measurement, but the Windows log does not identify which child timed out. Attribute the cost before optimizing and preserve every existing refusal and the 60-second CTest timeout. Do not increase nested or outer time limits, remove a control, or weaken timeout rejection.
+The existing self-test calls `diagnostic_sanitization_control` before its other bounded-process controls (lines 1160–1163); `self_test(..., controls=True)` is selected by the existing CLI (lines 1072, 1377). Keep the C1 case inside this path.
 
-### Existing CTest and inventory files — preserve the qualification boundary
+**Existing CTest contract** (tracked `tests/CMakeLists.txt`, lines 3711–3719):
 
-**Analogs:** `tests/CMakeLists.txt` (lines 3707–3719), `tests/cmake/ci-lanes.cmake` (lines 151–166), and `tests/expected-tests.txt` (the existing entries for the Phase 22 evidence and planning-label controls).
+```cmake
+add_test(NAME phase22_evidence_controls
+  COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --self-test-controls
+    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}")
+set_tests_properties(phase22_evidence_controls PROPERTIES TIMEOUT 60 LABELS planning
+  PASS_REGULAR_EXPRESSION "diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable")
+```
 
-The evidence contract and control tests are already registered and retain `TIMEOUT 60`. `planning_labels_controls` already runs the current self-test through the planning lane. New self-test cases should run inside these existing test names, preserving the Windows test count of 1,594, exact inventory policy, labels, and pass-expression assertions. Do not create replacement CTest names, expected-test additions/removals, skips, waivers, or timeout changes.
+The C1 regression stays under this test identity and preserves its command, label, pass expression, inventory membership, and 60-second timeout. No new CTest registration is needed.
+
+### Existing D-142 Task 1 files outside the C1 delta
+
+`tests/scripts/verify-cgb-progress.py` already has a standard-library checker, synthetic controls, and bounded diagnostic sanitization; it is a nearby utility pattern for its pre-existing D-142 repair. `tests/scripts/verify-planning-labels.py` has a local path-normalization helper and self-test for its pre-existing D-142 repair. D-143 does not assign either file new C1 behavior; do not spread this one correction into those files or expand it into test-inventory/CI changes.
 
 ## Shared Patterns
 
-### Keep portability changes exact
+### Bounded diagnostic text
 
-Normalize only path-bearing values before equality checks; retain identity checks, exact order/count, test-name/label restrictions, interpreter identity, immutable source revision, and every existing negative control. A Windows-form positive must pass alongside the existing POSIX-form positive, while all bypass mutants remain rejected.
+**Source:** `tests/scripts/verify-diagnostic-evidence.py:94-109`
+**Apply to:** the existing `sanitized_diagnostic` path only.
 
-### Preserve bounded subprocess diagnostics
+Decode bytes with replacement, remove complete escape/control spans before stripping individual controls, redact local roots in all path spellings, compact whitespace, and retain the current 700-character ceiling.
 
-Use the existing `run()` helper in `verify-diagnostic-evidence.py` for bounded output and existing timeouts. On failure, expose a small sanitized diagnostic tied to the specific child operation. Do not print full environment/config files or unbounded subprocess output. Keep the rejection code stable where callers assert it, or update the corresponding assertions without weakening them.
+### Synthetic negative control
 
-### Keep synthetic Git and CMake fixtures isolated
+**Source:** `tests/scripts/verify-diagnostic-evidence.py:1024-1037,1160-1163`
+**Apply to:** the existing `diagnostic_sanitization_control` called by `--self-test-controls`.
 
-Temporary repositories, generated CMake projects, snapshots, and archives remain disposable synthetic test data. Preserve source-bound inputs and test-only Git configuration; do not read or modify the user's actual Git configuration, run hooks, require signing credentials, or add real diagnostic payloads.
-
-### Test through existing CTest identities
-
-Add causal positives and negatives to the current self-tests, then run the existing focused CTests. Preserve `tests/expected-tests.txt`, the registered names, and both existing 60-second CTest limits. The final acceptance still requires the full local suite and fresh exact-head required CI on the updated PR.
-
-## No Analog Found
-
-No new code module or CTest registration is authorized or needed by the approved rescope. The existing checker, CMake, subprocess, and temporary-repository patterns cover the likely changes; the remaining Git, expected-policy, and runtime causes must be established from bounded Windows evidence before choosing a fix.
+Use synthetic input only. Assert the C1 payload is absent and surrounding ordinary text remains. Retain existing sanitizer assertions and the current `phase22_evidence_controls` CTest contract.
 
 ## Metadata
 
-**Analog search scope:** `tests/scripts/`, `tests/CMakeLists.txt`, `tests/cmake/ci-lanes.cmake`, and `tests/expected-tests.txt`.
-**Tracked-source gate:** Every existing analog path above was confirmed with `git ls-files -- <path>`.
+**Analog search scope:** `tests/scripts/`, the `phase22_evidence_controls` registration in `tests/CMakeLists.txt`, and the D-143 sections of `22-RESEARCH.md` / `22-12-PLAN.md`.
+**Tracked-source check:** all analog paths named above are tracked by Git.
 **Pattern extraction date:** 2026-11-03

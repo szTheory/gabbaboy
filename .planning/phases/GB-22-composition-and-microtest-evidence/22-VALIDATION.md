@@ -9,7 +9,7 @@ created: "2026-11-02"
 
 # Phase 22 — Validation Strategy
 
-> D-141 narrows Phase 22 to the original synthetic composition tracer, the metadata-only 513-case assessment, and a machine-checked real-fixture no-go. The original DIAG-01, DIAG-02, and RIGHTS-01 meanings remain unchanged and Pending.
+> D-141 narrows Phase 22 to the original synthetic composition tracer, the metadata-only 513-case assessment, and a machine-checked real-fixture no-go. D-143 allows one C1 OSC diagnostic correction and independent review in the existing 22-12 plan. The original DIAG-01, DIAG-02, and RIGHTS-01 meanings remain unchanged and Pending.
 
 ## Test Infrastructure
 
@@ -44,6 +44,8 @@ The existing tests must retain positive and causal negative controls: native and
 
 Because this host is macOS, Windows behavior is qualified only by the updated PR’s fresh `native-windows-x64` run. After independent code and security review, run the full local Phase 1 configure/build/CTest command once at the final tracked source. Then require fresh exact-head `required-native`, `fixture-repro`, and `preview-package-smoke` results, their required artifacts, and a successful `.github/scripts/verify-pr-evidence.sh` check. A failed, skipped, stale, missing, or different-head result leaves Phase 22 open. [VERIFIED: `22-RESEARCH.md` D-142 Validation Architecture; `.planning/phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md`]
 
+Under D-143, include one additional independent code/security review only for the C1 OSC diagnostic correction and its new causal control. The earlier two review-fix rounds and one gap round remain used; do not reset the ledger. This allowance ends after one correction and review. Any further blocking correctness/security finding stops Phase 22 for owner scope resolution rather than opening another fix or gap round. If the C1 review is clean, continue the local and exact-head qualification above on the same PR.
+
 ## Live Plan Validation Map
 
 | Plan | Scope and status | Required evidence |
@@ -52,7 +54,7 @@ Because this host is macOS, Windows behavior is qualified only by the updated PR
 | 22-02 | Complete. Source-bound metadata assessment and public no-go. | D1/D2 coverage in `22-02-SUMMARY.md`; D2 now has `human_judgment: false` and passing document-contract plus immutable evidence references. |
 | 22-10 | Complete. Immutable inventory/no-go snapshot, claims, exact test membership, and boundary checker. | D1–D3 coverage in `22-10-SUMMARY.md`; eight registered Phase 22 checks and mutation controls. |
 | 22-11 | Final live plan. Local review/security, exact source/build, generated closure and phase boundary, full local suite, and exact-head PR evidence. | Block-style coverage in `22-11-SUMMARY.md`; immutable no-go and boundary checks, all configured CTests, `verify-pr-evidence.sh`, same-head runs/artifacts, review dispositions, and merge-tree comparison. |
-| 22-12 | D-142 Windows CI remediation. Planned; implementation and qualification are pending. | The focused ten-test selection above, existing negative controls, independent updated-source review/security review, one final full local suite, and fresh exact-head required PR contexts and artifacts. |
+| 22-12 | D-142 Windows CI remediation plus the D-143 C1 OSC correction and review. The Windows remediation is implemented locally; the C1 fix and final qualification remain pending. | C1 payload-removal control in the existing `phase22_evidence_controls` identity; the focused ten-test selection above; existing negative controls; one fresh independent code/security review for the C1 correction; one final full local suite; and fresh exact-head required PR contexts and artifacts. |
 
 Plans 22-03 through 22-09 are marked `superseded` in the roadmap under D-141. Their original real-fixture build, game/diagnostic, cohort execution, distribution, and lifecycle expectations are outside the approved phase scope; they are neither missing deliverables nor passing claims.
 
