@@ -274,16 +274,9 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--rom, --reference, --runner and --rom-kind are required")
     # Exit codes: 0 match, 1 frames differ, 2 refused (unpinned input), 3 harness error
     # (manifest, runner, decode). Nothing else may reach exit 1.
-    try:
-        manifest = json.loads(args.manifest.read_text())
-        kind = manifest["kinds"][args.rom_kind]
-        budget = manifest["ldbb_budget_half_dots"]
-        kind["rom_sha256"], kind["reference_sha256"], kind["runner_model"], kind["rom_size"]
-    except (OSError, ValueError, KeyError, TypeError) as exc:
-        print(f"acid2 error: manifest unusable ({exc.__class__.__name__})")
-        return 3
     # No third-party bytes may reach the runner while the source/component approval record is
-    # absent or unresolved. Validate the source-bound assessment before reading ROM/reference data.
+    # absent or unresolved. Bind the runner policy and manifest to the immutable source commit
+    # before parsing the manifest or reading ROM/reference data.
     try:
         root = HERE.parent.parent
         revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True,
@@ -294,10 +287,24 @@ def main(argv: list[str] | None = None) -> int:
             raise Refused("admission adapter unavailable")
         adapter = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(adapter)
-        adapter.require_approved(root, revision)
+        manifest_path = args.manifest.resolve(strict=True)
+        manifest_relative = adapter.repository_relative_path(root, manifest_path)
+        adapter.require_approved(
+            root, revision,
+            source_paths=(("tests/scripts/run-acid2-local.py", pathlib.Path(__file__)),
+                          (manifest_relative, manifest_path)))
+        manifest_bytes = adapter.read_source_file(root, revision, manifest_relative)
     except (OSError, ValueError, subprocess.SubprocessError, RuntimeError) as exc:
         print(f"acid2 refused: scope-resolution-required ({exc})")
         return 2
+    try:
+        manifest = json.loads(manifest_bytes.decode("utf-8", "strict"))
+        kind = manifest["kinds"][args.rom_kind]
+        budget = manifest["ldbb_budget_half_dots"]
+        kind["rom_sha256"], kind["reference_sha256"], kind["runner_model"], kind["rom_size"]
+    except (UnicodeError, ValueError, KeyError, TypeError) as exc:
+        print(f"acid2 error: manifest unusable ({exc.__class__.__name__})")
+        return 3
     try:
         rom_bytes, ref_bytes = check_pins(kind, args.rom, args.reference)
     except Refused as exc:

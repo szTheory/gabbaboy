@@ -3681,15 +3681,27 @@ set_tests_properties(phase22_admission_assessment PROPERTIES TIMEOUT 30
   PASS_REGULAR_EXPRESSION "diagnostic assessment valid status=blocked unresolved_gates=7 gbmicrotest_cases=513")
 # The metadata no-go is checked at one immutable configure-time source revision. The checker
 # independently validates the historical assessment revision and never fetches upstream data.
-execute_process(COMMAND git rev-parse --verify HEAD
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-  RESULT_VARIABLE GBB_PHASE22_EVIDENCE_REV_RESULT
-  OUTPUT_VARIABLE GBB_PHASE22_EVIDENCE_SOURCE_REV
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-string(LENGTH "${GBB_PHASE22_EVIDENCE_SOURCE_REV}" GBB_PHASE22_EVIDENCE_REV_LENGTH)
-if(NOT GBB_PHASE22_EVIDENCE_REV_RESULT EQUAL 0 OR NOT GBB_PHASE22_EVIDENCE_REV_LENGTH EQUAL 40 OR
-   NOT GBB_PHASE22_EVIDENCE_SOURCE_REV MATCHES "^[0-9a-f]+$")
-  message(FATAL_ERROR "Phase 22 evidence tests require a full immutable source commit")
+# Source archives have no Git metadata: keep configure/build usable and fail these source-bound
+# tests closed at execution unless the caller supplied an immutable revision explicitly.
+set(GBB_PHASE22_EVIDENCE_SOURCE_REV "" CACHE STRING
+  "Immutable Git commit for Phase 22 evidence tests (empty derives from Git)")
+if(GBB_PHASE22_EVIDENCE_SOURCE_REV STREQUAL "")
+  execute_process(COMMAND git rev-parse --verify HEAD
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    RESULT_VARIABLE GBB_PHASE22_EVIDENCE_REV_RESULT
+    OUTPUT_VARIABLE GBB_PHASE22_EVIDENCE_SOURCE_REV
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  string(LENGTH "${GBB_PHASE22_EVIDENCE_SOURCE_REV}" GBB_PHASE22_EVIDENCE_REV_LENGTH)
+  if(NOT GBB_PHASE22_EVIDENCE_REV_RESULT EQUAL 0 OR NOT GBB_PHASE22_EVIDENCE_REV_LENGTH EQUAL 40 OR
+     NOT GBB_PHASE22_EVIDENCE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+    set(GBB_PHASE22_EVIDENCE_SOURCE_REV "unknown")
+  endif()
+else()
+  string(LENGTH "${GBB_PHASE22_EVIDENCE_SOURCE_REV}" GBB_PHASE22_EVIDENCE_REV_LENGTH)
+  if(NOT GBB_PHASE22_EVIDENCE_REV_LENGTH EQUAL 40 OR
+     NOT GBB_PHASE22_EVIDENCE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+    message(FATAL_ERROR "GBB_PHASE22_EVIDENCE_SOURCE_REV must be a full immutable Git commit")
+  endif()
 endif()
 set(GBB_PHASE22_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-evidence.py")
 add_test(NAME phase22_evidence_contract

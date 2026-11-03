@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import pathlib
@@ -11,7 +12,10 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
+import threading
+import time
 from typing import Any
 
 MAX_BYTES = 2 * 1024 * 1024
@@ -51,7 +55,7 @@ REQUIRED = (
 )
 BOUNDARY_PATHS = (
     ".planning/STATE.md", ".planning/state.json", ".planning/ROADMAP.md",
-    ".planning/config.json",
+    ".planning/REQUIREMENTS.md", ".planning/config.json",
     ".planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md",
 )
 FORBIDDEN_DIRS = ("fixtures/acid2", "fixtures/gbmicrotest")
@@ -59,6 +63,11 @@ FORBIDDEN_FILES = (
     "tests/external/diagnostic-package-identities.json",
     "tests/scripts/verify-diagnostic-packages.py",
 )
+PAYLOAD_SUFFIXES = {
+    ".gb", ".gbc", ".rom", ".bin", ".png", ".rgb", ".tar", ".zip",
+    ".gz", ".tgz", ".7z", ".bz2", ".xz", ".bmp", ".ppm", ".pbm",
+    ".jpg", ".jpeg",
+}
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -71,16 +80,66 @@ def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
     if not argv or any("\x00" in arg for arg in argv):
         raise Reject("subprocess-arguments-invalid")
     try:
-        result = subprocess.run(argv, cwd=root, capture_output=True, check=False,
-                                timeout=timeout,
-                                env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
-    except subprocess.TimeoutExpired:
-        raise Reject("subprocess-timeout") from None
+        process = subprocess.Popen(argv, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   check=False, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     except OSError as error:
         raise Reject(f"subprocess-start-failed:{error.__class__.__name__}") from None
-    if len(result.stdout) > limit or len(result.stderr) > limit:
+    outputs = [bytearray(), bytearray()]
+    exceeded = threading.Event()
+    read_errors: list[OSError] = []
+
+    def drain(stream, output: bytearray) -> None:
+        try:
+            while chunk := stream.read(64 * 1024):
+                if len(output) + len(chunk) > limit:
+                    exceeded.set()
+                if not exceeded.is_set():
+                    output.extend(chunk)
+        except OSError as error:
+            read_errors.append(error)
+
+    readers = [
+        threading.Thread(target=drain, args=(process.stdout, outputs[0]), daemon=True),
+        threading.Thread(target=drain, args=(process.stderr, outputs[1]), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+    deadline = time.monotonic() + timeout
+    timed_out = False
+    while process.poll() is None:
+        if exceeded.is_set():
+            try:
+                process.kill()
+            except OSError:
+                pass
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            timed_out = True
+            try:
+                process.kill()
+            except OSError:
+                pass
+            break
+        try:
+            process.wait(timeout=min(0.05, remaining))
+        except subprocess.TimeoutExpired:
+            continue
+    process.wait()
+    for reader in readers:
+        reader.join(timeout=2)
+    if any(reader.is_alive() for reader in readers):
+        for stream in (process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+        raise Reject("subprocess-output-reader-stuck")
+    if timed_out:
+        raise Reject("subprocess-timeout") from None
+    if exceeded.is_set():
         raise Reject("subprocess-output-limit")
-    return result.returncode, result.stdout, result.stderr
+    if read_errors:
+        raise Reject("subprocess-output-read-failed")
+    return process.returncode, bytes(outputs[0]), bytes(outputs[1])
 
 
 def git(root: pathlib.Path, *args: str, limit: int = MAX_OUTPUT) -> bytes:
@@ -281,7 +340,8 @@ def validate_metadata(snapshot: dict[str, bytes], revision: str,
             raise Reject("assessment-check-contract-failed")
         code, out, err = run(
             [sys.executable, "-I", str(checker), "--require-approved",
-             "--repo-root", str(copied), "--source-revision", revision], copied)
+             "--repo-root", str(copied), "--source-repo-root", str(repo),
+             "--source-revision", revision], copied)
         refusal = (out + err).decode("utf-8", "replace")
         if code != 2 or "scope-resolution-required" not in refusal:
             raise Reject("approval-refusal-contract-invalid")
@@ -488,11 +548,9 @@ def forbidden_fixture_path(path: str) -> bool:
         return True
     if value == "tests/acid2/control.asm":
         return False
-    named = any(token in value for token in ("acid2", "gbmicrotest", "diagnostic"))
-    payload = pathlib.PurePosixPath(value).suffix in {
-        ".gb", ".gbc", ".rom", ".png", ".rgb", ".tar", ".zip", ".gz",
-    }
-    return named and payload
+    # Added binary/reference payloads are prohibited by type even when renamed into
+    # an unrelated directory; path names alone cannot establish their identity.
+    return pathlib.PurePosixPath(value).suffix in PAYLOAD_SUFFIXES
 
 
 def require_no_diagnostic_payload(paths: list[str]) -> None:
@@ -508,6 +566,43 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
     entries = tree_entries(root, revision)
     require_no_diagnostic_payload(paths)
     return [{"path": path, "size_bytes": entries.get(path, ("", 0, ""))[1]} for path in paths]
+
+
+def source_archive_configure_control(root: pathlib.Path, revision: str) -> None:
+    """Ensure the default tests-enabled preset still configures from a Git source archive."""
+    archive_bytes = git(root, "archive", "--format=tar", revision, limit=MAX_OUTPUT)
+    with tempfile.TemporaryDirectory(prefix="gbb-source-archive-configure-") as name:
+        source = pathlib.Path(name) / "source"
+        source.mkdir()
+        with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:") as archive:
+            for member in archive.getmembers():
+                path = pathlib.PurePosixPath(member.name)
+                if path.is_absolute() or not path.parts or any(part in ("", ".", "..") for part in path.parts):
+                    raise Reject("source-archive-member-path-invalid")
+                target = source.joinpath(*path.parts)
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True)
+                elif member.isfile():
+                    if member.size > MAX_OUTPUT:
+                        raise Reject("source-archive-member-size-limit")
+                    source_file = archive.extractfile(member)
+                    if source_file is None:
+                        raise Reject("source-archive-member-unreadable")
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with source_file, target.open("wb") as output:
+                        shutil.copyfileobj(source_file, output)
+                elif member.issym() or member.islnk():
+                    # Only phase-history aliases use Git symlinks; CMake configuration
+                    # does not consume them, and the source archive must not need them.
+                    continue
+                else:
+                    raise Reject("source-archive-member-type-invalid")
+        if (source / ".git").exists():
+            raise Reject("source-archive-unexpected-git-metadata")
+        code, out, err = run(["cmake", "--preset", "phase1"], source, timeout=50)
+        if code:
+            detail = (out + err).decode("utf-8", "replace")[-700:]
+            raise Reject(f"source-archive-configure-failed:{detail}")
 
 
 def validate_boundaries(snapshot: dict[str, bytes], root: pathlib.Path,
@@ -544,6 +639,13 @@ def validate_boundary(snapshot: dict[str, bytes]) -> dict[str, Any]:
     roadmap = decode(snapshot, ".planning/ROADMAP.md")
     config = parse_json(snapshot[".planning/config.json"], "boundary-config")
     continuation = decode(snapshot, BOUNDARY_PATHS[-1])
+    requirement_defs, requirement_trace = requirement_parts(
+        decode(snapshot, ".planning/REQUIREMENTS.md"))
+    if (set(requirement_defs) != {"DIAG-01", "DIAG-02", "RIGHTS-01"}
+            or requirement_trace != {"DIAG-01": "Phase 22|Pending",
+                                     "DIAG-02": "Phase 22|Pending",
+                                     "RIGHTS-01": "Phase 20|Pending"}):
+        raise Reject("boundary-requirement-disposition-invalid")
     workflow = config.get("workflow")
     if not isinstance(workflow, dict) or workflow.get("auto_advance") is not False \
             or workflow.get("_auto_chain_active") is not False:
@@ -594,6 +696,14 @@ def minimal_boundary() -> dict[str, bytes]:
         ".planning/ROADMAP.md": (
             "### Phase 22: Synthetic Composition and Diagnostic Gate Assessment\nStatus: Complete\n"
             "### Phase 23: Qualified v0.4.0 Release\nStatus: Unstarted\n"
+        ).encode(),
+        ".planning/REQUIREMENTS.md": (
+            "- [ ] **DIAG-01**: Original diagnostic requirement.\n"
+            "- [ ] **DIAG-02**: Original diagnostic requirement.\n"
+            "- [ ] **RIGHTS-01**: Original rights requirement.\n"
+            "| DIAG-01 | Phase 22 | Pending |\n"
+            "| DIAG-02 | Phase 22 | Pending |\n"
+            "| RIGHTS-01 | Phase 20 | Pending |\n"
         ).encode(),
         ".planning/config.json":
             b'{"workflow":{"auto_advance":false,"_auto_chain_active":false}}',
@@ -774,9 +884,20 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expected_duplicate["tests/expected-tests.txt"] += b"phase22_evidence_controls\n"
     expect_reject(lambda: validate_test_text(expected_duplicate),
                   "ctest-inventory-membership-invalid", "duplicate-expected-test")
+    with tempfile.TemporaryDirectory(prefix="gbb-bounded-process-") as name:
+        expect_reject(
+            lambda: run([sys.executable, "-I", "-c", "import sys; sys.stdout.write('x' * 4096)"],
+                        pathlib.Path(name), limit=64),
+            "subprocess-output-limit", "bounded-subprocess-output")
     expect_reject(lambda: require_no_diagnostic_payload(
         ["fixtures/acid2/diagnostics.tar"]),
         "diagnostic-payload-added", "fixture-path")
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["assets/renamed-control.gb"]),
+        "diagnostic-payload-added", "renamed-rom-path")
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["misc/unrelated-data.zip"]),
+        "diagnostic-payload-added", "renamed-archive-path")
     docs_mutations = (
         ("docs/diagnostic-evidence.md", b"No real diagnostic result exists",
          b"No real diagnostic result exists. Real diagnostic result passed.",
@@ -810,11 +931,23 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         b"/gsd-discuss-phase 23", b"/gsd-execute-phase 23")
     expect_reject(lambda: validate_boundary(value), "boundary-phase23-route-invalid", "wrong-route")
     value = dict(boundary)
+    value[".planning/REQUIREMENTS.md"] = value[".planning/REQUIREMENTS.md"].replace(
+        b"DIAG-01 | Phase 22 | Pending", b"DIAG-01 | Phase 22 | Complete")
+    expect_reject(lambda: validate_boundary(value), "boundary-requirement-disposition-invalid",
+                  "boundary-requirement-completion")
+    requirement = dict(snapshot)
+    requirement[".planning/REQUIREMENTS.md"] = snapshot[".planning/REQUIREMENTS.md"].replace(
+        b"**DIAG-01**", b"**DIAG-01 changed**", 1)
+    expect_reject(lambda: validate_requirements(requirement, pathlib.Path.cwd()),
+                  "requirement-definition-changed", "boundary-requirement-definition")
+    value = dict(boundary)
     value[".planning/config.json"] = value[".planning/config.json"].replace(
         b'"_auto_chain_active":false', b'"_auto_chain_active":true')
     expect_reject(lambda: validate_boundary(value), "boundary-auto-advance-enabled", "auto-flag")
     boundary_history_control()
-    print("diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable")
+    source_archive_configure_control(repo, revision)
+    print("diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable "
+          "source_archive=passed")
 
 
 def _mutate_first_case_identity(record: dict[str, Any]) -> None:
@@ -898,7 +1031,9 @@ def main(argv: list[str] | None = None) -> int:
             root = args.repo_root.resolve(strict=True)
             resolve_revision(root, args.source_revision)
             boundary = resolve_revision(root, args.boundary_revision)
-            validate_boundary(load_boundary(root, boundary))
+            boundary_snapshot = load_boundary(root, boundary)
+            validate_boundary(boundary_snapshot)
+            validate_requirements(boundary_snapshot, root)
             print(f"diagnostic boundary pass source={boundary} phase22=complete phase23=unstarted "
                   "next=/gsd-discuss-phase-23 auto_advance=false")
             return 0

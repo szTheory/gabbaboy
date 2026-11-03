@@ -43,11 +43,13 @@ coverage:
   - id: D2
     description: "The public evidence document states the approved synthetic-plus-metadata scope and accurately describes the no-go boundary."
     verification:
+      - kind: integration
+        ref: "phase22_evidence_controls CTest: public documentation and claim mutations are rejected"
+        status: pass
       - kind: other
-        ref: "tests/scripts/verify-diagnostic-evidence.py --check (dependent Plan 22-10; run before final phase closure)"
-        status: unknown
-    human_judgment: true
-    rationale: "The immutable public-claim contract is delivered by dependent Plan 22-10; upgrade this coverage to automated pass after that contract runs."
+        ref: "python3 -I tests/scripts/verify-diagnostic-evidence.py --check --repo-root . --source-revision HEAD --write-evidence build/phase22/evidence.json"
+        status: pass
+    human_judgment: false
 duration: 15min
 completed: 2026-11-03
 status: complete

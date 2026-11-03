@@ -18,6 +18,7 @@ import unittest
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+ADMISSION_CHECKER_PATH = "tests/scripts/verify-diagnostic-admission.py"
 PHASE20 = ROOT / "tests/scripts/verify-fixture-admission.py"
 ACID2_TOOL = ROOT / "tests/scripts/run-acid2-local.py"
 CONTROL_SOURCE = ROOT / "tests/acid2/control.asm"
@@ -167,6 +168,63 @@ def _git(root: pathlib.Path, *args: str, input_bytes: bytes | None = None) -> by
         detail = result.stderr.decode("utf-8", "replace")[-500:]
         raise RuntimeError(f"git-failed:{args[0]}:{detail.strip()}")
     return result.stdout
+
+
+def repository_relative_path(root: pathlib.Path, path: pathlib.Path) -> str:
+    root = root.resolve(strict=True)
+    path = pathlib.Path(path)
+    if path.is_symlink():
+        raise AdmissionRefused("scope-resolution-required: source path is a symlink")
+    try:
+        resolved = path.resolve(strict=True)
+        relative = resolved.relative_to(root).as_posix()
+    except (OSError, ValueError):
+        raise AdmissionRefused("scope-resolution-required: source path is outside or absent") from None
+    if (not relative or relative.startswith("/") or "\\" in relative
+            or any(part in ("", ".", "..") or not re.fullmatch(r"[A-Za-z0-9._+-]+", part)
+                   for part in relative.split("/"))):
+        raise AdmissionRefused("scope-resolution-required: source path is invalid")
+    return relative
+
+
+def read_source_file(repo_root: pathlib.Path, source_revision: str, relative: str) -> bytes:
+    """Read a regular file from one immutable source commit, never from the worktree."""
+    if not HEX40.fullmatch(source_revision):
+        raise AdmissionRefused("source-revision-invalid")
+    if (not relative or relative.startswith("/") or "\\" in relative
+            or any(part in ("", ".", "..") or not re.fullmatch(r"[A-Za-z0-9._+-]+", part)
+                   for part in relative.split("/"))):
+        raise AdmissionRefused("scope-resolution-required: source path is invalid")
+    repo_root = repo_root.resolve(strict=True)
+    try:
+        tree_rows = [row for row in _git(repo_root, "ls-tree", "-z", source_revision, "--", relative).split(b"\0")
+                     if row]
+        if len(tree_rows) != 1:
+            raise AdmissionRefused(f"scope-resolution-required: source file absent: {relative}")
+        metadata, returned_path = tree_rows[0].split(b"\t", 1)
+        mode, kind, oid = metadata.decode("ascii").split()
+        if returned_path.decode("utf-8", "strict") != relative or kind != "blob" or mode not in ("100644", "100755"):
+            raise AdmissionRefused(f"scope-resolution-required: source file is not regular: {relative}")
+        raw = _git(repo_root, "cat-file", "blob", oid)
+    except (RuntimeError, UnicodeError, ValueError) as error:
+        if isinstance(error, AdmissionRefused):
+            raise
+        raise AdmissionRefused(f"scope-resolution-required: immutable source unavailable: {relative}") from None
+    limit = MAX_INVENTORY_BYTES if relative.endswith("gbmicrotest-inventory.json") else MAX_JSON_BYTES
+    if len(raw) > limit:
+        raise AdmissionRefused(f"scope-resolution-required: source file size limit: {relative}")
+    return raw
+
+
+def require_worktree_source_file(repo_root: pathlib.Path, source_revision: str,
+                                 relative: str, path: pathlib.Path) -> None:
+    """Refuse execution when a policy/manifest file differs from its committed bytes."""
+    expected = read_source_file(repo_root, source_revision, relative)
+    try:
+        if path.is_symlink() or not path.is_file() or read_limited(path, len(expected), relative) != expected:
+            raise AdmissionRefused(f"scope-resolution-required: source file differs from commit: {relative}")
+    except AdmissionRefused:
+        raise
 
 
 def _json_without_duplicates(raw: bytes, label: str) -> dict[str, Any]:
@@ -612,15 +670,45 @@ def check_synthetic_admission(root: pathlib.Path, manifest_path: pathlib.Path) -
     return code, stdout + stderr
 
 
-def require_approved(root: pathlib.Path, source_revision: str, manifest_path: pathlib.Path | None = None) -> dict:
-    """Require source-bound, evidence-backed rights and model clearance before real use."""
+def _commit_test_admission_source(root: pathlib.Path, *, inventory: bool = False) -> str:
+    """Create a local immutable source fixture for admission-gate controls."""
+    _git(root, "init", "-q")
+    _git(root, "config", "user.name", "GabbaBoy Admission Control")
+    _git(root, "config", "user.email", "admission-control@example.invalid")
+    checker = root / ADMISSION_CHECKER_PATH
+    checker.parent.mkdir(parents=True, exist_ok=True)
+    checker.write_bytes(pathlib.Path(__file__).read_bytes())
+    files = [ADMISSION_CHECKER_PATH, "tests/external/diagnostic-assessment.json"]
+    if inventory:
+        files.append("tests/external/gbmicrotest-inventory.json")
+    _git(root, "add", *files)
+    _git(root, "commit", "-qm", "synthetic: immutable admission source")
+    return _git(root, "rev-parse", "HEAD").decode("ascii").strip()
+
+
+def require_approved(root: pathlib.Path, source_revision: str,
+                     manifest_path: pathlib.Path | None = None, *,
+                     source_repo_root: pathlib.Path | None = None,
+                     source_paths: tuple[tuple[str, pathlib.Path], ...] = ()) -> dict:
+    """Require committed evidence and policy bytes before any real fixture can be used."""
     if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
         raise AdmissionRefused("source-revision-invalid")
-    assessment_path = root / "tests/external/diagnostic-assessment.json"
-    if not assessment_path.is_file() or assessment_path.is_symlink():
-        raise AdmissionRefused("scope-resolution-required: diagnostic assessment absent")
-    record = _read_json_record(root, "tests/external/diagnostic-assessment.json",
-                               MAX_JSON_BYTES, "diagnostic-assessment")
+    try:
+        root = root.resolve(strict=True)
+        source_root = (source_repo_root or root).resolve(strict=True)
+    except OSError:
+        raise AdmissionRefused("scope-resolution-required: source repository unavailable") from None
+    require_worktree_source_file(
+        source_root, source_revision, ADMISSION_CHECKER_PATH, pathlib.Path(__file__))
+    for relative, path in source_paths:
+        require_worktree_source_file(source_root, source_revision, relative, path)
+    if manifest_path is not None:
+        relative = repository_relative_path(source_root, manifest_path)
+        require_worktree_source_file(source_root, source_revision, relative, manifest_path)
+
+    assessment_bytes = read_source_file(
+        source_root, source_revision, "tests/external/diagnostic-assessment.json")
+    record = _json_without_duplicates(assessment_bytes, "diagnostic-assessment")
     if record.get("origin") in ("synthetic", "test-only") \
             or str(record.get("fixture_kind", "")).startswith("synthetic"):
         raise AdmissionRefused("synthetic-only-record-refused")
@@ -630,15 +718,20 @@ def require_approved(root: pathlib.Path, source_revision: str, manifest_path: pa
                           if isinstance(gate, dict) and gate.get("status") != "supported"]
         if unresolved_ids:
             raise AdmissionRefused("scope-resolution-required: unresolved gates=" + ",".join(unresolved_ids))
-    record, inventory = validate_assessment(root)
+    with tempfile.TemporaryDirectory(prefix="gbb-immutable-admission-") as name:
+        evidence_root = pathlib.Path(name)
+        for relative in ("tests/external/diagnostic-assessment.json",
+                         "tests/external/gbmicrotest-inventory.json"):
+            target = evidence_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(read_source_file(source_root, source_revision, relative))
+        record, inventory = validate_assessment(evidence_root)
     unresolved_ids = [gate["id"] for gate in record["required_gates"] if gate["status"] != "supported"]
     unresolved_ids.extend(component["id"] for component in record["components"]
                           if component["status"] == "unresolved")
     if record.get("status") != "approved" or unresolved_ids:
         detail = ",".join(unresolved_ids) if unresolved_ids else "assessment-not-approved"
         raise AdmissionRefused(f"scope-resolution-required: {detail}")
-    if record.get("source_revision") != source_revision:
-        raise AdmissionRefused("scope-resolution-required: approval/source identity unresolved")
     for case in inventory["cases"]:
         for identity, label in ((case["source"], "source"), (case["prebuilt_rom"], "rom")):
             if not isinstance(identity.get("sha256"), str) or not HEX64.fullmatch(identity["sha256"]):
@@ -843,8 +936,9 @@ class AdmissionContractTests(unittest.TestCase):
             assessment.parent.mkdir(parents=True)
             assessment.write_text(json.dumps({"origin": "test-only", "status": "approved",
                                               "source_revision": "a" * 40}), encoding="utf-8")
+            revision = _commit_test_admission_source(root)
             with self.assertRaisesRegex(AdmissionRefused, "synthetic-only-record-refused"):
-                require_approved(root, "a" * 40)
+                require_approved(root, revision)
 
     def test_malformed_approval_json_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gbb-admission-json-") as name:
@@ -852,8 +946,9 @@ class AdmissionContractTests(unittest.TestCase):
             assessment = root / "tests/external/diagnostic-assessment.json"
             assessment.parent.mkdir(parents=True)
             assessment.write_bytes(b'{"origin":')
+            revision = _commit_test_admission_source(root)
             with self.assertRaisesRegex(AdmissionRefused, "diagnostic-assessment-invalid"):
-                require_approved(root, "a" * 40)
+                require_approved(root, revision)
 
 
 class AdmissionControlTests(unittest.TestCase):
@@ -944,8 +1039,48 @@ class AdmissionControlTests(unittest.TestCase):
                 "gates": [{"id": "reference-art", "status": "unresolved",
                            "reason": "repository and public-CI grant scope not established"}],
             }), encoding="utf-8")
+            revision = _commit_test_admission_source(root)
             with self.assertRaisesRegex(AdmissionRefused, "scope-resolution-required.*reference-art"):
-                require_approved(root, "a" * 40)
+                require_approved(root, revision)
+
+    def test_uncommitted_approval_mutants_cannot_authorize_real_inputs(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-dirty-approval-") as name:
+            root = pathlib.Path(name)
+            self._copy_review_records(root)
+            revision = _commit_test_admission_source(root, inventory=True)
+
+            assessment = json.loads((root / "tests/external/diagnostic-assessment.json").read_text())
+            for gate in assessment["required_gates"]:
+                gate["status"] = "supported"
+                gate["blocker"] = None
+                gate["evidence"] = ["https://github.com/example/committed-review"]
+            for component in assessment["components"]:
+                component["status"] = "supported"
+                component["scope"] = {"repository": True, "public_ci": True}
+                component["evidence"] = ["https://github.com/example/committed-review"]
+                component["blocker"] = None
+            assessment["model_applicability"]["gbmicrotest"]["per_case_source_evidence"] = [
+                {"case": case["name"], "source": "https://github.com/example/case-review"}
+                for case in json.loads(
+                    (root / "tests/external/gbmicrotest-inventory.json").read_text())["cases"]
+            ]
+            assessment["source_revision"] = revision
+            assessment["status"] = "approved"
+            self._write_record(root, "diagnostic-assessment.json", assessment)
+
+            inventory = json.loads((root / "tests/external/gbmicrotest-inventory.json").read_text())
+            for case in inventory["cases"]:
+                for identity in (case["source"], case["prebuilt_rom"]):
+                    identity["sha256"] = "a" * 64
+                    identity["sha256_status"] = "verified-against-pinned-git-blob"
+            self._write_record(root, "gbmicrotest-inventory.json", inventory)
+
+            # Prove the working-tree mutant is internally plausible to the legacy schema checks.
+            mutable_record, _ = validate_assessment(root)
+            self.assertEqual(mutable_record["status"], "approved")
+            with self.assertRaisesRegex(AdmissionRefused, "scope-resolution-required.*unresolved gates") as caught:
+                require_approved(root, revision)
+            self.assertIn("gbmicrotest_case_applicability", str(caught.exception))
 
     def _copy_review_records(self, root: pathlib.Path) -> None:
         destination = root / "tests/external"
@@ -1015,6 +1150,7 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument("--require-approved", action="store_true")
     parser.add_argument("--runner", type=pathlib.Path)
     parser.add_argument("--repo-root", type=pathlib.Path, default=ROOT)
+    parser.add_argument("--source-repo-root", type=pathlib.Path)
     parser.add_argument("--source-revision", default="HEAD")
     args = parser.parse_args(argv)
     if args.self_test_tracer:
@@ -1037,7 +1173,9 @@ def main(argv: list[str] | None = None) -> int:
         if revision == "HEAD":
             revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=args.repo_root,
                                       capture_output=True, check=True, timeout=30).stdout.decode().strip()
-        require_approved(args.repo_root.resolve(), revision)
+        source_root = (args.source_repo_root or args.repo_root).resolve(strict=True)
+        require_approved(args.repo_root.resolve(strict=True), revision,
+                         source_repo_root=source_root)
     except (AdmissionRefused, OSError, subprocess.SubprocessError) as error:
         message = str(error)
         if message.startswith("scope-resolution-required:"):
