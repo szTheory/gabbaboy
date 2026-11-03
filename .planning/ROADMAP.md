@@ -105,7 +105,8 @@ Captured frame and PCM digests establish reproducibility. They do not independen
   3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending.
 **Phase-scoped acceptance override**: Owner-approved on 2026-11-03; see [22-RESCOPE.md](phases/GB-22-composition-and-microtest-evidence/22-RESCOPE.md) and D-141. Phase 22's revised roadmap criteria are the acceptance contract. The original meanings of DIAG-01/02 and RIGHTS-01 are unchanged and remain Pending. No real upstream diagnostic payload is fetched, built, run, admitted, or claimed.
 **Plan cap**: 10 (unchanged from the approved v0.4 allocation)
-**Plans**: 4 live plans (3 complete, 1 remaining); 7 original plans are superseded under D-141 and excluded from execution.
+**Plans**: 4 live plans (22-01, 22-02, 22-10 complete; 22-11 candidate summary prepared; exact-head qualification pending); 7 original plans are superseded under D-141 and excluded from execution.
+**Boundary candidate**: Phase 22 is complete only after the final exact-head required checks, package artifacts, reviews, and merge-tree equivalence pass. Until then, Phase 22 remains conditional and Phase 23 stays unstarted.
 **Execution waves**: Four sequential dependency waves: 22-01 (complete) → 22-02 (close the existing metadata assessment) → 22-10 (immutable no-go contract and public claims) → 22-11 (local/review/security/exact-head remote qualification and boundary). Original 22-03 through 22-09 carry machine-readable `status: superseded` and must not dispatch.
 
 Plans:
@@ -124,6 +125,8 @@ Plans:
 The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-composition-and-microtest-evidence/22-SOURCE-AUDIT.md). Completed tracer and assessment commits are preserved; real-fixture build/admission/execution and downloaded-lifecycle work are outside the approved Phase 22 scope. Original requirement definitions and existing fixture-admission/package boundaries remain intact.
 
 ### Phase 23: Qualified v0.4.0 Release
+
+**Status**: Unstarted and owner-controlled; after Phase 22 qualifies, the next action is `/gsd-discuss-phase 23`.
 
 **Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
 **Depends on**: Phase 22
@@ -160,7 +163,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
-| 22. Synthetic Composition and Diagnostic Gate Assessment | 3/4 | In Progress under D-141; synthetic tracer and immutable metadata/no-go contract complete; DIAG-01/02 and RIGHTS-01 remain Pending | - |
+| 22. Synthetic Composition and Diagnostic Gate Assessment | 4/4 | In Progress under D-141; synthetic tracer and immutable metadata/no-go contract complete; DIAG-01/02 and RIGHTS-01 remain Pending | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
 ## Planning and Approval Boundary

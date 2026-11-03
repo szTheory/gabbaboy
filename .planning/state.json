@@ -16,7 +16,7 @@
     {
       "number": "22",
       "name": "Synthetic Composition and Diagnostic Gate Assessment",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "23",
@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 3 of 4 · 50% · executing"
+    "command": "/gsd-discuss-phase 23",
+    "label": "Owner-controlled Phase 23 discussion",
+    "reason": "Candidate Phase 22 boundary only; final exact-head remote qualification remains pending"
   },
-  "updated_at": "2026-11-03T11:22:45.974Z"
+  "updated_at": "2026-11-03T12:14:35.566Z"
 }
