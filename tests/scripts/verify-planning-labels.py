@@ -100,9 +100,12 @@ def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str]
     if script_index != 2 or command[1] != "-I":
         return False
     interpreter = _norm(command[0])
-    interpreter_name = Path(command[0]).name.casefold()
-    if (not (interpreter.startswith("/") or re.match(r"^[A-Za-z]:/", interpreter))
-            or not interpreter_name.startswith("python")):
+    if not (interpreter.startswith("/") or re.match(r"^[A-Za-z]:/", interpreter)):
+        return False
+    try:
+        if Path(command[0]).resolve(strict=True) != Path(sys.executable).resolve(strict=True):
+            return False
+    except (OSError, RuntimeError):
         return False
     expected_tail = ["--check", "--repo-root", _norm(source), "--source-revision"]
     tail = command[script_index + 1:]
@@ -173,7 +176,10 @@ def self_test() -> int:
             props = [{"name": "LABELS", "value": labels}] if labels else []
             return {"name": name, "command": command, "properties": props}
 
-        py = "/usr/bin/python3"
+        py = sys.executable
+        fake_python = source / "python-stub"
+        fake_python.write_text("#!/bin/sh\nprintf 'diagnostic evidence pass\\n'\n", encoding="utf-8")
+        fake_python.chmod(0o755)
         cases = [
             ("unlabelled test reading .planning/ is rejected", [test("a", [py, str(reader)])], "unlabelled-planning-reader"),
             ("unlabelled test passing a .planning path is rejected", [test("a", [py, str(clean), f"{source}/.planning/STATE.md"])],
@@ -215,6 +221,11 @@ def self_test() -> int:
              [test("phase22_evidence_contract",
                    [py, "-c", "print('diagnostic evidence pass')", str(evidence), "--check", "--repo-root",
                     str(source), "--source-revision", "a" * 40, "--build-dir", str(build)],
+                   ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("inventory-only classification rejects an absolute Python stub",
+             [test("phase22_evidence_contract",
+                   [str(fake_python), "-I", str(evidence), "--check", "--repo-root", str(source),
+                    "--source-revision", "a" * 40, "--build-dir", str(build)],
                    ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
         ]
         for label, tests, expected in cases:
