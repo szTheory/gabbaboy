@@ -729,7 +729,8 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     run_admission_mutant(
         snapshot, "assessment",
         lambda record: _mutate_component_rights(record),
-        "diagnostic-assessment-supported-component-has-blocker", "unsupported-rights-upgrade",
+        "diagnostic-assessment-positive-scope-incomplete:gbmicrotest_prebuilt_roms",
+        "unsupported-rights-upgrade",
     )
     assessment = parse_json(snapshot[ASSESSMENT], "self-test-assessment")
     value = json.loads(json.dumps(assessment))
@@ -844,7 +845,7 @@ def run_check(args: argparse.Namespace) -> int:
         output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     checker_id = result["metadata"]["assessment_checker_sha256"]
     print(f"diagnostic evidence pass source={revision} assessment=blocked cases=513 "
-          "unresolved_gates=7 admitted=0 executed=0 assessment_checker_sha256={checker_id}")
+          f"unresolved_gates=7 admitted=0 executed=0 assessment_checker_sha256={checker_id}")
     return 0
 
 
