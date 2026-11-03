@@ -3715,7 +3715,9 @@ add_test(NAME phase22_evidence_controls
 # not execute built artifacts. verify-planning-labels checks the explicit inventory-only class.
 set_tests_properties(phase22_evidence_contract PROPERTIES TIMEOUT 60 LABELS "planning;ctest-inventory-only"
   PASS_REGULAR_EXPRESSION "diagnostic evidence pass source=[0-9a-f]+ assessment=blocked cases=513 unresolved_gates=7 admitted=0 executed=0 assessment_checker_sha256=[0-9a-f]+")
-set_tests_properties(phase22_evidence_controls PROPERTIES TIMEOUT 60 LABELS planning
+# This self-test creates isolated Git histories and nested CMake builds; keep it out of
+# parallel Windows CTest load while preserving the existing 60-second bound.
+set_tests_properties(phase22_evidence_controls PROPERTIES TIMEOUT 60 COST 60 RUN_SERIAL TRUE LABELS planning
   PASS_REGULAR_EXPRESSION "diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable")
 # The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
 add_test(NAME cgb_acid2_local_refuses_unpinned
