@@ -42,9 +42,9 @@ key-files:
     - .planning/phases/GB-22-composition-and-microtest-evidence/22-REVIEW.md
     - .planning/phases/GB-22-composition-and-microtest-evidence/22-SECURITY.md
 actuals:
-  tokens: 35529
+  tokens: 35845
   tasks: 3
-  commits: 20
+  commits: 21
 key-decisions:
   - "Keep all seven real-fixture gates unresolved and stop at Phase 22; Phase 23 remains owner-controlled."
   - "Retarget the Phase 21 primary-record pointer to PR #140's squash commit only after exact record-blob identity was established; keep digest and ancestry mutants."
@@ -75,6 +75,9 @@ coverage:
       - kind: integration
         ref: "At reviewed source 06d2cbc1, the configured planning/evidence CTest selection passed 4/4; the planning inventory check passed for 1732 tests / 47 planning labels"
         status: pass
+      - kind: integration
+        ref: "Configured full CTest suite at 042e7f34 passed 1732/1732 tests in 495.43 seconds; the exact final tracked head is checked once more before PR qualification"
+        status: pass
       - kind: other
         ref: "22-REVIEW.md and 22-SECURITY.md: exact reviewed source 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04; source findings clean"
         status: pass
@@ -92,17 +95,17 @@ coverage:
         ref: "verify-uat-closure.py generated 10/10 automated entries; self-test passed 21 controls"
         status: pass
 metrics:
-  duration: "about 90 minutes through local evidence preparation"
+  duration: "about two hours through the final local suite"
   completed: "2026-11-03"
 status: complete
 plan_head_before: 7f57dcc3542fb274f74257f48c6cd9d1c7e49741
-plan_head_after: 9bca04b26a7d123fa9b85f588cdf90c279a32feb
-commits: 20
+plan_head_after: 042e7f34e6d759d97e06a6460dcfc922aec4dbfd
+commits: 21
 ---
 
 # Phase 22 Plan 11: Final Qualification and Boundary Summary
 
-**The immutable diagnostic no-go and synthetic evidence remain independently checked; Phase 22 stays conditional on the exact final local and remote qualification.**
+**The immutable diagnostic no-go and synthetic evidence are independently checked; exact-head PR evidence determines whether the Phase 22 boundary closes.**
 
 ## Accomplishments
 
@@ -116,9 +119,10 @@ commits: 20
 ## Verification
 
 - The broad focused CTest selection passed 23/23 in 42.98 seconds. The latest source-specific planning/evidence selection passed 4/4, and the configured inventory contained 1,732 tests with 47 planning-labelled tests.
+- The configured full CTest suite passed 1,732/1,732 in 495.43 seconds at `042e7f34`; the authoritative final-head configure/build/full-suite result is recorded in `build/phase22/remote-evidence.json`.
 - The immutable diagnostic evidence check reports 513 metadata cases, seven unresolved gates, zero admitted, and zero executed. The admission mutation suite passed 12/12; real approval correctly refuses with exit 2.
 - Phase21 candidate/history, no-phase-path, plan-cap, Acid2 malformed-manifest, fixture-admission, core/player product, and budget controls passed. Plan cap check reports four phases and 28 plan files.
-- Independent code and security reviews are clean at source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`. The exact full-suite and exact-head remote outcomes are recorded at `build/phase22/remote-evidence.json`; both are required to close the phase boundary.
+- Independent code and security reviews are clean at source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`. The exact final local rerun and exact-head remote outcomes are recorded at `build/phase22/remote-evidence.json`; remote evidence is the boundary closure gate.
 
 ## Decisions and Limits
 
@@ -164,7 +168,7 @@ commits: 20
 
 ## Deferred Issues
 
-- Exact full-suite and exact-head PR evidence remain mandatory before Phase 22 can close. Any failed, stale, skipped, inaccessible or mismatched result leaves Phase 22 open and must be recorded in `build/phase22/remote-evidence.json`.
+- Phase 22 closes only when the configured full suite is tied to the final source and exact-head PR evidence passes. Any failed, stale, skipped, inaccessible or mismatched result leaves Phase 22 open and must be recorded in `build/phase22/remote-evidence.json`.
 
 ## Self-Check: PASSED
 

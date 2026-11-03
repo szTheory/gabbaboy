@@ -6,11 +6,11 @@ current_phase: 22
 current_phase_name: Synthetic Composition and Diagnostic Gate Assessment
 current_plan: 4
 status: Phase GB-22 candidate boundary prepared; Phase 22 is complete only after exact-head PR checks, required artifacts and merge-tree equivalence pass
-stopped_at: Prepared conditional Phase 22 boundary; exact-head qualification remains
-last_updated: "2026-11-03T13:11:56.089Z"
+stopped_at: Plan 22-11 exact-head qualification
+last_updated: "2026-11-03T13:28:12.173Z"
 last_activity: 2026-11-03
-last_activity_desc: Plan 22-11 candidate boundary prepared; final local and exact-head qualification pending
-state_head: 9bca04b26a7d123fa9b85f588cdf90c279a32feb
+last_activity_desc: Plan 22-11 full-suite evidence recorded; exact-head PR gate controls Phase 22 closure
+state_head: 042e7f343ca6e956016226f7d6e427a36fa00f24
 progress:
   total_phases: 4
   completed_phases: 2
@@ -40,7 +40,7 @@ Last activity: 2026-11-03 — Plan 22-10 immutable metadata/no-go contract compl
 
 Completed stage: **Phase 21 — CGB Game Progress and Scene Regressions, implementation and verification**. All eight plans and five roadmap criteria are complete. Implementation source `e0845db5` passed configure/build, the 18 compile-command tests, and focused fixture-admission controls. The serial local CTest suite passed 1,717/1,718 before `v02_source_archive_controls` hit its existing 90-second limit; that test passed an isolated same-source retry in 77.17 seconds, so every local test has passing evidence across the full run and retry, but no single invocation was all-green. PR #140's final checked head `507019f9` passed the required native/platform, sanitizer, CMake-floor, fixture-reproduction, installed-consumer, and player-package checks and was squash-merged as `bef2cfbd`; the merged tree matches the checked PR head. The first macOS hosted full-suite attempt timed out `phase21_fixture_admission_controls` at 60.08 seconds; its same-head full-suite rerun passed all 1,724 tests, including that control in 50.18 seconds. Independent scoped review and security review found no remaining issues; the security report has zero open threats. The verifier passed all five roadmap criteria using the documented owner disposition for FIXT-01. That requirement remains Pending; no candidate game source or ROM was run and no rights clearance is claimed. Phase 22 was replanned under owner-approved D-141 after seven real-fixture evidence gates remained unresolved; the four-live-plan set passed independent plan review.
 
-Current stage: Phase 22 Plan 22-11 has a candidate boundary record. The fixed source and focused local checks pass, and independent code/security reviews close the source findings. The final full local suite and exact-head PR qualification still remain. Phase 22 is complete only after the required exact-head jobs/artifacts/reviews and merge-tree equivalence pass. No upstream ROM/reference payload is fetched or run, no real diagnostic fixture is admitted, and no license prohibition is inferred. DIAG-01, DIAG-02, and RIGHTS-01 remain Pending. If qualification succeeds, stop at Phase 22; Phase 23 — Qualified v0.4.0 Release — remains unstarted and owner-controlled via `/gsd-discuss-phase 23`. Keep both automatic-advance flags false.
+Current stage: Phase 22 Plan 22-11 has a candidate boundary record. The configured full local CTest suite passed 1,732/1,732 at `042e7f34`; the authoritative result for the final tracked head and the exact-head PR evidence are recorded in `build/phase22/remote-evidence.json`. Independent code/security reviews close source findings. Phase 22 is complete only when the final source matches the PR head and required jobs, artifacts, reviews, and merge-tree equivalence pass. No upstream ROM/reference payload is fetched or run, no real diagnostic fixture is admitted, and no license prohibition is inferred. DIAG-01, DIAG-02, and RIGHTS-01 remain Pending. If qualification succeeds, stop at Phase 22; Phase 23 — Qualified v0.4.0 Release — remains unstarted and owner-controlled via `/gsd-discuss-phase 23`. Keep both automatic-advance flags false.
 
 ## Performance Metrics
 
@@ -83,13 +83,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-03T12:13:18.370Z
-**Stopped at:** Prepared conditional Phase 22 boundary; exact-head qualification remains
-**Resume file:** None
+**Last session:** 2026-11-03T13:28:11.993Z
+**Stopped at:** Plan 22-11 exact-head qualification
+**Resume file:** .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
 
 ## Operator Next Steps
 
-Plan 22-11 has prepared the machine-checked closure and conditional boundary. Continue with final local full-suite and exact-head PR qualification in this Phase 22 plan; do not mark Phase 22 complete unless every required check and merge-tree comparison passes. Seven real-fixture evidence gates remain open; no real diagnostic fixture is admitted and DIAG-01, DIAG-02, and RIGHTS-01 remain Pending. If Phase 22 qualifies, the next phase is Phase 23 — Qualified v0.4.0 Release — through the owner-controlled **/gsd-discuss-phase 23** command. Do not begin Phase 23 automatically.
+Plan 22-11 has prepared the machine-checked closure and conditional boundary; a configured full suite passed 1,732/1,732 and the authoritative final-head result is maintained with exact-head remote evidence in `build/phase22/remote-evidence.json`. Do not mark Phase 22 complete unless the final source matches the PR head and every required job and merge-tree comparison passes. Seven real-fixture evidence gates remain open; no real diagnostic fixture is admitted and DIAG-01, DIAG-02, and RIGHTS-01 remain Pending. If Phase 22 qualifies, the next phase is Phase 23 — Qualified v0.4.0 Release — through the owner-controlled **/gsd-discuss-phase 23** command. Do not begin Phase 23 automatically.
 
 ## Decisions
 

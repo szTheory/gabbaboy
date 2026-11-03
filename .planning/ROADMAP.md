@@ -105,7 +105,7 @@ Captured frame and PCM digests establish reproducibility. They do not independen
   3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending.
 **Phase-scoped acceptance override**: Owner-approved on 2026-11-03; see [22-RESCOPE.md](phases/GB-22-composition-and-microtest-evidence/22-RESCOPE.md) and D-141. Phase 22's revised roadmap criteria are the acceptance contract. The original meanings of DIAG-01/02 and RIGHTS-01 are unchanged and remain Pending. No real upstream diagnostic payload is fetched, built, run, admitted, or claimed.
 **Plan cap**: 12
-**Plans**: 4 live plans (22-01, 22-02, 22-10 complete; 22-11 closure and boundary prepared; final local and exact-head qualification pending); 7 original plans are superseded under D-141 and excluded from execution.
+**Plans**: 4 live plans (22-01, 22-02, 22-10 complete; 22-11 closure and boundary prepared; full local suite evidence recorded, final exact-head PR gate determines boundary status); 7 original plans are superseded under D-141 and excluded from execution.
 **Boundary candidate**: Phase 22 is complete only after the final exact-head required checks, package artifacts, reviews, and merge-tree equivalence pass. Until then, Phase 22 remains conditional and Phase 23 stays unstarted.
 **Execution waves**: Four sequential dependency waves: 22-01 (complete) → 22-02 (close the existing metadata assessment) → 22-10 (immutable no-go contract and public claims) → 22-11 (local/review/security/exact-head remote qualification and boundary). Original 22-03 through 22-09 carry machine-readable `status: superseded` and must not dispatch.
 

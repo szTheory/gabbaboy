@@ -2,8 +2,8 @@
 status: complete
 phase: GB-22-composition-and-microtest-evidence
 source: 22-01-SUMMARY.md, 22-02-SUMMARY.md, 22-10-SUMMARY.md, 22-11-SUMMARY.md
-started: 2026-11-03T13:13:49.855025+00:00
-updated: 2026-11-03T13:13:49.855025+00:00
+started: 2026-11-03T13:29:31.205114+00:00
+updated: 2026-11-03T13:29:31.205114+00:00
 ---
 
 ## Automated Evidence
@@ -30,6 +30,7 @@ The fallback `ucity-1.3.json` points to the primary no-go record `tests/data/cgb
 | `cmake --build --preset phase1` | `24c4e191` | All 339 build targets passed during the focused check cycle; later changes only tightened the Python planning-label checker and its control floor. |
 | `ctest --test-dir build --parallel 4 --output-on-failure --no-tests=error -R '^(planning_labels|planning_labels_controls|phase22_evidence_contract|phase22_evidence_controls)$'` | `06d2cbc1` | Passed 4/4; the explicit configured build inventory, 17 label-policy controls, immutable no-go contract, and evidence mutants passed. |
 | Focused Phase 22/fixture/product/budget/Phase 21 selection | `24c4e191` | Passed 23/23 in 42.98 seconds; included exact Phase 21 game-reference and candidate controls, no-phase-path controls, cap, fixture admission, core/player product, and Phase 22 contracts. The final full suite below supersedes this focused result for completion. |
+| `cmake --preset phase1 && cmake --build --preset phase1 && ctest --preset phase1 --parallel 4 --output-on-failure --no-tests=error` | `042e7f34` | Passed 1,732/1,732 in 495.43 seconds; the final tracked-head run is captured in `build/phase22/remote-evidence.json`. |
 | `verify-diagnostic-evidence.py --check --repo-root . --source-revision 06d2cbc1... --build-dir build --write-evidence build/phase22/evidence.json` | `06d2cbc1` | Passed: 513 cases, seven unresolved gates, admitted=0, executed=0. |
 | `verify-diagnostic-admission.py --self-test-controls` | `06d2cbc1` | Passed all 12 mutation controls, including mutable Phase 20 checker and policy substitutions. |
 | `verify-diagnostic-admission.py --require-approved` | `06d2cbc1` | Correctly refused with exit 2 and all seven unresolved gates. |
@@ -38,7 +39,7 @@ The fallback `ucity-1.3.json` points to the primary no-go record `tests/data/cgb
 | `verify-planning-hygiene.py --check plan-cap` | `06d2cbc1` | Passed: four phases and 28 plan files under the combined cap of 40. Phase 21 uses 8 of 10 slots, keeping two reserve slots; Phase caps are 9/10/12/9. |
 | `verify-summary-coverage.py` for 22-01, 22-02, 22-10, and 22-11 | Current live summaries | Passed; Plan 22-02 D2 is automated with `human_judgment: false`. |
 
-The final full local CTest suite and exact-head PR qualification are the remaining completion gates. Their exact-source outcomes and sanitized run identities are recorded in `build/phase22/remote-evidence.json`; a local pass does not substitute for required remote evidence.
+The full local CTest suite passed 1,732/1,732 on `042e7f34`; its authoritative final tracked-head result and the exact-head PR evidence are recorded in `build/phase22/remote-evidence.json`. A local pass does not substitute for the required remote evidence.
 
 ## Review and Security
 
@@ -46,7 +47,7 @@ The independent scoped code review and security review are clean at source `06d2
 
 ## Build and Feedback Cost
 
-The latest measured focused run configured in 13.2 seconds, built 339 targets after the configured source identity changed, and passed its selected 23 CTests in 42.98 seconds at four-way parallelism. The longest selected controls were the Phase 21 fixture admission controls (22.67 seconds) and fixture repository controls (18.34 seconds). The separate current-source planning/evidence selection passed 4/4 in 13.10 seconds; `phase22_evidence_controls` accounted for 13.09 seconds. No measured evidence supports increasing timeouts, adding a build cache, or changing CI scheduling. Record full-suite and hosted run durations in the remote evidence file; preserve existing budgets and required coverage.
+The focused run configured in 13.2 seconds, built 339 targets, and passed 23 CTests in 42.98 seconds at four-way parallelism. The final local full suite passed 1,732/1,732 in 495.43 seconds. The separate planning/evidence selection passed 4/4 in 13.10 seconds; `phase22_evidence_controls` accounted for 13.09 seconds. No measured evidence supports increasing timeouts, adding a build cache, or changing CI scheduling. The final configured full-suite rerun and hosted durations will be recorded in the remote evidence file; preserve existing budgets and required coverage.
 
 ## Exact-Head Qualification
 
@@ -132,7 +133,7 @@ result: pass
 source: automated
 summary_file: 22-11-SUMMARY.md
 coverage_id: D2
-evidence: ["Focused phase1 CTest selection at 24c4e191 passed 23/23, including Phase 22, Phase 21 candidate/history, fixture repository, core/player product, planning-label, cap, path and budget controls", "At reviewed source 06d2cbc1, the configured planning/evidence CTest selection passed 4/4; the planning inventory check passed for 1732 tests / 47 planning labels", "22-REVIEW.md and 22-SECURITY.md: exact reviewed source 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04; source findings clean", "verify-summary-coverage.py passed for 22-01, 22-02, 22-10 and this block; Plan 22-02 D2 is automated with human_judgment false"]
+evidence: ["Focused phase1 CTest selection at 24c4e191 passed 23/23, including Phase 22, Phase 21 candidate/history, fixture repository, core/player product, planning-label, cap, path and budget controls", "At reviewed source 06d2cbc1, the configured planning/evidence CTest selection passed 4/4; the planning inventory check passed for 1732 tests / 47 planning labels", "Configured full CTest suite at 042e7f34 passed 1732/1732 tests in 495.43 seconds; the exact final tracked head is checked once more before PR qualification", "22-REVIEW.md and 22-SECURITY.md: exact reviewed source 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04; source findings clean", "verify-summary-coverage.py passed for 22-01, 22-02, 22-10 and this block; Plan 22-02 D2 is automated with human_judgment false"]
 
 ### 10. The point-in-time boundary preserves Pending requirements, false automatic advance, all seven no-go gates and the owner-controlled Phase 23 route.
 expected: "The point-in-time boundary preserves Pending requirements, false automatic advance, all seven no-go gates and the owner-controlled Phase 23 route."

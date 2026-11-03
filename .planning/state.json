@@ -27,7 +27,7 @@
   "next": {
     "command": "/gsd-discuss-phase 23",
     "label": "Owner-controlled Phase 23 discussion",
-    "reason": "Candidate Phase 22 boundary only; final exact-head remote qualification remains pending"
+    "reason": "Phase 22 closes only after the final full-suite result and exact-head remote qualification pass"
   },
-  "updated_at": "2026-11-03T13:12:32Z"
+  "updated_at": "2026-11-03T13:29:50Z"
 }

@@ -34,4 +34,4 @@ The independent source audit reviewed exact source `06d2cbc1e0ceaa100cc0ecc28826
 
 ## Remote Qualification
 
-Source review is clean. T-22-32 remains open because there is no PR yet for the phase branch. Required same-head CI and artifacts, review state, exact-head equality, and merge-tree equivalence have not been established. Any inaccessible, stale, skipped, failed, or mismatched result leaves Phase 22 unclosed.
+Source review is clean. T-22-32 is the exact-head operational gate; this source audit makes no claim that it passed. Its final disposition is determined by the required same-head CI and artifacts, review state, exact-head equality, and merge-tree equivalence recorded in `build/phase22/remote-evidence.json`. Any inaccessible, stale, skipped, failed, or mismatched result leaves Phase 22 unclosed.
