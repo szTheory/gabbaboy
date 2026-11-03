@@ -6,11 +6,11 @@ current_phase: 22
 current_phase_name: Synthetic Composition and Diagnostic Gate Assessment
 current_plan: 5
 status: Blocked pending owner scope resolution for the open Phase 22 C1 OSC diagnostic leak
-stopped_at: "Phase 22 Plan 22-12 blocked: open C1 OSC payload finding at final review cap"
-last_updated: "2026-11-03T15:51:09.424Z"
+stopped_at: Phase 22 scope resolved under D-143; amend plan 22-12
+last_updated: "2026-11-03T16:24:17.494Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 22 execution started
-state_head: bbcbe2f83947517dcc9ad1926716a5f78d20c9b7
+state_head: 93984197d0e018d680248d53148d166648113c0e
 progress:
   total_phases: 4
   completed_phases: 2
@@ -83,8 +83,8 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-03T15:49:36.681Z
-**Stopped at:** Phase 22 Plan 22-12 blocked: open C1 OSC payload finding at final review cap
+**Last session:** 2026-11-03T16:24:17.273Z
+**Stopped at:** Phase 22 scope resolved under D-143; amend plan 22-12
 **Resume file:** .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
 
 ## Operator Next Steps

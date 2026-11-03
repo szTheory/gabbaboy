@@ -21,6 +21,19 @@
 **User's choice:** The owner answered “Yes, I approve” to a bounded Windows-CI rescope after the exact-head PR #142 failure was recorded. This authorizes a revised Phase 22 plan for the reported Windows failures; it does not authorize a check waiver or reset prior review/fix/gap history.
 **Notes:** PR head `46c6696e57299be9601e88c17f0a19709a7f7367` passed the local 1,732-test suite, while Windows CI failed ten tests: seven CGB progress/history self-tests with `self-test-source-history-git-init-failed`, `phase22_evidence_contract` with `expected-test-policy-failed`, `phase22_evidence_controls` at 58.81 seconds under its 60-second timeout, and `planning_labels_controls` on the configured build-directory reference. The preview failure was an aggregation consequence of required CI and produced no independent preview artifact. The exact job/run details are in `build/phase22/remote-evidence.json`.
 
+## Final C1 OSC diagnostic finding and review limit
+
+**Date:** 2026-11-03
+**Area:** Resolve the C1 OSC payload leak found after D-142's final review.
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| One-time scoped fix and independent review | Amend existing 22-12 in place to fix and test the `U+009D … U+009C` OSC payload leak, then obtain one fresh independent review. Keep all prior review/gap counts, preserve the 12-plan cap, and stop if another blocking finding remains. | ✓ |
+| Keep Phase 22 stopped | Make no further source changes after the original review cap and leave the C1 finding for a future owner-selected scope. | |
+
+**User's choice:** The owner asked for the recommendation and authorized it. The recommendation was one additional fix-and-independent-review cycle limited to the C1 OSC payload leak, with an in-place amendment to 22-12. This is a one-time Phase 22 exception; it does not reset the two-round cap or the used gap round.
+**Notes:** If the C1 correction passes review, continue the already approved Phase 22 local and exact-head PR qualification. Any further blocking correctness/security finding returns to owner scope resolution. No new plan, gap round, check waiver, fixture admission, or Phase 23 work is authorized.
+
 ---
 
 ## Acid2 independent oracle and derivatives
