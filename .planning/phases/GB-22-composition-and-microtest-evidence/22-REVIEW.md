@@ -1,30 +1,30 @@
 ---
 phase: GB-22-composition-and-microtest-evidence
-reviewed: 2026-11-03T13:00:48Z
-depth: deep
-files_reviewed: 12
+reviewed: 2026-11-03
+depth: updated-source scoped review
+reviewed_source: f59ebd166a354537343dd9e87b870698cc686b2b
+review_round: 2 of 2
+files_reviewed: 3
 files_reviewed_list:
-  - CMakeLists.txt
-  - tests/CMakeLists.txt
-  - tests/cmake/ci-lanes.cmake
-  - tests/data/cgb-candidates/ucity-1.3.json
-  - tests/expected-tests.txt
-  - tests/scripts/run-acid2-local.py
-  - tests/scripts/verify-cgb-candidates.py
   - tests/scripts/verify-cgb-progress.py
-  - tests/scripts/verify-diagnostic-admission.py
   - tests/scripts/verify-diagnostic-evidence.py
-  - tests/scripts/verify-no-phase-paths.py
   - tests/scripts/verify-planning-labels.py
 findings:
   critical: 0
-  warning: 0
+  warning: 1
   info: 0
-  total: 0
-status: clean
+  total: 1
+status: blocked
+historical_review:
+  reviewed: 2026-11-03T13:00:48Z
+  reviewed_source: 06d2cbc1e0ceaa100cc0ecc28826e39794a73f04
+  status: clean
+  findings: 0
 ---
 
 # Phase GB-22: Code Review Report
+
+## Historical Review (06d2cbc1)
 
 **Reviewed:** 2026-11-03T13:00:48Z
 
@@ -79,3 +79,11 @@ _Reviewed: 2026-11-03T13:00:48Z_
 _Reviewer: the agent (gsd-code-reviewer)_
 
 _Depth: deep_
+
+## D-142 Review-Fix Round Ledger
+
+The prior Phase 22 review history uses one review-fix round of the two-round cap. The round resolved the inventory command-shape and interpreter findings before the clean review of source `06d2cbc1e0ceaa100cc0ecc28826e39794a73f04`; the dispositions point to commits `24c4e191`, `9d39195a`, and `06d2cbc1`. The full-suite gap round is separately used and remains the single permitted gap round, as recorded in `22-11-SUMMARY.md` and commits `26082639` through `06d2cbc1`.
+
+The D-142 review used the second and final review-fix round. At source `4e532d76a671a33daa91576e283e84a8bd442b71`, both reviewers found that the new sanitizers left OSC payloads when terminated by ESC-backslash. Commit `f59ebd166a354537343dd9e87b870698cc686b2b` corrects the 7-bit OSC BEL and ESC-backslash handling, and direct controls reject both synthetic title payloads.
+
+**Current review status: BLOCKED at source `f59ebd166a354537343dd9e87b870698cc686b2b`.** The corrected-source code review found a remaining T-22-38 edge: an 8-bit C1 OSC sequence (`U+009D … U+009C`) has its control bytes removed but leaves the printable payload (`0;synthetic-c1-title`) in the diagnostic. This contradicts the plan's requirement to remove control/escape sequences. The independent ASVS review at this source returned SECURED for T-22-36/37/38, but its review did not cover the C1 form; the later code-review finding keeps the combined updated-source review open. No other source finding was reported. The remaining review-fix allowance is exhausted, so no further code change or re-review is authorized under D-142. Phase 22 stays open for owner scope resolution; no final full-suite or remote qualification was started.
