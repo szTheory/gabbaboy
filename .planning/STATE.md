@@ -4,18 +4,18 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 22
 current_phase_name: Synthetic Composition and Diagnostic Gate Assessment
-current_plan: 2
-status: Phase GB-22 plan set is approved and ready to execute
-stopped_at: Phase GB-22 replanning complete; resume execution at Plan 22-02 with /gsd-execute-phase 22
-last_updated: "2026-11-03T11:00:06.965Z"
+current_plan: 3
+status: Phase GB-22 is in progress; Plan 22-10 is complete and Plan 22-11 remains
+stopped_at: Completed 22-10-PLAN.md; next in-phase plan is 22-11
+last_updated: "2026-11-03T11:22:46.783Z"
 last_activity: 2026-11-03
-last_activity_desc: Phase 22 planning complete
-state_head: 7b109f208d2a11ebc4af7020ad4a22af1be1f55b
+last_activity_desc: Plan 22-10 immutable metadata/no-go contract complete
+state_head: 31425631a85c0cd199c955a9c1460ff57b9df827
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 20
   percent: 50
 ---
 
@@ -30,17 +30,17 @@ See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 ## Current Position
 
-Current Plan: 2
+Current Plan: 3
 Total Plans in Phase: 4
-Phase: 22 (Synthetic Composition and Diagnostic Gate Assessment) — READY TO EXECUTE
+Phase: 22 (Synthetic Composition and Diagnostic Gate Assessment) — IN PROGRESS
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
-Status: Phase GB-22 plan set is approved and ready to execute
-Last activity: 2026-11-03 — Phase 22 planning complete
+Status: Phase GB-22 is in progress; Plan 22-10 is complete and Plan 22-11 remains
+Last activity: 2026-11-03 — Plan 22-10 immutable metadata/no-go contract complete
 
 Completed stage: **Phase 21 — CGB Game Progress and Scene Regressions, implementation and verification**. All eight plans and five roadmap criteria are complete. Implementation source `e0845db5` passed configure/build, the 18 compile-command tests, and focused fixture-admission controls. The serial local CTest suite passed 1,717/1,718 before `v02_source_archive_controls` hit its existing 90-second limit; that test passed an isolated same-source retry in 77.17 seconds, so every local test has passing evidence across the full run and retry, but no single invocation was all-green. PR #140's final checked head `507019f9` passed the required native/platform, sanitizer, CMake-floor, fixture-reproduction, installed-consumer, and player-package checks and was squash-merged as `bef2cfbd`; the merged tree matches the checked PR head. The first macOS hosted full-suite attempt timed out `phase21_fixture_admission_controls` at 60.08 seconds; its same-head full-suite rerun passed all 1,724 tests, including that control in 50.18 seconds. Independent scoped review and security review found no remaining issues; the security report has zero open threats. The verifier passed all five roadmap criteria using the documented owner disposition for FIXT-01. That requirement remains Pending; no candidate game source or ROM was run and no rights clearance is claimed. Phase 22 was replanned under owner-approved D-141 after seven real-fixture evidence gates remained unresolved; the four-live-plan set passed independent plan review.
 
-Current stage: Phase 21 is complete. PR #140 final head `507019f9` passed its required checks and merged to main as `bef2cfbd`; the squash tree matches the checked PR tree. Phase 22 has four live plans in four sequential waves; seven original real-fixture plans are superseded under owner-approved D-141. Plan 22-01 remains complete, and Plan 22-02's metadata assessment is already committed but awaits its honest summary and public no-go disposition. The revised plan set passed independent review after removing one known slow repeated check from the pre-review selection. Continue within Phase 22 using `/gsd-execute-phase 22`. No upstream ROM/reference payload will be fetched or run, no real diagnostic fixture is admitted, and no license prohibition is inferred. DIAG-01, DIAG-02, and RIGHTS-01 remain Pending. Keep both automatic-advance flags false.
+Current stage: Phase 22 Plan 22-10 is complete. Its immutable checker and negative controls prove the metadata-only inventory and exact no-go disposition; public claims remain synthetic-plus-metadata only. Plan 22-11 is the sole remaining plan in Phase 22. Continue with `/gsd-execute-phase 22`. At the later Phase 22 boundary, the next phase is Phase 23 — Qualified v0.4.0 Release — via `/gsd-discuss-phase 23`; do not begin it before owner selection. No upstream ROM/reference payload is fetched or run, no real diagnostic fixture is admitted, and no license prohibition is inferred. DIAG-01, DIAG-02, and RIGHTS-01 remain Pending. Keep both automatic-advance flags false.
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 | Phase GB-21 P05 | 15min | 3 tasks | 1 files |
 | Phase GB-21 P07 | 533min | 2 tasks | 17 files |
 | Phase GB-22 P01 | 19min | 2 tasks | 6 files |
+| Phase 22 P10 | about 24 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -81,13 +82,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-03
-**Stopped at:** Phase GB-22 replanning complete; resume execution at Plan 22-02 with /gsd-execute-phase 22
-**Resume file:** .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
+**Last session:** 2026-11-03T11:22:46.695Z
+**Stopped at:** Completed 22-10-PLAN.md; next in-phase plan is 22-11
+**Resume file:** None
 
 ## Operator Next Steps
 
-Phase 21 is verified at implementation source `e0845db5` and merged after exact-head PR qualification. PR #140 final head `507019f9` passed required checks and squash-merged as `bef2cfbd` with an identical tree. Phase 22 Plan 22-01 is complete; its five selected tests pass, including the original synthetic tracer. Owner-approved D-141 replanning passed independent review: four live plans, with 22-02 next and the old real-fixture build/admission plans superseded. Continue within Phase 22 with **/gsd-execute-phase 22**. The seven diagnostic evidence gates remain open; no real diagnostic fixture is admitted and DIAG-01, DIAG-02, RIGHTS-01 remain Pending. Do not advance automatically beyond Phase 22.
+Phase 22 Plan 22-10 is complete with the immutable metadata/no-go contract, synchronized public claims, and passing negative controls. Continue at the sole remaining Plan 22-11 with **/gsd-execute-phase 22**. Seven real-fixture evidence gates remain open; no real diagnostic fixture is admitted and DIAG-01, DIAG-02, and RIGHTS-01 remain Pending. When Phase 22 is complete, Phase 23 — Qualified v0.4.0 Release — is next via **/gsd-discuss-phase 23**. Do not begin Phase 23 automatically.
 
 ## Decisions
 
@@ -111,6 +112,7 @@ Phase 21 is verified at implementation source `e0845db5` and merged after exact-
 - [Phase GB-22]: Keep the tracer synthetic-only and bind its one visible tile cell to a fixed allowlist.
 - [Phase GB-22]: Assert specific refusal reasons for identity, mask, image, path, and admission-pin mutants.
 - [Phase GB-22]: Owner approved the Phase 22 synthetic-plus-metadata rescope; DIAG-01, DIAG-02, and RIGHTS-01 remain Pending and real fixture admission remains refused. — D-141 records that the metadata review could not establish the seven required real-fixture evidence gates. See .planning/phases/GB-22-composition-and-microtest-evidence/22-RESCOPE.md.
+- [Phase 22]: Plan 22-10 checks the immutable metadata inventory and exact no-go claims while DIAG-01, DIAG-02, and RIGHTS-01 remain Pending.
 
 ### Blockers
 
