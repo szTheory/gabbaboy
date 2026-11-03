@@ -587,6 +587,7 @@ def forbidden_fixture_path(path: str, content: bytes = b"") -> bool:
 
 def is_svg_document(content: bytes) -> bool:
     """Recognize an SVG document root without matching source-code examples."""
+    content = normalize_xml_markup(content)
     candidate = content[3:] if content.startswith(b"\xef\xbb\xbf") else content
     while True:
         candidate = candidate.lstrip(b" \t\r\n")
@@ -607,8 +608,31 @@ def is_svg_document(content: bytes) -> bool:
                 return False
             candidate = candidate[end + 1:].lstrip(b" \t\r\n")
         else:
-            return re.match(rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?svg(?=[\s/>])",
+            return re.match(rb"<(?:[^:/\s<>]+:)?svg(?=[\s/>])",
                             candidate, re.IGNORECASE) is not None
+
+
+def normalize_xml_markup(content: bytes) -> bytes:
+    """Project UTF-16 XML punctuation to ASCII for bounded root recognition."""
+    if content.startswith(b"\xff\xfe"):
+        offset, little_endian = 2, True
+    elif content.startswith(b"\xfe\xff"):
+        offset, little_endian = 2, False
+    elif content.startswith(b"<\x00"):
+        offset, little_endian = 0, True
+    elif content.startswith(b"\x00<"):
+        offset, little_endian = 0, False
+    else:
+        return content
+    encoded = memoryview(content)[offset:]
+    if len(encoded) % 2:
+        return b""
+    normalized = bytearray(len(encoded) // 2)
+    for index in range(0, len(encoded), 2):
+        first, second = encoded[index], encoded[index + 1]
+        low, high = (first, second) if little_endian else (second, first)
+        normalized[index // 2] = low if high == 0 else 0xff
+    return bytes(normalized)
 
 
 def doctype_end(content: bytes) -> int:
@@ -1102,6 +1126,12 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: require_no_diagnostic_payload(
         ["assets/reference.md"], {"assets/reference.md": doctype_svg}),
         "diagnostic-payload-added", "doctype-subset-svg-content")
+    for endian, bom, control in (("utf-16-le", b"\xff\xfe", "utf16le-svg-content"),
+                                 ("utf-16-be", b"\xfe\xff", "utf16be-svg-content")):
+        encoded_svg = bom + "<?xml version='1.0'?><svg:svg xmlns:svg='urn:svg'/>".encode(endian)
+        expect_reject(lambda encoded_svg=encoded_svg: require_no_diagnostic_payload(
+            ["assets/reference.md"], {"assets/reference.md": encoded_svg}),
+            "diagnostic-payload-added", control)
     if forbidden_fixture_path("tests/scripts/control.py", b"svg_example = b'<svg xmlns=\\\"urn:example\\\"/>'"):
         raise Reject("self-test-false-svg-positive")
     for brand, control in ((b"avif", "extensionless-avif-content"),
