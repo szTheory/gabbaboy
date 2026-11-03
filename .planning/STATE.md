@@ -5,12 +5,12 @@ milestone_name: Evidence Floor
 current_phase: 22
 current_phase_name: Synthetic Composition and Diagnostic Gate Assessment
 current_plan: 5
-status: executing
+status: Blocked pending owner scope resolution for the open Phase 22 C1 OSC diagnostic leak
 stopped_at: "Phase 22 Plan 22-12 blocked: open C1 OSC payload finding at final review cap"
-last_updated: "2026-11-03T15:49:36.909Z"
+last_updated: "2026-11-03T15:51:09.424Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase 22 execution started
-state_head: f59ebd166a354537343dd9e87b870698cc686b2b
+state_head: bbcbe2f83947517dcc9ad1926716a5f78d20c9b7
 progress:
   total_phases: 4
   completed_phases: 2
@@ -26,7 +26,7 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 22 — Synthetic Composition and Diagnostic Gate Assessment
+**Current focus:** Phase 22 Plan 22-12 stopped at the final review-fix limit with T-22-38 open. Owner scope resolution required; next command: /gsd-discuss-phase 22
 
 ## Current Position
 
@@ -35,7 +35,7 @@ Total Plans in Phase: 5
 Phase: 22 (Synthetic Composition and Diagnostic Gate Assessment) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
-Status: Executing Phase 22
+Status: Blocked pending owner scope resolution for the open Phase 22 C1 OSC diagnostic leak
 Last activity: 2026-11-03 — Phase 22 execution started
 
 Completed stage: **Phase 21 — CGB Game Progress and Scene Regressions, implementation and verification**. All eight plans and five roadmap criteria are complete. Implementation source `e0845db5` passed configure/build, the 18 compile-command tests, and focused fixture-admission controls. The serial local CTest suite passed 1,717/1,718 before `v02_source_archive_controls` hit its existing 90-second limit; that test passed an isolated same-source retry in 77.17 seconds, so every local test has passing evidence across the full run and retry, but no single invocation was all-green. PR #140's final checked head `507019f9` passed the required native/platform, sanitizer, CMake-floor, fixture-reproduction, installed-consumer, and player-package checks and was squash-merged as `bef2cfbd`; the merged tree matches the checked PR head. The first macOS hosted full-suite attempt timed out `phase21_fixture_admission_controls` at 60.08 seconds; its same-head full-suite rerun passed all 1,724 tests, including that control in 50.18 seconds. Independent scoped review and security review found no remaining issues; the security report has zero open threats. The verifier passed all five roadmap criteria using the documented owner disposition for FIXT-01. That requirement remains Pending; no candidate game source or ROM was run and no rights clearance is claimed. Phase 22 was replanned under owner-approved D-141 after seven real-fixture evidence gates remained unresolved; the four-live-plan set passed independent plan review.
