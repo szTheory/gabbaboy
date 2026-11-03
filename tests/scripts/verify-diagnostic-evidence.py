@@ -578,11 +578,35 @@ def forbidden_fixture_path(path: str, content: bytes = b"") -> bool:
         return True
     if len(prefix) >= 262 and prefix[257:262] == b"ustar":
         return True
-    if re.search(rb"<svg\b", content, re.IGNORECASE):
+    if is_svg_document(content):
         return True
     if re.match(rb"\s*P[1-6][\s\r\n]", prefix):
         return True
     return False
+
+
+def is_svg_document(content: bytes) -> bool:
+    """Recognize an SVG document root without matching source-code examples."""
+    candidate = content.lstrip(b"\xef\xbb\xbf \t\r\n")
+    while True:
+        lowered = candidate[:32].lower()
+        if lowered.startswith(b"<!--"):
+            end = candidate.find(b"-->", 4)
+            if end < 0:
+                return False
+            candidate = candidate[end + 3:].lstrip(b" \t\r\n")
+        elif lowered.startswith(b"<?"):
+            end = candidate.find(b"?>", 2)
+            if end < 0:
+                return False
+            candidate = candidate[end + 2:].lstrip(b" \t\r\n")
+        elif re.match(rb"<!doctype\s+svg\b", lowered, re.IGNORECASE):
+            end = candidate.find(b">")
+            if end < 0:
+                return False
+            candidate = candidate[end + 1:].lstrip(b" \t\r\n")
+        else:
+            return re.match(rb"<svg(?:\s|>)", candidate, re.IGNORECASE) is not None
 
 
 def require_no_diagnostic_payload(paths: list[str],
@@ -1033,6 +1057,8 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: require_no_diagnostic_payload(
         ["assets/reference.md"], {"assets/reference.md": long_svg}),
         "diagnostic-payload-added", "long-prefix-renamed-svg-content")
+    if forbidden_fixture_path("tests/scripts/control.py", b"svg_example = b'<svg xmlns=\\\"urn:example\\\"/>'"):
+        raise Reject("self-test-false-svg-positive")
     for brand, control in ((b"avif", "extensionless-avif-content"),
                            (b"heic", "extensionless-heic-content")):
         ftyp_image = b"\x00\x00\x00\x18ftyp" + brand + b"\x00\x00\x00\x00"
