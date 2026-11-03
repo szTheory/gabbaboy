@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 CHECKER = Path(__file__).with_name("verify-cgb-candidates.py")
@@ -210,6 +211,19 @@ class CandidateOrderTests(unittest.TestCase):
         self.assertEqual(
             CHECKER_MODULE.cmake_build_qualified_value(unrelated_undefine), "1"
         )
+
+    def test_cmake_build_flag_windows_command_only_strips_double_quotes(self) -> None:
+        single_quoted = {
+            "command": "cl '-DGBB_BUILD_QUALIFIED=1' source.c",
+        }
+        double_quoted = {
+            "command": 'cl "-DGBB_BUILD_QUALIFIED=1" source.c',
+        }
+        with mock.patch.object(CHECKER_MODULE.os, "name", "nt"):
+            self.assertIsNone(CHECKER_MODULE.cmake_build_qualified_value(single_quoted))
+            self.assertEqual(
+                CHECKER_MODULE.cmake_build_qualified_value(double_quoted), "1"
+            )
 
     def test_cmake_source_candidate_diagnostic_has_a_total_size_bound(self) -> None:
         commands = [{"file": f"{index}-{'x' * 2000}/gabbaboy.c"} for index in range(20)]

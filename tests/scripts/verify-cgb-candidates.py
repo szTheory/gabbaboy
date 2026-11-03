@@ -2305,8 +2305,8 @@ def cmake_build_qualified_value(entry: dict[str, Any]) -> str | None:
     index = 0
     while index < len(argv):
         argument = argv[index]
-        if (strip_command_quotes and len(argument) >= 2
-                and argument[0] in "\"'" and argument[-1] == argument[0]):
+        if strip_command_quotes and len(argument) >= 2 \
+                and argument[0] == '"' and argument[-1] == '"':
             argument = argument[1:-1]
         prefix = next((flag for flag in ("-D", "/D", "-U", "/U")
                        if argument.startswith(flag)), None)
@@ -2316,8 +2316,8 @@ def cmake_build_qualified_value(entry: dict[str, Any]) -> str | None:
             if not definition and index + 1 < len(argv):
                 index += 1
                 definition = argv[index]
-                if (strip_command_quotes and len(definition) >= 2
-                        and definition[0] in "\"'" and definition[-1] == definition[0]):
+                if strip_command_quotes and len(definition) >= 2 \
+                        and definition[0] == '"' and definition[-1] == '"':
                     definition = definition[1:-1]
             target = "GBB_BUILD_QUALIFIED"
             if definition == target or definition.startswith(target + "="):
