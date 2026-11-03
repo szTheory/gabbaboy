@@ -2,32 +2,33 @@
 
 Planning date: 2026-11-03. Installed runtime identity observed: `@opengsd/gsd-core` 1.19.0. Planning only: no implementation change, build, test suite, hosted workflow, fixture operation, tag or publication was executed. Plan syntax/schema validation is separate from implementation verification.
 
-Seven plans occupy seven waves, leaving two of the nine allowed slots unused. Each production-code task touches at most five exact source files. Existing shared test registration and mutable release control-plane state force sequential waves; artificial concurrency would conflict on `tests/CMakeLists.txt`, inventory, generated copy or the same version PR. No external dependency, database schema or new release infrastructure is planned. Plan 23-07 executes between 04 and 05: planning inspection confirmed that existing state goldens still declare 0.3.0 and both support validation and compiled pin checks require the actual CMake release token. Its existing release-change disposition and documentation must therefore move with the generated 0.4.0 source, under the already adopted same-release-only policy.
+Eight plans occupy eight waves, leaving one of the nine allowed slots unused. Each production-code task touches at most five exact source files. Existing shared test registration and mutable release control-plane state force sequential waves; artificial concurrency would conflict on `tests/CMakeLists.txt`, inventory, generated copy or the same version PR. No external dependency, database schema or new release infrastructure is planned. Plan 23-07 executes between 04 and 05: planning inspection confirmed that existing state goldens still declare 0.3.0 and both support validation and compiled pin checks require the actual CMake release token. Its existing release-change disposition and documentation must therefore move with the generated 0.4.0 source, under the already adopted same-release-only policy. Plan 23-06 now owns seven modified files for downloaded-release reconciliation and automated release-evidence closure. Former 23-06-T3 milestone bookkeeping/lessons/continuation moves to Plan 23-08, which depends on 06, owns seven modified files and includes final all-summary closure regeneration. No plan exceeds ten modified files.
 
 ## Four-source coverage
 
 | SOURCE | ID | Required outcome or constraint | Plans/tasks | Status |
 |---|---|---|---|---|
-| GOAL | Phase 23 | Qualified v0.4.0 with accurate established CGB/diagnostic evidence | 01–06 | COVERED |
+| GOAL | Phase 23 | Qualified v0.4.0 with accurate established CGB/diagnostic evidence | 01–08; execution order 01 → 02 → 03 → 04 → 07 → 05 → 06 → 08 | COVERED |
 | GOAL | Criterion 1 | Final implementation-head local/hosted qualification, reviewed exact-source rehearsal, consumers and controls; historical phase evidence retained | 04-T1/T2, 05-T1/T3, 06-T1 | COVERED |
 | GOAL | Criterion 2 | Both named absence reasons or exact admitted progress; source/model distinctions and hardware/perceptual/timing/platform/compatibility limits | 01-T1/T2, 02-T1/T2, 05-T1, 06-T2 | COVERED — accepted source facts require absence, never fixture execution |
 | GOAL | Criterion 3 | Published/downloaded source/digest reconciliation, actual-byte consumers, notices and real-product/game-ROM-insertion controls | 05-T3, 06-T1 | COVERED |
-| GOAL | Cap/out-of-scope | At most nine plans; no default RM-032, libretro, Linux/Deck support, timing rewrite, license migration, libfuturo dependency or API/state freeze | Execution contract; 04-T2, 05-T1, 06-T3 | COVERED |
-| REQ | REL-01 | Qualified release and source/model-bound support documentation with explicit evidence limits | All seven `requirements` fields; 06-T2 closure | COVERED |
+| GOAL | Cap/out-of-scope | At most nine plans; no default RM-032, libretro, Linux/Deck support, timing rewrite, license migration, libfuturo dependency or API/state freeze | Execution contract; 04-T2, 05-T1, 08-T1/T2 | COVERED |
+| REQ | REL-01 | Qualified release and source/model-bound support documentation with explicit evidence limits | All eight `requirements` fields; 06-T2 release closure; 08-T2 final all-summary closure/handoff | COVERED |
 | RESEARCH | Profile dispatch | Current v0.3-only claims need explicit v0.4 input/validation/rendering while preserving historical bytes | 01-T1/T2 | COVERED |
 | RESEARCH | Claims/ledger controls | Strict bounded immutable Git reads, closed schema, exact generator output and causal promotion refusals | 01-T1/T2, 02-T1 | COVERED |
 | RESEARCH | Concise notes | Reuse existing adoption/disclosure gate; share facts with ledger and reject omissions/contradictions | 02-T1/T2 | COVERED |
 | RESEARCH | Content window | Add all v0.4 copy inputs; retain body/base/source/run invalidation and inactive development semantics | 03-T1, 05-T1 | COVERED |
 | RESEARCH | Verified version dependency | Existing state goldens declare 0.3.0; actual 0.4.0 serialized release token needs compiled pins and exact immutable-base compatibility disposition | 07-T1/T2; 03-T1 managed-input binding; 05-T1 review/rehearsal | COVERED — no format/behavior/API change or guard weakening |
-| RESEARCH | Open exact-version gate | Actual release-please output remains unobserved; current source is 0.3.0 and observed history did not prove a minor bump | 03-T2, 05-T1 | COVERED — wrong/missing output holds freeze/rehearsal/tag; concrete blocker can use reviewed reserve plan |
+| RESEARCH | Resolved planning / exact-version gate | Actual release-please output remains unobserved; current source is 0.3.0 and observed history did not prove a minor bump | 03-T2, 07-T1, 05-T1 | COVERED — RESOLVED FOR PLANNING by the strict pre-freeze gate; wrong/missing output holds freeze/rehearsal/tag; concrete blocker can use the remaining reviewed reserve plan |
 | RESEARCH | H/R1/W/R2 | Actual reviewed H, R1, record-only W, R2/current checks/nightly before version merge | 05-T1/T3 | COVERED |
 | RESEARCH | Two-stage qualification | Rehearsal is source-side only; later trusted draft-bound downloads/consumers/final publication remain required | 05-T1/T3, 06-T1 | COVERED |
-| RESEARCH | Live access/checks | Observe actual auth/protection/check/source identity; historical/local success cannot qualify remote head | 04-T2, 05-T1/T3 | COVERED — auth gate only when observed |
+| RESEARCH | Resolved planning / live access/checks | Observe actual auth/protection/check/source identity; future access/results remain unobserved and historical/local success cannot qualify remote head | 04-T2, 05-T1/T3 | COVERED — RESOLVED FOR PLANNING by existing fail-closed live gates; unavailable credentials/protection or missing/stale/non-successful current checks hold the transition; auth gate only when observed |
 | RESEARCH | Privilege/source boundaries | Preserve trusted checkout, exact tag/source, scoped tokens, bounded archive policy, notices and fixture exclusion | 04-T1, 05-T3, 06-T1 | COVERED |
 | RESEARCH | Retry/recovery hold | Same draft/tag/source/byte-identical assets only; historical v0.3 repair is not general authorization | 02-T2, 05-T3 | COVERED |
-| RESEARCH | CI efficiency | Measure current job/step durations, queue/dependency waits and headroom; preserve all required lanes and accept justified no-change | 04-T2, 06-T1/T3 | COVERED |
+| RESEARCH | CI efficiency | Measure current job/step durations, queue/dependency waits and headroom; preserve all required lanes and accept justified no-change | 04-T2, 06-T1, 08-T1 | COVERED |
 | RESEARCH | Independent review | Release, security, consumer and adversarial review with bounded fixes | 04-T1; generated-delta review 05-T1 | COVERED |
-| RESEARCH | Automated closure | Correct SUMMARY schema and shared closure checker; no invented gameplay/document UAT | Execution contract; 06-T2/T3 | COVERED |
+| RESEARCH | Automated closure | Correct SUMMARY schema and shared closure checker; no invented gameplay/document UAT | Execution contract; 06-T2 release-evidence closure; 08-T2 exact eight-summary set and final shared regeneration/self-test | COVERED — 23-UAT-EVIDENCE.md remains the --write evidence input; 23-UAT.md is generated output |
+| RESEARCH | Milestone handoff | Read-only sibling/Playstead XFER scan, measured lessons, rolling-roadmap refresh and precise owner-controlled audit route | 08-T1/T2, moved from former 06-T3 | COVERED — both automatic-advance flags remain false; no next milestone starts |
 | RESEARCH | Package audit | No new dependency install; existing pinned CMake/Python/GitHub infrastructure | All plans' supply-chain row; execution contract | COVERED |
 | CONTEXT | D-01 | Concise exact candidate/model/diagnostic/limit notes and versioned ledger link | 02-T1/T2, 05-T1 | COVERED |
 | CONTEXT | D-02 | Generated self-sufficient concise v0.4 ledger; direct detail links; v0.3 unchanged | 01-T1/T2, 05-T1 | COVERED |
@@ -36,7 +37,7 @@ Seven plans occupy seven waves, leaving two of the nine allowed slots unused. Ea
 | CONTEXT | D-05 | CGB-CPU-E native harness-only RGB555/PCM reproducibility with all evidence limits | 01-T2, 02-T1/T2, 06-T1/T2 | COVERED |
 | CONTEXT | D-06 | Synthetic composition and metadata-only assessment; 513 names, seven unresolved gates, zero admitted/executed; DIAG/RIGHTS Pending | 01-T2, 02-T1, 05-T1, 06-T1/T2 | COVERED |
 | CONTEXT | D-07 | Existing version/rehearsal/source/tag/download/consumer/notice/fixture/final publish gates and unsigned platform limits | 02-T2, 03, 04, 05, 06-T1 | COVERED |
-| CONTEXT | D-08 | Historical receipts preserved; current reviewed release source/download identity distinct | 01–06 | COVERED |
+| CONTEXT | D-08 | Historical receipts preserved; current reviewed release source/download identity distinct | 01–08 | COVERED |
 
 No required source item is missing. Deferred/out-of-scope research suggestions and unresolved fixture admission itself are excluded from implementation; their Pending disclosure is included. A new concrete correctness/security failure requires correction or rescope within the configured bounds, never silent deferral.
 
@@ -50,9 +51,12 @@ No required source item is missing. Deferred/out-of-scope research suggestions a
 | 23-04 / 4 | Completed implementation 01–03 | Independent/adversarial reviews and exact-head local/hosted implementation merge | Independent review roles may run in parallel with distinct reports; findings return to owning task |
 | 23-07 / 5 | Reviewed merged implementation and actual generated 0.4.0 version PR | Compiled release-bound state pins/disposition/docs under existing same-release policy | No new approval of established policy; no freeze/rehearsal/tag |
 | 23-05 / 6 | 07 actual exact 0.4.0 source and consistent native-state pins | Generated tracked ledger/notes, H/R1/W/R2, protected version merge and trusted published bytes | One-way decision immediately before tag/publication-triggering merge; one mutable release control plane |
-| 23-06 / 7 | Actual successful release and qualified inventories | Reconciled release, automated closure, Pending traceability and owner-controlled milestone-audit route | Stop at phase boundary; never start next milestone |
+| 23-06 / 7 | Actual successful release and qualified inventories | Reconciled downloaded release, automated release-evidence closure and Pending traceability | No checkpoint; final milestone bookkeeping/closure follows in 08 |
+| 23-08 / 8 | Completed 06 release reconciliation/closure | Sanitized transfer/CI lessons, rolling-roadmap refresh, all-eight-summary shared closure and exact owner-controlled milestone-audit route | Stop at phase boundary; never start next milestone; shares UAT evidence/output with 06 in a later wave |
 
 Each plan has 2–3 tasks. Plan 23-05 has a decision in addition to preparation and implementation because it must keep reversible reviewable work ahead of the one-way release action. The leading plan's frontmatter and first task are both marked tracer. Every task includes exact files where modified, read_first, action, automated checks, immediate observable fails_when, acceptance_criteria and done.
+
+Revision 1 resolves both research questions for planning through explicit execution-time gate/hold dispositions without asserting unknown future output or credentials. The closeout split preserves all original responsibilities, locked decisions, probe flags, exact-version/state-pin ordering and the existing release path. The transfer and continuation checks are one-off local bookkeeping assertions; they do not add a reusable checker or dependency.
 
 ## Discovery, interface and path grounding
 

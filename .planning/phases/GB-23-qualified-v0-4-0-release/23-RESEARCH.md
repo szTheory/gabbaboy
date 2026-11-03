@@ -262,16 +262,18 @@ Use the roadmap's nine-plan cap as a ceiling; a likely convergent order is: [VER
 
 No unverified technical claims are recommended as facts. The expected release version, hosted checks and live GitHub/API outcomes remain gates to observe, not assumptions. [VERIFIED: .planning/ROADMAP.md:130-144; .planning/STATE.md:5-10]
 
-## Open Questions
+## Planning Resolutions and Execution-Time Gates
 
 1. **Will the first generated release PR produce exactly 0.4.0?**
+   - **RESOLVED FOR PLANNING — EXECUTION-TIME GATE:** Plans 23-03-T2 and 23-07-T1 require the actual immutable generated CMake/manifest output to equal 0.4.0 before Plan 23-05 may freeze, rehearse or tag; Plan 23-05-T1 rechecks the generated ledger and notes with that source. Planning is resolved by this strict gate and hold path, not by knowing the future generated output. [PLANNED: 23-03-PLAN.md, 23-07-PLAN.md, 23-05-PLAN.md]
    - What we know: The current manifest and CMake version are both `0.3.0`; Phase 23's target is v0.4.0. The current non-merge commit subjects after v0.3.0 are docs, CI, test, chore and phase-title subjects; no `feat:` subject appears in the observed history. Release Please documents `feat:` as a minor-version signal. [VERIFIED: .release-please-manifest.json:1-3; CMakeLists.txt:1-2; .planning/ROADMAP.md:130-144; git log --no-merges --format=%s v0.3.0..HEAD; CITED: https://github.com/googleapis/release-please-action]
-   - What's unclear: The generated PR/tag and actual hosted action output have not been observed; the current config does not explicitly set a 0.4.0 target. [VERIFIED: release-please-config.json:3-14; local research boundary]
-   - Recommendation: Treat 0.4.0 CMake, manifest, tag, ledger and notes agreement as a pre-merge gate. Stop before the version-window/tag if generation differs; resolve only the narrow release blocker within phase scope. [VERIFIED: docs/release.md:103-118, 489-534; .planning/ROADMAP.md:141-144]
+   - Execution observation still required: The generated PR/tag and actual hosted action output have not been observed; the current config does not explicitly set a 0.4.0 target. This disposition does not claim that the next output will be 0.4.0. [VERIFIED: release-please-config.json:3-14; local research boundary]
+   - Hold condition: A missing PR, unavailable output or any wrong/mixed version holds the content window, rehearsal and tag. Retain the observed run/output blocker; resolve only a demonstrated narrow existing-path target correction through the remaining scoped reviewed reserve plan and affected controls. Do not manufacture feature history or silently accept another version. [PLANNED: 23-07-T1, 23-05-T1; VERIFIED: docs/release.md:103-118, 489-534; .planning/ROADMAP.md:141-144]
 2. **Will the owner-approved remote checks and credentials be available when the phase executes?**
+   - **RESOLVED FOR PLANNING — EXECUTION-TIME GATE:** Plans 23-04-T2 and 23-05-T1/T3 require live authenticated repository access, current protection/merge eligibility and successful required checks at the actual reviewed head. Planning is resolved by these existing gates and their fail-closed hold; future access and hosted results remain unobserved. [PLANNED: 23-04-PLAN.md, 23-05-PLAN.md]
    - What we know: Local `gh` is installed, but this research did not inspect authenticated GitHub state or run hosted workflows. [VERIFIED: local shell probe; .planning/STATE.md:8-10]
-   - What's unclear: Current branch protection, open PRs, action approvals, secrets and exact-head check status are live state.
-   - Recommendation: Use the existing documented remote qualification path and report access failures precisely; do not treat local CTest or historical Phase 22 checks as v0.4 qualification. [VERIFIED: AGENTS.md:41-43; docs/release.md:489-534]
+   - Execution observation still required: Current branch protection, open PRs, action approvals, secrets and exact-head check status are live state; neither credentials nor future successful checks are asserted available here.
+   - Hold condition: Unavailable credentials/protection/check APIs, changed head/base, missing or skipped required coverage, or incomplete/non-successful current checks holds the applicable merge/release transition. Record the actual failure, address an authentication gate only when observed, and resume only after the existing live gates pass. Local CTest, historical Phase 22 checks and an earlier successful head cannot substitute. [PLANNED: 23-04-T2, 23-05-T1/T3; VERIFIED: AGENTS.md:41-43; docs/release.md:489-534]
 
 ## Environment Availability
 

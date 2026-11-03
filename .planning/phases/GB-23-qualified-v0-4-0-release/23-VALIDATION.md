@@ -55,7 +55,8 @@ All entries are planned checks, not execution evidence. Each task's PLAN has an 
 | 23-05-T3 | 05 | 6 | REL-01 | T-23-10/11/12 | Actual tagged/downloaded bytes, consumers/notices/fixture controls/nightly/final live inventory precede publication | e2e | Live release workflow plus existing published-asset readback verifier in 23-05-PLAN.md | Existing workflows/checkers | pending |
 | 23-06-T1 | 06 | 7 | REL-01 | T-23-13 | Fresh final API/download inventory matches qualified source, product and consumer evidence | e2e | Existing published-asset verifier and lifecycle/product/workflow controls in 23-06-PLAN.md | Existing commands | pending |
 | 23-06-T2 | 06 | 7 | REL-01 | T-23-14 | Exact SUMMARY schema and shared closure accept evidence and reject weakened copies; Pending requirements preserved | integration | Shared `verify-uat-closure.py` write/self-test and summary/closure CTest commands in 23-06-PLAN.md | Existing checker/CTest | pending |
-| 23-06-T3 | 06 | 7 | REL-01 | T-23-15 | Point-in-time boundary facts and false auto flags survive closeout; owner chooses next stage | other | Config flag assertion and shared closure check in 23-06-PLAN.md | Existing config/checker | pending |
+| 23-08-T1 | 08 | 8 | REL-01 | T-23-18 | Sanitized transfer/CI lessons and future direction cite actual immutable release evidence | other | Lesson/roadmap section and evidence-link assertion with removed-reference/transfer controls in 23-08-PLAN.md | Existing documents; one-off bookkeeping assertion | pending |
+| 23-08-T2 | 08 | 8 | REL-01 | T-23-15/18 | All eight summaries enter final closure; point-in-time boundary facts, owner route and false auto flags survive handoff | integration | Exact-summary-set/route/flag assertion with mutation controls; shared --write using 23-UAT-EVIDENCE.md, --self-test and final check in 23-08-PLAN.md | Existing config/checker; one-off bookkeeping assertion | pending |
 
 ---
 
@@ -73,6 +74,8 @@ These are delivered inside 23-01 through 23-03, with tests and registration in e
 ## Manual-Only Verifications
 
 All phase behavior has automated verification. Hosted credentials, required-check status, generated version-PR content, and real downloaded release artifacts must be observed through the existing trusted release process; local tests cannot substitute for those results. No human gameplay or perceptual review is a Phase 23 gate.
+
+Plan 23-06's closure covers completed release-evidence summaries. Final phase acceptance additionally requires Plan 23-08's completed summary and regeneration through the same shared tool with `23-UAT-EVIDENCE.md` as the evidence input; `23-UAT.md` is generated output. Plan 23-08 asserts the exact eight-summary set because shared closure validates only summaries that exist.
 
 Plan 23-05 includes the expressly required one-way decision immediately before version-PR merge/tag/publication. This is an authority boundary, not human UAT. The spec-less REL-01 edge remains unclassified/unresolved, and two descriptor-less transparency prohibitions remain flagged-unverified; 23-SOURCE-AUDIT.md records the recall/precision/projection evidence without manufacturing human acceptance scenarios.
 
