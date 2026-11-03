@@ -1,6 +1,6 @@
 # Phase 21 bounded rescope: qualification flag ordering and diagnostic escaping
 
-**Status:** Owner-approved, in progress
+**Status:** Owner-approved, implementation and review complete; final documentation-head qualification and PR merge pending
 
 **Approval:** User authorized one bounded fix and independent review on 2026-11-02.
 
@@ -30,7 +30,7 @@ No emulator/product code, candidate source or ROM, rights decision, fixture inve
 
 ## Completion evidence
 
-Record the final reviewed source commit, focused controls, full local suite, fresh exact-head hosted checks, and PR merge outcome here and in the phase verification/evidence artifacts. The phase remains incomplete until those checks and its ordinary verification/closeout requirements pass.
+The final reviewed implementation source is `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`. The 18 parser unit tests, configure/build, focused fixture-admission control, independent scoped code/security reviews, and all 1,718 registered local tests have passing evidence across the full serial run plus its one isolated source-archive timeout retest. Pull-request CI, fixture-reproduction, installed-consumer and player-package checks all passed on exact PR head `e0845db5`; run links and the honest full-suite accounting are in [21-UAT-EVIDENCE.md](21-UAT-EVIDENCE.md). The phase documentation/verification commit will create a new PR head and requires a fresh exact-head check set before merge. Record that final head and the merge result before closing Phase 21.
 
 ### Related review refinement
 

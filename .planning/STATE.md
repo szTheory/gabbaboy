@@ -2,21 +2,21 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
-current_phase: 21
-current_phase_name: CGB Game Progress and Scene Regressions
-current_plan: 7
-status: ready_for_verification
-stopped_at: "Plan 21-07 merged-main local requalification complete; final PR #140 exact-head qualification pending"
-last_updated: "2026-11-02T15:37:38.963Z"
+current_phase: 22
+current_phase_name: Composition and Microtest Evidence
+current_plan: Not started
+status: planning
+stopped_at: Phase 21 verified; final closeout-head PR checks and merge remain in progress before Phase 22 planning
+last_updated: "2026-11-03T01:29:20Z"
 last_activity: 2026-11-02
-last_activity_desc: Completed GB-21 Plan 21-07 configure/build and 1724/1724 CTests at code source fdd3454a; exact-head PR qualification pending
-state_head: f5c750962e05663be6df1b62741cedff9611c108
+last_activity_desc: Phase 21 verification passed 5/5 with the owner-approved FIXT-01 pending disposition; final closeout PR qualification remains
+state_head: e0845db5841a1d56d8a297cbfaa3e0811af6ad67
 progress:
   total_phases: 4
-  completed_phases: 1
-  total_plans: 16
-  completed_plans: 16
-  percent: 25
+  completed_phases: 2
+  total_plans: 17
+  completed_plans: 17
+  percent: 50
 ---
 
 # Project State
@@ -26,21 +26,21 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-21 — CGB Game Progress and Scene Regressions
+**Current focus:** Phase 21 closeout; Phase 22 remains unstarted
 
 ## Current Position
 
-Current Plan: 7
-Total Plans in Phase: 7
-Phase: GB-21 (CGB Game Progress and Scene Regressions) — FINAL QUALIFICATION
+Current Plan: Not started
+Total Plans in Phase: 0
+Phase: 22 — Composition and Microtest Evidence (not started)
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
-Phase 21 plans: seven reviewed plans across five dependency waves; all four requirements remain mapped, with FIXT-01 pending because neither game was admitted.
-Status: Local execution complete; verify exact-head hosted and installed-consumer checks, then hand off for shared phase closure
-Last activity: 2026-11-02 — Completed Phase GB-21 Plan 21-07 configure/build, full CTest, and source-bound receipt at `66ee663b`
+Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
+Status: Phase 21 verified; final closeout-head PR checks and merge pending. Phase 22 planning waits for the owner-selected command.
+Last activity: 2026-11-02 — Phase 21 verification and exact implementation-source CI completed; final documentation head remains to be qualified.
 
-Completed stage: **Phase 20 — Fixture Admission Tune-up, implementation and final verification**. All nine plans are complete. All 1,711 CTests have passing evidence across two partial full runs and six focused retests; no single full-suite invocation was all-green. Exact-head pull/push CI, preview-package, and fixture-reproduction runs passed; the security audit had no open items and final code review was clean. The final GSD verifier passes all 35 implementation truths with no human checkpoint. The owner reviewed the two judgment findings: public availability or matching hashes do not establish legal permission, and historical fixture approvals were preserved without extending them to new evidence. This review resolves those verification findings only. No fixture was admitted, no legal permission was granted, and `RIGHTS-01` remains Pending. Phase 21 planning is complete; Plan 21-01 now supplies the native-CGB progress tracer and loaded-mode refusal control.
+Completed stage: **Phase 21 — CGB Game Progress and Scene Regressions, implementation and verification**. All eight plans are complete. The final code source `e0845db5` passed configure/build, the 18 compile-command tests, and focused fixture-admission controls. The serial CTest suite passed 1,717/1,718 before `v02_source_archive_controls` hit its existing 90-second limit; that exact test passed an isolated same-source retry in 77.17 seconds. All tests have passing evidence across the full run plus the retry, but no single full invocation was all-green. Exact-head PR CI, fixture reproduction, both installed-package consumers, and player-package smoke passed at `e0845db5`. Independent scoped review and security review found no remaining issues; the security report has zero open threats. The verifier passed all five roadmap criteria using the documented owner disposition for FIXT-01. That requirement stays Pending; no game source or ROM was run and no rights clearance is claimed. The closeout documentation changes the PR head, so its exact checks must pass before merge. Phase 22 — Composition and Microtest Evidence — remains unstarted.
 
-Current stage: Phase 21 — CGB Game Progress and Scene Regressions, final hosted qualification. Plans 21-01 through 21-07 are summarized; configure/build and all 1,724 CTests passed at implementation source `fdd3454a0ee6c2aa37dcd56666e1699c59cb55bf` in 1,220.71 seconds, under the unchanged 60-second budget. The source-bound receipt passes at the same code source. A push diagnostic at `e2fbe20c` found that Windows nested scene CTest discovery selected Debug while execution omitted it; commit `fdd3454a` uses the same explicit configuration for both and its focused controls plus full local suite pass. That prior push diagnostic is not PR qualification. Push the final metadata head, then accept only hosted PR checks whose head SHA matches current PR #140, including installed-consumer jobs. Potion Panic is a no-go because exact component grants and repository/public-CI source scope were not established after its creator-linked source fetch failed. µCity 1.3 is a no-go because required `source/engine/hardware.inc` has no identified grant or notice. Neither outcome asserts license prohibition; neither game was run and downstream tool/build/ROM facts remain not observed. FIXT-01 remains pending. The CGB ROM result is harness-only, and the scene workflow is synthetic-only with no live defect claimed. Both workflow.auto_advance and workflow._auto_chain_active remain false.
+Current stage: Finish Phase 21's closeout on PR #140. The exact implementation-source head `e0845db5` has green PR native/platform, sanitizer, CMake-floor, fixture-reproduction, and package-consumer evidence. The currently edited closeout artifacts will be committed and pushed as a new PR head; accept merge only after that current head's required checks pass. Potion Panic and µCity 1.3 remain source/rights-scope no-go outcomes, not license prohibitions; neither game was run. `FIXT-01` remains Pending under the explicit phase-scoped verification override. The original CGB result is harness-only, and the scene workflow is synthetic-only. Keep both automatic-advance flags false.
 
 ## Performance Metrics
 
@@ -80,13 +80,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-02T15:38:39.078Z
-**Stopped at:** Plan 21-07 merged-main local requalification complete; final PR #140 exact-head qualification pending
+**Last session:** 2026-11-03T01:29:20Z
+**Stopped at:** Phase 21 verified; final closeout PR #140 exact-head checks and merge in progress
 **Resume file:** .planning/phases/GB-21-cgb-game-progress-and-scene-regressions/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 21 Plan 21-07 local implementation and qualification are complete. The earlier full suite and source-bound receipt passed at code source `fdd3454a`; after merging current `main`, all 1,718 tests registered on this host passed cumulatively across a full run and six focused retests. The source-archive control passed under its unchanged 90-second limit. A push diagnostic at `e2fbe20c` exposed a missing `-C Debug` on nested Windows CTest execution; commit `fdd3454a` fixes it. Check native/platform, fixture-reproduction, and installed-consumer jobs on the exact final PR #140 head. When those checks pass, hand off for **/gsd-verify-work 21** shared phase closure. Phase 22 — Composition and Microtest Evidence — remains not started; after Phase 21 closes, the owner-selected next phase command is **/gsd-discuss-phase 22**. Do not invoke that command automatically. Both auto-advance flags remain false.
+Phase 21 is verified at implementation source `e0845db5`; local, independent review/security, and exact-head PR evidence are recorded in the phase artifacts. The full CTest run had one existing 90-second timeout, and that exact test passed its isolated same-source retry at 77.17 seconds; no single full run was all-green. The verifier passed 5/5 roadmap criteria with an explicit phase-scoped disposition, while `FIXT-01` stays Pending. The current closeout commit changes the PR SHA. Continue with final PR #140 exact-head checks, then merge only if all required statuses pass. Phase 22 — Composition and Microtest Evidence — remains unstarted. The owner-selected next command after Phase 21 closeout is **/gsd-discuss-phase 22**; do not invoke it automatically. Both auto-advance flags remain false.
 
 ## Decisions
 

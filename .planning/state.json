@@ -11,7 +11,7 @@
     {
       "number": "21",
       "name": "CGB Game Progress and Scene Regressions",
-      "status": "pending"
+      "status": "complete"
     },
     {
       "number": "22",
@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 21",
-    "label": "Execute Phase 21",
-    "reason": "Phase 21 planning is complete; seven reviewed plans are ready for owner-selected execution"
+    "command": "/gsd-discuss-phase 22",
+    "label": "Discuss Phase 22",
+    "reason": "Phase 21 is verified; finish PR #140 closeout before starting Phase 22"
   },
-  "updated_at": "2026-11-02T01:45:40.734Z"
+  "updated_at": "2026-11-03T01:30:07.734Z"
 }

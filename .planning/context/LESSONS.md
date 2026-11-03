@@ -1119,3 +1119,20 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Remedy:** Compare each requirement changed by `phase.complete` with the final verification report. Use `gsd-tools requirements revert-phase <ID>` to clear an overclaimed checkbox, then keep its traceability row `Pending` when the remaining work is not a current-phase gap (`revert-phase` labels it `Gaps Found`). Reconcile STATE.md and state.json with the exact next phase route before committing.
 - **Applies when:** Completing a phase that maps a multi-part requirement, or where the phase verifies only a subset of its conditions.
 - **Verification:** `RIGHTS-01` is unchecked and Pending in REQUIREMENTS.md; Phase 20 verification remains passed and states that no fixture or legal permission was approved. Phase 21 remains unstarted.
+
+### GB-CI-020 / 2026-11-02 / Retest one serial CTest timeout before repeating the whole suite
+
+- **Cause and evidence:** At Phase 21 rescope source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`, the full serial CTest invocation passed 1,717/1,718; `v02_source_archive_controls` reached its existing 90-second limit. Read-only post-run process inspection found no leftover test child, and the exact test passed alone in 77.17 seconds under the same limit. This does not establish why the first invocation exceeded its limit.
+- **Remedy:** Inspect attributable processes after a timeout, then retry only that exact test once with unchanged membership, timeout, and budget. If it passes and no process residue remains, record both results instead of spending another full-suite run to hide the original timeout.
+- **Applies when:** A serial suite is long, one test times out, and an isolated bounded rerun can determine whether a targeted failure remains.
+- **Verification:** All 1,718 registered tests have passing evidence across the full run and isolated retry; no single full-suite invocation was all-green. The timeout and focused pass remain in [21-UAT-EVIDENCE.md](../phases/GB-21-cgb-game-progress-and-scene-regressions/21-UAT-EVIDENCE.md).
+- **Status:** Adopted; cause of the isolated timeout variance remains unknown.
+
+### GB-CI-021 / 2026-11-02 / Measure duplicate push and pull-request workflows before changing triggers
+
+- **Cause and evidence:** On exact source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`, both push run `41554953994` and pull-request run `41554959166` started the same `ci` workflow; both `fixture-repro` runs also started for that SHA. The PR/push CI run times included 38:41/26:00 for the sanitizer shard and 20:52/33:58 for the CMake-floor lane. PR preview run `41554959116` held its Linux and macOS installed-package jobs for 40:00/40:18 and player-package smoke for 40:34 while they waited on the same-head CI run. The pull-request event remains the qualification authority, while the push event is diagnostic. These same-SHA runs duplicated hosted work and held package runners while waiting.
+- **Remedy:** At the next CI-efficiency review, inspect measured run/job durations and GitHub event/token semantics, then propose the smallest trigger adjustment that removes redundant work while preserving all required PR checks. Do not infer merge qualification from a push run and do not change workflow triggers from this observation alone.
+- **Applies when:** A branch push also opens or updates a pull request and workflows run on both events.
+- **Verification:** The exact-head PR CI, fixture, installed-consumer, and player-package checks all passed at `e0845db5`; both event-level `ci` and fixture-reproduction runs were green. Compare completed run records for the same head SHA and confirm the required current-head PR contexts remain present and successful after any separately approved workflow change.
+- **Source:** Phase 21 PR #140, push run `41554953994`, pull-request run `41554959166`; fixture-reproduction runs `41554954013` and `41554959121`.
+- **Status:** Follow-up recorded; no CI workflow changed in Phase 21.

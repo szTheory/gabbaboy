@@ -41,7 +41,7 @@ created: "2026-11-02"
 | T-21-13 | Information disclosure | Scene-report intake | high | mitigate | Confine reports to ignored local storage, use safe permissions, bound reads and reject private-media promotion (`verify-scene-report.py:230,296,325,474,627`). | closed |
 | T-21-14 | Tampering | Scene-report promotion | high | mitigate | Require source-bound reproduction, an independent committed expectation and a causal negative (`verify-scene-report.py:619,662,703,1037`). | closed |
 | T-21-15 | Spoofing | Game-evidence claims | high | mitigate | Check actual no-go causes and unobserved facts; reject unsupported game, accuracy, hardware and license-prohibition claims (`verify-cgb-game-evidence.py:236,399,408,514+`). | closed |
-| T-21-16 | Tampering | Source-bound game result | high | mitigate | Compare source files to immutable blobs and bind runner, receipt and observations (`verify-cgb-game-evidence.py:136,696`). Exact-head PR CI, fixture, and installed-consumer qualification remain pending for the final evidence head. | closed |
+| T-21-16 | Tampering | Source-bound game result | high | mitigate | Compare source files to immutable blobs and bind runner, receipt and observations (`verify-cgb-game-evidence.py:136,696`). Exact-head hosted qualification is tracked in `21-UAT-EVIDENCE.md`. | closed |
 | T-21-17 | Repudiation | Phase evidence and closure | medium | mitigate | Preserve every plan coverage entry in generated UAT; the shared checker validates evidence mapping and rejects weakened closures (`21-UAT.md`; `verify-uat-closure.py:131,174`). Keep FIXT-01 pending and unresolved prohibitions visible. | closed |
 | T-21-SC | Tampering | Source pin and helper dependencies | high | mitigate | Use existing standard-library helpers, do not execute upstream tools, and require full immutable commit/blob pin checks (`verify-fixture-admission.py:134,767`). | closed |
 
@@ -57,7 +57,7 @@ No accepted risks.
 |------------|---------------|--------|------|--------|
 | 2026-11-02 | 18 unique (24 plan entries; T-21-SC repeats) | 18 | 0 | gsd-security-auditor, ASVS L1 |
 
-The latest source security audit checked code at `ca17216b22d0d9f2fb742c8baed3e1543bc307e1` and found zero implementation blockers. Hosted CI, fixture reproduction, and installed-consumer qualification are outside this source security audit; check PR #140 against its current head before phase closure. Neither candidate game was admitted or run; no rights clearance or hardware/compatibility qualification is claimed. There are no unregistered threat flags.
+The full security audit checked code at `ca17216b22d0d9f2fb742c8baed3e1543bc307e1` and found zero implementation blockers. A scoped independent security recheck of the owner-approved parser and diagnostic correction at `e0845db5841a1d56d8a297cbfaa3e0811af6ad67` also found no remaining issue in scope. Hosted CI, fixture reproduction, and installed-consumer qualification are recorded separately in `21-UAT-EVIDENCE.md`. Neither candidate game was admitted or run; no rights clearance or hardware/compatibility qualification is claimed. There are no unregistered threat flags.
 
 ## Sign-Off
 

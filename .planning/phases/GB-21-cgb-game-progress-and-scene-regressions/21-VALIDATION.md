@@ -1,7 +1,7 @@
 ---
 phase: "21"
 slug: "cgb-game-progress-and-scene-regressions"
-status: local-qualified
+status: validated
 nyquist_compliant: true
 wave_0_complete: true
 created: "2026-11-01"
@@ -116,12 +116,28 @@ Latest exact-head qualification: source `ca17216b22d0d9f2fb742c8baed3e1543bc307e
 - Neither game source was run. Fallback toolchain/build/run facts remain `not_observed`; no fallback fixture, acceptance case, input, predicate, or notice row exists. Original ROM progress remains harness-only. RGB555/PCM digests show repeatability only; no accuracy, physical-hardware, perceptual, mode-3 timing, or general-compatibility claim is made.
 - Independent code review at `893ecac8`: clean, 0 findings. Executor follow-up through `fdd3454a` found no security-relevant surface in the Windows CTest configuration/diagnostic change. See `21-07-REVIEW.md`. Exact-head hosted/platform/installed-consumer checks remain open until the final PR head passes; shared verify-work closure is a separate phase-boundary step.
 
+## Owner-Approved Rescope Qualification
+
+The bounded correction approved under D-140 is at source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`. Its 18 parser unit tests, configure/build, and focused `phase21_fixture_admission_controls` CTest passed. The final serial suite passed 1,717/1,718 in 1,910.62 seconds; `v02_source_archive_controls` hit its existing 90-second timeout, then passed an isolated exact-source retest in 77.17 seconds. No timeout, membership, or budget changed. All registered tests have passing evidence across the full run and focused retest, but there was no all-green full-suite invocation.
+
+Independent scoped code and security reviews found no remaining issue in the parser and diagnostic correction. The final source-bound game result remains `game=not-admitted`, model `CGB-CPU-E`, mode `cgb`; no candidate game source or ROM ran, and `FIXT-01` remains Pending. Exact-head hosted qualification is tracked in `21-UAT-EVIDENCE.md` and remains required before phase closure.
+
 ## CI/CD Efficiency
 
-The final local serial run measured 1,220.71 seconds and passed all 1,724 tests. In exact-source push run `41439436732` at `e2fbe20c`, Linux native took 21m51s, macOS native 21m55s, the CMake-floor install/test 28m43s, and the sanitizer inventory shard 36m12s; those jobs passed. Windows failed only `phase21_scene_report_controls`: nested CTest discovery used `-C Debug` but execution omitted it. Commit `fdd3454a` now supplies the same configuration to execution; its focused tests and full local suite pass. Fixture-reproduction push run `41439436733` passed. Push runs skip PR-only planning and installed package qualification. Current timings show the required full test streams dominate; no measured safe change to scheduling, caching, timeout limits, or test membership is justified.
+The final local serial run measured 1,220.71 seconds and passed all 1,724 tests. In exact-source push run `41439436732` at `e2fbe20c`, Linux native took 21m51s, macOS native 21m55s, the CMake-floor install/test 28m43s, and the sanitizer inventory shard 36m12s; those jobs passed. Windows failed only `phase21_scene_report_controls`: nested CTest discovery used `-C Debug` but execution omitted it. Commit `fdd3454a` now supplies the same configuration to execution; its focused tests and full local suite pass. Fixture-reproduction push run `41439436733` passed. Push runs skip PR-only planning and installed package qualification.
+
+At the owner-approved rescope source `e0845db5`, exact-SHA PR run `41554959166` and its same-SHA push diagnostic `41554953994` both passed. Duplicate PR/push durations were 21m13/21m49 native Linux, 18m11/21m13 native macOS, 20m52/33m58 CMake floor, and 38m41/26m00 for the sanitizer test shard. PR preview run `41554959116` completed both installed-package consumers and the player-package smoke; each held a runner while waiting for matching CI and took 40m00–40m34 overall. This repeats the measured RM-025 CI-load issue. No workflow trigger, cache, timeout, or test membership was changed because that was outside the approved rescope and no coverage reduction is justified. See [FUTURE-MILESTONES.md](../../context/FUTURE-MILESTONES.md#rm-025).
 
 ## Hosted Qualification
 
-PR #140 is the required source for exact-head native/platform and installed-consumer qualification. The push diagnostic at `e2fbe20c` found the missing nested `Debug` configuration and is not accepted as final evidence. After the final evidence head is pushed, accept only successful pull-request runs whose `headSha` equals the current PR head, including `required-native`, fixture reproduction, and both installed package consumers. Push-event and local results are not substitutes. Once exact-head checks pass, use the shared automated closure and phase verifier.
+PR #140 is the required source for exact-head native/platform and installed-consumer qualification. At `e0845db5`, all exact-head PR CI, fixture-reproduction, and installed-consumer checks passed; the detailed run links are in `21-UAT-EVIDENCE.md`. The final phase documentation/verification commit will change the PR SHA, so accept final qualification only from successful pull-request runs whose `headSha` equals that new current PR head, including native/platform, sanitizer, CMake-floor, fixture-reproduction, and package consumers. Push-event results remain diagnostic and local results are not substitutes. After the new exact-head checks pass, finalize the shared automated closure and phase verifier.
 
 **Status:** local implementation and automated validation are recorded; PR #140 carries the live hosted status, and shared phase closure remains a separate step.
+
+## Validation Audit 2026-11-03
+
+| Metric | Count |
+|---|---|
+| Gaps found | 0 |
+| Resolved | 0 |
+| Escalated | 0 |
