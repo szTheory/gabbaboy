@@ -587,8 +587,9 @@ def forbidden_fixture_path(path: str, content: bytes = b"") -> bool:
 
 def is_svg_document(content: bytes) -> bool:
     """Recognize an SVG document root without matching source-code examples."""
-    candidate = content.lstrip(b"\xef\xbb\xbf \t\r\n")
+    candidate = content[3:] if content.startswith(b"\xef\xbb\xbf") else content
     while True:
+        candidate = candidate.lstrip(b" \t\r\n")
         lowered = candidate[:32].lower()
         if lowered.startswith(b"<!--"):
             end = candidate.find(b"-->", 4)
@@ -600,13 +601,48 @@ def is_svg_document(content: bytes) -> bool:
             if end < 0:
                 return False
             candidate = candidate[end + 2:].lstrip(b" \t\r\n")
-        elif re.match(rb"<!doctype\s+svg\b", lowered, re.IGNORECASE):
-            end = candidate.find(b">")
+        elif lowered.startswith(b"<!doctype"):
+            end = doctype_end(candidate)
             if end < 0:
                 return False
             candidate = candidate[end + 1:].lstrip(b" \t\r\n")
         else:
-            return re.match(rb"<svg(?:\s|>)", candidate, re.IGNORECASE) is not None
+            return re.match(rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?svg(?=[\s/>])",
+                            candidate, re.IGNORECASE) is not None
+
+
+def doctype_end(content: bytes) -> int:
+    """Find a DOCTYPE terminator outside quotes, comments, and its subset."""
+    index = len(b"<!DOCTYPE")
+    subset_depth = 0
+    quote = 0
+    while index < len(content):
+        if not quote and content.startswith(b"<!--", index):
+            comment_end = content.find(b"-->", index + 4)
+            if comment_end < 0:
+                return -1
+            index = comment_end + 3
+            continue
+        if not quote and content.startswith(b"<?", index):
+            instruction_end = content.find(b"?>", index + 2)
+            if instruction_end < 0:
+                return -1
+            index = instruction_end + 2
+            continue
+        byte = content[index]
+        if quote:
+            if byte == quote:
+                quote = 0
+        elif byte in (ord('"'), ord("'")):
+            quote = byte
+        elif byte == ord("["):
+            subset_depth += 1
+        elif byte == ord("]") and subset_depth:
+            subset_depth -= 1
+        elif byte == ord(">") and subset_depth == 0:
+            return index
+        index += 1
+    return -1
 
 
 def require_no_diagnostic_payload(paths: list[str],
@@ -1053,10 +1089,19 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: require_no_diagnostic_payload(
         ["assets/reference.md"], {"assets/reference.md": hidden_svg}),
         "diagnostic-payload-added", "renamed-svg-content")
-    long_svg = b"<!--" + bytes(8192) + b"--><svg xmlns='http://www.w3.org/2000/svg'/>"
+    long_svg = b"<!--" + b"x" * 8192 + b"--><svg xmlns='http://www.w3.org/2000/svg'/>"
     expect_reject(lambda: require_no_diagnostic_payload(
         ["assets/reference.md"], {"assets/reference.md": long_svg}),
         "diagnostic-payload-added", "long-prefix-renamed-svg-content")
+    namespaced_svg = b"<svg:svg xmlns:svg='http://www.w3.org/2000/svg'/>"
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["assets/reference.md"], {"assets/reference.md": namespaced_svg}),
+        "diagnostic-payload-added", "namespaced-svg-content")
+    doctype_svg = (b"<!DOCTYPE svg [<!ENTITY marker 'value > value'>]><svg xmlns='http://www.w3.org/2000/svg'>"
+                   b"<text>&marker;</text></svg>")
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["assets/reference.md"], {"assets/reference.md": doctype_svg}),
+        "diagnostic-payload-added", "doctype-subset-svg-content")
     if forbidden_fixture_path("tests/scripts/control.py", b"svg_example = b'<svg xmlns=\\\"urn:example\\\"/>'"):
         raise Reject("self-test-false-svg-positive")
     for brand, control in ((b"avif", "extensionless-avif-content"),
