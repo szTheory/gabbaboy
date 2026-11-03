@@ -94,53 +94,27 @@ Plans:
 
 Captured frame and PCM digests establish reproducibility. They do not independently establish rendering accuracy, perceptual quality, physical CGB-E behavior, or general compatibility. A newly reproduced correctness/security issue must be fixed within scope or trigger a rescope; the candidate absence exit cannot silently defer it. Optional direct Steam Deck/SSH exploration is neither a completion gate nor a qualified Linux/Deck path.
 
-### Phase 22: Composition and Microtest Evidence
+### Phase 22: Synthetic Composition and Diagnostic Gate Assessment
 
-**Goal**: Maintainers can use admitted rendering references and microtests with exact identities, explicit applicability, and expectations independent of GabbaBoy's current output.
+**Goal**: Maintainers can reproduce the synthetic, source-anchored composition tracer and inspect a machine-checked, metadata-only assessment explaining why real diagnostic fixtures remain unadmitted.
 **Depends on**: Phase 21
 **Requirements**: DIAG-01, DIAG-02
 **Success Criteria** (what must be TRUE):
-  1. The dmg-acid2 and cgb-acid2 derivatives carry reproducible source/build and rights records, original replacement glyphs, and an explicit text mask; their expected comparisons are derived independently of GabbaBoy output and are labeled as controlled composition evidence.
-  2. The admitted gbmicrotest cohort records exact source/ROM identities, redistribution terms, model applicability, and named eligible/executed/excluded cases; missing required cases or unexplained exclusions cannot yield a successful suite result.
-  3. Automated negative controls detect altered fixture/reference/mask identities and incorrect case applicability or accounting; neither diagnostic results nor cross-model comparisons are reported as mode-3 timing, game-level, or physical CGB-E qualification.
-**Plan cap**: 10
-**Plans**: 1/9 plans executed
-**Execution waves**: 9 sequential waves; Plan 22-08 inserts the trusted downloaded core/player byte gate after the complete identity projection and before final evidence/PR handoff. Plan 22-09 owns source-bound final evidence, measured CI-efficiency assessment, and the Phase 22 stop. Existing admission, root MIT, platform, release-authority, and phase-pause constraints remain in force.
+  1. The original synthetic composition tracer runs through the compiled runner with its fixed source-cell mask, exact unmasked comparison, and negative controls for altered identities, masks, and images.
+  2. A source-bound metadata-only inventory retains all 513 named gbmicrotest source/ROM pairs and records each unresolved acid2/gbmicrotest admission gate; the approval command refuses while required evidence is unresolved.
+  3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending.
+**Phase-scoped acceptance override**: Owner-approved on 2026-11-03; see [22-RESCOPE.md](phases/GB-22-composition-and-microtest-evidence/22-RESCOPE.md) and D-141. Phase 22's revised roadmap criteria are the acceptance contract. The original meanings of DIAG-01/02 and RIGHTS-01 are unchanged and remain Pending. No real upstream diagnostic payload is fetched, built, run, admitted, or claimed.
+**Plan cap**: 12
+**Plans**: 4 live plans (1 complete, 1 partial, 2 remaining); 7 original plans are superseded under D-141. Eleven plan files remain within the 12-plan cap.
+**Execution waves**: Four sequential dependency waves: 22-01 (complete) → 22-02 (close the existing metadata assessment) → 22-10 (immutable no-go contract and public claims) → 22-11 (local/review/security/exact-head remote qualification and boundary). Original 22-03 through 22-09 carry machine-readable `status: superseded` and must not dispatch.
 
 Plans:
-**Wave 1**
-- [x] 22-01-PLAN.md — Original end-to-end composition tracer and identity/mask controls.
+- [x] 22-01-PLAN.md — Preserve the completed original synthetic composition tracer and controls.
+- [ ] 22-02-PLAN.md — Close the committed metadata assessment under the approved rescope; preserve the seven refused gates and Pending requirements.
+- [ ] 22-10-PLAN.md — Check immutable metadata, exact 513-name inventory, no-go/public claims, test membership and current source/package boundaries.
+- [ ] 22-11-PLAN.md — Qualify final local/review/security/remote evidence, generate automated closure and pause before `/gsd-discuss-phase 23`.
 
-**Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 22-02-PLAN.md — Complete source/rights/applicability assessment and blocking admission gate.
-
-**Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 22-03-PLAN.md — Original glyph/source-cell inputs and reproducible acid2 candidate derivatives.
-
-**Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 22-04-PLAN.md — Immutable acid2 admission and both independent masked comparison CTests.
-
-**Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 22-05-PLAN.md — Source-reviewed microtest runner protocol and complete-set refusal controls.
-
-**Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 22-06-PLAN.md — Immutable microtest admission, every eligible case registration and complete required execution.
-
-**Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 22-07-PLAN.md — Actual source/product distribution boundary and diagnostic byte exclusions.
-
-**Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 22-08-PLAN.md — Trusted downloaded core/player verification consumes the complete diagnostic identity view, with disguised-byte and lifecycle-order controls.
-
-**Wave 9** *(blocked on Wave 8 completion)*
-- [ ] 22-09-PLAN.md — Source-bound evidence, exact-head remote/review verification, measured CI-efficiency record, and Phase 22 handoff.
-
-**Cross-cutting constraints:**
-- Both derivatives reproduce from pinned source, submodule, original glyph source, patch/build inputs and verified RGBDS tools.
-- Source-anchored cells cover only substituted displayed text, including greeting/footer where affected, with independently bounded coverage.
-- The two inline MBC1 verdict implementations are reviewed separately from the 480 macro callers; the other 31 retain concrete oracle exclusions.
-
-Fixture admission uses Phase 20's contract. An unresolved acid2 or gbmicrotest rights/model/oracle gate requires scope resolution; it is not satisfied by capturing a new golden from GabbaBoy or by borrowing another silicon model's expected image.
+The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-composition-and-microtest-evidence/22-SOURCE-AUDIT.md). Completed tracer and assessment commits are preserved; real-fixture build/admission/execution and downloaded-lifecycle work are outside the approved Phase 22 scope. Original requirement definitions and existing fixture-admission/package boundaries remain intact.
 
 ### Phase 23: Qualified v0.4.0 Release
 
