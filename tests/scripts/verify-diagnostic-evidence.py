@@ -767,9 +767,10 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         "diagnostic-payload-added", "fixture-path")
     doc = dict(snapshot)
     doc["docs/diagnostic-evidence.md"] = snapshot["docs/diagnostic-evidence.md"].replace(
-        b"These gaps make the evidence insufficient for admission",
-        b"These gaps establish successful real diagnostic results", 1)
-    expect_reject(lambda: validate_docs(doc), "documentation", "broadened-claim")
+        b"not a finding that an upstream license prohibits use",
+        b"an upstream license prohibits use", 1)
+    expect_reject(lambda: validate_docs(doc),
+                  "documentation-rights-conclusion-overstated", "license-prohibition-claim")
     for path in ("LICENSE", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json"):
         value = dict(snapshot)
         value[path] += b"\nmutated\n"
