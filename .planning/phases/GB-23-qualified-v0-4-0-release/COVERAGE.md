@@ -1,0 +1,1 @@
+No external API integration: Phase 23 extends existing local claim/render/window contracts and operates the already integrated GitHub release control plane; it introduces no API/SDK client, service integration or external application capability. The detector's CI API signal refers to reading existing required-check evidence.
