@@ -2,8 +2,8 @@
 status: complete
 phase: GB-22-composition-and-microtest-evidence
 source: 22-01-SUMMARY.md, 22-02-SUMMARY.md, 22-10-SUMMARY.md, 22-11-SUMMARY.md
-started: 2026-11-03T12:11:17.991662+00:00
-updated: 2026-11-03T12:11:17.991662+00:00
+started: 2026-11-03T12:15:59.837560+00:00
+updated: 2026-11-03T12:15:59.837560+00:00
 ---
 
 ## Automated Evidence
@@ -47,7 +47,9 @@ The latest focused run measured a 13.5-second configure and rebuilt 339 targets 
 
 ## Exact-Head Qualification
 
-The final source and immutable boundary ID are recorded in the committed state and this evidence file. The PR record carries sanitized exact-head local/remote run, job, package artifact, review, and merge-tree identities; `build/phase22/remote-evidence.json` is the local machine-readable capture. A failed, inaccessible, stale, skipped, or unsuccessful required lane leaves Phase 22 unclosed.
+The candidate boundary snapshot is commit `4ac46e7406329efbd4fb6ac0dc39c86c14156691`. `verify-diagnostic-evidence.py --check-boundary --repo-root . --source-revision HEAD --boundary-revision HEAD` passed against that immutable commit, preserving the Pending requirements, seven-gate stop, false automatic-advance flags, and owner-controlled Phase 23 route. This is a conditional boundary only: the final full local suite and exact-head remote PR qualification remain outstanding.
+
+The final PR record will carry sanitized exact-head local/remote run, job, package artifact, review, and merge-tree identities; `build/phase22/remote-evidence.json` is the local machine-readable capture. A failed, inaccessible, stale, skipped, or unsuccessful required lane leaves Phase 22 unclosed.
 
 **Phase 23 handoff:** Phase 23 — Qualified v0.4.0 Release — remains unstarted. The owner-controlled next command is `/gsd-discuss-phase 23`; both automatic-advance flags stay false.
 
@@ -135,7 +137,7 @@ result: pass
 source: automated
 summary_file: 22-11-SUMMARY.md
 coverage_id: D3
-evidence: ["verify-diagnostic-evidence.py --check-boundary at the immutable boundary commit recorded in 22-EVIDENCE.md", "verify-uat-closure.py for this phase: shared closure self-test and full live-summary coverage pass"]
+evidence: ["verify-diagnostic-evidence.py --check-boundary --repo-root . --source-revision HEAD --boundary-revision 4ac46e7406329efbd4fb6ac0dc39c86c14156691", "verify-uat-closure.py for this phase: shared closure self-test and full live-summary coverage pass"]
 
 ## Summary
 

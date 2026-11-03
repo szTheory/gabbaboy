@@ -71,7 +71,7 @@ coverage:
     human_judgment: false
     verification:
       - kind: other
-        ref: "verify-diagnostic-evidence.py --check-boundary at the immutable boundary commit recorded in 22-EVIDENCE.md"
+        ref: "verify-diagnostic-evidence.py --check-boundary --repo-root . --source-revision HEAD --boundary-revision 4ac46e7406329efbd4fb6ac0dc39c86c14156691"
         status: pass
       - kind: other
         ref: "verify-uat-closure.py for this phase: shared closure self-test and full live-summary coverage pass"
