@@ -77,6 +77,7 @@ GB_ROM_LOGO = bytes.fromhex(
 )
 PAYLOAD_SIGNATURES = (
     b"\x89PNG\r\n\x1a\n", b"GIF87a", b"GIF89a", b"\xff\xd8\xff", b"BM",
+    b"\x00\x00\x01\x00",
     b"II*\x00", b"MM\x00*", b"RIFF", b"PK\x03\x04", b"PK\x05\x06",
     b"Rar!\x1a\x07", b"7z\xbc\xaf\x27\x1c", b"\x1f\x8b", b"BZh",
     b"\xfd7zXZ\x00", b"\x28\xb5\x2f\xfd", b"\x04\x22\x4d\x18",
@@ -571,9 +572,13 @@ def forbidden_fixture_path(path: str, content: bytes = b"") -> bool:
         return True
     if any(prefix.startswith(signature) for signature in PAYLOAD_SIGNATURES):
         return True
+    if len(prefix) >= 12 and prefix[4:8] == b"ftyp" and prefix[8:12] in {
+        b"avif", b"avis", b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1",
+    }:
+        return True
     if len(prefix) >= 262 and prefix[257:262] == b"ustar":
         return True
-    if re.search(rb"<svg\b", prefix, re.IGNORECASE):
+    if re.search(rb"<svg\b", content, re.IGNORECASE):
         return True
     if re.match(rb"\s*P[1-6][\s\r\n]", prefix):
         return True
@@ -593,8 +598,8 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
               BASELINE, revision, "--")
     paths = [item.decode("utf-8", "strict") for item in raw.split(b"\0") if item]
     entries = tree_entries(root, revision)
-    contents = {}
     for path in paths:
+        require_no_diagnostic_payload([path])
         entry = entries.get(path)
         if entry is None:
             raise Reject("added-path-missing-from-tree:" + path)
@@ -604,8 +609,7 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
         content = git(root, "cat-file", "blob", oid, limit=MAX_OUTPUT)
         if len(content) != size:
             raise Reject("added-path-size-mismatch:" + path)
-        contents[path] = content
-    require_no_diagnostic_payload(paths, contents)
+        require_no_diagnostic_payload([path], {path: content})
     return [{"path": path, "size_bytes": entries.get(path, ("", 0, ""))[1]} for path in paths]
 
 
@@ -1025,6 +1029,20 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     expect_reject(lambda: require_no_diagnostic_payload(
         ["assets/reference.md"], {"assets/reference.md": hidden_svg}),
         "diagnostic-payload-added", "renamed-svg-content")
+    long_svg = b"<!--" + bytes(8192) + b"--><svg xmlns='http://www.w3.org/2000/svg'/>"
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["assets/reference.md"], {"assets/reference.md": long_svg}),
+        "diagnostic-payload-added", "long-prefix-renamed-svg-content")
+    for brand, control in ((b"avif", "extensionless-avif-content"),
+                           (b"heic", "extensionless-heic-content")):
+        ftyp_image = b"\x00\x00\x00\x18ftyp" + brand + b"\x00\x00\x00\x00"
+        expect_reject(lambda ftyp_image=ftyp_image: require_no_diagnostic_payload(
+            ["assets/reference.md"], {"assets/reference.md": ftyp_image}),
+            "diagnostic-payload-added", control)
+    hidden_icon = b"\x00\x00\x01\x00\x01\x00\x10\x10"
+    expect_reject(lambda: require_no_diagnostic_payload(
+        ["assets/reference.md"], {"assets/reference.md": hidden_icon}),
+        "diagnostic-payload-added", "renamed-ico-content")
     docs_mutations = (
         ("docs/diagnostic-evidence.md", b"No real diagnostic result exists",
          b"No real diagnostic result exists. Real diagnostic result passed.",
