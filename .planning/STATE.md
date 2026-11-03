@@ -5,9 +5,9 @@ milestone_name: Evidence Floor
 current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 0
-status: Phase 22 complete; PR #143 post-merge main CI is green; the documentation handoff and local main reconciliation are in progress before Phase 23
+status: Phase 22 and repository cleanup are complete; Phase 23 remains owner-controlled and unstarted
 stopped_at: Phase 22 qualification complete; Phase 23 remains unstarted and owner-controlled
-last_updated: "2026-11-03T21:16:17Z"
+last_updated: "2026-11-03T21:32:00Z"
 last_activity: 2026-11-03
 state_head: 4eee5b51f8725ab588e2aa5a71760826185fa42b
 progress:
@@ -16,7 +16,7 @@ progress:
   total_plans: 22
   completed_plans: 22
   percent: 75
-last_activity_desc: PR #143 passed exact-head checks and post-merge main CI run 41715210158; finalize the documentation handoff and reconcile local main
+last_activity_desc: PR #143 main CI and PR #144 documentation handoff passed; local main is reconciled with remote and Phase 23 remains owner-controlled
 ---
 
 # Project State
@@ -35,10 +35,10 @@ Total Plans in Phase: TBD
 Phase: 23 (Qualified v0.4.0 Release) — NOT STARTED
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
-Status: Phase 22 is complete. PR #143 merged as `4eee5b51`; post-merge main CI, fixture reproduction, and release-please checks passed. The documentation handoff and local main reconciliation remain in progress. Phase 23 remains owner-controlled.
+Status: Phase 22 and repository cleanup are complete. PR #143's post-merge main CI, fixture reproduction, and release-please checks passed; PR #144's documentation handoff and planning-only main CI passed. Local main is reconciled with remote main, no PRs or issues remain open, and Phase 23 remains owner-controlled and unstarted.
 Last activity: 2026-11-03
 
-Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. The docs handoff PR and local main reconciliation are the remaining cleanup steps.
+Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
 ## Performance Metrics
 
@@ -81,13 +81,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-03T16:24:17.273Z
-**Stopped at:** PR #143 post-merge main CI passed; the documentation handoff and local main reconciliation are in progress
+**Last session:** 2026-11-03T21:32:00Z
+**Stopped at:** Phase 22 and repository cleanup complete; Phase 23 remains unstarted and owner-controlled
 **Resume file:** .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 22 is complete and merged. The seven real-fixture evidence gates remain open; no real diagnostic fixture is admitted, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. PR #143's scheduling fix passed exact-head gates, merged, and passed post-merge main CI. Finish the documentation handoff and local main reconciliation while preserving the local v0.4 commit history. After that handoff, the next phase is Phase 23 — Qualified v0.4.0 Release — via the owner-controlled **/gsd-discuss-phase 23** command. Do not begin Phase 23 automatically.
+Phase 22 is complete and merged. The seven real-fixture evidence gates remain open; no real diagnostic fixture is admitted, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. PR #143 passed protected exact-head checks and post-merge main CI; PR #144 completed the documentation handoff. Local main is tree-identical to origin/main at cleanup reconciliation, all three local v0.4 commits remain in history, and no PRs or issues are open. The next phase is Phase 23 — Qualified v0.4.0 Release — via the owner-controlled **/gsd-discuss-phase 23** command. Do not begin Phase 23 automatically.
 
 ## Decisions
 

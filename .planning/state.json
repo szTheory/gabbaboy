@@ -27,7 +27,7 @@
   "next": {
     "command": "/gsd-discuss-phase 23",
     "label": "Owner-controlled Phase 23 discussion",
-    "reason": "Phase 22 and post-merge main CI are complete; finish the documentation handoff and local reconciliation before owner-controlled Phase 23"
+    "reason": "Phase 22 and repository cleanup are complete; Phase 23 remains owner-controlled"
   },
-  "updated_at": "2026-11-03T21:16:17Z"
+  "updated_at": "2026-11-03T21:32:00Z"
 }
