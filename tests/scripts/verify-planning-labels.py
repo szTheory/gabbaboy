@@ -180,6 +180,17 @@ def self_test() -> int:
         fake_python = source / "python-stub"
         fake_python.write_text("#!/bin/sh\nprintf 'diagnostic evidence pass\\n'\n", encoding="utf-8")
         fake_python.chmod(0o755)
+        windows_command = [
+            py, "-I", str(evidence).replace("/", "\\"), "--check", "--repo-root",
+            str(source).replace("/", "\\"), "--source-revision", "a" * 40,
+            "--build-dir", str(build).replace("/", "\\"),
+        ]
+        mixed_separator_command = [
+            py, "-I", str(evidence).replace("/", "\\"), "--check", "--repo-root",
+            str(source), "--source-revision", "a" * 40,
+            "--build-dir", str(build).replace("/", "\\"),
+        ]
+        wrong_windows_build = str(build / "unexpected").replace("/", "\\")
         cases = [
             ("unlabelled test reading .planning/ is rejected", [test("a", [py, str(reader)])], "unlabelled-planning-reader"),
             ("unlabelled test passing a .planning path is rejected", [test("a", [py, str(clean), f"{source}/.planning/STATE.md"])],
@@ -199,6 +210,14 @@ def self_test() -> int:
              [test("phase22_evidence_contract",
                    [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
                     "--build-dir", str(build)], ["planning", "ctest-inventory-only"])], None),
+            ("the exact Phase 22 planning contract accepts simulated Windows separators",
+             [test("phase22_evidence_contract", windows_command, ["planning", "ctest-inventory-only"])], None),
+            ("the exact Phase 22 planning contract accepts mixed path separators",
+             [test("phase22_evidence_contract", mixed_separator_command, ["planning", "ctest-inventory-only"])], None),
+            ("inventory-only classification rejects a configured build directory with a Windows-spelled substitution",
+             [test("phase22_evidence_contract",
+                   [*mixed_separator_command[:-1], wrong_windows_build], ["planning", "ctest-inventory-only"])],
+             "planning-test-needs-build"),
             ("the inventory-only classification is required for build-tree access",
              [test("phase22_evidence_contract",
                    [py, "-I", str(evidence), "--check", "--repo-root", str(source), "--source-revision", "a" * 40,
