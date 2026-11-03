@@ -26,12 +26,55 @@ BASELINE_COMMIT = "7cc6495e64f3645caa120e7458f754585b788985"
 MAX_SOURCE_BYTES = 64 * 1024
 MAX_ROM_BYTES = 32 * 1024
 MAX_JSON_BYTES = 2 * 1024 * 1024
+MAX_INVENTORY_BYTES = 2 * 1024 * 1024
 MAX_PROCESS_OUTPUT = 64 * 1024
 CONTROL_BUDGET_HALF_DOTS = 350_000
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+HEX40 = re.compile(r"^[0-9a-f]{40}$")
 IDENTITY_FIELDS = ("rom", "reference", "source", "layout", "glyph", "allowlist", "mask", "overlay")
 SOURCE_CELL_ALLOWLIST = ((2, 3),)
 CONTROL_GLYPH_BYTES = b"\x80" + bytes(15)
+GBMICROTEST_COMMIT = "463eb6bc0fe31d61781ef63060ad6d74090c0255"
+GBMICROTEST_TREE = "9b692d1a028beea00a9fc08b89bc6160dd268efa"
+GBMICROTEST_CASE_COUNT = 513
+GBMICROTEST_PROTOCOL_COUNTS = {
+    "shared-verdict-macros": 480,
+    "inline-ff80-ff82": 2,
+    "no-verdict-protocol": 31,
+}
+GBMICROTEST_ROSTER_PROJECTION_SHA256 = "29c610580ee8d953ac9a85a80db7d46bba80908e888cb91d65e327ce25a3651b"
+GBMICROTEST_INLINE_CASES = frozenset(("mbc1_ram_banks", "mbc1_rom_banks"))
+GBMICROTEST_INITIAL_EXCLUSIONS = frozenset((
+    "000-oam_lock", "000-write_to_x8000", "001-vram_unlocked", "002-vram_locked",
+    "004-tima_boot_phase", "004-tima_cycle_timer", "007-lcd_on_stat", "400-dma",
+    "500-scx-timing", "800-ppu-latch-scx", "801-ppu-latch-scy",
+    "802-ppu-latch-tileselect", "803-ppu-latch-bgdisplay", "audio_testbench",
+    "cpu_bus_1", "dma_basic", "flood_vram", "lcdon_write_timing", "ly_while_lcd_off",
+    "minimal", "mode2_stat_int_to_oam_unlock", "oam_sprite_trashing", "poweron",
+    "ppu_scx_vs_bgp", "ppu_sprite_testbench", "ppu_spritex_vs_scx", "ppu_win_vs_wx",
+    "ppu_wx_early", "temp", "toggle_lcdc", "wave_write_to_0xC003",
+))
+REQUIRED_GATE_IDS = (
+    "acid2_source_and_gitlink_identity",
+    "acid2_component_rights_and_output_scope",
+    "acid2_profile_applicability",
+    "gbmicrotest_complete_roster_identity",
+    "gbmicrotest_component_rights_and_output_scope",
+    "gbmicrotest_prebuilt_rom_sha256",
+    "gbmicrotest_case_applicability",
+    "gbmicrotest_independent_oracle",
+)
+REQUIRED_COMPONENT_IDS = (
+    "acid2_source_code",
+    "acid2_footer_graphics",
+    "acid2_reference_images",
+    "mgblib_font_data",
+    "project_font_replacement",
+    "gbmicrotest_source_code",
+    "gbmicrotest_prebuilt_roms",
+    "gbmicrotest_nintendo_logo",
+    "diagnostic_notices_and_derivative_outputs",
+)
 
 
 class AdmissionRefused(ValueError):
@@ -123,6 +166,231 @@ def _git(root: pathlib.Path, *args: str, input_bytes: bytes | None = None) -> by
         detail = result.stderr.decode("utf-8", "replace")[-500:]
         raise RuntimeError(f"git-failed:{args[0]}:{detail.strip()}")
     return result.stdout
+
+
+def _json_without_duplicates(raw: bytes, label: str) -> dict[str, Any]:
+    def object_pairs(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise AdmissionRefused(f"{label}-duplicate-key:{key}")
+            value[key] = item
+        return value
+
+    def reject_constant(value: str):
+        raise AdmissionRefused(f"{label}-invalid-constant:{value}")
+
+    try:
+        value = json.loads(raw.decode("utf-8", "strict"), object_pairs_hook=object_pairs,
+                           parse_constant=reject_constant)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+        raise AdmissionRefused(f"{label}-invalid") from None
+    if not isinstance(value, dict):
+        raise AdmissionRefused(f"{label}-invalid")
+    return value
+
+
+def _read_json_record(root: pathlib.Path, relative: str, limit: int, label: str) -> dict[str, Any]:
+    path = root / relative
+    if path.is_symlink() or not path.is_file():
+        raise AdmissionRefused(f"{label}-missing-or-unsafe")
+    return _json_without_duplicates(read_limited(path, limit, label), label)
+
+
+def _inventory_projection(cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{
+        "name": case["name"],
+        "source_path": case["source"]["path"],
+        "source_size_bytes": case["source"]["size_bytes"],
+        "source_git_blob_sha1": case["source"]["git_blob_sha1"],
+        "rom_path": case["prebuilt_rom"]["path"],
+        "rom_size_bytes": case["prebuilt_rom"]["size_bytes"],
+        "rom_git_blob_sha1": case["prebuilt_rom"]["git_blob_sha1"],
+        "protocol_kind": case["protocol"]["kind"],
+    } for case in cases]
+
+
+def _ordered_names(value: object, label: str) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(name, str) for name in value):
+        raise AdmissionRefused(f"{label}-invalid")
+    if value != sorted(set(value), key=lambda name: name.encode("utf-8")):
+        raise AdmissionRefused(f"{label}-not-unique-bytewise-sorted")
+    return value
+
+
+def validate_gbmicrotest_inventory(root: pathlib.Path) -> dict[str, Any]:
+    record = _read_json_record(root, "tests/external/gbmicrotest-inventory.json",
+                               MAX_INVENTORY_BYTES, "diagnostic-inventory")
+    if record.get("schema") != "gabbaboy-gbmicrotest-inventory-v1":
+        raise AdmissionRefused("diagnostic-inventory-schema-invalid")
+    upstream = record.get("upstream")
+    if (not isinstance(upstream, dict) or upstream.get("repository") != "https://github.com/aappleby/gbmicrotest"
+            or upstream.get("commit") != GBMICROTEST_COMMIT
+            or upstream.get("root_tree_sha1") != GBMICROTEST_TREE
+            or upstream.get("tree_entry_count") != 1034
+            or upstream.get("tree_truncated") is not False):
+        raise AdmissionRefused("diagnostic-inventory-source-pin-mismatch")
+    cases = record.get("cases")
+    if not isinstance(cases, list) or len(cases) != GBMICROTEST_CASE_COUNT:
+        raise AdmissionRefused("diagnostic-inventory-case-count-mismatch")
+    names: list[str] = []
+    protocol_counts = {kind: 0 for kind in GBMICROTEST_PROTOCOL_COUNTS}
+    for case in cases:
+        if not isinstance(case, dict) or not isinstance(case.get("name"), str):
+            raise AdmissionRefused("diagnostic-inventory-case-invalid")
+        name = case["name"]
+        if not re.fullmatch(r"[A-Za-z0-9._-]+", name):
+            raise AdmissionRefused("diagnostic-inventory-case-name-invalid")
+        names.append(name)
+        source, rom, protocol = case.get("source"), case.get("prebuilt_rom"), case.get("protocol")
+        if not all(isinstance(item, dict) for item in (source, rom, protocol)):
+            raise AdmissionRefused(f"diagnostic-inventory-case-identity-invalid:{name}")
+        if (source.get("path") != f"tests/{name}.s" or rom.get("path") != f"bin/{name}.gb"
+                or not isinstance(source.get("size_bytes"), int) or source["size_bytes"] <= 0
+                or not isinstance(rom.get("size_bytes"), int) or not 0 < rom["size_bytes"] <= 32 * 1024 * 1024
+                or not HEX40.fullmatch(str(source.get("git_blob_sha1", "")))
+                or not HEX40.fullmatch(str(rom.get("git_blob_sha1", "")))):
+            raise AdmissionRefused(f"diagnostic-inventory-case-identity-invalid:{name}")
+        for identity, label in ((source, "source"), (rom, "rom")):
+            digest, digest_status = identity.get("sha256"), identity.get("sha256_status")
+            if digest is None:
+                if not isinstance(digest_status, str) or not digest_status.startswith("not-computed;"):
+                    raise AdmissionRefused(f"diagnostic-inventory-digest-status-invalid:{name}:{label}")
+            elif not HEX64.fullmatch(str(digest)) or digest_status != "verified-against-pinned-git-blob":
+                raise AdmissionRefused(f"diagnostic-inventory-digest-invalid:{name}:{label}")
+        protocol_kind = protocol.get("kind")
+        if protocol_kind not in protocol_counts:
+            raise AdmissionRefused(f"diagnostic-inventory-protocol-invalid:{name}")
+        expected_kind = ("no-verdict-protocol" if name in GBMICROTEST_INITIAL_EXCLUSIONS else
+                         "inline-ff80-ff82" if name in GBMICROTEST_INLINE_CASES else
+                         "shared-verdict-macros")
+        if protocol_kind != expected_kind:
+            raise AdmissionRefused(f"diagnostic-inventory-protocol-mismatch:{name}")
+        protocol_evidence = protocol.get("evidence")
+        expected_evidence_path = "tests/macros.inc" if protocol_kind == "shared-verdict-macros" else f"tests/{name}.s"
+        if (not isinstance(protocol_evidence, dict)
+                or protocol_evidence.get("repository") != "https://github.com/aappleby/gbmicrotest"
+                or protocol_evidence.get("commit") != GBMICROTEST_COMMIT
+                or protocol_evidence.get("path") != expected_evidence_path
+                or not isinstance(protocol_evidence.get("basis"), str)
+                or not protocol_evidence["basis"].strip()
+                or not isinstance(protocol.get("detail"), str) or not protocol["detail"].strip()):
+            raise AdmissionRefused(f"diagnostic-inventory-protocol-evidence-invalid:{name}")
+        protocol_counts[protocol_kind] += 1
+        applicability = case.get("model_applicability")
+        if (not isinstance(applicability, dict) or applicability.get("status") != "unresolved"
+                or applicability.get("suite_claim") != "DMG-CPU-08 (uncertain, suite-wide only)"
+                or applicability.get("per_case_evidence") is not None):
+            raise AdmissionRefused(f"diagnostic-inventory-applicability-mutated:{name}")
+    if names != sorted(set(names), key=lambda name: name.encode("utf-8")):
+        raise AdmissionRefused("diagnostic-inventory-roster-not-unique-bytewise-sorted")
+    if protocol_counts != GBMICROTEST_PROTOCOL_COUNTS:
+        raise AdmissionRefused("diagnostic-inventory-protocol-count-mismatch")
+    canonical = json.dumps(_inventory_projection(cases), sort_keys=True, separators=(",", ":")).encode("ascii")
+    if sha256(canonical) != GBMICROTEST_ROSTER_PROJECTION_SHA256:
+        raise AdmissionRefused("diagnostic-inventory-projection-pin-mismatch")
+    counts = record.get("counts")
+    expected_counts = {"named_cases": 513, "shared_macro_verdict": 480, "inline_verdict": 2,
+                       "initial_no_protocol_exclusions": 31, "protocol_candidates": 482}
+    if counts != expected_counts:
+        raise AdmissionRefused("diagnostic-inventory-summary-counts-mismatch")
+    accounting = record.get("accounting")
+    if not isinstance(accounting, dict):
+        raise AdmissionRefused("diagnostic-inventory-accounting-invalid")
+    candidate_names = [name for name in names if name not in GBMICROTEST_INITIAL_EXCLUSIONS]
+    exclusions = [name for name in names if name in GBMICROTEST_INITIAL_EXCLUSIONS]
+    if (_ordered_names(accounting.get("protocol_candidate_names"), "protocol-candidates") != candidate_names
+            or _ordered_names(accounting.get("admitted_eligible_names"), "admitted-eligible") != []
+            or _ordered_names(accounting.get("executed_names"), "executed") != []
+            or _ordered_names(accounting.get("excluded_names"), "excluded") != exclusions
+            or _ordered_names(accounting.get("blocked_not_observed_names"), "blocked-not-observed") != candidate_names
+            or accounting.get("final_suite_accounting_complete") is not False
+            or accounting.get("status") != "blocked-before-real-byte-use"):
+        raise AdmissionRefused("diagnostic-inventory-eligibility-accounting-mismatch")
+    interpretation = accounting.get("interpretation")
+    if (not isinstance(interpretation, str)
+            or any(phrase not in interpretation.casefold() for phrase in (
+                "eligibility is a predicate", "executed and excluded are disjoint terminal outcomes",
+                "every eligible case must execute", "blocked and not observed"))):
+        raise AdmissionRefused("diagnostic-inventory-accounting-interpretation-invalid")
+    return record
+
+
+def validate_assessment(root: pathlib.Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    record = _read_json_record(root, "tests/external/diagnostic-assessment.json",
+                               MAX_JSON_BYTES, "diagnostic-assessment")
+    if record.get("origin") in ("synthetic", "test-only") or str(record.get("fixture_kind", "")).startswith("synthetic"):
+        raise AdmissionRefused("synthetic-only-record-refused")
+    if (record.get("schema") != "gabbaboy-diagnostic-assessment-v1"
+            or record.get("origin") != "pinned-upstream-evidence"
+            or not isinstance(record.get("source_revision"), str)
+            or not HEX40.fullmatch(record["source_revision"])):
+        raise AdmissionRefused("diagnostic-assessment-schema-invalid")
+    gates = record.get("required_gates")
+    if not isinstance(gates, list):
+        raise AdmissionRefused("diagnostic-assessment-gates-invalid")
+    by_gate = {gate.get("id"): gate for gate in gates if isinstance(gate, dict)}
+    if len(by_gate) != len(gates) or tuple(by_gate) != REQUIRED_GATE_IDS:
+        raise AdmissionRefused("diagnostic-assessment-gate-set-invalid")
+    for gate_id in REQUIRED_GATE_IDS:
+        gate = by_gate[gate_id]
+        if gate.get("status") not in ("supported", "unresolved"):
+            raise AdmissionRefused(f"diagnostic-assessment-gate-status-invalid:{gate_id}")
+        evidence = gate.get("evidence")
+        if (not isinstance(evidence, list) or not evidence
+                or any(not isinstance(item, str) or not item for item in evidence)):
+            raise AdmissionRefused(f"diagnostic-assessment-gate-evidence-invalid:{gate_id}")
+        if gate["status"] == "unresolved" and (not isinstance(gate.get("blocker"), str) or not gate["blocker"].strip()):
+            raise AdmissionRefused(f"diagnostic-assessment-blocker-missing:{gate_id}")
+        if gate["status"] == "supported" and gate.get("blocker") is not None:
+            raise AdmissionRefused(f"diagnostic-assessment-supported-gate-has-blocker:{gate_id}")
+        if gate["status"] == "supported" and not any(item.startswith(("https://github.com/", "https://api.github.com/"))
+                                                        for item in evidence):
+            raise AdmissionRefused(f"diagnostic-assessment-supported-gate-not-source-backed:{gate_id}")
+    components = record.get("components")
+    if not isinstance(components, list):
+        raise AdmissionRefused("diagnostic-assessment-components-invalid")
+    by_component = {item.get("id"): item for item in components if isinstance(item, dict)}
+    if len(by_component) != len(components) or tuple(by_component) != REQUIRED_COMPONENT_IDS:
+        raise AdmissionRefused("diagnostic-assessment-component-set-invalid")
+    for component_id in REQUIRED_COMPONENT_IDS:
+        component = by_component[component_id]
+        status = component.get("status")
+        if status not in ("supported", "unresolved", "excluded-by-design", "not-created"):
+            raise AdmissionRefused(f"diagnostic-assessment-component-status-invalid:{component_id}")
+        if status == "supported":
+            scope = component.get("scope")
+            evidence = component.get("evidence")
+            if (not isinstance(scope, dict) or scope.get("repository") is not True
+                    or scope.get("public_ci") is not True or not isinstance(evidence, list) or not evidence
+                    or any(not isinstance(item, str) or not item for item in evidence)):
+                raise AdmissionRefused(f"diagnostic-assessment-positive-scope-incomplete:{component_id}")
+            if component.get("blocker") is not None:
+                raise AdmissionRefused(f"diagnostic-assessment-supported-component-has-blocker:{component_id}")
+            if not any(item.startswith(("https://github.com/", "https://api.github.com/")) for item in evidence):
+                raise AdmissionRefused(f"diagnostic-assessment-supported-component-not-source-backed:{component_id}")
+        elif status == "unresolved" and (not isinstance(component.get("blocker"), str)
+                                           or not component["blocker"].strip()):
+            raise AdmissionRefused(f"diagnostic-assessment-component-blocker-missing:{component_id}")
+    inventory = validate_gbmicrotest_inventory(root)
+    applicability = record.get("model_applicability")
+    if not isinstance(applicability, dict) or not isinstance(applicability.get("gbmicrotest"), dict):
+        raise AdmissionRefused("diagnostic-assessment-model-applicability-invalid")
+    case_applicability = applicability["gbmicrotest"]
+    case_gate = next(gate for gate in gates if gate["id"] == "gbmicrotest_case_applicability")
+    if case_gate["status"] == "supported":
+        per_case = case_applicability.get("per_case_source_evidence")
+        if (not isinstance(per_case, list) or len(per_case) != GBMICROTEST_CASE_COUNT
+                or any(not isinstance(item, dict) or not isinstance(item.get("case"), str)
+                       or not isinstance(item.get("source"), str) or not item["source"].startswith("https://github.com/")
+                       for item in per_case)):
+            raise AdmissionRefused("diagnostic-assessment-case-applicability-evidence-incomplete")
+    unresolved = any(gate["status"] != "supported" for gate in gates)
+    unresolved = unresolved or any(item["status"] == "unresolved" for item in components)
+    expected_status = "blocked" if unresolved else "approved"
+    if record.get("status") != expected_status:
+        raise AdmissionRefused("diagnostic-assessment-status-gate-mismatch")
+    return record, inventory
 
 
 def _instruction_size(instruction: str) -> int:
@@ -344,22 +612,36 @@ def check_synthetic_admission(root: pathlib.Path, manifest_path: pathlib.Path) -
 
 
 def require_approved(root: pathlib.Path, source_revision: str, manifest_path: pathlib.Path | None = None) -> dict:
-    """Require a source-bound, non-synthetic assessment before a real diagnostic can run."""
+    """Require source-bound, evidence-backed rights and model clearance before real use."""
     if not re.fullmatch(r"[0-9a-f]{40}", source_revision):
         raise AdmissionRefused("source-revision-invalid")
-    assessment = root / "tests/external/diagnostic-assessment.json"
-    if not assessment.is_file():
+    assessment_path = root / "tests/external/diagnostic-assessment.json"
+    if not assessment_path.is_file() or assessment_path.is_symlink():
         raise AdmissionRefused("scope-resolution-required: diagnostic assessment absent")
-    raw = read_limited(assessment, MAX_JSON_BYTES, "diagnostic-assessment")
-    try:
-        record = json.loads(raw.decode("utf-8", "strict"))
-    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
-        raise AdmissionRefused("diagnostic-assessment-invalid") from None
-    if not isinstance(record, dict) or record.get("origin") in ("synthetic", "test-only") \
-            or record.get("fixture_kind", "").startswith("synthetic"):
+    record = _read_json_record(root, "tests/external/diagnostic-assessment.json",
+                               MAX_JSON_BYTES, "diagnostic-assessment")
+    if record.get("origin") in ("synthetic", "test-only") \
+            or str(record.get("fixture_kind", "")).startswith("synthetic"):
         raise AdmissionRefused("synthetic-only-record-refused")
-    if record.get("status") != "approved" or record.get("source_revision") != source_revision:
+    declared_gates = record.get("required_gates", record.get("gates", []))
+    if isinstance(declared_gates, list):
+        unresolved_ids = [str(gate.get("id", "unknown")) for gate in declared_gates
+                          if isinstance(gate, dict) and gate.get("status") != "supported"]
+        if unresolved_ids:
+            raise AdmissionRefused("scope-resolution-required: unresolved gates=" + ",".join(unresolved_ids))
+    record, inventory = validate_assessment(root)
+    unresolved_ids = [gate["id"] for gate in record["required_gates"] if gate["status"] != "supported"]
+    unresolved_ids.extend(component["id"] for component in record["components"]
+                          if component["status"] == "unresolved")
+    if record.get("status") != "approved" or unresolved_ids:
+        detail = ",".join(unresolved_ids) if unresolved_ids else "assessment-not-approved"
+        raise AdmissionRefused(f"scope-resolution-required: {detail}")
+    if record.get("source_revision") != source_revision:
         raise AdmissionRefused("scope-resolution-required: approval/source identity unresolved")
+    for case in inventory["cases"]:
+        for identity, label in ((case["source"], "source"), (case["prebuilt_rom"], "rom")):
+            if not isinstance(identity.get("sha256"), str) or not HEX64.fullmatch(identity["sha256"]):
+                raise AdmissionRefused(f"scope-resolution-required: {label} sha256 not independently recorded for {case['name']}")
     if manifest_path is not None:
         if not manifest_path.is_file():
             raise AdmissionRefused("diagnostic-manifest-missing")
@@ -664,6 +946,63 @@ class AdmissionControlTests(unittest.TestCase):
             with self.assertRaisesRegex(AdmissionRefused, "scope-resolution-required.*reference-art"):
                 require_approved(root, "a" * 40)
 
+    def _copy_review_records(self, root: pathlib.Path) -> None:
+        destination = root / "tests/external"
+        destination.mkdir(parents=True)
+        for filename in ("diagnostic-assessment.json", "gbmicrotest-inventory.json"):
+            (destination / filename).write_bytes((ROOT / "tests/external" / filename).read_bytes())
+
+    def _write_record(self, root: pathlib.Path, filename: str, record: dict[str, Any]) -> None:
+        (root / "tests/external" / filename).write_text(
+            json.dumps(record, sort_keys=True), encoding="utf-8")
+
+    def test_rights_status_mutant_needs_positive_repository_and_ci_scope(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-rights-mutant-") as name:
+            root = pathlib.Path(name)
+            self._copy_review_records(root)
+            record = json.loads((root / "tests/external/diagnostic-assessment.json").read_text())
+            component = next(item for item in record["components"] if item["id"] == "acid2_reference_images")
+            component["status"] = "supported"
+            self._write_record(root, "diagnostic-assessment.json", record)
+            with self.assertRaisesRegex(AdmissionRefused, "positive-scope-incomplete:acid2_reference_images"):
+                validate_assessment(root)
+
+    def test_model_status_mutant_needs_per_case_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-model-mutant-") as name:
+            root = pathlib.Path(name)
+            self._copy_review_records(root)
+            record = json.loads((root / "tests/external/diagnostic-assessment.json").read_text())
+            record["model_applicability"]["gbmicrotest"]["per_case_source_evidence"] = []
+            gate = next(item for item in record["required_gates"]
+                        if item["id"] == "gbmicrotest_case_applicability")
+            gate["status"] = "supported"
+            gate["blocker"] = None
+            self._write_record(root, "diagnostic-assessment.json", record)
+            with self.assertRaisesRegex(AdmissionRefused, "case-applicability-evidence-incomplete"):
+                validate_assessment(root)
+
+    def test_roster_projection_rejects_changed_identity_even_with_same_totals(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-roster-mutant-") as name:
+            root = pathlib.Path(name)
+            self._copy_review_records(root)
+            record = json.loads((root / "tests/external/gbmicrotest-inventory.json").read_text())
+            case = record["cases"][0]
+            case["source"]["git_blob_sha1"] = "0" * 40
+            self._write_record(root, "gbmicrotest-inventory.json", record)
+            with self.assertRaisesRegex(AdmissionRefused, "projection-pin-mismatch"):
+                validate_gbmicrotest_inventory(root)
+
+    def test_eligibility_mutant_cannot_hide_a_blocked_case(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gbb-admission-eligibility-mutant-") as name:
+            root = pathlib.Path(name)
+            self._copy_review_records(root)
+            record = json.loads((root / "tests/external/gbmicrotest-inventory.json").read_text())
+            moved = record["accounting"]["blocked_not_observed_names"].pop()
+            record["accounting"]["admitted_eligible_names"] = [moved]
+            self._write_record(root, "gbmicrotest-inventory.json", record)
+            with self.assertRaisesRegex(AdmissionRefused, "eligibility-accounting-mismatch"):
+                validate_gbmicrotest_inventory(root)
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -671,6 +1010,7 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument("--self-test-tracer", action="store_true")
     modes.add_argument("--self-test", action="store_true")
     modes.add_argument("--self-test-controls", action="store_true")
+    modes.add_argument("--check-assessment", action="store_true")
     modes.add_argument("--require-approved", action="store_true")
     parser.add_argument("--runner", type=pathlib.Path)
     parser.add_argument("--repo-root", type=pathlib.Path, default=ROOT)
@@ -686,13 +1026,23 @@ def main(argv: list[str] | None = None) -> int:
         result = unittest.TextTestRunner(verbosity=2).run(suite)
         return 0 if result.wasSuccessful() else 1
     try:
+        if args.check_assessment:
+            record, inventory = validate_assessment(args.repo_root.resolve())
+            unresolved = sum(gate["status"] != "supported" for gate in record["required_gates"])
+            print(f"diagnostic assessment valid status={record['status']} unresolved_gates={unresolved} "
+                  f"gbmicrotest_cases={len(inventory['cases'])}")
+            return 0
         revision = args.source_revision
         if revision == "HEAD":
             revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=args.repo_root,
                                       capture_output=True, check=True, timeout=30).stdout.decode().strip()
         require_approved(args.repo_root.resolve(), revision)
     except (AdmissionRefused, OSError, subprocess.SubprocessError) as error:
-        print(f"scope-resolution-required: {error}", file=sys.stderr)
+        message = str(error)
+        if message.startswith("scope-resolution-required:"):
+            print(message, file=sys.stderr)
+        else:
+            print(f"scope-resolution-required: {message}", file=sys.stderr)
         return 2
     print("diagnostic-admission approved")
     return 0
