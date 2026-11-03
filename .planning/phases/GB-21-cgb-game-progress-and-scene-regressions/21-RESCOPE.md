@@ -1,6 +1,6 @@
 # Phase 21 bounded rescope: qualification flag ordering and diagnostic escaping
 
-**Status:** Owner-approved, implementation and review complete; final documentation-head qualification and PR merge pending
+**Status:** Owner-approved; implementation, independent review, final-head qualification, and PR merge complete
 
 **Approval:** User authorized one bounded fix and independent review on 2026-11-02.
 
@@ -30,7 +30,7 @@ No emulator/product code, candidate source or ROM, rights decision, fixture inve
 
 ## Completion evidence
 
-The final reviewed implementation source is `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`. The 18 parser unit tests, configure/build, focused fixture-admission control, independent scoped code/security reviews, and all 1,718 registered local tests have passing evidence across the full serial run plus its one isolated source-archive timeout retest. Pull-request CI, fixture-reproduction, installed-consumer and player-package checks all passed on exact PR head `e0845db5`; run links and the honest full-suite accounting are in [21-UAT-EVIDENCE.md](21-UAT-EVIDENCE.md). The phase documentation/verification commit will create a new PR head and requires a fresh exact-head check set before merge. Record that final head and the merge result before closing Phase 21.
+The final reviewed implementation source is `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`. The 18 parser unit tests, configure/build, focused fixture-admission control, independent scoped code/security reviews, and all 1,718 registered local tests have passing evidence across the full serial run plus its one isolated source-archive timeout retest. PR #140 final head `507019f9363bcce375fa8bec3bda0d75fa0583c6` passed all required exact-head CI, fixture-reproduction, installed-consumer and player-package checks. The first hosted macOS CTest run timed out `phase21_fixture_admission_controls` at 60.08 seconds; the same-head full-suite rerun passed all 1,724 tests, including that test in 50.18 seconds. PR #140 was squash-merged to main at `bef2cfbdbdd0fc9b2d78631586827e29e0241b3b`; its merge tree matches the checked PR head. Run links and the full-suite accounting are in [21-UAT-EVIDENCE.md](21-UAT-EVIDENCE.md). Phase 21 closeout is complete; Phase 22 remains unstarted.
 
 ### Related review refinement
 
