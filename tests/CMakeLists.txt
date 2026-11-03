@@ -3706,14 +3706,15 @@ endif()
 set(GBB_PHASE22_EVIDENCE_CHECKER "${PROJECT_SOURCE_DIR}/tests/scripts/verify-diagnostic-evidence.py")
 add_test(NAME phase22_evidence_contract
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --check
-    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}"
-    --build-dir "${PROJECT_BINARY_DIR}")
+    --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}")
 add_test(NAME phase22_evidence_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${GBB_PHASE22_EVIDENCE_CHECKER}" --self-test-controls
     --repo-root "${PROJECT_SOURCE_DIR}" --source-revision "${GBB_PHASE22_EVIDENCE_SOURCE_REV}")
+# Without --build-dir the checker reads repo/build, which the planning lane has configured; it
+# inspects only CTest's JSON inventory and needs no compiled artifacts.
 set_tests_properties(phase22_evidence_contract PROPERTIES TIMEOUT 60 LABELS planning
   PASS_REGULAR_EXPRESSION "diagnostic evidence pass source=[0-9a-f]+ assessment=blocked cases=513 unresolved_gates=7 admitted=0 executed=0 assessment_checker_sha256=[0-9a-f]+")
-set_tests_properties(phase22_evidence_controls PROPERTIES TIMEOUT 60
+set_tests_properties(phase22_evidence_controls PROPERTIES TIMEOUT 60 LABELS planning
   PASS_REGULAR_EXPRESSION "diagnostic evidence controls pass positives=1 rejected_controls=passed boundary=immutable")
 # The repository LICENSE is not a pinned ROM, so the runner must refuse it before running anything.
 add_test(NAME cgb_acid2_local_refuses_unpinned
