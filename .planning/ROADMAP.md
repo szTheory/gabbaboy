@@ -104,12 +104,12 @@ Captured frame and PCM digests establish reproducibility. They do not independen
   2. The admitted gbmicrotest cohort records exact source/ROM identities, redistribution terms, model applicability, and named eligible/executed/excluded cases; missing required cases or unexplained exclusions cannot yield a successful suite result.
   3. Automated negative controls detect altered fixture/reference/mask identities and incorrect case applicability or accounting; neither diagnostic results nor cross-model comparisons are reported as mode-3 timing, game-level, or physical CGB-E qualification.
 **Plan cap**: 10
-**Plans**: 9 plans
+**Plans**: 1/9 plans executed
 **Execution waves**: 9 sequential waves; Plan 22-08 inserts the trusted downloaded core/player byte gate after the complete identity projection and before final evidence/PR handoff. Plan 22-09 owns source-bound final evidence, measured CI-efficiency assessment, and the Phase 22 stop. Existing admission, root MIT, platform, release-authority, and phase-pause constraints remain in force.
 
 Plans:
 **Wave 1**
-- [ ] 22-01-PLAN.md — Original end-to-end composition tracer and identity/mask controls.
+- [x] 22-01-PLAN.md — Original end-to-end composition tracer and identity/mask controls.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 22-02-PLAN.md — Complete source/rights/applicability assessment and blocking admission gate.
@@ -179,7 +179,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
-| 22. Composition and Microtest Evidence | 0/9 | Planned; implementation not started | - |
+| 22. Composition and Microtest Evidence | 1/9 | In Progress; implementation not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
 ## Planning and Approval Boundary
