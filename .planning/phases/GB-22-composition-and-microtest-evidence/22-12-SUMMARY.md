@@ -9,7 +9,7 @@ requires:
 provides:
   - C1 OSC diagnostic payload removal and causal byte regression in the existing evidence control
   - Fresh exact-source independent code and ASVS 1 reviews for the D-143 exception
-  - Local focused qualification and preserved conditional final boundary route
+  - Final full-suite qualification and Phase 22 exact-head boundary evidence
 affects: [diagnostic-evidence, phase-23-release-evidence]
 tech-stack:
   added: []
@@ -90,9 +90,9 @@ plan_head_after: d867cbaf60c2c68a6664b633fc43f3a7c11c327a
 commits: 3
 ---
 
-# Phase 22 Plan 12: C1 Diagnostic Sanitizer and Conditional Qualification
+# Phase 22 Plan 12: C1 Diagnostic Sanitizer and Final Qualification
 
-**The C1 OSC diagnostic payload is removed with a causal byte regression and fresh independent review; final full-suite and exact-head evidence remain the Phase 22 closure gates.**
+**The C1 OSC diagnostic payload is removed with a causal byte regression and fresh independent review; final full-suite and exact-head qualification passed for PR #142.**
 
 ## Accomplishments
 
@@ -110,6 +110,6 @@ commits: 3
 
 ## Limits and Remaining Qualification
 
-This summary records the completed C1 correction, review cycle, and focused local evidence. The configured full local suite at the final tracked boundary source, fresh Windows and other required exact-head jobs/artifacts, branch-protection review, and merge-tree comparison remain mandatory before Phase 22 closes. PR #142 still points remotely to its earlier failed head until the authorized source is pushed and requalified. The ignored `build/phase22/remote-evidence.json` retains the prior attempt and must retain any new attempt separately.
+This summary records the completed C1 correction, review cycle, focused local evidence, and final phase qualification. The configured suite passed 1,732/1,732 at PR #142's qualified head `9cb92b0f344b884d5f3e7179740ff5bc87eae379`; exact-head required CI, fixture reproduction, package artifacts, clean source/security reviews, strict branch protection, and merge-tree equality passed before squash merge as `ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765`. PR #143 separately records post-merge Windows scheduling cleanup.
 
 No upstream diagnostic payload was fetched, built, run, admitted, or claimed. No license prohibition is inferred. Phase 23 remains unstarted and owner-controlled through `/gsd-discuss-phase 23`; do not auto-advance.

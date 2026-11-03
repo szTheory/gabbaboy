@@ -24,6 +24,8 @@ The final implementation-head audit passed its full suite without failures/skips
 
 The root project license remains MIT. Full libretro work is deferred from v0.4; a direct Steam Deck development build over the owner's existing SSH workflow is exploratory only and does not establish Linux-player or Deck support. libfuturo informs future consumer-contract thinking but adds no dependency and does not freeze GabbaBoy's API or state format.
 
+Phases 20–22 are complete. Phase 22 closes at a metadata-only no-go assessment: no real diagnostic fixture was admitted or executed, seven real-fixture gates remain unresolved, and no license prohibition is inferred. GAME-01, GAME-02, and FEED-01 are complete; FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain pending. REL-01 is owned by Phase 23, which has not started.
+
 <details>
 <summary>Completed v0.3 scope and kickoff context</summary>
 
@@ -127,7 +129,7 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 ### Active
 
-All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). v0.4 requirements are being defined in [REQUIREMENTS.md](REQUIREMENTS.md) from the selected targets above.
+All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). v0.4 requirements and status are tracked in [REQUIREMENTS.md](REQUIREMENTS.md); Phase 23 release evidence (REL-01) remains pending.
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 
@@ -207,4 +209,4 @@ At each phase boundary, update delivered requirements, evidence, limitations, de
 At each milestone boundary, audit this document and the active requirements, summarize compatibility by tested model/corpus, refresh the near/mid/long-term roadmap, and prepare a concise lesson transfer for sibling emulator projects. Keep unverified external advice separate until reproduced locally.
 
 ---
-Last updated: 2026-10-31 after v0.4 milestone kickoff.
+Last updated: 2026-11-03 after Phase 22 qualification.
