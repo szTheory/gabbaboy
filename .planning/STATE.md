@@ -4,17 +4,17 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 22
 current_phase_name: Synthetic Composition and Diagnostic Gate Assessment
-current_plan: 4
-status: Phase GB-22 candidate boundary prepared; Phase 22 is complete only after exact-head PR checks, required artifacts and merge-tree equivalence pass
+current_plan: 5
+status: executing
 stopped_at: Phase 22 Windows-CI rescope approved; replan authorized
-last_updated: "2026-11-03T14:36:38.043Z"
+last_updated: "2026-11-03T15:29:13.687Z"
 last_activity: 2026-11-03
-last_activity_desc: Plan 22-11 full-suite evidence recorded; exact-head PR gate controls Phase 22 closure
-state_head: 46c6696e57299be9601e88c17f0a19709a7f7367
+last_activity_desc: Phase 22 execution started
+state_head: c24bc73c913e1fbef67ace409eaacb83834c9eef
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 21
+  total_plans: 22
   completed_plans: 21
   percent: 50
 ---
@@ -26,17 +26,17 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-10-31.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase GB-22 — Synthetic Composition and Diagnostic Gate Assessment
+**Current focus:** Phase 22 — Synthetic Composition and Diagnostic Gate Assessment
 
 ## Current Position
 
-Current Plan: 4
-Total Plans in Phase: 4
-Phase: 22 (Synthetic Composition and Diagnostic Gate Assessment) — IN PROGRESS
+Current Plan: 5
+Total Plans in Phase: 5
+Phase: 22 (Synthetic Composition and Diagnostic Gate Assessment) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
-Status: Phase GB-22 candidate boundary prepared; Phase 22 is complete only after exact-head PR checks, required artifacts and merge-tree equivalence pass
-Last activity: 2026-11-03 — Plan 22-10 immutable metadata/no-go contract complete
+Status: Executing Phase 22
+Last activity: 2026-11-03 — Phase 22 execution started
 
 Completed stage: **Phase 21 — CGB Game Progress and Scene Regressions, implementation and verification**. All eight plans and five roadmap criteria are complete. Implementation source `e0845db5` passed configure/build, the 18 compile-command tests, and focused fixture-admission controls. The serial local CTest suite passed 1,717/1,718 before `v02_source_archive_controls` hit its existing 90-second limit; that test passed an isolated same-source retry in 77.17 seconds, so every local test has passing evidence across the full run and retry, but no single invocation was all-green. PR #140's final checked head `507019f9` passed the required native/platform, sanitizer, CMake-floor, fixture-reproduction, installed-consumer, and player-package checks and was squash-merged as `bef2cfbd`; the merged tree matches the checked PR head. The first macOS hosted full-suite attempt timed out `phase21_fixture_admission_controls` at 60.08 seconds; its same-head full-suite rerun passed all 1,724 tests, including that control in 50.18 seconds. Independent scoped review and security review found no remaining issues; the security report has zero open threats. The verifier passed all five roadmap criteria using the documented owner disposition for FIXT-01. That requirement remains Pending; no candidate game source or ROM was run and no rights clearance is claimed. Phase 22 was replanned under owner-approved D-141 after seven real-fixture evidence gates remained unresolved; the four-live-plan set passed independent plan review.
 

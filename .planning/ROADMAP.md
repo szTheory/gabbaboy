@@ -110,6 +110,8 @@ Captured frame and PCM digests establish reproducibility. They do not independen
 **Execution waves**: Four sequential dependency waves: 22-01 (complete) → 22-02 (close the existing metadata assessment) → 22-10 (immutable no-go contract and public claims) → 22-11 (local/review/security/exact-head remote qualification and boundary). Original 22-03 through 22-09 carry machine-readable `status: superseded` and must not dispatch.
 
 Plans:
+- [ ] 22-12-PLAN.md
+
 **Wave 1**
 - [x] 22-01-PLAN.md — Preserve the completed original synthetic composition tracer and controls.
 
@@ -163,7 +165,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
-| 22. Synthetic Composition and Diagnostic Gate Assessment | 4/4 | In Progress under D-141; synthetic tracer and immutable metadata/no-go contract complete; DIAG-01/02 and RIGHTS-01 remain Pending | - |
+| 22. Synthetic Composition and Diagnostic Gate Assessment | 4/5 | In Progress under D-141; synthetic tracer and immutable metadata/no-go contract complete; DIAG-01/02 and RIGHTS-01 remain Pending | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
 ## Planning and Approval Boundary

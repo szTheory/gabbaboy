@@ -25,9 +25,9 @@
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 23",
-    "label": "Owner-controlled Phase 23 discussion",
-    "reason": "Phase 22 closes only after the final full-suite result and exact-head remote qualification pass"
+    "command": "$gsd-progress --next",
+    "label": "Advance to the next step",
+    "reason": "Phase 3 of 4 · 50% · executing"
   },
-  "updated_at": "2026-11-03T13:29:50Z"
+  "updated_at": "2026-11-03T15:29:13.698Z"
 }

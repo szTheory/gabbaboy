@@ -30,6 +30,20 @@ created: "2026-11-02"
 | Immutable metadata retains all 513 source/ROM names and each unresolved admission gate; real-byte approval refuses while required evidence is absent. | `phase22_admission_assessment`, fixture-admission controls, `verify-diagnostic-evidence.py --check`, and `verify-diagnostic-admission.py --require-approved`; roster, gate, status, eligibility, and fake-approval mutants are refused. | 22-02, 22-10, 22-11. |
 | Public claims keep the tracer synthetic-only, record no-go without inventing a license prohibition, and preserve DIAG-01/02 and RIGHTS-01 as Pending. | Immutable documentation checks, requirement definition/disposition comparisons, summary block coverage, shared closure writer, and historical boundary mutants. | 22-02, 22-10, 22-11. |
 
+## D-142 Windows Remediation Validation
+
+The bounded Windows repair preserves the revised D-141 acceptance contract and all existing CTest names, assertions, Windows inventory membership, expected-test policy, required CI contexts, and the 60-second `phase22_evidence_*` CTest limits. No test is skipped or waived, no child or CTest limit is raised, and no checker assertion is weakened. The Windows baseline is 1,594 configured tests; the local Phase 1 inventory is 1,732. [VERIFIED: `build/phase22/remote-evidence.json`; `.planning/phases/GB-22-composition-and-microtest-evidence/22-CONTEXT.md`]
+
+Run the ten previously failing CTests as a focused local selection after each relevant fix:
+
+```sh
+ctest --preset phase1 --output-on-failure --no-tests=error -R '^(acceptance_cgb_progress_(discrimination|observations|controls|tracer|compat_rejected)|phase21_fixture_admission_controls|phase21_game_evidence|phase22_evidence_contract|phase22_evidence_controls|planning_labels_controls)$'
+```
+
+The existing tests must retain positive and causal negative controls: native and Windows-separator command paths; temporary Git initialization with hostile global hooks/signing configuration and proof that hooks do not run; exact expected-test inventory acceptance plus missing/duplicate/unexpected membership refusal; and the evidence checker’s immutable-boundary, archive, and timeout controls. Time the existing evidence-control stages to identify the near-limit cost without removing a control or increasing its timeout. The configured inventory and exact test names remain unchanged. [VERIFIED: `22-RESEARCH.md` D-142 Validation Architecture; `tests/CMakeLists.txt`; `tests/cmake/ci-lanes.cmake`; `tests/expected-tests.txt`]
+
+Because this host is macOS, Windows behavior is qualified only by the updated PR’s fresh `native-windows-x64` run. After independent code and security review, run the full local Phase 1 configure/build/CTest command once at the final tracked source. Then require fresh exact-head `required-native`, `fixture-repro`, and `preview-package-smoke` results, their required artifacts, and a successful `.github/scripts/verify-pr-evidence.sh` check. A failed, skipped, stale, missing, or different-head result leaves Phase 22 open. [VERIFIED: `22-RESEARCH.md` D-142 Validation Architecture; `.planning/phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md`]
+
 ## Live Plan Validation Map
 
 | Plan | Scope and status | Required evidence |
@@ -38,6 +52,7 @@ created: "2026-11-02"
 | 22-02 | Complete. Source-bound metadata assessment and public no-go. | D1/D2 coverage in `22-02-SUMMARY.md`; D2 now has `human_judgment: false` and passing document-contract plus immutable evidence references. |
 | 22-10 | Complete. Immutable inventory/no-go snapshot, claims, exact test membership, and boundary checker. | D1–D3 coverage in `22-10-SUMMARY.md`; eight registered Phase 22 checks and mutation controls. |
 | 22-11 | Final live plan. Local review/security, exact source/build, generated closure and phase boundary, full local suite, and exact-head PR evidence. | Block-style coverage in `22-11-SUMMARY.md`; immutable no-go and boundary checks, all configured CTests, `verify-pr-evidence.sh`, same-head runs/artifacts, review dispositions, and merge-tree comparison. |
+| 22-12 | D-142 Windows CI remediation. Planned; implementation and qualification are pending. | The focused ten-test selection above, existing negative controls, independent updated-source review/security review, one final full local suite, and fresh exact-head required PR contexts and artifacts. |
 
 Plans 22-03 through 22-09 are marked `superseded` in the roadmap under D-141. Their original real-fixture build, game/diagnostic, cohort execution, distribution, and lifecycle expectations are outside the approved phase scope; they are neither missing deliverables nor passing claims.
 
@@ -63,4 +78,4 @@ The latest broad focused run passed 23/23 selected tests in 42.98 seconds at fou
 
 No manual or game/perceptual/hardware UAT is planned. The shared closure is generated from live SUMMARY block coverage and its self-test proves that weakened coverage is refused. Synthetic runner evidence and metadata are not a real diagnostic result. No upstream ROM/reference payload, upstream build/program, real fixture admission, license prohibition, or completed DIAG/RIGHTS requirement is claimed.
 
-Final validation is governed by Plan 22-11's immutable local and exact-head remote gates. This validation document remains conditional while either gate is outstanding. Phase 23 remains unstarted and owner-controlled at `/gsd-discuss-phase 23`.
+Final validation is governed by Plans 22-11 and 22-12's immutable local and exact-head remote gates. This validation document remains conditional while either gate is outstanding. Phase 23 remains unstarted and owner-controlled at `/gsd-discuss-phase 23`.
