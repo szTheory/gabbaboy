@@ -18,7 +18,7 @@ The two substantive tracks are CGB game acceptance with scene regressions, and d
 Numbering continues after completed Phase 19. Decimal phases are reserved for explicitly approved insertions.
 
 - [x] **Phase 20: Fixture Admission Tune-up** — New evidence enters through a checked rights and distribution boundary. Nine plans and exact-head hosted platform/package qualification are complete; RIGHTS-01 remains pending because no fixture was admitted.
-- [ ] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome.
+- [x] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome. (completed 2026-11-02)
 - [ ] **Phase 22: Composition and Microtest Evidence** — Admitted acid2 derivatives and gbmicrotest expose their exact model and oracle limits.
 - [ ] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established.
 
@@ -69,7 +69,28 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
 **Plan cap**: 12
-**Plans**: TBD — within the cap; the primary and fallback candidate attempts each occupy at most one plan.
+**Plans**: 8/8 plans complete — within the cap; the primary and fallback candidate attempts each occupy one conditional plan. Plan 21-08 is the single reserved gap round; after CR-04/CR-05 closure it reopened within that same plan for CR-06 and completed with exact 24-input qualification and source-drift controls. No additional plan or gap round was added. Exact implementation-source PR CI, fixture reproduction, installed consumers, and player-package smoke passed at `e0845db5`; requalify the closeout metadata head before merge and before beginning Phase 22.
+
+Plans:
+**Wave 1**
+- [x] 21-01-PLAN.md — Shared native-CGB progress tracer, original generated control and preserved Libbet/DMG policy.
+- [x] 21-03-PLAN.md — Source-bound two-candidate record/admission contract with real-CLI controls.
+
+**Wave 2** *(blocked on the indicated Wave 1 dependencies)*
+- [x] 21-02-PLAN.md — Input/predicate discrimination and independently specified original RGB555 observation controls.
+- [x] 21-06-PLAN.md — Minimal scene intake, agent-owned reproduction procedure and independent/private-data promotion gates.
+
+**Wave 3** *(blocked on Plans 21-02 and 21-03)*
+- [x] 21-04-PLAN.md — One bounded Potion Panic GB Compo 2025 source/build/rights/native-progress attempt or actual no-go.
+
+**Wave 4** *(blocked on the primary's final disposition)*
+- [x] 21-05-PLAN.md — Sole conditional preferred µCity 1.3 fallback or checked not-needed outcome.
+
+**Wave 5** *(blocked on controls, the final candidate pair and scene workflow)*
+- [x] 21-07-PLAN.md — Actual outcome/documentation composition, final source qualification and Phase 21 handoff.
+
+**Wave 6** *(single reserved gap round after final review)*
+- [x] 21-08-PLAN.md — Separate historical provenance from current CMake artifact qualification and bind replay to exact aggregate RGB555/PCM observations.
 
 Captured frame and PCM digests establish reproducibility. They do not independently establish rendering accuracy, perceptual quality, physical CGB-E behavior, or general compatibility. A newly reproduced correctness/security issue must be fixed within scope or trigger a rescope; the candidate absence exit cannot silently defer it. Optional direct Steam Deck/SSH exploration is neither a completion gate nor a qualified Linux/Deck path.
 
@@ -123,7 +144,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
-| 21. CGB Game Progress and Scene Regressions | 0/TBD | Not started | - |
+| 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; closeout-head PR checks and merge pending | 2026-11-02 |
 | 22. Composition and Microtest Evidence | 0/TBD | Not started | - |
 | 23. Qualified v0.4.0 Release | 0/TBD | Not started | - |
 
@@ -134,4 +155,4 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
 - Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.
 
-Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`. Its nine plans, final local review/security evidence, exact-head pull-request and push CI matrices, and the Linux/macOS/player consumer smoke checks passed. The full CTest run passed 1,708 cases; its three configure-time revision-snapshot controls passed after reconfigure/build and focused retest. The archive-controls self-test now reuses its prevalidated fixture-policy baseline and passed in 52.11 seconds. No fixture was admitted; RIGHTS-01 remains pending, with no legal-clearance claim. Phase 21 stays unstarted; use **/gsd-discuss-phase 21** when the owner chooses to continue.
+Phase 20 completed on implementation head `39eb048e7770652b84a3fc5da7aaa3890adbd70c`; no fixture was admitted and RIGHTS-01 remains pending. Phase 21's eight plans and five roadmap criteria are verified. Implementation source `e0845db5` passed configure/build, focused checks, exact-head PR native/platform/sanitizer/CMake-floor CI, fixture reproduction, and package consumers. The full local CTest run passed 1,717/1,718 before one unchanged 90-second timeout; the exact timed-out test passed a 77.17-second isolated retry, so all tests have passing evidence across those runs but no single full invocation was all-green. The verifier's owner-approved override keeps FIXT-01 Pending without claiming a license grant or candidate ROM. The closeout documentation head still needs fresh exact-head PR checks and merge. Phase 22 — Composition and Microtest Evidence — is the next phase, remains unstarted, and requires the owner-selected command **/gsd-discuss-phase 22** after this closeout. Both automatic-advance flags remain false.

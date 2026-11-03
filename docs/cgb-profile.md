@@ -28,10 +28,14 @@ mode reads `$FF`. Double-speed switching, GDMA and HBlank DMA run on the selecte
 and keep their budgets in master half-dots.
 
 These are limits, not omissions. No CGB game-level evidence exists: the CGB test-ROM corpus is
-software-model evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY. CGB mode-3
-timing is not claimed. No physical or perceptual audio/color qualification is claimed, and
-nothing here describes general game compatibility. The evidence rows below say which cells rest
-on a hardware-derived test, a document, a differential oracle or project policy.
+software-model evidence, not game acceptance. Phase 21 passed the original native-CGB harness
+under the CGB-CPU-E software model in native mode; that result is harness-only and does not add an
+admitted game. Potion Panic and µCity 1.3 both ended in documented rights/source-scope no-go
+outcomes; the component evidence and unobserved downstream facts are in
+[game acceptance](game-acceptance.md). Physical CGB-E remains UNKNOWN/POLICY. CGB mode-3 timing is
+not claimed. No physical or perceptual audio/color qualification is claimed, and nothing here
+describes general game compatibility. The evidence rows below say which cells rest on a
+hardware-derived test, a document, a differential oracle or project policy.
 <!-- adopter-model-summary-end -->
 
 ## Evidence classes

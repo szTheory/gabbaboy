@@ -29,6 +29,18 @@ if("${gbb_dirty_command}" STREQUAL "")
   message(FATAL_ERROR "qualified-sources-dirty-list-missing: no `git diff --quiet HEAD --` command in ${GBB_ROOT_CMAKELISTS}")
 endif()
 string(STRIP "${CMAKE_MATCH_1}" gbb_dirty_text)
+# CMakeLists.txt keeps the complete dirty-source inventory in one shared list so the
+# qualification receipt and GBB_BUILD_QUALIFIED use the same source of truth. Resolve
+# that reference here before checking individual runner and host sources against it.
+string(FIND "${gbb_dirty_text}" "\${GBB_RUNNER_BUILD_INPUTS}" gbb_runner_inputs_reference)
+if(NOT gbb_runner_inputs_reference EQUAL -1)
+  string(REGEX MATCH "set\\(GBB_RUNNER_BUILD_INPUTS[ \t\r\n]+([^)]*)\\)"
+    gbb_runner_inputs_assignment "${gbb_text}")
+  if("${gbb_runner_inputs_assignment}" STREQUAL "")
+    message(FATAL_ERROR "qualified-sources-runner-input-list-missing: GBB_RUNNER_BUILD_INPUTS")
+  endif()
+  set(gbb_dirty_text "${CMAKE_MATCH_1}")
+endif()
 string(REGEX REPLACE "[ \t\r\n]+" ";" gbb_dirty_list "${gbb_dirty_text}")
 if(NOT gbb_dirty_list)
   message(FATAL_ERROR "qualified-sources-dirty-list-empty")

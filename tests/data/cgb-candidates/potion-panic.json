@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "candidate_id": "potion-panic-gbcompo25",
+  "release": "GB Compo 2025",
+  "preferred_artifact": "potion-panic.gb",
+  "stage": "final",
+  "partial": false,
+  "source": {
+    "state": "not_observed",
+    "blocked_by": "rights",
+    "reason": "Rights cutoff before source acquisition: the creator-linked Codeberg repository was unavailable, so no exact revision, recursive inputs, component inventory, or build recipe was observed."
+  },
+  "build": {
+    "state": "not_observed",
+    "blocked_by": "rights",
+    "reason": "Rights cutoff before source acquisition: no exact source or build inputs were approved or observed; no upstream build was run."
+  },
+  "admission": {
+    "state": "observed",
+    "value": {
+      "decision_status": "no-go",
+      "reason": "The creator page reports separate MIT code and CC BY-NC-SA 4.0 asset terms, but the exact source tree and component-to-grant coverage could not be inspected. Phase 20 repository/public-CI rights and notice scope therefore remain unestablished.",
+      "evidence": {
+        "kind": "rights-scope-review",
+        "creator_page": "https://deved.itch.io/potion-panic",
+        "creator_page_observed": {
+          "release": "GB Compo 2025 demo",
+          "listed_download": "ROM file, 256 kB",
+          "source_link": "https://codeberg.org/DevEd/potion-panic",
+          "code_license_label": "MIT License",
+          "asset_license_label": "Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International"
+        },
+        "license_references": {
+          "asset_license_legal_code": "https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en",
+          "mit_license_reference": "https://opensource.org/license/mit",
+          "scope_note": "The CC BY-NC-SA grant is conditional, including noncommercial use, attribution, and share-alike for adapted material; the licensor's authority to grant each work must still be established."
+        },
+        "authoritative_source_acquisition": {
+          "repository": "https://codeberg.org/DevEd/potion-panic",
+          "attempt": "git ls-remote --symref for the creator-linked repository",
+          "result": "failed before any ref or commit identity was returned",
+          "sanitized_error": "SSL_ERROR_SYSCALL while connecting to codeberg.org:443"
+        },
+        "fork_disposition": {
+          "repository": "https://github.com/gbcompo25/potion-panic",
+          "used_as_source_authority": false,
+          "reason": "The indexed repository identifies itself as a fork from DevEd2/potion-panic; the creator page instead links to Codeberg DevEd/potion-panic."
+        },
+        "unresolved_phase20_scope": [
+          "Exact code, art, audio-driver, converter, build-input, and notice coverage for the creator-linked source tree",
+          "Evidence that the grantor has authority over each component and its incorporated dependencies",
+          "Explicit repository and public-CI scope for the exact source-built ROM and required notices"
+        ],
+        "cutoff": "Stopped at the rights gate. No authoritative source revision, source inventory, submodule identities, build-tool identities, ROM bytes, cartridge header, loaded mode, progress predicate, observations, or receipt were established."
+      }
+    }
+  },
+  "rom": {
+    "state": "not_observed",
+    "blocked_by": "rights",
+    "reason": "Rights cutoff before candidate acquisition/build; ROM bytes, digest, size, and cartridge header were not observed."
+  },
+  "execution": {
+    "state": "not_observed",
+    "blocked_by": "rights",
+    "reason": "Rights cutoff before candidate execution; CGB profile and loaded execution mode were not observed."
+  },
+  "progress": {
+    "state": "not_observed",
+    "blocked_by": "rights",
+    "reason": "Rights cutoff before candidate execution; no game route or progress predicate was evaluated."
+  },
+  "observations": {
+    "state": "not_observed",
+    "blocked_by": "rights",
+    "reason": "Rights cutoff before candidate execution; RGB555 and PCM observations were not produced."
+  },
+  "receipt": {
+    "state": "not_observed",
+    "blocked_by": "rights",
+    "reason": "Rights cutoff before candidate execution; no source-qualified candidate receipt was produced."
+  },
+  "unobserved": [
+    {
+      "field": "source",
+      "blocked_by": "rights",
+      "reason": "Rights cutoff before source acquisition: the creator-linked Codeberg repository was unavailable, so no exact revision, recursive inputs, component inventory, or build recipe was observed."
+    },
+    {
+      "field": "build",
+      "blocked_by": "rights",
+      "reason": "Rights cutoff before source acquisition: no exact source or build inputs were approved or observed; no upstream build was run."
+    },
+    {
+      "field": "rom",
+      "blocked_by": "rights",
+      "reason": "Rights cutoff before candidate acquisition/build; ROM bytes, digest, size, and cartridge header were not observed."
+    },
+    {
+      "field": "execution",
+      "blocked_by": "rights",
+      "reason": "Rights cutoff before candidate execution; CGB profile and loaded execution mode were not observed."
+    },
+    {
+      "field": "progress",
+      "blocked_by": "rights",
+      "reason": "Rights cutoff before candidate execution; no game route or progress predicate was evaluated."
+    },
+    {
+      "field": "observations",
+      "blocked_by": "rights",
+      "reason": "Rights cutoff before candidate execution; RGB555 and PCM observations were not produced."
+    },
+    {
+      "field": "receipt",
+      "blocked_by": "rights",
+      "reason": "Rights cutoff before candidate execution; no source-qualified candidate receipt was produced."
+    }
+  ],
+  "disposition": {
+    "status": "no-go",
+    "category": "rights",
+    "blocker_stage": "rights",
+    "reason": "Exact component rights and required repository/public-CI scope could not be established from the creator-linked source evidence; no later candidate facts were observed.",
+    "evidence": {
+      "kind": "creator-linked-source-and-rights-cutoff",
+      "source_repository": "https://codeberg.org/DevEd/potion-panic",
+      "source_acquisition_error": "SSL_ERROR_SYSCALL before ref or commit identity was returned",
+      "rights_finding": "Creator-page license labels were verified, but exact component coverage, grant authority, and Phase 20 repository/public-CI scope remain unverified.",
+      "upstream_scripts_executed": false,
+      "candidate_rom_acquired_or_executed": false
+    }
+  }
+}

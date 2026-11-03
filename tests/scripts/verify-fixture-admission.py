@@ -764,9 +764,9 @@ def check_manifest(root: Path, manifest_path: str) -> dict:
         pin_text = pin_raw.decode("ascii")
     except UnicodeDecodeError:
         raise Reject("admission-pin-invalid", pin_path) from None
-    if not re.fullmatch(r"[0-9a-f]{40}\n?", pin_text):
+    if not re.fullmatch(r"[0-9a-f]{40}(?:\n|\r\n)?", pin_text):
         raise Reject("admission-pin-invalid", "must contain exactly one full commit id")
-    pin_text = pin_text.rstrip("\n")
+    pin_text = pin_text.rstrip("\r\n")
     pin = check_commit(root, pin_text, "admission-pin-invalid")
     current_head = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
     ancestry = subprocess.run(["git", "merge-base", "--is-ancestor", pin, current_head], cwd=root,
@@ -1601,13 +1601,14 @@ def _write_synthetic(root: Path) -> str:
                     "index_path": "THIRD_PARTY_NOTICES.md"},
     }
     manifest_path = root / "fixtures/synthetic/manifest.json"
-    manifest_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest_path.write_bytes((json.dumps(record, indent=2, sort_keys=True) + "\n").encode("utf-8"))
     manifest_digest = sha256(manifest_path.read_bytes())
-    (root / "THIRD_PARTY_NOTICES.md").write_text(
+    (root / "THIRD_PARTY_NOTICES.md").write_bytes((
         "### Manifest and notice digests\n\n"
         "| Fixture directory | `manifest.json` SHA-256 | `LICENSE.txt` SHA-256 |\n"
         "|---|---|---|\n"
-        f"| `synthetic` | `{manifest_digest}` | `{sha256(license_bytes)}` |\n", encoding="utf-8")
+        f"| `synthetic` | `{manifest_digest}` | `{sha256(license_bytes)}` |\n"
+    ).encode("utf-8"))
     git(root, "add", "fixtures/synthetic", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json")
     tree = git(root, "write-tree").decode("ascii").strip()
     commit = git(root, "commit-tree", tree, "-p", BASELINE_COMMIT, "-m",
@@ -1784,12 +1785,27 @@ def _run_manifest_mutations(root: Path) -> int:
     if result.returncode == 0 or "REJECT admission-pin-invalid:" not in result.stderr:
         raise Reject("self-test-symbolic-pin", result.stderr.strip() or "symbolic pin was accepted")
     cases.append("symbolic-pin")
+    valid_pin = git(root, "rev-parse", "HEAD").decode("ascii").strip()
+    pin_path.write_bytes((valid_pin + "\r").encode("ascii"))
+    result = _run_manifest_cli(root)
+    if result.returncode == 0 or "REJECT admission-pin-invalid:" not in result.stderr:
+        raise Reject("self-test-bare-cr-pin", result.stderr.strip() or "bare-CR pin was accepted")
+    cases.append("bare-cr-pin")
     pin_path.write_bytes((BASELINE_COMMIT + "\n").encode("ascii"))
     result = _run_manifest_cli(root)
     if result.returncode == 0 or "REJECT git-blob-missing:" not in result.stderr:
         raise Reject("self-test-missing-blob", result.stderr.strip() or "missing pinned blob was accepted")
     cases.append("missing-pinned-blob")
-    pin_path.write_bytes((git(root, "rev-parse", "HEAD").decode("ascii").strip() + "\n").encode("ascii"))
+    pin_path.write_bytes((valid_pin + "\n").encode("ascii"))
+    result = _run_manifest_cli(root)
+    if result.returncode != 0 or "PASS: fixture admission" not in result.stdout:
+        raise Reject("self-test-valid-pin", result.stderr.strip() or result.stdout.strip())
+    cases.append("valid-pin")
+    pin_path.write_bytes((valid_pin + "\r\n").encode("ascii"))
+    result = _run_manifest_cli(root)
+    if result.returncode != 0 or "PASS: fixture admission" not in result.stdout:
+        raise Reject("self-test-crlf-pin", result.stderr.strip() or result.stdout.strip())
+    cases.append("crlf-pin")
     return len(cases)
 
 

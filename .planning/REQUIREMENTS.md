@@ -8,8 +8,8 @@
 
 ### CGB Game Acceptance
 
-- [ ] **GAME-01**: The shared game-acceptance runner supports CGB RGB555 frame observations and guest-progress predicates on the CGB-CPU-E software profile while preserving the existing DMG acceptance path.
-- [ ] **GAME-02**: A CGB game result binds the exact ROM digest, profile and mode, scripted inputs, progress predicate, and observation data; a positive progress case and no-input/wrong-input or deliberately broken-predicate controls distinguish real guest progress from a vacuous pass.
+- [x] **GAME-01**: The shared game-acceptance runner supports CGB RGB555 frame observations and guest-progress predicates on the CGB-CPU-E software profile while preserving the existing DMG acceptance path.
+- [x] **GAME-02**: A CGB game result binds the exact ROM digest, profile and mode, scripted inputs, progress predicate, and observation data; a positive progress case and no-input/wrong-input or deliberately broken-predicate controls distinguish real guest progress from a vacuous pass.
 
 ### Fixture Admission and Rights
 
@@ -23,7 +23,7 @@
 
 ### Scene Feedback
 
-- [ ] **FEED-01**: A concise title/scene/symptom report is enough to start agent-owned reproduction and classification; any resulting automated scene regression has an independent expected behavior and a negative control, while personal ROMs, saves, states, and captures remain outside the repository.
+- [x] **FEED-01**: A concise title/scene/symptom report is enough to start agent-owned reproduction and classification; any resulting automated scene regression has an independent expected behavior and a negative control, while personal ROMs, saves, states, and captures remain outside the repository.
 
 ### Release Evidence
 
@@ -55,13 +55,13 @@ Deferred to a later owner-approved milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GAME-01 | Phase 21 | Pending |
-| GAME-02 | Phase 21 | Pending |
+| GAME-01 | Phase 21 | Complete |
+| GAME-02 | Phase 21 | Complete |
 | FIXT-01 | Phase 21 | Pending |
 | RIGHTS-01 | Phase 20 | Pending |
 | DIAG-01 | Phase 22 | Pending |
 | DIAG-02 | Phase 22 | Pending |
-| FEED-01 | Phase 21 | Pending |
+| FEED-01 | Phase 21 | Complete |
 | REL-01 | Phase 23 | Pending |
 
 **Coverage:**

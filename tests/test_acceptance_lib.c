@@ -398,6 +398,65 @@ static int case_predicate_truth_table(void) {
     PASS("acceptance_predicate_truth_table");
 }
 
+static const char *cgb_control_rom_sha256 =
+    "17822873ec8641280d9504229d96850414e872bc90de5431469a498e5271db7e";
+
+static int case_predicate_cgb_truth_table(void) {
+    const gbb_accept_predicate *progress =
+        gbb_accept_predicate_find("cgb-control-progress", cgb_control_rom_sha256);
+    const gbb_accept_predicate *impossible =
+        gbb_accept_predicate_find("cgb-control-impossible", cgb_control_rom_sha256);
+    REQUIRE(progress != NULL && impossible != NULL);
+    uint8_t ram[0x10000u] = {0};
+    ram[0xC000] = 0xA5;
+    ram[0xC001] = 0x01;
+    REQUIRE(gbb_accept_predicate_eval(progress, synthetic_peek, ram, 0));
+    REQUIRE(!gbb_accept_predicate_eval(impossible, synthetic_peek, ram, 0));
+
+    ram[0xC000] = 0xA4;
+    REQUIRE(!gbb_accept_predicate_eval(progress, synthetic_peek, ram, 0));
+    ram[0xC000] = 0xA5;
+    ram[0xC001] = 0x00;
+    REQUIRE(!gbb_accept_predicate_eval(progress, synthetic_peek, ram, 0));
+
+    REQUIRE(gbb_accept_predicate_find("cgb-control-progress", "") == NULL);
+    REQUIRE(gbb_accept_predicate_find("cgb-control-progress",
+                "17822873ec8641280d9504229d96850414e872bc90de5431469a498e5271db8") == NULL);
+    REQUIRE(gbb_accept_predicate_find("cgb-control-unbound", cgb_control_rom_sha256) == NULL);
+    REQUIRE(gbb_accept_predicate_find(NULL, cgb_control_rom_sha256) == NULL);
+    PASS("acceptance_predicate_cgb_truth_table");
+}
+
+static int case_predicate_cgb_anchors(void) {
+    const gbb_accept_predicate *progress =
+        gbb_accept_predicate_find("cgb-control-progress", cgb_control_rom_sha256);
+    REQUIRE(progress != NULL);
+    uint8_t rom[0x181u] = {0};
+    for (size_t i = 0; i < GBB_ACCEPT_SOURCE_ROW_COUNT; i++) {
+        const gbb_accept_predicate_row *row = &progress->source_rows[i];
+        REQUIRE(row->anchor_length <= sizeof(row->anchor));
+        if (row->anchor_length != 0) {
+            REQUIRE(row->anchor_offset <= sizeof(rom));
+            REQUIRE(sizeof(rom) - row->anchor_offset >= row->anchor_length);
+            memcpy(rom + row->anchor_offset, row->anchor, row->anchor_length);
+        }
+    }
+    REQUIRE(gbb_accept_predicate_anchors_match(progress, rom, sizeof(rom)));
+    REQUIRE(!gbb_accept_predicate_anchors_ok(progress, rom, sizeof(rom)));
+
+    for (size_t i = 0; i < GBB_ACCEPT_SOURCE_ROW_COUNT; i++) {
+        const gbb_accept_predicate_row *row = &progress->source_rows[i];
+        if (row->anchor_length == 0) continue;
+        rom[row->anchor_offset] ^= 1u;
+        REQUIRE(!gbb_accept_predicate_anchors_match(progress, rom, sizeof(rom)));
+        rom[row->anchor_offset] ^= 1u;
+        REQUIRE(gbb_accept_predicate_anchors_match(progress, rom, sizeof(rom)));
+    }
+    REQUIRE(!gbb_accept_predicate_anchors_match(progress, rom, sizeof(rom) - 1u));
+    REQUIRE(!gbb_accept_predicate_anchors_match(progress, NULL, sizeof(rom)));
+    PASS("acceptance_predicate_cgb_anchors");
+}
+
 static int case_predicate_anchors(const char *rom_path) {
     size_t length = 0;
     uint8_t *rom = read_file(rom_path, 32768u, &length);
@@ -1259,6 +1318,8 @@ int main(int argc, char **argv) {
     if (strcmp(argv[1], "acceptance_parse_script_bounds") == 0) return case_parse_bounds();
     if (strcmp(argv[1], "acceptance_parse_script_errors") == 0) return case_parse_errors();
     if (strcmp(argv[1], "acceptance_predicate_truth_table") == 0) return case_predicate_truth_table();
+    if (strcmp(argv[1], "acceptance_predicate_cgb_truth_table") == 0) return case_predicate_cgb_truth_table();
+    if (strcmp(argv[1], "acceptance_predicate_cgb_anchors") == 0) return case_predicate_cgb_anchors();
     if (strcmp(argv[1], "acceptance_predicate_anchors") == 0) {
         REQUIRE(argc == 3);
         return case_predicate_anchors(argv[2]);

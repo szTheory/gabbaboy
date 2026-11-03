@@ -5593,6 +5593,7 @@ gbb_state_alloc_mutant(save_overwrites_tail "${GBB_STATE_SAVE_SUCCESS_ANCHOR}"
 # configure-time HEAD, read with git show; nothing falls back to the live tree.
 if(NOT WIN32)
   # Each case: name | checker mode | output regex | key whose value must reach a minimum | minimum.
+  set(gbb_release_shell_tests)
   foreach(gbb_lifecycle_case IN ITEMS
       "release_lifecycle_replay|--replay|release-lifecycle replay pass modes=[1-9][0-9]* publish_decisions=2 live_mutations=0|uploads|7"
       "release_lifecycle_controls|--self-test|release-lifecycle controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*|controls|95")
@@ -5610,6 +5611,7 @@ if(NOT WIN32)
         -DGBB_EXPECT_MIN_KEY=${gbb_lifecycle_key} -DGBB_EXPECT_MIN_VALUE=${gbb_lifecycle_min}
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
+    list(APPEND gbb_release_shell_tests "${gbb_lifecycle_name}")
   endforeach()
   # Keep each post-tag semantic family independently runnable at the existing fixed budget.
   # The immutable manifest checker proves exact registration and execution across all six groups.
@@ -5628,6 +5630,7 @@ if(NOT WIN32)
         "-DGBB_EXPECT_REGEX=release-lifecycle post-tag group=${gbb_post_tag_group} controls=[1-9][0-9]* positives=[0-9]+ endpoint_inventory=${gbb_post_tag_endpoint_inventory} ids_sha256=[0-9a-f]+"
         -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
     set_tests_properties("${gbb_post_tag_test}" PROPERTIES TIMEOUT 60 LABELS "v02" RUN_SERIAL TRUE)
+    list(APPEND gbb_release_shell_tests "${gbb_post_tag_test}")
   endforeach()
 
   add_test(NAME release_lifecycle_post_tag_coverage_controls
@@ -5638,10 +5641,19 @@ if(NOT WIN32)
       -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
   set_tests_properties(release_lifecycle_post_tag_coverage_controls
     PROPERTIES TIMEOUT 60 LABELS "v02" RUN_SERIAL TRUE)
+  list(APPEND gbb_release_shell_tests release_lifecycle_post_tag_coverage_controls)
 
-  # These control suites launch many short subprocesses. Run each alone so parallel test load
-  # cannot push existing fixed 60-second budgets over their caps.
-  set_tests_properties(release_lifecycle_controls PROPERTIES RUN_SERIAL TRUE)
+  # The shell gates call bare `python3`; make that resolve to the same interpreter CMake selected.
+  # On hosts with an older system Python earlier on PATH, the nested gate can otherwise use an
+  # incompatible stdlib even though the outer test was launched with Python3_EXECUTABLE.
+  get_filename_component(gbb_cmake_python_bin "${Python3_EXECUTABLE}" DIRECTORY)
+  set_tests_properties(${gbb_release_shell_tests} PROPERTIES
+    ENVIRONMENT "PATH=${gbb_cmake_python_bin}:$ENV{PATH}")
+
+  # Run this 95-control suite with the other long checks. It reached its unchanged 60-second cap
+  # when CTest scheduled it after the full serial run; the COST hint front-loads it without
+  # changing coverage, concurrency, or the timeout.
+  set_tests_properties(release_lifecycle_controls PROPERTIES RUN_SERIAL TRUE COST 45)
 endif()
 
 # D-27 (19-08): the Python-stdlib recovery controls run on every host, after the immutable
@@ -5708,6 +5720,7 @@ add_test(NAME state_boundary_controls
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(state_boundary_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 
+include("${PROJECT_SOURCE_DIR}/tests/cmake/game-evidence.cmake")
 gabbaboy_verify_registered_tests()
 
 # Per-test TIMEOUTs are normal-build limits. Debug ASan/UBSan runs the same work several times

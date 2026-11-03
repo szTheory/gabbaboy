@@ -121,6 +121,32 @@ target_link_libraries(gabbaboy-runner PRIVATE gabbaboy_runner_support gabbaboy_h
 target_compile_features(gabbaboy-runner PRIVATE c_std_17)
 set_target_properties(gabbaboy-runner PROPERTIES C_EXTENSIONS OFF)
 
+set(GBB_RUNNER_BUILD_INPUTS
+  CMakeLists.txt
+  cmake/StateVersion.cmake
+  include/gabbaboy/gabbaboy.h
+  src/core/gabbaboy.c
+  src/core/gbb_accept_input.h
+  src/core/gabbaboy_test.h
+  src/runner/main.c
+  src/runner/acceptance.h
+  src/runner/cases.c
+  src/runner/acceptance.c
+  src/accept/gbb_accept.h
+  src/accept/sha256.c
+  src/accept/input_script.c
+  src/accept/stepper.c
+  src/accept/predicate.c
+  src/accept/digest.c
+  src/host/gbb_host.h
+  src/host/host_exit.h
+  src/host/host_cadence.c
+  src/host/host_run.c
+  src/host/host_save_format.c
+  src/host/host_save_io.c
+  src/host/host_signal.c
+  src/host/host_basename.c
+)
 execute_process(COMMAND git rev-parse --verify HEAD
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
   OUTPUT_VARIABLE GABBABOY_BUILD_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -132,10 +158,7 @@ if(NOT GABBABOY_GIT_RESULT EQUAL 0 OR
   set(GABBABOY_BUILD_REVISION "unknown")
   set(GABBABOY_BUILD_QUALIFIED 0)
 else()
-  execute_process(COMMAND git diff --quiet HEAD -- CMakeLists.txt include/gabbaboy/gabbaboy.h src/core/gabbaboy.c src/core/gabbaboy_test.h src/runner/main.c
-    src/runner/acceptance.h src/runner/cases.c src/runner/acceptance.c
-    src/accept/gbb_accept.h src/accept/sha256.c src/accept/input_script.c src/accept/stepper.c src/accept/predicate.c src/accept/digest.c
-    src/host/gbb_host.h src/host/host_exit.h src/host/host_cadence.c src/host/host_run.c src/host/host_save_format.c src/host/host_save_io.c src/host/host_signal.c src/host/host_basename.c
+  execute_process(COMMAND git diff --quiet HEAD -- ${GBB_RUNNER_BUILD_INPUTS}
     WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}" RESULT_VARIABLE GABBABOY_SOURCE_DIRTY ERROR_QUIET)
   if(GABBABOY_SOURCE_DIRTY EQUAL 0)
     set(GABBABOY_BUILD_QUALIFIED 1)
@@ -149,6 +172,30 @@ target_compile_definitions(gabbaboy_core PRIVATE
 target_compile_definitions(gabbaboy-runner PRIVATE
   GBB_BUILD_REVISION="${GABBABOY_BUILD_REVISION}"
   GBB_BUILD_QUALIFIED=${GABBABOY_BUILD_QUALIFIED})
+
+if(BUILD_TESTING)
+  set(GBB_RUNNER_QUALIFICATION_PATH
+    "${PROJECT_SOURCE_DIR}/build/phase21-evidence/current-runner-qualification.json")
+  set(GBB_RUNNER_QUALIFICATION_INPUT_ARGS)
+  set(GBB_RUNNER_QUALIFICATION_INPUT_FILES)
+  foreach(GBB_RUNNER_INPUT IN LISTS GBB_RUNNER_BUILD_INPUTS)
+    list(APPEND GBB_RUNNER_QUALIFICATION_INPUT_ARGS --input-path "${GBB_RUNNER_INPUT}")
+    list(APPEND GBB_RUNNER_QUALIFICATION_INPUT_FILES "${PROJECT_SOURCE_DIR}/${GBB_RUNNER_INPUT}")
+  endforeach()
+  add_custom_target(gabbaboy-runner-qualification ALL
+    COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-candidates.py"
+      --write-build-qualification
+      --repo-root "${PROJECT_SOURCE_DIR}"
+      --source-revision "${GABBABOY_BUILD_REVISION}"
+      --runner "$<TARGET_FILE:gabbaboy-runner>"
+      --qualification "${GBB_RUNNER_QUALIFICATION_PATH}"
+      --build-qualified "${GABBABOY_BUILD_QUALIFIED}"
+      ${GBB_RUNNER_QUALIFICATION_INPUT_ARGS}
+    DEPENDS gabbaboy-runner
+      "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cgb-candidates.py"
+      ${GBB_RUNNER_QUALIFICATION_INPUT_FILES}
+    VERBATIM)
+endif()
 
 if(GABBABOY_BUILD_PLAYER)
   find_package(SDL3 3.4.18 EXACT CONFIG REQUIRED)
