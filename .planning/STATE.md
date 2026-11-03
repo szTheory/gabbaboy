@@ -6,11 +6,11 @@ current_phase: 22
 current_phase_name: Composition and Microtest Evidence
 current_plan: 2
 status: executing
-stopped_at: Completed GB-22-01-PLAN.md
-last_updated: "2026-11-03T10:05:17.560Z"
+stopped_at: Awaiting owner decision at GB-22-02 Task 2 checkpoint
+last_updated: "2026-11-03T10:24:15.800Z"
 last_activity: 2026-11-03
 last_activity_desc: Phase GB-22 Plan 22-01 complete; Plan 22-02 remains
-state_head: e0cf205d576fb43461eb546026035f6d3b5e8167
+state_head: f2542c8053db1e5183e0dd0e8702e77afbb2eb59
 progress:
   total_phases: 4
   completed_phases: 2
@@ -81,9 +81,9 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-03T10:05:17.427Z
-**Stopped at:** Completed GB-22-01-PLAN.md
-**Resume file:** None
+**Last session:** 2026-11-03T10:24:15.695Z
+**Stopped at:** Awaiting owner decision at GB-22-02 Task 2 checkpoint
+**Resume file:** .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
 
 ## Operator Next Steps
 
@@ -110,3 +110,7 @@ Phase 21 is verified at implementation source `e0845db5` and merged after exact-
 - [Phase 21]: Run nested scene CTests with the same explicit Debug configuration used for discovery and preserve failure diagnostics.
 - [Phase GB-22]: Keep the tracer synthetic-only and bind its one visible tile cell to a fixed allowlist.
 - [Phase GB-22]: Assert specific refusal reasons for identity, mask, image, path, and admission-pin mutants.
+
+### Blockers
+
+- Phase GB-22 Plan 22-02 Task 2 is stopped at a blocking-human owner decision checkpoint. Seven evidence gates remain unresolved: acid2 derivative build reproducibility; acid2 component rights and output scope; acid2 DMG-CPU-B/CGB-CPU-E reference applicability; gbmicrotest ROM/logo rights and output scope; SHA-256 identities for 513 prebuilt ROMs; per-case applicability; and independent expected results. Keep downstream plans blocked until source-backed evidence clears every gate or the owner explicitly rescope returns Phase 22 for replanning.
