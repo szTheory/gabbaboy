@@ -2301,15 +2301,17 @@ def cmake_build_qualified_value(entry: dict[str, Any]) -> str | None:
             return None
         strip_command_quotes = os.name == "nt"
 
-    definitions: list[str] = []
+    operations: list[tuple[str, str | None]] = []
     index = 0
     while index < len(argv):
         argument = argv[index]
         if (strip_command_quotes and len(argument) >= 2
                 and argument[0] in "\"'" and argument[-1] == argument[0]):
             argument = argument[1:-1]
-        prefix = next((flag for flag in ("-D", "/D") if argument.startswith(flag)), None)
+        prefix = next((flag for flag in ("-D", "/D", "-U", "/U")
+                       if argument.startswith(flag)), None)
         if prefix is not None:
+            operation = "define" if prefix.endswith("D") else "undefine"
             definition = argument[len(prefix):]
             if not definition and index + 1 < len(argv):
                 index += 1
@@ -2317,18 +2319,24 @@ def cmake_build_qualified_value(entry: dict[str, Any]) -> str | None:
                 if (strip_command_quotes and len(definition) >= 2
                         and definition[0] in "\"'" and definition[-1] == definition[0]):
                     definition = definition[1:-1]
-            if definition == "GBB_BUILD_QUALIFIED":
-                definitions.append("")
-            elif definition.startswith("GBB_BUILD_QUALIFIED="):
-                definitions.append(definition.partition("=")[2])
+            target = "GBB_BUILD_QUALIFIED"
+            if definition == target or definition.startswith(target + "="):
+                if operation == "undefine":
+                    operations.append((operation, None))
+                elif definition == target:
+                    operations.append((operation, None))
+                else:
+                    operations.append((operation, definition.partition("=")[2]))
         index += 1
-    if len(definitions) == 1 and definitions[0] in {"0", "1"}:
-        return definitions[0]
+    # The native build contract supplies exactly one binary definition. Reject every
+    # repeated define/undefine sequence instead of guessing compiler-specific effects.
+    if len(operations) == 1 and operations[0][0] == "define" and operations[0][1] in {"0", "1"}:
+        return operations[0][1]
     return None
 
 
 def _cmake_source_candidates_for_diagnostic(commands: list[Any]) -> str:
-    paths = [entry["file"][:96] for entry in commands
+    paths = [json.dumps(entry["file"], ensure_ascii=True)[1:-1][:96] for entry in commands
              if isinstance(entry, dict)
              and isinstance(entry.get("file"), str)
              and PureWindowsPath(entry["file"]).name.casefold() == "gabbaboy.c"][:4]

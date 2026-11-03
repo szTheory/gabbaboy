@@ -189,10 +189,43 @@ class CandidateOrderTests(unittest.TestCase):
         }
         self.assertIsNone(CHECKER_MODULE.cmake_build_qualified_value(duplicate))
 
+    def test_cmake_build_flag_rejects_undefinition_and_ambiguous_order(self) -> None:
+        cases = [
+            ["cc", "-DGBB_BUILD_QUALIFIED=1", "-UGBB_BUILD_QUALIFIED", "source.c"],
+            ["cc", "/DGBB_BUILD_QUALIFIED=1", "/UGBB_BUILD_QUALIFIED", "source.c"],
+            ["cc", "-D", "GBB_BUILD_QUALIFIED=1", "-U", "GBB_BUILD_QUALIFIED"],
+            ["cc", "-DGBB_BUILD_QUALIFIED=1", "-DGBB_BUILD_QUALIFIED=2", "source.c"],
+            ["cc", "-DGBB_BUILD_QUALIFIED=1", "-UGBB_BUILD_QUALIFIED",
+             "-DGBB_BUILD_QUALIFIED=1", "source.c"],
+        ]
+        for arguments in cases:
+            with self.subTest(arguments=arguments):
+                self.assertIsNone(
+                    CHECKER_MODULE.cmake_build_qualified_value({"arguments": arguments})
+                )
+
+        unrelated_undefine = {
+            "arguments": ["cc", "-UGBB_OTHER", "-DGBB_BUILD_QUALIFIED=1", "source.c"],
+        }
+        self.assertEqual(
+            CHECKER_MODULE.cmake_build_qualified_value(unrelated_undefine), "1"
+        )
+
     def test_cmake_source_candidate_diagnostic_has_a_total_size_bound(self) -> None:
         commands = [{"file": f"{index}-{'x' * 2000}/gabbaboy.c"} for index in range(20)]
         diagnostic = CHECKER_MODULE._cmake_source_candidates_for_diagnostic(commands)
         self.assertLessEqual(len(diagnostic), 384)
+
+    def test_cmake_source_candidate_diagnostic_escapes_control_characters(self) -> None:
+        path = "source\nforged-entry\x1b[31m/gabbaboy.c"
+        diagnostic = CHECKER_MODULE._cmake_source_candidates_for_diagnostic(
+            [{"file": path}]
+        )
+        self.assertLessEqual(len(diagnostic), 384)
+        self.assertNotIn("\n", diagnostic)
+        self.assertNotIn("\x1b", diagnostic)
+        self.assertIn(r"\n", diagnostic)
+        self.assertIn(r"\u001b", diagnostic)
 
     def test_primary_and_fallback_no_go_form_a_valid_absence(self) -> None:
         records = [
