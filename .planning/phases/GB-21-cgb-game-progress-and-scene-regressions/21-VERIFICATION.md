@@ -1,6 +1,6 @@
 ---
 phase: GB-21-cgb-game-progress-and-scene-regressions
-verified: 2026-11-03T01:29:42Z
+verified: 2026-11-03T02:42:44Z
 status: passed
 score: 5/5 roadmap success criteria verified
 covered_files:
@@ -52,7 +52,8 @@ re_verification:
   previous_status: gaps_found
   previous_score: 4/5
   gaps_closed:
-    - "Exact-head hosted qualification for implementation source e0845db5841a1d56d8a297cbfaa3e0811af6ad67 passed."
+    - "Exact-head hosted qualification passed on implementation source e0845db5841a1d56d8a297cbfaa3e0811af6ad67 and on the final closeout PR head 507019f9363bcce375fa8bec3bda0d75fa0583c6."
+    - "The final PR head passed all required checks and was squash-merged as bef2cfbdbdd0fc9b2d78631586827e29e0241b3b; its merge tree matches the checked PR head."
     - "FIXT-01's phase requirement gap was accepted as an intentional deferral by the project owner; the requirement itself remains Pending."
   gaps_remaining: []
   regressions: []
@@ -68,11 +69,11 @@ overrides:
 
 **Phase Goal:** Maintainers can obtain a reproducible CGB progress result from the shared runner, explain the bounded game-candidate outcome, and turn useful scene reports into controlled regressions.
 
-**Verified:** 2026-11-03T01:29:42Z
+**Verified:** 2026-11-03T02:42:44Z
 
 **Status:** passed
 
-**Re-verification:** Yes — after exact-head hosted qualification and owner override
+**Re-verification:** Yes — after exact-head hosted qualification, owner override, and final PR merge
 
 ## Goal Achievement
 
@@ -85,9 +86,9 @@ overrides:
 | 3 | Search assesses Potion Panic first and only then µCity 1.3, records source/build and rights evidence reached at each gate, and performs no third search. | VERIFIED WITH LIMIT | Current-source candidate checker passed. Exactly two records exist in order. The primary could not be resolved from the creator-linked source; the fallback source is pinned and its required include lacks identified grant/notice. Records mark downstream build, ROM and mode facts unobserved at the rights cutoff. |
 | 4 | If neither game is admitted, evidence names the actual blockers and delivers a concrete harness result without presenting it as admitted game evidence. | VERIFIED | Both rights/source-scope no-go outcomes and the current CGB-CPU-E original harness result are composed in the receipt and docs. No license prohibition, game progress, physical behavior, perceptual quality or general compatibility is claimed. FIXT-01 remains pending. |
 | 5 | Text-only scene reports support agent-owned reproduction/classification and controlled promotion with privacy boundaries. | VERIFIED | `verify-scene-report.py`, `docs/scene-feedback.md`, test registration and receipt cover intake, synthetic promotion, independent expectation, causal negative control, optional owner play and personal-media exclusion. No live report/defect is claimed. |
-| 6 | Current-source hosted/platform and installed-consumer qualification completes before phase closure. | VERIFIED WITH FOLLOW-UP GATE | `21-UAT-EVIDENCE.md` records PR #140 checks passing at exact implementation source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`, including native Windows/Linux/macOS, sanitizer, fixture reproduction, package consumers and player package smoke. The verification artifact changes the closeout revision; its final PR head must receive the required checks before merge. |
+| 6 | Current-source hosted/platform and installed-consumer qualification completes before phase closure. | VERIFIED | `21-UAT-EVIDENCE.md` records all required checks passing on final PR head `507019f9363bcce375fa8bec3bda0d75fa0583c6`, including native Windows/Linux/macOS, sanitizer, CMake floor, fixture reproduction, installed consumers, and player package smoke. PR #140 was squash-merged at `bef2cfbdbdd0fc9b2d78631586827e29e0241b3b`; the merge tree matches the checked PR head. |
 
-**Score:** 5/5 roadmap success criteria verified. The bounded no-go/harness-only result satisfies the roadmap's justified-absence outcome and does not claim game admission. FIXT-01 remains Pending in `REQUIREMENTS.md`; its phase-level gap is accepted by the owner as an intentional deferral using the override recorded above. The hosted qualification passed at `e0845db`; rerun it for the closeout artifact's final PR head before merge.
+**Score:** 5/5 roadmap success criteria verified. The bounded no-go/harness-only result satisfies the roadmap's justified-absence outcome and does not claim game admission. FIXT-01 remains Pending in `REQUIREMENTS.md`; its phase-level gap is accepted by the owner as an intentional deferral using the override recorded above. Required hosted qualification passed at implementation source `e0845db` and final closeout head `507019f9`; PR #140 is merged.
 
 ### Required Artifacts
 
@@ -129,7 +130,7 @@ The generic artifact checker flagged conditional candidate manifests/cases as ab
 | Full local suite | `21-UAT-EVIDENCE.md`, source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67` | 1,717/1,718 passed in the full serial run; the single existing 90-second timeout `v02_source_archive_controls` passed isolated at 77.17 seconds. Every test has passing evidence across the full run plus that retry; no single full run was all-green. | PASS (combined evidence) |
 | Candidate pair contract | `python3 -I tests/scripts/verify-cgb-candidates.py --check-all --require-final --repo-root . --source-revision e0845db5841a1d56d8a297cbfaa3e0811af6ad67` | Exit 0; two no-go records in order | PASS |
 | Composed current receipt | `build/phase21-evidence/result.json` | Exact source and qualified runner; harness controls present | PASS (inspected) |
-| Hosted exact-head checks | PR #140 | Required checks passed at exact implementation source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`; closeout artifact changes revision and must be requalified on its own PR head before merge. | PASS; final closeout SHA pending |
+| Hosted exact-head checks | PR #140 | Required checks passed at final head `507019f9363bcce375fa8bec3bda0d75fa0583c6`; the PR was squash-merged to main as `bef2cfbdbdd0fc9b2d78631586827e29e0241b3b`. | PASS |
 
 ### Probe Execution
 
@@ -158,14 +159,14 @@ The source-bound receipt composes real runner execution with pinned checkers. Po
 
 ### Human Verification Required
 
-None. Exact-head hosted qualification passed at `e0845db`; the final closeout PR head still needs its required checks before merge. FIXT-01 remains Pending in `REQUIREMENTS.md` and requires further owner-selected source/rights evidence; this is not a manual UAT checkpoint.
+None. Final exact-head hosted qualification and merge are complete. FIXT-01 remains Pending in `REQUIREMENTS.md` and requires further owner-selected source/rights evidence; this is not a manual UAT checkpoint.
 
 ### Gaps Summary
 
-The phase delivers the native CGB harness, its controls, the bounded candidate outcome, and the automated scene-report workflow. The roadmap accepts reasoned absence when both candidates fail their gates; the no-go records plus harness-only result satisfy that outcome without implying game progress, admission or license permission. FIXT-01 is accepted as an intentional phase-level deferral, remains Pending in `REQUIREMENTS.md`, and has not been completed. Exact-head hosted/platform and installed-consumer checks passed at implementation source `e0845db5841a1d56d8a297cbfaa3e0811af6ad67`; the final closeout artifact revision needs its own exact-head qualification before merge.
+The phase delivers the native CGB harness, its controls, the bounded candidate outcome, and the automated scene-report workflow. The roadmap accepts reasoned absence when both candidates fail their gates; the no-go records plus harness-only result satisfy that outcome without implying game progress, admission or license permission. FIXT-01 is accepted as an intentional phase-level deferral, remains Pending in `REQUIREMENTS.md`, and has not been completed. Required exact-head hosted/platform and installed-consumer checks passed on PR #140 head `507019f9363bcce375fa8bec3bda0d75fa0583c6`; the PR was merged as `bef2cfbdbdd0fc9b2d78631586827e29e0241b3b`.
 
 ---
 
-_Verified: 2026-11-03T01:29:42Z_
+_Verified: 2026-11-03T02:42:44Z_
 
 _Verifier: the agent (gsd-verifier)_

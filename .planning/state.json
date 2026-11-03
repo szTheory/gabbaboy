@@ -27,7 +27,7 @@
   "next": {
     "command": "/gsd-discuss-phase 22",
     "label": "Discuss Phase 22",
-    "reason": "Phase 21 is verified; finish PR #140 closeout before starting Phase 22"
+    "reason": "Phase 21 is complete and merged; Phase 22 remains unstarted until the owner selects this command"
   },
-  "updated_at": "2026-11-03T01:30:07.734Z"
+  "updated_at": "2026-11-03T02:42:44Z"
 }
