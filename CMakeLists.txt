@@ -38,22 +38,36 @@ include(CMakePackageConfigHelpers)
 if(BUILD_TESTING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
   set(GBB_FIXTURE_ADMISSION_ARGS --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
+  # A Git source archive has no object database for the immutable fixture baseline.
+  # Let it configure so source consumers can build, while the phase evidence tests
+  # continue to fail closed when their exact source revision cannot be established.
+  execute_process(
+    COMMAND git rev-parse --show-toplevel
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    RESULT_VARIABLE GBB_FIXTURE_GIT_ROOT_RESULT
+    OUTPUT_QUIET
+    ERROR_QUIET)
   if(GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT)
     list(APPEND GBB_FIXTURE_ADMISSION_ARGS --baseline-object-root "${GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT}")
   endif()
-  execute_process(
-    COMMAND "${Python3_EXECUTABLE}" -I
-      "${PROJECT_SOURCE_DIR}/tests/scripts/verify-fixture-admission.py" ${GBB_FIXTURE_ADMISSION_ARGS}
-    RESULT_VARIABLE GBB_FIXTURE_ADMISSION_RESULT
-    OUTPUT_VARIABLE GBB_FIXTURE_ADMISSION_OUTPUT
-    ERROR_VARIABLE GBB_FIXTURE_ADMISSION_ERROR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_STRIP_TRAILING_WHITESPACE)
-  if(NOT GBB_FIXTURE_ADMISSION_RESULT EQUAL 0)
-    message(FATAL_ERROR
-      "Fixture admission rejected the repository before test configuration: ${GBB_FIXTURE_ADMISSION_ERROR}${GBB_FIXTURE_ADMISSION_OUTPUT}")
+  if(GBB_FIXTURE_GIT_ROOT_RESULT EQUAL 0 OR GABBABOY_FIXTURE_BASELINE_OBJECT_ROOT)
+    execute_process(
+      COMMAND "${Python3_EXECUTABLE}" -I
+        "${PROJECT_SOURCE_DIR}/tests/scripts/verify-fixture-admission.py" ${GBB_FIXTURE_ADMISSION_ARGS}
+      RESULT_VARIABLE GBB_FIXTURE_ADMISSION_RESULT
+      OUTPUT_VARIABLE GBB_FIXTURE_ADMISSION_OUTPUT
+      ERROR_VARIABLE GBB_FIXTURE_ADMISSION_ERROR
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_STRIP_TRAILING_WHITESPACE)
+    if(NOT GBB_FIXTURE_ADMISSION_RESULT EQUAL 0)
+      message(FATAL_ERROR
+        "Fixture admission rejected the repository before test configuration: ${GBB_FIXTURE_ADMISSION_ERROR}${GBB_FIXTURE_ADMISSION_OUTPUT}")
+    endif()
+    message(STATUS "${GBB_FIXTURE_ADMISSION_OUTPUT}")
+  else()
+    message(STATUS
+      "Git source archive has no immutable fixture baseline; configuration is allowed, revision-bound evidence checks will fail closed")
   endif()
-  message(STATUS "${GBB_FIXTURE_ADMISSION_OUTPUT}")
 endif()
 
 add_library(gabbaboy_core STATIC src/core/gabbaboy.c)

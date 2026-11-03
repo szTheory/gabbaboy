@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import io
 import json
 import os
 import pathlib
@@ -20,6 +19,9 @@ from typing import Any
 
 MAX_BYTES = 2 * 1024 * 1024
 MAX_OUTPUT = 32 * 1024 * 1024
+# The current immutable source archive is about 61 MiB. Keep this separate from
+# subprocess text capture and stream it to disk with a 128 MiB ceiling.
+MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
 BASELINE = "f2542c8053db1e5183e0dd0e8702e77afbb2eb59"
 CHECKER = "tests/scripts/verify-diagnostic-admission.py"
 ASSESSMENT = "tests/external/diagnostic-assessment.json"
@@ -66,7 +68,8 @@ FORBIDDEN_FILES = (
 PAYLOAD_SUFFIXES = {
     ".gb", ".gbc", ".rom", ".bin", ".png", ".rgb", ".tar", ".zip",
     ".gz", ".tgz", ".7z", ".bz2", ".xz", ".bmp", ".ppm", ".pbm",
-    ".jpg", ".jpeg",
+    ".jpg", ".jpeg", ".webp", ".gif", ".tif", ".tiff", ".svg", ".ico",
+    ".avif", ".heic",
 }
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 
@@ -81,7 +84,7 @@ def run(argv: list[str], root: pathlib.Path, *, timeout: int = 30,
         raise Reject("subprocess-arguments-invalid")
     try:
         process = subprocess.Popen(argv, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   check=False, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+                                   env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     except OSError as error:
         raise Reject(f"subprocess-start-failed:{error.__class__.__name__}") from None
     outputs = [bytearray(), bytearray()]
@@ -568,13 +571,78 @@ def added_paths(root: pathlib.Path, revision: str) -> list[dict[str, Any]]:
     return [{"path": path, "size_bytes": entries.get(path, ("", 0, ""))[1]} for path in paths]
 
 
+def write_bounded_git_archive(root: pathlib.Path, revision: str, destination: pathlib.Path) -> None:
+    try:
+        process = subprocess.Popen(
+            ["git", "archive", "--format=tar", revision], cwd=root,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"})
+    except OSError as error:
+        raise Reject(f"source-archive-start-failed:{error.__class__.__name__}") from None
+    written = [0]
+    exceeded = threading.Event()
+    write_errors: list[OSError] = []
+
+    def drain() -> None:
+        try:
+            with destination.open("wb") as output:
+                while chunk := process.stdout.read(64 * 1024):
+                    if written[0] + len(chunk) > MAX_SOURCE_ARCHIVE_BYTES:
+                        exceeded.set()
+                    if not exceeded.is_set():
+                        count = output.write(chunk)
+                        if count != len(chunk):
+                            raise OSError("short archive write")
+                        written[0] += count
+        except OSError as error:
+            write_errors.append(error)
+            exceeded.set()
+
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
+    deadline = time.monotonic() + 30
+    timed_out = False
+    while process.poll() is None:
+        if exceeded.is_set():
+            try:
+                process.kill()
+            except OSError:
+                pass
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            timed_out = True
+            try:
+                process.kill()
+            except OSError:
+                pass
+            break
+        try:
+            process.wait(timeout=min(0.05, remaining))
+        except subprocess.TimeoutExpired:
+            continue
+    process.wait()
+    reader.join(timeout=2)
+    if reader.is_alive():
+        process.stdout.close()
+        raise Reject("source-archive-reader-stuck")
+    if timed_out:
+        raise Reject("source-archive-timeout")
+    if exceeded.is_set():
+        reason = "source-archive-size-limit" if not write_errors else "source-archive-write-failed"
+        raise Reject(reason)
+    if process.returncode != 0 or written[0] == 0:
+        raise Reject("source-archive-command-failed")
+
+
 def source_archive_configure_control(root: pathlib.Path, revision: str) -> None:
     """Ensure the default tests-enabled preset still configures from a Git source archive."""
-    archive_bytes = git(root, "archive", "--format=tar", revision, limit=MAX_OUTPUT)
     with tempfile.TemporaryDirectory(prefix="gbb-source-archive-configure-") as name:
         source = pathlib.Path(name) / "source"
         source.mkdir()
-        with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:") as archive:
+        archive_path = pathlib.Path(name) / "source.tar"
+        write_bounded_git_archive(root, revision, archive_path)
+        with tarfile.open(archive_path, mode="r:") as archive:
             for member in archive.getmembers():
                 path = pathlib.PurePosixPath(member.name)
                 if path.is_absolute() or not path.parts or any(part in ("", ".", "..") for part in path.parts):
