@@ -275,7 +275,7 @@ def verify_registrations(repo: Path, revision: str) -> None:
         if timeout_match is None:
             reject("review-test-registration-invalid", f"{name} timeout is missing")
         timeout, body = timeout_match.group(1), cmake[line_end + 1:close]
-        expected_body = f"[=[{success_regex}]=] {command}"
+        expected_body = f"{success_regex} {command}"
         if timeout != "60" or " ".join(body.split()) != " ".join(expected_body.split()):
             reject("review-test-registration-invalid", f"{name} has the wrong timeout, mode, source revision, or success assertion")
 
