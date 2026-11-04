@@ -139,7 +139,7 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
   2. Release notes and the support ledger identify an admitted game's exact software-model progress result or the justified absence after the two named attempts, distinguish diagnostic and reproducibility observations, and retain hardware, perceptual, timing, platform, and compatibility limits.
   3. Published/downloaded artifact identities and digests reconcile with the release source, installed consumers work against those bytes, required license/component notices are present, and the fixture-exclusion checks accept the real packages and reject their game-ROM insertion control.
 **Plan cap**: 9
-**Plans**: 2/8 plans executed in 8 sequential dependency waves, within the cap of 9.
+**Plans**: 3/8 plans executed in 8 sequential dependency waves, within the cap of 9.
 
 Plans:
 **Wave 1**
@@ -149,7 +149,7 @@ Plans:
 - [x] 23-02-PLAN.md — Generate concise release notes from the same checked evidence.
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 23-03-PLAN.md — Bind the complete release claim and require observed exact release-please output.
+- [x] 23-03-PLAN.md — Bind the complete release claim and require observed exact release-please output.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 23-04-PLAN.md — Add independent source-bound review evidence and qualify the implementation head.
@@ -194,7 +194,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
 | 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
-| 23. Qualified v0.4.0 Release | 2/8 | In Progress | - |
+| 23. Qualified v0.4.0 Release | 3/8 | In Progress | - |
 
 ## Planning and Approval Boundary
 
