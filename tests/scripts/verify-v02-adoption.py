@@ -710,6 +710,9 @@ def mask_markdown_nonrendered(text: str) -> str:
     # Reference definitions are metadata, not body copy, even when no link uses them.
     reference_labels: set[str] = set()
 
+    def normalize_reference_label(value: str) -> str:
+        return re.sub(r"[ \t\r\n]+", " ", value.strip(" \t\r\n")).casefold()
+
     def container_content_start(
             line: str) -> tuple[int, int, tuple[int, ...]] | None:
         cursor = 0
@@ -735,7 +738,7 @@ def mask_markdown_nonrendered(text: str) -> str:
                 marker_end += 1
             else:
                 digits_start = cursor
-                while (marker_end < len(line) and line[marker_end].isdigit()
+                while (marker_end < len(line) and line[marker_end] in "0123456789"
                        and marker_end - digits_start < 10):
                     marker_end += 1
                 if (marker_end - digits_start > 9 or marker_end == digits_start
@@ -785,7 +788,7 @@ def mask_markdown_nonrendered(text: str) -> str:
                 if cursor <= start or cursor + 1 >= end or line[cursor + 1] != ":":
                     return None
                 label = line[start:cursor]
-                if not label.strip():
+                if not label.strip(" \t\r\n"):
                     return None
                 cursor += 2
                 break
@@ -964,8 +967,7 @@ def mask_markdown_nonrendered(text: str) -> str:
         else:
             title_line, _title_end = title_extent
             final_end = line_spans[title_line][2]
-        label = re.sub(r"\\(.)", r"\1", label)
-        reference_labels.add(" ".join(label.split()).casefold())
+        reference_labels.add(normalize_reference_label(label))
         blank(start, final_end)
 
     openings = array("I")
@@ -1009,11 +1011,15 @@ def mask_markdown_nonrendered(text: str) -> str:
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
-                blank(opening + 1, close)
-                blank(following, reference_close + 1)
-                cursor = reference_close + 1
-                continue
-        elif " ".join("".join(chars[opening + 1:close]).split()).casefold() in reference_labels:
+                image_label = "".join(chars[opening + 1:close])
+                reference_label = "".join(chars[following + 1:reference_close])
+                target_label = reference_label if normalize_reference_label(reference_label) else image_label
+                if normalize_reference_label(target_label) in reference_labels:
+                    blank(opening + 1, close)
+                    blank(following, reference_close + 1)
+                    cursor = reference_close + 1
+                    continue
+        elif normalize_reference_label("".join(chars[opening + 1:close])) in reference_labels:
             blank(opening + 1, close)
         cursor += 1
 
@@ -1038,9 +1044,13 @@ def mask_markdown_nonrendered(text: str) -> str:
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
-                blank(following, reference_close + 1)
-                cursor = reference_close + 1
-                continue
+                link_text = "".join(chars[cursor + 1:close])
+                reference_label = "".join(chars[following + 1:reference_close])
+                target_label = reference_label if normalize_reference_label(reference_label) else link_text
+                if normalize_reference_label(target_label) in reference_labels:
+                    blank(following, reference_close + 1)
+                    cursor = reference_close + 1
+                    continue
         cursor += 1
 
     return "".join(chars)
@@ -1056,7 +1066,7 @@ def mask_fenced_code_blocks(text: str) -> str:
 
     def parse_containers(content: str) -> tuple[list[tuple[str, int]], int]:
         containers: list[tuple[str, int]] = []
-        list_marker = re.compile(r"([-+*]|\d{1,9}[.)])([ ]{1,4})")
+        list_marker = re.compile(r"([-+*]|[0-9]{1,9}[.)])([ ]{1,4})")
         position = 0
         while True:
             start = position
@@ -1144,7 +1154,7 @@ def mask_fenced_code_blocks(text: str) -> str:
 def mask_indented_code_blocks(text: str) -> str:
     """Mask indented code after blockquote and list container markers."""
     output: list[str] = []
-    list_marker = re.compile(r"([-+*]|\d{1,9}[.)])([ ]+)")
+    list_marker = re.compile(r"([-+*]|[0-9]{1,9}[.)])([ ]+)")
     for line in text.splitlines(keepends=True):
         content = line.rstrip("\r\n")
         ending = line[len(content):]
@@ -2570,6 +2580,8 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              "> [Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
             ("list-reference-title-hides-hardware-disclosure",
              "- [Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
+            ("ordered-list-reference-title-hides-hardware-disclosure",
+             "1. [Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
         ):
             child_result(test_root, "docs")
             changed = replace_all(
@@ -2578,6 +2590,25 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             write_lf(readme_path, changed)
             child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
             rejected_reasons.append("physical-cgb-limit-missing")
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        explicit_image_reference_disclosures = (
+            ("full-image-reference-hides-hardware-disclosure",
+             "![Physical CGB-E remains UNKNOWN/POLICY][disclosure]\n\n"
+             "[disclosure]: assets/info.png"),
+            ("collapsed-image-reference-hides-hardware-disclosure",
+             "![Physical CGB-E remains UNKNOWN/POLICY][]\n\n"
+             "[Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
+        )
+        for name, definition in explicit_image_reference_disclosures:
+            child_result(test_root, "docs")
+            changed = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = changed.rstrip() + "\n\n" + definition + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+            rejected_reasons.append(name)
             rejected += 1
             write_lf(readme_path, readme_original)
 
@@ -2685,6 +2716,28 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              '> [unused]: /url\n- "CGB game passes all acceptance checks."'),
             ("list-reference-definition-blockquote-title",
              '- [unused]: /url\n> "CGB game passes all acceptance checks."'),
+            ("arabic-indic-prefix-is-not-an-ordered-list-marker",
+             '١. [CGB game passes all acceptance checks.]: /url'),
+            ("superscript-prefix-is-not-an-ordered-list-marker",
+             '¹. [CGB game passes all acceptance checks.]: /url'),
+            ("nbsp-reference-label-does-not-match-shortcut-image",
+             '![CGB game passes all acceptance checks.]\n\n'
+             '[CGB\u00a0game passes all acceptance checks.]: /url'),
+            ("thin-space-reference-label-does-not-match-shortcut-image",
+             '![CGB game passes all acceptance checks.]\n\n'
+             '[CGB\u2009game passes all acceptance checks.]: /url'),
+            ("escaped-punctuation-reference-label-does-not-match-shortcut-image",
+             '![CGB game passes all acceptance checks.]\n\n'
+             '[CGB game passes all acceptance checks\\.]: /url'),
+            ("unresolved-full-image-reference-cannot-hide-game-claim",
+             '![CGB game passes all acceptance checks.][missing-label]'),
+            ("unresolved-collapsed-image-reference-cannot-hide-game-claim",
+             '![CGB game passes all acceptance checks.][]'),
+            ("invalid-explicit-image-reference-cannot-hide-game-claim",
+             '![CGB game passes all acceptance checks.][other]\n\n'
+             '[other]: invalid destination with spaces'),
+            ("unresolved-link-label-cannot-hide-game-claim",
+             '[ordinary][CGB game passes all acceptance checks.]'),
         )
         for name, extra in mismatched_reference_titles:
             child_result(test_root, "docs")
@@ -3209,7 +3262,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 64 + len(incomplete_html_openers)
+    controls = len(mutations) + 76 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
