@@ -504,39 +504,69 @@ def read_document(root: Path, relative: str) -> str:
 
 
 def prose(text: str) -> str:
-    """Whitespace-normalized visible prose without comments or code spans."""
-    text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
+    """Whitespace-normalized prose without comments and code blocks."""
+    text = re.sub(r"<!--.*?(?:-->|\Z)", " ", text, flags=re.DOTALL)
     text = mask_fenced_code_blocks(text)
     text = re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", " ", text)
-    text = mask_inline_code_spans(text)
     return " ".join(text.split())
 
 
 def mask_fenced_code_blocks(text: str) -> str:
-    """Mask CommonMark fenced blocks, requiring a matching delimiter and length."""
+    """Mask CommonMark fenced blocks, including blockquote containers."""
     output: list[str] = []
     fence_char: str | None = None
     fence_length = 0
+    fence_quote_depth = 0
+
+    def quote_prefix(content: str, limit: int | None = None) -> tuple[int, int]:
+        depth = 0
+        position = 0
+        while limit is None or depth < limit:
+            start = position
+            spaces = 0
+            while position < len(content) and content[position] == " " and spaces < 4:
+                position += 1
+                spaces += 1
+            if spaces > 3 or position >= len(content) or content[position] != ">":
+                position = start
+                break
+            depth += 1
+            position += 1
+            if position < len(content) and content[position] in " \t":
+                position += 1
+        return depth, position
+
     for line in text.splitlines(keepends=True):
         content = line.rstrip("\r\n")
         ending = line[len(content):]
-        if fence_char is None:
-            opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", content)
-            if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
-                fence_char = opening.group(1)[0]
-                fence_length = len(opening.group(1))
+        if fence_char is not None:
+            depth, position = quote_prefix(content, fence_quote_depth)
+            if depth == fence_quote_depth:
+                candidate = content[position:]
+                closing = re.match(r"^ {0,3}([`~]+)[ \t]*$", candidate)
+                closes = (closing is not None and closing.group(1)[0] == fence_char
+                          and len(closing.group(1)) >= fence_length
+                          and all(char == fence_char for char in closing.group(1)))
                 output.append(" " * len(content) + ending)
-            else:
-                output.append(line)
-            continue
-        closing = re.match(r"^ {0,3}([`~]+)[ \t]*$", content)
-        closes = (closing is not None and closing.group(1)[0] == fence_char
-                  and len(closing.group(1)) >= fence_length
-                  and all(char == fence_char for char in closing.group(1)))
-        output.append(" " * len(content) + ending)
-        if closes:
+                if closes:
+                    fence_char = None
+                    fence_length = 0
+                    fence_quote_depth = 0
+                continue
             fence_char = None
             fence_length = 0
+            fence_quote_depth = 0
+
+        depth, position = quote_prefix(content)
+        candidate = content[position:]
+        opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", candidate)
+        if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
+            fence_char = opening.group(1)[0]
+            fence_length = len(opening.group(1))
+            fence_quote_depth = depth
+            output.append(" " * len(content) + ending)
+        else:
+            output.append(line)
     return "".join(output)
 
 
@@ -544,6 +574,7 @@ def mask_inline_code_spans(text: str) -> str:
     """Mask CommonMark backtick spans, including multiline spans, without moving offsets."""
     tick = chr(96)
     chars = list(text)
+    runs: list[tuple[int, int, int, bool]] = []
     index = 0
     length = len(text)
     while index < length:
@@ -559,28 +590,33 @@ def mask_inline_code_spans(text: str) -> str:
         while cursor >= 0 and text[cursor] == "\\":
             backslashes += 1
             cursor -= 1
-        if backslashes % 2:
+        runs.append((opening, index, delimiter, backslashes % 2 == 1))
+
+    next_same: list[int | None] = [None] * len(runs)
+    next_by_length: dict[int, int] = {}
+    for run_index in range(len(runs) - 1, -1, -1):
+        delimiter = runs[run_index][2]
+        next_same[run_index] = next_by_length.get(delimiter)
+        next_by_length[delimiter] = run_index
+
+    run_index = 0
+    while run_index < len(runs):
+        opening, _, _, escaped = runs[run_index]
+        closing_index = next_same[run_index]
+        if escaped or closing_index is None:
+            run_index += 1
             continue
-        search = index
-        while search < length:
-            if text[search] != tick:
-                search += 1
-                continue
-            closing = search
-            while search < length and text[search] == tick:
-                search += 1
-            if search - closing == delimiter:
-                for offset in range(opening, search):
-                    if chars[offset] not in ("\n", "\r"):
-                        chars[offset] = " "
-                index = search
-                break
-        else:
-            index = opening + delimiter
+        end = runs[closing_index][1]
+        for offset in range(opening, end):
+            if chars[offset] not in ("\n", "\r"):
+                chars[offset] = " "
+        run_index = closing_index + 1
+        while run_index < len(runs) and runs[run_index][0] < end:
+            run_index += 1
     return "".join(chars)
 
 def comment_free(text: str) -> str:
-    return re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
+    return re.sub(r"<!--.*?(?:-->|\Z)", " ", text, flags=re.DOTALL)
 
 
 _CLAIMS_MODULE = None
@@ -888,7 +924,14 @@ def perf_disclosure_head(root: Path, repo: Path | None = None, rev: str | None =
 
 
 def ledger_link_pattern(ledger: str) -> re.Pattern[str]:
-    return re.compile(r"(?<![!\\])\[[^\]\n]*\]\([^)]*" + re.escape(ledger) + r"(?:[#?][^)]*)?\)")
+    version = Path(ledger).name.removeprefix("v").removesuffix(".md")
+    canonical = f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger}"
+    destination = r"(?:" + re.escape(ledger) + r"|" + re.escape(canonical) + r")"
+    return re.compile(r"(?<![!\\])\[[^\]\n]*\]\(\s*" + destination + r"\s*\)")
+
+
+def canonical_ledger_url(version: str) -> str:
+    return f"https://github.com/szTheory/gabbaboy/blob/v{version}/docs/support/v{version}.md"
 
 
 def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: str) -> int:
@@ -1009,7 +1052,7 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         raise
     except (OSError, UnicodeError) as error:
         raise ContractError("release-notes-unavailable") from error
-    text = prose(raw)
+    text = " ".join(mask_inline_code_spans(prose(raw)).split())
     require(text, "release-notes-empty")
     if rev is not None:
         subject_version, subject_ledger = identity_at_revision(repo, rev)
@@ -1183,7 +1226,7 @@ GabbaBoy v@VERSION@ adds the selected CGB-CPU-E software model beside DMG-CPU-B.
 - No CGB game-level evidence exists. The CGB test-ROM corpus is software-model
   evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY.
 - The macOS player archive is unsigned and not notarized.
-- Support scope and known limits: [support ledger](https://example.invalid/@LEDGER@).
+- Support scope and known limits: [support ledger](@LEDGER_LINK@).
 - Instruction count: +@PERCENT@% versus v0.2.0 (receipt: tests/baseline/perf-attribution-v1.json; measured at @HEAD@).
 - @PERF_HEAD_LIMITATION@
 """
@@ -1194,7 +1237,8 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
     percent = perf_disclosure_percent(root)
     head = perf_disclosure_head(root)
     VALID_RELEASE_NOTES = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
-                           .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent)
+                           .replace("@LEDGER_LINK@", canonical_ledger_url(RELEASE_VERSION))
+                           .replace("@PERCENT@", percent)
                            .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
                            .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
                            .replace("@HEAD@", head[:12])
@@ -1220,8 +1264,8 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
              (ABSENCE_SENTENCE, f"<!-- {ABSENCE_SENTENCE} -->"),
              "release-notes-absence-missing"),
             ("missing-ledger-link",
-             (f"(https://example.invalid/{LEDGER})",
-              "(https://example.invalid/docs/support/v0.1.0.md)"),
+             (f"({canonical_ledger_url(RELEASE_VERSION)})",
+              "(https://github.com/szTheory/gabbaboy/blob/v0.1.0/docs/support/v0.1.0.md)"),
              "release-notes-ledger-link-missing"),
             ("missing-unsigned-limit", ("unsigned and not notarized", "ready"),
              "release-notes-unsigned-limit-missing"),
@@ -1297,8 +1341,9 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
     profile = v04_profile(root, rev)
     percent = perf_disclosure_percent(root, root, rev)
     head = perf_disclosure_head(root, root, rev)
-    base = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
-            .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent)
+    base = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", "0.4.0")
+            .replace("@LEDGER_LINK@", canonical_ledger_url("0.4.0"))
+            .replace("@PERCENT@", percent)
             .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
             .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
             .replace("@HEAD@", head[:12])
@@ -1331,6 +1376,17 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                 raise ContractError(f"negative-control-not-rejected:{name}:{reason}")
             controls += 1
 
+        def replace_ledger_targets(destination: str) -> str:
+            pattern = ledger_link_pattern("docs/support/v0.4.0.md")
+            return pattern.sub(
+                lambda match: match.group(0).split("](", 1)[0] + f"]({destination})",
+                valid,
+            )
+
+        def image_ledger_links() -> str:
+            pattern = ledger_link_pattern("docs/support/v0.4.0.md")
+            return pattern.sub(lambda match: "!" + match.group(0), valid)
+
         accepts(valid)
         with tempfile.TemporaryDirectory(prefix="gabbaboy-release-revision-identity-") as temp:
             other_tree = Path(temp)
@@ -1344,7 +1400,15 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
             (other_tree / "docs/support").mkdir(parents=True)
             (other_tree / "docs/support/v0.4.0.md").touch()
             legacy_notes = other_tree / "legacy-release-notes.md"
-            write_lf(legacy_notes, base)
+            legacy_base = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
+                           .replace("@LEDGER_LINK@", canonical_ledger_url(RELEASE_VERSION))
+                           .replace("@PERCENT@", percent)
+                           .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
+                           .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
+                           .replace("@HEAD@", head[:12])
+                           .replace("@PERF_HEAD_LIMITATION@",
+                                    PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
+            write_lf(legacy_notes, legacy_base)
             require(check_release_notes(legacy_notes, other_tree, rev, root) > 0,
                     "release-notes-revision-identity-not-pinned")
         potion, ucity = profile["candidate_outcomes"]
@@ -1391,6 +1455,16 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                "release-notes-support-limits-missing")
         reject("html-comment-hides-reason", valid.replace(p_line, f"<!-- {p_line} -->"),
                "release-notes-candidate-name-missing")
+        reject("unclosed-html-comment-hides-following-clauses",
+               valid.replace(p_line, f"<!--\n{p_line}"),
+               "release-notes-candidate-build-run-status-missing")
+        marker = chr(96) * 3
+        quoted_fence = f"> {marker}text\n> {p_line}\n> {marker}"
+        reject("blockquote-fenced-code-hides-reason", valid.replace(p_line, quoted_fence),
+               "release-notes-candidate-name-missing")
+        list_fence = f"- code:\n  {marker}text\n  {p_line}\n  {marker}"
+        reject("list-fenced-code-hides-reason", valid.replace(p_line, list_fence),
+               "release-notes-candidate-name-missing")
         reject("fenced-code-hides-reason", valid.replace(p_line, f"```text\n{p_line}\n```"),
                "release-notes-candidate-name-missing")
         tick = chr(96)
@@ -1404,10 +1478,19 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
         inline = "\n".join((f"{tick}{line}{tick}" if line else "") for line in valid.splitlines())
         reject("inline-code-hides-entire-preface", inline,
                "release-notes-version-missing:0.4.0")
-        image_link = re.sub(r"(?<!\!)\[([^\]\n]+)\](\([^\)\n]*docs/support/v0\.4\.0\.md[^\)\n]*\))",
-                            r"![\1]\2", valid, count=1)
+        image_link = image_ledger_links()
         require(image_link != valid, "release-notes-self-test-link-anchor-missing")
         reject("image-is-not-a-ledger-link", image_link, "release-notes-ledger-version-mismatch")
+        external_link = replace_ledger_targets("https://evil.invalid/?next=docs/support/v0.4.0.md")
+        require(external_link != valid, "release-notes-self-test-external-link-anchor-missing")
+        reject("external-query-is-not-a-ledger-link", external_link,
+               "release-notes-ledger-version-mismatch")
+        title_link = replace_ledger_targets("https://evil.invalid/ \"docs/support/v0.4.0.md\"")
+        reject("ledger-path-in-link-title-is-not-a-link", title_link,
+               "release-notes-ledger-version-mismatch")
+        malformed_link = replace_ledger_targets("not a valid destination docs/support/v0.4.0.md")
+        reject("malformed-destination-is-not-a-ledger-link", malformed_link,
+               "release-notes-ledger-version-mismatch")
         reject("terminal-control-hides-reason", valid.replace("Potion Panic", "Potion \x1b[2KPanic", 1),
                "release-notes-terminal-control-present")
         reject("wrong-version-ledger-link", valid.replace(

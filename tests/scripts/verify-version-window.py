@@ -297,7 +297,9 @@ def validate_version_outputs(repo: Path, commit: str, expected_version: str) -> 
     first = sections[0]
     end = sections[1].start() if len(sections) > 1 else len(visible)
     section = visible[first.end():end]
-    ledger_link = re.compile(r"(?<![!\\])\[[^\]\n]*\]\([^)]*" + re.escape(ledger_path) + r"(?:[#?][^)]*)?\)")
+    canonical_ledger = f"https://github.com/szTheory/gabbaboy/blob/v{expected_version}/{ledger_path}"
+    destination = r"(?:" + re.escape(ledger_path) + r"|" + re.escape(canonical_ledger) + r")"
+    ledger_link = re.compile(r"(?<![!\\])\[[^\]\n]*\]\(\s*" + destination + r"\s*\)")
     if ledger_link.search(section) is None:
         reject("window-version-output-mismatch", f"the {expected_version} changelog section does not link {ledger_path}")
 
@@ -308,37 +310,68 @@ def visible_markdown(text: str) -> str:
         return "".join("\n" if char == "\n" else "\r" if char == "\r" else " "
                        for char in match.group(0))
 
-    text = re.sub(r"<!--.*?-->", mask, text, flags=re.DOTALL)
+    text = re.sub(r"<!--.*?(?:-->|\Z)", mask, text, flags=re.DOTALL)
     text = mask_fenced_code_blocks(text)
     text = re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", mask, text)
     return mask_inline_code_spans(text)
 
 
 def mask_fenced_code_blocks(text: str) -> str:
-    """Mask CommonMark fenced blocks, requiring a matching delimiter and length."""
+    """Mask CommonMark fenced blocks, including blockquote containers."""
     output: list[str] = []
     fence_char: str | None = None
     fence_length = 0
+    fence_quote_depth = 0
+
+    def quote_prefix(content: str, limit: int | None = None) -> tuple[int, int]:
+        depth = 0
+        position = 0
+        while limit is None or depth < limit:
+            start = position
+            spaces = 0
+            while position < len(content) and content[position] == " " and spaces < 4:
+                position += 1
+                spaces += 1
+            if spaces > 3 or position >= len(content) or content[position] != ">":
+                position = start
+                break
+            depth += 1
+            position += 1
+            if position < len(content) and content[position] in " \t":
+                position += 1
+        return depth, position
+
     for line in text.splitlines(keepends=True):
         content = line.rstrip("\r\n")
         ending = line[len(content):]
-        if fence_char is None:
-            opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", content)
-            if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
-                fence_char = opening.group(1)[0]
-                fence_length = len(opening.group(1))
+        if fence_char is not None:
+            depth, position = quote_prefix(content, fence_quote_depth)
+            if depth == fence_quote_depth:
+                candidate = content[position:]
+                closing = re.match(r"^ {0,3}([`~]+)[ \t]*$", candidate)
+                closes = (closing is not None and closing.group(1)[0] == fence_char
+                          and len(closing.group(1)) >= fence_length
+                          and all(char == fence_char for char in closing.group(1)))
                 output.append(" " * len(content) + ending)
-            else:
-                output.append(line)
-            continue
-        closing = re.match(r"^ {0,3}([`~]+)[ \t]*$", content)
-        closes = (closing is not None and closing.group(1)[0] == fence_char
-                  and len(closing.group(1)) >= fence_length
-                  and all(char == fence_char for char in closing.group(1)))
-        output.append(" " * len(content) + ending)
-        if closes:
+                if closes:
+                    fence_char = None
+                    fence_length = 0
+                    fence_quote_depth = 0
+                continue
             fence_char = None
             fence_length = 0
+            fence_quote_depth = 0
+
+        depth, position = quote_prefix(content)
+        candidate = content[position:]
+        opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", candidate)
+        if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
+            fence_char = opening.group(1)[0]
+            fence_length = len(opening.group(1))
+            fence_quote_depth = depth
+            output.append(" " * len(content) + ending)
+        else:
+            output.append(line)
     return "".join(output)
 
 
@@ -346,6 +379,7 @@ def mask_inline_code_spans(text: str) -> str:
     """Mask CommonMark backtick spans, including multiline spans, without moving offsets."""
     tick = chr(96)
     chars = list(text)
+    runs: list[tuple[int, int, int, bool]] = []
     index = 0
     length = len(text)
     while index < length:
@@ -361,24 +395,29 @@ def mask_inline_code_spans(text: str) -> str:
         while cursor >= 0 and text[cursor] == "\\":
             backslashes += 1
             cursor -= 1
-        if backslashes % 2:
+        runs.append((opening, index, delimiter, backslashes % 2 == 1))
+
+    next_same: list[int | None] = [None] * len(runs)
+    next_by_length: dict[int, int] = {}
+    for run_index in range(len(runs) - 1, -1, -1):
+        delimiter = runs[run_index][2]
+        next_same[run_index] = next_by_length.get(delimiter)
+        next_by_length[delimiter] = run_index
+
+    run_index = 0
+    while run_index < len(runs):
+        opening, _, _, escaped = runs[run_index]
+        closing_index = next_same[run_index]
+        if escaped or closing_index is None:
+            run_index += 1
             continue
-        search = index
-        while search < length:
-            if text[search] != tick:
-                search += 1
-                continue
-            closing = search
-            while search < length and text[search] == tick:
-                search += 1
-            if search - closing == delimiter:
-                for offset in range(opening, search):
-                    if chars[offset] not in ("\n", "\r"):
-                        chars[offset] = " "
-                index = search
-                break
-        else:
-            index = opening + delimiter
+        end = runs[closing_index][1]
+        for offset in range(opening, end):
+            if chars[offset] not in ("\n", "\r"):
+                chars[offset] = " "
+        run_index = closing_index + 1
+        while run_index < len(runs) and runs[run_index][0] < end:
+            run_index += 1
     return "".join(chars)
 
 def check_release_notes(repo: Path, rev: str, release_notes: Path) -> None:
@@ -1055,9 +1094,18 @@ def self_test_version_v04() -> tuple[int, int]:
             ("comment", f"<!-- {ledger_link} -->"),
             ("fenced-code", f"```markdown\n{ledger_link}\n```"),
             ("indented-code", "    " + ledger_link),
+            ("blockquote-fenced-code", "> ~~~markdown\n> " + ledger_link + "\n> ~~~"),
+            ("list-fenced-code", f"- code:\n  {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
+            ("unclosed-comment", f"<!--\n{ledger_link}"),
             ("inline-code-span", tick + ledger_link + tick),
             ("multiline-inline-code-span", tick + "\n" + ledger_link + "\n" + tick),
             ("image-is-not-a-ledger-link", "![ledger](docs/support/v0.4.0.md)"),
+            ("external-query-is-not-a-ledger-link",
+             "[ledger](https://evil.invalid/?next=docs/support/v0.4.0.md)"),
+            ("external-title-is-not-a-ledger-link",
+             "[ledger](https://evil.invalid/ \"docs/support/v0.4.0.md\")"),
+            ("malformed-destination-is-not-a-ledger-link",
+             "[ledger](not a valid destination docs/support/v0.4.0.md)"),
         ):
             accepted("visible-ledger-link-counterpart-" + hiding,
                      cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
