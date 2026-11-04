@@ -1203,7 +1203,7 @@ def harness_paragraphs_v04(claims: dict) -> list[str]:
         "## Phase 21 CGB-CPU-E harness-only result",
         f"Phase 21 reports an original-harness-only result at implementation source `{harness['source_revision']}` "
         f"on model `{harness['model']}` in native CGB mode (`cgb`). No candidate game source or ROM was executed.",
-        f"The observed RGB555 frame and PCM digests establish repeatability only. They do not establish admitted-game "
+        f"{harness['interpretation']} The observed RGB555 frame and PCM digests do not establish admitted-game "
         f"progress, rendering accuracy, perceptual video or audio quality, physical CGB-CPU-E behavior, mode-3 timing, "
         f"or general compatibility.",
         f"Source-bound records: [Phase 21 verification]({harness['verification_path']}) at `{harness['evidence_revision']}` "
