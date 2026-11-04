@@ -454,6 +454,8 @@ NOTICE_REQUIRED = (
      "product-package-distinction-missing"),
     ("Controlled game and diagnostic bytes remain repository-test inputs and are excluded from binary products.",
      "product-package-distinction-missing"),
+    ("per-asset rights rest on single-author history plus the repository-wide zlib licence, not a per-asset upstream grant",
+     "libbet-rights-disclosure-missing"),
     ("X11", "samesuite-rights-missing"),
     ("MIT License in [`LICENSE`](LICENSE)", "root-license-missing"),
     ("not installed or packaged", "fixture-package-exclusion-missing"),
@@ -992,6 +994,7 @@ def fixture_directories(root: Path) -> list[str]:
 def check_notices(root: Path) -> int:
     raw = read_document(root, NOTICES)
     text = prose(raw)
+    notice_text = prose(raw, collapse=False)
     checks = check_phrases(NOTICES, text, NOTICE_REQUIRED)
     require(REBOUND_ATTRIBUTION.search(mask_inline_code_spans(raw)) is None,
             f"rebound-attribution-present:{NOTICES}")
@@ -999,7 +1002,7 @@ def check_notices(root: Path) -> int:
     checks += check_unqualified(NOTICES, text)
 
     rows = {match["name"]: (match["manifest"], match["notice"])
-            for match in NOTICE_ROW.finditer(comment_free(raw))}
+            for match in visible_notice_matches(NOTICE_ROW, notice_text)}
     actual = fixture_directories(root)
     for name in actual:
         require(name in rows, f"notice-fixture-missing:{name}")
@@ -1016,13 +1019,21 @@ def check_notices(root: Path) -> int:
         require(name in actual, f"notice-fixture-unknown:{name}")
         checks += 1
     # The prose table digests are bound to bytes too, not only the digest table.
-    for match in NOTICE_INLINE_DIGEST.finditer(comment_free(raw)):
+    for match in visible_notice_matches(NOTICE_INLINE_DIGEST, notice_text):
         target = root / match["path"]
         require(target.is_file(), f"notice-path-missing:{match['path']}")
         require(sha256_file(target) == match["digest"],
                 f"notice-digest-stale:{match['path']}")
         checks += 1
     return checks
+
+
+def visible_notice_matches(pattern: re.Pattern[str], text: str) -> list[re.Match[str]]:
+    """Find notice rows and digests outside code spans, comments, and code blocks."""
+    spans = inline_code_spans(text)
+    return [match for match in pattern.finditer(text)
+            if not any(opening <= match.start() and match.end() <= end
+                       for opening, end, _content in spans)]
 
 
 def perf_disclosure_bytes(root: Path, repo: Path | None = None, rev: str | None = None) -> bytes:
@@ -1466,7 +1477,8 @@ def copy_inputs(root: Path, target: Path) -> None:
     for name in fixture_directories(root):
         relatives.add(f"fixtures/{name}/manifest.json")
         relatives.add(f"fixtures/{name}/LICENSE.txt")
-    for match in NOTICE_INLINE_DIGEST.finditer(read_document(root, NOTICES)):
+    notice_text = prose(read_document(root, NOTICES), collapse=False)
+    for match in visible_notice_matches(NOTICE_INLINE_DIGEST, notice_text):
         relatives.add(match["path"])
     for relative in sorted(relatives):
         source = root / relative
@@ -2051,6 +2063,22 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             rejected += 1
             write_lf(target, original)
 
+        child_result(test_root, "docs")
+        notice_original = originals[NOTICES]
+        libbet_row = next((line for line in notice_original.splitlines()
+                           if line.startswith("| Libbet and the Magic Floor v0.08 test fixture |")), None)
+        require(libbet_row is not None, "self-test-mutation-target-missing:inline-code-hides-libbet-notice-row")
+        hidden_libbet_row = notice_original.replace(
+            libbet_row, "```markdown\n" + libbet_row + "\n```", 1)
+        require(hidden_libbet_row != notice_original,
+                "self-test-mutation-no-op:inline-code-hides-libbet-notice-row")
+        notice_path = test_root / NOTICES
+        write_lf(notice_path, hidden_libbet_row)
+        child_result(test_root, "docs", "libbet-rights-disclosure-missing")
+        rejected_reasons.append("libbet-rights-disclosure-missing")
+        rejected += 1
+        write_lf(notice_path, notice_original)
+
         hidden_disclosure = replace_all(
             readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
             "<div hidden>Physical CGB-E remains UNKNOWN/POLICY</div>", "hidden-html-disclosure")
@@ -2388,7 +2416,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 14 + len(incomplete_html_openers)
+    controls = len(mutations) + 15 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
