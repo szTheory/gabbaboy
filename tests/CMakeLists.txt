@@ -1532,6 +1532,14 @@ gbb_add_v02_contract(release_window_controls 60
 gbb_add_v02_contract(release_version_v04_controls 90
   [=[release-version-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   verify-version-window.py --self-test-version-v04)
+# Phase 23 D-07/D-08: committed independent review reports bind the implementation source and
+# the qualification comparison permits only the fixed report/evidence allowlist.
+gbb_add_v02_contract(phase23_review_evidence_contract 60
+  [=[review-evidence contract pass reports=3 findings=[0-9]+ implementation=[0-9a-f]{12}]=]
+  verify-review-evidence.py --check --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+gbb_add_v02_contract(phase23_review_evidence_controls 60
+  [=[review-evidence controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  verify-review-evidence.py --self-test --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 # Phase 19 D-19: local and hosted rehearsal outcomes share this message-key rule. The checker
 # refuses empty, ambiguous and cross-job log evidence instead of manufacturing a comparable result.
 add_test(NAME judge_outcome_controls
