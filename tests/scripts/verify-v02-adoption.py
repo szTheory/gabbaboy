@@ -647,18 +647,128 @@ def mask_markdown_nonrendered(text: str) -> str:
         return cursor + 1, title
 
     # Reference definitions are metadata, not body copy, even when no link uses them.
-    container_prefix = r"(?:(?: {0,3}>[ \t]?| {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]{1,4}))* {0,3}"
-    continuation_prefix = r"(?:(?: {0,3}>[ \t]?| {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]{1,4}))* {0,3}"
-    title_syntax = r'''(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|\((?:\\.|[^)\\\r\n])*\))'''
-    definition = re.compile(
-        r"(?m)^" + container_prefix
-        + r"\[(?P<label>(?:\\.|[^\]\r\n]){1,999})\]:[^\r\n]*(?:\r?\n|$)"
-        + r"(?:" + continuation_prefix + title_syntax + r"[ \t]*(?:\r?\n|$))?")
     reference_labels: set[str] = set()
-    for match in definition.finditer("".join(source_chars)):
-        label = re.sub(r"\\(.)", r"\1", match["label"])
+
+    def container_content_start(line: str) -> int | None:
+        cursor = 0
+        while cursor < len(line):
+            marker_start = cursor
+            spaces = 0
+            while cursor < len(line) and line[cursor] == " " and spaces < 4:
+                cursor += 1
+                spaces += 1
+            if spaces > 3:
+                return None
+            if cursor < len(line) and line[cursor] == ">":
+                cursor += 1
+                if cursor < len(line) and line[cursor] in " \t":
+                    cursor += 1
+                continue
+
+            marker_end = cursor
+            if cursor < len(line) and line[cursor] in "-+*":
+                marker_end += 1
+            else:
+                digits_start = cursor
+                while (marker_end < len(line) and line[marker_end].isdigit()
+                       and marker_end - digits_start < 10):
+                    marker_end += 1
+                if (marker_end - digits_start > 9 or marker_end == digits_start
+                        or marker_end >= len(line) or line[marker_end] not in ".)"):
+                    marker_end = cursor
+                else:
+                    marker_end += 1
+            if marker_end > cursor:
+                spaces_start = marker_end
+                while marker_end < len(line) and line[marker_end] in " \t" and marker_end - spaces_start < 5:
+                    marker_end += 1
+                if 1 <= marker_end - spaces_start <= 4:
+                    cursor = marker_end
+                    continue
+            return marker_start + spaces
+        return cursor
+
+    def reference_definition_label(line: str) -> str | None:
+        cursor = container_content_start(line)
+        if cursor is None or cursor >= len(line) or line[cursor] != "[":
+            return None
+        start = cursor + 1
+        cursor = start
+        while cursor < len(line) and cursor - start <= 999:
+            char = line[cursor]
+            if char == "\\":
+                cursor += 2
+            elif char == "[":
+                return None
+            elif char == "]":
+                if cursor > start and cursor + 1 < len(line) and line[cursor + 1] == ":":
+                    return line[start:cursor]
+                return None
+            elif char in "\r\n":
+                return None
+            else:
+                cursor += 1
+        return None
+
+    def is_reference_title_line(line: str) -> bool:
+        cursor = container_content_start(line)
+        if cursor is None or cursor >= len(line):
+            return False
+        delimiter = line[cursor]
+        if delimiter in ('"', "'"):
+            cursor += 1
+            while cursor < len(line):
+                if line[cursor] == "\\":
+                    cursor += 2
+                elif line[cursor] == delimiter:
+                    cursor += 1
+                    break
+                elif line[cursor] in "\r\n":
+                    return False
+                else:
+                    cursor += 1
+            else:
+                return False
+        elif delimiter == "(":
+            cursor += 1
+            depth = 1
+            while cursor < len(line):
+                if line[cursor] == "\\":
+                    cursor += 2
+                elif line[cursor] == "(":
+                    depth += 1
+                    cursor += 1
+                elif line[cursor] == ")":
+                    depth -= 1
+                    cursor += 1
+                    if depth == 0:
+                        break
+                elif line[cursor] in "\r\n":
+                    return False
+                else:
+                    cursor += 1
+            if depth != 0:
+                return False
+        else:
+            return False
+        return all(char in " \t\r\n" for char in line[cursor:])
+
+    source = "".join(source_chars)
+    line_spans: list[tuple[str, int, int]] = []
+    offset = 0
+    for line in source.splitlines(keepends=True):
+        line_spans.append((line, offset, offset + len(line)))
+        offset += len(line)
+    for index, (line, start, end) in enumerate(line_spans):
+        label = reference_definition_label(line)
+        if label is None:
+            continue
+        label = re.sub(r"\\(.)", r"\1", label)
         reference_labels.add(" ".join(label.split()).casefold())
-        blank(match.start(), match.end())
+        final_end = end
+        if index + 1 < len(line_spans) and is_reference_title_line(line_spans[index + 1][0]):
+            final_end = line_spans[index + 1][2]
+        blank(start, final_end)
 
     openings = array("I")
     backslashes = 0
@@ -692,14 +802,12 @@ def mask_markdown_nonrendered(text: str) -> str:
         following = close + 1
         if following < len(source_chars) and source_chars[following] == "(":
             parsed = inline_link(following)
-            if parsed is not None:
-                end, _title = parsed
-                blank(opening + 1, close)
-                blank(following, end)
-                cursor = end
-                continue
-            blank(following, len(source_chars))
-            break
+            require(parsed is not None, "markdown-inline-link-malformed")
+            end, _title = parsed
+            blank(opening + 1, close)
+            blank(following, end)
+            cursor = end
+            continue
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
@@ -723,14 +831,12 @@ def mask_markdown_nonrendered(text: str) -> str:
         following = close + 1
         if following < len(source_chars) and source_chars[following] == "(":
             parsed = inline_link(following)
-            if parsed is not None:
-                end, title = parsed
-                if title is not None:
-                    blank(title[0], title[1])
-                cursor = end
-                continue
-            blank(following, len(source_chars))
-            break
+            require(parsed is not None, "markdown-inline-link-malformed")
+            end, title = parsed
+            if title is not None:
+                blank(title[0], title[1])
+            cursor = end
+            continue
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
@@ -2199,6 +2305,9 @@ def comment_all(text: str, old: str, name: str) -> str:
 
 
 def run_self_test_docs(root: Path) -> tuple[int, int]:
+    quote_prefix_probe = "> " * 256 + "plain body text\n"
+    require(mask_markdown_nonrendered(quote_prefix_probe) == quote_prefix_probe,
+            "markdown-container-prefix-control-failed")
     originals = {relative: read_document(root, relative)
                  for relative in PUBLIC_SURFACES}
     rejected = 0
@@ -2301,10 +2410,24 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             malformed_link_prefix + "\n" + malformed_link_document
             + "\nPhysical CGB-E remains UNKNOWN/POLICY\n")
         write_lf(readme_path, malformed_link_document)
-        child_result(test_root, "docs", f"absence-statement-missing:{README}")
-        rejected_reasons.append("physical-cgb-limit-missing")
+        child_result(test_root, "docs", "markdown-inline-link-malformed")
+        rejected_reasons.append("markdown-inline-link-malformed")
         rejected += 1
         write_lf(readme_path, readme_original)
+
+        for name, extra in (
+            ("malformed-link-cannot-hide-game-claim",
+             "[x](unfinished\nCGB game passes all acceptance checks."),
+            ("malformed-link-cannot-hide-raw-html",
+             "[x](unfinished\n<div hidden>Physical CGB-E remains UNKNOWN/POLICY</div>"),
+        ):
+            child_result(test_root, "docs")
+            changed = readme_original + "\n" + extra + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", "markdown-inline-link-malformed")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
 
         child_result(test_root, "docs")
         shortcut_image_alt_only = replace_all(
@@ -2770,7 +2893,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 34 + len(incomplete_html_openers)
+    controls = len(mutations) + 36 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
