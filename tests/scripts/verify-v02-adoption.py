@@ -525,14 +525,206 @@ def read_document(root: Path, relative: str) -> str:
 
 
 def prose(text: str, scope: str = "markdown", *, collapse: bool = True) -> str:
-    """Whitespace-normalized prose without comments and code blocks."""
+    """Whitespace-normalized body prose without comments or non-rendered Markdown."""
     text = re.sub(r"<!--.*?(?:-->|\Z)", " ", text, flags=re.DOTALL)
     text = mask_fenced_code_blocks(text)
     text = mask_indented_code_blocks(text)
+    text = mask_markdown_nonrendered(text)
     visible = mask_inline_code_spans(text)
     require(RAW_HTML_CONSTRUCT.search(visible) is None, f"{scope}-raw-html-unsupported")
     require("\t" not in visible, f"{scope}-tab-unsupported")
     return " ".join(text.split()) if collapse else text
+
+
+def mask_markdown_nonrendered(text: str) -> str:
+    """Mask link titles, image markup and reference definitions while preserving link labels."""
+    chars = list(text)
+    source_chars = list(mask_inline_code_spans(text))
+
+    def blank(start: int, end: int) -> None:
+        for offset in range(start, end):
+            if chars[offset] not in ("\n", "\r"):
+                chars[offset] = " "
+                source_chars[offset] = " "
+
+    escaped_positions = bytearray(len(source_chars))
+    bracket_ends = array("i", [-1]) * len(source_chars)
+
+    def escaped(position: int) -> bool:
+        return escaped_positions[position] == 1
+
+    def closing_bracket(opening: int) -> int | None:
+        end = bracket_ends[opening]
+        return None if end < 0 else end
+
+    def closing_parenthesis(opening: int) -> int | None:
+        depth = 1
+        cursor = opening + 1
+        while cursor < len(source_chars):
+            char = source_chars[cursor]
+            if char == "\\":
+                cursor += 2
+                continue
+            if char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    return cursor
+            cursor += 1
+        return None
+
+    def inline_link(opening: int) -> tuple[int, tuple[int, int] | None] | None:
+        cursor = opening + 1
+        while cursor < len(source_chars) and source_chars[cursor].isspace():
+            cursor += 1
+        if cursor >= len(source_chars):
+            return None
+        if source_chars[cursor] == "<":
+            cursor += 1
+            while cursor < len(source_chars):
+                if source_chars[cursor] == "\\":
+                    cursor += 2
+                elif source_chars[cursor] == ">":
+                    cursor += 1
+                    break
+                else:
+                    cursor += 1
+            else:
+                return None
+        else:
+            depth = 0
+            while cursor < len(source_chars):
+                char = source_chars[cursor]
+                if char == "\\":
+                    cursor += 2
+                    continue
+                if char == "(":
+                    depth += 1
+                elif char == ")":
+                    if depth == 0:
+                        return cursor + 1, None
+                    depth -= 1
+                elif char.isspace() and depth == 0:
+                    break
+                cursor += 1
+
+        while cursor < len(source_chars) and source_chars[cursor].isspace():
+            cursor += 1
+        if cursor >= len(source_chars):
+            return None
+        if source_chars[cursor] == ")":
+            return cursor + 1, None
+        if source_chars[cursor] in ('"', "'"):
+            quote = source_chars[cursor]
+            title_start = cursor + 1
+            cursor = title_start
+            while cursor < len(source_chars):
+                if source_chars[cursor] == "\\":
+                    cursor += 2
+                elif source_chars[cursor] == quote:
+                    title_end = cursor
+                    cursor += 1
+                    break
+                else:
+                    cursor += 1
+            else:
+                return None
+            title = (title_start, title_end)
+        elif source_chars[cursor] == "(":
+            title_start = cursor + 1
+            title_end = closing_parenthesis(cursor)
+            if title_end is None:
+                return None
+            cursor = title_end + 1
+            title = (title_start, title_end)
+        else:
+            return None
+        while cursor < len(source_chars) and source_chars[cursor].isspace():
+            cursor += 1
+        if cursor >= len(source_chars) or source_chars[cursor] != ")":
+            return None
+        return cursor + 1, title
+
+    # Reference definitions are metadata, not body copy, even when no link uses them.
+    definition = re.compile(r"(?m)^ {0,3}\[(?:\\.|[^\]\r\n])+\]:[^\r\n]*(?:\r?\n|$)")
+    for match in definition.finditer("".join(source_chars)):
+        blank(match.start(), match.end())
+
+    openings = array("I")
+    backslashes = 0
+    for position, char in enumerate(source_chars):
+        if char == "\\":
+            backslashes += 1
+            continue
+        is_escaped = backslashes % 2 == 1
+        escaped_positions[position] = is_escaped
+        backslashes = 0
+        if is_escaped:
+            continue
+        if char == "[":
+            openings.append(position)
+        elif char == "]" and openings:
+            bracket_ends[openings.pop()] = position
+
+    # Mask image alt text before link labels so images nested in links cannot
+    # contribute prose through their alt attribute.
+    cursor = 0
+    while cursor < len(source_chars):
+        if (source_chars[cursor] != "!" or cursor + 1 >= len(source_chars)
+                or source_chars[cursor + 1] != "[" or escaped(cursor)):
+            cursor += 1
+            continue
+        opening = cursor + 1
+        close = closing_bracket(opening)
+        if close is None:
+            cursor += 1
+            continue
+        following = close + 1
+        if following < len(source_chars) and source_chars[following] == "(":
+            parsed = inline_link(following)
+            if parsed is not None:
+                end, _title = parsed
+                blank(opening + 1, close)
+                blank(following, end)
+                cursor = end
+                continue
+        elif following < len(source_chars) and source_chars[following] == "[":
+            reference_close = closing_bracket(following)
+            if reference_close is not None:
+                blank(opening + 1, close)
+                blank(following, reference_close + 1)
+                cursor = reference_close + 1
+                continue
+        cursor += 1
+
+    cursor = 0
+    while cursor < len(source_chars):
+        if source_chars[cursor] != "[" or escaped(cursor):
+            cursor += 1
+            continue
+        close = closing_bracket(cursor)
+        if close is None:
+            cursor += 1
+            continue
+        following = close + 1
+        if following < len(source_chars) and source_chars[following] == "(":
+            parsed = inline_link(following)
+            if parsed is not None:
+                end, title = parsed
+                if title is not None:
+                    blank(title[0], title[1])
+                cursor = end
+                continue
+        elif following < len(source_chars) and source_chars[following] == "[":
+            reference_close = closing_bracket(following)
+            if reference_close is not None:
+                blank(following, reference_close + 1)
+                cursor = reference_close + 1
+                continue
+        cursor += 1
+
+    return "".join(chars)
 
 
 def mask_fenced_code_blocks(text: str) -> str:
@@ -2051,6 +2243,18 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         rejected += 1
         write_lf(readme_path, readme_original)
 
+        child_result(test_root, "docs")
+        nested_image_alt_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "[![Physical CGB-E remains UNKNOWN/POLICY](assets/info.png)]"
+            "(https://example.invalid/)",
+            "nested-image-alt-hides-hardware-disclosure")
+        write_lf(readme_path, nested_image_alt_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
         for name, relative, phrase, reason in (
             ("inline-code-hides-game-absence", GAME_GUIDE, ABSENCE_SENTENCE,
              f"absence-statement-missing:{GAME_GUIDE}"),
@@ -2074,6 +2278,52 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             rejected_reasons.append(reason.split(":", 1)[0])
             rejected += 1
             write_lf(target, original)
+
+        link_title_controls = (
+            ("link-title-hides-hardware-disclosure", README,
+             "Physical CGB-E remains UNKNOWN/POLICY",
+             f"physical-cgb-limit-missing:{README}"),
+            ("link-title-hides-game-absence", GAME_GUIDE, ABSENCE_SENTENCE,
+             f"absence-statement-missing:{GAME_GUIDE}"),
+            ("link-title-hides-release-limit", RELEASE, "unsigned and not notarized",
+             f"unsigned-limit-missing:{RELEASE}"),
+        )
+        for name, relative, phrase, reason in link_title_controls:
+            child_result(test_root, "docs")
+            original = originals[relative]
+            changed = replace_all(
+                original, phrase,
+                f'[details](https://example.invalid/ "{phrase}")', name)
+            target = test_root / relative
+            write_lf(target, changed)
+            child_result(test_root, "docs", reason)
+            rejected_reasons.append(reason.split(":", 1)[0])
+            rejected += 1
+            write_lf(target, original)
+
+        child_result(test_root, "docs")
+        readme_title_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "",
+            "unused-reference-title-hides-hardware-disclosure")
+        readme_title_only = readme_title_only.rstrip() + (
+            '\n\n[unused-release-disclosure]: https://example.invalid/ '
+            '"Physical CGB-E remains UNKNOWN/POLICY"\n')
+        write_lf(readme_path, readme_title_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        image_alt_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "![Physical CGB-E remains UNKNOWN/POLICY](assets/info.png)",
+            "image-alt-hides-hardware-disclosure")
+        write_lf(readme_path, image_alt_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
 
         notice_original = originals[NOTICES]
         notice_path = test_root / NOTICES
@@ -2444,7 +2694,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 21 + len(incomplete_html_openers)
+    controls = len(mutations) + 27 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
