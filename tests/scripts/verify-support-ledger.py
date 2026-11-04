@@ -1226,7 +1226,8 @@ def diagnostic_paragraphs_v04(claims: dict) -> list[str]:
         "observed. Inventory Git blob identities and sizes do not establish ROM SHA-256 values, redistribution rights, "
         "reproducible builds, model applicability, or diagnostic results.",
         f"Source-bound records: [Phase 22 evidence]({diagnostic['evidence_path']}) at `{diagnostic['evidence_revision']}` "
-        f"(blob `{diagnostic['evidence_blob_oid']}`); assessment `{diagnostic['assessment_path']}` "
+        f"(blob `{diagnostic['evidence_blob_oid']}`); [Phase 22 UAT]({diagnostic['uat_path']}) "
+        f"(blob `{diagnostic['uat_blob_oid']}`); assessment `{diagnostic['assessment_path']}` "
         f"(blob `{diagnostic['assessment_blob_oid']}`); inventory `{diagnostic['inventory_path']}` "
         f"(blob `{diagnostic['inventory_blob_oid']}`).",
         "",
@@ -3068,6 +3069,8 @@ CLAIMS_V04_DIAGNOSTICS = {
     "evidence_revision": "d18db4c56d2a79e6138df37a9d16e3d346a86e13",
     "evidence_path": ".planning/phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md",
     "evidence_blob_oid": "4c0474cbaa14895fc349485d14891f813c70a46d",
+    "uat_path": ".planning/phases/GB-22-composition-and-microtest-evidence/22-UAT.md",
+    "uat_blob_oid": "1f8b11a36872d8d02c7d4dd8b524470cbdb9cb76",
     "assessment_path": "tests/external/diagnostic-assessment.json",
     "assessment_blob_oid": "55bd8a0a95cb04d34fd3628519c3bdfda0ee3b56",
     "assessment_source_revision": "559b5f7296f957a1a1fea278056a908f9a3d9339",
@@ -3394,13 +3397,15 @@ def validate_v04_harness(claims: dict, root: pathlib.Path, rev: str) -> None:
 
 def validate_v04_diagnostics(claims: dict, root: pathlib.Path, rev: str) -> dict:
     diagnostic = _claims_keys(claims.get("diagnostics"), "v0.4 diagnostics", set(CLAIMS_V04_DIAGNOSTICS))
-    pin_fields = ("evidence_revision", "evidence_path", "evidence_blob_oid", "assessment_path",
+    pin_fields = ("evidence_revision", "evidence_path", "evidence_blob_oid", "uat_path", "uat_blob_oid", "assessment_path",
                   "assessment_blob_oid", "assessment_source_revision", "inventory_path",
                   "inventory_blob_oid", "upstream_revision")
     if any(diagnostic.get(field) != CLAIMS_V04_DIAGNOSTICS[field] for field in pin_fields):
         fail("REJECT diagnostic-source-pin-mismatch: immutable Phase 22 evidence identity changed")
     evidence = read_pinned_claim_source(root, rev, diagnostic["evidence_revision"], diagnostic["evidence_path"],
                                         diagnostic["evidence_blob_oid"], "diagnostic-source-pin-mismatch")
+    uat = read_pinned_claim_source(root, rev, diagnostic["evidence_revision"], diagnostic["uat_path"],
+                                   diagnostic["uat_blob_oid"], "diagnostic-source-pin-mismatch")
     assessment_raw = read_pinned_claim_source(root, rev, diagnostic["evidence_revision"],
                                               diagnostic["assessment_path"], diagnostic["assessment_blob_oid"],
                                               "diagnostic-source-pin-mismatch")
@@ -3454,7 +3459,8 @@ def validate_v04_diagnostics(claims: dict, root: pathlib.Path, rev: str) -> dict
     if (type(downstream) is not list or len(downstream) != 3 or
             not any("No gbmicrotest source or ROM payload SHA-256 values" in item for item in downstream) or
             not any("No fixture manifest" in item for item in downstream) or
-            b"synthetic composition tracer" not in evidence.lower()):
+            b"synthetic-plus-metadata" not in evidence.lower() or
+            b"original synthetic composition traverses" not in uat.lower()):
         fail("REJECT diagnostic-accounting-mismatch: metadata-only and no-execution boundaries changed")
     return computed
 
@@ -4016,6 +4022,9 @@ def self_test_claims_v04(root: pathlib.Path, rev: str) -> tuple[int, int]:
     reject_claim("unknown-diagnostic-evidence-id",
                  lambda value: value["diagnostics"]["unresolved_gate_ids"].__setitem__(0, "unknown_gate"),
                  "diagnostic-evidence-id-mismatch")
+    reject_claim("diagnostic-source-change",
+                 lambda value: value["diagnostics"].update(uat_blob_oid="0" * 40),
+                 "diagnostic-source-pin-mismatch")
     reject_claim("false-real-fixture-admission",
                  lambda value: value["diagnostics"]["expected_counts"].update(real_fixtures_admitted=1),
                  "diagnostic-count-mismatch")

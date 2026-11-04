@@ -65,6 +65,8 @@
     "evidence_revision": "d18db4c56d2a79e6138df37a9d16e3d346a86e13",
     "evidence_path": ".planning/phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md",
     "evidence_blob_oid": "4c0474cbaa14895fc349485d14891f813c70a46d",
+    "uat_path": ".planning/phases/GB-22-composition-and-microtest-evidence/22-UAT.md",
+    "uat_blob_oid": "1f8b11a36872d8d02c7d4dd8b524470cbdb9cb76",
     "assessment_path": "tests/external/diagnostic-assessment.json",
     "assessment_blob_oid": "55bd8a0a95cb04d34fd3628519c3bdfda0ee3b56",
     "assessment_source_revision": "559b5f7296f957a1a1fea278056a908f9a3d9339",
