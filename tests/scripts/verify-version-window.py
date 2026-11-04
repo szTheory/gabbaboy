@@ -308,8 +308,11 @@ def validate_version_outputs(repo: Path, commit: str, expected_version: str) -> 
 
 
 RAW_HTML_CONSTRUCT = re.compile(
-    r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|<![A-Z][^>]*>|"
-    r"<\?[A-Za-z][^>]*\?>|<!\[CDATA\[", re.DOTALL | re.IGNORECASE)
+    r"(?<!\\)(?:\\\\)*(?:"
+    r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|"
+    r"<![A-Z][\s\S]*?(?:>|$)|<\?[A-Za-z][\s\S]*?(?:\?>|$)|"
+    r"<!\[CDATA\[|<(?:script|pre|style)(?=[ \t\r\n>]|$))",
+    re.DOTALL | re.IGNORECASE)
 
 
 def has_markdown_ledger_link(text: str, ledger_path: str, version: str) -> bool:
@@ -1168,6 +1171,7 @@ def self_test() -> tuple[int, int]:
 
 def self_test_version_v04() -> tuple[int, int]:
     """Exercise exact v0.4.0 generated identity on committed disposable subjects."""
+    global RAW_HTML_CONSTRUCT
     positives = 0
     controls = 0
 
