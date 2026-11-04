@@ -270,6 +270,52 @@ def tree_version(repo: Path, commit: str) -> str:
     return listed
 
 
+def validate_version_outputs(repo: Path, commit: str, expected_version: str) -> None:
+    """Check exact generated identity and its first public changelog section at an immutable revision."""
+    actual_version = tree_version(repo, commit)
+    if actual_version != expected_version:
+        reject("window-version-mismatch", f"the requested version is {expected_version}, but the tree is {actual_version}")
+
+    ledger_path = f"docs/support/v{expected_version}.md"
+    ledger = git_blob(repo, commit, ledger_path)
+    expected_heading = f"# GabbaBoy v{expected_version} support ledger".encode("utf-8")
+    if ledger is None or not ledger.splitlines() or ledger.splitlines()[0] != expected_heading:
+        reject("window-version-output-mismatch", f"{ledger_path} is absent or has the wrong version heading")
+
+    changelog = git_blob(repo, commit, "CHANGELOG.md")
+    if changelog is None:
+        reject("window-version-output-mismatch", "CHANGELOG.md is absent")
+    try:
+        text = changelog.decode("utf-8")
+    except UnicodeDecodeError:
+        reject("window-version-output-mismatch", "CHANGELOG.md is not UTF-8")
+    sections = list(re.finditer(r"(?m)^## \[(\d+\.\d+\.\d+)\](?:\([^\r\n]*\))?[^\r\n]*$", text))
+    if not sections or sections[0].group(1) != expected_version:
+        found = sections[0].group(1) if sections else "none"
+        reject("window-version-output-mismatch", f"the first changelog release section is {found}, expected {expected_version}")
+    first = sections[0]
+    end = sections[1].start() if len(sections) > 1 else len(text)
+    if ledger_path not in text[first.end():end]:
+        reject("window-version-output-mismatch", f"the {expected_version} changelog section does not link {ledger_path}")
+
+
+def check_release_notes(repo: Path, rev: str, release_notes: Path) -> None:
+    """Delegate supplied notes to the established immutable release-notes judge."""
+    script = ROOT / "tests/scripts/verify-v02-adoption.py"
+    try:
+        result = subprocess.run(
+            [sys.executable, "-I", str(script), "--release-notes", str(release_notes),
+             "--root", str(repo), "--repo", str(repo), "--rev", rev],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, check=False, timeout=90,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        reject("window-release-notes-invalid", f"the existing release-notes judge could not complete: {error}")
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).strip().splitlines()
+        reject("window-release-notes-invalid", detail[-1] if detail else "the existing release-notes judge rejected the notes")
+
+
 def classify(path: str) -> str:
     if path in REQUIRED_GENERATED_FILES or path.startswith("docs/support/"):
         return "release-output"
@@ -298,7 +344,8 @@ def is_ancestor(repo: Path, older: str, newer: str) -> bool:
                      lambda: git(repo, "merge-base", "--is-ancestor", older, newer, check=False).returncode == 0)
 
 
-def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes | None) -> str:
+def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes | None,
+                 expected_version: str | None = None) -> str:
     """Judge the record committed at rev. Returns a one-line verdict or raises WindowError."""
     rev = resolve_commit(repo, rev, "--rev")
     base = resolve_commit(repo, base, "--base")
@@ -308,9 +355,13 @@ def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes 
         reject("window-record-missing", f"{record_path} is not in the tree at {rev[:12]}")
     record = parse_record(raw)
     if validate_record_shape(record) == "inactive":
+        if expected_version is not None:
+            reject("window-record-inactive", "an explicit expected-version window requires an active record")
         return f"version-window inactive pass rev={rev[:12]} (normal development; no frozen content)"
 
     version = record["release_version"]
+    if expected_version is not None and version != expected_version:
+        reject("window-version-mismatch", f"the active record names {version}, expected {expected_version}")
     intended = record["intended"]
     head = intended["head"]
     # The reviewed identity is one exact head: review and rehearsal must name it, the rehearsal ref its version.
@@ -331,6 +382,8 @@ def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes 
         reject("window-stale-head", f"{head[:12]} -> {rev[:12]} changed {len(changes)} path(s) after review: {shown}")
     if tree_version(repo, rev) != version:
         reject("window-version-mismatch", f"the tree at {rev[:12]} is not version {version}")
+    if expected_version is not None:
+        validate_version_outputs(repo, rev, expected_version)
     for path, expected in sorted(record["managed_inputs"].items()):
         blob = git_blob(repo, rev, path)
         if blob is None or digest(blob) != expected:
@@ -394,7 +447,8 @@ def read_body(path: Path | None) -> bytes | None:
         reject("window-body-unreadable", str(error))
 
 
-def check_tracked(repo: Path, rev: str | None = None, require_active: bool = False) -> str:
+def check_tracked(repo: Path, rev: str | None = None, require_active: bool = False,
+                  expected_version: str | None = None) -> str:
     """Contract: the tracked record is well-formed and the production constants resolve in the tree."""
     if rev is None:
         head = git(repo, "rev-parse", "--verify", "HEAD^{commit}").stdout.decode("ascii").strip()
@@ -409,8 +463,14 @@ def check_tracked(repo: Path, rev: str | None = None, require_active: bool = Fal
     if state == "inactive" and require_active:
         reject("window-record-inactive", f"{RECORD_PATH} is inactive at revision {head[:12]}")
     version = tree_version(repo, head)
+    if expected_version is not None and version != expected_version:
+        reject("window-version-mismatch", f"the requested version is {expected_version}, but the tree at {head[:12]} is {version}")
     if state == "active" and version != record["release_version"]:
         reject("window-version-mismatch", f"the active record's version {record['release_version']} differs from the tree at {head[:12]}")
+    if expected_version is not None and state == "active" and record["release_version"] != expected_version:
+        reject("window-version-mismatch", f"the active record names {record['release_version']}, expected {expected_version}")
+    if expected_version is not None:
+        validate_version_outputs(repo, head, expected_version)
     required_paths = (*REQUIRED_MANAGED_INPUTS, *REQUIRED_GENERATED_FILES, f"docs/support/v{version}.md")
     for path in required_paths:
         if git_blob(repo, head, path) is None:
@@ -464,7 +524,7 @@ def build_fixture(directory: Path, main_version: str = "0.2.1",
     fx = Fixture(directory)
     fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {main_version} LANGUAGES C) # x-release-please-version\n")
     fx.write(".release-please-manifest.json", json.dumps({".": main_version}, indent=2) + "\n")
-    fx.write("CHANGELOG.md", "# Changelog\n")
+    fx.write("CHANGELOG.md", f"# Changelog\n\n## [{main_version}]\n\n- Support: [ledger](docs/support/v{main_version}.md).\n")
     for path in REQUIRED_MANAGED_INPUTS:
         fx.write(path, f"fixture input: {path}\n")
     fx.write("docs/support/v" + main_version + ".md", f"# GabbaBoy v{main_version} support ledger\n")
@@ -477,7 +537,7 @@ def build_fixture(directory: Path, main_version: str = "0.2.1",
     # The version PR: release-please bumps the version and changelog; the ledger is regenerated.
     fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {release_version} LANGUAGES C) # x-release-please-version\n")
     fx.write(".release-please-manifest.json", json.dumps({".": release_version}, indent=2) + "\n")
-    fx.write("CHANGELOG.md", f"# Changelog\n\n## [{release_version}]\n\n- generated entry\n")
+    fx.write("CHANGELOG.md", f"# Changelog\n\n## [{release_version}]\n\n- Support: [ledger](docs/support/v{release_version}.md).\n- generated entry\n")
     fx.write("docs/support/v" + release_version + ".md",
              f"# GabbaBoy v{release_version} support ledger\n")
     head = fx.commit("version pr", "CMakeLists.txt", ".release-please-manifest.json", "CHANGELOG.md",
@@ -809,6 +869,7 @@ def self_test_version_v04() -> tuple[int, int]:
         fx, base, head, body = build_fixture(Path(temporary), "0.3.0", "0.4.0")
         repo = fx.repo
         notes = Path(temporary) / "notes.md"
+        bad_notes = Path(temporary) / "bad-release-notes.md"
 
         def cli(*arguments: str) -> subprocess.CompletedProcess:
             return subprocess.run([sys.executable, "-I", str(Path(__file__).resolve()), "--repo", str(repo),
@@ -816,29 +877,47 @@ def self_test_version_v04() -> tuple[int, int]:
                                   stderr=subprocess.PIPE, text=True, check=False, timeout=60)
 
         def set_outputs(version: str, *, manifest_version: str | None = None,
-                        changelog_version: str | None = None, ledger_content_version: str | None = None) -> None:
+                        changelog_version: str | None = None, ledger_content_version: str | None = None,
+                        ledger_link_version: str | None = None, write_ledger: bool = True) -> None:
             manifest_version = manifest_version or version
             changelog_version = changelog_version or version
             ledger_content_version = ledger_content_version or version
+            ledger_link_version = ledger_link_version or version
             fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {version} LANGUAGES C) # x-release-please-version\n")
             fx.write(".release-please-manifest.json", json.dumps({".": manifest_version}, indent=2) + "\n")
-            fx.write("CHANGELOG.md", f"# Changelog\n\n## [{changelog_version}]\n\n- generated entry\n")
-            fx.write("docs/support/v" + version + ".md",
-                     f"# GabbaBoy v{ledger_content_version} support ledger\n")
+            fx.write("CHANGELOG.md", f"# Changelog\n\n## [{changelog_version}]\n\n"
+                     f"- Support: [ledger](docs/support/v{ledger_link_version}.md).\n- generated entry\n")
+            if write_ledger:
+                fx.write("docs/support/v" + version + ".md",
+                         f"# GabbaBoy v{ledger_content_version} support ledger\n")
+            else:
+                (repo / ("docs/support/v" + version + ".md")).unlink(missing_ok=True)
 
         accepted("inactive-development-record", cli("--check-tracked", "--rev", base))
         accepted("inactive-0.3.0-version-assertion",
                  cli("--check-tracked", "--rev", base, "--expect-version", "0.3.0"))
+        rejected("malformed-expected-version",
+                 cli("--check-tracked", "--rev", base, "--expect-version", "0.4"),
+                 "window-expect-version-invalid")
         accepted("generated-0.4.0-output",
                  cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
+
+        notes.write_bytes(body)
+        rejected("inactive-record-cannot-open-expected-window",
+                 cli("--rev", base, "--base", base, "--check", RECORD_PATH,
+                     "--body", str(notes), "--expect-version", "0.3.0"),
+                 "window-record-inactive")
 
         record = draft_record(repo, head, base, body, 41, 1001, 2002)
         fx.write(RECORD_PATH, render_record(record))
         active = fx.commit("freeze exact 0.4.0 output", RECORD_PATH)
-        notes.write_bytes(body)
         accepted("active-0.4.0-window",
                  cli("--rev", active, "--base", base, "--check", RECORD_PATH,
                      "--body", str(notes), "--expect-version", "0.4.0"))
+        rejected("expected-version-does-not-match-active-record",
+                 cli("--rev", active, "--base", base, "--check", RECORD_PATH,
+                     "--body", str(notes), "--expect-version", "0.3.0"),
+                 "window-version-mismatch")
 
         # Exact version gating rejects common release-please outcomes even when all generated
         # files agree internally and the development window record remains inactive.
@@ -867,16 +946,30 @@ def self_test_version_v04() -> tuple[int, int]:
                                                "--expect-version", "0.4.0"), "window-version-output-mismatch")
 
         fx.reset(head)
+        set_outputs("0.4.0", write_ledger=False)
+        missing_ledger = fx.commit("missing versioned ledger", "CMakeLists.txt",
+                                   ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("missing-versioned-ledger", cli("--check-tracked", "--rev", missing_ledger,
+                                                  "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        fx.reset(head)
         set_outputs("0.4.0", changelog_version="0.3.1")
         wrong_changelog = fx.commit("wrong changelog version", "CMakeLists.txt",
                                     ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
         rejected("wrong-changelog-section", cli("--check-tracked", "--rev", wrong_changelog,
                                                   "--expect-version", "0.4.0"), "window-version-output-mismatch")
 
-        notes.write_text("v0.3.0 notes with a historical ledger link\n", encoding="utf-8")
+        fx.reset(head)
+        set_outputs("0.4.0", ledger_link_version="0.3.0")
+        wrong_ledger_link = fx.commit("wrong versioned changelog ledger link", "CMakeLists.txt",
+                                      ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("wrong-changelog-ledger-link", cli("--check-tracked", "--rev", wrong_ledger_link,
+                                                     "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        bad_notes.write_text("v0.3.0 notes with a historical ledger link\n", encoding="utf-8")
         rejected("wrong-release-notes-version",
                  cli("--rev", active, "--base", base, "--check", RECORD_PATH, "--body", str(notes),
-                     "--release-notes", str(notes), "--expect-version", "0.4.0"),
+                     "--release-notes", str(bad_notes), "--expect-version", "0.4.0"),
                  "window-release-notes-invalid")
     return positives, controls
 
@@ -900,6 +993,12 @@ def main() -> int:
     parser.add_argument("--repo", type=Path, default=ROOT, help="repository to read (default: this checkout)")
     args = parser.parse_args()
     try:
+        if args.expect_version is not None and VERSION.fullmatch(args.expect_version) is None:
+            reject("window-expect-version-invalid", "expected X.Y.Z")
+        if args.expect_version is not None and not (args.check or args.check_tracked):
+            parser.error("--expect-version requires --check or --check-tracked")
+        if args.release_notes is not None and not (args.check and args.expect_version is not None):
+            parser.error("--release-notes requires --check and --expect-version")
         if args.self_test:
             positives, controls = self_test()
             print(f"version-window controls pass positives={positives} controls={controls}")
@@ -909,7 +1008,7 @@ def main() -> int:
             print(f"release-version-v04 controls pass positives={positives} controls={controls}")
             return 0
         if args.check_tracked:
-            print(check_tracked(args.repo, args.rev, args.require_active))
+            print(check_tracked(args.repo, args.rev, args.require_active, args.expect_version))
             return 0
         if args.require_active:
             parser.error("--require-active requires --check-tracked")
@@ -923,7 +1022,12 @@ def main() -> int:
         if args.check:
             if not (args.rev and args.base):
                 parser.error("--check requires --rev and --base")
-            print(check_window(args.repo, args.rev, args.base, args.check, read_body(args.body)))
+            resolved_rev = resolve_commit(args.repo, args.rev, "--rev")
+            verdict = check_window(args.repo, resolved_rev, args.base, args.check, read_body(args.body),
+                                   args.expect_version)
+            if args.release_notes is not None:
+                check_release_notes(args.repo, resolved_rev, args.release_notes)
+            print(verdict)
             return 0
         parser.error("supply --check, --digest, --check-tracked or --self-test")
     except WindowError as error:
