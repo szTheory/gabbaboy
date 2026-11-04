@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 from typing import Callable
+import unicodedata
 
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
@@ -164,6 +165,14 @@ UNSUPPORTED_GAME_CLAIM = re.compile(
     r"has\s+(?:passed|qualified|verified|evidence))\b",
     re.IGNORECASE,
 )
+
+
+def unsupported_game_claim_match(text: str) -> re.Match[str] | None:
+    """Match unsupported claims after removing invisible Unicode format chars."""
+    claim_text = "".join(char for char in text if unicodedata.category(char) != "Cf")
+    return UNSUPPORTED_GAME_CLAIM.search(claim_text)
+
+
 # A signing or notarization claim is allowed only in its negated form.
 FALSE_SIGNING_CLAIM = re.compile(
     r"(?:(?<!un)(?<!not )signed\s+and\s+notarized|"
@@ -529,8 +538,9 @@ def prose(text: str, scope: str = "markdown", *, collapse: bool = True) -> str:
     """Whitespace-normalized body prose without comments or non-rendered Markdown."""
     text = mask_fenced_code_blocks(text)
     text = mask_indented_code_blocks(text)
+    label_source = text
     text, comment_positions = protect_html_comments(text)
-    text = mask_markdown_nonrendered(text)
+    text = mask_markdown_nonrendered(text, label_source=label_source)
     visible = list(mask_inline_code_spans(text))
     text_chars = list(text)
     for position, is_comment in enumerate(comment_positions):
@@ -576,9 +586,13 @@ def protect_html_comments(text: str) -> tuple[str, bytearray]:
     return "".join(chars), comment_positions
 
 
-def mask_markdown_nonrendered(text: str) -> str:
+def mask_markdown_nonrendered(text: str, *, label_source: str | None = None) -> str:
     """Mask link titles, image markup and reference definitions while preserving link labels."""
+    if label_source is None:
+        label_source = text
+    require(len(label_source) == len(text), "markdown-label-source-length-mismatch")
     chars = list(text)
+    label_chars = list(label_source)
     source_chars = list(mask_inline_code_spans(text))
 
     def blank(start: int, end: int) -> None:
@@ -821,7 +835,7 @@ def mask_markdown_nonrendered(text: str) -> str:
         return end
 
     def reference_definition_label(
-            line: str) -> tuple[str, int, tuple[int, tuple[int, ...]]] | None:
+            line: str, raw_line: str) -> tuple[str, int, tuple[int, tuple[int, ...]]] | None:
         end = line_content_end(line)
         prefix = container_content_start(line)
         if prefix is None:
@@ -844,7 +858,7 @@ def mask_markdown_nonrendered(text: str) -> str:
             elif char == "]":
                 if cursor <= start or cursor + 1 >= end or line[cursor + 1] != ":":
                     return None
-                label = line[start:cursor]
+                label = raw_line[start:cursor]
                 if not label.strip(" \t\r\n"):
                     return None
                 cursor += 2
@@ -987,8 +1001,10 @@ def mask_markdown_nonrendered(text: str) -> str:
             return None
         return reference_title_extent(next_index, cursor, expected_context)
 
+    label_lines = label_source.splitlines(keepends=True)
+    require(len(label_lines) == len(line_spans), "markdown-label-source-lines-mismatch")
     for index, (line, start, end) in enumerate(line_spans):
-        parsed = reference_definition_label(line)
+        parsed = reference_definition_label(line, label_lines[index])
         if parsed is None:
             continue
         label, cursor, container_context = parsed
@@ -1097,15 +1113,15 @@ def mask_markdown_nonrendered(text: str) -> str:
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
-                image_label = "".join(chars[opening + 1:close])
-                reference_label = "".join(chars[following + 1:reference_close])
+                image_label = "".join(label_chars[opening + 1:close])
+                reference_label = "".join(label_chars[following + 1:reference_close])
                 target_label = image_label if reference_label == "" else reference_label
                 if normalize_reference_label(target_label) in reference_labels:
                     blank(opening + 1, close)
                     blank(following, reference_close + 1)
                     cursor = reference_close + 1
                     continue
-        elif normalize_reference_label("".join(chars[opening + 1:close])) in reference_labels:
+        elif normalize_reference_label("".join(label_chars[opening + 1:close])) in reference_labels:
             blank(opening + 1, close)
         cursor += 1
 
@@ -1130,8 +1146,8 @@ def mask_markdown_nonrendered(text: str) -> str:
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
-                link_text = "".join(chars[cursor + 1:close])
-                reference_label = "".join(chars[following + 1:reference_close])
+                link_text = "".join(label_chars[cursor + 1:close])
+                reference_label = "".join(label_chars[following + 1:reference_close])
                 target_label = link_text if reference_label == "" else reference_label
                 if normalize_reference_label(target_label) in reference_labels:
                     blank(following, reference_close + 1)
@@ -1468,7 +1484,9 @@ def check_unqualified(relative: str, text: str) -> int:
         (FALSE_FUZZ_CLAIM, "false-fuzz-campaign-claim"),
     )
     for pattern, reason in checks:
-        require(pattern.search(text) is None, f"{reason}:{relative}")
+        matched = (unsupported_game_claim_match(text) if pattern is UNSUPPORTED_GAME_CLAIM
+                   else pattern.search(text))
+        require(matched is None, f"{reason}:{relative}")
     return len(checks) + 1
 
 
@@ -1499,7 +1517,7 @@ def check_game(root: Path) -> int:
     require(ABSENCE_STATEMENT in disclosure_text,
             f"absence-statement-missing:{GAME_GUIDE}")
     checks += 1
-    require(UNSUPPORTED_GAME_CLAIM.search(disclosure_text) is None,
+    require(unsupported_game_claim_match(disclosure_text) is None,
             f"unsupported-cgb-game-qualification:{GAME_GUIDE}")
     checks += 1
 
@@ -1531,7 +1549,7 @@ def check_readme(root: Path) -> int:
     require(ABSENCE_STATEMENT in disclosure_text,
             f"absence-statement-missing:{README}")
     checks += 1
-    require(UNSUPPORTED_GAME_CLAIM.search(disclosure_text) is None,
+    require(unsupported_game_claim_match(disclosure_text) is None,
             f"unsupported-cgb-game-qualification:{README}")
     checks += 1
     evidence = (
@@ -2030,7 +2048,9 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         (FALSE_PLATFORM_CLAIM, "false-platform-guarantee"),
         (FALSE_PERCEPTUAL_CLAIM, "false-perceptual-claim"),
     ):
-        require(pattern.search(text) is None, f"release-notes-{reason}")
+        matched = (unsupported_game_claim_match(text) if pattern is UNSUPPORTED_GAME_CLAIM
+                   else pattern.search(text))
+        require(matched is None, f"release-notes-{reason}")
         checks += 1
     require(not unnegated(claims.UNQUALIFIED_CLAIM, text),
             "release-notes-unqualified-hardware-or-game-claim")
@@ -2200,6 +2220,12 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
              "release-notes-perf-disclosure-missing"),
             ("contrary-game-claim", None,
              "release-notes-unsupported-cgb-game-qualification"),
+            ("zero-width-space-game-claim", None,
+             "release-notes-unsupported-cgb-game-qualification"),
+            ("word-joiner-game-claim", None,
+             "release-notes-unsupported-cgb-game-qualification"),
+            ("zero-width-non-joiner-game-claim", None,
+             "release-notes-unsupported-cgb-game-qualification"),
             ("false-signing-claim", None,
              "release-notes-false-signing-or-notarization-claim"),
             ("false-publication-claim", None,
@@ -2216,6 +2242,14 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
         for name, edit, reason in mutations:
             if name == "contrary-game-claim":
                 changed = VALID_RELEASE_NOTES + "\nCGB game passes acceptance.\n"
+            elif name in ("zero-width-space-game-claim", "word-joiner-game-claim",
+                          "zero-width-non-joiner-game-claim"):
+                separator = {
+                    "zero-width-space-game-claim": "\u200b",
+                    "word-joiner-game-claim": "\u2060",
+                    "zero-width-non-joiner-game-claim": "\u200c",
+                }[name]
+                changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
             elif name == "false-signing-claim":
                 changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
             elif name == "false-publication-claim":
@@ -2914,6 +2948,11 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             "matching-comments-in-reference-labels-still-resolve",
             "![ordinary][CGB<!-- gap --> game passes all acceptance checks.]\n\n"
             "[CGB<!-- gap --> game passes all acceptance checks.]: /url")
+        readme_parser_control(
+            "different-comment-payloads-cannot-match-reference-labels",
+            "![CGB<!-- alt --> game passes all acceptance checks.]\n\n"
+            "[CGB<!-- def --> game passes all acceptance checks.]: /url",
+            f"unsupported-cgb-game-qualification:{README}")
 
         readme_parser_control(
             "comment-prefix-cannot-create-fence-hiding-game-claim",
@@ -2934,6 +2973,19 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             "autolink-close-bracket-title-remains-nonrendered",
             '[<https://example.invalid/]>](https://example.invalid/ '
             '"<script>not prose</script>")')
+
+        invisible_format_separators = (
+            ("zero-width-space-game-claim-cannot-pass", "\u200b"),
+            ("word-joiner-game-claim-cannot-pass", "\u2060"),
+            ("zero-width-non-joiner-game-claim-cannot-pass", "\u200c"),
+        )
+        for name, separator in invisible_format_separators:
+            readme_parser_control(
+                name, "CGB" + separator + " game passes all acceptance checks.",
+                f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "invisible-format-safe-game-evidence-prose-remains-valid",
+            "CGB\u200b test-ROM results remain software-model evidence only.")
 
         multiline_reference_titles = (
             ("inline-multiline-reference-title-hides-hardware-disclosure",
@@ -3449,7 +3501,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 83 + len(incomplete_html_openers)
+    controls = len(mutations) + 87 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
