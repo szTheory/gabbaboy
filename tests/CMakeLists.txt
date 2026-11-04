@@ -1529,6 +1529,9 @@ gbb_add_v02_contract(release_window_contract 60
 gbb_add_v02_contract(release_window_controls 60
   [=[version-window controls pass positives=[1-9][0-9]* controls=([2-9][0-9]|[1-9][0-9][0-9]+)]=]
   verify-version-window.py --self-test)
+gbb_add_v02_contract(release_version_v04_controls 90
+  [=[release-version-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  verify-version-window.py --self-test-version-v04)
 # Phase 19 D-19: local and hosted rehearsal outcomes share this message-key rule. The checker
 # refuses empty, ambiguous and cross-job log evidence instead of manufacturing a comparable result.
 add_test(NAME judge_outcome_controls

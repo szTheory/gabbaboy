@@ -458,29 +458,31 @@ class Fixture:
         return self.run("rev-parse", "HEAD")
 
 
-def build_fixture(directory: Path) -> tuple[Fixture, str, str, bytes]:
+def build_fixture(directory: Path, main_version: str = "0.2.1",
+                  release_version: str = "0.2.2") -> tuple[Fixture, str, str, bytes]:
     """Returns (fixture, main base commit, reviewed version-PR head, reviewed PR body)."""
     fx = Fixture(directory)
-    fx.write("CMakeLists.txt", "project(GabbaBoy VERSION 0.2.1 LANGUAGES C) # x-release-please-version\n")
-    fx.write(".release-please-manifest.json", '{\n  ".": "0.2.1"\n}\n')
+    fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {main_version} LANGUAGES C) # x-release-please-version\n")
+    fx.write(".release-please-manifest.json", json.dumps({".": main_version}, indent=2) + "\n")
     fx.write("CHANGELOG.md", "# Changelog\n")
     for path in REQUIRED_MANAGED_INPUTS:
         fx.write(path, f"fixture input: {path}\n")
-    fx.write("docs/support/v0.2.1.md", "# v0.2.1 ledger\n")
+    fx.write("docs/support/v" + main_version + ".md", f"# GabbaBoy v{main_version} support ledger\n")
     fx.write("src/core/gabbaboy.c", "int core(void) { return 0; }\n")
     fx.write(RECORD_PATH, render_record(inactive_record()))
     base = fx.commit("main", "CMakeLists.txt", ".release-please-manifest.json", "CHANGELOG.md",
-                     *REQUIRED_MANAGED_INPUTS, "docs/support/v0.2.1.md",
+                     *REQUIRED_MANAGED_INPUTS, "docs/support/v" + main_version + ".md",
                      "src/core/gabbaboy.c", RECORD_PATH)
     fx.run("checkout", "-q", "-b", "release-please--branches--main")
     # The version PR: release-please bumps the version and changelog; the ledger is regenerated.
-    fx.write("CMakeLists.txt", "project(GabbaBoy VERSION 0.2.2 LANGUAGES C) # x-release-please-version\n")
-    fx.write(".release-please-manifest.json", '{\n  ".": "0.2.2"\n}\n')
-    fx.write("CHANGELOG.md", "# Changelog\n\n## 0.2.2\n\n- generated entry\n")
-    fx.write("docs/support/v0.2.2.md", "# v0.2.2 ledger\n")
+    fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {release_version} LANGUAGES C) # x-release-please-version\n")
+    fx.write(".release-please-manifest.json", json.dumps({".": release_version}, indent=2) + "\n")
+    fx.write("CHANGELOG.md", f"# Changelog\n\n## [{release_version}]\n\n- generated entry\n")
+    fx.write("docs/support/v" + release_version + ".md",
+             f"# GabbaBoy v{release_version} support ledger\n")
     head = fx.commit("version pr", "CMakeLists.txt", ".release-please-manifest.json", "CHANGELOG.md",
-                     "docs/support/v0.2.2.md")
-    return fx, base, head, b"## 0.2.2\n\n- generated entry\n"
+                     "docs/support/v" + release_version + ".md")
+    return fx, base, head, f"## {release_version}\n\n- generated entry\n".encode("utf-8")
 
 
 def inactive_record() -> dict:
@@ -785,6 +787,100 @@ def self_test() -> tuple[int, int]:
     return positives, controls
 
 
+def self_test_version_v04() -> tuple[int, int]:
+    """Exercise exact v0.4.0 generated identity on committed disposable subjects."""
+    positives = 0
+    controls = 0
+
+    def accepted(name: str, result: subprocess.CompletedProcess) -> None:
+        nonlocal positives
+        if result.returncode != 0:
+            raise AssertionError(f"version-gate positive {name} was rejected: {result.stdout}{result.stderr}")
+        positives += 1
+
+    def rejected(name: str, result: subprocess.CompletedProcess, code: str) -> None:
+        nonlocal controls
+        if result.returncode != 1 or code not in result.stderr:
+            raise AssertionError(f"version-gate control {name} was accepted or misclassified: "
+                                 f"{result.stdout}{result.stderr}")
+        controls += 1
+
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-version-v04-") as temporary:
+        fx, base, head, body = build_fixture(Path(temporary), "0.3.0", "0.4.0")
+        repo = fx.repo
+        notes = Path(temporary) / "notes.md"
+
+        def cli(*arguments: str) -> subprocess.CompletedProcess:
+            return subprocess.run([sys.executable, "-I", str(Path(__file__).resolve()), "--repo", str(repo),
+                                   *arguments], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, text=True, check=False, timeout=60)
+
+        def set_outputs(version: str, *, manifest_version: str | None = None,
+                        changelog_version: str | None = None, ledger_content_version: str | None = None) -> None:
+            manifest_version = manifest_version or version
+            changelog_version = changelog_version or version
+            ledger_content_version = ledger_content_version or version
+            fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {version} LANGUAGES C) # x-release-please-version\n")
+            fx.write(".release-please-manifest.json", json.dumps({".": manifest_version}, indent=2) + "\n")
+            fx.write("CHANGELOG.md", f"# Changelog\n\n## [{changelog_version}]\n\n- generated entry\n")
+            fx.write("docs/support/v" + version + ".md",
+                     f"# GabbaBoy v{ledger_content_version} support ledger\n")
+
+        accepted("inactive-development-record", cli("--check-tracked", "--rev", base))
+        accepted("inactive-0.3.0-version-assertion",
+                 cli("--check-tracked", "--rev", base, "--expect-version", "0.3.0"))
+        accepted("generated-0.4.0-output",
+                 cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
+
+        record = draft_record(repo, head, base, body, 41, 1001, 2002)
+        fx.write(RECORD_PATH, render_record(record))
+        active = fx.commit("freeze exact 0.4.0 output", RECORD_PATH)
+        notes.write_bytes(body)
+        accepted("active-0.4.0-window",
+                 cli("--rev", active, "--base", base, "--check", RECORD_PATH,
+                     "--body", str(notes), "--expect-version", "0.4.0"))
+
+        # Exact version gating rejects common release-please outcomes even when all generated
+        # files agree internally and the development window record remains inactive.
+        for version in ("0.3.0", "0.3.1", "0.4.1"):
+            fx.reset(head)
+            set_outputs(version)
+            wrong = fx.commit("version output " + version, "CMakeLists.txt",
+                              ".release-please-manifest.json", "CHANGELOG.md",
+                              "docs/support/v" + version + ".md")
+            rejected("wrong-generated-version-" + version,
+                     cli("--check-tracked", "--rev", wrong, "--expect-version", "0.4.0"),
+                     "window-version-mismatch")
+
+        fx.reset(head)
+        set_outputs("0.4.0", manifest_version="0.3.0")
+        mixed_manifest = fx.commit("mixed CMake and manifest versions", "CMakeLists.txt",
+                                   ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("mixed-cmake-manifest", cli("--check-tracked", "--rev", mixed_manifest,
+                                               "--expect-version", "0.4.0"), "window-version-mismatch")
+
+        fx.reset(head)
+        set_outputs("0.4.0", ledger_content_version="0.3.0")
+        wrong_ledger = fx.commit("wrong version ledger content", "CMakeLists.txt",
+                                 ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("wrong-ledger-content", cli("--check-tracked", "--rev", wrong_ledger,
+                                               "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        fx.reset(head)
+        set_outputs("0.4.0", changelog_version="0.3.1")
+        wrong_changelog = fx.commit("wrong changelog version", "CMakeLists.txt",
+                                    ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("wrong-changelog-section", cli("--check-tracked", "--rev", wrong_changelog,
+                                                  "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        notes.write_text("v0.3.0 notes with a historical ledger link\n", encoding="utf-8")
+        rejected("wrong-release-notes-version",
+                 cli("--rev", active, "--base", base, "--check", RECORD_PATH, "--body", str(notes),
+                     "--release-notes", str(notes), "--expect-version", "0.4.0"),
+                 "window-release-notes-invalid")
+    return positives, controls
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rev", help="resolved 40-hex commit whose tree and record are judged")
@@ -797,13 +893,20 @@ def main() -> int:
     parser.add_argument("--rehearsal-run-id", type=int)
     parser.add_argument("--check-tracked", action="store_true")
     parser.add_argument("--require-active", action="store_true")
+    parser.add_argument("--expect-version", help="require the judged CMake, manifest and generated outputs to match X.Y.Z")
+    parser.add_argument("--release-notes", type=Path, help="also judge supplied release notes with the existing adoption validator")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--self-test-version-v04", action="store_true")
     parser.add_argument("--repo", type=Path, default=ROOT, help="repository to read (default: this checkout)")
     args = parser.parse_args()
     try:
         if args.self_test:
             positives, controls = self_test()
             print(f"version-window controls pass positives={positives} controls={controls}")
+            return 0
+        if args.self_test_version_v04:
+            positives, controls = self_test_version_v04()
+            print(f"release-version-v04 controls pass positives={positives} controls={controls}")
             return 0
         if args.check_tracked:
             print(check_tracked(args.repo, args.rev, args.require_active))

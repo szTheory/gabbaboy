@@ -1192,6 +1192,7 @@ support_claims_v04_controls
 support_ledger_v04_tracer
 release_window_contract
 release_window_controls
+release_version_v04_controls
 judge_outcome_controls
 release_lifecycle_replay
 release_lifecycle_controls
