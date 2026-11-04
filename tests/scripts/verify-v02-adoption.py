@@ -554,6 +554,10 @@ def mask_markdown_nonrendered(text: str) -> str:
     def escaped(position: int) -> bool:
         return escaped_positions[position] == 1
 
+    def ascii_control(char: str) -> bool:
+        codepoint = ord(char)
+        return codepoint < 0x20 or codepoint == 0x7F
+
     def closing_bracket(opening: int) -> int | None:
         end = bracket_ends[opening]
         return None if end < 0 else end
@@ -608,7 +612,7 @@ def mask_markdown_nonrendered(text: str) -> str:
                 elif char == ">":
                     cursor += 1
                     break
-                elif char.isspace() or char == "<":
+                elif char.isspace() or char == "<" or ascii_control(char):
                     return None
                 else:
                     cursor += 1
@@ -618,6 +622,8 @@ def mask_markdown_nonrendered(text: str) -> str:
             depth = 0
             while cursor < len(source_chars):
                 char = source_chars[cursor]
+                if ascii_control(char) and char not in "\t\r\n":
+                    return None
                 if char == "\\":
                     if (cursor + 1 >= len(source_chars)
                             or source_chars[cursor + 1] not in string.punctuation):
@@ -767,6 +773,8 @@ def mask_markdown_nonrendered(text: str) -> str:
         cursor = start
         while cursor < end and cursor - start <= 999:
             char = line[cursor]
+            if ascii_control(char):
+                return None
             if char == "\\":
                 if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
                     return None
@@ -795,6 +803,8 @@ def mask_markdown_nonrendered(text: str) -> str:
             cursor += 1
             while cursor < end:
                 char = line[cursor]
+                if ascii_control(char):
+                    return None
                 if char == "\\":
                     if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
                         return None
@@ -813,6 +823,8 @@ def mask_markdown_nonrendered(text: str) -> str:
             depth = 0
             while cursor < end and not line[cursor].isspace():
                 char = line[cursor]
+                if ascii_control(char):
+                    return None
                 if char == "\\":
                     if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
                         return None
@@ -2614,6 +2626,10 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              "[ordinary](/url (</span><div hidden>text</div> (inner)))"),
             ("inline-title-without-destination-separator-cannot-hide-game-claim",
              '[ordinary](<url>"CGB game passes all acceptance checks.")'),
+            ("nul-inline-bare-destination-cannot-hide-game-claim",
+             '[ordinary](/url\x00 "CGB game passes all acceptance checks.")'),
+            ("nul-inline-angle-destination-cannot-hide-game-claim",
+             '[ordinary](<url\x00> "CGB game passes all acceptance checks.")'),
             ("inline-title-with-blank-line-cannot-hide-game-claim",
              '[ordinary](/url "title starts here\n\nCGB game passes all acceptance checks.")'),
         ):
@@ -2645,6 +2661,8 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             ("reference-title-without-destination-separator-hides-game-claim",
              '[CGB game passes all acceptance checks.]: '
              '<https://example.invalid/>"title"'),
+            ("nul-reference-destination-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: /url\x00 "title"'),
             ("invalid-reference-image-hides-game-claim",
              "![CGB game passes all acceptance checks.]\n\n"
              "[CGB game passes all acceptance checks.]: invalid destination with spaces"),
@@ -3191,7 +3209,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 61 + len(incomplete_html_openers)
+    controls = len(mutations) + 64 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
