@@ -829,11 +829,12 @@ def check_game(root: Path) -> int:
 
 def check_readme(root: Path) -> int:
     text = prose(read_document(root, README))
+    disclosure_text = mask_inline_code_spans(text)
     checks = 0
-    require(ABSENCE_STATEMENT in text,
+    require(ABSENCE_STATEMENT in disclosure_text,
             f"absence-statement-missing:{README}")
     checks += 1
-    require(UNSUPPORTED_GAME_CLAIM.search(text) is None,
+    require(UNSUPPORTED_GAME_CLAIM.search(disclosure_text) is None,
             f"unsupported-cgb-game-qualification:{README}")
     checks += 1
     evidence = (
@@ -847,9 +848,9 @@ def check_readme(root: Path) -> int:
          "game-evidence-link-missing"),
     )
     for expected, reason in evidence:
-        require(expected in text, f"{reason}:{README}")
+        require(expected in disclosure_text, f"{reason}:{README}")
         checks += 1
-    return checks + check_claim_boundaries(README, text)
+    return checks + check_claim_boundaries(README, disclosure_text)
 
 
 def header_symbols(root: Path) -> set[str]:
