@@ -1984,10 +1984,18 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              f"absence-statement-missing:{GAME_GUIDE}"),
             ("inline-code-hides-release-limit", RELEASE, "unsigned and not notarized",
              f"unsigned-limit-missing:{RELEASE}"),
+            ("inline-code-hides-release-evidence-name", RELEASE,
+             "The `v02-*` evidence names are the evidence-schema family",
+             f"evidence-name-note-missing:{RELEASE}"),
+            ("inline-code-hides-release-rights-reason", RELEASE,
+             "µCity 1.3 stopped at the required `source/engine/hardware.inc` component, which has no identified grant or notice establishing repository/public-CI scope",
+             f"v04-ucity-outcome-missing:{RELEASE}"),
         ):
             child_result(test_root, "docs")
             original = originals[relative]
-            inline_code_disclosure = replace_all(original, phrase, f"`{phrase}`", name)
+            delimiter = "``" if "`" in phrase else "`"
+            inline_code_disclosure = replace_all(
+                original, phrase, f"{delimiter}{phrase}{delimiter}", name)
             target = test_root / relative
             write_lf(target, inline_code_disclosure)
             child_result(test_root, "docs", reason)
@@ -2332,7 +2340,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 12 + len(incomplete_html_openers)
+    controls = len(mutations) + 14 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
