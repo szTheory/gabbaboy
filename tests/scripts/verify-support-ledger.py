@@ -585,8 +585,8 @@ def _count_receipt_cases(observations: list[dict]) -> dict:
 def validate_data_v2(data: dict, expected_version: str, expected_case_count: int = V2_REQUIRED_CASES) -> None:
     if type(data) is not dict or type(data.get("schema_version")) is not int or data["schema_version"] != 2:
         fail("unsupported ledger schema")
-    if not re.fullmatch(r"0\.[23]\.[0-9]+", expected_version) or data.get("version") != expected_version:
-        fail("v0.2/v0.3 ledger version/profile identity is missing or unstable")
+    if not re.fullmatch(r"0\.[234]\.[0-9]+", expected_version) or data.get("version") != expected_version:
+        fail("v0.2/v0.3/v0.4 ledger version/profile identity is missing or unstable")
     game = data.get("game_evidence")
     if (type(game) is not dict or game.get("status") != "absent" or
             game.get("statement") != "No CGB game-level evidence exists"):
@@ -606,7 +606,7 @@ def validate_data_v2(data: dict, expected_version: str, expected_case_count: int
         "physical_cgb_e": "UNKNOWN/POLICY",
     })
     if scope != expected_scope:
-        fail("v0.2/v0.3 model, execution-mode, boot, or physical-evidence scope mismatch")
+        fail("v0.2/v0.3/v0.4 model, execution-mode, boot, or physical-evidence scope mismatch")
 
     source_inputs = data.get("source_inputs")
     if type(source_inputs) is not list or not source_inputs:
@@ -1177,6 +1177,39 @@ def render_v3_ledger(data: dict, disclosure: dict | None = None, claims: dict | 
     return rendered[:position] + claim_block + "\n" + rendered[position:]
 
 
+def candidate_outcome_paragraphs_v04(claims: dict) -> list[str]:
+    paragraphs = [
+        "## Phase 21 candidate outcomes",
+        "Phase 21 admitted no CGB game after its two ordered source/rights-scope reviews.",
+        "",
+    ]
+    for row in claims["candidate_outcomes"]:
+        paragraphs.extend([
+            f"- **{row['name']} — source/rights-scope no-go:** {row['reason']} "
+            f"Source record: `{row['record_path']}` at evidence revision `{claims['evidence_revision']}`.",
+            "",
+        ])
+    paragraphs.extend([
+        "Neither candidate was built or run. No CGB game was admitted. These outcomes do not establish a license prohibition.",
+        "For both candidates, build, ROM, execution, progress, observations, and receipt remain not observed.",
+        "",
+    ])
+    return paragraphs
+
+
+def render_v04_ledger(data: dict, disclosure: dict, claims: dict) -> str:
+    """Render the release ledger with the source-bound Phase 21 candidate boundary."""
+    if data.get("version") != "0.4.0":
+        fail("v0.4 renderer requires a v0.4.0 ledger")
+    rendered = render_v2_ledger(data, disclosure)
+    disclosure_block = "\n".join(disclosure_paragraphs(disclosure, data["version"]))
+    position = rendered.find(disclosure_block)
+    if position < 0 or rendered.find(disclosure_block, position + 1) >= 0:
+        fail("v0.4 renderer could not locate the historical disclosure block exactly once")
+    candidate_block = "\n".join(candidate_outcome_paragraphs_v04(claims))
+    return rendered[:position] + candidate_block + "\n" + rendered[position:]
+
+
 def create_current_ledger(receipt_path: pathlib.Path, output: pathlib.Path | None = None,
                           root: pathlib.Path = ROOT) -> dict:
     receipt_path = receipt_path.resolve(strict=True)
@@ -1212,14 +1245,16 @@ def write_generated_ledger(data: dict, root: pathlib.Path, output: pathlib.Path 
     target = output if output is not None else default_target
     refuse_tagged_target(root, data["version"], target, default_target)
     # Bytes, not text mode: the ledger is digest-bound and must not gain CRLF on Windows (GB-CI-011).
-    if tuple(int(part) for part in data["version"].split(".")) >= (0, 3, 0):
+    if data["version"] in ("0.3.0", "0.4.0"):
         try:
             rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
                                           stderr=subprocess.DEVNULL, text=True).strip()
         except (OSError, subprocess.CalledProcessError):
             fail("REJECT claims-input-invalid: immutable revision is unavailable")
-        claims = load_claims(root, rev)
-        target.write_bytes(render_v3_ledger(data, load_disclosure(root), claims).encode("utf-8"))
+        claims = load_claims_version(root, rev, data["version"])
+        rendered = (render_v3_ledger(data, load_disclosure(root), claims) if data["version"] == "0.3.0" else
+                    render_v04_ledger(data, load_disclosure(root), claims))
+        target.write_bytes(rendered.encode("utf-8"))
     else:
         target.write_bytes(render_v2_ledger(data).encode("utf-8"))
     return target
@@ -2861,8 +2896,33 @@ def load_disclosure(root: pathlib.Path = ROOT, bind: bool = True) -> dict:
 # D-11 / D-13: support claims are reviewed managed input. Their enums and required
 # exclusions live here so editing the JSON cannot widen the supported surface.
 CLAIMS_PATH = "tests/data/support-claims-v0.3.json"
+CLAIMS_V04_PATH = "tests/data/support-claims-v0.4.json"
 MAX_CLAIMS_BYTES = 64 * 1024
 CLAIMS_TOP_KEYS = {"schema_version", "kind", "applies_from_version", "claims", "non_claims"}
+CLAIMS_V04_TOP_KEYS = {
+    "schema_version", "kind", "applies_from_version", "evidence_revision",
+    "candidate_order", "candidate_outcomes", "non_claims",
+}
+CLAIMS_V04_CANDIDATES = (
+    {
+        "candidate_id": "potion-panic-gbcompo25",
+        "name": "Potion Panic",
+        "record_path": "tests/data/cgb-candidates/potion-panic.json",
+        "reason": "The creator-linked Codeberg source could not be reached before a ref or commit identity was returned; exact component grants and repository/public-CI scope remain unestablished.",
+    },
+    {
+        "candidate_id": "ucity-1.3",
+        "name": "µCity 1.3",
+        "record_path": "tests/data/cgb-candidates/ucity-1.3.json",
+        "reason": "The required source/engine/hardware.inc component has no identified grant or notice establishing repository/public-CI scope.",
+    },
+)
+CLAIMS_V04_NON_CLAIMS = [
+    "Neither candidate was built or run.",
+    "No CGB game was admitted.",
+    "These source/rights-scope no-go outcomes do not establish a license prohibition.",
+]
+CLAIMS_V04_NOT_OBSERVED = ["build", "rom", "execution", "progress", "observations", "receipt"]
 CLAIM_KEYS = {"id", "requirements", "statement", "models", "modes", "corpus",
               "platforms", "surface", "evidence", "non_claims"}
 CLAIM_MODELS = {"DMG-CPU-B", "CGB-CPU-E"}
@@ -2912,7 +2972,12 @@ def _claims_tree_version(root: pathlib.Path, rev: str) -> str:
     match = re.search(rb"^project\(\s*\w+\s+VERSION\s+(\d+\.\d+\.\d+)[\s)]", raw, re.M)
     if match is None:
         _claims_invalid("CMakeLists.txt has no plain X.Y.Z project VERSION")
-    return match.group(1).decode("ascii")
+    version = match.group(1).decode("ascii")
+    manifest_raw = immutable_git_file(root, rev, ".release-please-manifest.json", MAX_INPUT_BYTES)
+    manifest = strict_json(manifest_raw, "claims-version-manifest")
+    if type(manifest) is not dict or manifest.get(".") != version:
+        fail("REJECT claims-version-mismatch: immutable CMake and release manifest versions differ")
+    return version
 
 
 def _claim_inventory(raw: bytes, path: str) -> set[str]:
@@ -3086,9 +3151,120 @@ def validate_claims(data: object, root: pathlib.Path, rev: str) -> dict:
     return data
 
 
+def validate_claims_v04(data: object, root: pathlib.Path, rev: str) -> dict:
+    """Validate the v0.4 candidate outcome profile against immutable Phase 21 records."""
+    if type(data) is dict:
+        rows = data.get("candidate_outcomes")
+        allowed_row_keys = {
+            "candidate_id", "name", "record_path", "record_blob_oid", "disposition", "reason", "not_observed",
+        }
+        if type(rows) is list:
+            for row in rows:
+                if type(row) is dict:
+                    promoted = set(row) & {"built", "ran", "run", "executed", "admitted", "observed"}
+                    if promoted:
+                        fail("REJECT candidate-claim-promoted: candidate outcome asserts downstream execution or admission")
+                    unknown = set(row) - allowed_row_keys
+                    if any(name.endswith(("_built", "_run", "_admitted", "_executed")) for name in unknown):
+                        fail("REJECT candidate-claim-promoted: candidate outcome asserts downstream execution or admission")
+    data = _claims_keys(data, "v0.4 claims", CLAIMS_V04_TOP_KEYS)
+    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
+        _claims_invalid("v0.4 schema_version must be 1")
+    if data["kind"] != "release-support-claims" or data["applies_from_version"] != "0.4.0":
+        _claims_invalid("kind or applies_from_version is not the v0.4.0 claims profile")
+    evidence_revision = data["evidence_revision"]
+    if type(evidence_revision) is not str or not re.fullmatch(r"[0-9a-f]{40}", evidence_revision):
+        fail("REJECT evidence-source-pin-mismatch: evidence revision must be a full immutable Git commit")
+    try:
+        git("merge-base", "--is-ancestor", evidence_revision, rev, cwd=root)
+    except ValueError:
+        fail("REJECT evidence-source-pin-mismatch: candidate evidence revision is not an ancestor of the claim revision")
+
+    expected_ids = [item["candidate_id"] for item in CLAIMS_V04_CANDIDATES]
+    if data["candidate_order"] != expected_ids:
+        fail("REJECT candidate-order-invalid: candidate order differs from the Phase 21 attempt order")
+    outcomes = data["candidate_outcomes"]
+    if type(outcomes) is not list or len(outcomes) != len(CLAIMS_V04_CANDIDATES):
+        fail("REJECT candidate-source-mismatch: exactly two ordered candidate outcomes are required")
+    for index, (row, expected) in enumerate(zip(outcomes, CLAIMS_V04_CANDIDATES, strict=True)):
+        row = _claims_keys(row, f"v0.4 candidate[{index}]", {
+            "candidate_id", "name", "record_path", "record_blob_oid", "disposition", "reason", "not_observed",
+        })
+        if (row["candidate_id"] != expected["candidate_id"] or row["name"] != expected["name"] or
+                row["record_path"] != expected["record_path"]):
+            fail("REJECT candidate-source-mismatch: candidate name, order, or evidence path changed")
+        try:
+            record_raw = immutable_git_file(root, evidence_revision, expected["record_path"], MAX_INPUT_BYTES)
+            blob_oid = git("rev-parse", f"{evidence_revision}:{expected['record_path']}", cwd=root).decode("ascii").strip()
+        except (ValueError, UnicodeError):
+            fail("REJECT evidence-source-pin-mismatch: candidate record is missing from its immutable evidence revision")
+        if row["record_blob_oid"] != blob_oid:
+            fail("REJECT evidence-source-pin-mismatch: candidate record blob differs from the reviewed pin")
+        record = strict_json(record_raw, "candidate-evidence")
+        if type(record) is not dict or record.get("candidate_id") != expected["candidate_id"]:
+            fail("REJECT candidate-source-mismatch: pinned record identity differs")
+        disposition = record.get("disposition")
+        if (type(disposition) is not dict or disposition.get("status") != "no-go" or
+                disposition.get("category") != "rights" or disposition.get("blocker_stage") != "rights"):
+            fail("REJECT candidate-disposition-mismatch: pinned record is not the accepted source/rights no-go")
+        if row["disposition"] != "source-rights-no-go":
+            fail("REJECT candidate-disposition-mismatch: source/rights no-go disposition changed")
+        observed_unresolved = [item.get("field") for item in record.get("unobserved", [])
+                               if type(item) is dict and item.get("field") != "source"]
+        if row["not_observed"] != observed_unresolved or observed_unresolved != CLAIMS_V04_NOT_OBSERVED:
+            fail("REJECT candidate-observation-promoted: downstream fields are no longer the pinned unobserved set")
+        if record.get("build", {}).get("state") != "not_observed":
+            fail("REJECT candidate-claim-promoted: candidate build is claimed as observed")
+        if expected["candidate_id"] == "potion-panic-gbcompo25":
+            source = record.get("source", {})
+            evidence = record.get("admission", {}).get("value", {}).get("evidence", {})
+            acquisition = evidence.get("authoritative_source_acquisition", {})
+            phase20_scope = evidence.get("unresolved_phase20_scope", [])
+            no_run = disposition.get("evidence", {})
+            valid_boundary = (
+                source.get("state") == "not_observed" and source.get("blocked_by") == "rights" and
+                "failed before any ref" in acquisition.get("result", "") and
+                any("repository and public-CI" in item for item in phase20_scope) and
+                no_run.get("upstream_scripts_executed") is False and
+                no_run.get("candidate_rom_acquired_or_executed") is False
+            )
+        else:
+            evidence = record.get("admission", {}).get("value", {}).get("evidence", {})
+            component = evidence.get("component_grants", {}).get("unresolved_build_component", {})
+            no_run = disposition.get("evidence", {})
+            valid_boundary = (
+                record.get("source", {}).get("value", {}).get("revision") ==
+                "d1880a2a112d7c26f16c0fc06a15b6c32fdc9137" and
+                component.get("path") == "source/engine/hardware.inc" and
+                "no gpl header or separate grant/notice" in
+                record.get("admission", {}).get("value", {}).get("reason", "").lower() and
+                "repository/public-CI" in component.get("rights_scope", "") and
+                no_run.get("upstream_execution") is False
+            )
+        if not valid_boundary:
+            fail("REJECT candidate-evidence-mismatch: pinned source/rights facts changed")
+        if type(row["reason"]) is not str or not row["reason"].strip():
+            fail("REJECT candidate-reason-missing: every ordered no-go requires its reason")
+        if row["reason"] != expected["reason"]:
+            fail("REJECT candidate-reason-mismatch: reason differs from the accepted source-bound outcome")
+
+    if data["non_claims"] != CLAIMS_V04_NON_CLAIMS:
+        fail("REJECT candidate-non-claim-missing: required no-build, no-admission, or no-license-prohibition limit changed")
+    return data
+
+
 def load_claims(root: pathlib.Path, rev: str) -> dict:
     raw = immutable_git_file(root, rev, CLAIMS_PATH, MAX_CLAIMS_BYTES)
     return validate_claims(strict_json(raw, "claims-input"), root, rev)
+
+
+def load_claims_version(root: pathlib.Path, rev: str, version: str) -> dict:
+    if version == "0.3.0":
+        return load_claims(root, rev)
+    if version != "0.4.0":
+        fail("REJECT claims-version-unsupported: no managed claims profile for " + version)
+    raw = immutable_git_file(root, rev, CLAIMS_V04_PATH, MAX_CLAIMS_BYTES)
+    return validate_claims_v04(strict_json(raw, "v0.4-claims-input"), root, rev)
 
 
 def claim_paragraphs(claims: dict, version: str) -> list[str]:
@@ -3202,15 +3378,16 @@ def require_generated(raw: bytes, label: str, version: str, disclosure: dict,
                       root: pathlib.Path = ROOT, rev: str | None = None) -> bytes:
     """The bytes the actual generator renders from this ledger's own structured data; they must equal the ledger."""
     data = parse_ledger(raw, version)
-    if tuple(int(part) for part in version.split(".")) >= (0, 3, 0):
+    if version in ("0.3.0", "0.4.0"):
         if rev is None:
             try:
                 rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
                                               stderr=subprocess.DEVNULL, text=True).strip()
             except (OSError, subprocess.CalledProcessError):
                 fail("REJECT claims-input-invalid: immutable revision is unavailable")
-        claims = load_claims(root, rev)
-        generated = render_v3_ledger(data, disclosure, claims).encode("utf-8")
+        claims = load_claims_version(root, rev, version)
+        generated = (render_v3_ledger(data, disclosure, claims) if version == "0.3.0" else
+                     render_v04_ledger(data, disclosure, claims)).encode("utf-8")
     else:
         generated = render_v2_ledger(data, disclosure).encode("utf-8")
     if generated != raw:
@@ -3219,8 +3396,12 @@ def require_generated(raw: bytes, label: str, version: str, disclosure: dict,
     return generated
 
 
-def self_test_claims(root: pathlib.Path, rev: str) -> tuple[int, int]:
+def self_test_claims(root: pathlib.Path, rev: str, version: str = "0.3.0") -> tuple[int, int]:
     """Prove the v0.3 generator path and one scoped-input refusal beside positives."""
+    if version == "0.4.0":
+        return self_test_claims_v04(root, rev)
+    if version != "0.3.0":
+        fail("REJECT claims-version-unsupported: no managed claims profile for " + version)
     claims = load_claims(root, rev)
     positives = 1
     raw_v021 = immutable_git_file(root, rev, "docs/support/v0.2.1.md", MAX_LEDGER_BYTES)
@@ -3305,7 +3486,8 @@ def self_test_claims(root: pathlib.Path, rev: str) -> tuple[int, int]:
         git_args = ["git", "-C", str(fixture_root)]
         subprocess.run([*git_args, "init", "-q", "-b", "main"], check=True, env=fixture_env)
         required_sources = (
-            "CMakeLists.txt", "tests/data/state-forks.json", "tests/baseline/state-goldens-v1.json",
+            "CMakeLists.txt", ".release-please-manifest.json", "tests/data/state-forks.json",
+            "tests/baseline/state-goldens-v1.json",
             "docs/host-contract.json", "tests/expected-tests.txt", "tests/player/expected-tests.txt",
             "cmake/ExpectedTests.cmake",
         )
@@ -3431,9 +3613,144 @@ def self_test_claims(root: pathlib.Path, rev: str) -> tuple[int, int]:
     return positives, controls
 
 
-def check_claims(root: pathlib.Path, rev: str) -> tuple[int, int]:
-    claims = load_claims(root, rev)
-    return len(claims["claims"]), len(claims["non_claims"])
+def self_test_claims_v04(root: pathlib.Path, rev: str) -> tuple[int, int]:
+    claims = load_claims_version(root, rev, "0.4.0")
+    positives = 1
+    controls = 0
+    disclosure = load_disclosure(root)
+    historical_raw = immutable_git_file(root, rev, "docs/support/v0.3.0.md", MAX_LEDGER_BYTES)
+    if historical_raw != tagged_file(root, "v0.3.0", "docs/support/v0.3.0.md", MAX_LEDGER_BYTES):
+        fail("REJECT tagged-ledger-changed: historical v0.3.0 ledger bytes differ from its tag")
+    require_generated(historical_raw, "docs/support/v0.3.0.md", "0.3.0", disclosure, root, rev)
+    positives += 1
+
+    base_data = parse_ledger(historical_raw, "0.3.0")
+    base_data["version"] = "0.4.0"
+    generated = render_v04_ledger(base_data, disclosure, claims).encode("utf-8")
+    if require_generated(generated, "synthetic v0.4.0 ledger", "0.4.0", disclosure, root, rev) != generated:
+        fail("v0.4.0 candidate ledger was not a generator fixed point")
+    if any(text.encode("utf-8") not in generated for text in
+           (claims["candidate_outcomes"][0]["reason"], claims["candidate_outcomes"][1]["reason"])):
+        fail("v0.4.0 generated candidate summary omitted a source-bound no-go reason")
+    positives += 1
+
+    def reject_claim(name: str, mutate, reason: str) -> None:
+        nonlocal controls, positives
+        validate_claims_v04(copy.deepcopy(claims), root, rev)
+        positives += 1
+        altered = copy.deepcopy(claims)
+        mutate(altered)
+        try:
+            validate_claims_v04(altered, root, rev)
+        except ValueError as error:
+            if reason not in str(error):
+                fail(f"v0.4 claim control {name} was rejected for the wrong reason: {error}")
+        else:
+            fail(f"v0.4 claim control {name} was accepted")
+        controls += 1
+
+    reject_claim("missing-candidate-reason", lambda value: value["candidate_outcomes"][0].update(reason=""),
+                 "candidate-reason-missing")
+    reject_claim("swapped-candidate-reasons",
+                 lambda value: [row.update(reason=other["reason"])
+                                for row, other in zip(value["candidate_outcomes"],
+                                                      reversed(value["candidate_outcomes"]), strict=True)],
+                 "candidate-reason-mismatch")
+    reject_claim("candidate-run-promotion",
+                 lambda value: value["candidate_outcomes"][0].update(run=True), "candidate-claim-promoted")
+    reject_claim("candidate-record-pin-change",
+                 lambda value: value["candidate_outcomes"][1].update(record_blob_oid="0" * 40),
+                 "evidence-source-pin-mismatch")
+    reject_claim("candidate-order-change",
+                 lambda value: value.update(candidate_order=list(reversed(value["candidate_order"]))),
+                 "candidate-order-invalid")
+
+    edited = generated.replace(b"Potion Panic", b"Potion P4nic", 1)
+    if edited == generated:
+        fail("v0.4 hand-edit control did not alter generated output")
+    try:
+        require_generated(edited, "synthetic v0.4.0 ledger", "0.4.0", disclosure, root, rev)
+    except ValueError as error:
+        if "ledger-not-generated" not in str(error):
+            fail(f"hand-edited v0.4 ledger was rejected for the wrong reason: {error}")
+    else:
+        fail("hand-edited v0.4 ledger was accepted by the generator fixed point")
+    controls += 1
+    return positives, controls
+
+
+def self_test_v04_tracer(root: pathlib.Path, rev: str) -> tuple[int, int]:
+    """Run --write-current against a disposable committed 0.4.0 version-PR subject."""
+    from unittest import mock
+
+    historical_raw = immutable_git_file(root, rev, "docs/support/v0.3.0.md", MAX_LEDGER_BYTES)
+    base_data = parse_ledger(historical_raw, "0.3.0")
+    base_data["version"] = "0.4.0"
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-v04-tracer-") as temporary:
+        fixture = pathlib.Path(temporary) / "repo"
+        clone = subprocess.run(["git", "clone", "--shared", "--quiet", str(root), str(fixture)],
+                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=True, check=False, timeout=30)
+        if clone.returncode != 0:
+            fail("v0.4 tracer could not create a disposable committed subject: " + clone.stderr.strip())
+        fixture_git_env = {**os.environ,
+                           "GIT_AUTHOR_NAME": "GabbaBoy Automation",
+                           "GIT_AUTHOR_EMAIL": "automation@users.noreply.github.com",
+                           "GIT_COMMITTER_NAME": "GabbaBoy Automation",
+                           "GIT_COMMITTER_EMAIL": "automation@users.noreply.github.com"}
+        cmake_path = fixture / "CMakeLists.txt"
+        cmake_raw = cmake_path.read_text(encoding="utf-8")
+        cmake_v04, count = re.subn(r"(^project\(\s*\w+\s+VERSION\s+)0\.3\.0", r"\g<1>0.4.0",
+                                   cmake_raw, count=1, flags=re.M)
+        if count != 1:
+            fail("v0.4 tracer fixture could not create an exact CMake 0.4.0 subject")
+        cmake_path.write_text(cmake_v04, encoding="utf-8")
+        manifest_path = fixture / ".release-please-manifest.json"
+        manifest = strict_json(manifest_path.read_bytes(), "tracer-manifest")
+        manifest["."] = "0.4.0"
+        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        subprocess.run(["git", "add", "CMakeLists.txt", ".release-please-manifest.json"], cwd=fixture,
+                       check=True, env=fixture_git_env)
+        subprocess.run(["git", "-c", "user.name=GabbaBoy Automation", "-c",
+                        "user.email=automation@users.noreply.github.com", "commit", "-q", "-m",
+                        "release: create disposable v0.4.0 version subject"], cwd=fixture,
+                       check=True, env=fixture_git_env)
+        subject = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=fixture, text=True).strip()
+        receipt_path = fixture / "build/cgb-corpus-receipt.json"
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_path.write_text(json.dumps({"identity": {"core_revision": subject}}) + "\n", encoding="utf-8")
+        preview_path = fixture / "build/support-v0.4.0-preview.md"
+        module = sys.modules[__name__]
+        previous_root = ROOT
+        try:
+            globals()["ROOT"] = fixture
+            with mock.patch.object(module, "run_inventory_validator"), \
+                    mock.patch.object(module, "build_v2_data", return_value=copy.deepcopy(base_data)), \
+                    mock.patch.object(module, "run_existing_receipt_validator"), \
+                    mock.patch.object(module, "validate_data_v2"), \
+                    mock.patch.object(module, "validate_source_bindings"):
+                result = main(["--write-current", "--receipt", str(receipt_path), "--output", str(preview_path),
+                               "--root", str(fixture)])
+        finally:
+            globals()["ROOT"] = previous_root
+        if result != 0 or not preview_path.is_file():
+            fail("v0.4 --write-current did not produce its disposable preview")
+        rendered = preview_path.read_bytes()
+        disclosure = load_disclosure(fixture)
+        fixture_claims = load_claims_version(fixture, subject, "0.4.0")
+        expected = render_v04_ledger(base_data, disclosure, fixture_claims).encode("utf-8")
+        if rendered != expected:
+            fail("v0.4 --write-current output differs from the exact production renderer")
+        require_generated(rendered, "disposable v0.4.0 preview", "0.4.0", disclosure, fixture, subject)
+    return 1, 1
+
+
+def check_claims(root: pathlib.Path, rev: str, version: str | None = None) -> tuple[int, int]:
+    version = version or _claims_tree_version(root, rev)
+    claims = load_claims_version(root, rev, version)
+    if version == "0.3.0":
+        return len(claims["claims"]), len(claims["non_claims"])
+    return len(claims["candidate_outcomes"]), len(claims["non_claims"])
 
 
 def run_adoption_over_ledger(ledger_rel: str, ledger_raw: bytes, root: pathlib.Path = ROOT) -> None:
@@ -3633,7 +3950,7 @@ def self_test_disclosure(root: pathlib.Path = ROOT) -> tuple[int, int]:
     return positives, controls
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--self-test-v2", action="store_true")
@@ -3660,9 +3977,13 @@ def main() -> int:
                         help="the tagged ledgers are unchanged tag bytes and exact generator output (RM-028, D-19)")
     parser.add_argument("--self-test-disclosure", action="store_true")
     parser.add_argument("--check-claims", action="store_true",
-                        help="validate the immutable v0.3.0 managed support claims at --rev")
+                        help="validate the selected immutable managed support claims at --rev")
     parser.add_argument("--self-test-claims", action="store_true",
-                        help="run v0.3.0 claim renderer positives and seeded rejection controls at --rev")
+                        help="run the selected managed claim profile's positives and rejection controls at --rev")
+    parser.add_argument("--claims-version", choices=("0.3.0", "0.4.0"),
+                        help="select a reviewed claims profile; omitted selection follows immutable CMake/manifest facts")
+    parser.add_argument("--self-test-tracer", action="store_true",
+                        help="run the v0.4.0 profile through --write-current on a disposable version-PR subject")
     parser.add_argument("--rev", help="full immutable 40-hex commit id for claims input and source facts")
     parser.add_argument("--write-current", action="store_true")
     parser.add_argument("--receipt", type=pathlib.Path)
@@ -3671,7 +3992,7 @@ def main() -> int:
                              "receipt; reports consistency, never qualification")
     parser.add_argument("--evidence-only", action="store_true",
                         help="with --verify-sidecar: the receipt is a downloaded asset and the producer's build is absent")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.evidence_only:
         if not args.verify_sidecar:
             parser.error("--evidence-only is only accepted with --verify-sidecar")
@@ -3738,19 +4059,33 @@ def main() -> int:
         if args.check_claims:
             if args.rev is None:
                 parser.error("--check-claims requires --rev FULL_SHA")
-            claims_count, non_claim_count = check_claims(ROOT, args.rev)
+            version = args.claims_version or _claims_tree_version(ROOT, args.rev)
+            claims_count, non_claim_count = check_claims(ROOT, args.rev, version)
+            if version == "0.4.0":
+                print(f"support-claims-v04 pass candidates={claims_count} rev={args.rev} non_claims={non_claim_count}")
+                return 0
             print(f"support-claims pass claims={claims_count} non_claims={non_claim_count} rev={args.rev}")
             return 0
         if args.self_test_claims:
             if args.rev is None:
                 parser.error("--self-test-claims requires --rev FULL_SHA")
-            positives, controls = self_test_claims(ROOT, args.rev)
+            version = args.claims_version or _claims_tree_version(ROOT, args.rev)
+            positives, controls = self_test_claims(ROOT, args.rev, version)
+            if version == "0.4.0":
+                print(f"support-claims-v04 controls pass positives={positives} controls={controls}")
+                return 0
             print(f"support-claims controls pass positives={positives} controls={controls}")
+            return 0
+        if args.self_test_tracer:
+            if args.rev is None:
+                parser.error("--self-test-tracer requires --rev FULL_SHA")
+            positives, controls = self_test_v04_tracer(ROOT, args.rev)
+            print(f"support-ledger-v04 tracer pass version=0.4.0 candidates=2 positives={positives} controls={controls}")
             return 0
         if args.write_current:
             if not args.receipt:
                 parser.error("--write-current requires --receipt PATH")
-            data = create_current_ledger(args.receipt, args.output)
+            data = create_current_ledger(args.receipt, args.output, args.root)
             counts = data["receipt"]["counts"]
             print("support-ledger wrote version=" + data["version"] + " cases=" +
                   str(counts["completed_cases"]) +

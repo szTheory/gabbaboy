@@ -5073,13 +5073,13 @@ gbb_add_ledger_contract(support_claims
   --check-claims --rev "${GBB_STATE_SOURCE_REV}")
 gbb_add_ledger_contract(support_claims_v04
   [=[support-claims-v04 pass candidates=2 rev=[0-9a-f]+]=]
-  --check-claims --rev "${GBB_STATE_SOURCE_REV}")
+  --check-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
 gbb_add_ledger_contract(support_claims_v04_controls
   [=[support-claims-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
-  --self-test-claims --rev "${GBB_STATE_SOURCE_REV}")
+  --self-test-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
 gbb_add_ledger_contract(support_ledger_v04_tracer
   [=[support-ledger-v04 tracer pass version=0\.4\.0 candidates=2]=]
-  --check-claims --rev "${GBB_STATE_SOURCE_REV}")
+  --self-test-tracer --rev "${GBB_STATE_SOURCE_REV}")
 set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=16)
 gbb_add_ledger_contract(support_claims_controls
   [=[support-claims controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
