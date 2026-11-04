@@ -11,6 +11,7 @@ self-tests run the real command line against isolated mutated copies.
 from __future__ import annotations
 
 import argparse
+from array import array
 from fractions import Fraction
 import hashlib
 import importlib.util
@@ -46,6 +47,9 @@ NOTICES = "THIRD_PARTY_NOTICES.md"
 HEADER = "include/gabbaboy/gabbaboy.h"
 
 PERF_ATTRIBUTION = "tests/baseline/perf-attribution-v1.json"
+RAW_HTML_CONSTRUCT = re.compile(
+    r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|<![A-Z][^>]*>|"
+    r"<\?[A-Za-z][^>]*\?>|<!\[CDATA\[", re.DOTALL | re.IGNORECASE)
 
 
 def tree_identity(root: Path) -> tuple[str, str]:
@@ -503,12 +507,15 @@ def read_document(root: Path, relative: str) -> str:
     return read_bounded(root, relative, DOCUMENT_LIMITS.get(relative, MAX_DOCUMENT_BYTES))
 
 
-def prose(text: str) -> str:
+def prose(text: str, scope: str = "markdown", *, collapse: bool = True) -> str:
     """Whitespace-normalized prose without comments and code blocks."""
     text = re.sub(r"<!--.*?(?:-->|\Z)", " ", text, flags=re.DOTALL)
     text = mask_fenced_code_blocks(text)
     text = mask_indented_code_blocks(text)
-    return " ".join(text.split())
+    visible = mask_inline_code_spans(text)
+    require(RAW_HTML_CONSTRUCT.search(visible) is None, f"{scope}-raw-html-unsupported")
+    require("\t" not in visible, f"{scope}-tab-unsupported")
+    return " ".join(text.split()) if collapse else text
 
 
 def mask_fenced_code_blocks(text: str) -> str:
@@ -521,6 +528,7 @@ def mask_fenced_code_blocks(text: str) -> str:
 
     def parse_containers(content: str) -> tuple[list[tuple[str, int]], int]:
         containers: list[tuple[str, int]] = []
+        list_marker = re.compile(r"([-+*]|\d{1,9}[.)])([ ]{1,4})")
         position = 0
         while True:
             start = position
@@ -536,7 +544,7 @@ def mask_fenced_code_blocks(text: str) -> str:
                 if position < len(content) and content[position] in " \t":
                     position += 1
                 continue
-            marker = re.match(r"([-+*]|\d{1,9}[.)])([ ]{1,4})", content[position:])
+            marker = list_marker.match(content, position)
             if marker is not None:
                 containers.append(("list", spaces + len(marker.group(1)) + len(marker.group(2))))
                 position += len(marker.group(0))
@@ -558,8 +566,11 @@ def mask_fenced_code_blocks(text: str) -> str:
                 if position < len(content) and content[position] in " \t":
                     position += 1
             else:
-                if content[position:].strip() == "":
-                    return True, len(content)
+                remainder = position
+                while remainder < len(content) and content[remainder] in " \t":
+                    remainder += 1
+                if remainder == len(content):
+                    return True, remainder
                 spaces = 0
                 while position + spaces < len(content) and content[position + spaces] == " ":
                     spaces += 1
@@ -605,6 +616,7 @@ def mask_fenced_code_blocks(text: str) -> str:
 def mask_indented_code_blocks(text: str) -> str:
     """Mask indented code after blockquote and list container markers."""
     output: list[str] = []
+    list_marker = re.compile(r"([-+*]|\d{1,9}[.)])([ ]+)")
     for line in text.splitlines(keepends=True):
         content = line.rstrip("\r\n")
         ending = line[len(content):]
@@ -623,7 +635,7 @@ def mask_indented_code_blocks(text: str) -> str:
                 if position < len(content) and content[position] in " \t":
                     position += 1
                 continue
-            marker = re.match(r"([-+*]|\d{1,9}[.)])([ ]+)", content[position:])
+            marker = list_marker.match(content, position)
             if marker is not None:
                 marker_spaces = len(marker.group(2))
                 position += len(marker.group(1)) + (1 if marker_spaces > 4 else marker_spaces)
@@ -998,44 +1010,30 @@ def ledger_link_pattern(ledger: str) -> re.Pattern[str]:
     return re.compile(r"(?<![!\\])\[[^\]\n]*\]\(\s*" + destination + r"\s*\)")
 
 
-RAW_HTML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>", re.DOTALL)
-
-
 def has_markdown_ledger_link(text: str, ledger: str, version: str) -> bool:
     """Find a real Markdown link with an exact supported ledger destination."""
     canonical = f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger}"
     allowed = {ledger, canonical}
 
-    def escaped(index: int) -> bool:
-        backslashes = 0
-        index -= 1
-        while index >= 0 and text[index] == "\\":
+    escaped_chars = bytearray(len(text))
+    bracket_ends = array("i", [-1]) * len(text)
+    openings = array("I")
+    backslashes = 0
+    for index, char in enumerate(text):
+        if char == "\\":
             backslashes += 1
-            index -= 1
-        return backslashes % 2 == 1
+            continue
+        escaped_chars[index] = backslashes % 2 == 1
+        backslashes = 0
+        if escaped_chars[index]:
+            continue
+        if char == "[":
+            openings.append(index)
+        elif char == "]" and openings:
+            bracket_ends[openings.pop()] = index
 
-    def link_end(opening: int) -> tuple[str, int] | None:
-        position = opening + 1
-        depth = 1
-        while position < len(text):
-            if text[position] == "\\":
-                position += 2
-                continue
-            if text[position] == "[":
-                depth += 1
-            elif text[position] == "]":
-                depth -= 1
-                if depth == 0:
-                    break
-            position += 1
-        if position >= len(text):
-            return None
-        position += 1
-        while position < len(text) and text[position].isspace():
-            position += 1
-        if position >= len(text) or text[position] != "(":
-            return None
-        position += 1
+    def link_end(closing_bracket: int) -> tuple[str, int] | None:
+        position = closing_bracket + 2
         while position < len(text) and text[position].isspace():
             position += 1
         if position >= len(text):
@@ -1106,15 +1104,23 @@ def has_markdown_ledger_link(text: str, ledger: str, version: str) -> bool:
 
     position = 0
     while position < len(text):
-        if text[position] != "[" or escaped(position):
+        if text[position] != "[" or escaped_chars[position]:
             position += 1
             continue
-        image = position > 0 and text[position - 1] == "!" and not escaped(position - 1)
-        parsed = link_end(position)
+        closing_bracket = bracket_ends[position]
+        if closing_bracket < 0:
+            position += 1
+            continue
+        if closing_bracket + 1 >= len(text) or text[closing_bracket + 1] != "(":
+            position += 1
+            continue
+        image = position > 0 and text[position - 1] == "!" and not escaped_chars[position - 1]
+        parsed = link_end(closing_bracket)
         if parsed is None:
-            position += 1
-            continue
+            return False
         destination, end = parsed
+        if re.search(r"\n[ \t]*\n", text[position:end]):
+            return False
         if not image and destination in allowed:
             return True
         position = end
@@ -1125,7 +1131,8 @@ def canonical_ledger_url(version: str) -> str:
     return f"https://github.com/szTheory/gabbaboy/blob/v{version}/docs/support/v{version}.md"
 
 
-def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: str) -> int:
+def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str,
+                            ledger: str, link_text: str) -> int:
     require(not re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", raw),
             "release-notes-terminal-control-present")
     support = support_ledger_module()
@@ -1134,7 +1141,7 @@ def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: s
     checks = 0
     if ledger != "docs/support/v0.4.0.md":
         require(False, "release-notes-ledger-version-mismatch")
-    require(has_markdown_ledger_link(text, ledger, "0.4.0"),
+    require(has_markdown_ledger_link(link_text, ledger, "0.4.0"),
             "release-notes-ledger-version-mismatch")
     checks += 1
     require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
@@ -1243,9 +1250,10 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         raise
     except (OSError, UnicodeError) as error:
         raise ContractError("release-notes-unavailable") from error
-    text = " ".join(mask_inline_code_spans(prose(raw)).split())
+    visible = prose(raw, "release-notes", collapse=False)
+    link_text = mask_inline_code_spans(visible)
+    text = " ".join(link_text.split())
     require(text, "release-notes-empty")
-    require(RAW_HTML_TAG.search(text) is None, "release-notes-raw-html-unsupported")
     if rev is not None:
         subject_version, subject_ledger = identity_at_revision(repo, rev)
     else:
@@ -1261,11 +1269,11 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
     if version == "0.4.0":
         require(re.fullmatch(r"[0-9a-f]{40}", rev or "") is not None,
                 "release-notes-revision-required")
-        checks += check_v04_release_notes(text, raw, repo, rev, ledger)
+        checks += check_v04_release_notes(text, raw, repo, rev, ledger, link_text)
     else:
         require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
         checks += 1
-        require(has_markdown_ledger_link(text, ledger, version),
+        require(has_markdown_ledger_link(link_text, ledger, version),
                 "release-notes-ledger-link-missing")
         checks += 1
     require(STATE_VERSION_SENTENCE in text, "release-notes-state-version-missing")
@@ -1584,6 +1592,7 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
             return pattern.sub(lambda match: "!" + match.group(0), valid)
 
         accepts(valid)
+        accepts(valid + "\n```html\n<div hidden>sample</div>\n\t[ledger](docs/support/v0.4.0.md)\n```\n")
         with tempfile.TemporaryDirectory(prefix="gabbaboy-release-revision-identity-") as temp:
             other_tree = Path(temp)
             cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -1709,6 +1718,25 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
             '[outer](https://evil.invalid/ "[ledger](docs/support/v0.4.0.md)")')
         reject("nested-ledger-link-in-external-title-is-not-a-link", nested_title_link,
                "release-notes-ledger-version-mismatch")
+        whitespace_link = replace_ledger_construct("[ledger] (docs/support/v0.4.0.md)")
+        reject("whitespace-before-link-destination-is-not-a-link", whitespace_link,
+               "release-notes-ledger-version-mismatch")
+        newline_link = replace_ledger_construct("[ledger]\n(docs/support/v0.4.0.md)")
+        reject("newline-before-link-destination-is-not-a-link", newline_link,
+               "release-notes-ledger-version-mismatch")
+        blank_label_link = replace_ledger_construct("[ledger\n\n](docs/support/v0.4.0.md)")
+        reject("blank-line-in-link-label-is-not-a-link", blank_label_link,
+               "release-notes-ledger-version-mismatch")
+        blank_title_link = replace_ledger_construct(
+            "[ledger](docs/support/v0.4.0.md\n\n\"title\")")
+        reject("blank-line-in-link-title-is-not-a-link", blank_title_link,
+               "release-notes-ledger-version-mismatch")
+        unmatched_brackets = replace_ledger_construct("[" * 5000)
+        reject("unmatched-brackets-do-not-create-a-link", unmatched_brackets,
+               "release-notes-ledger-version-mismatch")
+        tab_indented_link = replace_ledger_construct("-\t    [ledger](docs/support/v0.4.0.md)")
+        reject("tab-indented-list-code-is-not-a-ledger-link", tab_indented_link,
+               "release-notes-tab-unsupported")
         reject("raw-html-pre-rejected",
                replace_ledger_construct("<pre>[ledger](docs/support/v0.4.0.md)</pre>"),
                "release-notes-raw-html-unsupported")
@@ -1718,6 +1746,15 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
         reject("hidden-html-link-attribute-rejected",
                replace_ledger_construct(
                    '<span hidden title="[ledger](docs/support/v0.4.0.md)">notes</span>'),
+               "release-notes-raw-html-unsupported")
+        reject("html-declaration-rejected",
+               replace_ledger_construct('<!DOCTYPE html>[ledger](docs/support/v0.4.0.md)'),
+               "release-notes-raw-html-unsupported")
+        reject("html-processing-instruction-rejected",
+               replace_ledger_construct('<?xml version="1.0"?>[ledger](docs/support/v0.4.0.md)'),
+               "release-notes-raw-html-unsupported")
+        reject("html-cdata-rejected",
+               replace_ledger_construct('<![CDATA[[ledger](docs/support/v0.4.0.md)]]>'),
                "release-notes-raw-html-unsupported")
         malformed_link = replace_ledger_targets("not a valid destination docs/support/v0.4.0.md")
         reject("malformed-destination-is-not-a-ledger-link", malformed_link,
@@ -1844,6 +1881,45 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         test_root = Path(temp)
         copy_inputs(root, test_root)
         child_result(test_root, "docs")
+
+        readme_path = test_root / README
+        readme_original = originals[README]
+        write_lf(readme_path, readme_original +
+                 "\n```html\n<div hidden>example</div>\n\t[ledger](docs/support/v0.4.0.md)\n```\n")
+        child_result(test_root, "docs")
+        write_lf(readme_path, readme_original)
+
+        hidden_disclosure = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "<div hidden>Physical CGB-E remains UNKNOWN/POLICY</div>", "hidden-html-disclosure")
+        write_lf(readme_path, hidden_disclosure)
+        child_result(test_root, "docs", "markdown-raw-html-unsupported")
+        rejected_reasons.append("markdown-raw-html-unsupported")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+        hidden_details = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "<details><summary>More</summary>Physical CGB-E remains UNKNOWN/POLICY</details>",
+            "details-html-disclosure")
+        write_lf(readme_path, hidden_details)
+        child_result(test_root, "docs", "markdown-raw-html-unsupported")
+        rejected_reasons.append("markdown-raw-html-unsupported")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+        declared_html = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "<!DOCTYPE html>Physical CGB-E remains UNKNOWN/POLICY", "declared-html-disclosure")
+        write_lf(readme_path, declared_html)
+        child_result(test_root, "docs", "markdown-raw-html-unsupported")
+        rejected_reasons.append("markdown-raw-html-unsupported")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+        tabbed_link = readme_original + "\n-\t    [ledger](docs/support/v0.4.0.md)\n"
+        write_lf(readme_path, tabbed_link)
+        child_result(test_root, "docs", "markdown-tab-unsupported")
+        rejected_reasons.append("markdown-tab-unsupported")
+        rejected += 1
+        write_lf(readme_path, readme_original)
 
         component_notice = test_root / "fixtures/visible-demo/LICENSE.txt"
         component_notice_bytes = component_notice.read_bytes()
@@ -2150,7 +2226,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 5
+    controls = len(mutations) + 9
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))

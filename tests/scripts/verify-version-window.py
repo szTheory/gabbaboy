@@ -23,6 +23,7 @@ hosted evidence; the required checks on the exact head, not this script, authent
 from __future__ import annotations
 
 import argparse
+from array import array
 import copy
 import hashlib
 import json
@@ -296,14 +297,19 @@ def validate_version_outputs(repo: Path, commit: str, expected_version: str) -> 
         reject("window-version-output-mismatch", f"the first changelog release section is {found}, expected {expected_version}")
     first = sections[0]
     end = sections[1].start() if len(sections) > 1 else len(visible)
+    judged_changelog = visible[:end]
     section = visible[first.end():end]
-    if RAW_HTML_TAG.search(section) is not None:
+    if "\t" in judged_changelog:
+        reject("window-version-output-mismatch", "the first changelog release section contains a tab")
+    if RAW_HTML_CONSTRUCT.search(judged_changelog) is not None:
         reject("window-version-output-mismatch", "the first changelog release section contains raw HTML")
     if not has_markdown_ledger_link(section, ledger_path, expected_version):
         reject("window-version-output-mismatch", f"the {expected_version} changelog section does not link {ledger_path}")
 
 
-RAW_HTML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>", re.DOTALL)
+RAW_HTML_CONSTRUCT = re.compile(
+    r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|<![A-Z][^>]*>|"
+    r"<\?[A-Za-z][^>]*\?>|<!\[CDATA\[", re.DOTALL | re.IGNORECASE)
 
 
 def has_markdown_ledger_link(text: str, ledger_path: str, version: str) -> bool:
@@ -311,36 +317,25 @@ def has_markdown_ledger_link(text: str, ledger_path: str, version: str) -> bool:
     canonical = f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger_path}"
     allowed = {ledger_path, canonical}
 
-    def escaped(index: int) -> bool:
-        backslashes = 0
-        index -= 1
-        while index >= 0 and text[index] == "\\":
+    escaped_chars = bytearray(len(text))
+    bracket_ends = array("i", [-1]) * len(text)
+    openings = array("I")
+    backslashes = 0
+    for index, char in enumerate(text):
+        if char == "\\":
             backslashes += 1
-            index -= 1
-        return backslashes % 2 == 1
+            continue
+        escaped_chars[index] = backslashes % 2 == 1
+        backslashes = 0
+        if escaped_chars[index]:
+            continue
+        if char == "[":
+            openings.append(index)
+        elif char == "]" and openings:
+            bracket_ends[openings.pop()] = index
 
-    def link_end(opening: int) -> tuple[str, int] | None:
-        position = opening + 1
-        depth = 1
-        while position < len(text):
-            if text[position] == "\\":
-                position += 2
-                continue
-            if text[position] == "[":
-                depth += 1
-            elif text[position] == "]":
-                depth -= 1
-                if depth == 0:
-                    break
-            position += 1
-        if position >= len(text):
-            return None
-        position += 1
-        while position < len(text) and text[position].isspace():
-            position += 1
-        if position >= len(text) or text[position] != "(":
-            return None
-        position += 1
+    def link_end(closing_bracket: int) -> tuple[str, int] | None:
+        position = closing_bracket + 2
         while position < len(text) and text[position].isspace():
             position += 1
         if position >= len(text):
@@ -411,15 +406,23 @@ def has_markdown_ledger_link(text: str, ledger_path: str, version: str) -> bool:
 
     position = 0
     while position < len(text):
-        if text[position] != "[" or escaped(position):
+        if text[position] != "[" or escaped_chars[position]:
             position += 1
             continue
-        image = position > 0 and text[position - 1] == "!" and not escaped(position - 1)
-        parsed = link_end(position)
+        closing_bracket = bracket_ends[position]
+        if closing_bracket < 0:
+            position += 1
+            continue
+        if closing_bracket + 1 >= len(text) or text[closing_bracket + 1] != "(":
+            position += 1
+            continue
+        image = position > 0 and text[position - 1] == "!" and not escaped_chars[position - 1]
+        parsed = link_end(closing_bracket)
         if parsed is None:
-            position += 1
-            continue
+            return False
         destination, end = parsed
+        if re.search(r"\n[ \t]*\n", text[position:end]):
+            return False
         if not image and destination in allowed:
             return True
         position = end
@@ -448,6 +451,7 @@ def mask_fenced_code_blocks(text: str) -> str:
 
     def parse_containers(content: str) -> tuple[list[tuple[str, int]], int]:
         containers: list[tuple[str, int]] = []
+        list_marker = re.compile(r"([-+*]|\d{1,9}[.)])([ ]{1,4})")
         position = 0
         while True:
             start = position
@@ -463,7 +467,7 @@ def mask_fenced_code_blocks(text: str) -> str:
                 if position < len(content) and content[position] in " \t":
                     position += 1
                 continue
-            marker = re.match(r"([-+*]|\d{1,9}[.)])([ ]{1,4})", content[position:])
+            marker = list_marker.match(content, position)
             if marker is not None:
                 containers.append(("list", spaces + len(marker.group(1)) + len(marker.group(2))))
                 position += len(marker.group(0))
@@ -485,8 +489,11 @@ def mask_fenced_code_blocks(text: str) -> str:
                 if position < len(content) and content[position] in " \t":
                     position += 1
             else:
-                if content[position:].strip() == "":
-                    return True, len(content)
+                remainder = position
+                while remainder < len(content) and content[remainder] in " \t":
+                    remainder += 1
+                if remainder == len(content):
+                    return True, remainder
                 spaces = 0
                 while position + spaces < len(content) and content[position + spaces] == " ":
                     spaces += 1
@@ -532,6 +539,7 @@ def mask_fenced_code_blocks(text: str) -> str:
 def mask_indented_code_blocks(text: str) -> str:
     """Mask indented code after blockquote and list container markers."""
     output: list[str] = []
+    list_marker = re.compile(r"([-+*]|\d{1,9}[.)])([ ]+)")
     for line in text.splitlines(keepends=True):
         content = line.rstrip("\r\n")
         ending = line[len(content):]
@@ -550,7 +558,7 @@ def mask_indented_code_blocks(text: str) -> str:
                 if position < len(content) and content[position] in " \t":
                     position += 1
                 continue
-            marker = re.match(r"([-+*]|\d{1,9}[.)])([ ]+)", content[position:])
+            marker = list_marker.match(content, position)
             if marker is not None:
                 marker_spaces = len(marker.group(2))
                 position += len(marker.group(1)) + (1 if marker_spaces > 4 else marker_spaces)
@@ -1287,6 +1295,10 @@ def self_test_version_v04() -> tuple[int, int]:
             ("blockquote-indented-code", ">     " + ledger_link),
             ("blockquote-list-indented-code", "> -     " + ledger_link),
             ("list-blockquote-indented-code", "- >     " + ledger_link),
+            ("list-tab-indented-code", "-\t    " + ledger_link),
+            ("list-space-tab-indented-code", "- \t    " + ledger_link),
+            ("blockquote-tab-indented-code", ">\t    " + ledger_link),
+            ("nested-list-tab-indented-code", "> - Item\n>   \t" + ledger_link),
             ("blockquote-fenced-code", "> ~~~markdown\n> " + ledger_link + "\n> ~~~"),
             ("list-fenced-code", f"- code:\n  {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
             ("list-item-fenced-code", f"- {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
@@ -1305,12 +1317,27 @@ def self_test_version_v04() -> tuple[int, int]:
              "[ledger](https://evil.invalid/ \"docs/support/v0.4.0.md\")"),
             ("nested-ledger-link-in-external-title-is-not-a-ledger-link",
              "[outer](https://evil.invalid/ \"[ledger](docs/support/v0.4.0.md)\")"),
+            ("whitespace-before-link-destination-is-not-a-ledger-link",
+             "[ledger] (docs/support/v0.4.0.md)"),
+            ("newline-before-link-destination-is-not-a-ledger-link",
+             "[ledger]\n(docs/support/v0.4.0.md)"),
+            ("blank-line-before-link-destination-is-not-a-ledger-link",
+             "[ledger]\n\n(docs/support/v0.4.0.md)"),
+            ("blank-line-in-link-title-is-not-a-ledger-link",
+             "[ledger](docs/support/v0.4.0.md\n\n\"ledger\")"),
             ("html-pre-is-not-a-ledger-link",
              "<pre>\n" + ledger_link + "\n</pre>"),
             ("hidden-html-div-is-not-a-ledger-link",
              '<div style="display:none">' + ledger_link + "</div>"),
             ("hidden-html-attribute-is-not-a-ledger-link",
              '<span hidden title="[ledger](docs/support/v0.4.0.md)">release note</span>'),
+            ("html-declaration-is-not-a-ledger-link",
+             "<!DOCTYPE html>\n" + ledger_link),
+            ("html-processing-instruction-is-not-a-ledger-link",
+             '<?xml version="1.0"?>\n' + ledger_link),
+            ("html-cdata-is-not-a-ledger-link",
+             "<![CDATA[\n" + ledger_link + "\n]]>"),
+            ("unmatched-brackets-do-not-create-a-ledger-link", "[" * 5000),
             ("malformed-destination-is-not-a-ledger-link",
              "[ledger](not a valid destination docs/support/v0.4.0.md)"),
         ):
@@ -1322,6 +1349,13 @@ def self_test_version_v04() -> tuple[int, int]:
             rejected("hidden-changelog-ledger-link-" + hiding,
                      cli("--check-tracked", "--rev", hidden_link, "--expect-version", "0.4.0"),
                      "window-version-output-mismatch")
+
+        fx.reset(head)
+        fx.write("CHANGELOG.md", "# Changelog\n\n<div hidden>\n\n## [0.4.0]\n\n" + ledger_link + "\n")
+        hidden_heading = fx.commit("hide the first changelog heading in HTML", "CHANGELOG.md")
+        rejected("html-before-changelog-heading",
+                 cli("--check-tracked", "--rev", hidden_heading, "--expect-version", "0.4.0"),
+                 "window-version-output-mismatch")
 
         bad_notes.write_text("v0.3.0 notes with a historical ledger link\n", encoding="utf-8")
         rejected("wrong-release-notes-version",
