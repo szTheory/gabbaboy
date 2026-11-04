@@ -9,7 +9,7 @@
       "candidate_id": "potion-panic-gbcompo25",
       "name": "Potion Panic",
       "record_path": "tests/data/cgb-candidates/potion-panic.json",
-      "record_sha256": "f3583f2933e48479b275e68beb275cfd1f356c01",
+      "record_blob_oid": "f3583f2933e48479b275e68beb275cfd1f356c01",
       "disposition": "source-rights-no-go",
       "reason": "The creator-linked Codeberg source could not be reached before a ref or commit identity was returned; exact component grants and repository/public-CI scope remain unestablished.",
       "not_observed": ["build", "rom", "execution", "progress", "observations", "receipt"]
@@ -18,7 +18,7 @@
       "candidate_id": "ucity-1.3",
       "name": "µCity 1.3",
       "record_path": "tests/data/cgb-candidates/ucity-1.3.json",
-      "record_sha256": "d510c32410f8b46d7fdcb7917a8fabed138987b9",
+      "record_blob_oid": "d510c32410f8b46d7fdcb7917a8fabed138987b9",
       "disposition": "source-rights-no-go",
       "reason": "The required source/engine/hardware.inc component has no identified grant or notice establishing repository/public-CI scope.",
       "not_observed": ["build", "rom", "execution", "progress", "observations", "receipt"]
