@@ -456,6 +456,18 @@ NOTICE_REQUIRED = (
      "product-package-distinction-missing"),
     ("per-asset rights rest on single-author history plus the repository-wide zlib licence, not a per-asset upstream grant",
      "libbet-rights-disclosure-missing"),
+    ("Mooneye mbc2/mbc5 derivative test ROMs (15) | Mooneye Test Suite revision `31510e12eea6286d36eea060a6adde755e1067aa` (Gekkio), MIT; headless-report derivatives with a zero-filled font replacement (see `fixtures/mooneye-mbc/FONT-LICENSE.txt`); WLA-DX is a GPL-2.0-or-later build tool that is not bundled or linked; ROM digests are a local rebuild until the hosted match in Plan 08-07; repository test fixtures only, not installed or packaged",
+     "mooneye-mbc-rights-disclosure-missing"),
+    ("MagenTests out-of-bounds SRAM ROMs (3) | MagenTests release 0.5.0 at pinned commit `3f9c090f16e5a721db776febb9ba7d773e1c819c` (alloncm), MIT; build-time `hardware.inc` (gbdev, commit `21ef22d`) is CC0-1.0; hardware-derived, author-attested; repository test fixtures only, not installed or packaged",
+     "magentests-rights-disclosure-missing"),
+    ("AGE CGB speed-switch ROMs | AGE test ROMs by Christoph Sprenger, MIT (Copyright (c) 2021); the Cellphone Font by domsson is CC0; `hardware.inc` is an equates-only CC0 copy with no code bytes; author-attested hardware, repository test fixtures only, not installed or packaged",
+     "age-rights-disclosure-missing"),
+    ("rtc3test MBC3 real-time-clock ROM and `tests.md` | rtc3test release v004 at pinned commit `80ae792bf1b3c3387929b912e6df001af3511e24` (aaaaaa123456789), Unlicense; build-time RGBDS v0.4.2 only; hardware-derived, author-attested; repository test fixture only, not installed or packaged",
+     "rtc3test-rights-disclosure-missing"),
+    ("Mooneye DMG and CGB test ROMs (3 and 9) | Mooneye Test Suite revision `31510e12eea6286d36eea060a6adde755e1067aa` (Gekkio), MIT; headless-report derivatives with a zero-filled font replacement (see `FONT-LICENSE.txt` in each directory); WLA-DX is a GPL-2.0-or-later build tool that is not bundled or linked; repository test fixtures only, not installed or packaged",
+     "mooneye-dmg-cgb-rights-disclosure-missing"),
+    ("SameSuite CGB DMA and APU test ROMs (4 and 70) | SameSuite revision `f15645fb049a47ea235f6d2c9a033e72d8087901` (Lior Halphon), X11 licence; the build-time `hardware.inc` is CC0-1.0 and `hexdigits.2bpp` is covered by the repository X11 licence; RGBDS 1.0.1 is build-time only; repository test fixtures only, not installed or packaged",
+     "samesuite-rights-missing"),
     ("X11", "samesuite-rights-missing"),
     ("MIT License in [`LICENSE`](LICENSE)", "root-license-missing"),
     ("not installed or packaged", "fixture-package-exclusion-missing"),
@@ -2063,21 +2075,37 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             rejected += 1
             write_lf(target, original)
 
-        child_result(test_root, "docs")
         notice_original = originals[NOTICES]
-        libbet_row = next((line for line in notice_original.splitlines()
-                           if line.startswith("| Libbet and the Magic Floor v0.08 test fixture |")), None)
-        require(libbet_row is not None, "self-test-mutation-target-missing:inline-code-hides-libbet-notice-row")
-        hidden_libbet_row = notice_original.replace(
-            libbet_row, "```markdown\n" + libbet_row + "\n```", 1)
-        require(hidden_libbet_row != notice_original,
-                "self-test-mutation-no-op:inline-code-hides-libbet-notice-row")
         notice_path = test_root / NOTICES
-        write_lf(notice_path, hidden_libbet_row)
-        child_result(test_root, "docs", "libbet-rights-disclosure-missing")
-        rejected_reasons.append("libbet-rights-disclosure-missing")
-        rejected += 1
-        write_lf(notice_path, notice_original)
+        hidden_notice_rows = (
+            ("libbet", "Libbet and the Magic Floor v0.08 test fixture",
+             "libbet-rights-disclosure-missing"),
+            ("mooneye-mbc", "Mooneye mbc2/mbc5 derivative test ROMs (15)",
+             "mooneye-mbc-rights-disclosure-missing"),
+            ("magentests", "MagenTests out-of-bounds SRAM ROMs (3)",
+             "magentests-rights-disclosure-missing"),
+            ("age", "AGE CGB speed-switch ROMs", "age-rights-disclosure-missing"),
+            ("rtc3test", "rtc3test MBC3 real-time-clock ROM and `tests.md`",
+             "rtc3test-rights-disclosure-missing"),
+            ("mooneye-dmg-cgb", "Mooneye DMG and CGB test ROMs (3 and 9)",
+             "mooneye-dmg-cgb-rights-disclosure-missing"),
+            ("samesuite", "SameSuite CGB DMA and APU test ROMs (4 and 70)",
+             "samesuite-rights-missing"),
+        )
+        for name, label, reason in hidden_notice_rows:
+            child_result(test_root, "docs")
+            row = next((line for line in notice_original.splitlines()
+                        if line.startswith(f"| {label} |")), None)
+            require(row is not None,
+                    f"self-test-mutation-target-missing:inline-code-hides-{name}-notice-row")
+            changed = notice_original.replace(row, f"```markdown\n{row}\n```", 1)
+            require(changed != notice_original,
+                    f"self-test-mutation-no-op:inline-code-hides-{name}-notice-row")
+            write_lf(notice_path, changed)
+            child_result(test_root, "docs", reason)
+            rejected_reasons.append(reason.split(":", 1)[0])
+            rejected += 1
+            write_lf(notice_path, notice_original)
 
         hidden_disclosure = replace_all(
             readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
@@ -2416,7 +2444,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 15 + len(incomplete_html_openers)
+    controls = len(mutations) + 21 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
