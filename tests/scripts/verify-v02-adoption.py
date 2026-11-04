@@ -759,6 +759,7 @@ def unnegated(pattern: re.Pattern[str], text: str) -> bool:
 
 def check_unqualified(relative: str, text: str) -> int:
     """Reject qualification claims that no shipped evidence supports."""
+    text = mask_inline_code_spans(text)
     claims = claims_module()
     require(not unnegated(claims.UNQUALIFIED_CLAIM, text),
             f"unqualified-hardware-or-game-claim:{relative}")
@@ -777,6 +778,7 @@ def check_unqualified(relative: str, text: str) -> int:
 
 
 def check_claim_boundaries(relative: str, text: str) -> int:
+    text = mask_inline_code_spans(text)
     for pattern, reason in CLAIM_BOUNDARY_RULES:
         require(not unnegated(pattern, text), f"{reason}:{relative}")
     for (pattern, reason), twin in zip(CLAIM_BOUNDARY_RULES, CLAIM_BOUNDARY_TWINS):
@@ -787,31 +789,34 @@ def check_claim_boundaries(relative: str, text: str) -> int:
 
 def check_phrases(relative: str, text: str,
                   required: tuple[tuple[str, str], ...]) -> int:
+    prose_text = mask_inline_code_spans(text)
     for phrase, reason in required:
-        require(phrase in text, f"{reason}:{relative}")
+        evidence = text if "`" in phrase else prose_text
+        require(phrase in evidence, f"{reason}:{relative}")
     return len(required)
 
 
 def check_game(root: Path) -> int:
     text = prose(read_document(root, GAME_GUIDE))
+    disclosure_text = mask_inline_code_spans(text)
     checks = 0
 
-    require(ABSENCE_STATEMENT in text,
+    require(ABSENCE_STATEMENT in disclosure_text,
             f"absence-statement-missing:{GAME_GUIDE}")
     checks += 1
-    require(UNSUPPORTED_GAME_CLAIM.search(text) is None,
+    require(UNSUPPORTED_GAME_CLAIM.search(disclosure_text) is None,
             f"unsupported-cgb-game-qualification:{GAME_GUIDE}")
     checks += 1
 
     evidence = (
-        ("cc2966e1643d480d0780fb6cc5b9ef53d5ef6898", "candidate-source-missing"),
+        ("`cc2966e1643d480d0780fb6cc5b9ef53d5ef6898`", "candidate-source-missing"),
         ("RGBDS v1.0.4", "rgbds-1.0.4-result-missing"),
-        ("2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+        ("`2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`",
          "rgbds-1.0.1-archive-digest-missing"),
         ("494 assembler errors", "rgbds-1.0.1-build-failure-missing"),
         ("No output ROM or ROM digest was produced", "candidate-output-absence-missing"),
         ("asset rights remain unresolved", "candidate-rights-limit-missing"),
-        ("195765b8ca3b0fb7d37b7b92d0242d6c7e01ec71f27f93e565fa081e449cbb92",
+        ("`195765b8ca3b0fb7d37b7b92d0242d6c7e01ec71f27f93e565fa081e449cbb92`",
          "historical-candidate-digest-missing"),
         ("unverified historical metadata", "historical-candidate-status-missing"),
         ("Libbet and the Magic Floor v0.08 remains the DMG game acceptance",
@@ -822,7 +827,8 @@ def check_game(root: Path) -> int:
         ("[CGB corpus contract](cgb-corpus.md)", "cgb-corpus-evidence-link-missing"),
     )
     for expected, reason in evidence:
-        require(expected in text, f"{reason}:{GAME_GUIDE}")
+        evidence_text = text if "`" in expected else disclosure_text
+        require(expected in evidence_text, f"{reason}:{GAME_GUIDE}")
         checks += 1
     return checks
 
@@ -883,17 +889,18 @@ def check_symbols(root: Path) -> int:
 
 def check_surface(root: Path, relative: str) -> int:
     text = prose(read_document(root, relative))
+    disclosure_text = mask_inline_code_spans(text)
     checks = check_phrases(relative, text, REQUIRED[relative])
-    checks += check_unqualified(relative, text)
+    checks += check_unqualified(relative, disclosure_text)
     if relative == UNRELEASED:
-        require(PENDING_V030_SECTION.search(text) is None,
+        require(PENDING_V030_SECTION.search(disclosure_text) is None,
                 f"unreleased-pending-stale:{relative}")
         checks += 1
     if relative == RELEASE:
-        require(not unnegated(FALSE_RETRY_TAMPER_CLAIM, text),
+        require(not unnegated(FALSE_RETRY_TAMPER_CLAIM, disclosure_text),
                 f"retry-tamper-overclaim:{relative}")
         checks += 1
-        require(publication_claim_pattern("0.4.0").search(text) is None,
+        require(publication_claim_pattern("0.4.0").search(disclosure_text) is None,
                 f"false-publication-claim:{relative}")
         checks += 1
     if relative == PREVIEW:
@@ -938,7 +945,7 @@ def check_notices(root: Path) -> int:
     raw = read_document(root, NOTICES)
     text = prose(raw)
     checks = check_phrases(NOTICES, text, NOTICE_REQUIRED)
-    require(REBOUND_ATTRIBUTION.search(raw) is None,
+    require(REBOUND_ATTRIBUTION.search(mask_inline_code_spans(raw)) is None,
             f"rebound-attribution-present:{NOTICES}")
     checks += 1
     checks += check_unqualified(NOTICES, text)
