@@ -647,8 +647,14 @@ def mask_markdown_nonrendered(text: str) -> str:
         return cursor + 1, title
 
     # Reference definitions are metadata, not body copy, even when no link uses them.
-    definition = re.compile(r"(?m)^ {0,3}\[(?:\\.|[^\]\r\n])+\]:[^\r\n]*(?:\r?\n|$)")
+    container_prefix = r"(?:(?: {0,3}>[ \t]?| {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]{1,4}))* {0,3}"
+    definition = re.compile(
+        r"(?m)^" + container_prefix
+        + r"\[(?P<label>(?:\\.|[^\]\r\n]){1,999})\]:[^\r\n]*(?:\r?\n|$)")
+    reference_labels: set[str] = set()
     for match in definition.finditer("".join(source_chars)):
+        label = re.sub(r"\\(.)", r"\1", match["label"])
+        reference_labels.add(" ".join(label.split()).casefold())
         blank(match.start(), match.end())
 
     openings = array("I")
@@ -696,6 +702,8 @@ def mask_markdown_nonrendered(text: str) -> str:
                 blank(following, reference_close + 1)
                 cursor = reference_close + 1
                 continue
+        elif " ".join("".join(chars[opening + 1:close]).split()).casefold() in reference_labels:
+            blank(opening + 1, close)
         cursor += 1
 
     cursor = 0
@@ -2243,6 +2251,35 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         rejected += 1
         write_lf(readme_path, readme_original)
 
+        for name, definition in (
+            ("blockquote-reference-title-hides-hardware-disclosure",
+             "> [Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
+            ("list-reference-title-hides-hardware-disclosure",
+             "- [Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
+        ):
+            child_result(test_root, "docs")
+            changed = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = changed.rstrip() + "\n\n" + definition + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+            rejected_reasons.append("physical-cgb-limit-missing")
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        shortcut_image_alt_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "![Physical CGB-E remains UNKNOWN/POLICY]",
+            "shortcut-image-alt-hides-hardware-disclosure")
+        shortcut_image_alt_only = shortcut_image_alt_only.rstrip() + (
+            "\n\n[Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png\n")
+        write_lf(readme_path, shortcut_image_alt_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
         child_result(test_root, "docs")
         nested_image_alt_only = replace_all(
             readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
@@ -2694,7 +2731,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 27 + len(incomplete_html_openers)
+    controls = len(mutations) + 30 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
