@@ -4,17 +4,17 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
-current_plan: 4
-status: "Phase 23 is blocked in Plan 23-04 T2 by an open correctness finding: incomplete raw-HTML block openers can hide required release evidence. Plans 23-04 T3 and later plans remain stopped pending an owner-approved rescope; REL-01 remains Pending and no release is claimed"
-stopped_at: Phase 23 Plan 23-04 T2 reviews recorded; execution is blocked by an open raw-HTML visibility finding and awaits owner rescope approval
-last_updated: "2026-11-04T07:05:57.421Z"
+current_plan: 9
+status: Phase 23 is ready to execute Plan 23-09, which targets the open raw-HTML visibility finding; Plan 23-04 qualification stays held until the fix and three reissued reports pass; REL-01 remains Pending and no release is claimed
+stopped_at: Phase 23 Plan 23-09 inline execution is starting under the approved rescope
+last_updated: "2026-11-04T12:55:55.197Z"
 last_activity: 2026-11-04
-last_activity_desc: Phase GB-23 Plan 23-04 T2 review evidence committed; real-report gate blocked by open raw-HTML correctness finding
-state_head: 4c833703329a256e87614bc91c2b5b974427d6d8
+last_activity_desc: Phase 23 plan verification passed; Plan 23-09 starts inline
+state_head: 3939ac52b9f275d41d30fe46278b8e31e5c009c8
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 30
+  total_plans: 31
   completed_plans: 25
   percent: 75
 ---
@@ -26,17 +26,17 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 23 — Qualified v0.4.0 Release (Plan 23-04 T2 is blocked by an open raw-HTML visibility finding; REL-01 remains Pending; no release is claimed)
+**Current focus:** Phase 23 Plan 23-09 — close the raw-HTML visibility bypass with production-path controls; Plan 23-04 T2 remains held pending all three reports being reissued.
 
 ## Current Position
 
-Current Plan: 4
-Total Plans in Phase: 8
-Phase: GB-23 (Qualified v0.4.0 Release) — IN PROGRESS
+Current Plan: 9
+Total Plans in Phase: 9
+Phase: GB-23 (Qualified v0.4.0 Release) — READY TO EXECUTE
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
-Status: Phase 23 is blocked in Plan 23-04 T2 by an open correctness finding: incomplete raw-HTML block openers can hide required release evidence. Plans 23-04 T3 and later plans remain stopped pending an owner-approved rescope; REL-01 remains Pending and no release is claimed
-Last activity: 2026-11-04 — Phase GB-23 Plan 23-04 T2 review evidence committed; real-report gate blocked by open raw-HTML correctness finding
+Status: Phase 23 is ready to execute Plan 23-09, which targets the open raw-HTML visibility finding; Plan 23-04 qualification stays held until the fix and three reissued reports pass; REL-01 remains Pending and no release is claimed
+Last activity: 2026-11-04 — Phase 23 plan verification passed; Plan 23-09 starts inline
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
@@ -89,7 +89,7 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 ## Session Continuity
 
 **Last session:** 2026-11-04T07:05:57.272Z
-**Stopped at:** Phase 23 Plan 23-04 T2 reviews recorded; execution is blocked by an open raw-HTML visibility finding and awaits owner rescope approval
+**Stopped at:** Phase 23 Plan 23-09 inline execution is starting under the approved rescope
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
@@ -130,4 +130,4 @@ Phase 23 — Qualified v0.4.0 Release — is in progress. Plan 23-01 is complete
 ### Blockers
 
 - No active Phase 22 blocker. The seven evidence gates still block real fixture admission, but D-141 scoped the completed phase to synthetic composition, metadata assessment, and explicit no-go controls. Do not fetch, build, run, or admit real diagnostic fixtures without a new owner-approved scope.
-- Phase 23 Plan 23-04 T2 is blocked at implementation SHA 276f317d199cdd3246e9a90ce72a1f3a1235af1c. All three exact-source reviews found incomplete raw-HTML block openers that hide required release evidence; the committed real-report gate rejects the open correctness finding. Do not run T3 or later plans against this implementation. After owner approval, rescope with /gsd-plan-phase 23 --skip-research.
+- Phase 23 Plan 23-04 qualification remains held until Plan 23-09's bounded raw-HTML fix is committed, all three independent reports are reissued at that source, and the direct report gate passes; REL-01 and publication remain pending.

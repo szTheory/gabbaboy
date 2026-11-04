@@ -129,7 +129,7 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
 
 ### Phase 23: Qualified v0.4.0 Release
 
-**Status**: In progress — nine plans across nine sequential dependency waves after the owner-approved targeted visibility rescope. Plans 23-01 through 23-03 remain complete; Plan 23-09 must fix the reproduced raw-HTML visibility bypass before Plan 23-04 T2 reissues all three independent reports and T3 qualifies the implementation. The next action after plan verification is `/gsd-execute-phase 23`. No release qualification or publication is claimed.
+**Status**: In progress — the approved nine-plan rescope passed independent plan verification. Plans 23-01 through 23-03 remain complete; Plan 23-09 is next and will close the reproduced raw-HTML visibility bypass before Plan 23-04 T2 reissues all three independent reports and T3 qualifies the implementation. Execution continues inline after the selected no-progress recovery. No release qualification or publication is claimed.
 
 **Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
 **Depends on**: Phase 22
@@ -154,19 +154,19 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 23-09-PLAN.md — Fix incomplete raw-HTML visibility bypasses in the existing notes/docs/changelog validators and add causal automated controls.
 
-**Wave 5** *(blocked on Plans 23-03 and 23-09)*
+**Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 23-04-PLAN.md — Reissue all three independent source-bound reports after the visibility fix, gate their committed evidence and qualify the implementation head.
 
-**Wave 6** *(blocked on Plan 23-04 completion)*
+**Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 23-07-PLAN.md — Apply the observed 0.4.0 state-version policy before version freeze.
 
-**Wave 7** *(blocked on Plan 23-07 completion)*
+**Wave 7** *(blocked on Wave 6 completion)*
 - [ ] 23-05-PLAN.md — Prepare the version PR and use the existing trusted release lifecycle.
 
-**Wave 8** *(blocked on Plan 23-05 completion)*
+**Wave 8** *(blocked on Wave 7 completion)*
 - [ ] 23-06-PLAN.md — Reconcile downloaded release evidence and generate automated phase closure.
 
-**Wave 9** *(blocked on Plan 23-06 completion)*
+**Wave 9** *(blocked on Wave 8 completion)*
 - [ ] 23-08-PLAN.md — Record transferable lessons and stop at the owner-controlled milestone boundary.
 
 Use the existing release path. RM-032 tooling is not an automatic work list; only a concrete release blocker can justify a narrowly scoped required change. Keep full libretro, supported Linux/Steam Deck gameplay, CGB timing rewrites, license migration, and a libfuturo dependency or early API/state freeze outside this milestone.
