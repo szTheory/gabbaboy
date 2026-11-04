@@ -6,10 +6,10 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: D-149 correction and notices controls; rerun the full docs/release-note validation, commit the corrected source, reissue three exact-source reviews, then the direct report gate and focused CTests.
-last_updated: "2026-11-04T19:05:50.816Z"
-last_activity: "2026-11-04: Release-consumer review found check_notices passed collapsed prose at 402de242; D-149 control wiring now includes this shared matcher path."
-state_head: 402de242cc0ea44aad321189aaa8f2d3e12006a3
+stopped_at: Plan 23-04 T2 D-150 implementation and controls; run full docs/release-note validation, commit the final source, reissue three exact-source reviews, then the report gate and focused CTests.
+last_updated: "2026-11-04T19:51:12.651Z"
+last_activity: "2026-11-04: Owner approved D-150 after adversarial review reproduced CommonMark emphasis and inline link-label claim bypasses at e26757fa."
+state_head: e26757fafc818a92ddf7ca45f1a409658a5a5bdd
 progress:
   total_phases: 4
   completed_phases: 3
@@ -25,7 +25,7 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Plan 23-04 T2: complete D-149 hard-line-break handling at all shared matcher call sites, including THIRD_PARTY_NOTICES.md, then re-review the corrected source.
+**Current focus:** Plan 23-04 T2: apply owner-approved D-150 inline emphasis/link-label normalization in the unsupported CGB-game matcher, then re-review the corrected source.
 
 ## Current Position
 
@@ -35,13 +35,13 @@ Phase: GB-23 (Qualified v0.4.0 Release) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
 Status: Executing Phase 23
-Last activity: 2026-11-04: Release-consumer review found check_notices passed collapsed prose at 402de242; D-149 control wiring now includes this shared matcher path.
+Last activity: 2026-11-04: Owner approved D-150 after adversarial review reproduced CommonMark emphasis and inline link-label claim bypasses at e26757fa.
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
 ## Phase 23 Execution Handoff
 
-Phase 23 — Qualified v0.4.0 Release — is in progress in its accepted eight-wave order. Plan 23-01 is complete; see [23-01-SUMMARY.md](phases/GB-23-qualified-v0-4-0-release/23-01-SUMMARY.md). Plan 23-02, Concise release disclosure, is next. Keep REL-01 and the two descriptor-less transparency prohibitions flagged, and preserve all Pending evidence limits. After clearing context, resume with `/gsd-execute-phase 23`; stop at the Phase 23 boundary before the later v0.4 milestone audit.
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. D-150 matcher correction and controls are underway; exact-source three-role review, the direct report gate, and focused CTests remain before qualification. Keep REL-01 and all Pending evidence limits. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Performance Metrics
 
@@ -88,12 +88,12 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 ## Session Continuity
 
 **Last session:** 2026-11-04T16:26:14.783Z
-**Stopped at:** D-149 correction and notices controls; rerun the full docs/release-note validation, commit the corrected source, reissue three exact-source reviews, then the direct report gate and focused CTests.
+**Stopped at:** Plan 23-04 T2 D-150 implementation and controls; run full docs/release-note validation, commit the final source, reissue three exact-source reviews, then the report gate and focused CTests.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 23 — Qualified v0.4.0 Release — is in progress. Plan 23-01 is complete and summarized in [23-01-SUMMARY.md](phases/GB-23-qualified-v0-4-0-release/23-01-SUMMARY.md); Plan 23-02, Concise release disclosure, is next. No v0.4.0 qualification or publication is claimed. Preserve the Pending requirements and flagged transparency prohibitions in the continuation note. After clearing context, resume Phase 23 with `/gsd-execute-phase 23`; stop at the phase boundary before the later v0.4 milestone audit.
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. D-150 matcher correction and controls are underway; exact-source three-role review, the direct report gate, and focused CTests remain before qualification. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Decisions
 
@@ -131,8 +131,9 @@ Phase 23 — Qualified v0.4.0 Release — is in progress. Plan 23-01 is complete
 - [Phase 23]: Owner approved D-147: decode valid CommonMark character references only when they produce Cf or Unicode 18.0 Default_Ignorable_Code_Point characters in unsupported CGB-game claims, with paired controls and exact-source review.
 - [Phase 23]: Owner approved D-148: decode all valid CommonMark character references in already-visible prose before unsupported CGB-game claim matching; preserve code masking and keep the change confined to that matcher.
 - [Phase 23]: Owner approved D-149: normalize CommonMark hard line breaks only for unsupported CGB-game claim matching; preserve code masking and add paired controls. — At fc0ba4ff, adversarial review reproduced visible claims split by a backslash hard line break, including a reference-encoded space. The owner approved an in-place T2 correction and exact-source re-review; no plan or counter reset.
+- [Phase 23]: Owner approved D-150: normalize CommonMark emphasis markers and inline link-label text only in the unsupported CGB-game matcher; preserve code masking and ignore destinations. — At e26757fa, adversarial review reproduced production docs-checker acceptance of bold, intraword emphasis, and inline link-label forms that CommonMark renders as visible CGB game claims. The owner approved the bounded in-place correction, paired docs/release-note controls, exact-source review, and gates on 2026-11-04; no plan or counter reset.
 
 ### Blockers
 
 - No active Phase 22 blocker. The seven evidence gates still block real fixture admission, but D-141 scoped the completed phase to synthetic composition, metadata assessment, and explicit no-go controls. Do not fetch, build, run, or admit real diagnostic fixtures without a new owner-approved scope.
-- Plan 23-04 T2 is active under owner-approved D-144 through D-149; normalize CommonMark hard line breaks only in unsupported CGB-game claim matching, preserve code masking, add paired controls, then re-review exact source and pass report/focused CTest gates. REL-01 and publication remain Pending.
+- Plan 23-04 T2 is active under owner-approved D-144 through D-150. Apply only the scoped Markdown normalization for unsupported CGB-game claim matching, preserve code masking and safe counterparts, then re-review exact source and pass report/focused CTest gates. REL-01 and publication remain Pending.
