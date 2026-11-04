@@ -1972,6 +1972,22 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         rejected += 1
         write_lf(readme_path, readme_original)
 
+        for name, relative, phrase, reason in (
+            ("inline-code-hides-game-absence", GAME_GUIDE, ABSENCE_SENTENCE,
+             f"absence-statement-missing:{GAME_GUIDE}"),
+            ("inline-code-hides-release-limit", RELEASE, "unsigned and not notarized",
+             f"unsigned-limit-missing:{RELEASE}"),
+        ):
+            child_result(test_root, "docs")
+            original = originals[relative]
+            inline_code_disclosure = replace_all(original, phrase, f"`{phrase}`", name)
+            target = test_root / relative
+            write_lf(target, inline_code_disclosure)
+            child_result(test_root, "docs", reason)
+            rejected_reasons.append(reason.split(":", 1)[0])
+            rejected += 1
+            write_lf(target, original)
+
         hidden_disclosure = replace_all(
             readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
             "<div hidden>Physical CGB-E remains UNKNOWN/POLICY</div>", "hidden-html-disclosure")
@@ -2309,7 +2325,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 10 + len(incomplete_html_openers)
+    controls = len(mutations) + 12 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
