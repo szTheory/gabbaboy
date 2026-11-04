@@ -648,9 +648,12 @@ def mask_markdown_nonrendered(text: str) -> str:
 
     # Reference definitions are metadata, not body copy, even when no link uses them.
     container_prefix = r"(?:(?: {0,3}>[ \t]?| {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]{1,4}))* {0,3}"
+    continuation_prefix = r"(?:(?: {0,3}>[ \t]?| {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]{1,4}))* {0,3}"
+    title_syntax = r'''(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|\((?:\\.|[^)\\\r\n])*\))'''
     definition = re.compile(
         r"(?m)^" + container_prefix
-        + r"\[(?P<label>(?:\\.|[^\]\r\n]){1,999})\]:[^\r\n]*(?:\r?\n|$)")
+        + r"\[(?P<label>(?:\\.|[^\]\r\n]){1,999})\]:[^\r\n]*(?:\r?\n|$)"
+        + r"(?:" + continuation_prefix + title_syntax + r"[ \t]*(?:\r?\n|$))?")
     reference_labels: set[str] = set()
     for match in definition.finditer("".join(source_chars)):
         label = re.sub(r"\\(.)", r"\1", match["label"])
@@ -695,6 +698,8 @@ def mask_markdown_nonrendered(text: str) -> str:
                 blank(following, end)
                 cursor = end
                 continue
+            blank(following, len(source_chars))
+            break
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
@@ -724,6 +729,8 @@ def mask_markdown_nonrendered(text: str) -> str:
                     blank(title[0], title[1])
                 cursor = end
                 continue
+            blank(following, len(source_chars))
+            break
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
@@ -2267,6 +2274,38 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             rejected += 1
             write_lf(readme_path, readme_original)
 
+        for name, definition in (
+            ("multiline-reference-title-hides-hardware-disclosure",
+             '[unused-physical]: https://example.invalid\n  "Physical CGB-E remains UNKNOWN/POLICY"'),
+            ("blockquote-multiline-reference-title-hides-hardware-disclosure",
+             '> [unused-physical]: https://example.invalid\n>   "Physical CGB-E remains UNKNOWN/POLICY"'),
+            ("list-multiline-reference-title-hides-hardware-disclosure",
+             '- [unused-physical]: https://example.invalid\n  "Physical CGB-E remains UNKNOWN/POLICY"'),
+        ):
+            child_result(test_root, "docs")
+            changed = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = changed.rstrip() + "\n\n" + definition + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+            rejected_reasons.append("physical-cgb-limit-missing")
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        malformed_link_prefix = "[x](" * 2048
+        malformed_link_document = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "",
+            "unclosed-link-prefix-hides-hardware-disclosure")
+        malformed_link_document = (
+            malformed_link_prefix + "\n" + malformed_link_document
+            + "\nPhysical CGB-E remains UNKNOWN/POLICY\n")
+        write_lf(readme_path, malformed_link_document)
+        child_result(test_root, "docs", f"absence-statement-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
         child_result(test_root, "docs")
         shortcut_image_alt_only = replace_all(
             readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
@@ -2731,7 +2770,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 30 + len(incomplete_html_openers)
+    controls = len(mutations) + 34 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
