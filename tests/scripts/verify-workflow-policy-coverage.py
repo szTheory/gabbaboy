@@ -74,7 +74,7 @@ INSTRUMENTED_POLICY_FUNCTIONS = {
 }
 # These existing functions changed in their exact reviewed snapshots. Their full source bytes
 # are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
-REVIEWED_CHANGED_POLICY_FUNCTIONS = {"_copy_fixture", "check_window", "main", "self_test"}
+REVIEWED_CHANGED_POLICY_FUNCTIONS = {"_copy_fixture", "check_version_window", "main", "self_test"}
 ADDED_MUTATION_CONTROLS = (
     ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
     ("P20 Linux stage gate prefixes an untrusted PATH assignment", "release.yml", "fixture-product-stage"),
