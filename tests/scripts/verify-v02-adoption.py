@@ -37,6 +37,7 @@ SUPPORT_LEDGER_SCRIPT = SCRIPT.parent / "verify-support-ledger.py"
 MAX_DOCUMENT_BYTES = 1_048_576
 MAX_SOURCE_BYTES = 1_048_576
 MAX_NOTES_BYTES = 262_144
+HTML_COMMENT_SENTINEL = "\ufdd0"
 
 GAME_GUIDE = "docs/game-acceptance.md"
 README = "README.md"
@@ -214,6 +215,14 @@ COMMONMARK_EMPHASIS_GAME_CLAIMS = (
     ("strong-underscore", "__CGB__ game passes all acceptance checks."),
     ("inline-link-label", "C[GB](https://example.invalid) game passes all acceptance checks."),
 )
+COMMONMARK_REFERENCE_LINK_GAME_CLAIMS = (
+    ("shortcut", "C[GB] game passes all acceptance checks.\n\n"
+     "[GB]: https://example.invalid"),
+    ("full", "C[GB][target] game passes all acceptance checks.\n\n"
+     "[target]: https://example.invalid"),
+    ("collapsed", "C[GB][] game passes all acceptance checks.\n\n"
+     "[GB]: https://example.invalid"),
+)
 
 
 def is_default_ignorable_codepoint(codepoint: int) -> bool:
@@ -314,7 +323,7 @@ def normalize_commonmark_emphasis(text: str) -> str:
 
 def unsupported_game_claim_match(text: str) -> re.Match[str] | None:
     """Match visible claims after scoped CommonMark rendering and invisible-char normalization."""
-    text = mask_markdown_nonrendered(text, render_inline_link_labels=True)
+    text = mask_markdown_nonrendered(text, render_link_labels=True)
     text = COMMONMARK_HARD_LINE_BREAK.sub(" ", text)
     text = decode_commonmark_character_references(text)
     text = normalize_commonmark_emphasis(text)
@@ -686,22 +695,17 @@ def read_document(root: Path, relative: str) -> str:
     return read_bounded(root, relative, DOCUMENT_LIMITS.get(relative, MAX_DOCUMENT_BYTES))
 
 
-def prose(text: str, scope: str = "markdown", *, collapse: bool = True) -> str:
+def prose(text: str, scope: str = "markdown", *, collapse: bool = True,
+          render_link_labels: bool = False) -> str:
     """Whitespace-normalized body prose without comments or non-rendered Markdown."""
     text = mask_fenced_code_blocks(text)
     text = mask_indented_code_blocks(text)
     label_source = text
-    text, comment_positions = protect_html_comments(text)
-    text = mask_markdown_nonrendered(text, label_source=label_source)
-    visible = list(mask_inline_code_spans(text))
-    text_chars = list(text)
-    for position, is_comment in enumerate(comment_positions):
-        if is_comment and text_chars[position] not in ("\n", "\r"):
-            text_chars[position] = " "
-        if is_comment and visible[position] not in ("\n", "\r"):
-            visible[position] = " "
-    text = "".join(text_chars)
-    visible = "".join(visible)
+    text, _comment_positions = protect_html_comments(text)
+    text = mask_markdown_nonrendered(
+        text, label_source=label_source, render_link_labels=render_link_labels)
+    text = text.replace(HTML_COMMENT_SENTINEL, " ")
+    visible = mask_inline_code_spans(text)
     require(RAW_HTML_CONSTRUCT.search(visible) is None, f"{scope}-raw-html-unsupported")
     require("\t" not in visible, f"{scope}-tab-unsupported")
     return " ".join(text.split()) if collapse else text
@@ -711,7 +715,6 @@ def protect_html_comments(text: str) -> tuple[str, bytearray]:
     """Keep comments opaque to Markdown parsing without joining their neighbors."""
     chars = list(text)
     comment_positions = bytearray(len(text))
-    sentinel = "\ufdd0"
     search_from = 0
     while True:
         start = text.find("<!--", search_from)
@@ -729,7 +732,7 @@ def protect_html_comments(text: str) -> tuple[str, bytearray]:
                 comment_positions[position] = 1
                 chars[position] = text[position] if text[position] in "\r\n" else " "
             if segment_start < end and text[segment_start] not in "\r\n":
-                chars[segment_start] = sentinel
+                chars[segment_start] = HTML_COMMENT_SENTINEL
             if line_end < 0:
                 break
             line_start = line_end + 1
@@ -739,7 +742,7 @@ def protect_html_comments(text: str) -> tuple[str, bytearray]:
 
 
 def mask_markdown_nonrendered(text: str, *, label_source: str | None = None,
-                              render_inline_link_labels: bool = False) -> str:
+                              render_link_labels: bool = False) -> str:
     """Mask link titles, image markup and reference definitions while preserving link labels."""
     if label_source is None:
         label_source = text
@@ -1295,7 +1298,7 @@ def mask_markdown_nonrendered(text: str, *, label_source: str | None = None,
             end, title = parsed
             if title is not None:
                 blank(title[0], title[1])
-            if render_inline_link_labels:
+            if render_link_labels:
                 rendered_links.append((cursor, end, cursor + 1, close))
                 blank(cursor, cursor + 1)
                 blank(close, close + 1)
@@ -1309,12 +1312,26 @@ def mask_markdown_nonrendered(text: str, *, label_source: str | None = None,
                 reference_label = "".join(label_chars[following + 1:reference_close])
                 target_label = link_text if reference_label == "" else reference_label
                 if normalize_reference_label(target_label) in reference_labels:
-                    blank(following, reference_close + 1)
+                    if render_link_labels:
+                        rendered_links.append((cursor, reference_close + 1,
+                                               cursor + 1, close))
+                        blank(cursor, cursor + 1)
+                        blank(close, close + 1)
+                        blank(following, reference_close + 1)
+                    else:
+                        blank(following, reference_close + 1)
                     cursor = reference_close + 1
                     continue
+        elif normalize_reference_label("".join(label_chars[cursor + 1:close])) in reference_labels:
+            if render_link_labels:
+                rendered_links.append((cursor, close + 1, cursor + 1, close))
+                blank(cursor, cursor + 1)
+                blank(close, close + 1)
+            cursor = close + 1
+            continue
         cursor += 1
 
-    if render_inline_link_labels and rendered_links:
+    if render_link_labels and rendered_links:
         rendered: list[str] = []
         cursor = 0
         for start, end, label_start, label_end in rendered_links:
@@ -1681,7 +1698,8 @@ def check_phrases(relative: str, text: str,
 def check_game(root: Path) -> int:
     raw = read_document(root, GAME_GUIDE)
     visible_text = prose(raw, collapse=False)
-    game_claim_text = mask_inline_code_spans(visible_text)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, collapse=False, render_link_labels=True))
     text = " ".join(visible_text.split())
     disclosure_text = mask_inline_code_spans(text)
     checks = 0
@@ -1717,7 +1735,8 @@ def check_game(root: Path) -> int:
 def check_readme(root: Path) -> int:
     raw = read_document(root, README)
     visible_text = prose(raw, collapse=False)
-    game_claim_text = mask_inline_code_spans(visible_text)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, collapse=False, render_link_labels=True))
     text = " ".join(visible_text.split())
     disclosure_text = mask_inline_code_spans(text)
     checks = 0
@@ -1774,7 +1793,8 @@ def check_symbols(root: Path) -> int:
 def check_surface(root: Path, relative: str) -> int:
     raw = read_document(root, relative)
     visible_text = prose(raw, collapse=False)
-    game_claim_text = mask_inline_code_spans(visible_text)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, collapse=False, render_link_labels=True))
     text = " ".join(visible_text.split())
     disclosure_text = mask_inline_code_spans(text)
     checks = check_phrases(relative, text, REQUIRED[relative])
@@ -1832,7 +1852,8 @@ def check_notices(root: Path) -> int:
     raw = read_document(root, NOTICES)
     text = prose(raw)
     notice_text = prose(raw, collapse=False)
-    game_claim_text = mask_inline_code_spans(notice_text)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, collapse=False, render_link_labels=True))
     checks = check_phrases(NOTICES, text, NOTICE_REQUIRED)
     require(REBOUND_ATTRIBUTION.search(mask_inline_code_spans(raw)) is None,
             f"rebound-attribution-present:{NOTICES}")
@@ -2160,6 +2181,8 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         raise ContractError("release-notes-unavailable") from error
     visible = prose(raw, "release-notes", collapse=False)
     link_text = mask_inline_code_spans(visible)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, "release-notes", collapse=False, render_link_labels=True))
     text = " ".join(link_text.split())
     require(text, "release-notes-empty")
     if rev is not None:
@@ -2227,7 +2250,7 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         (FALSE_PLATFORM_CLAIM, "false-platform-guarantee"),
         (FALSE_PERCEPTUAL_CLAIM, "false-perceptual-claim"),
     ):
-        matched = (unsupported_game_claim_match(link_text)
+        matched = (unsupported_game_claim_match(game_claim_text)
                    if pattern is UNSUPPORTED_GAME_CLAIM else pattern.search(text))
         require(matched is None, f"release-notes-{reason}")
         checks += 1
@@ -2438,6 +2461,11 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
              "release-notes-unsupported-cgb-game-qualification")
             for name, _ in COMMONMARK_EMPHASIS_GAME_CLAIMS
         )
+        mutations += tuple(
+            (f"commonmark-ref-link-{name}-game-claim", None,
+             "release-notes-unsupported-cgb-game-qualification")
+            for name, _ in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS
+        )
         for safe_suffix in (
                 "\nCGB&#x20; test-ROM results remain software-model evidence only.\n",
                 "\n`CGB&#x200b; game passes all acceptance checks.`\n",
@@ -2447,7 +2475,13 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                 "\nC\\*G\\*B game passes all acceptance checks.\n",
                 "\n[details](<https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>)\n",
                 "\n`CGB game passes all acceptance checks.`\n",
-                "\n```text\nCGB game passes all acceptance checks.\n```\n"):
+                "\n```text\nCGB game passes all acceptance checks.\n```\n",
+                "\nC[GB] game passes all acceptance checks.\n",
+                "\nC\\[GB\\] game passes all acceptance checks.\n",
+                "\n[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>\n",
+                "\n[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\"\n",
+                "\n`C[GB] game passes all acceptance checks.`\n",
+                "\n```text\nC[GB] game passes all acceptance checks.\n```\n"):
             write_lf(notes, VALID_RELEASE_NOTES + safe_suffix)
             expect_pass(cli_args)
         write_lf(notes, VALID_RELEASE_NOTES)
@@ -2481,6 +2515,11 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                 claim_name = name.removeprefix("commonmark-emphasis-").removesuffix(
                     "-game-claim")
                 claim = dict(COMMONMARK_EMPHASIS_GAME_CLAIMS)[claim_name]
+                changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+            elif name.startswith("commonmark-ref-link-"):
+                claim_name = name.removeprefix("commonmark-ref-link-").removesuffix(
+                    "-game-claim")
+                claim = dict(COMMONMARK_REFERENCE_LINK_GAME_CLAIMS)[claim_name]
                 changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
             elif name == "false-signing-claim":
                 changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
@@ -3232,6 +3271,10 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             readme_parser_control(
                 "commonmark-emphasis-" + name + "-game-claim-cannot-pass",
                 claim, f"unsupported-cgb-game-qualification:{README}")
+        for name, claim in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS:
+            readme_parser_control(
+                "commonmark-reference-link-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{README}")
         readme_parser_control(
             "invisible-format-safe-game-evidence-prose-remains-valid",
             "CGB\u200b test-ROM results remain software-model evidence only.")
@@ -3263,6 +3306,20 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
                 ("claim-in-fenced-code-remains-masked",
                  "```text\nCGB game passes all acceptance checks.\n```")):
             readme_parser_control("commonmark-emphasis-" + name, safe_prose)
+        for name, safe_prose in (
+                ("unresolved-shortcut-label-remains-visible",
+                 "C[GB] game passes all acceptance checks."),
+                ("escaped-shortcut-label-remains-visible",
+                 r"C\[GB\] game passes all acceptance checks."),
+                ("reference-destination-claim-is-not-visible",
+                 "[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>"),
+                ("reference-title-claim-is-not-visible",
+                 "[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\""),
+                ("reference-link-claim-in-inline-code-remains-masked",
+                 "`C[GB] game passes all acceptance checks.`"),
+                ("reference-link-claim-in-fenced-code-remains-masked",
+                 "```text\nC[GB] game passes all acceptance checks.\n```")):
+            readme_parser_control("commonmark-reference-link-" + name, safe_prose)
 
         multiline_reference_titles = (
             ("inline-multiline-reference-title-hides-hardware-disclosure",
@@ -3442,6 +3499,10 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             notice_parser_control(
                 "notice-commonmark-emphasis-" + name + "-game-claim-cannot-pass",
                 claim, f"unsupported-cgb-game-qualification:{NOTICES}")
+        for name, claim in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS:
+            notice_parser_control(
+                "notice-commonmark-reference-link-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{NOTICES}")
         for name, safe_prose in (
                 ("underscore-intraword-remains-visible", "C_G_B game passes all acceptance checks."),
                 ("escaped-asterisks-remain-visible", r"C\*G\*B game passes all acceptance checks."),
@@ -3451,6 +3512,18 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
                 ("claim-in-fenced-code-remains-masked",
                  "```text\nCGB game passes all acceptance checks.\n```")):
             notice_parser_control("notice-commonmark-emphasis-" + name, safe_prose)
+        for name, safe_prose in (
+                ("unresolved-shortcut-label-remains-visible", "C[GB] game passes all acceptance checks."),
+                ("escaped-shortcut-label-remains-visible", r"C\[GB\] game passes all acceptance checks."),
+                ("reference-destination-claim-is-not-visible",
+                 "[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>"),
+                ("reference-title-claim-is-not-visible",
+                 "[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\""),
+                ("reference-link-claim-in-inline-code-remains-masked",
+                 "`C[GB] game passes all acceptance checks.`"),
+                ("reference-link-claim-in-fenced-code-remains-masked",
+                 "```text\nC[GB] game passes all acceptance checks.\n```")):
+            notice_parser_control("notice-commonmark-reference-link-" + name, safe_prose)
 
         hidden_notice_rows = (
             ("libbet", "Libbet and the Magic Floor v0.08 test fixture",
@@ -3819,7 +3892,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 112 + len(incomplete_html_openers)
+    controls = len(mutations) + 118 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
