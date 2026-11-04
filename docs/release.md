@@ -16,6 +16,76 @@ artifacts; broader OS compatibility remains untested. This describes those quali
 artifacts; it does not promise support on older macOS releases. The C core itself has
 no SDL runtime dependency.
 
+## v0.4.0 preparation and evidence contract
+
+The last qualified release is v0.3.0. Phase 23 prepares v0.4.0 through the
+existing release-please path. This is preparation guidance; no v0.4.0
+publication is claimed. Before release, the CMake project version, release-please manifest,
+generated `docs/support/v0.4.0.md` ledger, and rendered release notes must all
+identify exactly v0.4.0.
+
+The release-notes preface and support ledger share the validated immutable
+`tests/data/support-claims-v0.4.json` profile. Render the concise preface from
+the exact source revision with
+`python3 -I tests/scripts/verify-support-ledger.py --render-release-notes-preface
+--claims-version 0.4.0 --rev FULL_SHA --repo . --output PATH`. The existing
+release workflow judges the notes with
+`python3 -I tests/scripts/verify-v02-adoption.py --release-notes PATH --rev
+FULL_SHA`; the checker derives the version and ledger link from that revision.
+If either copy changes, regenerate it from the profile and review both outputs.
+
+For v0.4.0, Potion Panic stopped before a source identity was returned: its
+creator-linked Codeberg source could not be reached, and exact component grants
+plus repository/public-CI scope remain unestablished. µCity 1.3 stopped at the
+required `source/engine/hardware.inc` component, which has no identified grant
+or notice establishing repository/public-CI scope. Neither candidate was built
+or run; no CGB game was admitted. These source/rights-scope outcomes do not
+establish a license prohibition.
+
+The CGB-CPU-E native-mode RGB555/PCM result is original-harness-only; its
+digests establish repeatability only. They do not establish admitted-game
+progress, rendering accuracy, perceptual quality, physical CGB-CPU-E behavior,
+CGB mode-3 timing, or general compatibility. Phase 22 is a synthetic
+composition tracer and metadata-only assessment: 513 named entries, seven
+unresolved real-fixture gates, zero real fixtures admitted, and zero real
+fixtures executed. FIXT-01, RIGHTS-01, DIAG-01, DIAG-02, and REL-01 remain
+Pending until their separate release evidence is accepted.
+
+The established product matrix remains Linux x64, macOS arm64, and Windows x64
+core archives, plus the macOS arm64 player. In the inspected macOS ARM64
+artifacts, macOS 15.0 is the minimum deployment target and the build used the
+macOS 15.5 SDK; those inspected values are not broader compatibility floors.
+No Linux or Windows packaged-player game smoke is claimed; the player is
+macOS arm64 only.
+Artifacts are unsigned and not notarized. Checksums and source binding identify
+bytes; they are not signing or notarization. Save states load only in the exact
+GabbaBoy release that wrote them. Host mode is POSIX-only, and Windows refuses
+`--save-dir`. The deterministic instruction-count gate and native realtime
+floor remain blocking; paired wall-clock timing is advisory and cannot approve
+a release.
+
+Follow the existing exact-head sequence: **H → R1 → W → R2 → nightly → pre-tag
+gate**. H is the regenerated version-PR head with its required checks green; R1
+is the rehearsal at H; W is a window-only commit containing the active content
+digests; R2, nightly replay, and pre-tag checks run after the rehearsal branch
+fast-forwards to W. The window is valid only while source, generated notes,
+ledger, release-please body, main base, and run identities remain bound. A note
+or body regeneration, moved tag, or changed source invalidates the window and
+keeps the release on hold until the sequence is regenerated and repeated.
+
+R1 and R2 are source-side rehearsal evidence. After tagging, the existing
+trusted release path must still build, attach, download, and verify the real
+core and player archive bytes, installed consumers, notices, and fixture
+exclusion before the draft can be published. A successful rehearsal or a local
+build does not replace those downloaded-byte checks.
+
+If v0.4.0 notes omit a required disclosure, keep the draft unpublished. Carry a
+reviewed correction in a non-releasable main pull request, then run the full
+offline lifecycle replay and retry-readback controls before any draft change.
+The captured v0.3.0 draft-note repair below records one incident; it is not a
+v0.4.0 repair recipe or authorization. Any moved tag or source is a hold that
+requires an explicitly approved current recovery procedure.
+
 ## Source archives and product packages
 
 GitHub generated source archives retain the admitted licensed fixtures and
@@ -189,7 +259,7 @@ protection enforces this gate.
 The six former `release_bound` timeout rows have been replaced by verified
 normal citations. Four rehearsal rows use tree-equal citations whose commits
 and trees are checked from the release checkout; the two release workflow rows
-cite merged PR evidence and are not object-read. Before publishing v0.3.0, run
+cite merged PR evidence and are not object-read. Before publishing a qualified release, run
 the release-head policy check from a fresh heads-and-tags checkout and require
 zero provisional rows.
 
@@ -277,7 +347,7 @@ from the live tree or later ancestry.
 The six former `release_bound` timeout rows have been replaced by verified
 normal citations. Four rehearsal rows use tree-equal citations whose commits
 and trees are checked from the release checkout; the two release workflow rows
-cite merged PR evidence and are not object-read. Before publishing v0.3.0, run
+cite merged PR evidence and are not object-read. Before publishing a qualified release, run
 the release-head policy check from a fresh heads-and-tags checkout and require
 zero provisional rows.
 
