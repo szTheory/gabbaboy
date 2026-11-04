@@ -213,6 +213,8 @@ COMMONMARK_EMPHASIS_GAME_CLAIMS = (
     ("strong-star", "**CGB** game passes all acceptance checks."),
     ("intraword-star", "C*G*B game passes all acceptance checks."),
     ("strong-underscore", "__CGB__ game passes all acceptance checks."),
+    ("unicode-symbol-strong-underscore", "😀__CGB__ game passes all acceptance checks."),
+    ("unicode-symbol-rule-of-three", "😀**CGB* game passes all acceptance checks."),
     ("inline-link-label", "C[GB](https://example.invalid) game passes all acceptance checks."),
 )
 COMMONMARK_REFERENCE_LINK_GAME_CLAIMS = (
@@ -227,6 +229,14 @@ DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM = (
     "a* " * 512 + "CGB game passes all acceptance checks.")
 DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE = (
     "a* " * 512 + "CGB test-ROM results remain software-model evidence only.")
+DENSE_NESTED_REFERENCE_BRACKETS_PREFIX = (
+    "[" * 512 + "]" * 512 + "\n\n[dense-control]: /target\n\n")
+DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM = (
+    DENSE_NESTED_REFERENCE_BRACKETS_PREFIX
+    + "CGB game passes all acceptance checks.")
+DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE = (
+    DENSE_NESTED_REFERENCE_BRACKETS_PREFIX
+    + "CGB test-ROM results remain software-model evidence only.")
 
 
 def is_default_ignorable_codepoint(codepoint: int) -> bool:
@@ -252,7 +262,8 @@ def normalize_commonmark_emphasis(text: str) -> str:
     runs: list[dict[str, int | str | bool]] = []
 
     def punctuation(char: str) -> bool:
-        return char in string.punctuation or unicodedata.category(char).startswith("P")
+        return (char in string.punctuation
+                or unicodedata.category(char).startswith(("P", "S")))
 
     def escaped(position: int) -> bool:
         backslashes = 0
@@ -1270,6 +1281,22 @@ def mask_markdown_nonrendered(text: str, *, label_source: str | None = None,
             bracket_ends[openings.pop()] = position
         position += 1
 
+    # A reference label cannot contain an unescaped bracket and is limited to
+    # 999 characters. Reject impossible candidates in constant time before
+    # copying or normalizing their text. This prevents nested bracket input
+    # from making each outer label rescan the remaining document.
+    paired_opening_prefix = array("I", [0]) * (len(source_chars) + 1)
+    for position, char in enumerate(source_chars):
+        paired_opening_prefix[position + 1] = (
+            paired_opening_prefix[position]
+            + int(char == "[" and bracket_ends[position] >= 0))
+
+    def normalized_reference_label_span(start: int, end: int) -> str | None:
+        if (start >= end or end - start > 999
+                or paired_opening_prefix[end] != paired_opening_prefix[start]):
+            return None
+        return normalize_reference_label("".join(label_chars[start:end]))
+
     # Mask image alt text before link labels so images nested in links cannot
     # contribute prose through their alt attribute.
     cursor = 0
@@ -1295,16 +1322,19 @@ def mask_markdown_nonrendered(text: str, *, label_source: str | None = None,
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
-                image_label = "".join(label_chars[opening + 1:close])
-                reference_label = "".join(label_chars[following + 1:reference_close])
-                target_label = image_label if reference_label == "" else reference_label
-                if normalize_reference_label(target_label) in reference_labels:
+                target_span = ((opening + 1, close)
+                               if reference_close == following + 1 else
+                               (following + 1, reference_close))
+                target_label = normalized_reference_label_span(*target_span)
+                if target_label is not None and target_label in reference_labels:
                     blank(opening + 1, close)
                     blank(following, reference_close + 1)
                     cursor = reference_close + 1
                     continue
-        elif normalize_reference_label("".join(label_chars[opening + 1:close])) in reference_labels:
-            blank(opening + 1, close)
+        else:
+            image_label = normalized_reference_label_span(opening + 1, close)
+            if image_label is not None and image_label in reference_labels:
+                blank(opening + 1, close)
         cursor += 1
 
     cursor = 0
@@ -1333,10 +1363,11 @@ def mask_markdown_nonrendered(text: str, *, label_source: str | None = None,
         elif following < len(source_chars) and source_chars[following] == "[":
             reference_close = closing_bracket(following)
             if reference_close is not None:
-                link_text = "".join(label_chars[cursor + 1:close])
-                reference_label = "".join(label_chars[following + 1:reference_close])
-                target_label = link_text if reference_label == "" else reference_label
-                if normalize_reference_label(target_label) in reference_labels:
+                target_span = ((cursor + 1, close)
+                               if reference_close == following + 1 else
+                               (following + 1, reference_close))
+                target_label = normalized_reference_label_span(*target_span)
+                if target_label is not None and target_label in reference_labels:
                     if render_link_labels:
                         rendered_links.append((cursor, reference_close + 1,
                                                cursor + 1, close))
@@ -1347,13 +1378,15 @@ def mask_markdown_nonrendered(text: str, *, label_source: str | None = None,
                         blank(following, reference_close + 1)
                     cursor = reference_close + 1
                     continue
-        elif normalize_reference_label("".join(label_chars[cursor + 1:close])) in reference_labels:
-            if render_link_labels:
-                rendered_links.append((cursor, close + 1, cursor + 1, close))
-                blank(cursor, cursor + 1)
-                blank(close, close + 1)
-            cursor = close + 1
-            continue
+        else:
+            shortcut_label = normalized_reference_label_span(cursor + 1, close)
+            if shortcut_label is not None and shortcut_label in reference_labels:
+                if render_link_labels:
+                    rendered_links.append((cursor, close + 1, cursor + 1, close))
+                    blank(cursor, cursor + 1)
+                    blank(close, close + 1)
+                cursor = close + 1
+                continue
         cursor += 1
 
     if render_link_labels and rendered_links:
@@ -2493,6 +2526,8 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
         )
         mutations += (("dense-unmatched-emphasis-game-claim", None,
                        "release-notes-unsupported-cgb-game-qualification"),)
+        mutations += (("dense-nested-reference-brackets-game-claim", None,
+                       "release-notes-unsupported-cgb-game-qualification"),)
         for safe_suffix in (
                 "\nCGB&#x20; test-ROM results remain software-model evidence only.\n",
                 "\n`CGB&#x200b; game passes all acceptance checks.`\n",
@@ -2500,6 +2535,8 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                 "\n`CGB\\\ngame passes all acceptance checks.`\n",
                 "\nC_G_B game passes all acceptance checks.\n",
                 "\nC\\*G\\*B game passes all acceptance checks.\n",
+                "\n😀__CGB__ test-ROM results remain software-model evidence only.\n",
+                "\n😀**CGB** test-ROM results remain software-model evidence only.\n",
                 "\n[details](<https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>)\n",
                 "\n`CGB game passes all acceptance checks.`\n",
                 "\n```text\nCGB game passes all acceptance checks.\n```\n",
@@ -2512,6 +2549,9 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                 "\n" + DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE + "\n"):
             write_lf(notes, VALID_RELEASE_NOTES + safe_suffix)
             expect_pass(cli_args)
+        write_lf(notes, VALID_RELEASE_NOTES + "\n" +
+                 DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE + "\n")
+        expect_pass(cli_args)
         write_lf(notes, VALID_RELEASE_NOTES)
         for name, edit, reason in mutations:
             if name == "contrary-game-claim":
@@ -2551,6 +2591,9 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                 changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
             elif name == "dense-unmatched-emphasis-game-claim":
                 changed = VALID_RELEASE_NOTES + "\n" + DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM + "\n"
+            elif name == "dense-nested-reference-brackets-game-claim":
+                changed = (VALID_RELEASE_NOTES + "\n"
+                           + DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM + "\n")
             elif name == "false-signing-claim":
                 changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
             elif name == "false-publication-claim":
@@ -3315,6 +3358,9 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             "commonmark-visible-reference-safe-evidence-prose-remains-valid",
             "CGB&#x20; test-ROM results remain software-model evidence only.")
         readme_parser_control(
+            "commonmark-unicode-symbol-emphasis-safe-evidence-prose-remains-valid",
+            "😀__CGB__ test-ROM results remain software-model evidence only.")
+        readme_parser_control(
             "commonmark-reference-claim-in-code-span-remains-masked",
             "`CGB&#x200b; game passes all acceptance checks.`")
         readme_parser_control(
@@ -3357,6 +3403,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         readme_parser_control(
             "dense-unmatched-emphasis-safe-game-evidence-remains-valid",
             DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE)
+        readme_parser_control(
+            "dense-nested-reference-brackets-game-claim-cannot-pass",
+            DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM,
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "dense-nested-reference-brackets-safe-game-evidence-remains-valid",
+            DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE)
 
         multiline_reference_titles = (
             ("inline-multiline-reference-title-hides-hardware-disclosure",
@@ -3536,6 +3589,9 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             notice_parser_control(
                 "notice-commonmark-emphasis-" + name + "-game-claim-cannot-pass",
                 claim, f"unsupported-cgb-game-qualification:{NOTICES}")
+        notice_parser_control(
+            "notice-commonmark-unicode-symbol-emphasis-safe-evidence-prose-remains-valid",
+            "😀__CGB__ test-ROM results remain software-model evidence only.")
         for name, claim in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS:
             notice_parser_control(
                 "notice-commonmark-reference-link-" + name + "-game-claim-cannot-pass",
@@ -3568,6 +3624,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         notice_parser_control(
             "notice-dense-unmatched-emphasis-safe-game-evidence-remains-valid",
             DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE)
+        notice_parser_control(
+            "notice-dense-nested-reference-brackets-game-claim-cannot-pass",
+            DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM,
+            f"unsupported-cgb-game-qualification:{NOTICES}")
+        notice_parser_control(
+            "notice-dense-nested-reference-brackets-safe-game-evidence-remains-valid",
+            DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE)
 
         hidden_notice_rows = (
             ("libbet", "Libbet and the Magic Floor v0.08 test fixture",
@@ -3936,7 +3999,8 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 120 + len(incomplete_html_openers)
+    # The fixed docs/notice inventory includes six D-153/D-154 negatives.
+    controls = len(mutations) + 126 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
