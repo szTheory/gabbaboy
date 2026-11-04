@@ -3631,6 +3631,47 @@ def claim_paragraphs(claims: dict, version: str) -> list[str]:
     return paragraphs
 
 
+def render_release_notes_preface_v04(claims: dict) -> str:
+    """Render concise release-note copy only from the validated immutable v0.4 profile."""
+    if claims.get("applies_from_version") != "0.4.0":
+        fail("REJECT release-notes-profile-mismatch: v0.4 copy requires the v0.4.0 profile")
+    outcomes = claims["candidate_outcomes"]
+    harness = claims["harness"]
+    counts = claims["diagnostics"]["expected_counts"]
+    requirements = claims["requirements"]["statuses"]
+    limitations = claims["limitations"]
+    non_claims = claims["non_claims"]
+    candidate_lines = [f"- **{row['name']}:** {row['reason']}" for row in outcomes]
+    observations = ", ".join(harness["observations"])
+    not_claimed = ", ".join(harness["not_claimed"])
+    pending = ", ".join(f"{row['id']} {row['status']}" for row in requirements)
+    limit_lines = [f"- {item}" for item in limitations]
+    return "\n".join([
+        "## v0.4.0 support and limitations",
+        "",
+        "No CGB game-level evidence exists.",
+        "",
+        "**Candidate outcomes:**",
+        *candidate_lines,
+        f"{non_claims[0]} {non_claims[1]} {non_claims[2]}",
+        "",
+        (f"**Harness-only result:** {harness['model']} native-mode {observations} results are "
+         f"{harness['result']}. {harness['interpretation']} This does not establish {not_claimed}."),
+        "",
+        ("**Diagnostics:** Phase 22 is a synthetic composition tracer and metadata-only assessment: "
+         f"{counts['named_entries']} named entries, {counts['unresolved_gates']} unresolved real-fixture gates, "
+         f"{counts['real_fixtures_admitted']} real fixtures admitted, and "
+         f"{counts['real_fixtures_executed']} real fixtures executed."),
+        f"Requirements remain Pending: {pending}.",
+        "",
+        "**Limits:**",
+        *limit_lines,
+        "",
+        "[Complete evidence and scope: v0.4.0 support ledger](docs/support/v0.4.0.md).",
+        "",
+    ])
+
+
 def disclosure_paragraphs(disclosure: dict, version: str) -> list[str]:
     """The ledger paragraphs, each followed by the blank separator line."""
     h = disclosure["historical"]
@@ -4385,6 +4426,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="print REHEARSAL_TAG=vX.Y.Z when REF is rehearsal/vX.Y.Z for this tree's own version")
     parser.add_argument("--root", type=pathlib.Path, default=ROOT,
                         help="tree to read the version from with --derive-rehearsal-tag (default: this checkout)")
+    parser.add_argument("--repo", type=pathlib.Path, default=ROOT,
+                        help="Git repository whose immutable release inputs are judged or rendered")
     parser.add_argument("--print-version", action="store_true",
                         help="print the tree version (CMake project VERSION cross-checked with the manifest)")
     parser.add_argument("--check-ledger", action="store_true",
@@ -4396,6 +4439,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="validate the selected immutable managed support claims at --rev")
     parser.add_argument("--self-test-claims", action="store_true",
                         help="run the selected managed claim profile's positives and rejection controls at --rev")
+    parser.add_argument("--render-release-notes-preface", action="store_true",
+                        help="render the concise managed v0.4.0 release-notes preface from immutable claim facts")
     parser.add_argument("--claims-version", choices=("0.3.0", "0.4.0"),
                         help="select a reviewed claims profile; omitted selection follows immutable CMake/manifest facts")
     parser.add_argument("--self-test-tracer", action="store_true",
@@ -4417,6 +4462,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.attached_evidence and not (args.verify_sidecar and args.evidence_only):
         parser.error("--attached-evidence requires --verify-sidecar and --evidence-only")
     try:
+        if args.render_release_notes_preface:
+            if args.claims_version != "0.4.0":
+                parser.error("--render-release-notes-preface requires --claims-version 0.4.0")
+            if args.rev is None or args.output is None:
+                parser.error("--render-release-notes-preface requires --rev FULL_SHA and --output PATH")
+            repo = args.repo.resolve(strict=True)
+            claims = load_claims_version(repo, args.rev, "0.4.0")
+            rendered = render_release_notes_preface_v04(claims)
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_bytes(rendered.encode("utf-8"))
+            counts = claims["diagnostics"]["expected_counts"]
+            print("release-notes-preface pass version=0.4.0 candidates=2 diagnostics=" +
+                  f"{counts['named_entries']}/{counts['unresolved_gates']}/" +
+                  f"{counts['real_fixtures_admitted']}/{counts['real_fixtures_executed']} " +
+                  f"ledger=docs/support/v0.4.0.md rev={args.rev}")
+            return 0
         if args.self_test_v2:
             self_test_v2()
             return 0

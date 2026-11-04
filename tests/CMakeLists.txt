@@ -5082,6 +5082,10 @@ gbb_add_ledger_contract(support_claims_v04
 gbb_add_ledger_contract(support_claims_v04_controls
   [=[support-claims-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
+gbb_add_ledger_contract(release_notes_v04
+  [=[release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+]=]
+  --render-release-notes-preface --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}"
+  --repo "${PROJECT_SOURCE_DIR}" --output "${PROJECT_BINARY_DIR}/release-notes-v0.4.0-preface.md")
 gbb_add_ledger_contract(support_ledger_v04_tracer
   [=[support-ledger-v04 tracer pass version=0\.4\.0 candidates=2]=]
   --self-test-tracer --rev "${GBB_STATE_SOURCE_REV}")

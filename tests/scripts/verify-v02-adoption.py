@@ -15,6 +15,7 @@ from fractions import Fraction
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -27,6 +28,7 @@ from typing import Callable
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = Path(__file__).resolve()
 CLAIMS_SCRIPT = SCRIPT.parent / "verify-cgb-corpus-claims.py"
+SUPPORT_LEDGER_SCRIPT = SCRIPT.parent / "verify-support-ledger.py"
 MAX_DOCUMENT_BYTES = 1_048_576
 MAX_SOURCE_BYTES = 1_048_576
 MAX_NOTES_BYTES = 262_144
@@ -58,6 +60,11 @@ def tree_identity(root: Path) -> tuple[str, str]:
         names = sorted(entry.name for entry in (root / "docs/support").iterdir())
     except (OSError, ValueError) as error:
         raise SystemExit(f"verify-v02-adoption fail: version-unreadable:{error}")
+    return identity_from_sources(cmake, manifest, names)
+
+
+def identity_from_sources(cmake: str, manifest: object, names: list[str]) -> tuple[str, str]:
+    """Select the version and newest matching support ledger from one source identity."""
     match = re.search(r"^project\(\s*\w+\s+VERSION\s+(\d+)\.(\d+)\.(\d+)[\s)]", cmake, re.M)
     if not match:
         raise SystemExit("verify-v02-adoption fail: version-missing:CMakeLists.txt")
@@ -75,6 +82,43 @@ def tree_identity(root: Path) -> tuple[str, str]:
     if not candidates:
         raise SystemExit(f"verify-v02-adoption fail: support-ledger-missing:{version}")
     return version, "docs/support/" + max(candidates)[1]
+
+
+def git_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.update({"GIT_NO_LAZY_FETCH": "1", "GIT_NO_REPLACE_OBJECTS": "1",
+                        "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"})
+    return environment
+
+
+def identity_at_revision(repo: Path, rev: str) -> tuple[str, str]:
+    """Derive release identity from Git objects at the judged revision, never the live checkout."""
+    if re.fullmatch(r"[0-9a-f]{40}", rev) is None:
+        raise ContractError("release-notes-revision-invalid")
+    git_env = git_environment()
+    commit = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{rev}^{{commit}}"],
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, check=False, timeout=10, env=git_env)
+    if commit.returncode != 0:
+        raise ContractError("release-notes-revision-invalid")
+    try:
+        cmake = subprocess.check_output(["git", "-C", str(repo), "show", f"{rev}:CMakeLists.txt"],
+                                        stderr=subprocess.DEVNULL, timeout=10,
+                                        env=git_env).decode("utf-8", "strict")
+        manifest = json.loads(subprocess.check_output(
+            ["git", "-C", str(repo), "show", f"{rev}:.release-please-manifest.json"],
+            stderr=subprocess.DEVNULL, timeout=10, env=git_env).decode("utf-8", "strict"))
+        names_raw = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only",
+                                             f"{rev}:docs/support"],
+                                            stderr=subprocess.DEVNULL, timeout=10,
+                                            env=git_env).decode("utf-8", "strict")
+    except (OSError, UnicodeError, subprocess.SubprocessError, ValueError) as error:
+        raise ContractError("release-notes-revision-input-unavailable") from error
+    names = [name for name in names_raw.splitlines() if name]
+    try:
+        return identity_from_sources(cmake, manifest, names)
+    except SystemExit as error:
+        raise ContractError("release-notes-revision-identity-invalid") from error
 
 
 RELEASE_VERSION, LEDGER = tree_identity(DEFAULT_ROOT)
@@ -378,10 +422,6 @@ NOTICE_ROW = re.compile(
 NOTICE_INLINE_DIGEST = re.compile(
     r"`(?P<path>fixtures/[A-Za-z0-9_./-]+)`: `(?P<digest>[0-9a-f]{64})`"
 )
-LEDGER_LINK = re.compile(r"\]\([^)\s]*docs/support/v" + re.escape(LEDGER_VERSION) + r"\.md[^)]*\)")
-VERSION_TOKEN = re.compile(r"(?<![\w.])v?" + re.escape(RELEASE_VERSION) + r"(?![\w.])")
-
-
 class ContractError(Exception):
     """A named failure in the adoption contract."""
 
@@ -439,6 +479,8 @@ def comment_free(text: str) -> str:
 
 
 _CLAIMS_MODULE = None
+_SUPPORT_LEDGER_MODULE = None
+_V04_PROFILE_CACHE: dict[tuple[str, str], dict] = {}
 
 
 def claims_module():
@@ -456,6 +498,30 @@ def claims_module():
             raise ContractError("claims-parser-unavailable") from error
         _CLAIMS_MODULE = module
     return _CLAIMS_MODULE
+
+
+def support_ledger_module():
+    """Load the source-bound support-profile validator and release-copy renderer."""
+    global _SUPPORT_LEDGER_MODULE
+    if _SUPPORT_LEDGER_MODULE is None:
+        try:
+            spec = importlib.util.spec_from_file_location("verify_support_ledger", SUPPORT_LEDGER_SCRIPT)
+            require(spec is not None and spec.loader is not None,
+                    "support-ledger-validator-unavailable")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except (OSError, SyntaxError) as error:
+            raise ContractError("support-ledger-validator-unavailable") from error
+        _SUPPORT_LEDGER_MODULE = module
+    return _SUPPORT_LEDGER_MODULE
+
+
+def v04_profile(repo: Path, rev: str) -> dict:
+    """Reuse a profile only within this process, keyed by its immutable Git revision."""
+    key = (str(repo.resolve(strict=True)), rev)
+    if key not in _V04_PROFILE_CACHE:
+        _V04_PROFILE_CACHE[key] = support_ledger_module().load_claims_version(repo, rev, "0.4.0")
+    return _V04_PROFILE_CACHE[key]
 
 
 def unnegated(pattern: re.Pattern[str], text: str) -> bool:
@@ -676,11 +742,23 @@ def check_notices(root: Path) -> int:
     return checks
 
 
-def perf_disclosure_percent(root: Path) -> str:
+def perf_disclosure_bytes(root: Path, repo: Path | None = None, rev: str | None = None) -> bytes:
+    if rev is not None:
+        require(repo is not None, "release-notes-repository-missing")
+        return immutable_blob(repo, rev, PERF_ATTRIBUTION)
+    try:
+        raw = (root / PERF_ATTRIBUTION).read_bytes()
+    except OSError as error:
+        raise ContractError("perf-attribution-receipt-unreadable") from error
+    require(len(raw) <= 4 * MAX_DOCUMENT_BYTES, "perf-attribution-receipt-unreadable")
+    return raw
+
+
+def perf_disclosure_percent(root: Path, repo: Path | None = None, rev: str | None = None) -> str:
     """The head-versus-v0.2.0 instruction-count increase to disclose, one decimal: the maximum ratio over the
     three attribution ROMs and every repeat in the committed receipt (D-30, D-13)."""
     try:
-        receipt = json.loads(read_bounded(root, PERF_ATTRIBUTION, 4 * MAX_DOCUMENT_BYTES))
+        receipt = json.loads(perf_disclosure_bytes(root, repo, rev))
         by_revision = {row["revision"]: row["ir"] for row in receipt["measurements"]}
         base, head = by_revision[receipt["selection"]["v020"]], by_revision[receipt["selection"]["head"]]
         ratios = [Fraction(h, b) for rom in head for b, h in zip(base[rom], head[rom])]
@@ -690,9 +768,9 @@ def perf_disclosure_percent(root: Path) -> str:
     return f"{float((max(ratios) - 1) * 100):.1f}"
 
 
-def perf_disclosure_head(root: Path) -> str:
+def perf_disclosure_head(root: Path, repo: Path | None = None, rev: str | None = None) -> str:
     try:
-        receipt = json.loads(read_bounded(root, PERF_ATTRIBUTION, 4 * MAX_DOCUMENT_BYTES))
+        receipt = json.loads(perf_disclosure_bytes(root, repo, rev))
         head = receipt["selection"]["head"]
     except (ContractError, KeyError, TypeError, ValueError) as error:
         raise ContractError("perf-attribution-receipt-unreadable") from error
@@ -701,7 +779,104 @@ def perf_disclosure_head(root: Path) -> str:
     return head
 
 
-def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None = None) -> int:
+def ledger_link_pattern(ledger: str) -> re.Pattern[str]:
+    return re.compile(r"\]\([^)]*" + re.escape(ledger) + r"(?:[#?][^)]*)?\)")
+
+
+def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: str) -> int:
+    require(not re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", raw),
+            "release-notes-terminal-control-present")
+    support = support_ledger_module()
+    claims = v04_profile(repo, rev)
+    rendered = support.render_release_notes_preface_v04(claims)
+    checks = 0
+    if ledger != "docs/support/v0.4.0.md":
+        require(False, "release-notes-ledger-version-mismatch")
+    require(ledger_link_pattern(ledger).search(comment_free(raw)) is not None,
+            "release-notes-ledger-version-mismatch")
+    checks += 1
+    require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
+    checks += 1
+    non_claim_reasons = (
+        "release-notes-candidate-build-run-status-missing",
+        "release-notes-cgb-admission-status-missing",
+        "release-notes-license-prohibition-limit-missing",
+    )
+    for statement, reason in zip(claims["non_claims"], non_claim_reasons, strict=True):
+        require(prose(statement) in text, reason)
+        checks += 1
+
+    outcomes = claims["candidate_outcomes"]
+    known_reasons = [prose(row["reason"]) for row in outcomes]
+    for row in outcomes:
+        name = prose(row["name"])
+        reason = prose(row["reason"])
+        require(name in text, f"release-notes-candidate-name-missing:{row['candidate_id']}")
+        line = prose(f"- **{row['name']}:** {row['reason']}")
+        if line not in text:
+            swapped = any(prose(f"- **{row['name']}:** {other}") in text
+                          for other in (item for item in known_reasons if item != reason))
+            if swapped:
+                require(False, f"release-notes-candidate-reason-mismatch:{row['candidate_id']}")
+            require(False, f"release-notes-candidate-source-reason-missing:{row['candidate_id']}")
+        checks += 1
+
+    harness = claims["harness"]
+    harness_statement = prose(
+        f"**Harness-only result:** {harness['model']} native-mode {', '.join(harness['observations'])} "
+        f"results are {harness['result']}. {harness['interpretation']} This does not establish "
+        f"{', '.join(harness['not_claimed'])}."
+    )
+    require(harness_statement in text, "release-notes-harness-game-conflation")
+    checks += 1
+
+    counts = claims["diagnostics"]["expected_counts"]
+    diagnostic_statement = prose(
+        "**Diagnostics:** Phase 22 is a synthetic composition tracer and metadata-only assessment: "
+        f"{counts['named_entries']} named entries, {counts['unresolved_gates']} unresolved real-fixture gates, "
+        f"{counts['real_fixtures_admitted']} real fixtures admitted, and "
+        f"{counts['real_fixtures_executed']} real fixtures executed."
+    )
+    require(diagnostic_statement in text, "release-notes-diagnostic-count-mismatch")
+    checks += 1
+    pending = ", ".join(f"{row['id']} {row['status']}" for row in claims["requirements"]["statuses"])
+    require(prose(f"Requirements remain Pending: {pending}.") in text,
+            "release-notes-requirement-status-promoted")
+    checks += 1
+    for limitation in claims["limitations"]:
+        require(prose(limitation) in text, "release-notes-support-limits-missing")
+        checks += 1
+
+    require(prose(rendered) in text, "release-notes-managed-preface-missing")
+    checks += 1
+
+    false_positive_claims = (
+        (re.compile(r"\b(?:Potion Panic|µCity\s+1\.3)\b.{0,100}\b(?:was|were|has been|have been)\s+(?:built|run|executed|admitted)\b", re.I),
+         "release-notes-candidate-claim-promoted"),
+        (re.compile(r"\bCGB\s+game\b.{0,50}\b(?:was|has been)?\s*admitted\b", re.I),
+         "release-notes-cgb-admission-promoted"),
+        (re.compile(r"\bCGB\s+game-level\s+evidence\s+(?:exists?|was\s+observed|has\s+been\s+established)\b", re.I),
+         "release-notes-cgb-evidence-promoted"),
+        (re.compile(r"\b(?:sha-?256|digest|hash)\b.{0,80}\b(?:proves?|establishes?|confirms?)\b.{0,60}\b(?:fixture\s+)?admission\b|\b(?:fixture\s+)?admission\b.{0,60}\b(?:sha-?256|digest|hash)\b", re.I),
+         "release-notes-digest-as-admission"),
+        (re.compile(r"\bCGB-CPU-E\b.{0,100}\b(?:qualifies?|proves?|establishes?)\b.{0,50}\b(?:game|compatibility|physical)\b", re.I),
+         "release-notes-harness-claim-promoted"),
+        (re.compile(r"\bphysical\s+(?:DMG-CPU-B|CGB-CPU-E)\s+(?:hardware\s+)?(?:behavior|results?)\s+(?:is|are)\s+(?:qualified|verified|established)\b", re.I),
+         "release-notes-hardware-claim-promoted"),
+        (re.compile(r"\bCGB\s+mode[- ]3\s+timing\s+(?:is|has been)\s+(?:qualified|verified|established)\b", re.I),
+         "release-notes-timing-claim-promoted"),
+        (re.compile(r"\b(?:general|broad)\s+(?:CGB\s+)?game\s+compatibility\s+(?:is|has been)\s+(?:qualified|verified|established|complete)\b", re.I),
+         "release-notes-compatibility-claim-promoted"),
+    )
+    for pattern, reason in false_positive_claims:
+        require(not unnegated(pattern, text), reason)
+        checks += 1
+    checks += 1
+    return checks
+
+
+def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None = None,
+                        repo: Path = DEFAULT_ROOT, version_override: str | None = None) -> int:
     try:
         resolved = path.resolve(strict=True)
         if resolved.stat().st_size > MAX_NOTES_BYTES:
@@ -713,31 +888,41 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         raise ContractError("release-notes-unavailable") from error
     text = prose(raw)
     require(text, "release-notes-empty")
-    checks = 0
-    require(VERSION_TOKEN.search(text) is not None,
-            f"release-notes-version-missing:{RELEASE_VERSION}")
-    checks += 1
-    require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
-    checks += 1
+    if rev is not None:
+        subject_version, subject_ledger = identity_at_revision(repo, rev)
+    else:
+        subject_version, subject_ledger = tree_identity(root)
+    version = version_override or subject_version
+    ledger = ("docs/support/v" + version + ".md") if version_override is not None else subject_ledger
+    require(re.fullmatch(r"\d+\.\d+\.\d+", version) is not None,
+            "release-notes-version-invalid")
+    version_token = re.compile(r"(?<![\w.])v?" + re.escape(version) + r"(?![\w.])")
+    require(version_token.search(text) is not None,
+            f"release-notes-version-missing:{version}")
+    checks = 1
+    if version == "0.4.0":
+        require(re.fullmatch(r"[0-9a-f]{40}", rev or "") is not None,
+                "release-notes-revision-required")
+        checks += check_v04_release_notes(text, raw, repo, rev, ledger)
+    else:
+        require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
+        checks += 1
+        require(ledger_link_pattern(ledger).search(comment_free(raw)) is not None,
+                "release-notes-ledger-link-missing")
+        checks += 1
     require(STATE_VERSION_SENTENCE in text, "release-notes-state-version-missing")
     checks += 1
     require(HOST_POSIX_SENTENCE in text, "release-notes-host-posix-missing")
     checks += 1
-    require(LEDGER_LINK.search(comment_free(raw)) is not None,
-            "release-notes-ledger-link-missing")
-    checks += 1
     require(re.search(r"unsigned and not notarized", text, re.IGNORECASE) is not None,
             "release-notes-unsigned-limit-missing")
     checks += 1
-    percent = perf_disclosure_percent(root)
-    head = perf_disclosure_head(root)
+    percent = perf_disclosure_percent(root, repo if rev is not None else None, rev)
+    head = perf_disclosure_head(root, repo if rev is not None else None, rev)
     short_head = head[:12]
     if rev is not None:
         require(re.fullmatch(r"[0-9a-f]{40}", rev) is not None,
                 "release-notes-revision-invalid")
-        commit = subprocess.run(["git", "-C", str(DEFAULT_ROOT), "cat-file", "-e", f"{rev}^{{commit}}"],
-                                capture_output=True, check=False)
-        require(commit.returncode == 0, "release-notes-revision-invalid")
     limitation_required = rev is None or head != rev
     require(re.search(r"(?<![\d.])\+" + re.escape(percent) + r"%", text) is not None and PERF_ATTRIBUTION in text,
             f"release-notes-perf-disclosure-missing:+{percent}%:{PERF_ATTRIBUTION}")
@@ -754,7 +939,8 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
     elif limitation_marker in text:
         require(limitation in text, "release-notes-perf-head-mismatch")
         checks += 1
-    require(FALSE_PUBLICATION_CLAIM.search(text) is None,
+    publication_claim = publication_claim_pattern(version)
+    require(publication_claim.search(text) is None,
             "release-notes-false-publication-claim")
     checks += 1
     checks += check_claim_boundaries("release-notes", text)
@@ -763,6 +949,8 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         (UNSUPPORTED_GAME_CLAIM, "unsupported-cgb-game-qualification"),
         (FALSE_SIGNING_CLAIM, "false-signing-or-notarization-claim"),
         (FALSE_FUZZ_CLAIM, "false-fuzz-campaign-claim"),
+        (FALSE_PLATFORM_CLAIM, "false-platform-guarantee"),
+        (FALSE_PERCEPTUAL_CLAIM, "false-perceptual-claim"),
     ):
         require(pattern.search(text) is None, f"release-notes-{reason}")
         checks += 1
@@ -979,50 +1167,123 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
 
 def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int]:
     """Prove that the existing release-notes gate rejects an omitted v0.4 fact."""
-    percent = perf_disclosure_percent(root)
-    head = perf_disclosure_head(root)
-    valid = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
-             .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent)
-             .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
-             .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
-             .replace("@HEAD@", head[:12])
-             .replace("@PERF_HEAD_LIMITATION@",
-                      PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
-    reason = (
-        "The creator-linked Codeberg source could not be reached before a ref or commit identity was returned; "
-        "exact component grants and repository/public-CI scope remain unestablished."
-    )
-    valid += f"""
-
-## v0.4.0 qualification
-
-Potion Panic: {reason}
-µCity 1.3 stopped because the required source/engine/hardware.inc component has no identified grant or notice
-establishing repository/public-CI scope. Neither candidate was built or run. No CGB game was admitted. These
-source/rights-scope outcomes do not establish a license prohibition. CGB-CPU-E native mode is original-harness-only;
-RGB555/PCM repeatability is not game progress or perceptual qualification. Phase 22 is synthetic composition and
-metadata-only: 513 named entries, seven unresolved gates, zero real fixtures admitted, zero real fixtures executed.
-DIAG-01, DIAG-02 and RIGHTS-01 remain Pending. Hardware behavior, perceptual quality, CGB mode-3 timing, broader
-platform support and general compatibility are not qualified. Artifacts are unsigned and not notarized.
-[Support ledger](https://example.invalid/docs/support/v0.4.0.md).
-"""
     rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
                                   stderr=subprocess.DEVNULL, text=True).strip()
+    support = support_ledger_module()
+    profile = v04_profile(root, rev)
+    percent = perf_disclosure_percent(root, root, rev)
+    head = perf_disclosure_head(root, root, rev)
+    base = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
+            .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent)
+            .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
+            .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
+            .replace("@HEAD@", head[:12])
+            .replace("@PERF_HEAD_LIMITATION@",
+                     PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
+    valid = base
+    valid += "\n" + support.render_release_notes_preface_v04(profile)
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v04-notes-") as temp:
         notes = Path(temp) / "release-notes.md"
-        write_lf(notes, valid)
-        arguments = ["--release-notes", str(notes), "--root", str(root), "--repo", str(root), "--rev", rev]
-        expect_pass(arguments)
-        changed = valid.replace(reason, "The creator-linked source could not be obtained.", 1)
-        require(changed != valid, "self-test-mutation-no-op:candidate-source-reason")
-        write_lf(notes, changed)
-        expect_reject(arguments, "release-notes-candidate-source-reason-missing")
-    return 1, 1
+        controls = 0
+        def accepts(value: str) -> None:
+            write_lf(notes, value)
+            try:
+                checks = check_release_notes(notes, root, rev, root, "0.4.0")
+            except ContractError as error:
+                raise ContractError(f"release-notes-v04-positive-refused:{error}") from error
+            require(checks > 0, "release-notes-v04-positive-checks-empty")
+
+        def reject(name: str, changed: str, reason: str) -> None:
+            nonlocal controls
+            require(changed != valid, f"self-test-mutation-no-op:{name}")
+            accepts(valid)
+            write_lf(notes, changed)
+            try:
+                check_release_notes(notes, root, rev, root, "0.4.0")
+            except ContractError as error:
+                require(reason in str(error),
+                        f"release-notes-v04-control-wrong-reason:{name}:{error}")
+            else:
+                raise ContractError(f"negative-control-not-rejected:{name}:{reason}")
+            controls += 1
+
+        accepts(valid)
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-release-revision-identity-") as temp:
+            other_tree = Path(temp)
+            cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+            cmake = cmake.replace(f"VERSION {RELEASE_VERSION} LANGUAGES", "VERSION 0.4.0 LANGUAGES", 1)
+            (other_tree / "CMakeLists.txt").write_text(cmake, encoding="utf-8")
+            manifest = json.loads((root / ".release-please-manifest.json").read_text(encoding="utf-8"))
+            manifest["."] = "0.4.0"
+            (other_tree / ".release-please-manifest.json").write_text(
+                json.dumps(manifest) + "\n", encoding="utf-8")
+            (other_tree / "docs/support").mkdir(parents=True)
+            (other_tree / "docs/support/v0.4.0.md").touch()
+            legacy_notes = other_tree / "legacy-release-notes.md"
+            write_lf(legacy_notes, base)
+            require(check_release_notes(legacy_notes, other_tree, rev, root) > 0,
+                    "release-notes-revision-identity-not-pinned")
+        potion, ucity = profile["candidate_outcomes"]
+        p_line = f"- **{potion['name']}:** {potion['reason']}"
+        u_line = f"- **{ucity['name']}:** {ucity['reason']}"
+        p_swapped = p_line.replace(potion["reason"], ucity["reason"])
+        u_swapped = u_line.replace(ucity["reason"], potion["reason"])
+        reject("candidate-reason-omission", valid.replace(p_line, f"- **{potion['name']}:** source review stopped."),
+               "release-notes-candidate-source-reason-missing")
+        reject("candidate-reasons-swapped", valid.replace(p_line, p_swapped).replace(u_line, u_swapped),
+               "release-notes-candidate-reason-mismatch")
+        reject("candidate-built-after-negative",
+               valid + "\nPotion Panic was built and run after the source review.\n",
+               "release-notes-candidate-claim-promoted")
+        reject("game-admitted-after-negative",
+               valid + "\nOne CGB game was admitted after the Phase 21 review.\n",
+               "release-notes-cgb-admission-promoted")
+        reject("game-evidence-after-negative",
+               valid + "\nCGB game-level evidence exists for this release.\n",
+               "release-notes-cgb-evidence-promoted")
+        reject("candidate-status-omission",
+               valid.replace(profile["non_claims"][0], "Candidate build and run status is unstated."),
+               "release-notes-candidate-build-run-status-missing")
+        reject("game-admission-omission",
+               valid.replace(profile["non_claims"][1], "Game admission status is unstated."),
+               "release-notes-cgb-admission-status-missing")
+        reject("harness-game-conflation", valid + "\nCGB-CPU-E qualifies game progress.\n",
+               "release-notes-harness-claim-promoted")
+        reject("diagnostic-count-mismatch", valid.replace("513 named entries", "512 named entries"),
+               "release-notes-diagnostic-count-mismatch")
+        reject("pending-status-promoted", valid.replace("DIAG-01 Pending", "DIAG-01 Complete"),
+               "release-notes-requirement-status-promoted")
+        reject("missing-hardware-limit",
+               valid.replace(profile["limitations"][0], "Physical hardware status is unstated."),
+               "release-notes-support-limits-missing")
+        reject("html-comment-hides-reason", valid.replace(p_line, f"<!-- {p_line} -->"),
+               "release-notes-candidate-name-missing")
+        reject("fenced-code-hides-reason", valid.replace(p_line, f"```text\n{p_line}\n```"),
+               "release-notes-candidate-name-missing")
+        reject("terminal-control-hides-reason", valid.replace("Potion Panic", "Potion \x1b[2KPanic", 1),
+               "release-notes-terminal-control-present")
+        reject("wrong-version-ledger-link", valid.replace(
+            "docs/support/v0.4.0.md", "docs/support/v0.3.0.md"),
+               "release-notes-ledger-version-mismatch")
+        reject("digest-does-not-prove-admission", valid +
+               "\nThe SHA-256 digest proves fixture admission.\n",
+               "release-notes-digest-as-admission")
+        reject("signed-artifact-promotion", valid + "\nRelease artifacts are signed.\n",
+               "release-notes-false-signing-or-notarization-claim")
+        reject("notarized-artifact-promotion", valid + "\nRelease artifacts are notarized.\n",
+               "release-notes-false-signing-or-notarization-claim")
+        reject("false-publication-claim", valid + "\nv0.4.0 has been published.\n",
+               "release-notes-false-publication-claim")
+        reject("all-platform-promotion", valid + "\nGabbaBoy supports all platforms.\n",
+               "release-notes-false-platform-guarantee")
+        reject("perceptual-qualification", valid + "\nPerceptual audio is verified.\n",
+               "release-notes-false-perceptual-claim")
+        return 2, controls
 
 
 def immutable_blob(repo: Path, rev: str, relative: str) -> bytes:
     result = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{relative}"],
-                            capture_output=True, check=False)
+                            capture_output=True, check=False, env=git_environment())
     require(result.returncode == 0, f"revision-input-missing:{relative}")
     require(len(result.stdout) <= MAX_DOCUMENT_BYTES * 4,
             f"revision-input-too-large:{relative}")
@@ -1033,7 +1294,7 @@ def run_self_test_claim_boundaries(repo: Path, rev: str) -> tuple[int, int]:
     require(re.fullmatch(r"[0-9a-f]{40}", rev) is not None,
             "revision-invalid:full-commit-id-required")
     resolved = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{rev}^{{commit}}"],
-                              capture_output=True, check=False)
+                              capture_output=True, check=False, env=git_environment())
     require(resolved.returncode == 0, "revision-invalid:commit-not-found")
     # Bind the version and ledger identity used for generated release notes to the same commit.
     with tempfile.TemporaryDirectory(prefix="gabbaboy-claims-rev-") as temp:
@@ -1045,7 +1306,7 @@ def run_self_test_claim_boundaries(repo: Path, rev: str) -> tuple[int, int]:
             target.write_bytes(immutable_blob(repo, rev, relative))
         listing = subprocess.run(
             ["git", "-C", str(repo), "ls-tree", "--name-only", f"{rev}:docs/support"],
-            capture_output=True, check=False, text=True)
+            capture_output=True, check=False, text=True, env=git_environment())
         require(listing.returncode == 0, "revision-support-ledger-list-unavailable")
         names = [line for line in listing.stdout.splitlines() if line]
         require(names, "revision-support-ledger-list-empty")
@@ -1386,10 +1647,13 @@ def main() -> int:
                   f"controls={controls} rev={args.rev}")
             return 0
         if args.release_notes is not None:
-            checks = check_release_notes(args.release_notes, args.root.resolve(strict=True), args.rev)
+            root = args.root.resolve(strict=True)
+            repo = args.repo.resolve(strict=True)
+            checks = check_release_notes(args.release_notes, root, args.rev, repo)
+            target_version = identity_at_revision(repo, args.rev)[0] if args.rev is not None else tree_identity(root)[0]
             print(json.dumps({
                 "mode": "release-notes",
-                "target": RELEASE_VERSION,
+                "target": target_version,
                 "checks": checks,
                 "negative_controls": 0,
                 "rejected_controls": 0,
