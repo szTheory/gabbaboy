@@ -507,7 +507,7 @@ def prose(text: str) -> str:
     """Whitespace-normalized prose without comments and code blocks."""
     text = re.sub(r"<!--.*?(?:-->|\Z)", " ", text, flags=re.DOTALL)
     text = mask_fenced_code_blocks(text)
-    text = re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", " ", text)
+    text = mask_indented_code_blocks(text)
     return " ".join(text.split())
 
 
@@ -596,6 +596,42 @@ def mask_fenced_code_blocks(text: str) -> str:
             fence_char = opening.group(1)[0]
             fence_length = len(opening.group(1))
             fence_containers = containers
+            output.append(" " * len(content) + ending)
+        else:
+            output.append(line)
+    return "".join(output)
+
+
+def mask_indented_code_blocks(text: str) -> str:
+    """Mask indented code after blockquote and list container markers."""
+    output: list[str] = []
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        position = 0
+        while position < len(content):
+            start = position
+            spaces = 0
+            while position < len(content) and content[position] == " " and spaces < 4:
+                position += 1
+                spaces += 1
+            if spaces > 3:
+                position = start
+                break
+            if position < len(content) and content[position] == ">":
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+                continue
+            marker = re.match(r"([-+*]|\d{1,9}[.)])([ ]+)", content[position:])
+            if marker is not None:
+                marker_spaces = len(marker.group(2))
+                position += len(marker.group(1)) + (1 if marker_spaces > 4 else marker_spaces)
+                continue
+            position = start
+            break
+        candidate = content[position:]
+        if candidate.startswith("    ") or candidate.startswith("\t"):
             output.append(" " * len(content) + ending)
         else:
             output.append(line)
@@ -962,6 +998,129 @@ def ledger_link_pattern(ledger: str) -> re.Pattern[str]:
     return re.compile(r"(?<![!\\])\[[^\]\n]*\]\(\s*" + destination + r"\s*\)")
 
 
+RAW_HTML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>", re.DOTALL)
+
+
+def has_markdown_ledger_link(text: str, ledger: str, version: str) -> bool:
+    """Find a real Markdown link with an exact supported ledger destination."""
+    canonical = f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger}"
+    allowed = {ledger, canonical}
+
+    def escaped(index: int) -> bool:
+        backslashes = 0
+        index -= 1
+        while index >= 0 and text[index] == "\\":
+            backslashes += 1
+            index -= 1
+        return backslashes % 2 == 1
+
+    def link_end(opening: int) -> tuple[str, int] | None:
+        position = opening + 1
+        depth = 1
+        while position < len(text):
+            if text[position] == "\\":
+                position += 2
+                continue
+            if text[position] == "[":
+                depth += 1
+            elif text[position] == "]":
+                depth -= 1
+                if depth == 0:
+                    break
+            position += 1
+        if position >= len(text):
+            return None
+        position += 1
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position >= len(text) or text[position] != "(":
+            return None
+        position += 1
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position >= len(text):
+            return None
+
+        if text[position] == "<":
+            destination_start = position + 1
+            position += 1
+            while position < len(text):
+                if text[position] == "\\":
+                    position += 2
+                    continue
+                if text[position] == ">":
+                    break
+                position += 1
+            if position >= len(text):
+                return None
+            destination = text[destination_start:position]
+            position += 1
+        else:
+            destination_start = position
+            nested = 0
+            while position < len(text):
+                char = text[position]
+                if char == "\\":
+                    position += 2
+                    continue
+                if char == "(":
+                    nested += 1
+                elif char == ")":
+                    if nested == 0:
+                        break
+                    nested -= 1
+                elif char.isspace() and nested == 0:
+                    break
+                position += 1
+            destination = text[destination_start:position]
+
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position < len(text) and text[position] != ")":
+            quote = text[position]
+            if quote not in "\"'(":
+                return None
+            closing = ")" if quote == "(" else quote
+            title_depth = 1 if quote == "(" else 0
+            position += 1
+            while position < len(text):
+                char = text[position]
+                if char == "\\":
+                    position += 2
+                    continue
+                if quote == "(" and char == "(":
+                    title_depth += 1
+                elif char == closing:
+                    if quote != "(" or title_depth == 1:
+                        break
+                    title_depth -= 1
+                position += 1
+            if position >= len(text):
+                return None
+            position += 1
+            while position < len(text) and text[position].isspace():
+                position += 1
+        if position >= len(text) or text[position] != ")":
+            return None
+        return destination, position + 1
+
+    position = 0
+    while position < len(text):
+        if text[position] != "[" or escaped(position):
+            position += 1
+            continue
+        image = position > 0 and text[position - 1] == "!" and not escaped(position - 1)
+        parsed = link_end(position)
+        if parsed is None:
+            position += 1
+            continue
+        destination, end = parsed
+        if not image and destination in allowed:
+            return True
+        position = end
+    return False
+
+
 def canonical_ledger_url(version: str) -> str:
     return f"https://github.com/szTheory/gabbaboy/blob/v{version}/docs/support/v{version}.md"
 
@@ -975,7 +1134,7 @@ def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: s
     checks = 0
     if ledger != "docs/support/v0.4.0.md":
         require(False, "release-notes-ledger-version-mismatch")
-    require(ledger_link_pattern(ledger).search(text) is not None,
+    require(has_markdown_ledger_link(text, ledger, "0.4.0"),
             "release-notes-ledger-version-mismatch")
     checks += 1
     require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
@@ -1086,6 +1245,7 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         raise ContractError("release-notes-unavailable") from error
     text = " ".join(mask_inline_code_spans(prose(raw)).split())
     require(text, "release-notes-empty")
+    require(RAW_HTML_TAG.search(text) is None, "release-notes-raw-html-unsupported")
     if rev is not None:
         subject_version, subject_ledger = identity_at_revision(repo, rev)
     else:
@@ -1105,7 +1265,7 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
     else:
         require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
         checks += 1
-        require(ledger_link_pattern(ledger).search(text) is not None,
+        require(has_markdown_ledger_link(text, ledger, version),
                 "release-notes-ledger-link-missing")
         checks += 1
     require(STATE_VERSION_SENTENCE in text, "release-notes-state-version-missing")
@@ -1415,6 +1575,10 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                 valid,
             )
 
+        def replace_ledger_construct(replacement: str) -> str:
+            pattern = ledger_link_pattern("docs/support/v0.4.0.md")
+            return pattern.sub(lambda _match: replacement, valid)
+
         def image_ledger_links() -> str:
             pattern = ledger_link_pattern("docs/support/v0.4.0.md")
             return pattern.sub(lambda match: "!" + match.group(0), valid)
@@ -1509,6 +1673,15 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
         reject("blockquote-list-fence-hides-reason",
                valid.replace(p_line, quote_list_fence),
                "release-notes-candidate-name-missing")
+        reject("blockquote-indented-code-hides-reason",
+               valid.replace(p_line, ">     " + p_line),
+               "release-notes-candidate-name-missing")
+        reject("blockquote-list-indented-code-hides-reason",
+               valid.replace(p_line, "> -     " + p_line),
+               "release-notes-candidate-name-missing")
+        reject("list-blockquote-indented-code-hides-reason",
+               valid.replace(p_line, "- >     " + p_line),
+               "release-notes-candidate-name-missing")
         reject("fenced-code-hides-reason", valid.replace(p_line, f"```text\n{p_line}\n```"),
                "release-notes-candidate-name-missing")
         tick = chr(96)
@@ -1532,6 +1705,20 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
         title_link = replace_ledger_targets("https://evil.invalid/ \"docs/support/v0.4.0.md\"")
         reject("ledger-path-in-link-title-is-not-a-link", title_link,
                "release-notes-ledger-version-mismatch")
+        nested_title_link = replace_ledger_construct(
+            '[outer](https://evil.invalid/ "[ledger](docs/support/v0.4.0.md)")')
+        reject("nested-ledger-link-in-external-title-is-not-a-link", nested_title_link,
+               "release-notes-ledger-version-mismatch")
+        reject("raw-html-pre-rejected",
+               replace_ledger_construct("<pre>[ledger](docs/support/v0.4.0.md)</pre>"),
+               "release-notes-raw-html-unsupported")
+        reject("hidden-html-div-rejected",
+               replace_ledger_construct('<div hidden>[ledger](docs/support/v0.4.0.md)</div>'),
+               "release-notes-raw-html-unsupported")
+        reject("hidden-html-link-attribute-rejected",
+               replace_ledger_construct(
+                   '<span hidden title="[ledger](docs/support/v0.4.0.md)">notes</span>'),
+               "release-notes-raw-html-unsupported")
         malformed_link = replace_ledger_targets("not a valid destination docs/support/v0.4.0.md")
         reject("malformed-destination-is-not-a-ledger-link", malformed_link,
                "release-notes-ledger-version-mismatch")

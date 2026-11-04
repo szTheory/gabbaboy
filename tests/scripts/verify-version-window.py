@@ -297,11 +297,133 @@ def validate_version_outputs(repo: Path, commit: str, expected_version: str) -> 
     first = sections[0]
     end = sections[1].start() if len(sections) > 1 else len(visible)
     section = visible[first.end():end]
-    canonical_ledger = f"https://github.com/szTheory/gabbaboy/blob/v{expected_version}/{ledger_path}"
-    destination = r"(?:" + re.escape(ledger_path) + r"|" + re.escape(canonical_ledger) + r")"
-    ledger_link = re.compile(r"(?<![!\\])\[[^\]\n]*\]\(\s*" + destination + r"\s*\)")
-    if ledger_link.search(section) is None:
+    if RAW_HTML_TAG.search(section) is not None:
+        reject("window-version-output-mismatch", "the first changelog release section contains raw HTML")
+    if not has_markdown_ledger_link(section, ledger_path, expected_version):
         reject("window-version-output-mismatch", f"the {expected_version} changelog section does not link {ledger_path}")
+
+
+RAW_HTML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>", re.DOTALL)
+
+
+def has_markdown_ledger_link(text: str, ledger_path: str, version: str) -> bool:
+    """Find a real Markdown link with an exact supported ledger destination."""
+    canonical = f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger_path}"
+    allowed = {ledger_path, canonical}
+
+    def escaped(index: int) -> bool:
+        backslashes = 0
+        index -= 1
+        while index >= 0 and text[index] == "\\":
+            backslashes += 1
+            index -= 1
+        return backslashes % 2 == 1
+
+    def link_end(opening: int) -> tuple[str, int] | None:
+        position = opening + 1
+        depth = 1
+        while position < len(text):
+            if text[position] == "\\":
+                position += 2
+                continue
+            if text[position] == "[":
+                depth += 1
+            elif text[position] == "]":
+                depth -= 1
+                if depth == 0:
+                    break
+            position += 1
+        if position >= len(text):
+            return None
+        position += 1
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position >= len(text) or text[position] != "(":
+            return None
+        position += 1
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position >= len(text):
+            return None
+
+        if text[position] == "<":
+            destination_start = position + 1
+            position += 1
+            while position < len(text):
+                if text[position] == "\\":
+                    position += 2
+                    continue
+                if text[position] == ">":
+                    break
+                position += 1
+            if position >= len(text):
+                return None
+            destination = text[destination_start:position]
+            position += 1
+        else:
+            destination_start = position
+            nested = 0
+            while position < len(text):
+                char = text[position]
+                if char == "\\":
+                    position += 2
+                    continue
+                if char == "(":
+                    nested += 1
+                elif char == ")":
+                    if nested == 0:
+                        break
+                    nested -= 1
+                elif char.isspace() and nested == 0:
+                    break
+                position += 1
+            destination = text[destination_start:position]
+
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position < len(text) and text[position] != ")":
+            quote = text[position]
+            if quote not in "\"'(":
+                return None
+            closing = ")" if quote == "(" else quote
+            title_depth = 1 if quote == "(" else 0
+            position += 1
+            while position < len(text):
+                char = text[position]
+                if char == "\\":
+                    position += 2
+                    continue
+                if quote == "(" and char == "(":
+                    title_depth += 1
+                elif char == closing:
+                    if quote != "(" or title_depth == 1:
+                        break
+                    title_depth -= 1
+                position += 1
+            if position >= len(text):
+                return None
+            position += 1
+            while position < len(text) and text[position].isspace():
+                position += 1
+        if position >= len(text) or text[position] != ")":
+            return None
+        return destination, position + 1
+
+    position = 0
+    while position < len(text):
+        if text[position] != "[" or escaped(position):
+            position += 1
+            continue
+        image = position > 0 and text[position - 1] == "!" and not escaped(position - 1)
+        parsed = link_end(position)
+        if parsed is None:
+            position += 1
+            continue
+        destination, end = parsed
+        if not image and destination in allowed:
+            return True
+        position = end
+    return False
 
 
 def visible_markdown(text: str) -> str:
@@ -312,7 +434,7 @@ def visible_markdown(text: str) -> str:
 
     text = re.sub(r"<!--.*?(?:-->|\Z)", mask, text, flags=re.DOTALL)
     text = mask_fenced_code_blocks(text)
-    text = re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", mask, text)
+    text = mask_indented_code_blocks(text)
     return mask_inline_code_spans(text)
 
 
@@ -401,6 +523,42 @@ def mask_fenced_code_blocks(text: str) -> str:
             fence_char = opening.group(1)[0]
             fence_length = len(opening.group(1))
             fence_containers = containers
+            output.append(" " * len(content) + ending)
+        else:
+            output.append(line)
+    return "".join(output)
+
+
+def mask_indented_code_blocks(text: str) -> str:
+    """Mask indented code after blockquote and list container markers."""
+    output: list[str] = []
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        position = 0
+        while position < len(content):
+            start = position
+            spaces = 0
+            while position < len(content) and content[position] == " " and spaces < 4:
+                position += 1
+                spaces += 1
+            if spaces > 3:
+                position = start
+                break
+            if position < len(content) and content[position] == ">":
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+                continue
+            marker = re.match(r"([-+*]|\d{1,9}[.)])([ ]+)", content[position:])
+            if marker is not None:
+                marker_spaces = len(marker.group(2))
+                position += len(marker.group(1)) + (1 if marker_spaces > 4 else marker_spaces)
+                continue
+            position = start
+            break
+        candidate = content[position:]
+        if candidate.startswith("    ") or candidate.startswith("\t"):
             output.append(" " * len(content) + ending)
         else:
             output.append(line)
@@ -1126,6 +1284,9 @@ def self_test_version_v04() -> tuple[int, int]:
             ("comment", f"<!-- {ledger_link} -->"),
             ("fenced-code", f"```markdown\n{ledger_link}\n```"),
             ("indented-code", "    " + ledger_link),
+            ("blockquote-indented-code", ">     " + ledger_link),
+            ("blockquote-list-indented-code", "> -     " + ledger_link),
+            ("list-blockquote-indented-code", "- >     " + ledger_link),
             ("blockquote-fenced-code", "> ~~~markdown\n> " + ledger_link + "\n> ~~~"),
             ("list-fenced-code", f"- code:\n  {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
             ("list-item-fenced-code", f"- {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
@@ -1142,6 +1303,14 @@ def self_test_version_v04() -> tuple[int, int]:
              "[ledger](https://evil.invalid/?next=docs/support/v0.4.0.md)"),
             ("external-title-is-not-a-ledger-link",
              "[ledger](https://evil.invalid/ \"docs/support/v0.4.0.md\")"),
+            ("nested-ledger-link-in-external-title-is-not-a-ledger-link",
+             "[outer](https://evil.invalid/ \"[ledger](docs/support/v0.4.0.md)\")"),
+            ("html-pre-is-not-a-ledger-link",
+             "<pre>\n" + ledger_link + "\n</pre>"),
+            ("hidden-html-div-is-not-a-ledger-link",
+             '<div style="display:none">' + ledger_link + "</div>"),
+            ("hidden-html-attribute-is-not-a-ledger-link",
+             '<span hidden title="[ledger](docs/support/v0.4.0.md)">release note</span>'),
             ("malformed-destination-is-not-a-ledger-link",
              "[ledger](not a valid destination docs/support/v0.4.0.md)"),
         ):
