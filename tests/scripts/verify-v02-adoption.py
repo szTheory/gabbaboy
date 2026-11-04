@@ -2894,11 +2894,11 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
 
         readme_parser_control(
             "tab-list-marker-cannot-hide-reference-title-game-claim",
-            '-\t[unused]: /url\n  "CGB game passes all acceptance checks."',
+            '> -\t[unused]: /url\n>  "CGB game passes all acceptance checks."',
             f"unsupported-cgb-game-qualification:{README}")
         readme_parser_control(
-            "four-column-tab-list-continuation-still-masks-reference-title",
-            '-\t[unused]: /url\n    "CGB game passes all acceptance checks."')
+            "tab-expanded-list-continuation-at-column-four-masks-reference-title",
+            '> -\t[unused]: /url\n>   "CGB game passes all acceptance checks."')
 
         readme_parser_control(
             "commented-explicit-reference-label-cannot-hide-game-claim",
