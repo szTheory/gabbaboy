@@ -48,8 +48,11 @@ HEADER = "include/gabbaboy/gabbaboy.h"
 
 PERF_ATTRIBUTION = "tests/baseline/perf-attribution-v1.json"
 RAW_HTML_CONSTRUCT = re.compile(
-    r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|<![A-Z][^>]*>|"
-    r"<\?[A-Za-z][^>]*\?>|<!\[CDATA\[", re.DOTALL | re.IGNORECASE)
+    r"(?<!\\)(?:\\\\)*(?:"
+    r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|"
+    r"<![A-Z][\s\S]*?(?:>|$)|<\?[A-Za-z][\s\S]*?(?:\?>|$)|"
+    r"<!\[CDATA\[|<(?:script|pre|style)(?=[ \t\r\n>]|$))",
+    re.DOTALL | re.IGNORECASE)
 
 
 def tree_identity(root: Path) -> tuple[str, str]:
@@ -1607,6 +1610,7 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
         accepts(valid)
         accepts(valid + "\n```html\n<div hidden>sample</div>\n\t[ledger](docs/support/v0.4.0.md)\n```\n")
         accepts(valid + "\n<!-- <script\n -->\n\n```html\n<pre \n```\n\n    <style\n\n`<!DOCTYPE html` `<?xml version=\"1.0\"`\n")
+        accepts(valid + "\n\\<script\n<scripture\n")
         with tempfile.TemporaryDirectory(prefix="gabbaboy-release-revision-identity-") as temp:
             other_tree = Path(temp)
             cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -2294,7 +2298,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 9
+    controls = len(mutations) + 9 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
