@@ -1513,6 +1513,11 @@ gbb_add_ledger_contract(release_disclosure_controls
   [=[release-disclosure controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-disclosure)
 unset(GBB_LEDGER_MIN)
+# Phase 23 D-01/D-03: the existing release-notes judge must reject copy that omits either
+# source-bound candidate reason, even when the old disclosure checks still pass.
+gbb_add_v02_contract(release_notes_v04_controls 90
+  [=[release-notes-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  verify-v02-adoption.py --self-test-release-notes-v04 --repo "${PROJECT_SOURCE_DIR}")
 # Phase 17 RM-028 / D-19 (17-08): the version-PR content window. The contract test checks the tracked record is a
 # well-formed inactive (or statically valid active) record and that every generator input the window digests exists in
 # the tree; the controls run the checker over disposable repositories (body overwrite, stale head/input, a changed

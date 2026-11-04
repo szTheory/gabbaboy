@@ -977,6 +977,49 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
     return len(mutations), len(mutations)
 
 
+def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int]:
+    """Prove that the existing release-notes gate rejects an omitted v0.4 fact."""
+    percent = perf_disclosure_percent(root)
+    head = perf_disclosure_head(root)
+    valid = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
+             .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent)
+             .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
+             .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
+             .replace("@HEAD@", head[:12])
+             .replace("@PERF_HEAD_LIMITATION@",
+                      PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
+    reason = (
+        "The creator-linked Codeberg source could not be reached before a ref or commit identity was returned; "
+        "exact component grants and repository/public-CI scope remain unestablished."
+    )
+    valid += f"""
+
+## v0.4.0 qualification
+
+Potion Panic: {reason}
+µCity 1.3 stopped because the required source/engine/hardware.inc component has no identified grant or notice
+establishing repository/public-CI scope. Neither candidate was built or run. No CGB game was admitted. These
+source/rights-scope outcomes do not establish a license prohibition. CGB-CPU-E native mode is original-harness-only;
+RGB555/PCM repeatability is not game progress or perceptual qualification. Phase 22 is synthetic composition and
+metadata-only: 513 named entries, seven unresolved gates, zero real fixtures admitted, zero real fixtures executed.
+DIAG-01, DIAG-02 and RIGHTS-01 remain Pending. Hardware behavior, perceptual quality, CGB mode-3 timing, broader
+platform support and general compatibility are not qualified. Artifacts are unsigned and not notarized.
+[Support ledger](https://example.invalid/docs/support/v0.4.0.md).
+"""
+    rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
+                                  stderr=subprocess.DEVNULL, text=True).strip()
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-v04-notes-") as temp:
+        notes = Path(temp) / "release-notes.md"
+        write_lf(notes, valid)
+        arguments = ["--release-notes", str(notes), "--root", str(root), "--repo", str(root), "--rev", rev]
+        expect_pass(arguments)
+        changed = valid.replace(reason, "The creator-linked source could not be obtained.", 1)
+        require(changed != valid, "self-test-mutation-no-op:candidate-source-reason")
+        write_lf(notes, changed)
+        expect_reject(arguments, "release-notes-candidate-source-reason-missing")
+    return 1, 1
+
+
 def immutable_blob(repo: Path, rev: str, relative: str) -> bytes:
     result = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{relative}"],
                             capture_output=True, check=False)
@@ -1321,12 +1364,18 @@ def main() -> int:
     group.add_argument("--check", choices=("game", "docs"))
     group.add_argument("--self-test", choices=("game", "docs"))
     group.add_argument("--release-notes", type=Path, metavar="PATH")
+    group.add_argument("--self-test-release-notes-v04", action="store_true")
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--repo", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--rev", help="full immutable commit id for claim-boundary evidence")
     group.add_argument("--self-test-claim-boundaries", action="store_true")
     args = parser.parse_args()
     try:
+        if args.self_test_release_notes_v04:
+            positives, controls = run_self_test_release_notes_v04(args.repo.resolve(strict=True))
+            require(positives > 0 and controls > 0, "release-notes-v04-self-test-empty")
+            print(f"release-notes-v04 controls pass positives={positives} controls={controls}")
+            return 0
         if args.self_test_claim_boundaries:
             require(args.rev is not None, "revision-required")
             positives, controls = run_self_test_claim_boundaries(

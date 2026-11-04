@@ -1183,6 +1183,7 @@ support_ledger_binding
 support_ledger_binding_controls
 release_disclosure_generator
 release_disclosure_controls
+release_notes_v04_controls
 support_claims
 support_claims_controls
 support_claims_v04
