@@ -47,11 +47,19 @@ VERSION = re.compile(r"\d+\.\d+\.\d+")
 REQUIRED_MANAGED_INPUTS = (
     "tests/data/release-disclosure.json",
     "tests/data/support-claims-v0.3.json",
+    "tests/data/support-claims-v0.4.json",
     "tests/scripts/verify-support-ledger.py",
+    "tests/scripts/verify-v02-adoption.py",
     "release-please-config.json",
+    "tests/data/cgb-candidates/potion-panic.json",
+    "tests/data/cgb-candidates/ucity-1.3.json",
+    "tests/external/diagnostic-assessment.json",
+    "tests/external/gbmicrotest-inventory.json",
+    "tests/baseline/state-goldens-v1.json",
+    "tests/data/state-compatibility.json",
 )
 # Regenerated outputs of the version PR (the ledger path is derived from the version).
-REQUIRED_GENERATED_FILES = ("CHANGELOG.md", ".release-please-manifest.json")
+REQUIRED_GENERATED_FILES = ("CMakeLists.txt", "CHANGELOG.md", ".release-please-manifest.json")
 
 TOP_KEYS = {"schema_version", "kind", "state", "release_version", "intended", "managed_inputs", "generated",
             "review", "rehearsal"}
@@ -222,11 +230,18 @@ def validate_record_shape(record: dict) -> str:
     for path in REQUIRED_MANAGED_INPUTS:
         if path not in inputs:
             reject("window-input-missing", f"managed_inputs omits the generator input {path}")
+    unclassified_inputs = sorted(set(inputs) - set(REQUIRED_MANAGED_INPUTS))
+    if unclassified_inputs:
+        reject("window-record-invalid", f"managed_inputs has unclassified input {unclassified_inputs[0]}")
     generated = exact_keys(record["generated"], {"files", "pr_body_sha256"}, "generated")
     files = digest_map(generated["files"], "generated.files")
-    for path in (*REQUIRED_GENERATED_FILES, f"docs/support/v{record['release_version']}.md"):
+    expected_generated = {*REQUIRED_GENERATED_FILES, f"docs/support/v{record['release_version']}.md"}
+    for path in sorted(expected_generated):
         if path not in files:
             reject("window-generated-missing", f"generated.files omits {path}")
+    unclassified_generated = sorted(set(files) - expected_generated)
+    if unclassified_generated:
+        reject("window-record-invalid", f"generated.files has unclassified output {unclassified_generated[0]}")
     if type(generated["pr_body_sha256"]) is not str or SHA256.fullmatch(generated["pr_body_sha256"]) is None:
         reject("window-record-invalid", "generated.pr_body_sha256 is not SHA-256")
     review = exact_keys(record["review"], {"head", "pull_request", "ci_run_id"}, "review")
@@ -256,11 +271,13 @@ def tree_version(repo: Path, commit: str) -> str:
 
 
 def classify(path: str) -> str:
-    if path.startswith(("src/", "include/", "fixtures/")) or path == "CMakeLists.txt":
+    if path in REQUIRED_GENERATED_FILES or path.startswith("docs/support/"):
+        return "release-output"
+    if path.startswith(("src/", "include/", "fixtures/")):
         return "source"
-    if path == "CHANGELOG.md" or path.startswith("docs/support/") or path == "docs/release.md":
+    if path == "docs/release.md":
         return "release-note"
-    if path in REQUIRED_MANAGED_INPUTS or path == ".release-please-manifest.json":
+    if path in REQUIRED_MANAGED_INPUTS:
         return "generator-input"
     if path.startswith(".github/"):
         return "workflow"
@@ -391,9 +408,11 @@ def check_tracked(repo: Path, rev: str | None = None, require_active: bool = Fal
     state = validate_record_shape(record)
     if state == "inactive" and require_active:
         reject("window-record-inactive", f"{RECORD_PATH} is inactive at revision {head[:12]}")
-    if state == "active" and tree_version(repo, head) != record["release_version"]:
+    version = tree_version(repo, head)
+    if state == "active" and version != record["release_version"]:
         reject("window-version-mismatch", f"the active record's version {record['release_version']} differs from the tree at {head[:12]}")
-    for path in (*REQUIRED_MANAGED_INPUTS, *REQUIRED_GENERATED_FILES):
+    required_paths = (*REQUIRED_MANAGED_INPUTS, *REQUIRED_GENERATED_FILES, f"docs/support/v{version}.md")
+    for path in required_paths:
         if git_blob(repo, head, path) is None:
             reject("window-input-missing", f"the window requires {path}, which is not in the tree")
     return f"version-window contract pass state={state} rev={head[:12]} inputs={len(REQUIRED_MANAGED_INPUTS)}"
@@ -445,18 +464,13 @@ def build_fixture(directory: Path) -> tuple[Fixture, str, str, bytes]:
     fx.write("CMakeLists.txt", "project(GabbaBoy VERSION 0.2.1 LANGUAGES C) # x-release-please-version\n")
     fx.write(".release-please-manifest.json", '{\n  ".": "0.2.1"\n}\n')
     fx.write("CHANGELOG.md", "# Changelog\n")
-    fx.write("release-please-config.json", '{"release-type": "simple"}\n')
-    fx.write("tests/data/release-disclosure.json", '{"schema_version": 1}\n')
-    fx.write("tests/data/support-claims-v0.3.json", '{"schema_version": 1, "kind": "scoped-support-claims"}\n')
-    fx.write("tests/data/support-claims-v0.4.json", '{"schema_version": 1, "kind": "release-support-claims"}\n')
-    fx.write("tests/scripts/verify-support-ledger.py", "# stand-in generator\n")
+    for path in REQUIRED_MANAGED_INPUTS:
+        fx.write(path, f"fixture input: {path}\n")
     fx.write("docs/support/v0.2.1.md", "# v0.2.1 ledger\n")
     fx.write("src/core/gabbaboy.c", "int core(void) { return 0; }\n")
     fx.write(RECORD_PATH, render_record(inactive_record()))
     base = fx.commit("main", "CMakeLists.txt", ".release-please-manifest.json", "CHANGELOG.md",
-                     "release-please-config.json", "tests/data/release-disclosure.json",
-                     "tests/data/support-claims-v0.3.json", "tests/data/support-claims-v0.4.json",
-                     "tests/scripts/verify-support-ledger.py", "docs/support/v0.2.1.md",
+                     *REQUIRED_MANAGED_INPUTS, "docs/support/v0.2.1.md",
                      "src/core/gabbaboy.c", RECORD_PATH)
     fx.run("checkout", "-q", "-b", "release-please--branches--main")
     # The version PR: release-please bumps the version and changelog; the ledger is regenerated.
@@ -570,18 +584,41 @@ def self_test() -> tuple[int, int]:
         source_edit = fx.commit("source edit", "src/core/gabbaboy.c")
         rejected("source-change-after-review", lambda: check(source_edit, base), "window-stale-head",
                  "source:src/core/gabbaboy.c")
+        for path in REQUIRED_GENERATED_FILES:
+            fx.reset(frozen)
+            original = git_blob(repo, head, path)
+            if original is None:
+                raise AssertionError(f"fixture omitted generated output {path}")
+            fx.write(path, original + b"\nregenerated\n")
+            output_edit = fx.commit("generated output edit", path)
+            rejected("generated-output-change-after-review-" + Path(path).name,
+                     lambda output_edit=output_edit: check(output_edit, base), "window-stale-head",
+                     f"release-output:{path}")
         fx.reset(frozen)
-        fx.write("CHANGELOG.md", "# Changelog\n\n## 0.2.2\n\n- hand edit\n")
-        note_edit = fx.commit("release note edit", "CHANGELOG.md")
-        rejected("release-note-change-after-review", lambda: check(note_edit, base), "window-stale-head",
-                 "release-note:CHANGELOG.md")
+        fx.write("docs/support/v0.2.2.md", "# v0.2.2 ledger, hand edited\n")
+        ledger_edit = fx.commit("release ledger edit", "docs/support/v0.2.2.md")
+        rejected("release-ledger-change-after-review", lambda: check(ledger_edit, base), "window-stale-head",
+                 "release-output:docs/support/v0.2.2.md")
         fx.reset(frozen)
-        fx.write("tests/data/release-disclosure.json", '{"schema_version": 1, "edited": true}\n')
-        input_edit = fx.commit("generator input edit", "tests/data/release-disclosure.json")
-        rejected("generator-input-change-after-review", lambda: check(input_edit, base), "window-stale-head",
-                 "generator-input:tests/data/release-disclosure.json")
+        fx.write("CMakeLists.txt", "project(GabbaBoy VERSION 0.2.3 LANGUAGES C) # x-release-please-version\n")
+        cmake_version_edit = fx.commit("generated CMake version edit", "CMakeLists.txt")
+        rejected("generated-cmake-version-change-after-review", lambda: check(cmake_version_edit, base),
+                 "window-stale-head", "release-output:CMakeLists.txt")
+        for path in REQUIRED_MANAGED_INPUTS:
+            fx.reset(frozen)
+            original = git_blob(repo, head, path)
+            if original is None:
+                raise AssertionError(f"fixture omitted managed input {path}")
+            fx.write(path, original + b"\nchanged\n")
+            input_edit = fx.commit("generator input edit", path)
+            rejected("generator-input-change-after-review-" + Path(path).name,
+                     lambda input_edit=input_edit: check(input_edit, base), "window-stale-head",
+                     f"generator-input:{path}")
 
         # Mismatch after regeneration: the head and base are re-recorded but a digest is not recomputed.
+        fx.reset(frozen)
+        fx.write("tests/data/release-disclosure.json", b"edited disclosure input\n")
+        input_edit = fx.commit("generator input edit", "tests/data/release-disclosure.json")
         partial = copy.deepcopy(freeze(input_edit, base, body))
         partial["managed_inputs"]["tests/data/release-disclosure.json"] = reviewed["managed_inputs"][
             "tests/data/release-disclosure.json"]
@@ -616,12 +653,13 @@ def self_test() -> tuple[int, int]:
         if profile_blob is None:
             raise AssertionError("fixture omitted the v0.4 claim profile")
         profile_bound = copy.deepcopy(reviewed)
-        profile_bound["managed_inputs"][profile_path] = digest(profile_blob)
+        profile_bound["managed_inputs"].setdefault(profile_path, digest(profile_blob))
         fx.reset(frozen)
-        bound_profile = with_record(profile_bound)
+        bound_profile = frozen if profile_bound == reviewed else with_record(profile_bound)
         accepted("v04-profile-explicitly-bound", lambda: check(bound_profile, base))
         profile_omitted = copy.deepcopy(profile_bound)
         del profile_omitted["managed_inputs"][profile_path]
+        fx.reset(bound_profile)
         rejected("v04-profile-omitted", lambda: check(with_record(profile_omitted), base),
                  "window-input-missing", profile_path)
         fx.reset(frozen)
@@ -635,11 +673,11 @@ def self_test() -> tuple[int, int]:
         rehearsal_ref = with_record({**reviewed, "rehearsal": {**reviewed["rehearsal"], "ref": "rehearsal/v0.2.9"}})
         rejected("rehearsal-for-another-version", lambda: check(rehearsal_ref, base), "window-rehearsal-stale")
         fx.reset(frozen)
+        wrong_version_files = dict(reviewed["generated"]["files"])
+        wrong_version_files.pop("docs/support/v0.2.2.md")
+        wrong_version_files["docs/support/v0.2.9.md"] = reviewed["generated"]["files"]["docs/support/v0.2.2.md"]
         wrong_version = with_record({**reviewed, "release_version": "0.2.9",
-                                     "generated": {**reviewed["generated"], "files": {
-                                         **reviewed["generated"]["files"],
-                                         "docs/support/v0.2.9.md": reviewed["generated"]["files"][
-                                             "docs/support/v0.2.2.md"]}},
+                                     "generated": {**reviewed["generated"], "files": wrong_version_files},
                                      "rehearsal": {**reviewed["rehearsal"], "ref": "rehearsal/v0.2.9"}})
         rejected("record-for-another-version", lambda: check(wrong_version, base), "window-version-mismatch")
         fx.reset(frozen)
@@ -650,6 +688,23 @@ def self_test() -> tuple[int, int]:
             rejected("generator-input-omitted-" + Path(omitted_input).name,
                      lambda: check(with_record(dropped_input), base), "window-input-missing",
                      omitted_input)
+        for omitted_output in (*REQUIRED_GENERATED_FILES, "docs/support/v0.2.2.md"):
+            fx.reset(frozen)
+            dropped_output = copy.deepcopy(reviewed)
+            del dropped_output["generated"]["files"][omitted_output]
+            rejected("generated-output-omitted-" + Path(omitted_output).name,
+                     lambda: check(with_record(dropped_output), base), "window-generated-missing",
+                     omitted_output)
+        fx.reset(frozen)
+        widened_inputs = copy.deepcopy(reviewed)
+        widened_inputs["managed_inputs"]["README.md"] = digest(b"not an allowed managed input")
+        rejected("unclassified-managed-input", lambda: check(with_record(widened_inputs), base),
+                 "window-record-invalid", "unclassified input README.md")
+        fx.reset(frozen)
+        widened_outputs = copy.deepcopy(reviewed)
+        widened_outputs["generated"]["files"]["README.md"] = digest(b"not an allowed generated output")
+        rejected("unclassified-generated-output", lambda: check(with_record(widened_outputs), base),
+                 "window-record-invalid", "unclassified output README.md")
         fx.reset(frozen)
         with_clock = {**reviewed, "expires_at": "2026-12-31T00:00:00Z"}
         rejected("clock-field-rejected", lambda: check(with_record(with_clock), base), "window-record-invalid",
@@ -691,6 +746,11 @@ def self_test() -> tuple[int, int]:
         fx.run("rm", "-q", "release-please-config.json")
         fx.run("commit", "-q", "-m", "drop a managed input")
         rejected("tracked-contract-input-removed", lambda: check_tracked(repo), "window-input-missing")
+        fx.reset(base)
+        fx.run("rm", "-q", "docs/support/v0.2.1.md")
+        fx.run("commit", "-q", "-m", "drop the generated support ledger")
+        rejected("tracked-contract-ledger-removed", lambda: check_tracked(repo), "window-input-missing",
+                 "docs/support/v0.2.1.md")
 
         # The CLI reads the same objects: the exact process the workflow runs, over the frozen head.
         def cli(*arguments: str) -> subprocess.CompletedProcess:
