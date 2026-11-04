@@ -319,36 +319,68 @@ def visible_markdown(text: str) -> str:
 def mask_fenced_code_blocks(text: str) -> str:
     """Mask CommonMark fenced blocks, including blockquote containers."""
     output: list[str] = []
+    tick = chr(96)
     fence_char: str | None = None
     fence_length = 0
-    fence_quote_depth = 0
+    fence_containers: list[tuple[str, int]] = []
 
-    def quote_prefix(content: str, limit: int | None = None) -> tuple[int, int]:
-        depth = 0
+    def parse_containers(content: str) -> tuple[list[tuple[str, int]], int]:
+        containers: list[tuple[str, int]] = []
         position = 0
-        while limit is None or depth < limit:
+        while True:
             start = position
             spaces = 0
             while position < len(content) and content[position] == " " and spaces < 4:
                 position += 1
                 spaces += 1
-            if spaces > 3 or position >= len(content) or content[position] != ">":
-                position = start
-                break
-            depth += 1
-            position += 1
-            if position < len(content) and content[position] in " \t":
+            if spaces > 3:
+                return containers, start
+            if position < len(content) and content[position] == ">":
+                containers.append(("quote", 0))
                 position += 1
-        return depth, position
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+                continue
+            marker = re.match(r"([-+*]|\d{1,9}[.)])([ ]{1,4})", content[position:])
+            if marker is not None:
+                containers.append(("list", spaces + len(marker.group(1)) + len(marker.group(2))))
+                position += len(marker.group(0))
+                continue
+            return containers, start
+
+    def strip_containers(content: str, containers: list[tuple[str, int]]) -> tuple[bool, int]:
+        position = 0
+        for kind, indent in containers:
+            if kind == "quote":
+                start = position
+                spaces = 0
+                while position < len(content) and content[position] == " " and spaces < 4:
+                    position += 1
+                    spaces += 1
+                if spaces > 3 or position >= len(content) or content[position] != ">":
+                    return False, start
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+            else:
+                if content[position:].strip() == "":
+                    return True, len(content)
+                spaces = 0
+                while position + spaces < len(content) and content[position + spaces] == " ":
+                    spaces += 1
+                if spaces < indent:
+                    return False, position
+                position += indent
+        return True, position
 
     for line in text.splitlines(keepends=True):
         content = line.rstrip("\r\n")
         ending = line[len(content):]
         if fence_char is not None:
-            depth, position = quote_prefix(content, fence_quote_depth)
-            if depth == fence_quote_depth:
+            matched, position = strip_containers(content, fence_containers)
+            if matched:
                 candidate = content[position:]
-                closing = re.match(r"^ {0,3}([`~]+)[ \t]*$", candidate)
+                closing = re.match(r"^ {0,3}([" + re.escape(tick) + r"~]+)[ \t]*$", candidate)
                 closes = (closing is not None and closing.group(1)[0] == fence_char
                           and len(closing.group(1)) >= fence_length
                           and all(char == fence_char for char in closing.group(1)))
@@ -356,19 +388,19 @@ def mask_fenced_code_blocks(text: str) -> str:
                 if closes:
                     fence_char = None
                     fence_length = 0
-                    fence_quote_depth = 0
+                    fence_containers = []
                 continue
             fence_char = None
             fence_length = 0
-            fence_quote_depth = 0
+            fence_containers = []
 
-        depth, position = quote_prefix(content)
+        containers, position = parse_containers(content)
         candidate = content[position:]
-        opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", candidate)
-        if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
+        opening = re.match(r"^ {0,3}(" + re.escape(tick) + r"{3,}|~{3,})(.*)$", candidate)
+        if opening and not (opening.group(1)[0] == tick and tick in opening.group(2)):
             fence_char = opening.group(1)[0]
             fence_length = len(opening.group(1))
-            fence_quote_depth = depth
+            fence_containers = containers
             output.append(" " * len(content) + ending)
         else:
             output.append(line)
@@ -1096,6 +1128,12 @@ def self_test_version_v04() -> tuple[int, int]:
             ("indented-code", "    " + ledger_link),
             ("blockquote-fenced-code", "> ~~~markdown\n> " + ledger_link + "\n> ~~~"),
             ("list-fenced-code", f"- code:\n  {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
+            ("list-item-fenced-code", f"- {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
+            ("list-item-tilde-fenced-code", f"- ~~~markdown\n  {ledger_link}\n  ~~~"),
+            ("list-then-blockquote-fence",
+             f"- > {tick * 3}markdown\n  > {ledger_link}\n  > {tick * 3}"),
+            ("blockquote-then-list-fence",
+             f"> - {tick * 3}markdown\n>   {ledger_link}\n>   {tick * 3}"),
             ("unclosed-comment", f"<!--\n{ledger_link}"),
             ("inline-code-span", tick + ledger_link + tick),
             ("multiline-inline-code-span", tick + "\n" + ledger_link + "\n" + tick),
