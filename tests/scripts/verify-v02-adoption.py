@@ -558,37 +558,58 @@ def mask_markdown_nonrendered(text: str) -> str:
         end = bracket_ends[opening]
         return None if end < 0 else end
 
-    def closing_parenthesis(opening: int) -> int | None:
-        depth = 1
-        cursor = opening + 1
+    def skip_inline_whitespace(cursor: int) -> int | None:
+        line_endings = 0
         while cursor < len(source_chars):
             char = source_chars[cursor]
-            if char == "\\":
-                cursor += 2
+            if char in " \t":
+                cursor += 1
+            elif char == "\r":
+                line_endings += 1
+                cursor += 2 if cursor + 1 < len(source_chars) and source_chars[cursor + 1] == "\n" else 1
+            elif char == "\n":
+                line_endings += 1
+                cursor += 1
+            else:
+                break
+            if line_endings > 1:
+                return None
+        return cursor
+
+    def has_blank_line(start: int, end: int) -> bool:
+        cursor = start
+        while cursor < end:
+            if source_chars[cursor] not in "\r\n":
+                cursor += 1
                 continue
-            if char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-                if depth == 0:
-                    return cursor
-            cursor += 1
-        return None
+            cursor += 2 if (source_chars[cursor] == "\r" and cursor + 1 < end
+                            and source_chars[cursor + 1] == "\n") else 1
+            while cursor < end and source_chars[cursor] in " \t":
+                cursor += 1
+            if cursor < end and source_chars[cursor] in "\r\n":
+                return True
+        return False
 
     def inline_link(opening: int) -> tuple[int, tuple[int, int] | None] | None:
-        cursor = opening + 1
-        while cursor < len(source_chars) and source_chars[cursor].isspace():
-            cursor += 1
+        cursor = skip_inline_whitespace(opening + 1)
+        if cursor is None:
+            return None
         if cursor >= len(source_chars):
             return None
         if source_chars[cursor] == "<":
             cursor += 1
             while cursor < len(source_chars):
-                if source_chars[cursor] == "\\":
+                char = source_chars[cursor]
+                if char == "\\":
+                    if (cursor + 1 >= len(source_chars)
+                            or source_chars[cursor + 1] not in string.punctuation):
+                        return None
                     cursor += 2
-                elif source_chars[cursor] == ">":
+                elif char == ">":
                     cursor += 1
                     break
+                elif char.isspace() or char == "<":
+                    return None
                 else:
                     cursor += 1
             else:
@@ -598,30 +619,46 @@ def mask_markdown_nonrendered(text: str) -> str:
             while cursor < len(source_chars):
                 char = source_chars[cursor]
                 if char == "\\":
+                    if (cursor + 1 >= len(source_chars)
+                            or source_chars[cursor + 1] not in string.punctuation):
+                        return None
                     cursor += 2
                     continue
                 if char == "(":
                     depth += 1
+                    if depth > 32:
+                        return None
                 elif char == ")":
                     if depth == 0:
                         return cursor + 1, None
                     depth -= 1
-                elif char.isspace() and depth == 0:
-                    break
+                elif char.isspace():
+                    if depth == 0:
+                        break
+                    return None
+                elif char in "<>":
+                    return None
                 cursor += 1
 
-        while cursor < len(source_chars) and source_chars[cursor].isspace():
-            cursor += 1
+        separator_start = cursor
+        cursor = skip_inline_whitespace(cursor)
+        if cursor is None:
+            return None
         if cursor >= len(source_chars):
             return None
         if source_chars[cursor] == ")":
             return cursor + 1, None
+        if cursor == separator_start:
+            return None
         if source_chars[cursor] in ('"', "'"):
             quote = source_chars[cursor]
             title_start = cursor + 1
             cursor = title_start
             while cursor < len(source_chars):
                 if source_chars[cursor] == "\\":
+                    if (cursor + 1 >= len(source_chars)
+                            or source_chars[cursor + 1] not in string.punctuation):
+                        return None
                     cursor += 2
                 elif source_chars[cursor] == quote:
                     title_end = cursor
@@ -634,15 +671,32 @@ def mask_markdown_nonrendered(text: str) -> str:
             title = (title_start, title_end)
         elif source_chars[cursor] == "(":
             title_start = cursor + 1
-            title_end = closing_parenthesis(cursor)
-            if title_end is None:
+            cursor = title_start
+            while cursor < len(source_chars):
+                char = source_chars[cursor]
+                if char == "\\":
+                    if (cursor + 1 >= len(source_chars)
+                            or source_chars[cursor + 1] not in string.punctuation):
+                        return None
+                    cursor += 2
+                elif char == "(":
+                    return None
+                elif char == ")":
+                    break
+                else:
+                    cursor += 1
+            if cursor >= len(source_chars):
                 return None
-            cursor = title_end + 1
+            title_end = cursor
+            cursor += 1
             title = (title_start, title_end)
         else:
             return None
-        while cursor < len(source_chars) and source_chars[cursor].isspace():
-            cursor += 1
+        if has_blank_line(title[0], title[1]):
+            return None
+        cursor = skip_inline_whitespace(cursor)
+        if cursor is None:
+            return None
         if cursor >= len(source_chars) or source_chars[cursor] != ")":
             return None
         return cursor + 1, title
@@ -650,8 +704,11 @@ def mask_markdown_nonrendered(text: str) -> str:
     # Reference definitions are metadata, not body copy, even when no link uses them.
     reference_labels: set[str] = set()
 
-    def container_content_start(line: str) -> int | None:
+    def container_content_start(
+            line: str) -> tuple[int, int, tuple[int, ...]] | None:
         cursor = 0
+        quote_depth = 0
+        list_content_columns: list[int] = []
         while cursor < len(line):
             marker_start = cursor
             spaces = 0
@@ -661,6 +718,7 @@ def mask_markdown_nonrendered(text: str) -> str:
             if spaces > 3:
                 return None
             if cursor < len(line) and line[cursor] == ">":
+                quote_depth += 1
                 cursor += 1
                 if cursor < len(line) and line[cursor] in " \t":
                     cursor += 1
@@ -685,9 +743,10 @@ def mask_markdown_nonrendered(text: str) -> str:
                     marker_end += 1
                 if 1 <= marker_end - spaces_start <= 4:
                     cursor = marker_end
+                    list_content_columns.append(cursor)
                     continue
-            return marker_start + spaces
-        return cursor
+            return marker_start + spaces, quote_depth, tuple(list_content_columns)
+        return cursor, quote_depth, tuple(list_content_columns)
 
     def line_content_end(line: str) -> int:
         end = len(line)
@@ -695,47 +754,14 @@ def mask_markdown_nonrendered(text: str) -> str:
             end -= 1
         return end
 
-    def reference_title_end(line: str, cursor: int, end: int) -> int | None:
-        delimiter = line[cursor]
-        if delimiter in ('"', "'"):
-            cursor += 1
-            while cursor < end:
-                if line[cursor] == "\\":
-                    if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
-                        return None
-                    cursor += 2
-                elif line[cursor] == delimiter:
-                    return cursor + 1
-                else:
-                    cursor += 1
-            return None
-        if delimiter != "(":
-            return None
-        cursor += 1
-        depth = 1
-        while cursor < end:
-            if line[cursor] == "\\":
-                if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
-                    return None
-                cursor += 2
-            elif line[cursor] == "(":
-                depth += 1
-                if depth > 32:
-                    return None
-                cursor += 1
-            elif line[cursor] == ")":
-                depth -= 1
-                cursor += 1
-                if depth == 0:
-                    return cursor
-            else:
-                cursor += 1
-        return None
-
-    def reference_definition(line: str) -> tuple[str, bool] | None:
+    def reference_definition_label(
+            line: str) -> tuple[str, int, tuple[int, tuple[int, ...]]] | None:
         end = line_content_end(line)
-        cursor = container_content_start(line)
-        if cursor is None or cursor >= end or line[cursor] != "[":
+        prefix = container_content_start(line)
+        if prefix is None:
+            return None
+        cursor, quote_depth, list_content_columns = prefix
+        if cursor >= end or line[cursor] != "[":
             return None
         start = cursor + 1
         cursor = start
@@ -762,10 +788,9 @@ def mask_markdown_nonrendered(text: str) -> str:
         else:
             return None
 
-        while cursor < end and line[cursor] in " \t":
-            cursor += 1
-        if cursor >= end:
-            return None
+        return label, cursor, (quote_depth, list_content_columns)
+
+    def reference_destination(line: str, cursor: int, end: int) -> int | None:
         if line[cursor] == "<":
             cursor += 1
             while cursor < end:
@@ -808,23 +833,7 @@ def mask_markdown_nonrendered(text: str) -> str:
                     cursor += 1
             if cursor == destination_start or depth != 0:
                 return None
-
-        while cursor < end and line[cursor] in " \t":
-            cursor += 1
-        if cursor == end:
-            return label, False
-        title_end = reference_title_end(line, cursor, end)
-        if title_end is None or any(char not in " \t" for char in line[title_end:end]):
-            return None
-        return label, True
-
-    def is_reference_title_line(line: str) -> bool:
-        cursor = container_content_start(line)
-        end = line_content_end(line)
-        if cursor is None or cursor >= end:
-            return False
-        title_end = reference_title_end(line, cursor, end)
-        return title_end is not None and all(char in " \t" for char in line[title_end:end])
+        return cursor
 
     source = "".join(source_chars)
     line_spans: list[tuple[str, int, int]] = []
@@ -832,17 +841,119 @@ def mask_markdown_nonrendered(text: str) -> str:
     for line in source.splitlines(keepends=True):
         line_spans.append((line, offset, offset + len(line)))
         offset += len(line)
+
+    def reference_title_context_matches(
+            expected: tuple[int, tuple[int, ...]],
+            actual: tuple[int, int, tuple[int, ...]]) -> bool:
+        content_column, quote_depth, list_content_columns = actual
+        expected_quote_depth, expected_list_columns = expected
+        if quote_depth != expected_quote_depth or list_content_columns:
+            return False
+        if expected_list_columns:
+            list_content_column = expected_list_columns[-1]
+            return list_content_column <= content_column <= list_content_column + 3
+        return True
+
+    def reference_title_extent(
+            line_index: int, cursor: int,
+            expected_context: tuple[int, tuple[int, ...]]) -> tuple[int, int] | None:
+        if cursor >= line_content_end(line_spans[line_index][0]):
+            return None
+        delimiter = line_spans[line_index][0][cursor]
+        if delimiter not in ('"', "'", "("):
+            return None
+        cursor += 1
+        while line_index < len(line_spans):
+            line = line_spans[line_index][0]
+            end = line_content_end(line)
+            while cursor < end:
+                char = line[cursor]
+                if char == "\\":
+                    if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                        return None
+                    cursor += 2
+                elif (char == ")" if delimiter == "(" else char == delimiter):
+                    if any(rest not in " \t" for rest in line[cursor + 1:end]):
+                        return None
+                    return line_index, cursor + 1
+                elif delimiter == "(" and char == "(":
+                    return None
+                else:
+                    cursor += 1
+            line_index += 1
+            if line_index >= len(line_spans):
+                return None
+            prefix = container_content_start(line_spans[line_index][0])
+            if prefix is None or not reference_title_context_matches(expected_context, prefix):
+                return None
+            cursor = prefix[0]
+            if cursor >= line_content_end(line_spans[line_index][0]):
+                return None
+        return None
+
+    def reference_title_after_destination(
+            line_index: int, destination_end: int,
+            expected_context: tuple[int, tuple[int, ...]]) -> tuple[int, int] | None:
+        line = line_spans[line_index][0]
+        cursor = destination_end
+        end = line_content_end(line)
+        separator_start = cursor
+        while cursor < end and line[cursor] in " \t":
+            cursor += 1
+        if cursor < end:
+            if cursor == separator_start:
+                return None
+            return reference_title_extent(line_index, cursor, expected_context)
+        next_index = line_index + 1
+        if next_index >= len(line_spans):
+            return None
+        prefix = container_content_start(line_spans[next_index][0])
+        if prefix is None or not reference_title_context_matches(expected_context, prefix):
+            return None
+        cursor = prefix[0]
+        if cursor >= line_content_end(line_spans[next_index][0]):
+            return None
+        return reference_title_extent(next_index, cursor, expected_context)
+
     for index, (line, start, end) in enumerate(line_spans):
-        parsed = reference_definition(line)
+        parsed = reference_definition_label(line)
         if parsed is None:
             continue
-        label, has_inline_title = parsed
+        label, cursor, container_context = parsed
+        destination_line = index
+        destination_source = line
+        destination_source_end = line_content_end(line)
+        while cursor < destination_source_end and destination_source[cursor] in " \t":
+            cursor += 1
+        if cursor >= destination_source_end:
+            destination_line += 1
+            if destination_line >= len(line_spans):
+                continue
+            prefix = container_content_start(line_spans[destination_line][0])
+            if prefix is None or not reference_title_context_matches(container_context, prefix):
+                continue
+            cursor = prefix[0]
+            destination_source = line_spans[destination_line][0]
+            destination_source_end = line_content_end(destination_source)
+            while cursor < destination_source_end and destination_source[cursor] in " \t":
+                cursor += 1
+        if cursor >= destination_source_end:
+            continue
+        destination_end = reference_destination(destination_source, cursor, destination_source_end)
+        if destination_end is None:
+            continue
+        title_extent = reference_title_after_destination(
+            destination_line, destination_end, container_context)
+        if title_extent is None:
+            tail = destination_source[destination_end:destination_source_end]
+            if any(char not in " \t" for char in tail):
+                continue
+            final_end = line_spans[destination_line][2]
+        else:
+            title_line, _title_end = title_extent
+            final_end = line_spans[title_line][2]
         label = re.sub(r"\\(.)", r"\1", label)
         reference_labels.add(" ".join(label.split()).casefold())
-        final_end = end
-        if (not has_inline_title and index + 1 < len(line_spans)
-                and is_reference_title_line(line_spans[index + 1][0])):
-            final_end = line_spans[index + 1][2]
         blank(start, final_end)
 
     openings = array("I")
@@ -2216,7 +2327,7 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
         blank_title_link = replace_ledger_construct(
             "[ledger](docs/support/v0.4.0.md\n\n\"title\")")
         reject("blank-line-in-link-title-is-not-a-link", blank_title_link,
-               "release-notes-ledger-version-mismatch")
+               "markdown-inline-link-malformed")
         unmatched_brackets = replace_ledger_construct("[" * 5000)
         reject("unmatched-brackets-do-not-create-a-link", unmatched_brackets,
                "release-notes-ledger-version-mismatch")
@@ -2495,6 +2606,16 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              "[x](unfinished\nCGB game passes all acceptance checks."),
             ("malformed-link-cannot-hide-raw-html",
              "[x](unfinished\n<div hidden>Physical CGB-E remains UNKNOWN/POLICY</div>"),
+            ("nested-parentheses-inline-title-cannot-hide-game-claim",
+             "[ordinary](/url (CGB game passes all acceptance checks. (inner)))"),
+            ("nested-parentheses-image-title-cannot-hide-game-claim",
+             "![CGB game passes all acceptance checks.](/url (outer (inner) title))"),
+            ("nested-parentheses-inline-title-cannot-hide-raw-html",
+             "[ordinary](/url (</span><div hidden>text</div> (inner)))"),
+            ("inline-title-without-destination-separator-cannot-hide-game-claim",
+             '[ordinary](<url>"CGB game passes all acceptance checks.")'),
+            ("inline-title-with-blank-line-cannot-hide-game-claim",
+             '[ordinary](/url "title starts here\n\nCGB game passes all acceptance checks.")'),
         ):
             child_result(test_root, "docs")
             changed = readme_original + "\n" + extra + "\n"
@@ -2517,8 +2638,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              '[CGB game passes all acceptance checks.]: /url "bad\\q"'),
             ("over-nested-reference-destination-hides-game-claim",
              "[CGB game passes all acceptance checks.]: " + "(" * 33 + "target" + ")" * 33),
-            ("over-nested-reference-title-hides-game-claim",
-             "[CGB game passes all acceptance checks.]: /url " + "(" * 33 + "title" + ")" * 33),
+            ("nested-reference-title-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: /url (outer (inner) title)"),
+            ("blank-line-reference-title-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: /url "title\n\ncontinues"'),
+            ("reference-title-without-destination-separator-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: '
+             '<https://example.invalid/>"title"'),
             ("invalid-reference-image-hides-game-claim",
              "![CGB game passes all acceptance checks.]\n\n"
              "[CGB game passes all acceptance checks.]: invalid destination with spaces"),
@@ -2532,6 +2658,44 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             rejected += 1
             write_lf(readme_path, readme_original)
 
+        mismatched_reference_titles = (
+            ("root-reference-definition-blockquote-title",
+             '[unused]: /url\n> "CGB game passes all acceptance checks."'),
+            ("root-reference-definition-list-title",
+             '[unused]: /url\n- "CGB game passes all acceptance checks."'),
+            ("blockquote-reference-definition-list-title",
+             '> [unused]: /url\n- "CGB game passes all acceptance checks."'),
+            ("list-reference-definition-blockquote-title",
+             '- [unused]: /url\n> "CGB game passes all acceptance checks."'),
+        )
+        for name, extra in mismatched_reference_titles:
+            child_result(test_root, "docs")
+            changed = readme_original + "\n" + extra + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"unsupported-cgb-game-qualification:{README}")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        multiline_reference_titles = (
+            ("inline-multiline-reference-title-hides-hardware-disclosure",
+             '[unused]: /url "title continues\n  Physical CGB-E remains UNKNOWN/POLICY"'),
+            ("next-line-multiline-reference-title-hides-hardware-disclosure",
+             '[unused]: /url\n  "title starts here\n  Physical CGB-E remains UNKNOWN/POLICY"'),
+            ("next-line-reference-destination-and-title-hide-hardware-disclosure",
+             '[unused]:\n  /url "Physical CGB-E remains UNKNOWN/POLICY"'),
+        )
+        for name, definition in multiline_reference_titles:
+            child_result(test_root, "docs")
+            changed = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = changed.rstrip() + "\n\n" + definition + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
         child_result(test_root, "docs")
         shortcut_image_alt_only = replace_all(
             readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
@@ -2540,6 +2704,19 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         shortcut_image_alt_only = shortcut_image_alt_only.rstrip() + (
             "\n\n[Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png\n")
         write_lf(readme_path, shortcut_image_alt_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        escaped_parenthesized_title_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "",
+            "escaped-parentheses-in-reference-title-hides-hardware-disclosure")
+        escaped_parenthesized_title_only = escaped_parenthesized_title_only.rstrip() + (
+            "\n\n[unused-escaped-title]: https://example.invalid/ "
+            "(escaped \\(title\\) Physical CGB-E remains UNKNOWN/POLICY)\n")
+        write_lf(readme_path, escaped_parenthesized_title_only)
         child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
         rejected_reasons.append("physical-cgb-limit-missing")
         rejected += 1
@@ -2589,19 +2766,37 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
              f"absence-statement-missing:{GAME_GUIDE}"),
             ("link-title-hides-release-limit", RELEASE, "unsigned and not notarized",
              f"unsigned-limit-missing:{RELEASE}"),
+            ("multiline-link-title-hides-hardware-disclosure", README,
+             "Physical CGB-E remains UNKNOWN/POLICY",
+             f"physical-cgb-limit-missing:{README}"),
         )
         for name, relative, phrase, reason in link_title_controls:
             child_result(test_root, "docs")
             original = originals[relative]
             changed = replace_all(
                 original, phrase,
-                f'[details](https://example.invalid/ "{phrase}")', name)
+                (f'[details](https://example.invalid/ "title continues\n{phrase}")'
+                 if "multiline" in name else
+                 f'[details](https://example.invalid/ "{phrase}")'), name)
             target = test_root / relative
             write_lf(target, changed)
             child_result(test_root, "docs", reason)
             rejected_reasons.append(reason.split(":", 1)[0])
             rejected += 1
             write_lf(target, original)
+
+        child_result(test_root, "docs")
+        escaped_inline_title_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "",
+            "escaped-parentheses-in-inline-title-hides-hardware-disclosure")
+        escaped_inline_title_only = escaped_inline_title_only.rstrip() + (
+            "\n\n[details](/url (escaped \\(title\\) "
+            "Physical CGB-E remains UNKNOWN/POLICY))\n")
+        write_lf(readme_path, escaped_inline_title_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
 
         child_result(test_root, "docs")
         readme_title_only = replace_all(
@@ -2996,7 +3191,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 44 + len(incomplete_html_openers)
+    controls = len(mutations) + 61 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
