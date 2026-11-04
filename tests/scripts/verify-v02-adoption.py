@@ -1535,6 +1535,7 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
 
 def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int]:
     """Prove that the existing release-notes gate rejects an omitted v0.4 fact."""
+    global RAW_HTML_CONSTRUCT
     rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
                                   stderr=subprocess.DEVNULL, text=True).strip()
     support = support_ledger_module()
@@ -1591,8 +1592,21 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
             pattern = ledger_link_pattern("docs/support/v0.4.0.md")
             return pattern.sub(lambda match: "!" + match.group(0), valid)
 
+        incomplete_html_openers = (
+            ("script-newline", "<script\n"),
+            ("script-space-newline", "<script \n"),
+            ("pre-newline", "<pre\n"),
+            ("pre-space-newline", "<pre \n"),
+            ("style-newline", "<style\n"),
+            ("style-space-newline", "<style \n"),
+            ("script-mixed-case", "<ScRiPt\n"),
+            ("doctype-html", "<!DOCTYPE html\n"),
+            ("xml-processing-instruction", '<?xml version="1.0"\n'),
+        )
+
         accepts(valid)
         accepts(valid + "\n```html\n<div hidden>sample</div>\n\t[ledger](docs/support/v0.4.0.md)\n```\n")
+        accepts(valid + "\n<!-- <script\n -->\n\n```html\n<pre \n```\n\n    <style\n\n`<!DOCTYPE html` `<?xml version=\"1.0\"`\n")
         with tempfile.TemporaryDirectory(prefix="gabbaboy-release-revision-identity-") as temp:
             other_tree = Path(temp)
             cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
@@ -1756,6 +1770,27 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
         reject("html-cdata-rejected",
                replace_ledger_construct('<![CDATA[[ledger](docs/support/v0.4.0.md)]]>'),
                "release-notes-raw-html-unsupported")
+        legacy_reproducer = "<script\n" + valid
+        legacy_raw_html_construct = re.compile(
+            r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|<![A-Z][^>]*>|"
+            r"<\?[A-Za-z][^>]*\?>|<!\[CDATA\[", re.DOTALL | re.IGNORECASE)
+        current_raw_html_construct = RAW_HTML_CONSTRUCT
+        try:
+            RAW_HTML_CONSTRUCT = legacy_raw_html_construct
+            write_lf(notes, legacy_reproducer)
+            try:
+                require(check_release_notes(notes, root, rev, root, "0.4.0") > 0,
+                        "legacy-incomplete-html-raw-html-causal-checks-empty")
+            except ContractError as error:
+                raise ContractError(f"legacy-incomplete-html-raw-html-causal-reproducer-rejected:{error}") from error
+        finally:
+            RAW_HTML_CONSTRUCT = current_raw_html_construct
+        for opener_name, opener in incomplete_html_openers:
+            reject(f"incomplete-{opener_name}-hides-release-notes", opener + valid,
+                   "release-notes-raw-html-unsupported")
+            reject(f"incomplete-{opener_name}-hides-ledger-link",
+                   replace_ledger_construct(opener + "[ledger](docs/support/v0.4.0.md)"),
+                   "release-notes-raw-html-unsupported")
         malformed_link = replace_ledger_targets("not a valid destination docs/support/v0.4.0.md")
         reject("malformed-destination-is-not-a-ledger-link", malformed_link,
                "release-notes-ledger-version-mismatch")
@@ -1888,6 +1923,39 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
                  "\n```html\n<div hidden>example</div>\n\t[ledger](docs/support/v0.4.0.md)\n```\n")
         child_result(test_root, "docs")
         write_lf(readme_path, readme_original)
+
+        masked_incomplete_openers = (
+            "\n<!-- <script\n -->\n\n"
+            "```html\n<pre \n```\n\n"
+            "    <style\n    [ledger](docs/support/v0.4.0.md)\n\n"
+            "`<!DOCTYPE html` `<?xml version=\"1.0\"`\n"
+        )
+        write_lf(readme_path, readme_original + masked_incomplete_openers)
+        child_result(test_root, "docs")
+        write_lf(readme_path, readme_original)
+
+        incomplete_html_openers = (
+            ("script-newline", "<script\n"),
+            ("script-space-newline", "<script \n"),
+            ("pre-newline", "<pre\n"),
+            ("pre-space-newline", "<pre \n"),
+            ("style-newline", "<style\n"),
+            ("style-space-newline", "<style \n"),
+            ("script-mixed-case", "<ScRiPt\n"),
+            ("doctype-html", "<!DOCTYPE html\n"),
+            ("xml-processing-instruction", '<?xml version="1.0"\n'),
+        )
+        for opener_name, opener in incomplete_html_openers:
+            child_result(test_root, "docs")
+            incomplete_disclosure = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+                opener + "Physical CGB-E remains UNKNOWN/POLICY",
+                f"incomplete-html-{opener_name}-hides-hardware-disclosure")
+            write_lf(readme_path, incomplete_disclosure)
+            child_result(test_root, "docs", "markdown-raw-html-unsupported")
+            rejected_reasons.append(f"incomplete-html-{opener_name}-hides-hardware-disclosure")
+            rejected += 1
+            write_lf(readme_path, readme_original)
 
         hidden_disclosure = replace_all(
             readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
