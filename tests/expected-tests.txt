@@ -1185,6 +1185,9 @@ release_disclosure_generator
 release_disclosure_controls
 support_claims
 support_claims_controls
+support_claims_v04
+support_claims_v04_controls
+support_ledger_v04_tracer
 release_window_contract
 release_window_controls
 judge_outcome_controls

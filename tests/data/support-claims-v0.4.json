@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "kind": "release-support-claims",
+  "applies_from_version": "0.4.0",
+  "evidence_revision": "4a4513998ba026d1c6e1dec6d8ab6fc5cd517f4f",
+  "candidate_order": ["potion-panic-gbcompo25", "ucity-1.3"],
+  "candidate_outcomes": [
+    {
+      "candidate_id": "potion-panic-gbcompo25",
+      "name": "Potion Panic",
+      "record_path": "tests/data/cgb-candidates/potion-panic.json",
+      "record_sha256": "f3583f2933e48479b275e68beb275cfd1f356c01",
+      "disposition": "source-rights-no-go",
+      "reason": "The creator-linked Codeberg source could not be reached before a ref or commit identity was returned; exact component grants and repository/public-CI scope remain unestablished.",
+      "not_observed": ["build", "rom", "execution", "progress", "observations", "receipt"]
+    },
+    {
+      "candidate_id": "ucity-1.3",
+      "name": "µCity 1.3",
+      "record_path": "tests/data/cgb-candidates/ucity-1.3.json",
+      "record_sha256": "d510c32410f8b46d7fdcb7917a8fabed138987b9",
+      "disposition": "source-rights-no-go",
+      "reason": "The required source/engine/hardware.inc component has no identified grant or notice establishing repository/public-CI scope.",
+      "not_observed": ["build", "rom", "execution", "progress", "observations", "receipt"]
+    }
+  ],
+  "non_claims": [
+    "Neither candidate was built or run.",
+    "No CGB game was admitted.",
+    "These source/rights-scope no-go outcomes do not establish a license prohibition."
+  ]
+}
