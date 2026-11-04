@@ -223,6 +223,10 @@ COMMONMARK_REFERENCE_LINK_GAME_CLAIMS = (
     ("collapsed", "C[GB][] game passes all acceptance checks.\n\n"
      "[GB]: https://example.invalid"),
 )
+DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM = (
+    "a* " * 512 + "CGB game passes all acceptance checks.")
+DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE = (
+    "a* " * 512 + "CGB test-ROM results remain software-model evidence only.")
 
 
 def is_default_ignorable_codepoint(codepoint: int) -> bool:
@@ -288,36 +292,57 @@ def normalize_commonmark_emphasis(text: str) -> str:
                      "can_open": can_open, "can_close": can_close})
         cursor = end
 
+    opener_buckets: dict[str, list[list[int]]] = {
+        "*": [[] for _ in range(6)],
+        "_": [[] for _ in range(6)],
+    }
+
+    def bucket_index(run: dict[str, int | str | bool]) -> int:
+        return (3 if run["can_close"] else 0) + int(run["length"]) % 3
+
     removed = bytearray(len(text))
     for close_index, closer in enumerate(runs):
-        if not closer["can_close"]:
-            continue
+        marker = str(closer["marker"])
         closing_count = int(closer["remaining"])
-        opener_index = close_index - 1
-        while closing_count and opener_index >= 0:
-            opener = runs[opener_index]
-            opener_index -= 1
-            if opener["marker"] != closer["marker"] or not opener["can_open"]:
-                continue
-            opening_count = int(opener["remaining"])
-            if not opening_count:
-                continue
-            if opener["can_close"] or closer["can_open"]:
-                if ((int(opener["length"]) + int(closer["length"])) % 3 == 0
-                        and (int(opener["length"]) % 3 != 0
-                             or int(closer["length"]) % 3 != 0)):
-                    continue
-            paired = min(opening_count, closing_count)
-            opener_start = int(opener["end"]) - opening_count
-            closer_start = int(closer["start"]) + (
-                int(closer["length"]) - closing_count)
-            for position in range(opener_start, opener_start + paired):
-                removed[position] = 1
-            for position in range(closer_start, closer_start + paired):
-                removed[position] = 1
-            opener["remaining"] = opening_count - paired
-            closer["remaining"] = closing_count - paired
-            closing_count -= paired
+        closer_modulo = int(closer["length"]) % 3
+        closer_can_open = bool(closer["can_open"])
+        if closer["can_close"]:
+            while closing_count:
+                candidate_index = -1
+                for opener_can_close in (False, True):
+                    for opener_modulo in range(3):
+                        if ((opener_can_close or closer_can_open)
+                                and (opener_modulo + closer_modulo) % 3 == 0
+                                and (opener_modulo != 0 or closer_modulo != 0)):
+                            continue
+                        bucket = opener_buckets[marker][
+                            (3 if opener_can_close else 0) + opener_modulo]
+                        while (bucket and
+                               int(runs[bucket[-1]]["remaining"]) == 0):
+                            bucket.pop()
+                        if bucket and bucket[-1] > candidate_index:
+                            candidate_index = bucket[-1]
+                if candidate_index < 0:
+                    break
+
+                opener = runs[candidate_index]
+                opening_count = int(opener["remaining"])
+                paired = min(opening_count, closing_count)
+                opener_start = int(opener["end"]) - opening_count
+                closer_start = int(closer["start"]) + (
+                    int(closer["length"]) - closing_count)
+                for position in range(opener_start, opener_start + paired):
+                    removed[position] = 1
+                for position in range(closer_start, closer_start + paired):
+                    removed[position] = 1
+                opener["remaining"] = opening_count - paired
+                closing_count -= paired
+                closer["remaining"] = closing_count
+                if int(opener["remaining"]) == 0:
+                    opener_buckets[marker][bucket_index(opener)].pop()
+
+        if closer_can_open and int(closer["remaining"]) > 0:
+            opener_buckets[marker][bucket_index(closer)].append(close_index)
     return "".join(char for position, char in enumerate(text) if not removed[position])
 
 
@@ -2466,6 +2491,8 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
              "release-notes-unsupported-cgb-game-qualification")
             for name, _ in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS
         )
+        mutations += (("dense-unmatched-emphasis-game-claim", None,
+                       "release-notes-unsupported-cgb-game-qualification"),)
         for safe_suffix in (
                 "\nCGB&#x20; test-ROM results remain software-model evidence only.\n",
                 "\n`CGB&#x200b; game passes all acceptance checks.`\n",
@@ -2481,7 +2508,8 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                 "\n[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>\n",
                 "\n[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\"\n",
                 "\n`C[GB] game passes all acceptance checks.`\n",
-                "\n```text\nC[GB] game passes all acceptance checks.\n```\n"):
+                "\n```text\nC[GB] game passes all acceptance checks.\n```\n",
+                "\n" + DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE + "\n"):
             write_lf(notes, VALID_RELEASE_NOTES + safe_suffix)
             expect_pass(cli_args)
         write_lf(notes, VALID_RELEASE_NOTES)
@@ -2521,6 +2549,8 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                     "-game-claim")
                 claim = dict(COMMONMARK_REFERENCE_LINK_GAME_CLAIMS)[claim_name]
                 changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+            elif name == "dense-unmatched-emphasis-game-claim":
+                changed = VALID_RELEASE_NOTES + "\n" + DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM + "\n"
             elif name == "false-signing-claim":
                 changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
             elif name == "false-publication-claim":
@@ -3320,6 +3350,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
                 ("reference-link-claim-in-fenced-code-remains-masked",
                  "```text\nC[GB] game passes all acceptance checks.\n```")):
             readme_parser_control("commonmark-reference-link-" + name, safe_prose)
+        readme_parser_control(
+            "dense-unmatched-emphasis-game-claim-cannot-pass",
+            DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM,
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "dense-unmatched-emphasis-safe-game-evidence-remains-valid",
+            DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE)
 
         multiline_reference_titles = (
             ("inline-multiline-reference-title-hides-hardware-disclosure",
@@ -3524,6 +3561,13 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
                 ("reference-link-claim-in-fenced-code-remains-masked",
                  "```text\nC[GB] game passes all acceptance checks.\n```")):
             notice_parser_control("notice-commonmark-reference-link-" + name, safe_prose)
+        notice_parser_control(
+            "notice-dense-unmatched-emphasis-game-claim-cannot-pass",
+            DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM,
+            f"unsupported-cgb-game-qualification:{NOTICES}")
+        notice_parser_control(
+            "notice-dense-unmatched-emphasis-safe-game-evidence-remains-valid",
+            DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE)
 
         hidden_notice_rows = (
             ("libbet", "Libbet and the Magic Floor v0.08 test fixture",
@@ -3892,7 +3936,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 118 + len(incomplete_html_openers)
+    controls = len(mutations) + 120 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
