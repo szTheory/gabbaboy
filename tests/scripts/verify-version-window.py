@@ -448,13 +448,14 @@ def build_fixture(directory: Path) -> tuple[Fixture, str, str, bytes]:
     fx.write("release-please-config.json", '{"release-type": "simple"}\n')
     fx.write("tests/data/release-disclosure.json", '{"schema_version": 1}\n')
     fx.write("tests/data/support-claims-v0.3.json", '{"schema_version": 1, "kind": "scoped-support-claims"}\n')
+    fx.write("tests/data/support-claims-v0.4.json", '{"schema_version": 1, "kind": "release-support-claims"}\n')
     fx.write("tests/scripts/verify-support-ledger.py", "# stand-in generator\n")
     fx.write("docs/support/v0.2.1.md", "# v0.2.1 ledger\n")
     fx.write("src/core/gabbaboy.c", "int core(void) { return 0; }\n")
     fx.write(RECORD_PATH, render_record(inactive_record()))
     base = fx.commit("main", "CMakeLists.txt", ".release-please-manifest.json", "CHANGELOG.md",
                      "release-please-config.json", "tests/data/release-disclosure.json",
-                     "tests/data/support-claims-v0.3.json",
+                     "tests/data/support-claims-v0.3.json", "tests/data/support-claims-v0.4.json",
                      "tests/scripts/verify-support-ledger.py", "docs/support/v0.2.1.md",
                      "src/core/gabbaboy.c", RECORD_PATH)
     fx.run("checkout", "-q", "-b", "release-please--branches--main")
@@ -607,6 +608,23 @@ def self_test() -> tuple[int, int]:
 
         def with_record(record: dict) -> str:
             return commit_record(record)
+
+        # The v0.4 claim profile must remain an individually required input, even when its
+        # current bytes and the generated ledger digest are otherwise internally consistent.
+        profile_path = "tests/data/support-claims-v0.4.json"
+        profile_blob = git_blob(repo, head, profile_path)
+        if profile_blob is None:
+            raise AssertionError("fixture omitted the v0.4 claim profile")
+        profile_bound = copy.deepcopy(reviewed)
+        profile_bound["managed_inputs"][profile_path] = digest(profile_blob)
+        fx.reset(frozen)
+        bound_profile = with_record(profile_bound)
+        accepted("v04-profile-explicitly-bound", lambda: check(bound_profile, base))
+        profile_omitted = copy.deepcopy(profile_bound)
+        del profile_omitted["managed_inputs"][profile_path]
+        rejected("v04-profile-omitted", lambda: check(with_record(profile_omitted), base),
+                 "window-input-missing", profile_path)
+        fx.reset(frozen)
 
         review_stale = with_record({**reviewed, "review": {**reviewed["review"], "head": base}})
         rejected("review-for-another-head", lambda: check(review_stale, base), "window-review-stale")
