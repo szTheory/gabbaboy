@@ -249,6 +249,7 @@ REBOUND_ATTRIBUTION = re.compile(r"\bRebound\b")
 
 STATE_VERSION_SENTENCE = "Save states load only in the exact GabbaBoy release that wrote them."
 HOST_POSIX_SENTENCE = "Host mode is POSIX-only; Windows refuses `--save-dir`."
+HOST_POSIX_VISIBLE = "Host mode is POSIX-only; Windows refuses"
 PERF_HEAD_LIMITATION = (
     "The Ir attribution figure was measured at @HEAD@ on main before the release commit; "
     "the release-binding Ir check is the perf-gate receipt verified at the tagged source."
@@ -503,13 +504,80 @@ def read_document(root: Path, relative: str) -> str:
 
 
 def prose(text: str) -> str:
-    """Whitespace-normalized visible prose without comments or code blocks."""
+    """Whitespace-normalized visible prose without comments or code spans."""
     text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
-    text = re.sub(r"^(```|~~~).*?^\1[^\n]*$", " ", text,
-                  flags=re.DOTALL | re.MULTILINE)
+    text = mask_fenced_code_blocks(text)
     text = re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", " ", text)
+    text = mask_inline_code_spans(text)
     return " ".join(text.split())
 
+
+def mask_fenced_code_blocks(text: str) -> str:
+    """Mask CommonMark fenced blocks, requiring a matching delimiter and length."""
+    output: list[str] = []
+    fence_char: str | None = None
+    fence_length = 0
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        if fence_char is None:
+            opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", content)
+            if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
+                fence_char = opening.group(1)[0]
+                fence_length = len(opening.group(1))
+                output.append(" " * len(content) + ending)
+            else:
+                output.append(line)
+            continue
+        closing = re.match(r"^ {0,3}([`~]+)[ \t]*$", content)
+        closes = (closing is not None and closing.group(1)[0] == fence_char
+                  and len(closing.group(1)) >= fence_length
+                  and all(char == fence_char for char in closing.group(1)))
+        output.append(" " * len(content) + ending)
+        if closes:
+            fence_char = None
+            fence_length = 0
+    return "".join(output)
+
+
+def mask_inline_code_spans(text: str) -> str:
+    """Mask CommonMark backtick spans, including multiline spans, without moving offsets."""
+    tick = chr(96)
+    chars = list(text)
+    index = 0
+    length = len(text)
+    while index < length:
+        if text[index] != tick:
+            index += 1
+            continue
+        opening = index
+        while index < length and text[index] == tick:
+            index += 1
+        delimiter = index - opening
+        backslashes = 0
+        cursor = opening - 1
+        while cursor >= 0 and text[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        if backslashes % 2:
+            continue
+        search = index
+        while search < length:
+            if text[search] != tick:
+                search += 1
+                continue
+            closing = search
+            while search < length and text[search] == tick:
+                search += 1
+            if search - closing == delimiter:
+                for offset in range(opening, search):
+                    if chars[offset] not in ("\n", "\r"):
+                        chars[offset] = " "
+                index = search
+                break
+        else:
+            index = opening + delimiter
+    return "".join(chars)
 
 def comment_free(text: str) -> str:
     return re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
@@ -820,7 +888,7 @@ def perf_disclosure_head(root: Path, repo: Path | None = None, rev: str | None =
 
 
 def ledger_link_pattern(ledger: str) -> re.Pattern[str]:
-    return re.compile(r"\]\([^)]*" + re.escape(ledger) + r"(?:[#?][^)]*)?\)")
+    return re.compile(r"(?<![!\\])\[[^\]\n]*\]\([^)]*" + re.escape(ledger) + r"(?:[#?][^)]*)?\)")
 
 
 def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: str) -> int:
@@ -967,7 +1035,8 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         checks += 1
     require(STATE_VERSION_SENTENCE in text, "release-notes-state-version-missing")
     checks += 1
-    require(HOST_POSIX_SENTENCE in text, "release-notes-host-posix-missing")
+    require(HOST_POSIX_SENTENCE in raw and HOST_POSIX_VISIBLE in text,
+            "release-notes-host-posix-missing")
     checks += 1
     require(re.search(r"unsigned and not notarized", text, re.IGNORECASE) is not None,
             "release-notes-unsigned-limit-missing")
@@ -1324,8 +1393,21 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                "release-notes-candidate-name-missing")
         reject("fenced-code-hides-reason", valid.replace(p_line, f"```text\n{p_line}\n```"),
                "release-notes-candidate-name-missing")
+        tick = chr(96)
+        reject("inline-code-hides-reason", valid.replace(p_line, f"{tick}{p_line}{tick}"),
+               "release-notes-candidate-name-missing")
+        reject("inline-code-hides-host-limit", valid.replace(
+            HOST_POSIX_SENTENCE, f"{tick}{HOST_POSIX_SENTENCE}{tick}"),
+            "release-notes-host-posix-missing")
         indented = "\n".join(("    " + line if line else "") for line in valid.splitlines())
         reject("indented-code-hides-entire-preface", indented, "release-notes-empty")
+        inline = "\n".join((f"{tick}{line}{tick}" if line else "") for line in valid.splitlines())
+        reject("inline-code-hides-entire-preface", inline,
+               "release-notes-version-missing:0.4.0")
+        image_link = re.sub(r"(?<!\!)\[([^\]\n]+)\](\([^\)\n]*docs/support/v0\.4\.0\.md[^\)\n]*\))",
+                            r"![\1]\2", valid, count=1)
+        require(image_link != valid, "release-notes-self-test-link-anchor-missing")
+        reject("image-is-not-a-ledger-link", image_link, "release-notes-ledger-version-mismatch")
         reject("terminal-control-hides-reason", valid.replace("Potion Panic", "Potion \x1b[2KPanic", 1),
                "release-notes-terminal-control-present")
         reject("wrong-version-ledger-link", valid.replace(

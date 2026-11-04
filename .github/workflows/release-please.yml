@@ -128,4 +128,6 @@ jobs:
             echo "No open version PR; normal development keeps the existing release policy."
             exit 0
           fi
-          python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" --base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md" --expect-version 0.4.0
+          python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" --base "$MAIN_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md"
+          python3 -I trusted/tests/scripts/verify-version-window.py --check-tracked --rev "$PR_HEAD" --expect-version 0.4.0 --repo version-pr
+          python3 -I trusted/tests/scripts/verify-v02-adoption.py --release-notes "$RUNNER_TEMP/version-pr-body.md" --repo version-pr --rev "$PR_HEAD"

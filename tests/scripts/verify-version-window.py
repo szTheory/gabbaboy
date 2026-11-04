@@ -297,21 +297,89 @@ def validate_version_outputs(repo: Path, commit: str, expected_version: str) -> 
     first = sections[0]
     end = sections[1].start() if len(sections) > 1 else len(visible)
     section = visible[first.end():end]
-    ledger_link = re.compile(r"\]\([^)]*" + re.escape(ledger_path) + r"(?:[#?][^)]*)?\)")
+    ledger_link = re.compile(r"(?<![!\\])\[[^\]\n]*\]\([^)]*" + re.escape(ledger_path) + r"(?:[#?][^)]*)?\)")
     if ledger_link.search(section) is None:
         reject("window-version-output-mismatch", f"the {expected_version} changelog section does not link {ledger_path}")
 
 
 def visible_markdown(text: str) -> str:
-    """Mask comments, fenced code, and indented code while preserving source offsets."""
+    """Mask comments, code blocks, and inline code while preserving source offsets."""
     def mask(match: re.Match[str]) -> str:
         return "".join("\n" if char == "\n" else "\r" if char == "\r" else " "
-                        for char in match.group(0))
+                       for char in match.group(0))
 
     text = re.sub(r"<!--.*?-->", mask, text, flags=re.DOTALL)
-    text = re.sub(r"(?ms)^(```|~~~).*?^\1[^\n]*$", mask, text)
-    return re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", mask, text)
+    text = mask_fenced_code_blocks(text)
+    text = re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", mask, text)
+    return mask_inline_code_spans(text)
 
+
+def mask_fenced_code_blocks(text: str) -> str:
+    """Mask CommonMark fenced blocks, requiring a matching delimiter and length."""
+    output: list[str] = []
+    fence_char: str | None = None
+    fence_length = 0
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        if fence_char is None:
+            opening = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", content)
+            if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
+                fence_char = opening.group(1)[0]
+                fence_length = len(opening.group(1))
+                output.append(" " * len(content) + ending)
+            else:
+                output.append(line)
+            continue
+        closing = re.match(r"^ {0,3}([`~]+)[ \t]*$", content)
+        closes = (closing is not None and closing.group(1)[0] == fence_char
+                  and len(closing.group(1)) >= fence_length
+                  and all(char == fence_char for char in closing.group(1)))
+        output.append(" " * len(content) + ending)
+        if closes:
+            fence_char = None
+            fence_length = 0
+    return "".join(output)
+
+
+def mask_inline_code_spans(text: str) -> str:
+    """Mask CommonMark backtick spans, including multiline spans, without moving offsets."""
+    tick = chr(96)
+    chars = list(text)
+    index = 0
+    length = len(text)
+    while index < length:
+        if text[index] != tick:
+            index += 1
+            continue
+        opening = index
+        while index < length and text[index] == tick:
+            index += 1
+        delimiter = index - opening
+        backslashes = 0
+        cursor = opening - 1
+        while cursor >= 0 and text[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        if backslashes % 2:
+            continue
+        search = index
+        while search < length:
+            if text[search] != tick:
+                search += 1
+                continue
+            closing = search
+            while search < length and text[search] == tick:
+                search += 1
+            if search - closing == delimiter:
+                for offset in range(opening, search):
+                    if chars[offset] not in ("\n", "\r"):
+                        chars[offset] = " "
+                index = search
+                break
+        else:
+            index = opening + delimiter
+    return "".join(chars)
 
 def check_release_notes(repo: Path, rev: str, release_notes: Path) -> None:
     """Delegate supplied notes to the established immutable release-notes judge."""
@@ -982,10 +1050,14 @@ def self_test_version_v04() -> tuple[int, int]:
 
         changelog_section = "# Changelog\n\n## [0.4.0]\n\n"
         ledger_link = "- Support: [ledger](docs/support/v0.4.0.md)."
+        tick = chr(96)
         for hiding, content in (
             ("comment", f"<!-- {ledger_link} -->"),
             ("fenced-code", f"```markdown\n{ledger_link}\n```"),
             ("indented-code", "    " + ledger_link),
+            ("inline-code-span", tick + ledger_link + tick),
+            ("multiline-inline-code-span", tick + "\n" + ledger_link + "\n" + tick),
+            ("image-is-not-a-ledger-link", "![ledger](docs/support/v0.4.0.md)"),
         ):
             accepted("visible-ledger-link-counterpart-" + hiding,
                      cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))

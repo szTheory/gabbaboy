@@ -3792,8 +3792,12 @@ def check_version_window(root: Path) -> None:
     _check_bounded_downloads(name, tree)
     require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
     require_call(name, WINDOW_JOB, {"steps": [judge_steps[0]]}, WINDOW_CALL, conditional=True)
-    expected_judge_run = WINDOW_JUDGE_RUN.replace(
-        WINDOW_CALL, WINDOW_CALL + " --expect-version 0.4.0")
+    expected_judge_run = WINDOW_JUDGE_RUN + (
+        '\npython3 -I trusted/tests/scripts/verify-version-window.py --check-tracked '
+        '--rev "$PR_HEAD" --expect-version 0.4.0 --repo version-pr'
+        '\npython3 -I trusted/tests/scripts/verify-v02-adoption.py --release-notes '
+        '"$RUNNER_TEMP/version-pr-body.md" --repo version-pr --rev "$PR_HEAD"'
+    )
     if judge_text != expected_judge_run:
         raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} judge body must match the trusted absent/present routing contract")
     _check_window_config(root)
@@ -4064,6 +4068,12 @@ def check_version_pr_gate(root: Path) -> None:
     if "BASE_SHA=$(git -C trusted rev-parse HEAD)" not in window_text:
         raise Reject("version-pr-gate-trust", "the window base must be the immutable trusted PR-base checkout")
     require_call(name, VERSION_PR_JOB, {"steps": [window]}, VERSION_PR_WINDOW_CALL)
+    require_call(name, VERSION_PR_JOB, {"steps": [window]},
+                 'python3 -I trusted/tests/scripts/verify-version-window.py --check-tracked '
+                 '--rev "$PR_HEAD" --expect-version 0.4.0 --repo version-pr')
+    require_call(name, VERSION_PR_JOB, {"steps": [window]},
+                 'python3 -I trusted/tests/scripts/verify-v02-adoption.py --release-notes '
+                 '"$RUNNER_TEMP/version-pr-body.md" --repo version-pr --rev "$PR_HEAD"')
     state = steps[4]
     if state.get("id") != "window":
         raise Reject("version-pr-gate-trust", "the window state step must expose whether a valid active record exists")

@@ -106,29 +106,69 @@ def shell_events(policy, step: dict, workflow: str) -> list:
         raise Reject("release-policy-shell-invalid", f"{workflow} step has unsupported shell syntax") from error
 
 
-def checker_invocation(policy, step: dict, workflow: str, *, require_active: bool, script_path: str) -> None:
+def checker_invocations(policy, step: dict, workflow: str, script_path: str) -> list[list[str]]:
     events = shell_events(policy, step, workflow)
-    invocations = [event.words for event in events
-                   if event.words[:3] == ["python3", "-I", script_path]]
+    return [event.words for event in events
+            if event.words[:3] == ["python3", "-I", script_path]]
+
+
+def has_option(words: list[str], option: str, value: str) -> bool:
+    return words.count(option) == 1 and words.index(option) + 1 < len(words) \
+        and words[words.index(option) + 1] == value
+
+
+def validate_pr_window(policy, step: dict, workflow: str, script_path: str) -> None:
+    invocations = checker_invocations(policy, step, workflow, script_path)
+    if len(invocations) != 2:
+        raise Reject("release-policy-version-window-call", f"{workflow} must separately check the active window and tracked output")
+    active = [words for words in invocations if "--check" in words and "--check-tracked" not in words]
+    tracked = [words for words in invocations if "--check-tracked" in words]
+    if len(active) != 1 or len(tracked) != 1:
+        raise Reject("release-policy-version-window-call", f"{workflow} must have one active-window check and one tracked-output check")
+    if active[0].count("--check") != 1 or "--expect-version" in active[0]:
+        raise Reject("release-policy-inactive-window-pin", f"{workflow} active-window check must allow the normal inactive pre-freeze record")
+    if (tracked[0].count("--check-tracked") != 1 or "--check" in tracked[0]
+            or not has_option(tracked[0], "--expect-version", VERSION)
+            or not has_option(tracked[0], "--repo", "version-pr")
+            or not has_option(tracked[0], "--rev", "$PR_HEAD")):
+        raise Reject("release-policy-version-pin", f"{workflow} tracked version check must pin {VERSION} on the exact PR head")
+
+    adoption_path = "trusted/tests/scripts/verify-v02-adoption.py"
+    adoption_calls = [event.words for event in shell_events(policy, step, workflow)
+                      if event.words[:3] == ["python3", "-I", adoption_path]]
+    if (len(adoption_calls) != 1
+            or not has_option(adoption_calls[0], "--release-notes", "$RUNNER_TEMP/version-pr-body.md")
+            or not has_option(adoption_calls[0], "--repo", "version-pr")
+            or not has_option(adoption_calls[0], "--rev", "$PR_HEAD")):
+        raise Reject("release-policy-notes-call", f"{workflow} must validate the exact PR release-notes body")
+
+
+def validate_release_window(policy, step: dict, workflow: str, script_path: str) -> None:
+    invocations = checker_invocations(policy, step, workflow, script_path)
     if len(invocations) != 1:
         raise Reject("release-policy-version-window-call", f"{workflow} must execute one trusted version-window checker")
     words = invocations[0]
+    if (words.count("--check-tracked") != 1 or words.count("--check") != 0
+            or words.count("--require-active") != 1
+            or not has_option(words, "--expect-version", VERSION)):
+        raise Reject("release-policy-version-pin", f"{workflow} must require an active exact {VERSION} tracked window")
+
+
+def validate_version_pin(words: list[str], workflow: str) -> None:
     if words.count("--expect-version") != 1:
         raise Reject("release-policy-version-pin", f"{workflow} must pin exactly one expected release version")
     index = words.index("--expect-version")
     if index + 1 >= len(words) or words[index + 1] != VERSION:
         raise Reject("release-policy-version-pin", f"{workflow} must require version {VERSION}")
-    required = {"--check"}
-    if require_active:
-        required = {"--check-tracked", "--require-active"}
-    if not required.issubset(words):
-        raise Reject("release-policy-version-window-call", f"{workflow} is missing required version-window mode flags")
 
 
 def validate_documents(documents: dict[str, dict], policy) -> None:
     for workflow, (job, step_name, require_active, script_path) in WINDOW_STEPS.items():
         step = named_step(documents[workflow], workflow, job, step_name)
-        checker_invocation(policy, step, workflow, require_active=require_active, script_path=script_path)
+        if require_active:
+            validate_release_window(policy, step, workflow, script_path)
+        else:
+            validate_pr_window(policy, step, workflow, script_path)
 
     release = documents["release.yml"]
     identity = named_step(
@@ -137,7 +177,7 @@ def validate_documents(documents: dict[str, dict], policy) -> None:
     )
     guards = [event.words for event in shell_events(policy, identity, "release.yml")
               if event.words == ["[[", "$RELEASE_TAG", "==", "v0.4.0", "]]"]]
-    if not guards:
+    if len(guards) != 1:
         raise Reject("release-policy-tag-pin", "release.yml must accept only the v0.4.0 candidate tag")
 
 
@@ -164,19 +204,41 @@ def self_test(documents: dict[str, dict], policy) -> tuple[int, int]:
             return
         raise SystemExit(f"release workflow control {label} accepted a weakened version gate")
 
-    for workflow, (job, step_name, _require_active, _script_path) in WINDOW_STEPS.items():
-        for defect, replacement, expected in (
-            ("missing expected version", "", "release-policy-version-pin"),
-            ("wrong expected version", "--expect-version 0.3.0", "release-policy-version-pin"),
-        ):
-            accepted("valid " + workflow + " counterpart", copy.deepcopy(documents))
+    for workflow, (job, step_name, require_active, _script_path) in WINDOW_STEPS.items():
+        accepted("valid " + workflow + " counterpart", copy.deepcopy(documents))
+        mutant = copy.deepcopy(documents)
+        step = named_step(mutant[workflow], workflow, job, step_name)
+        original = step["run"]
+        if original.count("--expect-version 0.4.0") != 1:
+            raise SystemExit(f"release workflow self-test anchor is absent in {workflow}")
+        step["run"] = original.replace("--expect-version 0.4.0", "", 1)
+        rejected(workflow + " missing expected version", mutant, "release-policy-version-pin")
+
+        accepted("valid " + workflow + " counterpart", copy.deepcopy(documents))
+        mutant = copy.deepcopy(documents)
+        step = named_step(mutant[workflow], workflow, job, step_name)
+        step["run"] = step["run"].replace("--expect-version 0.4.0", "--expect-version 0.3.0", 1)
+        rejected(workflow + " wrong expected version", mutant, "release-policy-version-pin")
+
+        if not require_active:
+            accepted("inactive pre-freeze counterpart", copy.deepcopy(documents))
             mutant = copy.deepcopy(documents)
             step = named_step(mutant[workflow], workflow, job, step_name)
-            original = step["run"]
-            if original.count("--expect-version 0.4.0") != 1:
-                raise SystemExit(f"release workflow self-test anchor is absent in {workflow}")
-            step["run"] = original.replace("--expect-version 0.4.0", replacement, 1)
-            rejected(workflow + " " + defect, mutant, expected)
+            anchor = "--check tests/data/version-window.json"
+            if step["run"].count(anchor) != 1:
+                raise SystemExit(f"release workflow self-test active-check anchor is absent in {workflow}")
+            step["run"] = step["run"].replace(anchor, anchor + " --expect-version 0.4.0", 1)
+            rejected(workflow + " pins the inactive pre-freeze window", mutant,
+                     "release-policy-inactive-window-pin")
+
+            accepted("release-notes validation counterpart", copy.deepcopy(documents))
+            mutant = copy.deepcopy(documents)
+            step = named_step(mutant[workflow], workflow, job, step_name)
+            anchor = "python3 -I trusted/tests/scripts/verify-v02-adoption.py --release-notes"
+            if step["run"].count(anchor) != 1:
+                raise SystemExit(f"release workflow self-test notes-validator anchor is absent in {workflow}")
+            step["run"] = step["run"].replace(anchor, "python3 -I trusted/tests/scripts/untrusted-notes.py --release-notes", 1)
+            rejected(workflow + " omits trusted release-notes validation", mutant, "release-policy-notes-call")
 
     accepted("valid v0.4.0 tag counterpart", copy.deepcopy(documents))
     mutant = copy.deepcopy(documents)
