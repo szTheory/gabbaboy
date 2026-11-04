@@ -6,10 +6,10 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: Plan 23-04 T2 D-153/D-154 corrections and controls pass local docs/release-note self-tests; commit the corrected source, reissue three exact-source reviews, then run the direct report and focused CTest gates.
-last_updated: "2026-11-04T22:13:06.000Z"
-last_activity: "2026-11-04: Owner approved D-153 Unicode punctuation flanking and D-154 bounded reference-label candidates after exact-source reviews found an emoji emphasis bypass and quadratic nested-bracket scans at 6876fab0; docs and release-note self-tests now pass, with exact-source review and CTest gates remaining."
-state_head: b798781105b8f6f803e85aa2ad766d2b2fdbec22
+stopped_at: Plan 23-04 T2: correct the review-evidence CTest output regex, then reissue exact-source reports and rerun the direct gate and focused CTests.
+last_updated: "2026-11-04T22:49:11.000Z"
+last_activity: "2026-11-04: The three-report gate passed at f0c78ef5 and 17/18 focused CTests passed; the remaining review-evidence contract CTest rejected valid output because CMake does not support the {12} counted-repeat syntax. Correct the registration and its self-test, then re-review the new exact source."
+state_head: f0c78ef59ae04765775404d7c341544f52cefb12
 progress:
   total_phases: 4
   completed_phases: 3
@@ -25,7 +25,7 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Plan 23-04 T2: finish the Unicode punctuation/symbol emphasis correction and bounded reference-label candidate checks, preserve current matching behavior, add paired dense controls, and rerun exact-source review and gates.
+**Current focus:** Plan 23-04 T2: fix the CMake review-evidence output regex, preserve the passed matcher correction, reissue exact-source reports, and finish the direct report/focused CTest gates.
 
 ## Current Position
 
@@ -41,7 +41,7 @@ Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assess
 
 ## Phase 23 Execution Handoff
 
-Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. D-152 through D-154 bounded matcher corrections and paired controls are underway alongside D-144 through D-151; exact-source three-role review, the direct report gate, and focused CTests remain before qualification. Keep REL-01 and all Pending evidence limits. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The D-144 through D-154 matcher corrections pass their source-bound checks and exact-source reviews. The direct three-report gate passed at f0c78ef5; 17/18 focused CTests passed, with only the review-evidence contract output regex failing on unsupported CMake `{12}` syntax. Correct that test matcher and its self-test, reissue all reports against the updated source, and rerun the gate and focused CTests. Keep REL-01 and all Pending evidence limits. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Performance Metrics
 
@@ -88,12 +88,12 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 ## Session Continuity
 
 **Last session:** 2026-11-04T16:26:14.783Z
-**Stopped at:** Plan 23-04 T2 D-153/D-154 corrections and controls pass local docs/release-note self-tests; commit the corrected source, reissue three exact-source reviews, then run the direct report and focused CTest gates.
+**Stopped at:** Plan 23-04 T2 review-evidence CTest output regex correction and exact-source re-review; rerun the direct report gate and focused CTests.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. D-152 through D-154 bounded matcher corrections and paired controls are underway alongside D-144 through D-151; exact-source three-role review, the direct report gate, and focused CTests remain before qualification. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. D-144 through D-154 matcher corrections pass local checks; the direct report gate passed, and 17/18 focused CTests passed. The only failing test is the review-evidence contract's CMake output regex; replace unsupported counted-repeat syntax, re-review the exact updated source, and rerun the direct gate and focused tests. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Decisions
 

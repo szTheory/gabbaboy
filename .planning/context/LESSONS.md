@@ -1136,3 +1136,12 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Verification:** The exact-head PR CI, fixture, installed-consumer, and player-package checks all passed at `e0845db5`; both event-level `ci` and fixture-reproduction runs were green. For PR #141, the job log confirms the canceled push aggregate rejected `NATIVE_LINUX: cancelled` while the same-SHA PR aggregate passed; the PR was blocked until that duplicate context is replaced with successful evidence. Compare completed run records for the same head SHA and confirm the required current-head PR contexts remain present and successful after any separately approved workflow change.
 - **Source:** Phase 21 PR #140, push run `41554953994`, pull-request run `41554959166`; fixture-reproduction runs `41554954013` and `41554959121`.
 - **Status:** Follow-up recorded; no CI workflow changed in Phase 21.
+
+### GB-CI-022 / 2026-11-04 / Use CMake-supported regex syntax in CTest output contracts
+
+- **Cause and evidence:** The Phase 23 review-evidence checker returned success and its direct gate passed, but the registered CTest rejected its success line because the expected regex used `{12}`. A minimal CMake probe did not match `[0-9a-f]{12}` and did match `[0-9a-f]+`; CMake's regex engine does not support that counted-repeat form.
+- **Remedy:** Keep success output checks to regex features supported by CMake, and update the review-evidence registration self-test alongside the CTest expectation so both validate the same pattern.
+- **Applies when:** CMake-based CTests match CLI output with `if(output MATCHES ...)`; do not assume Python/PCRE counted-repeat syntax works in CMake.
+- **Verification:** The direct immutable report gate passed at the evidence commit; the failing CTest's exit code was zero and only the output matcher failed. The corrected registered contract and self-test will be re-run against the reissued exact-source reports.
+- **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-review-evidence.py`, and Phase 23 CTest evidence for the review-evidence gate.
+- **Status:** Fix implemented; exact-source CTest re-verification pending.

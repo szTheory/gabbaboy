@@ -254,7 +254,7 @@ def verify_registrations(repo: Path, revision: str) -> None:
     requirements = {
         "phase23_review_evidence_contract": (
             "verify-review-evidence.py --check --rev \"${GBB_STATE_SOURCE_REV}\" --repo \"${PROJECT_SOURCE_DIR}\"",
-            r"[=[review-evidence contract pass reports=3 findings=[0-9]+ implementation=[0-9a-f]{12}]=]",
+            r"[=[review-evidence contract pass reports=3 findings=[0-9]+ implementation=[0-9a-f]+]=]",
         ),
         "phase23_review_evidence_controls": (
             "verify-review-evidence.py --self-test --rev \"${GBB_STATE_SOURCE_REV}\" --repo \"${PROJECT_SOURCE_DIR}\"",

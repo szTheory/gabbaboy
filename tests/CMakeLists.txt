@@ -5081,7 +5081,7 @@ endif()
 # the qualification comparison permits only the fixed report/evidence allowlist. Register after
 # the configure-time immutable source revision is resolved above.
 gbb_add_v02_contract(phase23_review_evidence_contract 60
-  [=[review-evidence contract pass reports=3 findings=[0-9]+ implementation=[0-9a-f]{12}]=]
+  [=[review-evidence contract pass reports=3 findings=[0-9]+ implementation=[0-9a-f]+]=]
   verify-review-evidence.py --check --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 gbb_add_v02_contract(phase23_review_evidence_controls 60
   [=[review-evidence controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
