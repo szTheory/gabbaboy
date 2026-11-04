@@ -1730,11 +1730,12 @@ def check_notices(root: Path) -> int:
     raw = read_document(root, NOTICES)
     text = prose(raw)
     notice_text = prose(raw, collapse=False)
+    game_claim_text = mask_inline_code_spans(notice_text)
     checks = check_phrases(NOTICES, text, NOTICE_REQUIRED)
     require(REBOUND_ATTRIBUTION.search(mask_inline_code_spans(raw)) is None,
             f"rebound-attribution-present:{NOTICES}")
     checks += 1
-    checks += check_unqualified(NOTICES, text)
+    checks += check_unqualified(NOTICES, text, game_claim_text=game_claim_text)
 
     rows = {match["name"]: (match["manifest"], match["notice"])
             for match in visible_notice_matches(NOTICE_ROW, notice_text)}
@@ -3279,6 +3280,34 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
 
         notice_original = originals[NOTICES]
         notice_path = test_root / NOTICES
+
+        def notice_parser_control(name: str, extra: str,
+                                  reason: str | None = None) -> None:
+            nonlocal rejected
+            child_result(test_root, "docs")
+            changed = notice_original.rstrip() + "\n\n" + extra + "\n"
+            write_lf(notice_path, changed)
+            child_result(test_root, "docs", reason)
+            if reason is not None:
+                rejected_reasons.append(name)
+                rejected += 1
+            write_lf(notice_path, notice_original)
+
+        notice_parser_control(
+            "notice-hard-break-safe-game-evidence-prose-remains-valid",
+            "CGB\\\ntest-ROM results remain software-model evidence only.")
+        notice_parser_control(
+            "notice-hard-break-claim-in-code-span-remains-masked",
+            "`CGB\\\ngame passes all acceptance checks.`")
+        notice_parser_control(
+            "notice-hard-break-game-claim-cannot-pass",
+            "CGB\\\ngame passes all acceptance checks.",
+            f"unsupported-cgb-game-qualification:{NOTICES}")
+        notice_parser_control(
+            "notice-hard-break-encoded-space-game-claim-cannot-pass",
+            "CGB\\\n&#x20;game passes all acceptance checks.",
+            f"unsupported-cgb-game-qualification:{NOTICES}")
+
         hidden_notice_rows = (
             ("libbet", "Libbet and the Magic Floor v0.08 test fixture",
              "libbet-rights-disclosure-missing"),
@@ -3646,7 +3675,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 102 + len(incomplete_html_openers)
+    controls = len(mutations) + 104 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
