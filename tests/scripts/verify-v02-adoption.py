@@ -27,6 +27,7 @@ import sys
 import tempfile
 from typing import Callable
 import unicodedata
+from html import unescape
 
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
@@ -168,6 +169,7 @@ UNSUPPORTED_GAME_CLAIM = re.compile(
 )
 
 
+# Frozen from Unicode 18.0 DerivedCoreProperties.txt, which defines this property.
 DEFAULT_IGNORABLE_CODEPOINT_RANGES_UCD_18_0 = (
     (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C),
     (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180D),
@@ -186,6 +188,17 @@ DEFAULT_IGNORABLE_CLAIM_SEPARATORS = (
     ("variation-selector-16", "\ufe0f"),
     ("reserved-default-ignorable", "\u2065"),
 )
+COMMONMARK_REFERENCED_GAME_CLAIMS = (
+    ("hex-zero-width-space", "CGB&#x200b; game passes all acceptance checks."),
+    ("decimal-zero-width-space", "CGB&#8203; game passes all acceptance checks."),
+    ("named-zero-width-space", "CGB&ZeroWidthSpace; game passes all acceptance checks."),
+    ("hex-combining-grapheme-joiner", "CGB&#x34f; game passes all acceptance checks."),
+    ("hex-visible-space", "CGB&#x20; game passes all acceptance checks."),
+    ("encoded-cgb-letter", "&#67;GB game passes all acceptance checks."),
+)
+COMMONMARK_CHARACTER_REFERENCE = re.compile(
+    r"&(?:#[0-9]{1,7}|#[xX][0-9A-Fa-f]{1,6}|[A-Za-z][A-Za-z0-9]*);"
+)
 
 
 def is_default_ignorable_codepoint(codepoint: int) -> bool:
@@ -195,12 +208,23 @@ def is_default_ignorable_codepoint(codepoint: int) -> bool:
             and codepoint <= DEFAULT_IGNORABLE_CODEPOINT_RANGES_UCD_18_0[index][1])
 
 
+def is_invisible_claim_separator(char: str) -> bool:
+    return (unicodedata.category(char) == "Cf"
+            or is_default_ignorable_codepoint(ord(char)))
+
+
+def decode_commonmark_character_references(text: str) -> str:
+    """Decode valid CommonMark references in prose before claim matching."""
+    return COMMONMARK_CHARACTER_REFERENCE.sub(
+        lambda match: unescape(match.group(0)), text)
+
+
 def unsupported_game_claim_match(text: str) -> re.Match[str] | None:
-    """Match unsupported claims after removing format and default-ignorable chars."""
+    """Match visible claims after decoding references and removing invisible chars."""
+    text = decode_commonmark_character_references(text)
     claim_text = "".join(
         char for char in text
-        if unicodedata.category(char) != "Cf"
-        and not is_default_ignorable_codepoint(ord(char))
+        if not is_invisible_claim_separator(char)
     )
     return UNSUPPORTED_GAME_CLAIM.search(claim_text)
 
@@ -2276,6 +2300,17 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
              "release-notes-unsupported-cgb-game-qualification")
             for name, _ in DEFAULT_IGNORABLE_CLAIM_SEPARATORS
         )
+        mutations += tuple(
+            (f"commonmark-reference-{name}-game-claim", None,
+             "release-notes-unsupported-cgb-game-qualification")
+            for name, _ in COMMONMARK_REFERENCED_GAME_CLAIMS
+        )
+        for safe_suffix in (
+                "\nCGB&#x20; test-ROM results remain software-model evidence only.\n",
+                "\n`CGB&#x200b; game passes all acceptance checks.`\n"):
+            write_lf(notes, VALID_RELEASE_NOTES + safe_suffix)
+            expect_pass(cli_args)
+        write_lf(notes, VALID_RELEASE_NOTES)
         for name, edit, reason in mutations:
             if name == "contrary-game-claim":
                 changed = VALID_RELEASE_NOTES + "\nCGB game passes acceptance.\n"
@@ -2292,6 +2327,11 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                     "-game-claim")
                 separator = dict(DEFAULT_IGNORABLE_CLAIM_SEPARATORS)[separator_name]
                 changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
+            elif name.startswith("commonmark-reference-"):
+                claim_name = name.removeprefix("commonmark-reference-").removesuffix(
+                    "-game-claim")
+                claim = dict(COMMONMARK_REFERENCED_GAME_CLAIMS)[claim_name]
+                changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
             elif name == "false-signing-claim":
                 changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
             elif name == "false-publication-claim":
@@ -3030,12 +3070,22 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
                 "default-ignorable-" + name + "-game-claim-cannot-pass",
                 "CGB" + separator + " game passes all acceptance checks.",
                 f"unsupported-cgb-game-qualification:{README}")
+        for name, claim in COMMONMARK_REFERENCED_GAME_CLAIMS:
+            readme_parser_control(
+                "commonmark-reference-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{README}")
         readme_parser_control(
             "invisible-format-safe-game-evidence-prose-remains-valid",
             "CGB\u200b test-ROM results remain software-model evidence only.")
         readme_parser_control(
             "default-ignorable-safe-game-evidence-prose-remains-valid",
             "CGB\u034f test-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "commonmark-visible-reference-safe-evidence-prose-remains-valid",
+            "CGB&#x20; test-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "commonmark-reference-claim-in-code-span-remains-masked",
+            "`CGB&#x200b; game passes all acceptance checks.`")
 
         multiline_reference_titles = (
             ("inline-multiline-reference-title-hides-hardware-disclosure",
@@ -3551,7 +3601,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 91 + len(incomplete_html_openers)
+    controls = len(mutations) + 97 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
