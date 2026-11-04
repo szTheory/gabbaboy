@@ -6,16 +6,16 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: Phase 23 Plan 23-04 T2 inline execution starts after completed Plan 23-09.
-last_updated: "2026-11-04T13:21:43.673Z"
+stopped_at: Phase 23 Plan 23-04 T2 continuing under owner-approved D-144, D-145 and D-146; matcher correction and reviews remain in progress.
+last_updated: "2026-11-04T18:02:38.209Z"
 last_activity: 2026-11-04
-last_activity_desc: Plan 23-09 completed; focused visibility CTests and the Plan 23-04 review-evidence gate passed
-state_head: 4301406c3e2f215f772d33657e5905c58edbbb19
+last_activity_desc: Owner approved D-146 after U+034F bypass reproduction; extend the T2 claim matcher and controls.
+state_head: 742bf1bb5dd3a6e71ab93dbdb420bca2ec94d16a
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 31
-  completed_plans: 25
+  completed_plans: 26
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 23 Plan 23-04 T2 — reissue the three independent reports against the fixed implementation and pass the direct report gate. Resume with /gsd-execute-phase 23.
+**Current focus:** Phase 23 Plan 23-04 T2 under D-144/D-145/D-146: implement Unicode default-ignorable claim filtering and controls, then reissue reviews and pass T2 gates. Resume /gsd-execute-phase 23; stop at Phase 23.
 
 ## Current Position
 
@@ -36,7 +36,7 @@ Phase: GB-23 (Qualified v0.4.0 Release) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
 Status: Executing Phase 23
-Last activity: 2026-11-04 — Plan 23-09 completed; focused visibility CTests and the Plan 23-04 review-evidence gate passed
+Last activity: 2026-11-04 — Owner approved D-146 after U+034F bypass reproduction; extend the T2 claim matcher and controls.
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
@@ -88,8 +88,8 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-04T13:21:19Z
-**Stopped at:** Phase 23 Plan 23-04 T2 inline execution starts after completed Plan 23-09.
+**Last session:** 2026-11-04T16:26:14.783Z
+**Stopped at:** Phase 23 Plan 23-04 T2 continuing under owner-approved D-144, D-145 and D-146; matcher correction and reviews remain in progress.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
@@ -126,8 +126,11 @@ Phase 23 — Qualified v0.4.0 Release — is in progress. Plan 23-01 is complete
 - [Phase GB-23]: Report the CGB-CPU-E native harness as repeatability-only and Phase 22 diagnostics as synthetic plus metadata-only.
 - [Phase GB-23]: REL-01 remains Pending until Plan 23-06 establishes actual release evidence.
 - [Phase 23]: Render the concise preface from the existing immutable support-claims-v0.4.json profile; preserve release-disclosure.json and v0.3 output. — The validated profile already contains all managed v0.4 facts, so a second copy would add drift risk without supplying new evidence.
+- [Phase 23]: Owner approved the one-time bounded Phase 23 T2 parser correction and three-role re-review at the exact d98 findings; amend Plan 23-04 in place and add no plan. — D-144 and 23-04-T2-RESCOPE.md preserve the nine-plan cap and existing review/gap counters; any new correctness/security finding requires another explicit owner decision.
+- [Phase 23]: Owner approved D-145: extend Plan 23-04 T2 in place to reject unsupported CGB-game claims containing invisible Unicode format characters, with paired controls; no plan or budget reset.
+- [Phase 23]: Owner approved D-146: extend the unsupported CGB-game claim matcher to ignore Unicode Default_Ignorable_Code_Point characters, including U+034F, with paired docs/release-note controls and exact-source review.
 
 ### Blockers
 
 - No active Phase 22 blocker. The seven evidence gates still block real fixture admission, but D-141 scoped the completed phase to synthetic composition, metadata assessment, and explicit no-go controls. Do not fetch, build, run, or admit real diagnostic fixtures without a new owner-approved scope.
-- Phase 23 Plan 23-04 qualification remains held until Plan 23-09's bounded raw-HTML fix is committed, all three independent reports are reissued at that source, and the direct report gate passes; REL-01 and publication remain pending.
+- Plan 23-04 T2 is active under owner-approved D-144/D-145/D-146; commit the corrected matcher, reissue three exact-source reviews, then pass report and focused CTest gates. REL-01 and publication remain Pending.
