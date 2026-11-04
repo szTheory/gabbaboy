@@ -5085,6 +5085,14 @@ gbb_add_v02_contract(phase23_review_evidence_contract 60
 gbb_add_v02_contract(phase23_review_evidence_controls 60
   [=[review-evidence controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   verify-review-evidence.py --self-test --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+# Phase 23 D-01/D-02: keep the v0.4.0 release path pinned to its reviewed version across all
+# trusted version-window workflows, with mutation controls for missing/wrong pins and tag identity.
+gbb_add_v02_contract(phase23_release_workflow_contract 30
+  [=[release workflow v0.4.0 pins pass rev=[0-9a-f]{40}]=]
+  verify-v04-release-policy.py --check --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+gbb_add_v02_contract(phase23_release_workflow_controls 30
+  [=[release workflow v0.4.0 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]* rev=[0-9a-f]{40}]=]
+  verify-v04-release-policy.py --self-test --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 gbb_add_ledger_contract(support_claims
   [=[support-claims pass claims=9 non_claims=10 rev=[0-9a-f]+]=]
   --check-claims --rev "${GBB_STATE_SOURCE_REV}")

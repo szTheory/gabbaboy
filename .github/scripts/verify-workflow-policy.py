@@ -3792,7 +3792,9 @@ def check_version_window(root: Path) -> None:
     _check_bounded_downloads(name, tree)
     require_call(name, WINDOW_JOB, job, WINDOW_CALL, conditional=True)
     require_call(name, WINDOW_JOB, {"steps": [judge_steps[0]]}, WINDOW_CALL, conditional=True)
-    if judge_text != WINDOW_JUDGE_RUN:
+    expected_judge_run = WINDOW_JUDGE_RUN.replace(
+        WINDOW_CALL, WINDOW_CALL + " --expect-version 0.4.0")
+    if judge_text != expected_judge_run:
         raise Reject("window-discovery", f"{_where(name, WINDOW_JOB)} judge body must match the trusted absent/present routing contract")
     _check_window_config(root)
 

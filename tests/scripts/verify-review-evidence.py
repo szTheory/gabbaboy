@@ -205,16 +205,6 @@ def validate_findings(repo: Path, report: dict, path: str) -> int:
     return len(report["findings"])
 
 
-def changed_paths(repo: Path, older: str, newer: str) -> list[str]:
-    result = git(repo, "diff", "--name-only", "-z", "--no-renames", older, newer)
-    if len(result.stdout) > 4 * 1024 * 1024:
-        reject("review-qualification-diff-too-large", "the implementation-to-qualification path list exceeds its bound")
-    try:
-        return [path.decode("utf-8", "strict") for path in result.stdout.split(b"\0") if path]
-    except UnicodeDecodeError:
-        reject("review-qualification-path-invalid", "Git returned a non-UTF-8 changed path")
-
-
 QUALIFICATION_ALLOWLIST = {
     ".planning/phases/GB-23-qualified-v0-4-0-release/23-REVIEW.md",
     ".planning/phases/GB-23-qualified-v0-4-0-release/23-SECURITY.md",
@@ -223,6 +213,16 @@ QUALIFICATION_ALLOWLIST = {
     ".planning/phases/GB-23-qualified-v0-4-0-release/23-VALIDATION.md",
     ".planning/phases/GB-23-qualified-v0-4-0-release/23-04-SUMMARY.md",
 }
+
+
+def has_unexpected_changes(repo: Path, older: str, newer: str) -> bool:
+    """Ask Git whether any non-evidence path changed without materializing its path list."""
+    excluded = [f":(top,exclude,literal){path}" for path in sorted(QUALIFICATION_ALLOWLIST)]
+    result = git(repo, "diff", "--quiet", "--no-renames", older, newer, "--", ".", *excluded,
+                 check=False)
+    if result.returncode not in {0, 1}:
+        reject("review-git-failed", "git diff --quiet could not compare implementation and qualification")
+    return result.returncode == 1
 
 
 def verify_registrations(repo: Path, revision: str) -> None:
@@ -336,10 +336,8 @@ def check(repo: Path, revision: str, implementation_sha: str | None = None,
     if qualification_sha is not None:
         if not is_ancestor(repo, reviewed_sha, revision):
             reject("review-qualification-not-descendant", "qualification must descend from the reviewed implementation")
-        changed = changed_paths(repo, reviewed_sha, revision)
-        unexpected = [path for path in changed if path not in QUALIFICATION_ALLOWLIST]
-        if unexpected:
-            reject("review-qualification-source-drift", "non-evidence paths changed after review: " + ", ".join(unexpected[:8]))
+        if has_unexpected_changes(repo, reviewed_sha, revision):
+            reject("review-qualification-source-drift", "non-evidence paths changed after review")
     return (f"review-evidence contract pass reports=3 findings={finding_count} "
             f"implementation={reviewed_sha[:12]}")
 
@@ -630,13 +628,17 @@ def self_test(repo: Path, source_revision: str) -> tuple[int, int]:
         source_case("duplicate-inventory-entry", "review-test-inventory-invalid", inventory_duplicate)
 
         base_accept("accepted-counterpart-evidence-only-qualification")
-        fx.reset(report_commit)
-        fx.write("README.md", "unreviewed source change\n")
-        drifted_qualification = fx.commit("non-evidence change after review", "README.md")
-        rejected("non-evidence-source-change-after-review",
-                 cli(drifted_qualification, "--check", "--implementation-sha", implementation,
-                     "--qualification-sha", drifted_qualification),
-                 "review-qualification-source-drift")
+        for name, path in (
+            ("non-evidence-source-change-after-review", "README.md"),
+            ("unlisted-same-phase-directory-change", phase_path("23-OTHER.md")),
+        ):
+            base_accept("accepted-counterpart-" + name)
+            fx.reset(report_commit)
+            fx.write(path, "unreviewed source change\n")
+            drifted_qualification = fx.commit("non-evidence change after review", path)
+            rejected(name, cli(drifted_qualification, "--check", "--implementation-sha", implementation,
+                               "--qualification-sha", drifted_qualification),
+                     "review-qualification-source-drift")
 
         # Make this the last fixture operation: its dirty-only repair is intentional.
         base_accept("accepted-counterpart-missing-report")

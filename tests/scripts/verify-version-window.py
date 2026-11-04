@@ -289,14 +289,28 @@ def validate_version_outputs(repo: Path, commit: str, expected_version: str) -> 
         text = changelog.decode("utf-8")
     except UnicodeDecodeError:
         reject("window-version-output-mismatch", "CHANGELOG.md is not UTF-8")
-    sections = list(re.finditer(r"(?m)^## \[(\d+\.\d+\.\d+)\](?:\([^\r\n]*\))?[^\r\n]*$", text))
+    visible = visible_markdown(text)
+    sections = list(re.finditer(r"(?m)^## \[(\d+\.\d+\.\d+)\](?:\([^\r\n]*\))?[^\r\n]*$", visible))
     if not sections or sections[0].group(1) != expected_version:
         found = sections[0].group(1) if sections else "none"
         reject("window-version-output-mismatch", f"the first changelog release section is {found}, expected {expected_version}")
     first = sections[0]
-    end = sections[1].start() if len(sections) > 1 else len(text)
-    if ledger_path not in text[first.end():end]:
+    end = sections[1].start() if len(sections) > 1 else len(visible)
+    section = visible[first.end():end]
+    ledger_link = re.compile(r"\]\([^)]*" + re.escape(ledger_path) + r"(?:[#?][^)]*)?\)")
+    if ledger_link.search(section) is None:
         reject("window-version-output-mismatch", f"the {expected_version} changelog section does not link {ledger_path}")
+
+
+def visible_markdown(text: str) -> str:
+    """Mask comments, fenced code, and indented code while preserving source offsets."""
+    def mask(match: re.Match[str]) -> str:
+        return "".join("\n" if char == "\n" else "\r" if char == "\r" else " "
+                        for char in match.group(0))
+
+    text = re.sub(r"<!--.*?-->", mask, text, flags=re.DOTALL)
+    text = re.sub(r"(?ms)^(```|~~~).*?^\1[^\n]*$", mask, text)
+    return re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", mask, text)
 
 
 def check_release_notes(repo: Path, rev: str, release_notes: Path) -> None:
@@ -965,6 +979,22 @@ def self_test_version_v04() -> tuple[int, int]:
                                       ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
         rejected("wrong-changelog-ledger-link", cli("--check-tracked", "--rev", wrong_ledger_link,
                                                      "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        changelog_section = "# Changelog\n\n## [0.4.0]\n\n"
+        ledger_link = "- Support: [ledger](docs/support/v0.4.0.md)."
+        for hiding, content in (
+            ("comment", f"<!-- {ledger_link} -->"),
+            ("fenced-code", f"```markdown\n{ledger_link}\n```"),
+            ("indented-code", "    " + ledger_link),
+        ):
+            accepted("visible-ledger-link-counterpart-" + hiding,
+                     cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
+            fx.reset(head)
+            fx.write("CHANGELOG.md", changelog_section + content + "\n")
+            hidden_link = fx.commit("hide the changelog ledger link in " + hiding, "CHANGELOG.md")
+            rejected("hidden-changelog-ledger-link-" + hiding,
+                     cli("--check-tracked", "--rev", hidden_link, "--expect-version", "0.4.0"),
+                     "window-version-output-mismatch")
 
         bad_notes.write_text("v0.3.0 notes with a historical ledger link\n", encoding="utf-8")
         rejected("wrong-release-notes-version",

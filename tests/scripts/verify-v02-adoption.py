@@ -503,10 +503,11 @@ def read_document(root: Path, relative: str) -> str:
 
 
 def prose(text: str) -> str:
-    """Whitespace-normalized text without HTML comments or fenced code."""
+    """Whitespace-normalized visible prose without comments or code blocks."""
     text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
     text = re.sub(r"^(```|~~~).*?^\1[^\n]*$", " ", text,
                   flags=re.DOTALL | re.MULTILINE)
+    text = re.sub(r"(?m)^(?: {4}|\t)[^\r\n]*", " ", text)
     return " ".join(text.split())
 
 
@@ -831,7 +832,7 @@ def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: s
     checks = 0
     if ledger != "docs/support/v0.4.0.md":
         require(False, "release-notes-ledger-version-mismatch")
-    require(ledger_link_pattern(ledger).search(comment_free(raw)) is not None,
+    require(ledger_link_pattern(ledger).search(text) is not None,
             "release-notes-ledger-version-mismatch")
     checks += 1
     require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
@@ -882,6 +883,17 @@ def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: s
     require(prose(f"Requirements remain Pending: {pending}.") in text,
             "release-notes-requirement-status-promoted")
     checks += 1
+    completion = r"(?:complete(?:d)?|accepted|passed|fulfilled|closed|verified|resolved)"
+    for row in claims["requirements"]["statuses"]:
+        identifier = re.escape(row["id"])
+        direct = re.compile(
+            rf"\b{identifier}\b\s*(?:(?:is|are|was|were|has been|have been|now)\s+|[:=]\s*)?"
+            rf"{completion}\b", re.IGNORECASE)
+        reversed_status = re.compile(
+            rf"\b{completion}\b\s*(?:status\s+(?:for|of)\s+)?{identifier}\b", re.IGNORECASE)
+        require(direct.search(text) is None and reversed_status.search(text) is None,
+                "release-notes-requirement-status-promoted")
+        checks += 1
     for limitation in claims["limitations"]:
         require(prose(limitation) in text, "release-notes-support-limits-missing")
         checks += 1
@@ -906,6 +918,10 @@ def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str, ledger: s
          "release-notes-timing-claim-promoted"),
         (re.compile(r"\b(?:general|broad)\s+(?:CGB\s+)?game\s+compatibility\s+(?:is|has been)\s+(?:qualified|verified|established|complete)\b", re.I),
          "release-notes-compatibility-claim-promoted"),
+        (re.compile(r"\b(?:\d+\s+)?(?:diagnostic|metadata)\s+(?:micro)?tests?\b.{0,100}\b(?:were|was|are|is|have\s+been|has\s+been)?\s*(?:executed|run|performed|passed|succeeded)\b", re.I),
+         "release-notes-metadata-as-diagnostic"),
+        (re.compile(r"\b(?:both\s+)?candidates?\b.{0,60}\blicen[cs]es\b.{0,80}\b(?:prohibit|forbid|ban|disallow|restrict)\w*\b.{0,100}\b(?:repository|public[- ]CI|redistribut\w*|use)\b", re.I),
+         "release-notes-license-prohibition-unsupported"),
     )
     for pattern, reason in false_positive_claims:
         require(not unnegated(pattern, text), reason)
@@ -946,7 +962,7 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
     else:
         require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
         checks += 1
-        require(ledger_link_pattern(ledger).search(comment_free(raw)) is not None,
+        require(ledger_link_pattern(ledger).search(text) is not None,
                 "release-notes-ledger-link-missing")
         checks += 1
     require(STATE_VERSION_SENTENCE in text, "release-notes-state-version-missing")
@@ -1292,6 +1308,15 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                "release-notes-diagnostic-count-mismatch")
         reject("pending-status-promoted", valid.replace("DIAG-01 Pending", "DIAG-01 Complete"),
                "release-notes-requirement-status-promoted")
+        reject("contradictory-pending-status",
+               valid + "\nDIAG-01 is complete.\n",
+               "release-notes-requirement-status-promoted")
+        reject("metadata-presented-as-diagnostic-results",
+               valid + "\nAll 513 diagnostic microtests were executed and passed.\n",
+               "release-notes-metadata-as-diagnostic")
+        reject("rights-scope-presented-as-license-prohibition",
+               valid + "\nBoth candidates' licenses prohibit repository and public-CI use.\n",
+               "release-notes-license-prohibition-unsupported")
         reject("missing-hardware-limit",
                valid.replace(profile["limitations"][0], "Physical hardware status is unstated."),
                "release-notes-support-limits-missing")
@@ -1299,6 +1324,8 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                "release-notes-candidate-name-missing")
         reject("fenced-code-hides-reason", valid.replace(p_line, f"```text\n{p_line}\n```"),
                "release-notes-candidate-name-missing")
+        indented = "\n".join(("    " + line if line else "") for line in valid.splitlines())
+        reject("indented-code-hides-entire-preface", indented, "release-notes-empty")
         reject("terminal-control-hides-reason", valid.replace("Potion Panic", "Potion \x1b[2KPanic", 1),
                "release-notes-terminal-control-present")
         reject("wrong-version-ledger-link", valid.replace(

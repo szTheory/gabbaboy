@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           BASE_SHA=$(git -C trusted rev-parse HEAD)
-          python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" --base "$BASE_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md" > "$RUNNER_TEMP/version-window-verdict.txt"
+          python3 -I trusted/tests/scripts/verify-version-window.py --repo version-pr --rev "$PR_HEAD" --base "$BASE_SHA" --check tests/data/version-window.json --body "$RUNNER_TEMP/version-pr-body.md" --expect-version 0.4.0 > "$RUNNER_TEMP/version-window-verdict.txt"
           cat "$RUNNER_TEMP/version-window-verdict.txt"
       - name: Select rehearsal only for an active window
         id: window
