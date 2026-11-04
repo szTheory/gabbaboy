@@ -1,12 +1,16 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** `4c9c54f8b5a33e758624c997f107d1ffdd7c94a0`
+**Reviewed implementation:** `de66945db318d7aeb7acdb13a0bd0203fed1bd31`
 **Scope:** Plans 23-01 through 23-04 and Plan 23-09, including immutable support claims, release-note and changelog validation, Markdown visibility, profile/source/version bindings, and the D-144–D-154 corrections in the unsupported CGB-game matcher.
 **Review posture:** I read the validator and release-window source from the exact commit, examined the current controls, and ran targeted mutations against production functions. No real CGB game or diagnostic fixture was fetched, built, run, or admitted. No release artifact was signed, notarized, or promoted; no hosted release evidence is claimed.
 
 ## Results
 
 No unresolved correctness or security issue remains in this reviewed scope. All retained findings ADV-01 through ADV-20 are fixed in full ancestor commits and have exact-source verification references below. The direct real-report gate and focused CTest pair were still pending while these independent reports were being prepared; their result is a separate qualification gate.
+
+### Review-evidence CMake regex correction
+
+The only code/registration change since the prior implementation is the review-evidence success regex. The checker prints `implementation={reviewed_sha[:12]}`, so the output contains exactly 12 lowercase hexadecimal characters. The CMake `PASS_REGULAR_EXPRESSION` and immutable registration expectation now use `[0-9a-f]+`; I ran that expression through CMake against the actual 12-character output, and it matches. The prior `{12}` form did not match in CMake’s regex dialect. The registration self-test still compares the entire required registration string against immutable `tests/CMakeLists.txt`, so this is not an unchecked working-tree relaxation. The report-gate self-test passed 32 positives and 27 controls at this exact SHA. The D-144–D-154 matcher blob is identical to the prior reviewed implementation; I re-read the immutable source and reran its docs baseline and v0.4 release-note controls at this SHA.
 
 ### D-153 and D-154 production probes
 
@@ -31,7 +35,7 @@ The exact-source control set preserves the paired cases added under the bounded 
 | Hard breaks, emphasis, and links | LF/CR/CRLF CommonMark hard-break claims, encoded-space joins, emphasis-split CGB text, and inline/reference-link label claims fail as unsupported game qualification, including through the notices caller. | Soft breaks where the claim does not form, escaped punctuation, intraword underscores, unresolved/escaped labels, code spans/fences, and destination/title-only claims remain accepted. |
 | Dense delimiter controls | Dense unmatched emphasis cannot prevent claim detection. | Its safe evidence counterpart passes. |
 
-The `verify-v02-adoption.py` source contains paired controls for each row. The owner completed the exact-source docs self-test at this SHA with 473 checks and 255/255 rejected controls. I independently ran the plain docs check (473 checks) and targeted D-153/D-154 production-path mutations across README, game-acceptance, notices, and renderer-built notes.
+The `verify-v02-adoption.py` blob is unchanged from `4c9c54f8b5a33e758624c997f107d1ffdd7c94a0`, where the owner-run complete docs self-test passed 473 checks with 255/255 negative controls rejected. At the exact current SHA I independently reran the production docs check (473 checks) and v0.4 release-note self-test (2 positives, 72 controls); targeted D-153/D-154 probes exercised README, game-acceptance, notices, and renderer-built notes. The unchanged matcher blob and these exact-SHA checks preserve the earlier parser review evidence.
 
 ### Plan 23-09 visibility and opener matrix
 
@@ -73,11 +77,11 @@ All results are local software checks against the exact source identity named ab
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-4c9c54f8-d153-d154-20261104-01",
+  "report_id": "gbb-phase23-adversarial-de66945-regex-20261104-01",
   "role": "adversarial",
   "reviewer_id": "codex-adversarial-reviewer-01",
   "independent": true,
-  "reviewed_sha": "4c9c54f8b5a33e758624c997f107d1ffdd7c94a0",
+  "reviewed_sha": "de66945db318d7aeb7acdb13a0bd0203fed1bd31",
   "findings": [
     {
       "id": "ADV-01",

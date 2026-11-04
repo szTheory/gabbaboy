@@ -2,13 +2,15 @@
 
 ## Review scope and conclusion
 
-I reviewed the committed source at 4c9c54f8b5a33e758624c997f107d1ffdd7c94a0. I inspected the T1 report and qualification gates, the adoption and version-window validators, D-145 through D-154 Markdown claim handling, the version-PR gate, and release workflow authority and package-validation paths.
+I reviewed the committed source at de66945db318d7aeb7acdb13a0bd0203fed1bd31. I inspected the T1 report and qualification gates, the adoption and version-window validators, D-145 through D-154 Markdown claim handling, the version-PR gate, and release workflow authority and package-validation paths.
 
 The adoption checker reads Markdown through a root-confined, size-limited UTF-8 reader. Ordinary documents are capped at 1 MiB, the historical support ledger at 8 MiB, and release notes at 256 KiB. The D-154 reference-label parser scans once to precompute paired-opening counts. Each candidate then uses the prefix counts and label-length check to reject empty, over-999-character, or nested-bracket spans before copying or normalizing them; only valid labels of at most 999 characters are normalized. D-152's emphasis matcher uses a fixed set of six candidate buckets per marker; it examines those buckets for each closing delimiter and pushes or removes each candidate at most once, so the previous repeated backward scan is gone.
 
 I reviewed the production claim flow across game-acceptance, README, release and other required surfaces, notices, and release notes. Their caller paths pass uncollapsed visible prose with rendered inline and reference link labels exposed, after masking code spans. The matcher decodes visible CommonMark references, normalizes hard line breaks and paired emphasis, and strips literal Cf characters plus the frozen Unicode 18.0 Default_Ignorable_Code_Point ranges. D-153 correctly treats Unicode symbol categories as punctuation for delimiter flanking; the paired emoji, underscore, rule-of-three, escaped-punctuation, destination/title, and code controls cover these cases.
 
 The exact-source evidence supplied for this revision reports py_compile, the production docs check (473 checks), the docs self-test (473 checks and 255 negative controls), the release-note self-test (2 positives and 72 controls), and phase1 configure/build as passing. I also ran the static workflow policy check at this source; it passed and recorded five residual write-authority jobs. Direct production-path probes for the D-153 symbol cases produced the expected match decisions. D-154 source inspection confirms the constant-time rejected-span guard, and paired docs, notice and release-note controls cover nested-bracket claim rejection and safe-prose acceptance. The direct review-report gate and focused CTest remain pending and are not claimed here.
+
+The de66945 delta from 4c9c54f is limited to the CMake review-evidence success regex and the matching registration-self-test expectation. Both now use one-or-more lowercase hex characters instead of a 12-character interval. The checker still validates the full reviewed commit ID and emits its first 12 hex characters in the status line; this regex only checks the test output and does not change the report identity or qualification decision. The exact-source checker self-test confirms the registration and invocation.
 
 The review-evidence checker resolves full commit IDs with lazy fetch and replacement objects disabled, reads fixed report blobs only after checking their size, enforces the closed schema, and uses git diff --quiet with fixed evidence exclusions for qualification drift. The version-window checker likewise uses immutable full commits, safe repository-relative paths, and size-before-read blob caps. SEC-23-09 remains open: several Git-output paths still capture data before enforcing an output bound or omit a subprocess timeout.
 
@@ -98,14 +100,15 @@ Before D-154, shortcut/reference matching copied and normalized nested candidate
 
 ## Verification evidence and limits
 
-For the exact source 4c9c54f8b5a33e758624c997f107d1ffdd7c94a0, the phase evidence records:
+The docs matcher and workflow sources are unchanged from 4c9c54f8b5a33e758624c997f107d1ffdd7c94a0; the phase evidence for that matcher revision records:
 
 - Python syntax check passed.
 - Production docs check passed with 473 checks.
 - Docs self-test passed with 473 checks and 255 negative controls.
 - Release-note self-test passed with 2 positives and 72 controls.
 - phase1 configure/build passed.
-- Static workflow policy check passed with five residual write-authority jobs; I reran this check at the reviewed source.
+- Static workflow policy check passed with five residual write-authority jobs; I reran this check at de66945db318d7aeb7acdb13a0bd0203fed1bd31.
+- At the reviewed source, the review-evidence self-test passed with 32 positives and 27 controls, including the CMake registration pattern check.
 - Direct D-153 symbol probes matched expected decisions. The D-154 constant-time rejected-span guard is supported by paired nested-bracket claim-rejection and safe-prose controls across docs, notices and release notes.
 
 The direct review-report gate and focused CTest have not been run for this report. These checks establish local source behavior only. No hosted evidence, release publication, real fixture operation, or downloaded-package result is claimed.
@@ -114,11 +117,11 @@ The direct review-report gate and focused CTest have not been run for this repor
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-4c9c54f8-20261104-codex-02",
+  "report_id": "phase23-security-de66945d-20261104-codex-03",
   "role": "security",
   "reviewer_id": "codex-security-reviewer-01",
   "independent": true,
-  "reviewed_sha": "4c9c54f8b5a33e758624c997f107d1ffdd7c94a0",
+  "reviewed_sha": "de66945db318d7aeb7acdb13a0bd0203fed1bd31",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -138,7 +141,7 @@ The direct review-report gate and focused CTest have not been run for this repor
       "disposition": "fixed",
       "rationale": "The exact source compares qualification trees with git diff --quiet --no-renames and a fixed evidence exclusion list. The immutable report reader checks size before reading. The source-bound self-test accepts evidence-only changes and rejects source drift.",
       "fix_sha": "1b7a01f30bd0b3c9330c3e633e4f60319e7b6712",
-      "verification_ref": "tests/scripts/verify-review-evidence.py:71-84,218-225; the checker source uses its size-before-read reader and quiet diff path"
+      "verification_ref": "tests/scripts/verify-review-evidence.py:71-84,218-225,254-275,401-406; exact-source self-test: 32 positives, 27 controls"
     },
     {
       "id": "SEC-23-03",
