@@ -655,8 +655,17 @@ def mask_indented_code_blocks(text: str) -> str:
 
 def mask_inline_code_spans(text: str) -> str:
     """Mask CommonMark backtick spans, including multiline spans, without moving offsets."""
-    tick = chr(96)
     chars = list(text)
+    for opening, end, _content in inline_code_spans(text):
+        for offset in range(opening, end):
+            if chars[offset] not in ("\n", "\r"):
+                chars[offset] = " "
+    return "".join(chars)
+
+
+def inline_code_spans(text: str) -> list[tuple[int, int, str]]:
+    """Return the same bounded CommonMark backtick spans masked by mask_inline_code_spans."""
+    tick = chr(96)
     runs: list[tuple[int, int, int, bool]] = []
     index = 0
     length = len(text)
@@ -682,21 +691,64 @@ def mask_inline_code_spans(text: str) -> str:
         next_same[run_index] = next_by_length.get(delimiter)
         next_by_length[delimiter] = run_index
 
+    spans: list[tuple[int, int, str]] = []
     run_index = 0
     while run_index < len(runs):
-        opening, _, _, escaped = runs[run_index]
+        opening, content_start, _, escaped = runs[run_index]
         closing_index = next_same[run_index]
         if escaped or closing_index is None:
             run_index += 1
             continue
+        closing_start = runs[closing_index][0]
         end = runs[closing_index][1]
-        for offset in range(opening, end):
-            if chars[offset] not in ("\n", "\r"):
-                chars[offset] = " "
+        spans.append((opening, end, text[content_start:closing_start]))
         run_index = closing_index + 1
         while run_index < len(runs) and runs[run_index][0] < end:
             run_index += 1
-    return "".join(chars)
+    return spans
+
+
+def normalized_code_span(content: str) -> str:
+    content = content.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
+    if content.startswith(" ") and content.endswith(" ") and content.strip():
+        return content[1:-1]
+    return content
+
+
+def visible_phrase_source(text: str, phrase: str) -> str:
+    """Mask inline code except exact code tokens explicitly required inside a visible phrase."""
+    required_tokens = {
+        normalized_code_span(content)
+        for _opening, _end, content in inline_code_spans(phrase)
+    }
+    if not required_tokens:
+        return mask_inline_code_spans(text)
+
+    pieces: list[str] = []
+    cursor = 0
+    for opening, end, content in inline_code_spans(text):
+        pieces.append(text[cursor:opening])
+        token = normalized_code_span(content)
+        if token in required_tokens:
+            pieces.append(token)
+        else:
+            pieces.append("".join("\n" if char == "\n" else "\r" if char == "\r" else " "
+                                  for char in text[opening:end]))
+        cursor = end
+    pieces.append(text[cursor:])
+    return "".join(pieces)
+
+
+def visible_phrase_text(phrase: str) -> str:
+    """Render expected inline-code tokens as their visible text for prose matching."""
+    pieces: list[str] = []
+    cursor = 0
+    for opening, end, content in inline_code_spans(phrase):
+        pieces.append(phrase[cursor:opening])
+        pieces.append(normalized_code_span(content))
+        cursor = end
+    pieces.append(phrase[cursor:])
+    return "".join(pieces)
 
 def comment_free(text: str) -> str:
     return re.sub(r"<!--.*?(?:-->|\Z)", " ", text, flags=re.DOTALL)
@@ -789,10 +841,10 @@ def check_claim_boundaries(relative: str, text: str) -> int:
 
 def check_phrases(relative: str, text: str,
                   required: tuple[tuple[str, str], ...]) -> int:
-    prose_text = mask_inline_code_spans(text)
     for phrase, reason in required:
-        evidence = text if "`" in phrase else prose_text
-        require(phrase in evidence, f"{reason}:{relative}")
+        evidence = visible_phrase_source(text, phrase)
+        expected = flexible(visible_phrase_text(phrase))
+        require(expected.search(evidence) is not None, f"{reason}:{relative}")
     return len(required)
 
 
@@ -826,11 +878,7 @@ def check_game(root: Path) -> int:
          "perceptual-output-limit-missing"),
         ("[CGB corpus contract](cgb-corpus.md)", "cgb-corpus-evidence-link-missing"),
     )
-    for expected, reason in evidence:
-        evidence_text = text if "`" in expected else disclosure_text
-        require(expected in evidence_text, f"{reason}:{GAME_GUIDE}")
-        checks += 1
-    return checks
+    return checks + check_phrases(GAME_GUIDE, text, evidence)
 
 
 def check_readme(root: Path) -> int:
