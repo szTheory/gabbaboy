@@ -129,7 +129,7 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
 
 ### Phase 23: Qualified v0.4.0 Release
 
-**Status**: Unstarted and owner-controlled; after Phase 22 qualifies, the next action is `/gsd-discuss-phase 23`.
+**Status**: Planned — eight plans across eight sequential dependency waves; execution remains owner-controlled. The next action is `/gsd-execute-phase 23`. No implementation, qualification, or publication is claimed.
 
 **Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
 **Depends on**: Phase 22
@@ -139,9 +139,36 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
   2. Release notes and the support ledger identify an admitted game's exact software-model progress result or the justified absence after the two named attempts, distinguish diagnostic and reproducibility observations, and retain hardware, perceptual, timing, platform, and compatibility limits.
   3. Published/downloaded artifact identities and digests reconcile with the release source, installed consumers work against those bytes, required license/component notices are present, and the fixture-exclusion checks accept the real packages and reject their game-ROM insertion control.
 **Plan cap**: 9
-**Plans**: TBD — within the cap.
+**Plans**: 8 plans in 8 sequential dependency waves, within the cap of 9.
+
+Plans:
+**Wave 1**
+- [ ] 23-01-PLAN.md — Generate the source-bound v0.4 support ledger and preserve evidence limits.
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 23-02-PLAN.md — Generate concise release notes from the same checked evidence.
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 23-03-PLAN.md — Bind the complete release claim and require observed exact release-please output.
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 23-04-PLAN.md — Add independent source-bound review evidence and qualify the implementation head.
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 23-07-PLAN.md — Apply the observed 0.4.0 state-version policy before version freeze.
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 23-05-PLAN.md — Prepare the version PR and use the existing trusted release lifecycle.
+
+**Wave 7** *(blocked on Wave 6 completion)*
+- [ ] 23-06-PLAN.md — Reconcile downloaded release evidence and generate automated phase closure.
+
+**Wave 8** *(blocked on Wave 7 completion)*
+- [ ] 23-08-PLAN.md — Record transferable lessons and stop at the owner-controlled milestone boundary.
 
 Use the existing release path. RM-032 tooling is not an automatic work list; only a concrete release blocker can justify a narrowly scoped required change. Keep full libretro, supported Linux/Steam Deck gameplay, CGB timing rewrites, license migration, and a libfuturo dependency or early API/state freeze outside this milestone.
+
+The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release/23-SOURCE-AUDIT.md), [research](phases/GB-23-qualified-v0-4-0-release/23-RESEARCH.md), and [execution contract](phases/GB-23-qualified-v0-4-0-release/23-EXECUTION-CONTRACT.md) preserve the evidence basis and execution limits. The spec-less probe's unclassified REL-01 edge and two descriptor-less transparency prohibitions remain explicitly flagged.
 
 ## Requirement Coverage
 
