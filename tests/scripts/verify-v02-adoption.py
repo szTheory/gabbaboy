@@ -199,6 +199,15 @@ COMMONMARK_REFERENCED_GAME_CLAIMS = (
 COMMONMARK_CHARACTER_REFERENCE = re.compile(
     r"&(?:#[0-9]{1,7}|#[xX][0-9A-Fa-f]{1,6}|[A-Za-z][A-Za-z0-9]*);"
 )
+# Match odd runs of backslashes immediately before a CommonMark line ending.
+COMMONMARK_HARD_LINE_BREAK = re.compile(r"(?<!\\)(?:\\\\)*\\(?=\r\n|\r|\n)")
+COMMONMARK_HARD_BREAK_GAME_CLAIMS = (
+    ("backslash-lf", "CGB\\\ngame passes all acceptance checks."),
+    ("backslash-cr", "CGB\\\rgame passes all acceptance checks."),
+    ("backslash-crlf", "CGB\\\r\ngame passes all acceptance checks."),
+    ("backslash-lf-encoded-space", "CGB\\\n&#x20;game passes all acceptance checks."),
+    ("soft-break-lf-encoded-space", "CGB\n&#x20;game passes all acceptance checks."),
+)
 
 
 def is_default_ignorable_codepoint(codepoint: int) -> bool:
@@ -220,7 +229,8 @@ def decode_commonmark_character_references(text: str) -> str:
 
 
 def unsupported_game_claim_match(text: str) -> re.Match[str] | None:
-    """Match visible claims after decoding references and removing invisible chars."""
+    """Match visible claims after Markdown break/reference and invisible-char normalization."""
+    text = COMMONMARK_HARD_LINE_BREAK.sub(" ", text)
     text = decode_commonmark_character_references(text)
     claim_text = "".join(
         char for char in text
@@ -1524,7 +1534,7 @@ def unnegated(pattern: re.Pattern[str], text: str) -> bool:
     return False
 
 
-def check_unqualified(relative: str, text: str) -> int:
+def check_unqualified(relative: str, text: str, *, game_claim_text: str | None = None) -> int:
     """Reject qualification claims that no shipped evidence supports."""
     text = mask_inline_code_spans(text)
     claims = claims_module()
@@ -1540,8 +1550,9 @@ def check_unqualified(relative: str, text: str) -> int:
         (FALSE_FUZZ_CLAIM, "false-fuzz-campaign-claim"),
     )
     for pattern, reason in checks:
-        matched = (unsupported_game_claim_match(text) if pattern is UNSUPPORTED_GAME_CLAIM
-                   else pattern.search(text))
+        matched = (unsupported_game_claim_match(
+            text if game_claim_text is None else game_claim_text)
+                   if pattern is UNSUPPORTED_GAME_CLAIM else pattern.search(text))
         require(matched is None, f"{reason}:{relative}")
     return len(checks) + 1
 
@@ -1566,14 +1577,17 @@ def check_phrases(relative: str, text: str,
 
 
 def check_game(root: Path) -> int:
-    text = prose(read_document(root, GAME_GUIDE))
+    raw = read_document(root, GAME_GUIDE)
+    visible_text = prose(raw, collapse=False)
+    game_claim_text = mask_inline_code_spans(visible_text)
+    text = " ".join(visible_text.split())
     disclosure_text = mask_inline_code_spans(text)
     checks = 0
 
     require(ABSENCE_STATEMENT in disclosure_text,
             f"absence-statement-missing:{GAME_GUIDE}")
     checks += 1
-    require(unsupported_game_claim_match(disclosure_text) is None,
+    require(unsupported_game_claim_match(game_claim_text) is None,
             f"unsupported-cgb-game-qualification:{GAME_GUIDE}")
     checks += 1
 
@@ -1599,13 +1613,16 @@ def check_game(root: Path) -> int:
 
 
 def check_readme(root: Path) -> int:
-    text = prose(read_document(root, README))
+    raw = read_document(root, README)
+    visible_text = prose(raw, collapse=False)
+    game_claim_text = mask_inline_code_spans(visible_text)
+    text = " ".join(visible_text.split())
     disclosure_text = mask_inline_code_spans(text)
     checks = 0
     require(ABSENCE_STATEMENT in disclosure_text,
             f"absence-statement-missing:{README}")
     checks += 1
-    require(unsupported_game_claim_match(disclosure_text) is None,
+    require(unsupported_game_claim_match(game_claim_text) is None,
             f"unsupported-cgb-game-qualification:{README}")
     checks += 1
     evidence = (
@@ -1653,10 +1670,13 @@ def check_symbols(root: Path) -> int:
 
 
 def check_surface(root: Path, relative: str) -> int:
-    text = prose(read_document(root, relative))
+    raw = read_document(root, relative)
+    visible_text = prose(raw, collapse=False)
+    game_claim_text = mask_inline_code_spans(visible_text)
+    text = " ".join(visible_text.split())
     disclosure_text = mask_inline_code_spans(text)
     checks = check_phrases(relative, text, REQUIRED[relative])
-    checks += check_unqualified(relative, disclosure_text)
+    checks += check_unqualified(relative, disclosure_text, game_claim_text=game_claim_text)
     if relative == UNRELEASED:
         require(PENDING_V030_SECTION.search(disclosure_text) is None,
                 f"unreleased-pending-stale:{relative}")
@@ -2104,8 +2124,8 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         (FALSE_PLATFORM_CLAIM, "false-platform-guarantee"),
         (FALSE_PERCEPTUAL_CLAIM, "false-perceptual-claim"),
     ):
-        matched = (unsupported_game_claim_match(text) if pattern is UNSUPPORTED_GAME_CLAIM
-                   else pattern.search(text))
+        matched = (unsupported_game_claim_match(link_text)
+                   if pattern is UNSUPPORTED_GAME_CLAIM else pattern.search(text))
         require(matched is None, f"release-notes-{reason}")
         checks += 1
     require(not unnegated(claims.UNQUALIFIED_CLAIM, text),
@@ -2305,9 +2325,16 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
              "release-notes-unsupported-cgb-game-qualification")
             for name, _ in COMMONMARK_REFERENCED_GAME_CLAIMS
         )
+        mutations += tuple(
+            (f"commonmark-hard-break-{name}-game-claim", None,
+             "release-notes-unsupported-cgb-game-qualification")
+            for name, _ in COMMONMARK_HARD_BREAK_GAME_CLAIMS
+        )
         for safe_suffix in (
                 "\nCGB&#x20; test-ROM results remain software-model evidence only.\n",
-                "\n`CGB&#x200b; game passes all acceptance checks.`\n"):
+                "\n`CGB&#x200b; game passes all acceptance checks.`\n",
+                "\nCGB\\\ntest-ROM results remain software-model evidence only.\n",
+                "\n`CGB\\\ngame passes all acceptance checks.`\n"):
             write_lf(notes, VALID_RELEASE_NOTES + safe_suffix)
             expect_pass(cli_args)
         write_lf(notes, VALID_RELEASE_NOTES)
@@ -2331,6 +2358,11 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                 claim_name = name.removeprefix("commonmark-reference-").removesuffix(
                     "-game-claim")
                 claim = dict(COMMONMARK_REFERENCED_GAME_CLAIMS)[claim_name]
+                changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+            elif name.startswith("commonmark-hard-break-"):
+                claim_name = name.removeprefix("commonmark-hard-break-").removesuffix(
+                    "-game-claim")
+                claim = dict(COMMONMARK_HARD_BREAK_GAME_CLAIMS)[claim_name]
                 changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
             elif name == "false-signing-claim":
                 changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
@@ -3074,6 +3106,10 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             readme_parser_control(
                 "commonmark-reference-" + name + "-game-claim-cannot-pass",
                 claim, f"unsupported-cgb-game-qualification:{README}")
+        for name, claim in COMMONMARK_HARD_BREAK_GAME_CLAIMS:
+            readme_parser_control(
+                "commonmark-hard-break-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{README}")
         readme_parser_control(
             "invisible-format-safe-game-evidence-prose-remains-valid",
             "CGB\u200b test-ROM results remain software-model evidence only.")
@@ -3086,6 +3122,15 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         readme_parser_control(
             "commonmark-reference-claim-in-code-span-remains-masked",
             "`CGB&#x200b; game passes all acceptance checks.`")
+        readme_parser_control(
+            "commonmark-hard-break-safe-game-evidence-prose-remains-valid",
+            "CGB\\\ntest-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "commonmark-hard-break-claim-in-code-span-remains-masked",
+            "`CGB\\\ngame passes all acceptance checks.`")
+        readme_parser_control(
+            "commonmark-hard-break-claim-in-fenced-code-remains-masked",
+            "```\nCGB\\\ngame passes all acceptance checks.\n```")
 
         multiline_reference_titles = (
             ("inline-multiline-reference-title-hides-hardware-disclosure",
@@ -3601,7 +3646,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 97 + len(incomplete_html_openers)
+    controls = len(mutations) + 102 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
