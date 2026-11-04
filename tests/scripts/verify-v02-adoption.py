@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 from array import array
+from bisect import bisect_right
 from fractions import Fraction
 import hashlib
 import importlib.util
@@ -167,9 +168,40 @@ UNSUPPORTED_GAME_CLAIM = re.compile(
 )
 
 
+DEFAULT_IGNORABLE_CODEPOINT_RANGES_UCD_18_0 = (
+    (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C),
+    (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180D),
+    (0x180E, 0x180E), (0x180F, 0x180F), (0x200B, 0x200F),
+    (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164),
+    (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF), (0xFFA0, 0xFFA0),
+    (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3), (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0FFF),
+)
+DEFAULT_IGNORABLE_CODEPOINT_STARTS_UCD_18_0 = tuple(
+    start for start, _ in DEFAULT_IGNORABLE_CODEPOINT_RANGES_UCD_18_0
+)
+DEFAULT_IGNORABLE_CLAIM_SEPARATORS = (
+    ("combining-grapheme-joiner", "\u034f"),
+    ("hangul-filler", "\u3164"),
+    ("variation-selector-16", "\ufe0f"),
+    ("reserved-default-ignorable", "\u2065"),
+)
+
+
+def is_default_ignorable_codepoint(codepoint: int) -> bool:
+    """Check the frozen Unicode 18.0 Default_Ignorable_Code_Point ranges."""
+    index = bisect_right(DEFAULT_IGNORABLE_CODEPOINT_STARTS_UCD_18_0, codepoint) - 1
+    return (index >= 0
+            and codepoint <= DEFAULT_IGNORABLE_CODEPOINT_RANGES_UCD_18_0[index][1])
+
+
 def unsupported_game_claim_match(text: str) -> re.Match[str] | None:
-    """Match unsupported claims after removing invisible Unicode format chars."""
-    claim_text = "".join(char for char in text if unicodedata.category(char) != "Cf")
+    """Match unsupported claims after removing format and default-ignorable chars."""
+    claim_text = "".join(
+        char for char in text
+        if unicodedata.category(char) != "Cf"
+        and not is_default_ignorable_codepoint(ord(char))
+    )
     return UNSUPPORTED_GAME_CLAIM.search(claim_text)
 
 
@@ -2239,6 +2271,11 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
             ("unscoped-state-claim", None,
              "unscoped-state-claim:release-notes"),
         )
+        mutations += tuple(
+            (f"default-ignorable-{name}-game-claim", None,
+             "release-notes-unsupported-cgb-game-qualification")
+            for name, _ in DEFAULT_IGNORABLE_CLAIM_SEPARATORS
+        )
         for name, edit, reason in mutations:
             if name == "contrary-game-claim":
                 changed = VALID_RELEASE_NOTES + "\nCGB game passes acceptance.\n"
@@ -2249,6 +2286,11 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                     "word-joiner-game-claim": "\u2060",
                     "zero-width-non-joiner-game-claim": "\u200c",
                 }[name]
+                changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
+            elif name.startswith("default-ignorable-"):
+                separator_name = name.removeprefix("default-ignorable-").removesuffix(
+                    "-game-claim")
+                separator = dict(DEFAULT_IGNORABLE_CLAIM_SEPARATORS)[separator_name]
                 changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
             elif name == "false-signing-claim":
                 changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
@@ -2983,9 +3025,17 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             readme_parser_control(
                 name, "CGB" + separator + " game passes all acceptance checks.",
                 f"unsupported-cgb-game-qualification:{README}")
+        for name, separator in DEFAULT_IGNORABLE_CLAIM_SEPARATORS:
+            readme_parser_control(
+                "default-ignorable-" + name + "-game-claim-cannot-pass",
+                "CGB" + separator + " game passes all acceptance checks.",
+                f"unsupported-cgb-game-qualification:{README}")
         readme_parser_control(
             "invisible-format-safe-game-evidence-prose-remains-valid",
             "CGB\u200b test-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "default-ignorable-safe-game-evidence-prose-remains-valid",
+            "CGB\u034f test-ROM results remain software-model evidence only.")
 
         multiline_reference_titles = (
             ("inline-multiline-reference-title-hides-hardware-disclosure",
@@ -3501,7 +3551,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 87 + len(incomplete_html_openers)
+    controls = len(mutations) + 91 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
