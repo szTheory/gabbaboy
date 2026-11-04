@@ -111,10 +111,19 @@ def verify_registrations(repo: Path, revision: str) -> None:
         ),
     }
     for name, (command, success_regex) in requirements.items():
-        registration = list(re.finditer(rf"(?m)^gbb_add_v02_contract\({re.escape(name)}\s+([^\n]+)\n(.*?)^\)", cmake))
+        registration = list(re.finditer(rf"(?m)^gbb_add_v02_contract\({re.escape(name)}(?=\s)", cmake))
         if len(registration) != 1:
             reject("review-test-registration-invalid", f"expected exactly one registration for {name}")
-        timeout, body = registration[0].group(1), registration[0].group(2)
+        start = registration[0].start()
+        line_end = cmake.find("\n", start)
+        close = cmake.find(")\n", line_end + 1)
+        if line_end < 0 or close < 0:
+            reject("review-test-registration-invalid", f"{name} registration is unterminated")
+        timeout_match = re.search(rf"^gbb_add_v02_contract\({re.escape(name)}\s+(\d+)\s*$",
+                                  cmake[start:line_end], re.M)
+        if timeout_match is None:
+            reject("review-test-registration-invalid", f"{name} timeout is missing")
+        timeout, body = timeout_match.group(1), cmake[line_end + 1:close]
         if timeout != "60" or command not in body or success_regex not in body:
             reject("review-test-registration-invalid", f"{name} has the wrong timeout, mode, source revision, or success assertion")
 
