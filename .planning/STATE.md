@@ -4,18 +4,18 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
-current_plan: 1 (Plan 23-01 is complete; next plan is 23-02)
-status: Phase 23 execution is in progress under owner control; Plan 23-01 is complete, and no release is claimed
-stopped_at: Completed GB-23-01; next plan is GB-23-02 Concise release disclosure
-last_updated: "2026-11-04T01:51:58.662Z"
-last_activity: 2026-11-03
-last_activity_desc: Phase GB-23 Plan 23-01 complete; next is Plan 23-02
-state_head: 004aac8474d3022b2f0e3b53e4f22b1ea0e52e9d
+current_plan: 3 (Plan 23-02 complete; next is GB-23-03 Release content window and observed version gate; resume with /gsd-execute-phase 23)
+status: Phase 23 is in progress; Plan 23-02 is complete and Plan 23-03 is next. REL-01 remains Pending; no release is claimed
+stopped_at: Completed GB-23-02; next plan is GB-23-03 Release content window and observed version gate
+last_updated: "2026-11-04T02:59:55.836Z"
+last_activity: 2026-11-04
+last_activity_desc: Phase GB-23 Plan 23-02 complete; continue with Plan 23-03
+state_head: 50e574e99c934fc930c047894d6df3541b551348
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 30
-  completed_plans: 23
+  completed_plans: 24
   percent: 75
 ---
 
@@ -26,17 +26,17 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 23 — Qualified v0.4.0 Release (in progress; Plan 23-01 complete, release evidence still pending)
+**Current focus:** Phase 23 — Qualified v0.4.0 Release (in progress; Plan 23-02 complete, release evidence still pending)
 
 ## Current Position
 
-Current Plan: 1 (Plan 23-01 is complete; resume with Plan 23-02)
+Current Plan: 3 (Plan 23-02 complete; next is GB-23-03 Release content window and observed version gate; resume with /gsd-execute-phase 23)
 Total Plans in Phase: 8
 Phase: GB-23 (Qualified v0.4.0 Release) — IN PROGRESS
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
-Status: Phase 22 and repository cleanup remain complete. Phase 23 Plan 23-01 is committed with its focused tests passing; Phase 23 continues with Plan 23-02. REL-01 remains Pending until Plan 23-06 establishes actual release evidence. No v0.4.0 qualification or publication is claimed.
-Last activity: 2026-11-03 — Phase GB-23 Plan 23-01 completed; continue with Plan 23-02
+Status: Phase 23 is in progress; Plan 23-02 is complete and Plan 23-03 is next. REL-01 remains Pending; no release is claimed
+Last activity: 2026-11-04 — Phase GB-23 Plan 23-02 complete; continue with Plan 23-03
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
@@ -62,6 +62,7 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 | Phase 22 P10 | about 24 min | 2 tasks | 5 files |
 | Phase GB-22 P11 | about 90 min through local evidence preparation | 3 tasks | 19 files |
 | Phase GB-23 P01 | 56min | 2 tasks | 4 files |
+| Phase 23 P02 | 1h | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -86,8 +87,8 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-04T01:51:58.580Z
-**Stopped at:** Completed GB-23-01; next plan is GB-23-02 Concise release disclosure
+**Last session:** 2026-11-04T02:57:53.868Z
+**Stopped at:** Completed GB-23-02; next plan is GB-23-03 Release content window and observed version gate
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
@@ -123,6 +124,7 @@ Phase 23 — Qualified v0.4.0 Release — is in progress. Plan 23-01 is complete
 - [Phase GB-23]: Carry the nine state/core/player support claims from the pinned v0.3 profile without creating new producer receipts.
 - [Phase GB-23]: Report the CGB-CPU-E native harness as repeatability-only and Phase 22 diagnostics as synthetic plus metadata-only.
 - [Phase GB-23]: REL-01 remains Pending until Plan 23-06 establishes actual release evidence.
+- [Phase 23]: Render the concise preface from the existing immutable support-claims-v0.4.json profile; preserve release-disclosure.json and v0.3 output. — The validated profile already contains all managed v0.4 facts, so a second copy would add drift risk without supplying new evidence.
 
 ### Blockers
 
