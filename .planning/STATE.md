@@ -6,11 +6,11 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: Phase 23 Plan 23-04 T2 continuing under owner-approved D-144, D-145 and D-146; matcher correction and reviews remain in progress.
-last_updated: "2026-11-04T18:02:38.209Z"
+stopped_at: Phase 23 Plan 23-04 T2 continuing under owner-approved D-144 through D-148; source correction and reviews remain in progress.
+last_updated: "2026-11-04T18:18:28.300Z"
 last_activity: 2026-11-04
-last_activity_desc: Owner approved D-146 after U+034F bypass reproduction; extend the T2 claim matcher and controls.
-state_head: 742bf1bb5dd3a6e71ab93dbdb420bca2ec94d16a
+last_activity_desc: Owner approved D-148 after visible entity references bypassed the CGB-game claim matcher; decode CommonMark references before matching.
+state_head: a6bc0a824bce55de57422e2b6b73b94ed0f841d1
 progress:
   total_phases: 4
   completed_phases: 3
@@ -26,7 +26,7 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 23 Plan 23-04 T2 under D-144/D-145/D-146: implement Unicode default-ignorable claim filtering and controls, then reissue reviews and pass T2 gates. Resume /gsd-execute-phase 23; stop at Phase 23.
+**Current focus:** Phase 23 Plan 23-04 T2 under D-144 through D-148: decode rendered CommonMark references in visible prose and controls, then validate and reissue three reviews. Resume /gsd-execute-phase 23; stop at Phase 23.
 
 ## Current Position
 
@@ -36,7 +36,7 @@ Phase: GB-23 (Qualified v0.4.0 Release) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
 Status: Executing Phase 23
-Last activity: 2026-11-04 — Owner approved D-146 after U+034F bypass reproduction; extend the T2 claim matcher and controls.
+Last activity: 2026-11-04 — Owner approved D-148 after visible entity references bypassed the CGB-game claim matcher; decode CommonMark references before matching.
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
@@ -89,7 +89,7 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 ## Session Continuity
 
 **Last session:** 2026-11-04T16:26:14.783Z
-**Stopped at:** Phase 23 Plan 23-04 T2 continuing under owner-approved D-144, D-145 and D-146; matcher correction and reviews remain in progress.
+**Stopped at:** Phase 23 Plan 23-04 T2 continuing under owner-approved D-144 through D-148; source correction and reviews remain in progress.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
@@ -129,8 +129,10 @@ Phase 23 — Qualified v0.4.0 Release — is in progress. Plan 23-01 is complete
 - [Phase 23]: Owner approved the one-time bounded Phase 23 T2 parser correction and three-role re-review at the exact d98 findings; amend Plan 23-04 in place and add no plan. — D-144 and 23-04-T2-RESCOPE.md preserve the nine-plan cap and existing review/gap counters; any new correctness/security finding requires another explicit owner decision.
 - [Phase 23]: Owner approved D-145: extend Plan 23-04 T2 in place to reject unsupported CGB-game claims containing invisible Unicode format characters, with paired controls; no plan or budget reset.
 - [Phase 23]: Owner approved D-146: extend the unsupported CGB-game claim matcher to ignore Unicode Default_Ignorable_Code_Point characters, including U+034F, with paired docs/release-note controls and exact-source review.
+- [Phase 23]: Owner approved D-147: decode valid CommonMark character references only when they produce Cf or Unicode 18.0 Default_Ignorable_Code_Point characters in unsupported CGB-game claims, with paired controls and exact-source review.
+- [Phase 23]: Owner approved D-148: decode all valid CommonMark character references in already-visible prose before unsupported CGB-game claim matching; preserve code masking and keep the change confined to that matcher.
 
 ### Blockers
 
 - No active Phase 22 blocker. The seven evidence gates still block real fixture admission, but D-141 scoped the completed phase to synthetic composition, metadata assessment, and explicit no-go controls. Do not fetch, build, run, or admit real diagnostic fixtures without a new owner-approved scope.
-- Plan 23-04 T2 is active under owner-approved D-144/D-145/D-146; commit the corrected matcher, reissue three exact-source reviews, then pass report and focused CTest gates. REL-01 and publication remain Pending.
+- Plan 23-04 T2 is active under owner-approved D-144 through D-148; decode valid CommonMark character references in visible prose only for unsupported CGB-game claims, then commit, reissue three exact-source reviews, and pass report/focused CTest gates. REL-01 and publication remain Pending.
