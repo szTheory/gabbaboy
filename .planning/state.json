@@ -21,13 +21,13 @@
     {
       "number": "23",
       "name": "Qualified v0.4.0 Release",
-      "status": "pending"
+      "status": "in_progress"
     }
   ],
   "next": {
-    "command": "/gsd-execute-phase 23",
-    "label": "Owner-controlled execution of Phase 23 — Qualified v0.4.0 Release",
-    "reason": "The eight-plan Phase 23 plan is accepted; execution is not started and no release qualification or publication is claimed."
+    "command": "$gsd-progress --next",
+    "label": "Advance to the next step (plan phase 23)",
+    "reason": "Phase 4 of 4 — needs a plan"
   },
-  "updated_at": "2026-11-04T00:41:55.112Z"
+  "updated_at": "2026-11-04T01:51:57.505Z"
 }

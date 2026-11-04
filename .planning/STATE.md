@@ -4,19 +4,19 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
-current_plan: 0
-status: Phase 22 and repository cleanup are complete; Phase 23 planning is accepted and execution remains owner-controlled
-stopped_at: Phase 23 planning complete; after clearing context, run owner-controlled /gsd-execute-phase 23
-last_updated: "2026-11-04T00:41:13.993Z"
+current_plan: 1 (Plan 23-01 is complete; next plan is 23-02)
+status: Phase 23 execution is in progress under owner control; Plan 23-01 is complete, and no release is claimed
+stopped_at: Completed GB-23-01; next plan is GB-23-02 Concise release disclosure
+last_updated: "2026-11-04T01:51:58.662Z"
 last_activity: 2026-11-03
-last_activity_desc: Phase GB-23 planning complete
-state_head: b1569bb452b203993cc5dd59b9e274cf52fc44e0
+last_activity_desc: Phase GB-23 Plan 23-01 complete; next is Plan 23-02
+state_head: 004aac8474d3022b2f0e3b53e4f22b1ea0e52e9d
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 30
-  completed_plans: 22
-  percent: 73
+  completed_plans: 23
+  percent: 75
 ---
 
 # Project State
@@ -26,23 +26,23 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 23 — Qualified v0.4.0 Release (planned; execution owner-controlled and not started)
+**Current focus:** Phase 23 — Qualified v0.4.0 Release (in progress; Plan 23-01 complete, release evidence still pending)
 
 ## Current Position
 
-Current Plan: 0 (Phase 23 planning is complete; execution has not started)
+Current Plan: 1 (Plan 23-01 is complete; resume with Plan 23-02)
 Total Plans in Phase: 8
-Phase: GB-23 (Qualified v0.4.0 Release) — READY TO EXECUTE
+Phase: GB-23 (Qualified v0.4.0 Release) — IN PROGRESS
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
-Status: Phase 22 and repository cleanup are complete. PR #143's post-merge main CI, fixture reproduction, and release-please checks passed; PR #144's documentation handoff and planning-only main CI passed. Local main is reconciled with remote main, no PRs or issues remain open, and Phase 23's eight-plan plan is accepted; execution remains owner-controlled and unstarted.
-Last activity: 2026-11-03 — Phase GB-23 planning complete; no implementation or release qualification has run
+Status: Phase 22 and repository cleanup remain complete. Phase 23 Plan 23-01 is committed with its focused tests passing; Phase 23 continues with Plan 23-02. REL-01 remains Pending until Plan 23-06 establishes actual release evidence. No v0.4.0 qualification or publication is claimed.
+Last activity: 2026-11-03 — Phase GB-23 Plan 23-01 completed; continue with Plan 23-02
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
-## Phase 23 Planning Handoff
+## Phase 23 Execution Handoff
 
-Phase 23 — Qualified v0.4.0 Release — is planned in eight sequential waves. The independent plan checker passed with no blockers or warnings; REL-01, all eight tracked context decisions, the API coverage declaration, and the post-planning gap analysis are covered. Planning does not establish implementation, qualification, or publication. Keep the unclassified REL-01 edge and two descriptor-less transparency prohibitions flagged, and preserve the Pending evidence limits in the phase context. After clearing context, the owner-controlled next command is `/gsd-execute-phase 23`.
+Phase 23 — Qualified v0.4.0 Release — is in progress in its accepted eight-wave order. Plan 23-01 is complete; see [23-01-SUMMARY.md](phases/GB-23-qualified-v0-4-0-release/23-01-SUMMARY.md). Plan 23-02, Concise release disclosure, is next. Keep REL-01 and the two descriptor-less transparency prohibitions flagged, and preserve all Pending evidence limits. After clearing context, resume with `/gsd-execute-phase 23`; stop at the Phase 23 boundary before the later v0.4 milestone audit.
 
 ## Performance Metrics
 
@@ -61,6 +61,7 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 | Phase GB-22 P01 | 19min | 2 tasks | 6 files |
 | Phase 22 P10 | about 24 min | 2 tasks | 5 files |
 | Phase GB-22 P11 | about 90 min through local evidence preparation | 3 tasks | 19 files |
+| Phase GB-23 P01 | 56min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -85,13 +86,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-04T00:41:13.903Z
-**Stopped at:** Phase 23 planning complete; after clearing context, run owner-controlled /gsd-execute-phase 23
+**Last session:** 2026-11-04T01:51:58.580Z
+**Stopped at:** Completed GB-23-01; next plan is GB-23-02 Concise release disclosure
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 23 — Qualified v0.4.0 Release — is planned in eight sequential waves and passed independent plan review and planning coverage gates. Execution has not started; no implementation, qualification, or publication is claimed. Preserve the unclassified REL-01 edge, the two flagged-unverified descriptor-less prohibitions, and all Pending evidence limits documented in the continuation note. After clearing context, the owner acts next with `/gsd-execute-phase 23`; stop at the Phase 23 boundary before the later v0.4 milestone audit.
+Phase 23 — Qualified v0.4.0 Release — is in progress. Plan 23-01 is complete and summarized in [23-01-SUMMARY.md](phases/GB-23-qualified-v0-4-0-release/23-01-SUMMARY.md); Plan 23-02, Concise release disclosure, is next. No v0.4.0 qualification or publication is claimed. Preserve the Pending requirements and flagged transparency prohibitions in the continuation note. After clearing context, resume Phase 23 with `/gsd-execute-phase 23`; stop at the phase boundary before the later v0.4 milestone audit.
 
 ## Decisions
 
@@ -119,6 +120,9 @@ Phase 23 — Qualified v0.4.0 Release — is planned in eight sequential waves a
 - [Phase GB-22]: Retarget the Phase 21 primary-record pointer to PR #140’s squash commit only after exact record-blob identity was established; keep digest and ancestry mutants.
 - [Phase GB-22]: Reduce the completed Phase 21 plan cap to 10, leaving two reserve slots and a four-phase total cap of 40.
 - [Phase GB-22]: Allow planning inventory inspection only through the narrowly pinned configured CTest inventory invocation.
+- [Phase GB-23]: Carry the nine state/core/player support claims from the pinned v0.3 profile without creating new producer receipts.
+- [Phase GB-23]: Report the CGB-CPU-E native harness as repeatability-only and Phase 22 diagnostics as synthetic plus metadata-only.
+- [Phase GB-23]: REL-01 remains Pending until Plan 23-06 establishes actual release evidence.
 
 ### Blockers
 
