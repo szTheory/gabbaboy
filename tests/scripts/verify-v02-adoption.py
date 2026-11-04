@@ -527,14 +527,53 @@ def read_document(root: Path, relative: str) -> str:
 
 def prose(text: str, scope: str = "markdown", *, collapse: bool = True) -> str:
     """Whitespace-normalized body prose without comments or non-rendered Markdown."""
-    text = re.sub(r"<!--.*?(?:-->|\Z)", " ", text, flags=re.DOTALL)
     text = mask_fenced_code_blocks(text)
     text = mask_indented_code_blocks(text)
+    text, comment_positions = protect_html_comments(text)
     text = mask_markdown_nonrendered(text)
-    visible = mask_inline_code_spans(text)
+    visible = list(mask_inline_code_spans(text))
+    text_chars = list(text)
+    for position, is_comment in enumerate(comment_positions):
+        if is_comment and text_chars[position] not in ("\n", "\r"):
+            text_chars[position] = " "
+        if is_comment and visible[position] not in ("\n", "\r"):
+            visible[position] = " "
+    text = "".join(text_chars)
+    visible = "".join(visible)
     require(RAW_HTML_CONSTRUCT.search(visible) is None, f"{scope}-raw-html-unsupported")
     require("\t" not in visible, f"{scope}-tab-unsupported")
     return " ".join(text.split()) if collapse else text
+
+
+def protect_html_comments(text: str) -> tuple[str, bytearray]:
+    """Keep comments opaque to Markdown parsing without joining their neighbors."""
+    chars = list(text)
+    comment_positions = bytearray(len(text))
+    sentinel = "\ufdd0"
+    search_from = 0
+    while True:
+        start = text.find("<!--", search_from)
+        if start < 0:
+            break
+        closing = text.find("-->", start + 4)
+        end = len(text) if closing < 0 else closing + 3
+        line_start = start
+        first_line = True
+        while line_start < end:
+            segment_start = start if first_line else line_start
+            line_end = text.find("\n", segment_start, end)
+            segment_end = end if line_end < 0 else line_end + 1
+            for position in range(segment_start, segment_end):
+                comment_positions[position] = 1
+                chars[position] = text[position] if text[position] in "\r\n" else " "
+            if segment_start < end and text[segment_start] not in "\r\n":
+                chars[segment_start] = sentinel
+            if line_end < 0:
+                break
+            line_start = line_end + 1
+            first_line = False
+        search_from = end
+    return "".join(chars), comment_positions
 
 
 def mask_markdown_nonrendered(text: str) -> str:
@@ -714,22 +753,30 @@ def mask_markdown_nonrendered(text: str) -> str:
         return re.sub(r"[ \t\r\n]+", " ", value.strip(" \t\r\n")).casefold()
 
     def container_content_start(
-            line: str) -> tuple[int, int, tuple[int, ...]] | None:
+            line: str) -> tuple[int, int, tuple[int, ...], int] | None:
         cursor = 0
+        visual_column = 0
         quote_depth = 0
         list_content_columns: list[int] = []
         while cursor < len(line):
-            marker_start = cursor
-            spaces = 0
-            while cursor < len(line) and line[cursor] == " " and spaces < 4:
+            marker_column = visual_column
+            while cursor < len(line) and line[cursor] in " \t":
+                if line[cursor] == " ":
+                    visual_column += 1
+                else:
+                    visual_column += 4 - visual_column % 4
                 cursor += 1
-                spaces += 1
-            if spaces > 3:
-                return None
+                if visual_column - marker_column > 3:
+                    return None
             if cursor < len(line) and line[cursor] == ">":
                 quote_depth += 1
                 cursor += 1
+                visual_column += 1
                 if cursor < len(line) and line[cursor] in " \t":
+                    if line[cursor] == " ":
+                        visual_column += 1
+                    else:
+                        visual_column += 4 - visual_column % 4
                     cursor += 1
                 continue
 
@@ -747,15 +794,25 @@ def mask_markdown_nonrendered(text: str) -> str:
                 else:
                     marker_end += 1
             if marker_end > cursor:
-                spaces_start = marker_end
-                while marker_end < len(line) and line[marker_end] in " \t" and marker_end - spaces_start < 5:
-                    marker_end += 1
-                if 1 <= marker_end - spaces_start <= 4:
-                    cursor = marker_end
-                    list_content_columns.append(cursor)
+                marker_width = marker_end - cursor
+                candidate_cursor = marker_end
+                candidate_column = visual_column + marker_width
+                whitespace_width = 0
+                while candidate_cursor < len(line) and line[candidate_cursor] in " \t":
+                    next_column = (candidate_column + 1 if line[candidate_cursor] == " " else
+                                   candidate_column + 4 - candidate_column % 4)
+                    if next_column - (visual_column + marker_width) > 4:
+                        break
+                    whitespace_width = next_column - (visual_column + marker_width)
+                    candidate_column = next_column
+                    candidate_cursor += 1
+                if 1 <= whitespace_width <= 4:
+                    cursor = candidate_cursor
+                    visual_column = candidate_column
+                    list_content_columns.append(visual_column)
                     continue
-            return marker_start + spaces, quote_depth, tuple(list_content_columns)
-        return cursor, quote_depth, tuple(list_content_columns)
+            return cursor, quote_depth, tuple(list_content_columns), visual_column
+        return cursor, quote_depth, tuple(list_content_columns), visual_column
 
     def line_content_end(line: str) -> int:
         end = len(line)
@@ -769,7 +826,7 @@ def mask_markdown_nonrendered(text: str) -> str:
         prefix = container_content_start(line)
         if prefix is None:
             return None
-        cursor, quote_depth, list_content_columns = prefix
+        cursor, quote_depth, list_content_columns, _visual_column = prefix
         if cursor >= end or line[cursor] != "[":
             return None
         start = cursor + 1
@@ -859,8 +916,8 @@ def mask_markdown_nonrendered(text: str) -> str:
 
     def reference_title_context_matches(
             expected: tuple[int, tuple[int, ...]],
-            actual: tuple[int, int, tuple[int, ...]]) -> bool:
-        content_column, quote_depth, list_content_columns = actual
+            actual: tuple[int, int, tuple[int, ...], int]) -> bool:
+        _content_cursor, quote_depth, list_content_columns, content_column = actual
         expected_quote_depth, expected_list_columns = expected
         if quote_depth != expected_quote_depth or list_content_columns:
             return False
@@ -970,21 +1027,50 @@ def mask_markdown_nonrendered(text: str) -> str:
         reference_labels.add(normalize_reference_label(label))
         blank(start, final_end)
 
+    def angle_autolink_end(opening: int) -> int | None:
+        if source_chars[opening] != "<":
+            return None
+        cursor = opening + 1
+        while cursor < len(source_chars):
+            char = source_chars[cursor]
+            if char == ">":
+                inner = "".join(source_chars[opening + 1:cursor])
+                scheme, separator, _target = inner.partition(":")
+                if (separator and re.fullmatch(r"[A-Za-z][A-Za-z0-9.+-]{1,31}", scheme)
+                        and all(not char.isspace() and not ascii_control(char)
+                                and char not in "<>" for char in inner)):
+                    return cursor + 1
+                return None
+            if char.isspace() or ascii_control(char) or char == "<":
+                return None
+            cursor += 1
+        return None
+
     openings = array("I")
     backslashes = 0
-    for position, char in enumerate(source_chars):
+    position = 0
+    while position < len(source_chars):
+        char = source_chars[position]
         if char == "\\":
             backslashes += 1
+            position += 1
             continue
         is_escaped = backslashes % 2 == 1
         escaped_positions[position] = is_escaped
         backslashes = 0
         if is_escaped:
+            position += 1
             continue
+        if char == "<":
+            autolink_end = angle_autolink_end(position)
+            if autolink_end is not None:
+                position = autolink_end
+                continue
         if char == "[":
             openings.append(position)
         elif char == "]" and openings:
             bracket_ends[openings.pop()] = position
+        position += 1
 
     # Mask image alt text before link labels so images nested in links cannot
     # contribute prose through their alt attribute.
@@ -1013,7 +1099,7 @@ def mask_markdown_nonrendered(text: str) -> str:
             if reference_close is not None:
                 image_label = "".join(chars[opening + 1:close])
                 reference_label = "".join(chars[following + 1:reference_close])
-                target_label = reference_label if normalize_reference_label(reference_label) else image_label
+                target_label = image_label if reference_label == "" else reference_label
                 if normalize_reference_label(target_label) in reference_labels:
                     blank(opening + 1, close)
                     blank(following, reference_close + 1)
@@ -1046,7 +1132,7 @@ def mask_markdown_nonrendered(text: str) -> str:
             if reference_close is not None:
                 link_text = "".join(chars[cursor + 1:close])
                 reference_label = "".join(chars[following + 1:reference_close])
-                target_label = reference_label if normalize_reference_label(reference_label) else link_text
+                target_label = link_text if reference_label == "" else reference_label
                 if normalize_reference_label(target_label) in reference_labels:
                     blank(following, reference_close + 1)
                     cursor = reference_close + 1
@@ -1063,6 +1149,22 @@ def mask_fenced_code_blocks(text: str) -> str:
     fence_char: str | None = None
     fence_length = 0
     fence_containers: list[tuple[str, int]] = []
+    comment_open = False
+
+    def next_comment_state(content: str, is_open: bool, start: int = 0) -> bool:
+        if not is_open:
+            cursor = start
+            spaces = 0
+            while cursor < len(content) and content[cursor] == " " and spaces < 4:
+                cursor += 1
+                spaces += 1
+            if spaces > 3 or not content.startswith("<!--", cursor):
+                return False
+            cursor += 4
+        else:
+            cursor = 0
+        closing = content.find("-->", cursor)
+        return closing < 0
 
     def parse_containers(content: str) -> tuple[list[tuple[str, int]], int]:
         containers: list[tuple[str, int]] = []
@@ -1138,6 +1240,11 @@ def mask_fenced_code_blocks(text: str) -> str:
             fence_length = 0
             fence_containers = []
 
+        if comment_open:
+            output.append(line)
+            comment_open = next_comment_state(content, True)
+            continue
+
         containers, position = parse_containers(content)
         candidate = content[position:]
         opening = re.match(r"^ {0,3}(" + re.escape(tick) + r"{3,}|~{3,})(.*)$", candidate)
@@ -1148,6 +1255,7 @@ def mask_fenced_code_blocks(text: str) -> str:
             output.append(" " * len(content) + ending)
         else:
             output.append(line)
+            comment_open = next_comment_state(content, False, position)
     return "".join(output)
 
 
@@ -2748,6 +2856,85 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             rejected += 1
             write_lf(readme_path, readme_original)
 
+        def readme_parser_control(name: str, extra: str,
+                                  reason: str | None = None,
+                                  *, remove_hardware_disclosure: bool = False) -> None:
+            nonlocal rejected
+            child_result(test_root, "docs")
+            base = readme_original
+            if remove_hardware_disclosure:
+                base = replace_all(
+                    base, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = base.rstrip() + "\n\n" + extra + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", reason)
+            if reason is not None:
+                rejected_reasons.append(name)
+                rejected += 1
+            write_lf(readme_path, readme_original)
+
+        for name, reference in (
+            ("whitespace-reference-label-cannot-hide-game-claim", "[ ]"),
+        ):
+            readme_parser_control(
+                name,
+                "![CGB game passes all acceptance checks.]" + reference + "\n\n"
+                "[CGB game passes all acceptance checks.]: /url",
+                f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "tab-reference-label-cannot-hide-game-claim",
+            "![CGB game passes all acceptance checks.][\t]\n\n"
+            "[CGB game passes all acceptance checks.]: /url",
+            "markdown-tab-unsupported")
+
+        readme_parser_control(
+            "empty-reference-label-remains-collapsed-image-syntax",
+            "![CGB game passes all acceptance checks.][]\n\n"
+            "[CGB game passes all acceptance checks.]: /url")
+
+        readme_parser_control(
+            "tab-list-marker-cannot-hide-reference-title-game-claim",
+            '-\t[unused]: /url\n  "CGB game passes all acceptance checks."',
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "four-column-tab-list-continuation-still-masks-reference-title",
+            '-\t[unused]: /url\n    "CGB game passes all acceptance checks."')
+
+        readme_parser_control(
+            "commented-explicit-reference-label-cannot-hide-game-claim",
+            "![ordinary][CGB<!-- gap --> game passes all acceptance checks.]\n\n"
+            "[CGB game passes all acceptance checks.]: /url",
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "commented-shortcut-image-label-cannot-hide-game-claim",
+            "![CGB<!-- gap --> game passes all acceptance checks.]\n\n"
+            "[CGB game passes all acceptance checks.]: /url",
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "matching-comments-in-reference-labels-still-resolve",
+            "![ordinary][CGB<!-- gap --> game passes all acceptance checks.]\n\n"
+            "[CGB<!-- gap --> game passes all acceptance checks.]: /url")
+
+        readme_parser_control(
+            "comment-prefix-cannot-create-fence-hiding-game-claim",
+            "<!-- -->```markdown\nCGB game passes all acceptance checks.",
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "standalone-comment-before-real-fence-still-masks-game-claim",
+            "<!-- note -->\n\n```markdown\n"
+            "CGB game passes all acceptance checks.\n```")
+
+        readme_parser_control(
+            "autolink-close-bracket-cannot-hide-hardware-disclosure",
+            '[<https://example.invalid/]>](https://example.invalid/ '
+            '"Physical CGB-E remains UNKNOWN/POLICY")',
+            f"physical-cgb-limit-missing:{README}",
+            remove_hardware_disclosure=True)
+        readme_parser_control(
+            "autolink-close-bracket-title-remains-nonrendered",
+            '[<https://example.invalid/]>](https://example.invalid/ '
+            '"<script>not prose</script>")')
+
         multiline_reference_titles = (
             ("inline-multiline-reference-title-hides-hardware-disclosure",
              '[unused]: /url "title continues\n  Physical CGB-E remains UNKNOWN/POLICY"'),
@@ -3262,7 +3449,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 76 + len(incomplete_html_openers)
+    controls = len(mutations) + 83 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
