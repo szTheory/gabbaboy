@@ -1961,6 +1961,16 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             rejected += 1
             write_lf(readme_path, readme_original)
 
+        child_result(test_root, "docs")
+        inline_code_disclosure = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "`Physical CGB-E remains UNKNOWN/POLICY`", "inline-code-hides-hardware-disclosure")
+        write_lf(readme_path, inline_code_disclosure)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
         hidden_disclosure = replace_all(
             readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
             "<div hidden>Physical CGB-E remains UNKNOWN/POLICY</div>", "hidden-html-disclosure")
@@ -2298,7 +2308,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 9 + len(incomplete_html_openers)
+    controls = len(mutations) + 10 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
