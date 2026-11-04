@@ -1287,7 +1287,16 @@ def self_test_version_v04() -> tuple[int, int]:
 
         changelog_section = "# Changelog\n\n## [0.4.0]\n\n"
         ledger_link = "- Support: [ledger](docs/support/v0.4.0.md)."
+        canonical_ledger_link = ("- Support: [ledger](https://github.com/szTheory/gabbaboy/blob/v0.4.0/"
+                                "docs/support/v0.4.0.md).")
         tick = chr(96)
+
+        fx.reset(head)
+        fx.write("CHANGELOG.md", changelog_section + canonical_ledger_link + "\n")
+        canonical_link_head = fx.commit("use canonical versioned support ledger link", "CHANGELOG.md")
+        accepted("canonical-versioned-ledger-link",
+                 cli("--check-tracked", "--rev", canonical_link_head, "--expect-version", "0.4.0"))
+
         for hiding, content in (
             ("comment", f"<!-- {ledger_link} -->"),
             ("fenced-code", f"```markdown\n{ledger_link}\n```"),
@@ -1356,6 +1365,62 @@ def self_test_version_v04() -> tuple[int, int]:
         rejected("html-before-changelog-heading",
                  cli("--check-tracked", "--rev", hidden_heading, "--expect-version", "0.4.0"),
                  "window-version-output-mismatch")
+
+        incomplete_html_openers = (
+            ("script-newline", "<script\n"),
+            ("script-space-newline", "<script \n"),
+            ("pre-newline", "<pre\n"),
+            ("pre-space-newline", "<pre \n"),
+            ("style-newline", "<style\n"),
+            ("style-space-newline", "<style \n"),
+            ("script-mixed-case", "<ScRiPt\n"),
+            ("doctype-html", "<!DOCTYPE html\n"),
+            ("xml-processing-instruction", '<?xml version="1.0"\n'),
+        )
+        for opener_name, opener in incomplete_html_openers:
+            for placement in ("before-heading", "inside-section"):
+                fx.reset(head)
+                accepted(f"incomplete-{opener_name}-{placement}-visible-counterpart",
+                         cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
+                if placement == "before-heading":
+                    changelog = "# Changelog\n\n" + opener + "## [0.4.0]\n\n" + ledger_link + "\n"
+                else:
+                    changelog = changelog_section + opener + ledger_link + "\n"
+                fx.write("CHANGELOG.md", changelog)
+                hidden_link = fx.commit(
+                    f"hide changelog ledger link with {opener_name} {placement}", "CHANGELOG.md")
+                result = cli("--check-tracked", "--rev", hidden_link, "--expect-version", "0.4.0")
+                rejected(f"incomplete-{opener_name}-{placement}-hides-ledger-link", result,
+                         "window-version-output-mismatch")
+
+                if opener_name == "script-newline" and placement == "inside-section":
+                    legacy_matcher = re.compile(
+                        r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|<![A-Z][^>]*>|"
+                        r"<\?[A-Za-z][^>]*\?>|<!\[CDATA\[", re.DOTALL | re.IGNORECASE)
+                    current_matcher = RAW_HTML_CONSTRUCT
+                    try:
+                        RAW_HTML_CONSTRUCT = legacy_matcher
+                        validate_version_outputs(repo, hidden_link, "0.4.0")
+                    except WindowError as error:
+                        raise AssertionError(
+                            "legacy raw-HTML matcher rejected the hidden-link causal fixture: " + str(error)) from error
+                    finally:
+                        RAW_HTML_CONSTRUCT = current_matcher
+                    positives += 1
+
+        # Masking still allows harmless examples when the actual relative ledger link stays visible.
+        for masking, example in (
+            ("comment", "<!-- <script\n -->"),
+            ("fenced-code", "```html\n<pre \n```") ,
+            ("indented-code", "    <style\n"),
+            ("inline-code", "`<!DOCTYPE html` `<?xml version=\"1.0\"`") ,
+        ):
+            fx.reset(head)
+            changelog = changelog_section + example + "\n" + ledger_link + "\n"
+            fx.write("CHANGELOG.md", changelog)
+            masked_head = fx.commit("mask incomplete raw-HTML example in " + masking, "CHANGELOG.md")
+            accepted("masked-incomplete-opener-" + masking,
+                     cli("--check-tracked", "--rev", masked_head, "--expect-version", "0.4.0"))
 
         bad_notes.write_text("v0.3.0 notes with a historical ledger link\n", encoding="utf-8")
         rejected("wrong-release-notes-version",
