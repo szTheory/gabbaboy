@@ -1462,7 +1462,8 @@ gbb_add_v02_contract(v02_game_claims_controls 60
 gbb_add_v02_contract(v02_adoption_docs 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "docs"]=]
   verify-v02-adoption.py --check docs)
-gbb_add_v02_contract(v02_adoption_docs_controls 120
+# This self-test took 111 seconds locally at the prior 120-second bound.
+gbb_add_v02_contract(v02_adoption_docs_controls 180
   [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "docs"]=]
   verify-v02-adoption.py --self-test docs)
 gbb_add_v02_contract(v02_support_ledger 60

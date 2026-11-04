@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import string
 import subprocess
 import sys
 import tempfile
@@ -688,70 +689,142 @@ def mask_markdown_nonrendered(text: str) -> str:
             return marker_start + spaces
         return cursor
 
-    def reference_definition_label(line: str) -> str | None:
-        cursor = container_content_start(line)
-        if cursor is None or cursor >= len(line) or line[cursor] != "[":
+    def line_content_end(line: str) -> int:
+        end = len(line)
+        while end > 0 and line[end - 1] in "\r\n":
+            end -= 1
+        return end
+
+    def reference_title_end(line: str, cursor: int, end: int) -> int | None:
+        delimiter = line[cursor]
+        if delimiter in ('"', "'"):
+            cursor += 1
+            while cursor < end:
+                if line[cursor] == "\\":
+                    if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                        return None
+                    cursor += 2
+                elif line[cursor] == delimiter:
+                    return cursor + 1
+                else:
+                    cursor += 1
             return None
-        start = cursor + 1
-        cursor = start
-        while cursor < len(line) and cursor - start <= 999:
-            char = line[cursor]
-            if char == "\\":
+        if delimiter != "(":
+            return None
+        cursor += 1
+        depth = 1
+        while cursor < end:
+            if line[cursor] == "\\":
+                if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                    return None
                 cursor += 2
-            elif char == "[":
-                return None
-            elif char == "]":
-                if cursor > start and cursor + 1 < len(line) and line[cursor + 1] == ":":
-                    return line[start:cursor]
-                return None
-            elif char in "\r\n":
-                return None
+            elif line[cursor] == "(":
+                depth += 1
+                if depth > 32:
+                    return None
+                cursor += 1
+            elif line[cursor] == ")":
+                depth -= 1
+                cursor += 1
+                if depth == 0:
+                    return cursor
             else:
                 cursor += 1
         return None
 
-    def is_reference_title_line(line: str) -> bool:
+    def reference_definition(line: str) -> tuple[str, bool] | None:
+        end = line_content_end(line)
         cursor = container_content_start(line)
-        if cursor is None or cursor >= len(line):
-            return False
-        delimiter = line[cursor]
-        if delimiter in ('"', "'"):
+        if cursor is None or cursor >= end or line[cursor] != "[":
+            return None
+        start = cursor + 1
+        cursor = start
+        while cursor < end and cursor - start <= 999:
+            char = line[cursor]
+            if char == "\\":
+                if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                    return None
+                cursor += 2
+            elif char == "[":
+                return None
+            elif char == "]":
+                if cursor <= start or cursor + 1 >= end or line[cursor + 1] != ":":
+                    return None
+                label = line[start:cursor]
+                if not label.strip():
+                    return None
+                cursor += 2
+                break
+            elif char in "\r\n":
+                return None
+            else:
+                cursor += 1
+        else:
+            return None
+
+        while cursor < end and line[cursor] in " \t":
             cursor += 1
-            while cursor < len(line):
-                if line[cursor] == "\\":
+        if cursor >= end:
+            return None
+        if line[cursor] == "<":
+            cursor += 1
+            while cursor < end:
+                char = line[cursor]
+                if char == "\\":
+                    if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                        return None
                     cursor += 2
-                elif line[cursor] == delimiter:
+                elif char == ">":
                     cursor += 1
                     break
-                elif line[cursor] in "\r\n":
-                    return False
+                elif char.isspace() or char == "<":
+                    return None
                 else:
                     cursor += 1
             else:
-                return False
-        elif delimiter == "(":
-            cursor += 1
-            depth = 1
-            while cursor < len(line):
-                if line[cursor] == "\\":
+                return None
+        else:
+            destination_start = cursor
+            depth = 0
+            while cursor < end and not line[cursor].isspace():
+                char = line[cursor]
+                if char == "\\":
+                    if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                        return None
                     cursor += 2
-                elif line[cursor] == "(":
+                elif char == "(":
                     depth += 1
+                    if depth > 32:
+                        return None
                     cursor += 1
-                elif line[cursor] == ")":
+                elif char == ")":
+                    if depth == 0:
+                        return None
                     depth -= 1
                     cursor += 1
-                    if depth == 0:
-                        break
-                elif line[cursor] in "\r\n":
-                    return False
+                elif char in "<>":
+                    return None
                 else:
                     cursor += 1
-            if depth != 0:
-                return False
-        else:
+            if cursor == destination_start or depth != 0:
+                return None
+
+        while cursor < end and line[cursor] in " \t":
+            cursor += 1
+        if cursor == end:
+            return label, False
+        title_end = reference_title_end(line, cursor, end)
+        if title_end is None or any(char not in " \t" for char in line[title_end:end]):
+            return None
+        return label, True
+
+    def is_reference_title_line(line: str) -> bool:
+        cursor = container_content_start(line)
+        end = line_content_end(line)
+        if cursor is None or cursor >= end:
             return False
-        return all(char in " \t\r\n" for char in line[cursor:])
+        title_end = reference_title_end(line, cursor, end)
+        return title_end is not None and all(char in " \t" for char in line[title_end:end])
 
     source = "".join(source_chars)
     line_spans: list[tuple[str, int, int]] = []
@@ -760,13 +833,15 @@ def mask_markdown_nonrendered(text: str) -> str:
         line_spans.append((line, offset, offset + len(line)))
         offset += len(line)
     for index, (line, start, end) in enumerate(line_spans):
-        label = reference_definition_label(line)
-        if label is None:
+        parsed = reference_definition(line)
+        if parsed is None:
             continue
+        label, has_inline_title = parsed
         label = re.sub(r"\\(.)", r"\1", label)
         reference_labels.add(" ".join(label.split()).casefold())
         final_end = end
-        if index + 1 < len(line_spans) and is_reference_title_line(line_spans[index + 1][0]):
+        if (not has_inline_title and index + 1 < len(line_spans)
+                and is_reference_title_line(line_spans[index + 1][0])):
             final_end = line_spans[index + 1][2]
         blank(start, final_end)
 
@@ -2190,7 +2265,7 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                    "release-notes-raw-html-unsupported")
         malformed_link = replace_ledger_targets("not a valid destination docs/support/v0.4.0.md")
         reject("malformed-destination-is-not-a-ledger-link", malformed_link,
-               "release-notes-ledger-version-mismatch")
+               "markdown-inline-link-malformed")
         reject("terminal-control-hides-reason", valid.replace("Potion Panic", "Potion \x1b[2KPanic", 1),
                "release-notes-terminal-control-present")
         reject("wrong-version-ledger-link", valid.replace(
@@ -2425,6 +2500,34 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             changed = readme_original + "\n" + extra + "\n"
             write_lf(readme_path, changed)
             child_result(test_root, "docs", "markdown-inline-link-malformed")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        invalid_reference_claims = (
+            ("invalid-reference-destination-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: invalid destination with spaces"),
+            ("empty-reference-destination-hides-game-claim",
+             "[CGB game passes all acceptance checks.]:"),
+            ("unterminated-reference-title-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: /url "unterminated'),
+            ("invalid-reference-destination-escape-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: /url\\q"),
+            ("invalid-reference-title-escape-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: /url "bad\\q"'),
+            ("over-nested-reference-destination-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: " + "(" * 33 + "target" + ")" * 33),
+            ("over-nested-reference-title-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: /url " + "(" * 33 + "title" + ")" * 33),
+            ("invalid-reference-image-hides-game-claim",
+             "![CGB game passes all acceptance checks.]\n\n"
+             "[CGB game passes all acceptance checks.]: invalid destination with spaces"),
+        )
+        for name, extra in invalid_reference_claims:
+            child_result(test_root, "docs")
+            changed = readme_original + "\n" + extra + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"unsupported-cgb-game-qualification:{README}")
             rejected_reasons.append(name)
             rejected += 1
             write_lf(readme_path, readme_original)
@@ -2893,7 +2996,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 36 + len(incomplete_html_openers)
+    controls = len(mutations) + 44 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
     print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
