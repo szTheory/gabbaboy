@@ -5072,7 +5072,7 @@ gbb_add_ledger_contract(support_claims
   [=[support-claims pass claims=9 non_claims=10 rev=[0-9a-f]+]=]
   --check-claims --rev "${GBB_STATE_SOURCE_REV}")
 gbb_add_ledger_contract(support_claims_v04
-  [=[support-claims-v04 pass candidates=2 rev=[0-9a-f]+]=]
+  [=[support-claims-v04 pass candidates=2 harness=CGB-CPU-E mode=cgb-native diagnostics=513/7/0/0 inherited-claims=9 rev=[0-9a-f]+]=]
   --check-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
 gbb_add_ledger_contract(support_claims_v04_controls
   [=[support-claims-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
