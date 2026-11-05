@@ -33,7 +33,7 @@ Keep the scope to the existing release path and v0.4.0 evidence. Full libretro, 
 - **D-08:** Do not repeat earlier phase qualification as if it were new v0.4.0 evidence. Bind this release to its reviewed implementation source and downloaded package identities while carrying Phase 20–22 receipts as historical records.
 
 ### the agent's Discretion
-- Choose the exact v0.4 support-claim input fields, renderer/verifier organization, concise prose, headings, test controls, and plan decomposition within the roadmap's nine-plan cap. Prefer existing CMake and Python standard-library tooling; add no dependency or release capability without demonstrated need and an in-scope blocker.
+- Choose the exact v0.4 support-claim input fields, renderer/verifier organization, concise prose, headings, test controls, and plan decomposition within the roadmap's nine scheduled plans plus its reserved gap slot. Prefer existing CMake and Python standard-library tooling; add no dependency or release capability without demonstrated need and an in-scope blocker.
 </decisions>
 
 <canonical_refs>
@@ -42,7 +42,7 @@ Keep the scope to the existing release path and v0.4.0 evidence. Full libretro, 
 **Downstream agents MUST read these before planning or implementing.**
 
 ### Phase boundary and requirements
-- `.planning/ROADMAP.md` §Phase 23 — scope, REL-01, release success criteria, nine-plan cap, and explicit out-of-scope items.
+- `.planning/ROADMAP.md` §Phase 23 — scope, REL-01, release success criteria, nine scheduled plans and the reserved gap slot, and explicit out-of-scope items.
 - `.planning/REQUIREMENTS.md` §Release Evidence — REL-01's exact claim requirements and pending requirement status.
 - `.planning/PROJECT.md` — v0.4 evidence boundaries, root MIT license, and product limitations.
 - `.planning/STATE.md` — Phase 22 closure and current Phase 23 route.

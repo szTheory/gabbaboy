@@ -62,9 +62,9 @@ SOURCES = "tests/data/release-api/SOURCES.md"
 RECOVERY_ADOPTION = "tests/scripts/verify-v02-adoption.py"
 RECOVERY_CLAIMS = "tests/scripts/verify-cgb-corpus-claims.py"
 RECOVERY_RELEASE_DOC = "docs/release.md"
-# The historical recovery source remains RECOVERY_SOURCE_SHA. Its adoption checker gained the
-# reviewed Phase 20 product-notice distinction, so pin that production checker separately.
-RECOVERY_ADOPTION_PIN_SHA = "802555ac42264561d6b3f6fbad233d9aac6db0a9"
+# The historical v0.3 recovery source remains RECOVERY_SOURCE_SHA. Pin the reviewed production
+# checker separately so the original tagged notes are exercised by the exact current checker.
+RECOVERY_ADOPTION_PIN_SHA = "aecf09cc02ae81bdb2047087014f1bc66b71aa06"
 PLATFORM_PRODUCT_ARCHIVES = (
     "gabbaboy-core-macos-arm64.tar.gz",
     "gabbaboy-preview-macos-arm64.tar.gz",
@@ -907,7 +907,7 @@ def _expect_adoption_pass(notes: bytes, label: str, source: str, root: Path) -> 
     except json.JSONDecodeError as error:
         raise Reject("recovery-adoption", f"production adoption checker output for {label} is not JSON") from error
     if summary.get("mode") != "release-notes" or summary.get("target") != "0.3.0" \
-            or summary.get("positive_success") is not True or summary.get("checks") != 22:
+            or summary.get("positive_success") is not True or summary.get("checks") != 24:
         raise Reject("recovery-adoption", f"production adoption checker positive for {label} is incomplete")
     return summary["checks"]
 
@@ -1446,7 +1446,7 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         raise Reject("recovery-controls", "published-asset schema self-test failed: "
                      + (publisher_result.stderr.strip() or publisher_result.stdout.strip())[-500:])
 
-    if controls < 26 or positives < 5 or adoption_checks != 89:
+    if controls < 26 or positives < 5 or adoption_checks != 97:
         raise Reject("recovery-controls", "recovery controls lack the required negative and production-adoption positives")
     return controls, positives, original_hash, repaired_hash
 

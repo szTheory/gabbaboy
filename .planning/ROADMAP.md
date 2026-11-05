@@ -68,8 +68,8 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   3. Potion Panic's GB Compo 2025 demo is assessed first in one bounded admission/build/predicate plan. Only after its recorded no-go may one bounded µCity 1.3 preferred-ucity.gbc fallback plan run; each records exact source/build, digest, cartridge metadata, native CGB mode, and the Phase 20 rights decision. No third game search begins.
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
-**Plan cap**: 10
-**Plans**: 8/10 plans used — the cap preserves two honest reserve slots while covering the eight plan files, including the single gap-work plan. The primary and fallback candidate attempts each occupy one conditional plan. Plan 21-08 is the single reserved gap round; after CR-04/CR-05 closure it reopened within that same plan for CR-06 and completed with exact 24-input qualification and source-drift controls. No additional plan or gap round was added. PR #140 final head `507019f9` passed required exact-head CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`; Phase 22 proceeds under the separate owner-approved D-141 scope.
+**Plan cap**: 9
+**Plans**: All eight Phase 21 plan files remain complete; the active cap is 9 after one unused ordinary slot was reallocated to Phase 23's required gap reserve. No Phase 21 plan, scope, or evidence changed. Plan 21-08 remains the single completed gap-work plan; after CR-04/CR-05 closure it reopened within that same plan for CR-06 and completed with exact 24-input qualification and source-drift controls. No additional plan or gap round was added. PR #140 final head `507019f9` passed required exact-head CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`; Phase 22 proceeds under the separate owner-approved D-141 scope.
 
 Plans:
 **Wave 1**
@@ -129,7 +129,7 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
 
 ### Phase 23: Qualified v0.4.0 Release
 
-**Status**: In progress — the approved nine-plan rescope passed independent plan verification. Plans 23-01 through 23-03 and 23-09 are complete. Plan 23-04 T1's immutable review-evidence controls pass at the fixed source; T2 is next to reissue all three independent reports and pass the direct report gate before T3 qualification. Execution continues inline after the selected no-progress recovery. REL-01 remains Pending; no release qualification or publication is claimed.
+**Status**: In progress — the approved nine-scheduled-plan rescope passed independent plan verification. The total cap of 10 includes the single required gap-closure reserve, funded by reallocating one unused ordinary slot from completed Phase 21 without changing its plans or evidence. Plans 23-01 through 23-03 and 23-09 are complete. Plan 23-04 T1's immutable review-evidence controls pass at the fixed source; T2 is next to reissue all three independent reports and pass the direct report gate before T3 qualification. Execution continues inline after the selected no-progress recovery. REL-01 remains Pending; no release qualification or publication is claimed.
 
 **Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
 **Depends on**: Phase 22
@@ -138,8 +138,8 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
   1. Final implementation-head qualification and the existing trusted release rehearsal pass for the reviewed revision with required hosted coverage, consumer evidence, and regression controls; earlier phase evidence remains historical and is not repeatedly refreshed.
   2. Release notes and the support ledger identify an admitted game's exact software-model progress result or the justified absence after the two named attempts, distinguish diagnostic and reproducibility observations, and retain hardware, perceptual, timing, platform, and compatibility limits.
   3. Published/downloaded artifact identities and digests reconcile with the release source, installed consumers work against those bytes, required license/component notices are present, and the fixture-exclusion checks accept the real packages and reject their game-ROM insertion control.
-**Plan cap**: 9
-**Plans**: 4/9 plans executed in 9 sequential dependency waves, at the cap of 9.
+**Plan cap**: 10
+**Plans**: Four of nine scheduled plans are complete in the nine-wave dependency order; the tenth cap slot remains reserved for the single gap-closure round.
 
 Plans:
 **Wave 1**

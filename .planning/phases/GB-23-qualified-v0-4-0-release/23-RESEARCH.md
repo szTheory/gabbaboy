@@ -26,7 +26,7 @@
 - **D-08:** Do not repeat earlier phase qualification as if it were new v0.4.0 evidence. Bind this release to its reviewed implementation source and downloaded package identities while carrying Phase 20–22 receipts as historical records.
 
 ### the agent's Discretion
-- Choose the exact v0.4 support-claim input fields, renderer/verifier organization, concise prose, headings, test controls, and plan decomposition within the roadmap's nine-plan cap. Prefer existing CMake and Python standard-library tooling; add no dependency or release capability without demonstrated need and an in-scope blocker.
+- Choose the exact v0.4 support-claim input fields, renderer/verifier organization, concise prose, headings, test controls, and plan decomposition within the roadmap's nine scheduled plans plus its reserved gap slot. Prefer existing CMake and Python standard-library tooling; add no dependency or release capability without demonstrated need and an in-scope blocker.
 
 ### Deferred Ideas (OUT OF SCOPE)
 None — discussion stayed within Phase 23 scope.
@@ -61,7 +61,7 @@ The implementation gap is specific: today's support verifier names a v0.3 claims
 ## Project Constraints (from AGENTS.md)
 
 - Use the installed `@opengsd/gsd-core` runtime and verify identity when changing runtime/tool path; stop at the Phase 23 boundary, keep both auto-advance flags false, and carry forward the specific next command. [VERIFIED: AGENTS.md:27-31]
-- Keep within the roadmap's nine-plan cap. Across the milestone, keep to four phases/about 40 plans; a 50% overrun triggers rescope. A phase may have at most two review-fix rounds and one gap round; unresolved correctness/security findings require rescope. [VERIFIED: .planning/ROADMAP.md:141-144; AGENTS.md:33-35] `**Plan cap**: 9` and `At most 4 phases and about 40 plans per milestone, and at most 12 plans per phase. A 50% overrun triggers a rescope.`
+- Keep within the roadmap's nine scheduled plans plus its required gap slot. Across the milestone, keep to four phases and at most 40 plan-cap slots; a 50% overrun triggers rescope. A phase may have at most two review-fix rounds and one gap round; unresolved correctness/security findings require rescope. [VERIFIED: .planning/ROADMAP.md:141-144; AGENTS.md:33-35] `**Plan cap**: 10` and `At most 4 phases and about 40 plans per milestone, and at most 12 plans per phase. A 50% overrun triggers a rescope.`
 - Every deliverable needs an automated check and negative control. Put checkers in `tests/scripts/`, make them read an immutable commit, and register them in CTest. Avoid human-reading checkpoints when a contract check can cover them; use the existing UAT-closure checker at the verification boundary. [VERIFIED: AGENTS.md:32-38]
 - Assess measured CI/release timing and queue waits. Preserve platform/configuration coverage, sanitizers, fuzz policy, exact-source/artifact binding, required checks and release authority. A justified no-change outcome is valid; keep wider work as a bounded follow-up. [VERIFIED: AGENTS.md:40; .planning/context/WORKFLOW.md:31-39]
 - Use a phase branch and PR when the remote exists; merge only the reviewed revision with required checks on its latest head. A local pass, skipped check or stale run does not qualify the remote revision. [VERIFIED: AGENTS.md:41-43; .planning/ROADMAP.md:138-140]
@@ -246,7 +246,7 @@ The Phase 22 evidence records the later duplicate full push run was canceled onl
 
 ## Recommended Plan Ordering
 
-Use the roadmap's nine-plan cap as a ceiling; a likely convergent order is: [VERIFIED: .planning/ROADMAP.md:141-142] `**Plan cap**: 9`
+Use the roadmap's nine scheduled plans as a ceiling, with one additional cap slot reserved for gap closure: [VERIFIED: .planning/ROADMAP.md:141-142] `**Plan cap**: 10`
 
 1. Add the v0.4 source-bound claim profile and immutable-source validation using accepted Phase 21/22 facts; leave the v0.3.0 ledger and evidence source records unchanged. [VERIFIED: 23-CONTEXT.md:22-29; tests/scripts/verify-support-ledger.py:2861-2936]
 2. Add CTest positive and negative controls for claim generation, profile selection, source/evidence references, Pending requirements and forbidden claim promotion. [VERIFIED: AGENTS.md:32-38; tests/CMakeLists.txt:5071-5077]
