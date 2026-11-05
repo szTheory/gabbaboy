@@ -30,8 +30,8 @@ printf '%s  %s\n' "$archive_sha256" "$archive" | sha256sum --check --status || {
 }
 
 tar -xzf "$archive" -C "$temp_root"
-cmake_bin="$temp_root/cmake-${version}-linux-x86_64/bin/cmake"
-ctest_bin="$temp_root/cmake-${version}-linux-x86_64/bin/ctest"
+readonly cmake_bin="$temp_root/cmake-${version}-linux-x86_64/bin/cmake"
+readonly ctest_bin="$temp_root/cmake-${version}-linux-x86_64/bin/ctest"
 [[ -x "$cmake_bin" && -x "$ctest_bin" ]] || {
   echo "Verified CMake archive is missing cmake or ctest" >&2
   exit 1

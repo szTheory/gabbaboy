@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 FLOOR_SCRIPT = ROOT / ".github/scripts/verify-cmake-floor.sh"
 CTEST_PREFIX = '"$ctest_bin" --test-dir '
 FLOOR_VERSION_ASSIGNMENT = "readonly version=3.25.3"
-CMAKE_BIN_ASSIGNMENT = 'cmake_bin="$temp_root/cmake-${version}-linux-x86_64/bin/cmake"'
-CTEST_BIN_ASSIGNMENT = 'ctest_bin="$temp_root/cmake-${version}-linux-x86_64/bin/ctest"'
+CMAKE_BIN_ASSIGNMENT = 'readonly cmake_bin="$temp_root/cmake-${version}-linux-x86_64/bin/cmake"'
+CTEST_BIN_ASSIGNMENT = 'readonly ctest_bin="$temp_root/cmake-${version}-linux-x86_64/bin/ctest"'
 TOOLCHAIN_ASSIGNMENTS = (
     FLOOR_VERSION_ASSIGNMENT,
     CMAKE_BIN_ASSIGNMENT,
@@ -19,6 +19,7 @@ TOOLCHAIN_ASSIGNMENTS = (
 )
 UNSAFE_TOOL_OVERRIDE = re.compile(
     r"\b(?:(?:builtin\s+)?printf\s+-v|eval|declare|typeset|local|export|read|source)\b"
+    r"|(?:^|[;&|]\s*)\.\s+"
 )
 INVENTORY_PREFIX = 'bash "$repo_root/.github/scripts/verify-test-inventory.sh"'
 BASE_BUILD = '"$repo_root/build-cmake-3.25.3"'
@@ -216,6 +217,16 @@ def self_test(source: str) -> int:
         ("floor version", FLOOR_VERSION_ASSIGNMENT, "readonly version=3.26.0"),
         ("cmake binary", CMAKE_BIN_ASSIGNMENT, 'cmake_bin="/usr/bin/cmake"'),
         ("ctest binary", CTEST_BIN_ASSIGNMENT, 'ctest_bin="/usr/bin/ctest"'),
+        (
+            "mutable cmake binary",
+            CMAKE_BIN_ASSIGNMENT,
+            'cmake_bin="$temp_root/cmake-${version}-linux-x86_64/bin/cmake"',
+        ),
+        (
+            "mutable ctest binary",
+            CTEST_BIN_ASSIGNMENT,
+            'ctest_bin="$temp_root/cmake-${version}-linux-x86_64/bin/ctest"',
+        ),
     ):
         unpinned = source.replace(assignment, replacement, 1)
         try:
@@ -283,6 +294,12 @@ def self_test(source: str) -> int:
         ),
         ("nameref", "declare -n tool=cmake_bin; tool=/usr/bin/cmake"),
         ("eval", 'eval "cmake_bin=/usr/bin/cmake"'),
+        (
+            "process substitution source",
+            'name=cmake; printf -v "${name}_bin" \'%s\' /usr/bin/cmake; '
+            '. <(printf "%s=%s\\n" "cmake_bin" /usr/bin/cmake)',
+        ),
+        ("helper source", '. "$temp_root/override-tools.sh"'),
     ):
         overridden = source + "\n" + override + "\n"
         try:
