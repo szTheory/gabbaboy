@@ -93,6 +93,11 @@ def validate(text: str) -> None:
         )
     ):
         raise Reject("floor-toolchain-not-pinned")
+    if any(
+        active_occurrences(text, assignment) != 1
+        for assignment in ("readonly version=", "cmake_bin=", "ctest_bin=")
+    ):
+        raise Reject("floor-toolchain-not-pinned")
     ctest_calls = active_commands(text, CTEST_PREFIX)
     if (
         active_occurrences(text, CTEST_PREFIX) != len(ctest_calls)
@@ -194,6 +199,21 @@ def self_test(source: str) -> int:
                 raise Reject(f"{label}-control-wrong-reason:{error}") from error
         else:
             raise Reject(f"unpinned-{label}-accepted")
+        controls += 1
+
+    for label, duplicate in (
+        ("cmake", 'cmake_bin="/usr/bin/cmake"'),
+        ("ctest", 'ctest_bin="/usr/bin/ctest"'),
+        ("version", "readonly version=3.25.3"),
+    ):
+        reassigned = source + "\n" + duplicate + "\n"
+        try:
+            validate(reassigned)
+        except Reject as error:
+            if str(error) != "floor-toolchain-not-pinned":
+                raise Reject(f"duplicate-{label}-assignment-control-wrong-reason:{error}") from error
+        else:
+            raise Reject(f"duplicate-{label}-assignment-accepted")
         controls += 1
 
     for build in ("build-cmake-3.25.3", "build-cmake-3.25.3-relocated"):
