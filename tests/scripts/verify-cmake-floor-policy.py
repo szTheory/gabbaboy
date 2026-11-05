@@ -16,6 +16,10 @@ ADAPTER_SELECTOR = (
     "cgb_corpus_report_tracer_controls|cgb_corpus_report_controls|cgb_corpus_report_platform_controls)$'"
 )
 NO_HOST_CLOCK_SELECTOR = "-R '^no_host_clock$'"
+INSTALL_PREFIX = '"$cmake_bin" --install '
+MOVE_PREFIX = 'mv "$stage" "$relocated"'
+RELOCATED_CONFIGURE_PREFIX = '"$cmake_bin" --preset cmake-3.25.3-relocated'
+RELOCATED_BUILD_PREFIX = f'"$cmake_bin" --build {RELOCATED_BUILD}'
 FULL_REPORT = (
     '--output-on-failure --no-tests=error --output-junit "$temp_root/relocated-tests.xml"'
 )
@@ -34,7 +38,7 @@ def active_commands(text: str, prefix: str) -> list[tuple[int, str]]:
     index = 0
     while index < len(lines):
         line = lines[index]
-        if line.startswith(prefix):
+        if not line.lstrip().startswith("#") and line.lstrip().startswith(prefix):
             start = index
             parts = [line]
             while parts[-1].rstrip().endswith("\\") and index + 1 < len(lines):
@@ -45,6 +49,13 @@ def active_commands(text: str, prefix: str) -> list[tuple[int, str]]:
     return commands
 
 
+def active_occurrences(text: str, prefix: str) -> int:
+    return sum(
+        line.count(prefix) for line in text.splitlines()
+        if not line.lstrip().startswith("#")
+    )
+
+
 def commented_out(text: str, command: str) -> str:
     replacement = "\n".join("# " + line for line in command.splitlines())
     return text.replace(command, replacement, 1)
@@ -52,6 +63,8 @@ def commented_out(text: str, command: str) -> str:
 
 def validate(text: str) -> None:
     ctest_calls = active_commands(text, CTEST_PREFIX)
+    if active_occurrences(text, CTEST_PREFIX) != len(ctest_calls):
+        raise Reject("full-ctest-not-unique-relocated")
     full_calls = [
         (line, call) for line, call in ctest_calls
         if not any(part.lstrip().startswith("-R ") for part in call.splitlines()[1:])
@@ -75,20 +88,46 @@ def validate(text: str) -> None:
     ):
         raise Reject("no-host-clock-result-missing")
     inventory_calls = active_commands(text, INVENTORY_PREFIX)
+    if active_occurrences(text, INVENTORY_PREFIX) != len(inventory_calls):
+        raise Reject("relocated-inventory-not-verified")
     installed_inventories = [
         (line, call) for line, call in inventory_calls
         if INVENTORY_REPORT in call
     ]
     full_line = full_calls[0][0]
-    if len(installed_inventories) != 1 or full_line >= installed_inventories[0][0]:
+    if (
+        len(inventory_calls) != 1
+        or len(installed_inventories) != 1
+        or full_line >= installed_inventories[0][0]
+    ):
         raise Reject("relocated-inventory-not-verified")
-    install = text.find(f'"$cmake_bin" --install {BASE_BUILD}')
-    move = text.find('mv "$stage" "$relocated"')
-    relocated_configure = text.find('"$cmake_bin" --preset cmake-3.25.3-relocated')
-    relocated_build = text.find(f'"$cmake_bin" --build {RELOCATED_BUILD}')
-    full_position = text.find(full_calls[0][1])
-    if min(install, move, relocated_configure, relocated_build, full_position) < 0 or not (
-        install < move < relocated_configure < relocated_build < full_position
+    install_calls = active_commands(text, INSTALL_PREFIX)
+    move_calls = active_commands(text, MOVE_PREFIX)
+    relocated_configure_calls = active_commands(text, RELOCATED_CONFIGURE_PREFIX)
+    relocated_build_calls = active_commands(text, RELOCATED_BUILD_PREFIX)
+    if any((
+        active_occurrences(text, prefix) != len(calls)
+        for prefix, calls in (
+            (INSTALL_PREFIX, install_calls),
+            (MOVE_PREFIX, move_calls),
+            (RELOCATED_CONFIGURE_PREFIX, relocated_configure_calls),
+            (RELOCATED_BUILD_PREFIX, relocated_build_calls),
+        )
+    )):
+        raise Reject("relocated-build-order-invalid")
+    if (
+        len(install_calls) != 1
+        or len(move_calls) != 1
+        or len(relocated_configure_calls) != 1
+        or len(relocated_build_calls) != 1
+        or BASE_BUILD not in install_calls[0][1]
+        or not (
+            install_calls[0][0]
+            < move_calls[0][0]
+            < relocated_configure_calls[0][0]
+            < relocated_build_calls[0][0]
+            < full_line
+        )
     ):
         raise Reject("relocated-build-order-invalid")
     if "-R '^no_host_clock$' --no-tests=error -V" not in no_host_clock_calls[0]:
@@ -117,6 +156,29 @@ def self_test(source: str) -> int:
             raise Reject(f"duplicate-full-suite-accepted:{build}")
         controls += 1
 
+    indented_duplicate = (
+        source + '\n  ' + CTEST_PREFIX + RELOCATED_BUILD + ' ' + chr(92)
+        + '\n    --no-tests=error --output-on-failure\n'
+    )
+    try:
+        validate(indented_duplicate)
+    except Reject as error:
+        if str(error) != "full-ctest-not-unique-relocated":
+            raise Reject(f"indented-duplicate-control-wrong-reason:{error}") from error
+    else:
+        raise Reject("indented-duplicate-full-suite-accepted")
+    controls += 1
+
+    inline_duplicate = source + '\n; ' + CTEST_PREFIX + RELOCATED_BUILD + ' --no-tests=error\n'
+    try:
+        validate(inline_duplicate)
+    except Reject as error:
+        if str(error) != "full-ctest-not-unique-relocated":
+            raise Reject(f"inline-duplicate-control-wrong-reason:{error}") from error
+    else:
+        raise Reject("inline-duplicate-full-suite-accepted")
+    controls += 1
+
     full_call = next(call for _, call in active_commands(source, CTEST_PREFIX) if FULL_REPORT in call)
     clock_call = next(
         call for _, call in active_commands(source, CTEST_PREFIX)
@@ -135,6 +197,22 @@ def self_test(source: str) -> int:
             validate(commented_out(source, command))
         except Reject as error:
             if str(error) != reason:
+                raise Reject(f"commented-{label}-control-wrong-reason:{error}") from error
+        else:
+            raise Reject(f"commented-{label}-accepted")
+        controls += 1
+
+    for label, prefix in (
+        ("install", INSTALL_PREFIX),
+        ("relocation move", MOVE_PREFIX),
+        ("relocated configure", RELOCATED_CONFIGURE_PREFIX),
+        ("relocated build", RELOCATED_BUILD_PREFIX),
+    ):
+        command = next(call for _, call in active_commands(source, prefix))
+        try:
+            validate(commented_out(source, command))
+        except Reject as error:
+            if str(error) != "relocated-build-order-invalid":
                 raise Reject(f"commented-{label}-control-wrong-reason:{error}") from error
         else:
             raise Reject(f"commented-{label}-accepted")
