@@ -8,7 +8,7 @@
 | Review evidence | `dbb3199ff62f4315b0fc122598905c72cb0b2faa` | Commit containing all three source-bound review reports. |
 | Local qualification run | `dbb3199ff62f4315b0fc122598905c72cb0b2faa` | Candidate head configured and used for the focused and full local runs below. |
 
-The final PR qualification SHA and hosted check results are pending the evidence commit and exact-head PR checks. The v0.4.0 version PR, tag, and publication remain out of scope for this plan.
+The full suite ran at the report commit above. Subsequent commits contain only the fixed Phase 23 evidence/validation paths accepted by the review-evidence gate. The current branch head is the PR candidate; read its exact SHA from GitHub when opening the PR and require hosted checks for that exact head. The v0.4.0 version PR, tag, and publication remain out of scope for this plan.
 
 ## Local verification
 
@@ -27,6 +27,10 @@ The final PR qualification SHA and hosted check results are pending the evidence
 | Post-tag recovery controls | Passed: 99 controls and 12 positive checks. |
 
 CTest output from the focused and full runs was preserved locally. The full run log is `/private/tmp/phase23-full-dbb3199ff62f4315b0fc122598905c72cb0b2faa.log`; the CTest build directory also retains its `Testing/Temporary/LastTest.log` output.
+
+## Evidence-only candidate check
+
+After the report commit, candidate `a8ae26d037049686d44ac3b76f97910baa492c3f` passed the real-report gate with implementation `1f97d44fd7d43c1edc88588f404de9b9322d33fb`; the gate verified all differences since implementation were on the fixed evidence/validation allowlist. Configure/build then passed, followed by the review-evidence contract/control and planning-label contract/control CTests (4/4). The 1,767-test full suite was not repeated after this evidence-only advance; its reviewed code and test tree are unchanged, and final exact-head hosted checks remain required.
 
 ## Superseded attempts and diagnosis
 
