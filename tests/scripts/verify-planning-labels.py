@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -122,11 +123,16 @@ def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str]
 
 
 def is_release_notes_v04_output_only(name: str, command: list[str], labels: list[str],
-                                    source: str, build: str) -> bool:
+                                    source: str, build: str, cmake_executable: str) -> bool:
     """Allow the v0.4 planning check to write its one fixed output under build/."""
     if name != "release_notes_v04" or "planning" not in labels or "v02" not in labels:
         return False
-    if len(command) != 6 or Path(command[0]).stem.lower() != "cmake":
+    if len(command) != 6:
+        return False
+    try:
+        if Path(command[0]).resolve(strict=True) != Path(cmake_executable).resolve(strict=True):
+            return False
+    except (OSError, RuntimeError):
         return False
     expected_regex = "-DGBB_EXPECT_REGEX=release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+"
     if command[2] != "-DGBB_EXPECT_CODE=0" or command[3] != expected_regex:
@@ -153,7 +159,7 @@ def is_release_notes_v04_output_only(name: str, command: list[str], labels: list
     return build_tokens == [expected_output]
 
 
-def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
+def judge(tests: list[dict], source: str, build: str, cmake_executable: str) -> tuple[int, int]:
     planning = 0
     for test in tests:
         name = test.get("name", "?")
@@ -168,7 +174,7 @@ def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
             planning += 1
             if uses_build_tree(command, build) \
                     and not is_phase22_inventory_reader(name, command, labels, source, build) \
-                    and not is_release_notes_v04_output_only(name, command, labels, source, build):
+                    and not is_release_notes_v04_output_only(name, command, labels, source, build, cmake_executable):
                 raise Reject(f"REJECT planning-test-needs-build: {name} is labelled planning but its command references the build directory")
         elif is_planning_reader(command, source, build):
             raise Reject(f"REJECT unlabelled-planning-reader: {name} reads .planning/ or AGENTS.md but lacks the planning label")
@@ -187,6 +193,22 @@ def load(build_dir: Path) -> list[dict]:
     if not tests:
         raise Reject("REJECT vacuous: ctest json-v1 listed no tests")
     return tests
+
+
+def configured_cmake(build_dir: Path) -> str:
+    """Return the CMake executable recorded by the build that generated the CTest inventory."""
+    cache = build_dir / "CMakeCache.txt"
+    try:
+        contents = cache.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise Reject(f"REJECT inventory-unreadable: cannot read configured CMake identity: {exc}") from exc
+    match = re.search(r"(?m)^CMAKE_COMMAND:INTERNAL=(.+)$", contents)
+    if match is None:
+        raise Reject("REJECT inventory-unreadable: configured CMake identity is missing")
+    try:
+        return str(Path(match.group(1)).resolve(strict=True))
+    except (OSError, RuntimeError) as exc:
+        raise Reject(f"REJECT inventory-unreadable: configured CMake executable is unavailable: {exc}") from exc
 
 
 def self_test() -> int:
@@ -233,13 +255,19 @@ def self_test() -> int:
         def release_notes_command(output: Path) -> list[str]:
             wrapped = [py, "-I", str(ledger), "--render-release-notes-preface", "--claims-version", "0.4.0",
                        "--rev", "a" * 40, "--repo", str(source), "--output", str(output)]
-            return ["cmake", "-DGBB_CMD=" + ";".join(wrapped), "-DGBB_EXPECT_CODE=0", release_notes_regex,
+            return [shutil.which("cmake") or "cmake", "-DGBB_CMD=" + ";".join(wrapped),
+                    "-DGBB_EXPECT_CODE=0", release_notes_regex,
                     "-P", str(expect_exit)]
 
         release_notes_writer = release_notes_command(build / "release-notes-v0.4.0-preface.md")
         release_notes_wrong_output = release_notes_command(build / "unexpected.md")
         release_notes_extra_artifact = list(release_notes_writer)
         release_notes_extra_artifact[1] += f";{build}/gabbaboy-runner"
+        fake_cmake = source / "fake-cmake"
+        fake_cmake.write_text("#!/bin/sh\nprintf 'release-notes-preface pass\\n'\n", encoding="utf-8")
+        fake_cmake.chmod(0o755)
+        release_notes_fake_cmake = list(release_notes_writer)
+        release_notes_fake_cmake[0] = str(fake_cmake)
         wrong_windows_build = str(build / "unexpected").replace("/", "\\")
         cases = [
             ("unlabelled test reading .planning/ is rejected", [test("a", [py, str(reader)])], "unlabelled-planning-reader"),
@@ -304,12 +332,14 @@ def self_test() -> int:
              [test("release_notes_v04", release_notes_wrong_output, ["v02", "planning"])], "planning-test-needs-build"),
             ("the release-notes output exception cannot smuggle a built executable",
              [test("release_notes_v04", release_notes_extra_artifact, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output exception rejects a fake outer CMake executable",
+             [test("release_notes_v04", release_notes_fake_cmake, ["v02", "planning"])], "planning-test-needs-build"),
             ("the release-notes output renderer must remain in the planning lane",
              [test("release_notes_v04", release_notes_writer, ["v02"])], "unlabelled-planning-reader"),
         ]
         for label, tests, expected in cases:
             try:
-                judge(tests, str(source), str(build))
+                judge(tests, str(source), str(build), shutil.which("cmake") or "cmake")
             except Reject as exc:
                 if expected is None or f"REJECT {expected}:" not in str(exc):
                     raise SystemExit(f"planning-labels self-test: {label}: unexpected {exc}")
@@ -317,7 +347,8 @@ def self_test() -> int:
                 if expected is not None:
                     raise SystemExit(f"planning-labels self-test: {label}: accepted, wanted REJECT {expected}")
             controls += 1
-        total, planning = judge([test("a", [py, str(reader)], ["planning"]), test("b", [py, str(clean)])], str(source), str(build))
+        total, planning = judge([test("a", [py, str(reader)], ["planning"]), test("b", [py, str(clean)])],
+                                str(source), str(build), shutil.which("cmake") or "cmake")
         if (total, planning) != (2, 1):
             raise SystemExit("planning-labels self-test: counts are wrong")
         controls += 1
@@ -336,7 +367,7 @@ def main() -> int:
         parser.error("--build-dir or --self-test is required")
     build = args.build_dir.resolve()
     try:
-        total, planning = judge(load(build), str(ROOT), str(build))
+        total, planning = judge(load(build), str(ROOT), str(build), configured_cmake(build))
     except Reject as exc:
         print(str(exc), file=sys.stderr)
         return 1

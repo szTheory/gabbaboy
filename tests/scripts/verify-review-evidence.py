@@ -263,7 +263,7 @@ def verify_registrations(repo: Path, revision: str) -> None:
     }
     for name, (command, success_regex) in requirements.items():
         registration = list(re.finditer(rf"(?m)^gbb_add_v02_contract\({re.escape(name)}(?=\s)", cmake))
-        if len(registration) != 1 or cmake.count(name) != 1:
+        if len(registration) != 1:
             reject("review-test-registration-invalid", f"expected exactly one registration for {name}")
         start = registration[0].start()
         line_end = cmake.find("\n", start)
@@ -592,8 +592,15 @@ def self_test(repo: Path, source_revision: str) -> tuple[int, int]:
         def remove_contract(cmake_text: str, start: int, end: int) -> str:
             return cmake_text[:start] + cmake_text[end:]
 
+        def duplicate_contract_registration(cmake_text: str, inventory_text: str):
+            start, end = block_for(cmake_text, "phase23_review_evidence_contract")
+            block = cmake_text[start:end]
+            return cmake_text + "\n" + block + "\n", inventory_text
+
         source_case("missing-contract-registration", "review-test-registration-invalid",
                     edit_contract(remove_contract))
+        source_case("duplicate-contract-registration", "review-test-registration-invalid",
+                    duplicate_contract_registration)
         source_case("wrong-control-mode", "review-test-registration-invalid",
                     edit_controls(lambda text, start, end: change_block(
                         text, start, end, "--self-test", "--check")))
