@@ -17,6 +17,11 @@ ADAPTER_SELECTOR = (
     "cgb_corpus_report_tracer_controls|cgb_corpus_report_controls|cgb_corpus_report_platform_controls)$'"
 )
 NO_HOST_CLOCK_SELECTOR = "-R '^no_host_clock$'"
+CTEST_FILTER_OPTION = re.compile(
+    r"(?:^|\s)(?:-R|-E|-L|-LE|-FA|-FS|-FC|-I|-U|--tests-regex|--exclude-regex|"
+    r"--label-regex|--label-exclude|--tests-from-file|--exclude-from-file|"
+    r"--rerun-failed)(?:\s|=|$)"
+)
 INSTALL_PREFIX = '"$cmake_bin" --install '
 MOVE_PREFIX = 'mv "$stage" "$relocated"'
 RELOCATED_CONFIGURE_PREFIX = '"$cmake_bin" --preset cmake-3.25.3-relocated'
@@ -79,7 +84,7 @@ def validate(text: str) -> None:
         raise Reject("full-ctest-not-unique-relocated")
     full_calls = [
         (line, call) for line, call in ctest_calls
-        if not any(part.lstrip().startswith("-R ") for part in call.splitlines()[1:])
+        if not CTEST_FILTER_OPTION.search(call)
     ]
     if (
         len(full_calls) != 1
@@ -246,6 +251,39 @@ def self_test(source: str) -> int:
     else:
         raise Reject("bare-ctest-full-inventory-accepted")
     controls += 1
+
+    full_prefix = '"$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3-relocated" \\\n'
+    for selector in (
+        "-R '^acceptance_'",
+        "-E '^ignored_'",
+        "-L unit",
+        "-LE flaky",
+        "-FA fixture",
+        "-FS fixture",
+        "-FC fixture",
+        "-I 1,10",
+        "-U",
+        "--tests-regex '^acceptance_'",
+        "--exclude-regex '^ignored_'",
+        "--label-regex unit",
+        "--label-exclude flaky",
+        "--tests-from-file selected-tests.txt",
+        "--exclude-from-file excluded-tests.txt",
+        "--rerun-failed",
+    ):
+        filtered_primary = source.replace(
+            full_prefix,
+            full_prefix[:-2] + selector + " \\\n",
+            1,
+        )
+        try:
+            validate(filtered_primary)
+        except Reject as error:
+            if str(error) != "full-ctest-not-unique-relocated":
+                raise Reject(f"filtered-primary-control-wrong-reason:{selector}:{error}") from error
+        else:
+            raise Reject(f"filtered-primary-full-inventory-accepted:{selector}")
+        controls += 1
 
     full_call = next(call for _, call in active_commands(source, CTEST_PREFIX) if FULL_REPORT in call)
     clock_call = next(
