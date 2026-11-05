@@ -9,6 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 FLOOR_SCRIPT = ROOT / ".github/scripts/verify-cmake-floor.sh"
 CTEST_PREFIX = '"$ctest_bin" --test-dir '
+FLOOR_VERSION_ASSIGNMENT = "readonly version=3.25.3"
+CMAKE_BIN_ASSIGNMENT = 'cmake_bin="$temp_root/cmake-${version}-linux-x86_64/bin/cmake"'
+CTEST_BIN_ASSIGNMENT = 'ctest_bin="$temp_root/cmake-${version}-linux-x86_64/bin/ctest"'
 INVENTORY_PREFIX = 'bash "$repo_root/.github/scripts/verify-test-inventory.sh"'
 BASE_BUILD = '"$repo_root/build-cmake-3.25.3"'
 RELOCATED_BUILD = '"$repo_root/build-cmake-3.25.3-relocated"'
@@ -81,6 +84,15 @@ def commented_out(text: str, command: str) -> str:
 
 
 def validate(text: str) -> None:
+    if any(
+        active_occurrences(text, assignment) != 1
+        for assignment in (
+            FLOOR_VERSION_ASSIGNMENT,
+            CMAKE_BIN_ASSIGNMENT,
+            CTEST_BIN_ASSIGNMENT,
+        )
+    ):
+        raise Reject("floor-toolchain-not-pinned")
     ctest_calls = active_commands(text, CTEST_PREFIX)
     if (
         active_occurrences(text, CTEST_PREFIX) != len(ctest_calls)
@@ -168,6 +180,21 @@ def self_test(source: str) -> int:
     except Reject as error:
         raise Reject(f"baseline-rejected:{error}") from error
     controls += 1
+
+    for label, assignment, replacement in (
+        ("floor version", FLOOR_VERSION_ASSIGNMENT, "readonly version=3.26.0"),
+        ("cmake binary", CMAKE_BIN_ASSIGNMENT, 'cmake_bin="/usr/bin/cmake"'),
+        ("ctest binary", CTEST_BIN_ASSIGNMENT, 'ctest_bin="/usr/bin/ctest"'),
+    ):
+        unpinned = source.replace(assignment, replacement, 1)
+        try:
+            validate(unpinned)
+        except Reject as error:
+            if str(error) != "floor-toolchain-not-pinned":
+                raise Reject(f"{label}-control-wrong-reason:{error}") from error
+        else:
+            raise Reject(f"unpinned-{label}-accepted")
+        controls += 1
 
     for build in ("build-cmake-3.25.3", "build-cmake-3.25.3-relocated"):
         duplicate = (
