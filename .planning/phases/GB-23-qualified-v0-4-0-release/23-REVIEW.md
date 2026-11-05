@@ -1,16 +1,18 @@
 # Phase 23 Release-Consumer Review
 
-**Reviewed implementation:** `aecf09cc02ae81bdb2047087014f1bc66b71aa06`
+**Reviewed implementation:** `1f97d44fd7d43c1edc88588f404de9b9322d33fb`
 **Role:** release-consumer
 **Reviewer:** `codex-release-consumer-01`
 
 ## Review scope and outcome
 
-I reviewed the immutable implementation at the exact SHA above, including the Plan 23-04 T2 contract and rescope decisions through D-154, Plan 23-09's version-window opener fix, the release workflows and guidance, and the installed/downloaded product and notice verifiers. The previous RC-01–RC-13 dispositions remain fixed at this source. I found no remaining release-consumer correctness or security issue.
+I reviewed the immutable implementation at the exact SHA above, including the full source and planning diff from `aecf09cc02ae81bdb2047087014f1bc66b71aa06`, the Plan 23-04 T2 contract and rescope decisions through D-154, Plan 23-09's version-window opener fix, the release workflows and guidance, and the installed/downloaded product and notice verifiers. RC-01–RC-13 remain fixed: their fix commits are ancestors of this source and their reviewed release/consumer paths are unchanged. I found no remaining release-consumer correctness or security issue.
 
-Since the previous review, the only runtime-code changes are to the documentation self-test harness and its CTest wiring. The D-144–D-154 production claim-matcher logic is unchanged. `--self-test docs` remains available as a full unsharded run; CTest now assigns its `child_result` CLI calls deterministically by call-index modulo 32. Each shard verifies its expected selected-call count and includes positive and negative checks, and the release-note control sweep runs once on shard 0. The CTest declaration registers shard 0 under the existing `v02_adoption_docs_controls` name and adds shards 01–31; all 31 new names appear in `tests/expected-tests.txt` and `tests/ci/test-budget-allowlist` with 90-second ceilings. The full release inventory still consumes `tests/expected-tests.txt`, so these shards are included in the downloaded-release CTest inventory checks. The release workflow, product package, notice data, and disclosure requirements do not change.
+The production release and consumer surfaces are unchanged from `aecf09cc`: release workflows, version-window and adoption checkers, release guidance, support-profile data, notices, installed-product policy, test inventory, and timeout budget. The D-144–D-154 production claim matcher also remains unchanged. `--self-test docs` remains available as a full unsharded run; CTest assigns its `child_result` CLI calls deterministically by call-index modulo 32. Each shard verifies its expected selected-call count and includes positive and negative checks, and the release-note control sweep runs once on shard 0. The CTest declaration registers shard 0 under the existing `v02_adoption_docs_controls` name and adds shards 01–31; all 31 new names appear in `tests/expected-tests.txt` and `tests/ci/test-budget-allowlist` with 90-second ceilings. These test-harness changes preserve the complete release inventory and do not change package contents or release behavior.
 
-The earlier review-evidence CTest success-regex correction remains in place in both `tests/CMakeLists.txt` and the verifier's immutable registration expectation. It uses `[0-9a-f]+` to match the verifier's 12-character display prefix. The verifier still validates full 40-character commit IDs and report identities; its immutable registration check pins the exact command, mode, timeout, wrapper, inventory entry, and regex. This output matcher does not authorize qualification or replace the explicit full-SHA report gate. I found no effect on release, consumer, package, notice, or claim-matcher behavior.
+The T3 planning corrections add the `planning` label to 14 existing source-bound ledger/review tests while preserving their `v02` label, and to the two v0.2 support-ledger tests. The release-notes output exception is limited to `release_notes_v04` with both labels, the configured CMake executable, the isolated configured Python interpreter, the exact support-ledger renderer and flags, the revision from the unique configured review-evidence CTest command, the existing success regex, and one fixed preface path under the build directory. Its controls reject another test name, an unexpected output path, a stale 40-hex revision, an injected build artifact, a fake executable whose basename is exactly `cmake`, and a missing planning label. The review-evidence registration checker now counts `gbb_add_v02_contract` declarations instead of every occurrence of a test name, and retains a duplicate-declaration negative control; this allows the new `set_tests_properties` label references without weakening the fixed registrations.
+
+The post-tag recovery test preserves the historical `RECOVERY_SOURCE_SHA` for v0.3.0 notes and fixtures, while separately pinning the production adoption checker to `aecf09cc02ae81bdb2047087014f1bc66b71aa06`. That checker blob is identical at the reviewed source. Four accepted recovery paths each require 24 production-checker checks, and the expected refusal adds one, yielding the exact 97 aggregate. The changes align the test with the current adoption checker; they do not change recovery workflow behavior, notes, or publication.
 
 The version-PR path keeps normal inactive-window development evaluation separate from the exact tracked `0.4.0` output and release-note checks. The version-PR and release-please jobs use trusted checkers against the PR head. The candidate release workflow binds `v0.4.0` to the returned source SHA, requires an active version window and validated notes, checks merged-PR exact-head evidence and the existing rehearsal, and keeps the candidate as an unpublished draft while it builds and verifies assets. The version-window checker requires the changelog ledger reference to be visible and exact; its incomplete raw-HTML opener cases are rejected through the production CLI while a visible ledger-link counterpart passes. Workflow source is present, but this review does not establish branch-protection configuration or any hosted run result.
 
@@ -22,10 +24,10 @@ The disclosure and notice boundaries remain intact: required clauses and each th
 
 ## Verification at the reviewed source
 
-- The production docs check passed with 473 checks. The complete docs-control self-test passed across all 32 deterministic CTest shards, including all D-144–D-154 and notice-path cases; the release-note sweep runs on shard 0. These shards, the 50-test T2 focused selection, configure/build, and the timeout-budget audit passed at implementation commit `1a7558d9749538a894e23a9cf965210d57bb77dd`. The adoption checker, CMake registrations, test inventory, and budget allowlist blobs are identical at that commit and the reviewed source.
-- The earlier unsharded docs self-test also passed with all 255 negative controls rejected on the identical D-144–D-154 matcher blob at `4c9c54f8b5a33e758624c997f107d1ffdd7c94a0`.
+- Exact-source local checks recorded for `1f97d44fd7d43c1edc88588f404de9b9322d33fb` include configure/build; the review-evidence self-test (33 positives, 28 controls); planning-label self-test (27 controls) and live inventory (1,767 tests, 63 planning); both planning-label CTests; phase-path check/self-test (597 files, 12 allowlists, 19 controls); planning-cap/hygiene (four phases, 38 plans, 96 controls); and lifecycle recovery (99 controls, 12 positives). These validate local harness behavior for their stated inputs; they do not establish a completed focused or full qualification run.
+- The production docs check passed with 473 checks, and the complete docs-control self-test passed across all 32 deterministic CTest shards, including D-144–D-154 and notice-path cases, on the unchanged adoption-checker blob at `1a7558d9749538a894e23a9cf965210d57bb77dd`. The earlier unsharded docs self-test also passed with all 255 negative controls rejected on the identical matcher blob at `4c9c54f8b5a33e758624c997f107d1ffdd7c94a0`.
 - The Plan 23-09 version-window self-test recorded 63 positives and 66 controls at `a63f1dc67654613e105ac1071b7445f21adea0bc`; its production opener source and controls are unchanged at the reviewed commit.
-- The explicit report gate for `aecf09cc02ae81bdb2047087014f1bc66b71aa06` remains outstanding until all reports are rebound to that SHA. I do not claim the direct full-SHA gate passed at this source.
+- The direct report gate for `1f97d44fd7d43c1edc88588f404de9b9322d33fb`, the focused T2 selection, and final full-suite qualification remain pending. I do not claim any of them passed at this source.
 
 These local checks establish only the behavior of their specified inputs. They do not establish review quality by themselves or qualify a release. I did not inspect live hosted checks, an actual v0.4.0 version PR, a v0.4.0 tag, downloaded v0.4.0 assets, or a publication. No real game or diagnostic fixture was fetched, built, run, or admitted.
 
@@ -33,11 +35,11 @@ These local checks establish only the behavior of their specified inputs. They d
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-aecf09cc-01",
+  "report_id": "gb-23-release-consumer-1f97d44f-20261105-01",
   "role": "release-consumer",
   "reviewer_id": "codex-release-consumer-01",
   "independent": true,
-  "reviewed_sha": "aecf09cc02ae81bdb2047087014f1bc66b71aa06",
+  "reviewed_sha": "1f97d44fd7d43c1edc88588f404de9b9322d33fb",
   "findings": [
     {
       "id": "RC-01",
