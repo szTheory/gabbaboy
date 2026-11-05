@@ -7,37 +7,92 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 FLOOR_SCRIPT = ROOT / ".github/scripts/verify-cmake-floor.sh"
-RELOCATED_CTEST = '"$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3-relocated"'
-FULL_REPORT = ('--output-on-failure --no-tests=error --output-junit '
-               '"$temp_root/relocated-tests.xml"')
-INVENTORY_REPORT = ('"$temp_root/relocated-tests.xml" "$repo_root/tests/expected-tests.txt" '
-                    '--installed')
+CTEST_PREFIX = '"$ctest_bin" --test-dir '
+INVENTORY_PREFIX = 'bash "$repo_root/.github/scripts/verify-test-inventory.sh"'
+BASE_BUILD = '"$repo_root/build-cmake-3.25.3"'
+RELOCATED_BUILD = '"$repo_root/build-cmake-3.25.3-relocated"'
+ADAPTER_SELECTOR = (
+    "-R '^(cgb_samesuite_apu_membership|cgb_samesuite_apu_controls|cgb_corpus_report_tracer|"
+    "cgb_corpus_report_tracer_controls|cgb_corpus_report_controls|cgb_corpus_report_platform_controls)$'"
+)
+NO_HOST_CLOCK_SELECTOR = "-R '^no_host_clock$'"
+FULL_REPORT = (
+    '--output-on-failure --no-tests=error --output-junit "$temp_root/relocated-tests.xml"'
+)
+INVENTORY_REPORT = (
+    '"$temp_root/relocated-tests.xml" "$repo_root/tests/expected-tests.txt" --installed'
+)
 
 
 class Reject(Exception):
     pass
 
 
+def active_commands(text: str, prefix: str) -> list[tuple[int, str]]:
+    lines = text.splitlines()
+    commands: list[tuple[int, str]] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.startswith(prefix):
+            start = index
+            parts = [line]
+            while parts[-1].rstrip().endswith("\\") and index + 1 < len(lines):
+                index += 1
+                parts.append(lines[index])
+            commands.append((start, "\n".join(parts)))
+        index += 1
+    return commands
+
+
+def commented_out(text: str, command: str) -> str:
+    replacement = "\n".join("# " + line for line in command.splitlines())
+    return text.replace(command, replacement, 1)
+
+
 def validate(text: str) -> None:
-    if text.count("--output-junit") != 1 or RELOCATED_CTEST not in text or FULL_REPORT not in text:
+    ctest_calls = active_commands(text, CTEST_PREFIX)
+    full_calls = [
+        (line, call) for line, call in ctest_calls
+        if not any(part.lstrip().startswith("-R ") for part in call.splitlines()[1:])
+    ]
+    if (
+        len(full_calls) != 1
+        or BASE_BUILD in full_calls[0][1]
+        or RELOCATED_BUILD not in full_calls[0][1]
+        or full_calls[0][1].count("--output-junit") != 1
+        or FULL_REPORT not in full_calls[0][1]
+    ):
         raise Reject("full-ctest-not-unique-relocated")
-    full = text.find(RELOCATED_CTEST)
-    report = text.find(FULL_REPORT)
-    inventory = text.find(INVENTORY_REPORT)
-    if inventory < 0 or not (full < report < inventory):
-        raise Reject("relocated-inventory-not-verified")
-    if "-R '^no_host_clock$' --no-tests=error -V" not in text:
+    adapter_calls = [call for _, call in ctest_calls if ADAPTER_SELECTOR in call]
+    if len(adapter_calls) != 1 or BASE_BUILD not in adapter_calls[0] or RELOCATED_BUILD in adapter_calls[0]:
+        raise Reject("floor-adapter-checks-missing")
+    no_host_clock_calls = [call for _, call in ctest_calls if NO_HOST_CLOCK_SELECTOR in call]
+    if (
+        len(no_host_clock_calls) != 1
+        or BASE_BUILD not in no_host_clock_calls[0]
+        or RELOCATED_BUILD in no_host_clock_calls[0]
+    ):
         raise Reject("no-host-clock-result-missing")
-    install = text.find('"$cmake_bin" --install "$repo_root/build-cmake-3.25.3"')
+    inventory_calls = active_commands(text, INVENTORY_PREFIX)
+    installed_inventories = [
+        (line, call) for line, call in inventory_calls
+        if INVENTORY_REPORT in call
+    ]
+    full_line = full_calls[0][0]
+    if len(installed_inventories) != 1 or full_line >= installed_inventories[0][0]:
+        raise Reject("relocated-inventory-not-verified")
+    install = text.find(f'"$cmake_bin" --install {BASE_BUILD}')
     move = text.find('mv "$stage" "$relocated"')
     relocated_configure = text.find('"$cmake_bin" --preset cmake-3.25.3-relocated')
-    relocated_build = text.find('"$cmake_bin" --build "$repo_root/build-cmake-3.25.3-relocated"')
-    if min(install, move, relocated_configure, relocated_build, full) < 0 or not (
-        install < move < relocated_configure < relocated_build < full
+    relocated_build = text.find(f'"$cmake_bin" --build {RELOCATED_BUILD}')
+    full_position = text.find(full_calls[0][1])
+    if min(install, move, relocated_configure, relocated_build, full_position) < 0 or not (
+        install < move < relocated_configure < relocated_build < full_position
     ):
         raise Reject("relocated-build-order-invalid")
-    if "-R '^(cgb_samesuite_apu_membership|" not in text:
-        raise Reject("floor-adapter-checks-missing")
+    if "-R '^no_host_clock$' --no-tests=error -V" not in no_host_clock_calls[0]:
+        raise Reject("no-host-clock-result-missing")
 
 
 def self_test(source: str) -> int:
@@ -48,31 +103,47 @@ def self_test(source: str) -> int:
         raise Reject(f"baseline-rejected:{error}") from error
     controls += 1
 
-    duplicated = source + '\n--output-junit "$temp_root/duplicate-tests.xml"\n'
-    try:
-        validate(duplicated)
-    except Reject as error:
-        if str(error) != "full-ctest-not-unique-relocated":
-            raise Reject(f"duplicate-control-wrong-reason:{error}") from error
-    else:
-        raise Reject("duplicate-full-suite-accepted")
-    controls += 1
+    for build in ("build-cmake-3.25.3", "build-cmake-3.25.3-relocated"):
+        duplicate = (
+            source + '\n"$ctest_bin" --test-dir "$repo_root/' + build + '" '
+            + chr(92) + "\n  --no-tests=error --output-on-failure\n"
+        )
+        try:
+            validate(duplicate)
+        except Reject as error:
+            if str(error) != "full-ctest-not-unique-relocated":
+                raise Reject(f"duplicate-control-wrong-reason:{error}") from error
+        else:
+            raise Reject(f"duplicate-full-suite-accepted:{build}")
+        controls += 1
 
-    wrong_tree = source.replace(
-        RELOCATED_CTEST,
-        '"$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3"',
-        1,
+    full_call = next(call for _, call in active_commands(source, CTEST_PREFIX) if FULL_REPORT in call)
+    clock_call = next(
+        call for _, call in active_commands(source, CTEST_PREFIX)
+        if NO_HOST_CLOCK_SELECTOR in call
     )
-    try:
-        validate(wrong_tree)
-    except Reject as error:
-        if str(error) != "full-ctest-not-unique-relocated":
-            raise Reject(f"wrong-tree-control-wrong-reason:{error}") from error
-    else:
-        raise Reject("preinstall-full-suite-accepted")
-    controls += 1
+    adapter_call = next(
+        call for _, call in active_commands(source, CTEST_PREFIX)
+        if ADAPTER_SELECTOR in call
+    )
+    for label, command, reason in (
+        ("relocated full suite", full_call, "full-ctest-not-unique-relocated"),
+        ("base adapter checks", adapter_call, "floor-adapter-checks-missing"),
+        ("base clock check", clock_call, "no-host-clock-result-missing"),
+    ):
+        try:
+            validate(commented_out(source, command))
+        except Reject as error:
+            if str(error) != reason:
+                raise Reject(f"commented-{label}-control-wrong-reason:{error}") from error
+        else:
+            raise Reject(f"commented-{label}-accepted")
+        controls += 1
 
-    missing_inventory = source.replace(INVENTORY_REPORT, "", 1)
+    missing_inventory = commented_out(source, next(
+        call for _, call in active_commands(source, INVENTORY_PREFIX)
+        if INVENTORY_REPORT in call
+    ))
     try:
         validate(missing_inventory)
     except Reject as error:
