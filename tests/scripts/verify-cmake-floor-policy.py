@@ -19,8 +19,9 @@ ADAPTER_SELECTOR = (
 NO_HOST_CLOCK_SELECTOR = "-R '^no_host_clock$'"
 CTEST_FILTER_OPTION = re.compile(
     r"(?:^|\s)(?:-R|-E|-L|-LE|-FA|-FS|-FC|-I|-U|--tests-regex|--exclude-regex|"
-    r"--label-regex|--label-exclude|--tests-information|--tests-from-file|--exclude-from-file|"
-    r"--rerun-failed)(?:\s|=|$)"
+    r"--label-regex|--label-exclude|--fixture-exclude-any|--fixture-exclude-setup|"
+    r"--fixture-exclude-cleanup|--tests-information|--tests-from-file|--exclude-from-file|"
+    r"--rerun-failed|--union)(?:\s|=|$)"
 )
 INSTALL_PREFIX = '"$cmake_bin" --install '
 MOVE_PREFIX = 'mv "$stage" "$relocated"'
@@ -28,6 +29,10 @@ RELOCATED_CONFIGURE_PREFIX = '"$cmake_bin" --preset cmake-3.25.3-relocated'
 RELOCATED_BUILD_PREFIX = f'"$cmake_bin" --build {RELOCATED_BUILD}'
 FULL_REPORT = (
     '--output-on-failure --no-tests=error --output-junit "$temp_root/relocated-tests.xml"'
+)
+FULL_CTEST_COMMAND = (
+    '"$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3-relocated" \\\n'
+    '  --output-on-failure --no-tests=error --output-junit "$temp_root/relocated-tests.xml"'
 )
 INVENTORY_REPORT = (
     '"$temp_root/relocated-tests.xml" "$repo_root/tests/expected-tests.txt" --installed'
@@ -92,6 +97,7 @@ def validate(text: str) -> None:
         or RELOCATED_BUILD not in full_calls[0][1]
         or full_calls[0][1].count("--output-junit") != 1
         or FULL_REPORT not in full_calls[0][1]
+        or full_calls[0][1] != FULL_CTEST_COMMAND
     ):
         raise Reject("full-ctest-not-unique-relocated")
     adapter_calls = [call for _, call in ctest_calls if ADAPTER_SELECTOR in call]
@@ -261,9 +267,13 @@ def self_test(source: str) -> int:
         "-FA fixture",
         "-FS fixture",
         "-FC fixture",
+        "--fixture-exclude-any fixture",
+        "--fixture-exclude-setup fixture",
+        "--fixture-exclude-cleanup fixture",
         "-I 1,10",
         "--tests-information 1,10",
         "-U",
+        "--union",
         "--tests-regex '^acceptance_'",
         "--exclude-regex '^ignored_'",
         "--label-regex unit",
@@ -271,6 +281,9 @@ def self_test(source: str) -> int:
         "--tests-from-file selected-tests.txt",
         "--exclude-from-file excluded-tests.txt",
         "--rerun-failed",
+        "--preset restricted",
+        "--presets-file restricted-presets.json",
+        "--show-only",
     ):
         filtered_primary = source.replace(
             full_prefix,
