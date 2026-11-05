@@ -1771,3 +1771,4 @@ contract_rev_wiring_bare_form
 contract_rev_wiring_bare_prefix_control
 contract_rev_default_head
 contract_rev_unreadable_ref_control
+ci_floor_relocated_suite_contract

@@ -47,10 +47,6 @@ relocated="$repo_root/build-cmake-3.25.3/package-prefix-relocated"
 "$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3" \
   -R '^(cgb_samesuite_apu_membership|cgb_samesuite_apu_controls|cgb_corpus_report_tracer|cgb_corpus_report_tracer_controls|cgb_corpus_report_controls|cgb_corpus_report_platform_controls)$' \
   --no-tests=error --output-on-failure
-"$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3" \
-  --output-on-failure --no-tests=error --output-junit "$temp_root/floor-tests.xml"
-bash "$repo_root/.github/scripts/verify-test-inventory.sh" \
-  "$temp_root/floor-tests.xml" "$repo_root/tests/expected-tests.txt"
 # Print the no-host-clock result so the job log records which symbol tool this leg used.
 "$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3" \
   -R '^no_host_clock$' --no-tests=error -V
@@ -60,6 +56,8 @@ rm -rf "$relocated"
 mv "$stage" "$relocated"
 "$cmake_bin" --preset cmake-3.25.3-relocated -S "$repo_root"
 "$cmake_bin" --build "$repo_root/build-cmake-3.25.3-relocated" --verbose
+# Run the full suite once against the relocated CMake-floor build. This covers the complete expected inventory
+# and the installed consumers while avoiding a duplicate 20-40 minute stream against the pre-install tree.
 "$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3-relocated" \
   --output-on-failure --no-tests=error --output-junit "$temp_root/relocated-tests.xml"
 bash "$repo_root/.github/scripts/verify-test-inventory.sh" \

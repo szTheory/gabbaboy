@@ -2637,6 +2637,12 @@ add_test(NAME ci_floor_parallel_serial_selftest
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=doc-contract-missing: CTEST_PARALLEL_LEVEL: 4"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME ci_floor_relocated_suite_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cmake-floor-policy.py" --self-test)
+set_tests_properties(ci_floor_relocated_suite_contract PROPERTIES
+  TIMEOUT 10
+  PASS_REGULAR_EXPRESSION "cmake-floor policy pass full-suite=relocated installed-inventory=ok controls=[0-9]+"
+  LABELS "planning")
 
 # Each native job runs the full suite, which serially took about 20 minutes of the CI critical path. The job
 # environment keeps its ctest calls parallel, like the floor job; each serial selftest blanks that one job's
