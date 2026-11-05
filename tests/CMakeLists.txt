@@ -1483,10 +1483,10 @@ endforeach()
 gbb_add_v02_contract(v02_support_ledger 60
   [=[support-ledger static pass version=0\.[0-9]+\.[0-9]+ cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)
-set_tests_properties(v02_support_ledger v02_support_ledger_controls PROPERTIES LABELS "planning")
 gbb_add_v02_contract(v02_support_ledger_controls 120
   [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
+set_tests_properties(v02_support_ledger v02_support_ledger_controls PROPERTIES LABELS "planning")
 # Phase 16 D-28/D-29 (16-06): the v0.2.0 ledger is frozen to the tag blob plus the one disclosed #93 block, and README links the
 # ledger that this tree's version selects. The version in the binding regex comes from the project VERSION at configure time, so
 # the same test follows the tree to v0.2.1 without an edit; the freeze reads the v0.2.0 tag, which every full-suite job fetches.
