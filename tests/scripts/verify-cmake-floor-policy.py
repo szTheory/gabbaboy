@@ -17,6 +17,9 @@ TOOLCHAIN_ASSIGNMENTS = (
     CMAKE_BIN_ASSIGNMENT,
     CTEST_BIN_ASSIGNMENT,
 )
+UNSAFE_TOOL_OVERRIDE = re.compile(
+    r"\b(?:(?:builtin\s+)?printf\s+-v|eval|declare|typeset|local|export|read|source)\b"
+)
 INVENTORY_PREFIX = 'bash "$repo_root/.github/scripts/verify-test-inventory.sh"'
 BASE_BUILD = '"$repo_root/build-cmake-3.25.3"'
 RELOCATED_BUILD = '"$repo_root/build-cmake-3.25.3-relocated"'
@@ -89,6 +92,12 @@ def commented_out(text: str, command: str) -> str:
 
 
 def validate(text: str) -> None:
+    if any(
+        UNSAFE_TOOL_OVERRIDE.search(line)
+        for line in text.splitlines()
+        if not line.lstrip().startswith("#")
+    ):
+        raise Reject("floor-toolchain-not-pinned")
     if any(
         active_occurrences(text, assignment) != 1
         for assignment in TOOLCHAIN_ASSIGNMENTS
@@ -255,6 +264,29 @@ def self_test(source: str) -> int:
         spoofed = source.replace(assignment, spoof, 1)
         try:
             validate(spoofed)
+        except Reject as error:
+            if str(error) != "floor-toolchain-not-pinned":
+                raise Reject(f"{label}-control-wrong-reason:{error}") from error
+        else:
+            raise Reject(f"{label}-accepted")
+        controls += 1
+
+    for label, override in (
+        (
+            "dynamic cmake printf",
+            'name=cmake; printf -v "${name}_bin" \'%s\' /usr/bin/cmake',
+        ),
+        (
+            "dynamic ctest printf",
+            'left=ct; right=est; suffix=_bin; '
+            'printf -v "${left}${right}${suffix}" \'%s\' "$temp_root/runner"',
+        ),
+        ("nameref", "declare -n tool=cmake_bin; tool=/usr/bin/cmake"),
+        ("eval", 'eval "cmake_bin=/usr/bin/cmake"'),
+    ):
+        overridden = source + "\n" + override + "\n"
+        try:
+            validate(overridden)
         except Reject as error:
             if str(error) != "floor-toolchain-not-pinned":
                 raise Reject(f"{label}-control-wrong-reason:{error}") from error
