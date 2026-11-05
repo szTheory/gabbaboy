@@ -7,9 +7,9 @@ current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
 stopped_at: Plan 23-04 T2: shard the exhaustive docs CLI controls within per-test budgets, reissue all exact-source reports, and rerun report, focused, and qualification gates.
-last_updated: "2026-11-05T00:19:42.000Z"
-last_activity: "2026-11-04: The full 50-test Plan 23-04 T2 focused selection passed after deterministic docs-control sharding; configure/build and the base-aware test-budget audit passed. The implementation must now be committed and reviewed at its exact new source before T3."
-state_head: 3e2772de83c365e0a395d516096d02769d2c47ea
+last_updated: "2026-11-05T00:25:27.000Z"
+last_activity: "2026-11-04: The docs-control harness amendment is committed after the 50-test focused selection and base-aware budget audit passed. The existing reports predate that commit; issue all three reviews at the current exact source, then pass the direct report gate before T3."
+state_head: 1a7558d9749538a894e23a9cf965210d57bb77dd
 progress:
   total_phases: 4
   completed_phases: 3
@@ -88,12 +88,12 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 ## Session Continuity
 
 **Last session:** 2026-11-05T00:19:42.000Z
-**Stopped at:** Plan 23-04 T2 deterministic docs-control sharding passed its full 50-test focused selection; commit the implementation, reissue exact-source reviews and rerun the direct gate.
+**Stopped at:** Plan 23-04 T2 docs-control sharding passed the 50-test focused selection; reissue the three exact-source reviews and rerun the direct report gate.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The matcher corrections, regex fix, and latest 50-test focused selection have passed their available checks; the sharded docs tests and timeout-budget audit also pass. The most recent reports predate the test-harness amendment, so commit the final implementation, reissue the three exact-source reviews, pass the direct report gate, and continue to T3 qualification. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The matcher corrections, regex fix, and latest 50-test focused selection have passed their available checks; the sharded docs tests and timeout-budget audit also pass. The reports at 3e2772de predate the committed harness amendment at 1a7558d9; reissue all three reviews at the exact current source, pass the direct report gate, and continue to T3 qualification. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Decisions
 
