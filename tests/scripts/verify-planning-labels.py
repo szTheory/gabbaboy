@@ -263,7 +263,9 @@ def self_test() -> int:
         release_notes_wrong_output = release_notes_command(build / "unexpected.md")
         release_notes_extra_artifact = list(release_notes_writer)
         release_notes_extra_artifact[1] += f";{build}/gabbaboy-runner"
-        fake_cmake = source / "fake-cmake"
+        fake_cmake_dir = source / "untrusted-cmake"
+        fake_cmake_dir.mkdir()
+        fake_cmake = fake_cmake_dir / "cmake"
         fake_cmake.write_text("#!/bin/sh\nprintf 'release-notes-preface pass\\n'\n", encoding="utf-8")
         fake_cmake.chmod(0o755)
         release_notes_fake_cmake = list(release_notes_writer)
