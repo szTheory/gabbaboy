@@ -2,6 +2,7 @@
 """Keep the CMake-floor verifier's one full suite bound to the relocated install tree."""
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -52,6 +53,14 @@ def active_commands(text: str, prefix: str) -> list[tuple[int, str]]:
 def active_occurrences(text: str, prefix: str) -> int:
     return sum(
         line.count(prefix) for line in text.splitlines()
+        if not line.lstrip().startswith("#")
+    )
+
+
+def active_word_occurrences(text: str, word: str) -> int:
+    return sum(
+        len(re.findall(rf"\b{re.escape(word)}\b", line))
+        for line in text.splitlines()
         if not line.lstrip().startswith("#")
     )
 
@@ -135,6 +144,10 @@ def validate(text: str) -> None:
         raise Reject("relocated-build-order-invalid")
     if "-R '^no_host_clock$' --no-tests=error -V" not in no_host_clock_calls[0]:
         raise Reject("no-host-clock-result-missing")
+    if len(ctest_calls) != 3:
+        raise Reject("full-ctest-not-unique-relocated")
+    if active_occurrences(text, "ctest_bin") != 5 or active_word_occurrences(text, "ctest") != 2:
+        raise Reject("full-ctest-not-unique-relocated")
 
 
 def self_test(source: str) -> int:
@@ -193,6 +206,45 @@ def self_test(source: str) -> int:
             raise Reject(f"braced-duplicate-control-wrong-reason:{error}") from error
     else:
         raise Reject("braced-duplicate-full-suite-accepted")
+    controls += 1
+
+    filtered_duplicate = (
+        source + '\n"$ctest_bin" --test-dir "$repo_root/build-cmake-3.25.3-relocated" '
+        "-R '.*' --no-tests=error --output-on-failure\n"
+    )
+    try:
+        validate(filtered_duplicate)
+    except Reject as error:
+        if str(error) != "full-ctest-not-unique-relocated":
+            raise Reject(f"filtered-duplicate-control-wrong-reason:{error}") from error
+    else:
+        raise Reject("filtered-full-inventory-accepted")
+    controls += 1
+
+    cwd_duplicate = (
+        source + '\n(cd "$repo_root/build-cmake-3.25.3-relocated" && '
+        '"$ctest_bin" --no-tests=error --output-on-failure)\n'
+    )
+    try:
+        validate(cwd_duplicate)
+    except Reject as error:
+        if str(error) != "full-ctest-not-unique-relocated":
+            raise Reject(f"cwd-duplicate-control-wrong-reason:{error}") from error
+    else:
+        raise Reject("cwd-full-inventory-accepted")
+    controls += 1
+
+    bare_ctest_duplicate = (
+        source + '\n(cd "$repo_root/build-cmake-3.25.3-relocated" && '
+        'ctest --no-tests=error --output-on-failure)\n'
+    )
+    try:
+        validate(bare_ctest_duplicate)
+    except Reject as error:
+        if str(error) != "full-ctest-not-unique-relocated":
+            raise Reject(f"bare-ctest-control-wrong-reason:{error}") from error
+    else:
+        raise Reject("bare-ctest-full-inventory-accepted")
     controls += 1
 
     full_call = next(call for _, call in active_commands(source, CTEST_PREFIX) if FULL_REPORT in call)
