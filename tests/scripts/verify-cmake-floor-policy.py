@@ -63,7 +63,10 @@ def commented_out(text: str, command: str) -> str:
 
 def validate(text: str) -> None:
     ctest_calls = active_commands(text, CTEST_PREFIX)
-    if active_occurrences(text, CTEST_PREFIX) != len(ctest_calls):
+    if (
+        active_occurrences(text, CTEST_PREFIX) != len(ctest_calls)
+        or active_occurrences(text, "--test-dir") != len(ctest_calls)
+    ):
         raise Reject("full-ctest-not-unique-relocated")
     full_calls = [
         (line, call) for line, call in ctest_calls
@@ -177,6 +180,19 @@ def self_test(source: str) -> int:
             raise Reject(f"inline-duplicate-control-wrong-reason:{error}") from error
     else:
         raise Reject("inline-duplicate-full-suite-accepted")
+    controls += 1
+
+    braced_duplicate = (
+        source + '\n"${ctest_bin}" --test-dir "$repo_root/build-cmake-3.25.3-relocated" '
+        '--no-tests=error\n'
+    )
+    try:
+        validate(braced_duplicate)
+    except Reject as error:
+        if str(error) != "full-ctest-not-unique-relocated":
+            raise Reject(f"braced-duplicate-control-wrong-reason:{error}") from error
+    else:
+        raise Reject("braced-duplicate-full-suite-accepted")
     controls += 1
 
     full_call = next(call for _, call in active_commands(source, CTEST_PREFIX) if FULL_REPORT in call)
