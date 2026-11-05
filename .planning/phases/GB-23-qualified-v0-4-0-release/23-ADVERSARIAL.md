@@ -1,16 +1,24 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** `de66945db318d7aeb7acdb13a0bd0203fed1bd31`
+**Reviewed implementation:** `aecf09cc02ae81bdb2047087014f1bc66b71aa06`
 **Scope:** Plans 23-01 through 23-04 and Plan 23-09, including immutable support claims, release-note and changelog validation, Markdown visibility, profile/source/version bindings, and the D-144–D-154 corrections in the unsupported CGB-game matcher.
 **Review posture:** I read the validator and release-window source from the exact commit, examined the current controls, and ran targeted mutations against production functions. No real CGB game or diagnostic fixture was fetched, built, run, or admitted. No release artifact was signed, notarized, or promoted; no hosted release evidence is claimed.
 
 ## Results
 
-No unresolved correctness or security issue remains in this reviewed scope. All retained findings ADV-01 through ADV-20 are fixed in full ancestor commits and have exact-source verification references below. The direct real-report gate and focused CTest pair were still pending while these independent reports were being prepared; their result is a separate qualification gate.
+No unresolved correctness or security issue remains in this reviewed scope. All retained findings ADV-01 through ADV-20 are fixed in full ancestor commits and have exact-source verification references below. The focused 50-test selection passed on the source-identical implementation parent noted below; the direct real-report gate remains pending because the independent reports are not committed yet.
 
 ### Review-evidence CMake regex correction
 
-The only code/registration change since the prior implementation is the review-evidence success regex. The checker prints `implementation={reviewed_sha[:12]}`, so the output contains exactly 12 lowercase hexadecimal characters. The CMake `PASS_REGULAR_EXPRESSION` and immutable registration expectation now use `[0-9a-f]+`; I ran that expression through CMake against the actual 12-character output, and it matches. The prior `{12}` form did not match in CMake’s regex dialect. The registration self-test still compares the entire required registration string against immutable `tests/CMakeLists.txt`, so this is not an unchecked working-tree relaxation. The report-gate self-test passed 32 positives and 27 controls at this exact SHA. The D-144–D-154 matcher blob is identical to the prior reviewed implementation; I re-read the immutable source and reran its docs baseline and v0.4 release-note controls at this SHA.
+The review-evidence success regex correction from the prior review remains intact: the checker prints a 12-character implementation prefix, and the CMake `PASS_REGULAR_EXPRESSION` and immutable registration expectation use `[0-9a-f]+`. The prior `{12}` form did not match in CMake’s regex dialect. The registration self-test still compares the complete required registration string against immutable `tests/CMakeLists.txt`. The report-gate self-test passed 32 positives and 27 controls at the previously reviewed exact SHA. The current commit changes only `.planning/STATE.md` and `.continue-here.md` relative to its tested parent; the test and implementation blobs are identical to that parent.
+
+### Deterministic docs self-test shards
+
+I read the exact diff from `de66945db318d7aeb7acdb13a0bd0203fed1bd31` to this implementation. The validator change adds only deterministic partitioning around existing docs `child_result` calls and a shard-0 condition around the existing shared release-note sweep; the D-144–D-154 parser, matcher, and control definitions are unchanged. Each docs child call increments the global-invocation index before applying `index % shard_count`, so for the registered count of 32 every call index is assigned to exactly one shard. The selected-count formula `1 + (calls - 1 - shard) // shard_count` gives the exact cardinality for that residue class. Each shard requires a nonempty selection with at least one successful positive and one rejected negative, and checks that the observed selected count equals the formula. The original fixed docs control-inventory check remains in place.
+
+The release-note control function has one call site in `run_self_test_docs`; it runs when the invocation is unsharded or shard index is 0, and is skipped for indices 1–31. CMake registers exactly one shard-0 test (`v02_adoption_docs_controls`) and shards 01–31 once each. `tests/expected-tests.txt` and `tests/ci/test-budget-allowlist` each contain the same 32 registered names; all shard entries have a 90-second timeout. `ctest -N` listed the complete set. The current `verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo .` check passed with 1,767 tests and 120 budgeted rows, confirming the configured inventory and timeout ceilings agree.
+
+I probed invalid boundaries (`-1/32`, `32/32`, `0/1`, and `0/0`), missing/extra values, and use with `--check docs`, the game self-test, release-note self-test, and claim-boundary self-test. Each was rejected by argparse with the corresponding shard validation diagnostic. The valid final shard `31/32` passed the production docs check (473 checks), assigned 13 child calls, and reported three negative controls alongside successful positive calls. The owner’s full 50-test focused CTest selection passed on the source-identical parent commit `1a7558d9749538a894e23a9cf965210d57bb77dd`; that selected set includes all 32 shard tests, so the aggregate confirms the original controls remain covered and the shard-0 release-note sweep passes once. I did not repeat the complete shard set.
 
 ### D-153 and D-154 production probes
 
@@ -35,13 +43,13 @@ The exact-source control set preserves the paired cases added under the bounded 
 | Hard breaks, emphasis, and links | LF/CR/CRLF CommonMark hard-break claims, encoded-space joins, emphasis-split CGB text, and inline/reference-link label claims fail as unsupported game qualification, including through the notices caller. | Soft breaks where the claim does not form, escaped punctuation, intraword underscores, unresolved/escaped labels, code spans/fences, and destination/title-only claims remain accepted. |
 | Dense delimiter controls | Dense unmatched emphasis cannot prevent claim detection. | Its safe evidence counterpart passes. |
 
-The `verify-v02-adoption.py` blob is unchanged from `4c9c54f8b5a33e758624c997f107d1ffdd7c94a0`, where the owner-run complete docs self-test passed 473 checks with 255/255 negative controls rejected. At the exact current SHA I independently reran the production docs check (473 checks) and v0.4 release-note self-test (2 positives, 72 controls); targeted D-153/D-154 probes exercised README, game-acceptance, notices, and renderer-built notes. The unchanged matcher blob and these exact-SHA checks preserve the earlier parser review evidence.
+The parser and matcher portions of `verify-v02-adoption.py` are unchanged from `4c9c54f8b5a33e758624c997f107d1ffdd7c94a0`, where the owner-run complete docs self-test passed 473 checks with 255/255 negative controls rejected. The exact diff adds only the deterministic shard wrapper and release-note sweep condition described above. The current valid shard-31 invocation reran the production docs check (473 checks); the owner-run full focused CTest selection on the source-identical parent covered all shard indices and the shard-0 release-note sweep. Targeted D-153/D-154 probes exercised README, game-acceptance, notices, and renderer-built notes at the previous exact matcher source. No parser or matcher bypass was found in the sharding change.
 
 ### Plan 23-09 visibility and opener matrix
 
 I re-evaluated prior ADV-09 against the current source. The exact opener set is `<script` newline/space forms, `<pre` newline/space forms, `<style` newline/space forms, mixed-case `<ScRiPt`, incomplete `<!DOCTYPE html`, and incomplete `<?xml version="1.0"`. On the changelog path, every opener is tried before the heading and inside the section; each hidden-link mutant must fail as `window-version-output-mismatch`, while its visible-ledger-link baseline passes. Comments, fenced/indented/inline-code samples, and escaped opener examples are accepted when the real ledger link stays visible. The current self-test temporarily restores the old matcher and confirms it accepts the causal hidden-link sample before verifying the corrected matcher rejects it.
 
-On the release-note path, every opener is tried both before the preface and around the ledger link, and fails as `release-notes-raw-html-unsupported`; the renderer-built notes, and examples masked by comment/fence/indent/code/escape syntax, pass. The v0.4 note self-test passed 2 positive baselines and 72 negative controls. The v0.4 version-window self-test passed 63 positives and 66 controls; the general version-window self-test passed 11 positives and 64 controls. The docs controls reject raw HTML as `markdown-raw-html-unsupported` and the exact-source docs run passed 255/255 negative controls.
+On the release-note path, every opener is tried both before the preface and around the ledger link, and fails as `release-notes-raw-html-unsupported`; the renderer-built notes, and examples masked by comment/fence/indent/code/escape syntax, pass. The v0.4 note self-test passed 2 positive baselines and 72 negative controls. The v0.4 version-window self-test passed 63 positives and 66 controls; the general version-window self-test passed 11 positives and 64 controls. The docs controls reject raw HTML as `markdown-raw-html-unsupported`; those controls remain in the current shard set, whose source-identical full CTest selection passed.
 
 ### Release, profile, and provenance attacks
 
@@ -77,11 +85,11 @@ All results are local software checks against the exact source identity named ab
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-de66945-regex-20261104-01",
+  "report_id": "gbb-phase23-adversarial-aecf09cc-shards-20261104-01",
   "role": "adversarial",
   "reviewer_id": "codex-adversarial-reviewer-01",
   "independent": true,
-  "reviewed_sha": "de66945db318d7aeb7acdb13a0bd0203fed1bd31",
+  "reviewed_sha": "aecf09cc02ae81bdb2047087014f1bc66b71aa06",
   "findings": [
     {
       "id": "ADV-01",
