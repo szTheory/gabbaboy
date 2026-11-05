@@ -19,7 +19,7 @@ ADAPTER_SELECTOR = (
 NO_HOST_CLOCK_SELECTOR = "-R '^no_host_clock$'"
 CTEST_FILTER_OPTION = re.compile(
     r"(?:^|\s)(?:-R|-E|-L|-LE|-FA|-FS|-FC|-I|-U|--tests-regex|--exclude-regex|"
-    r"--label-regex|--label-exclude|--tests-from-file|--exclude-from-file|"
+    r"--label-regex|--label-exclude|--tests-information|--tests-from-file|--exclude-from-file|"
     r"--rerun-failed)(?:\s|=|$)"
 )
 INSTALL_PREFIX = '"$cmake_bin" --install '
@@ -262,6 +262,7 @@ def self_test(source: str) -> int:
         "-FS fixture",
         "-FC fixture",
         "-I 1,10",
+        "--tests-information 1,10",
         "-U",
         "--tests-regex '^acceptance_'",
         "--exclude-regex '^ignored_'",
