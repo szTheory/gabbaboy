@@ -2338,7 +2338,7 @@ def run_cli(arguments: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def expect_pass(arguments: list[str]) -> None:
+def expect_pass(arguments: list[str]) -> int:
     result = run_cli(arguments)
     require(result.returncode == 0,
             "self-test-positive-check-failed:" + result.stderr.strip())
@@ -2348,7 +2348,9 @@ def expect_pass(arguments: list[str]) -> None:
         raise ContractError("self-test-positive-summary-invalid") from error
     require(summary.get("positive_success") is True,
             "self-test-positive-summary-missing")
-    require(summary.get("checks", 0) > 0, "self-test-positive-checks-empty")
+    checks = summary.get("checks", 0)
+    require(type(checks) is int and checks > 0, "self-test-positive-checks-empty")
+    return checks
 
 
 def expect_reject(arguments: list[str], reason: str) -> None:
@@ -2359,21 +2361,30 @@ def expect_reject(arguments: list[str], reason: str) -> None:
 
 
 DOCS_SELF_TEST_SHARD: tuple[int, int] | None = None
-DOCS_SELF_TEST_STATS = {"calls": 0, "positive": 0, "negative": 0}
+DOCS_SELF_TEST_STATS = {
+    "positive_calls": 0,
+    "negative_calls": 0,
+    "positive": 0,
+    "negative": 0,
+    "positive_checks": 0,
+}
 
 
 def child_result(root: Path, mode: str, reason: str | None = None) -> None:
     if DOCS_SELF_TEST_SHARD is not None:
         shard, shard_count = DOCS_SELF_TEST_SHARD
-        call_index = DOCS_SELF_TEST_STATS["calls"]
-        DOCS_SELF_TEST_STATS["calls"] += 1
+        kind = "positive" if reason is None else "negative"
+        call_index_key = kind + "_calls"
+        call_index = DOCS_SELF_TEST_STATS[call_index_key]
+        DOCS_SELF_TEST_STATS[call_index_key] += 1
         if call_index % shard_count != shard:
             return
     arguments = ["--check", mode, "--root", str(root)]
     if reason is None:
-        expect_pass(arguments)
+        checks = expect_pass(arguments)
         if DOCS_SELF_TEST_SHARD is not None:
             DOCS_SELF_TEST_STATS["positive"] += 1
+            DOCS_SELF_TEST_STATS["positive_checks"] = checks
     else:
         expect_reject(arguments, reason)
         if DOCS_SELF_TEST_SHARD is not None:
@@ -4054,7 +4065,13 @@ def main() -> int:
         if shard < 0 or shard_count < 2 or shard >= shard_count:
             parser.error("--shard requires 0 <= INDEX < COUNT and COUNT >= 2")
         DOCS_SELF_TEST_SHARD = (shard, shard_count)
-        DOCS_SELF_TEST_STATS = {"calls": 0, "positive": 0, "negative": 0}
+        DOCS_SELF_TEST_STATS = {
+            "positive_calls": 0,
+            "negative_calls": 0,
+            "positive": 0,
+            "negative": 0,
+            "positive_checks": 0,
+        }
     try:
         if args.self_test_release_notes_v04:
             positives, controls = run_self_test_release_notes_v04(args.repo.resolve(strict=True))
@@ -4101,16 +4118,27 @@ def main() -> int:
             checks = check_game(root)
             negative_controls, rejected_controls = run_self_test_game(root)
         else:
-            checks = check_docs(root)
+            checks = 0 if DOCS_SELF_TEST_SHARD is not None else check_docs(root)
             negative_controls, rejected_controls = run_self_test_docs(root)
             if DOCS_SELF_TEST_SHARD is not None:
                 shard, shard_count = DOCS_SELF_TEST_SHARD
-                calls = DOCS_SELF_TEST_STATS["calls"]
-                expected = 0 if shard >= calls else 1 + (calls - 1 - shard) // shard_count
+                positive_calls = DOCS_SELF_TEST_STATS["positive_calls"]
+                negative_calls = DOCS_SELF_TEST_STATS["negative_calls"]
+                expected_positive = (
+                    0 if shard >= positive_calls
+                    else 1 + (positive_calls - 1 - shard) // shard_count
+                )
+                expected_negative = (
+                    0 if shard >= negative_calls
+                    else 1 + (negative_calls - 1 - shard) // shard_count
+                )
                 positive = DOCS_SELF_TEST_STATS["positive"]
                 negative = DOCS_SELF_TEST_STATS["negative"]
-                require(expected > 0 and positive > 0 and negative > 0 and positive + negative == expected,
+                require(expected_positive > 0 and expected_negative > 0
+                        and positive == expected_positive and negative == expected_negative,
                         "docs-self-test-shard-coverage-invalid")
+                checks = DOCS_SELF_TEST_STATS["positive_checks"]
+                require(checks > 0, "docs-self-test-shard-positive-check-missing")
                 negative_controls = negative
                 rejected_controls = negative
         require(negative_controls > 0 and negative_controls == rejected_controls,

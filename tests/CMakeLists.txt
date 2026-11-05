@@ -1464,22 +1464,47 @@ gbb_add_v02_contract(v02_adoption_docs 60
   verify-v02-adoption.py --check docs)
 # The complete docs self-test runs every production CLI case, each reading the full public-doc set and
 # multi-megabyte support ledger. Keep every case, but distribute calls deterministically so each CTest
-# stays within the existing per-test timeout budget. The shared release-note controls run once in shard 0.
+# stays within the existing per-test timeout budget. Hosted four-worker runs showed the 32-shard split
+# still reached the 90-second ceiling, so use 200 shards with separately balanced positive/negative calls.
+# The release-note controls run once in shard 0.
+set(gbb_docs_control_shard_count 200)
+math(EXPR gbb_docs_control_shard_max "${gbb_docs_control_shard_count} - 1")
 gbb_add_v02_contract(v02_adoption_docs_controls 90
-  [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "shard": "0/32", "target": "docs"]=]
-  verify-v02-adoption.py --self-test docs --shard 0 32)
-foreach(gbb_docs_control_shard RANGE 1 31)
+  [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "shard": "0/200", "target": "docs"]=]
+  verify-v02-adoption.py --self-test docs --shard 0 ${gbb_docs_control_shard_count})
+foreach(gbb_docs_control_shard RANGE 1 ${gbb_docs_control_shard_max})
   if(gbb_docs_control_shard LESS 10)
     set(gbb_docs_control_shard_suffix "0${gbb_docs_control_shard}")
   else()
     set(gbb_docs_control_shard_suffix "${gbb_docs_control_shard}")
   endif()
   set(gbb_docs_control_shard_regex
-    "\"mode\": \"self-test\", \"negative_controls\": [1-9][0-9]*, \"positive_success\": true, \"rejected_controls\": [1-9][0-9]*, \"shard\": \"${gbb_docs_control_shard}/32\", \"target\": \"docs\"")
+    "\"mode\": \"self-test\", \"negative_controls\": [1-9][0-9]*, \"positive_success\": true, \"rejected_controls\": [1-9][0-9]*, \"shard\": \"${gbb_docs_control_shard}/${gbb_docs_control_shard_count}\", \"target\": \"docs\"")
   gbb_add_v02_contract(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} 90
     "${gbb_docs_control_shard_regex}"
-    verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} 32)
+    verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} ${gbb_docs_control_shard_count})
 endforeach()
+# The four-worker run identified this small subset as the only shards near the timeout. Reserve all
+# four CTest slots for them; the rest of the docs controls remain parallel.
+set(gbb_docs_control_slow_tests
+  v02_adoption_docs_controls
+  phase23_docs_controls_shard_02
+  phase23_docs_controls_shard_16
+  phase23_docs_controls_shard_62
+  phase23_docs_controls_shard_65
+  phase23_docs_controls_shard_74
+  phase23_docs_controls_shard_75
+  phase23_docs_controls_shard_92
+  phase23_docs_controls_shard_93
+  phase23_docs_controls_shard_94
+  phase23_docs_controls_shard_109
+  phase23_docs_controls_shard_127
+  phase23_docs_controls_shard_170
+  phase23_docs_controls_shard_171
+  phase23_docs_controls_shard_172
+  phase23_docs_controls_shard_174
+)
+set_tests_properties(${gbb_docs_control_slow_tests} PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_support_ledger 60
   [=[support-ledger static pass version=0\.[0-9]+\.[0-9]+ cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)
