@@ -12,6 +12,11 @@ CTEST_PREFIX = '"$ctest_bin" --test-dir '
 FLOOR_VERSION_ASSIGNMENT = "readonly version=3.25.3"
 CMAKE_BIN_ASSIGNMENT = 'cmake_bin="$temp_root/cmake-${version}-linux-x86_64/bin/cmake"'
 CTEST_BIN_ASSIGNMENT = 'ctest_bin="$temp_root/cmake-${version}-linux-x86_64/bin/ctest"'
+TOOLCHAIN_ASSIGNMENTS = (
+    FLOOR_VERSION_ASSIGNMENT,
+    CMAKE_BIN_ASSIGNMENT,
+    CTEST_BIN_ASSIGNMENT,
+)
 INVENTORY_PREFIX = 'bash "$repo_root/.github/scripts/verify-test-inventory.sh"'
 BASE_BUILD = '"$repo_root/build-cmake-3.25.3"'
 RELOCATED_BUILD = '"$repo_root/build-cmake-3.25.3-relocated"'
@@ -86,16 +91,23 @@ def commented_out(text: str, command: str) -> str:
 def validate(text: str) -> None:
     if any(
         active_occurrences(text, assignment) != 1
-        for assignment in (
-            FLOOR_VERSION_ASSIGNMENT,
-            CMAKE_BIN_ASSIGNMENT,
-            CTEST_BIN_ASSIGNMENT,
-        )
+        for assignment in TOOLCHAIN_ASSIGNMENTS
     ):
         raise Reject("floor-toolchain-not-pinned")
     if any(
         active_occurrences(text, assignment) != 1
         for assignment in ("readonly version=", "cmake_bin=", "ctest_bin=")
+    ):
+        raise Reject("floor-toolchain-not-pinned")
+    assignment_lines = [
+        line.strip()
+        for line in text.splitlines()
+        if not line.lstrip().startswith("#")
+        and any(marker in line for marker in ("version=", "cmake_bin=", "ctest_bin="))
+    ]
+    if (
+        assignment_lines != list(TOOLCHAIN_ASSIGNMENTS)
+        or active_word_occurrences(text, "version") != 9
     ):
         raise Reject("floor-toolchain-not-pinned")
     ctest_calls = active_commands(text, CTEST_PREFIX)
@@ -174,7 +186,12 @@ def validate(text: str) -> None:
         raise Reject("no-host-clock-result-missing")
     if len(ctest_calls) != 3:
         raise Reject("full-ctest-not-unique-relocated")
-    if active_occurrences(text, "ctest_bin") != 5 or active_word_occurrences(text, "ctest") != 2:
+    if active_word_occurrences(text, "cmake_bin") != 8:
+        raise Reject("floor-toolchain-not-pinned")
+    if (
+        active_word_occurrences(text, "ctest_bin") != 5
+        or active_word_occurrences(text, "ctest") != 2
+    ):
         raise Reject("full-ctest-not-unique-relocated")
 
 
@@ -214,6 +231,35 @@ def self_test(source: str) -> int:
                 raise Reject(f"duplicate-{label}-assignment-control-wrong-reason:{error}") from error
         else:
             raise Reject(f"duplicate-{label}-assignment-accepted")
+        controls += 1
+
+    for label, assignment, spoof in (
+        (
+            "version echo",
+            FLOOR_VERSION_ASSIGNMENT,
+            "printf '%s\\n' 'readonly version=3.25.3'; version=3.26.0; readonly version",
+        ),
+        (
+            "cmake echo",
+            CMAKE_BIN_ASSIGNMENT,
+            "printf '%s\\n' 'cmake_bin=\"$temp_root/cmake-${version}-linux-x86_64/bin/cmake\"'; "
+            "printf -v cmake_bin '%s' /usr/bin/cmake",
+        ),
+        (
+            "ctest echo",
+            CTEST_BIN_ASSIGNMENT,
+            "printf '%s\\n' 'ctest_bin=\"$temp_root/cmake-${version}-linux-x86_64/bin/ctest\"'; "
+            "printf -v ctest_bin '%s' /usr/bin/ctest",
+        ),
+    ):
+        spoofed = source.replace(assignment, spoof, 1)
+        try:
+            validate(spoofed)
+        except Reject as error:
+            if str(error) != "floor-toolchain-not-pinned":
+                raise Reject(f"{label}-control-wrong-reason:{error}") from error
+        else:
+            raise Reject(f"{label}-accepted")
         controls += 1
 
     for build in ("build-cmake-3.25.3", "build-cmake-3.25.3-relocated"):
