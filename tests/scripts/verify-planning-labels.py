@@ -121,6 +121,38 @@ def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str]
     return build_tokens == [_norm(build_value)]
 
 
+def is_release_notes_v04_output_only(name: str, command: list[str], labels: list[str],
+                                    source: str, build: str) -> bool:
+    """Allow the v0.4 planning check to write its one fixed output under build/."""
+    if name != "release_notes_v04" or "planning" not in labels or "v02" not in labels:
+        return False
+    if len(command) != 6 or Path(command[0]).stem.lower() != "cmake":
+        return False
+    expected_regex = "-DGBB_EXPECT_REGEX=release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+"
+    if command[2] != "-DGBB_EXPECT_CODE=0" or command[3] != expected_regex:
+        return False
+    expected_exit = _norm(str(Path(source) / "tests/expect_exit.cmake"))
+    if command[4] != "-P" or _norm(command[5]) != expected_exit or not command[1].startswith("-DGBB_CMD="):
+        return False
+    wrapped = command[1][len("-DGBB_CMD="):].split(";")
+    expected_script = _norm(str(Path(source) / "tests/scripts/verify-support-ledger.py"))
+    expected_output = _norm(str(Path(build) / "release-notes-v0.4.0-preface.md"))
+    if len(wrapped) != 12 or wrapped[1] != "-I" or _norm(wrapped[2]) != expected_script:
+        return False
+    try:
+        if Path(wrapped[0]).resolve(strict=True) != Path(sys.executable).resolve(strict=True):
+            return False
+    except (OSError, RuntimeError):
+        return False
+    if wrapped[3:7] != ["--render-release-notes-preface", "--claims-version", "0.4.0", "--rev"]:
+        return False
+    if not re.fullmatch(r"[0-9a-f]{40}", wrapped[7]) \
+            or wrapped[8:] != ["--repo", _norm(source), "--output", expected_output]:
+        return False
+    build_tokens = [_norm(token) for token in _tokens(command) if _under(token, build)]
+    return build_tokens == [expected_output]
+
+
 def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
     planning = 0
     for test in tests:
@@ -134,7 +166,9 @@ def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
         labelled = "planning" in labels
         if labelled:
             planning += 1
-            if uses_build_tree(command, build) and not is_phase22_inventory_reader(name, command, labels, source, build):
+            if uses_build_tree(command, build) \
+                    and not is_phase22_inventory_reader(name, command, labels, source, build) \
+                    and not is_release_notes_v04_output_only(name, command, labels, source, build):
                 raise Reject(f"REJECT planning-test-needs-build: {name} is labelled planning but its command references the build directory")
         elif is_planning_reader(command, source, build):
             raise Reject(f"REJECT unlabelled-planning-reader: {name} reads .planning/ or AGENTS.md but lacks the planning label")
@@ -171,6 +205,10 @@ def self_test() -> int:
         evidence = source / "tests/scripts" / "verify-diagnostic-evidence.py"
         evidence.parent.mkdir(parents=True, exist_ok=True)
         evidence.write_text("open('.planning/STATE.md')\n", encoding="utf-8")
+        ledger = source / "tests/scripts" / "verify-support-ledger.py"
+        ledger.write_text("open('.planning/STATE.md')\n", encoding="utf-8")
+        expect_exit = source / "tests" / "expect_exit.cmake"
+        expect_exit.write_text("message(STATUS 'ok')\n", encoding="utf-8")
 
         def test(name: str, command: list[str], labels: list[str] | None = None) -> dict:
             props = [{"name": "LABELS", "value": labels}] if labels else []
@@ -190,6 +228,18 @@ def self_test() -> int:
             str(source), "--source-revision", "a" * 40,
             "--build-dir", str(build).replace("/", "\\"),
         ]
+        release_notes_regex = "-DGBB_EXPECT_REGEX=release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+"
+
+        def release_notes_command(output: Path) -> list[str]:
+            wrapped = [py, "-I", str(ledger), "--render-release-notes-preface", "--claims-version", "0.4.0",
+                       "--rev", "a" * 40, "--repo", str(source), "--output", str(output)]
+            return ["cmake", "-DGBB_CMD=" + ";".join(wrapped), "-DGBB_EXPECT_CODE=0", release_notes_regex,
+                    "-P", str(expect_exit)]
+
+        release_notes_writer = release_notes_command(build / "release-notes-v0.4.0-preface.md")
+        release_notes_wrong_output = release_notes_command(build / "unexpected.md")
+        release_notes_extra_artifact = list(release_notes_writer)
+        release_notes_extra_artifact[1] += f";{build}/gabbaboy-runner"
         wrong_windows_build = str(build / "unexpected").replace("/", "\\")
         cases = [
             ("unlabelled test reading .planning/ is rejected", [test("a", [py, str(reader)])], "unlabelled-planning-reader"),
@@ -246,6 +296,16 @@ def self_test() -> int:
                    [str(fake_python), "-I", str(evidence), "--check", "--repo-root", str(source),
                     "--source-revision", "a" * 40, "--build-dir", str(build)],
                    ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("the exact v0.4 notes renderer may write its fixed output under build",
+             [test("release_notes_v04", release_notes_writer, ["v02", "planning"])], None),
+            ("the release-notes output exception cannot be reused by another test",
+             [test("other_release_notes", release_notes_writer, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output exception rejects an unexpected output path",
+             [test("release_notes_v04", release_notes_wrong_output, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output exception cannot smuggle a built executable",
+             [test("release_notes_v04", release_notes_extra_artifact, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output renderer must remain in the planning lane",
+             [test("release_notes_v04", release_notes_writer, ["v02"])], "unlabelled-planning-reader"),
         ]
         for label, tests, expected in cases:
             try:

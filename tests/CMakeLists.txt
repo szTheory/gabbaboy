@@ -1486,7 +1486,7 @@ gbb_add_v02_contract(v02_support_ledger 60
 gbb_add_v02_contract(v02_support_ledger_controls 120
   [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
-set_tests_properties(v02_support_ledger v02_support_ledger_controls PROPERTIES LABELS "planning")
+set_tests_properties(v02_support_ledger v02_support_ledger_controls PROPERTIES LABELS "v02;planning")
 # Phase 16 D-28/D-29 (16-06): the v0.2.0 ledger is frozen to the tag blob plus the one disclosed #93 block, and README links the
 # ledger that this tree's version selects. The version in the binding regex comes from the project VERSION at configure time, so
 # the same test follows the tree to v0.2.1 without an edit; the freeze reads the v0.2.0 tag, which every full-suite job fetches.
@@ -5130,6 +5130,16 @@ gbb_add_ledger_contract(support_claims_controls
   [=[support-claims controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-claims --rev "${GBB_STATE_SOURCE_REV}")
 unset(GBB_LEDGER_MIN)
+# These immutable ledger/review contracts read version-bound planning evidence. Preserve their v0.2
+# grouping and include them in the unbuilt planning lane. The v0.4 note generator's only build-tree
+# path is its exact output file, checked by verify-planning-labels.py.
+set_tests_properties(
+  ledger_freeze support_ledger_binding ledger_freeze_controls support_ledger_binding_controls
+  release_disclosure_generator release_disclosure_controls
+  phase23_review_evidence_contract phase23_review_evidence_controls
+  support_claims support_claims_v04 support_claims_v04_controls release_notes_v04
+  support_ledger_v04_tracer support_claims_controls
+  PROPERTIES LABELS "v02;planning")
 add_test(NAME adoption_claim_boundaries_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-adoption.py"
     --self-test-claim-boundaries --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
