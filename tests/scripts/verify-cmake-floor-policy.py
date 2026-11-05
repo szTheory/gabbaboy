@@ -19,7 +19,7 @@ TOOLCHAIN_ASSIGNMENTS = (
 )
 UNSAFE_TOOL_OVERRIDE = re.compile(
     r"\b(?:(?:builtin\s+)?printf\s+-v|eval|declare|typeset|local|export|read|source)\b"
-    r"|(?:^|[;&|]\s*)\.\s+"
+    r"|(?<![\w/])\.\s+\S"
 )
 INVENTORY_PREFIX = 'bash "$repo_root/.github/scripts/verify-test-inventory.sh"'
 BASE_BUILD = '"$repo_root/build-cmake-3.25.3"'
@@ -300,6 +300,11 @@ def self_test(source: str) -> int:
             '. <(printf "%s=%s\\n" "cmake_bin" /usr/bin/cmake)',
         ),
         ("helper source", '. "$temp_root/override-tools.sh"'),
+        ("indented helper source", '  . "$temp_root/override-tools.sh"'),
+        ("subshell helper source", '( . "$temp_root/override-tools.sh" )'),
+        ("command helper source", 'command . "$temp_root/override-tools.sh"'),
+        ("builtin helper source", 'builtin . "$temp_root/override-tools.sh"'),
+        ("conditional helper source", 'if . "$temp_root/override-tools.sh"; then :; fi'),
     ):
         overridden = source + "\n" + override + "\n"
         try:
