@@ -1462,10 +1462,24 @@ gbb_add_v02_contract(v02_game_claims_controls 60
 gbb_add_v02_contract(v02_adoption_docs 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "docs"]=]
   verify-v02-adoption.py --check docs)
-# This self-test took 111 seconds locally at the prior 120-second bound.
-gbb_add_v02_contract(v02_adoption_docs_controls 180
-  [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "docs"]=]
-  verify-v02-adoption.py --self-test docs)
+# The complete docs self-test runs every production CLI case, each reading the full public-doc set and
+# multi-megabyte support ledger. Keep every case, but distribute calls deterministically so each CTest
+# stays within the existing per-test timeout budget. The shared release-note controls run once in shard 0.
+gbb_add_v02_contract(v02_adoption_docs_controls 90
+  [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "shard": "0/32", "target": "docs"]=]
+  verify-v02-adoption.py --self-test docs --shard 0 32)
+foreach(gbb_docs_control_shard RANGE 1 31)
+  if(gbb_docs_control_shard LESS 10)
+    set(gbb_docs_control_shard_suffix "0${gbb_docs_control_shard}")
+  else()
+    set(gbb_docs_control_shard_suffix "${gbb_docs_control_shard}")
+  endif()
+  set(gbb_docs_control_shard_regex
+    "\"mode\": \"self-test\", \"negative_controls\": [1-9][0-9]*, \"positive_success\": true, \"rejected_controls\": [1-9][0-9]*, \"shard\": \"${gbb_docs_control_shard}/32\", \"target\": \"docs\"")
+  gbb_add_v02_contract(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} 90
+    "${gbb_docs_control_shard_regex}"
+    verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} 32)
+endforeach()
 gbb_add_v02_contract(v02_support_ledger 60
   [=[support-ledger static pass version=0\.[0-9]+\.[0-9]+ cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)

@@ -6,10 +6,10 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: Plan 23-04 T2: correct the review-evidence CTest output regex, then reissue exact-source reports and rerun the direct gate and focused CTests.
-last_updated: "2026-11-04T22:49:11.000Z"
-last_activity: "2026-11-04: The three-report gate passed at f0c78ef5 and 17/18 focused CTests passed; the remaining review-evidence contract CTest rejected valid output because CMake does not support the {12} counted-repeat syntax. Correct the registration and its self-test, then re-review the new exact source."
-state_head: f0c78ef59ae04765775404d7c341544f52cefb12
+stopped_at: Plan 23-04 T2: shard the exhaustive docs CLI controls within per-test budgets, reissue all exact-source reports, and rerun report, focused, and qualification gates.
+last_updated: "2026-11-05T00:19:42.000Z"
+last_activity: "2026-11-04: The full 50-test Plan 23-04 T2 focused selection passed after deterministic docs-control sharding; configure/build and the base-aware test-budget audit passed. The implementation must now be committed and reviewed at its exact new source before T3."
+state_head: 3e2772de83c365e0a395d516096d02769d2c47ea
 progress:
   total_phases: 4
   completed_phases: 3
@@ -25,7 +25,7 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Plan 23-04 T2: fix the CMake review-evidence output regex, preserve the passed matcher correction, reissue exact-source reports, and finish the direct report/focused CTest gates.
+**Current focus:** Plan 23-04 T2: complete deterministic docs-control CTest sharding, then reissue the three reports against the exact implementation commit and pass the direct report and focused-test gates.
 
 ## Current Position
 
@@ -35,13 +35,13 @@ Phase: GB-23 (Qualified v0.4.0 Release) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
 Status: Executing Phase 23
-Last activity: 2026-11-04: Owner approved D-153 Unicode punctuation flanking and D-154 bounded reference-label candidates after exact-source reviews found an emoji emphasis bypass and quadratic nested-bracket scans at 6876fab0; docs and release-note self-tests now pass, with exact-source review and CTest gates remaining.
+Last activity: 2026-11-05: The exhaustive docs controls now pass across all 32 deterministic CTest shards; the full 50-test focused selection, configure/build, and timeout-budget audit passed. The reports at the current committed head still precede this test-harness amendment, so commit the final implementation, reissue all three exact-source reviews, and rerun the direct report gate before T3. A prior full-suite attempt exposed sandbox-denied temporary Git worktree operations; repeat full qualification with the required filesystem access after T2 review.
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
 ## Phase 23 Execution Handoff
 
-Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The D-144 through D-154 matcher corrections pass their source-bound checks and exact-source reviews. The direct three-report gate passed at f0c78ef5; 17/18 focused CTests passed, with only the review-evidence contract output regex failing on unsupported CMake `{12}` syntax. Correct that test matcher and its self-test, reissue all reports against the updated source, and rerun the gate and focused CTests. Keep REL-01 and all Pending evidence limits. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The D-144 through D-154 matcher corrections passed source-bound checks and exact-source review; the CMake regex correction and reissued reports passed their direct gate. Afterward, the full docs self-test was distributed across 32 deterministic shards with no controls removed; the configure/build, budget check, and full 50-test focused selection passed. Commit this harness amendment, reissue all three reports against that exact implementation, then pass the direct gate and complete final-head qualification. Keep REL-01 and all Pending evidence limits. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Performance Metrics
 
@@ -87,13 +87,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-04T16:26:14.783Z
-**Stopped at:** Plan 23-04 T2 review-evidence CTest output regex correction and exact-source re-review; rerun the direct report gate and focused CTests.
+**Last session:** 2026-11-05T00:19:42.000Z
+**Stopped at:** Plan 23-04 T2 deterministic docs-control sharding passed its full 50-test focused selection; commit the implementation, reissue exact-source reviews and rerun the direct gate.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. D-144 through D-154 matcher corrections pass local checks; the direct report gate passed, and 17/18 focused CTests passed. The only failing test is the review-evidence contract's CMake output regex; replace unsupported counted-repeat syntax, re-review the exact updated source, and rerun the direct gate and focused tests. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The matcher corrections, regex fix, and latest 50-test focused selection have passed their available checks; the sharded docs tests and timeout-budget audit also pass. The most recent reports predate the test-harness amendment, so commit the final implementation, reissue the three exact-source reviews, pass the direct report gate, and continue to T3 qualification. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Decisions
 

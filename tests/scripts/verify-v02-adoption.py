@@ -2358,12 +2358,26 @@ def expect_reject(arguments: list[str], reason: str) -> None:
             f"negative-control-wrong-reason:{reason}:{result.stderr.strip()}")
 
 
+DOCS_SELF_TEST_SHARD: tuple[int, int] | None = None
+DOCS_SELF_TEST_STATS = {"calls": 0, "positive": 0, "negative": 0}
+
+
 def child_result(root: Path, mode: str, reason: str | None = None) -> None:
+    if DOCS_SELF_TEST_SHARD is not None:
+        shard, shard_count = DOCS_SELF_TEST_SHARD
+        call_index = DOCS_SELF_TEST_STATS["calls"]
+        DOCS_SELF_TEST_STATS["calls"] += 1
+        if call_index % shard_count != shard:
+            return
     arguments = ["--check", mode, "--root", str(root)]
     if reason is None:
         expect_pass(arguments)
+        if DOCS_SELF_TEST_SHARD is not None:
+            DOCS_SELF_TEST_STATS["positive"] += 1
     else:
         expect_reject(arguments, reason)
+        if DOCS_SELF_TEST_SHARD is not None:
+            DOCS_SELF_TEST_STATS["negative"] += 1
 
 
 def run_self_test_game(root: Path) -> tuple[int, int]:
@@ -4002,12 +4016,24 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
     # The fixed docs/notice inventory includes six D-153/D-154 negatives.
     controls = len(mutations) + 126 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
-    notes_controls, notes_rejected = run_self_test_release_notes()
-    print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
+    if DOCS_SELF_TEST_SHARD is None or DOCS_SELF_TEST_SHARD[0] == 0:
+        notes_controls, notes_rejected = run_self_test_release_notes()
+    else:
+        # The complete shard set includes this once with shard 0; repeating it in
+        # every shard would multiply unrelated release-note work without adding coverage.
+        notes_controls = 0
+        notes_rejected = 0
+    if DOCS_SELF_TEST_SHARD is None:
+        print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
+    else:
+        shard, shard_count = DOCS_SELF_TEST_SHARD
+        selected = DOCS_SELF_TEST_STATS["positive"] + DOCS_SELF_TEST_STATS["negative"]
+        print(f"adoption-doc-controls shard={shard}/{shard_count} selected={selected}")
     return controls + notes_controls, rejected + notes_rejected
 
 
 def main() -> int:
+    global DOCS_SELF_TEST_SHARD, DOCS_SELF_TEST_STATS
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", choices=("game", "docs"))
@@ -4017,8 +4043,18 @@ def main() -> int:
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--repo", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--rev", help="full immutable commit id for claim-boundary evidence")
+    parser.add_argument("--shard", nargs=2, type=int, metavar=("INDEX", "COUNT"),
+                        help="run one deterministic slice of the docs self-test CLI checks")
     group.add_argument("--self-test-claim-boundaries", action="store_true")
     args = parser.parse_args()
+    if args.shard is not None:
+        if args.self_test != "docs":
+            parser.error("--shard is valid only with --self-test docs")
+        shard, shard_count = args.shard
+        if shard < 0 or shard_count < 2 or shard >= shard_count:
+            parser.error("--shard requires 0 <= INDEX < COUNT and COUNT >= 2")
+        DOCS_SELF_TEST_SHARD = (shard, shard_count)
+        DOCS_SELF_TEST_STATS = {"calls": 0, "positive": 0, "negative": 0}
     try:
         if args.self_test_release_notes_v04:
             positives, controls = run_self_test_release_notes_v04(args.repo.resolve(strict=True))
@@ -4067,16 +4103,30 @@ def main() -> int:
         else:
             checks = check_docs(root)
             negative_controls, rejected_controls = run_self_test_docs(root)
+            if DOCS_SELF_TEST_SHARD is not None:
+                shard, shard_count = DOCS_SELF_TEST_SHARD
+                calls = DOCS_SELF_TEST_STATS["calls"]
+                expected = 0 if shard >= calls else 1 + (calls - 1 - shard) // shard_count
+                positive = DOCS_SELF_TEST_STATS["positive"]
+                negative = DOCS_SELF_TEST_STATS["negative"]
+                require(expected > 0 and positive > 0 and negative > 0 and positive + negative == expected,
+                        "docs-self-test-shard-coverage-invalid")
+                negative_controls = negative
+                rejected_controls = negative
         require(negative_controls > 0 and negative_controls == rejected_controls,
                 "self-test-control-inventory-invalid")
-        print(json.dumps({
+        summary = {
             "mode": "self-test",
             "target": args.self_test,
             "checks": checks,
             "negative_controls": negative_controls,
             "rejected_controls": rejected_controls,
             "positive_success": True,
-        }, sort_keys=True))
+        }
+        if DOCS_SELF_TEST_SHARD is not None:
+            shard, shard_count = DOCS_SELF_TEST_SHARD
+            summary["shard"] = f"{shard}/{shard_count}"
+        print(json.dumps(summary, sort_keys=True))
         return 0
     except (ContractError, OSError, ValueError) as error:
         print("verify-v02-adoption fail: " + str(error), file=sys.stderr)

@@ -58,6 +58,37 @@ core_linkage_controls	180	0.4	GB-CI-004	Lower when a measured run is under half 
 dmg_baseline	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 libbet_install_tree	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 mooneye_mbc_required_suite	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+phase23_docs_controls_shard_01	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_02	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_03	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_04	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_05	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_06	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_07	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_08	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_09	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_10	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_11	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_12	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_13	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_14	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_15	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_16	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_17	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_18	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_19	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_20	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_21	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_22	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_23	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_24	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_25	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_26	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_27	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_28	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_29	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_30	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_31	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
 player_cgb_cli	240	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
 player_cgb_hdma_smoke	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
 player_cgb_hdma_smoke_no_transfer	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
@@ -70,6 +101,8 @@ player_cgb_speed_smoke_mutant_ppu_follows_cpu	120	0.4	GB-CI-004	Lower when a mea
 player_cgb_speed_smoke_wrong_sha	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
 player_session_script_no_input	300	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
 preview_package_smoke	180	0.4	16-04	Lower after measured Windows and macOS package builds stay comfortably under the 60 s default
+release_notes_v04_controls	90	0.4	D-069	Keep all causal release-note controls; lower to 60 s when the complete set has measured headroom.
+release_version_v04_controls	90	0.4	D-069	Keep all causal version-window controls; lower to 60 s when the complete set has measured headroom.
 rtc3test_basic	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 rtc3test_negative_control	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
 rtc3test_range	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s

@@ -1137,6 +1137,15 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Source:** Phase 21 PR #140, push run `41554953994`, pull-request run `41554959166`; fixture-reproduction runs `41554954013` and `41554959121`.
 - **Status:** Follow-up recorded; no CI workflow changed in Phase 21.
 
+### GB-CI-023 / 2026-11-04 / Shard exhaustive documentation controls under their per-test timeout
+
+- **Cause and evidence:** The Phase 23 docs self-test passed when run directly but exceeded the 180-second CTest bound. Each accepted or mutated case launches the production CLI, which reparses the complete public-document set and support ledger. The first phase-wide run also encountered sandbox denials in unrelated controls that create temporary Git worktrees.
+- **Remedy:** Keep the unsharded self-test behavior, distribute its existing CLI cases deterministically over registered CTest shards, assert each shard's selected-call coverage plus positive and negative cases, and run the shared release-note sweep once across the complete shard set. Keep every shard in the expected-test inventory and under an explicit D-069 budget row.
+- **Applies when:** A mutation-heavy CLI harness repeatedly parses large shared inputs and the test budget is per-test rather than per-suite.
+- **Verification:** Configure/build and the base-aware timeout-budget checker passed; the complete 32-shard docs set and all paired T2 gates passed in a 50/50 focused CTest selection. The full Phase 23 qualification suite remains required after the source-bound reports are reissued.
+- **Source:** `tests/scripts/verify-v02-adoption.py`, `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `tests/ci/test-budget-allowlist`, and Phase 23 T2 rescope.
+- **Status:** Harness correction implemented and focused-gate verified; final exact-source reviews remain pending. No docs control was removed.
+
 ### GB-CI-022 / 2026-11-04 / Use CMake-supported regex syntax in CTest output contracts
 
 - **Cause and evidence:** The Phase 23 review-evidence checker returned success and its direct gate passed, but the registered CTest rejected its success line because the expected regex used `{12}`. A minimal CMake probe did not match `[0-9a-f]{12}` and did match `[0-9a-f]+`; CMake's regex engine does not support that counted-repeat form.
