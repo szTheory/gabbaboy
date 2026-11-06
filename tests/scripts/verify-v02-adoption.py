@@ -1896,14 +1896,73 @@ def sha256_file(path: Path) -> str:
 
 
 def fixture_directories(root: Path) -> list[str]:
-    base = root / "fixtures"
+    root_path = root.resolve(strict=True)
     try:
+        base = (root_path / "fixtures").resolve(strict=True)
+        try:
+            base.relative_to(root_path)
+        except ValueError as error:
+            raise ContractError("fixture-inventory-outside-root") from error
+        if not base.is_dir():
+            raise ContractError("fixture-inventory-unavailable")
         names = sorted(path.name for path in base.iterdir()
                        if (path / "manifest.json").is_file())
-    except OSError as error:
+    except ContractError:
+        raise
+    except (OSError, RuntimeError, ValueError) as error:
         raise ContractError("fixture-inventory-unavailable") from error
     require(names, "fixture-inventory-empty")
+    for name in names:
+        confined_source_file(root_path, f"fixtures/{name}/manifest.json",
+                             "fixture-inventory-outside-root",
+                             "fixture-inventory-unavailable")
     return names
+
+
+def safe_relative_parts(relative: str, reason: str) -> list[str]:
+    parts = relative.split("/")
+    if (not parts or any(part in {"", ".", ".."} for part in parts) or
+            Path(relative).is_absolute() or "\\" in relative):
+        raise ContractError(f"{reason}:{relative}")
+    return parts
+
+
+def confined_source_file(root: Path, relative: str, outside_reason: str,
+                         missing_reason: str) -> Path:
+    parts = safe_relative_parts(relative, outside_reason)
+    root_path = root.resolve(strict=True)
+    try:
+        target = root_path.joinpath(*parts).resolve(strict=True)
+    except FileNotFoundError as error:
+        raise ContractError(f"{missing_reason}:{relative}") from error
+    except (OSError, RuntimeError) as error:
+        raise ContractError(f"{outside_reason}:{relative}") from error
+    try:
+        target.relative_to(root_path)
+    except ValueError as error:
+        raise ContractError(f"{outside_reason}:{relative}") from error
+    if not target.is_file():
+        raise ContractError(f"{missing_reason}:{relative}")
+    return target
+
+
+def confined_copy_destination(root: Path, relative: str) -> Path:
+    parts = safe_relative_parts(relative, "self-test-copy-path-outside-root")
+    root_path = root.resolve(strict=True)
+    try:
+        destination = root_path.joinpath(*parts).resolve(strict=False)
+        destination.relative_to(root_path)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise ContractError(f"self-test-copy-path-outside-root:{relative}") from error
+    return destination
+
+
+def notice_fixture_path(root: Path, relative: str) -> Path:
+    parts = safe_relative_parts(relative, "notice-path-outside-root")
+    if len(parts) < 2 or parts[0] != "fixtures":
+        raise ContractError(f"notice-path-outside-root:{relative}")
+    return confined_source_file(root, relative, "notice-path-outside-root",
+                                "notice-path-missing")
 
 
 def check_notices(root: Path) -> int:
@@ -1924,11 +1983,14 @@ def check_notices(root: Path) -> int:
     for name in actual:
         require(name in rows, f"notice-fixture-missing:{name}")
         manifest, notice = rows[name]
-        directory = root / "fixtures" / name
-        require(sha256_file(directory / "manifest.json") == manifest,
+        manifest_path = confined_source_file(
+            root, f"fixtures/{name}/manifest.json", "notice-path-outside-root",
+            f"notice-fixture-missing:{name}")
+        require(sha256_file(manifest_path) == manifest,
                 f"notice-digest-stale:{name}:manifest")
-        license_path = directory / "LICENSE.txt"
-        require(license_path.is_file(), f"notice-license-file-missing:{name}")
+        license_path = confined_source_file(
+            root, f"fixtures/{name}/LICENSE.txt", "notice-path-outside-root",
+            f"notice-license-file-missing:{name}")
         require(sha256_file(license_path) == notice,
                 f"notice-digest-stale:{name}:notice")
         checks += 3
@@ -1937,8 +1999,7 @@ def check_notices(root: Path) -> int:
         checks += 1
     # The prose table digests are bound to bytes too, not only the digest table.
     for match in visible_notice_matches(NOTICE_INLINE_DIGEST, notice_text):
-        target = root / match["path"]
-        require(target.is_file(), f"notice-path-missing:{match['path']}")
+        target = notice_fixture_path(root, match["path"])
         require(sha256_file(target) == match["digest"],
                 f"notice-digest-stale:{match['path']}")
         checks += 1
@@ -2419,17 +2480,21 @@ def run_self_test_game(root: Path) -> tuple[int, int]:
 
 def copy_inputs(root: Path, target: Path) -> None:
     """Copy exactly the bytes the docs checker reads into an isolated root."""
+    target.mkdir(parents=True, exist_ok=True)
     relatives = set(PUBLIC_SURFACES) | {HEADER} | set(INTERNAL_SYMBOLS.values())
     for name in fixture_directories(root):
         relatives.add(f"fixtures/{name}/manifest.json")
         relatives.add(f"fixtures/{name}/LICENSE.txt")
     notice_text = prose(read_document(root, NOTICES), collapse=False)
     for match in visible_notice_matches(NOTICE_INLINE_DIGEST, notice_text):
+        notice_fixture_path(root, match["path"])
         relatives.add(match["path"])
     for relative in sorted(relatives):
-        source = root / relative
-        destination = target / relative
+        source = confined_source_file(root, relative, "self-test-input-outside-root",
+                                      "self-test-input-missing")
+        destination = confined_copy_destination(target, relative)
         destination.parent.mkdir(parents=True, exist_ok=True)
+        destination = confined_copy_destination(target, relative)
         shutil.copyfile(source, destination)
 
 
@@ -3032,9 +3097,37 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
     rejected = 0
     rejected_reasons: list[str] = []
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-docs-") as temp:
-        test_root = Path(temp)
+        test_root = Path(temp).resolve(strict=True)
         copy_inputs(root, test_root)
         child_result(test_root, "docs")
+
+        notice_path = test_root / NOTICES
+        notice_original = read_document(test_root, NOTICES)
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-docs-outside-") as outside:
+            outside_root = Path(outside).resolve(strict=True)
+            outside_file = outside_root / "digest.txt"
+            write_lf(outside_file, "safe external digest input\n")
+            escaped_path = "fixtures/" + os.path.relpath(
+                outside_file, test_root / "fixtures").replace(os.sep, "/")
+            require(NOTICE_INLINE_DIGEST.fullmatch(
+                f"`{escaped_path}`: `{sha256_file(outside_file)}`") is not None,
+                "notice-path-traversal-control-invalid")
+            write_lf(notice_path, notice_original +
+                     f"\n`{escaped_path}`: `{sha256_file(outside_file)}`\n")
+            child_result(test_root, "docs", "notice-path-outside-root")
+            rejected += 1
+            rejected_reasons.append("notice-path-outside-root")
+            link_path = test_root / "fixtures" / "phase23-notice-path-link.txt"
+            require(not link_path.exists() and not link_path.is_symlink(),
+                    "notice-symlink-control-destination-exists")
+            link_path.symlink_to(outside_file)
+            write_lf(notice_path, notice_original +
+                     f"\n`fixtures/{link_path.name}`: `{sha256_file(outside_file)}`\n")
+            child_result(test_root, "docs", "notice-path-outside-root")
+            rejected += 1
+            rejected_reasons.append("notice-path-outside-root")
+            link_path.unlink()
+        write_lf(notice_path, notice_original)
 
         readme_path = test_root / README
         readme_original = originals[README]
@@ -4024,8 +4117,54 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    # The fixed docs/notice inventory includes six D-153/D-154 negatives.
-    controls = len(mutations) + 126 + len(incomplete_html_openers)
+
+        copy_path_controls = 0
+        if DOCS_SELF_TEST_SHARD is None or DOCS_SELF_TEST_SHARD[0] == 0:
+            source_copy = test_root / "copy-source"
+            copy_inputs(root, source_copy)
+            source_copy = source_copy.resolve(strict=True)
+            outside_source = test_root / (Path(temp).name + "-copy-source.txt")
+            write_lf(outside_source, "safe copied notice input\n")
+            escaped_path = "fixtures/" + os.path.relpath(
+                outside_source, source_copy / "fixtures").replace(os.sep, "/")
+            source_notice = source_copy / NOTICES
+            source_notice_text = read_document(source_copy, NOTICES)
+            write_lf(source_notice, source_notice_text +
+                     f"\n`{escaped_path}`: `{sha256_file(outside_source)}`\n")
+            escaped_destination = (test_root / escaped_path).resolve(strict=False)
+            require(not escaped_destination.exists(),
+                    "notice-copy-traversal-control-destination-exists")
+            copied_outside_root = False
+            try:
+                copy_inputs(source_copy, test_root)
+                copied_outside_root = escaped_destination.is_file()
+            except ContractError as error:
+                require("notice-path-outside-root" in str(error),
+                        "notice-copy-traversal-control-wrong-rejection")
+                copy_path_controls += 1
+            finally:
+                escaped_destination.unlink(missing_ok=True)
+            require(not copied_outside_root,
+                    "notice-copy-path-escaped-isolated-root")
+
+            with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-copy-target-") as outside_target:
+                outside_target_root = Path(outside_target).resolve(strict=True)
+                symlink_target = test_root / "copy-symlink-target"
+                symlink_target.mkdir()
+                (symlink_target / "fixtures").symlink_to(
+                    outside_target_root, target_is_directory=True)
+                escaped_target_write = False
+                try:
+                    copy_inputs(root, symlink_target)
+                    escaped_target_write = any(outside_target_root.rglob("*"))
+                except ContractError as error:
+                    require("self-test-copy-path-outside-root" in str(error),
+                            "notice-copy-symlink-control-wrong-rejection")
+                    copy_path_controls += 1
+                require(not escaped_target_write,
+                        "notice-copy-target-symlink-escaped-isolated-root")
+    # The fixed docs/notice inventory includes the D-153 through D-155 negatives.
+    controls = len(mutations) + 128 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     if DOCS_SELF_TEST_SHARD is None or DOCS_SELF_TEST_SHARD[0] == 0:
         notes_controls, notes_rejected = run_self_test_release_notes()
@@ -4040,7 +4179,8 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         shard, shard_count = DOCS_SELF_TEST_SHARD
         selected = DOCS_SELF_TEST_STATS["positive"] + DOCS_SELF_TEST_STATS["negative"]
         print(f"adoption-doc-controls shard={shard}/{shard_count} selected={selected}")
-    return controls + notes_controls, rejected + notes_rejected
+    return (controls + notes_controls + copy_path_controls,
+            rejected + notes_rejected + copy_path_controls)
 
 
 def main() -> int:
