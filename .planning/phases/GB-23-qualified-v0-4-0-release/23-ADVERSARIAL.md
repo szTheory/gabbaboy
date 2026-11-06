@@ -1,109 +1,73 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** `0a7b2b37644f20e43da813b67561587bbd0f86e5`
-**Scope:** Plans 23-01 through 23-04 and Plan 23-09, including immutable support claims, release-note and changelog validation, Markdown visibility, profile/source/version bindings, D-144–D-154 matcher corrections, the T2 planning-lane and provenance controls, and the CMake-floor relocated-suite policy.
-**Review posture:** I read the relevant validator, release-window, planning-label, review-evidence, phase-path, release-lifecycle, and CMake-floor policy source at the exact commit and exercised targeted mutations through production checks. No real CGB game or diagnostic fixture was fetched, built, run, or admitted. No release artifact was signed, notarized, or promoted; no hosted release evidence is claimed.
+**Reviewed implementation:** `9166ab60d25c6d246761b4aa33a0ceb35dd83f5c`
+**Role:** adversarial
+**Reviewer:** `adversarial-d155`
+**Review posture:** I inspected the exact immutable commit in a clean detached checkout, including the Plan 23-04 and D-155 diffs, the execution contract, the notice checker and its controls, the focused CTest selector, and the source-bound release/profile/version controls. I did not use the concurrently modified working tree as implementation evidence.
 
-## Results
+## Result
 
-No unresolved correctness or security issue remains in this reviewed scope. All retained findings ADV-01 through ADV-20 are fixed in full ancestor commits and have exact-source verification references below. On this exact source, the planning-label controls passed; an unmodified configured CTest inventory passed with 1,768 tests and 64 planning tests; direct fake-`cmake` and stale-existing-revision mutations rejected with `planning-test-needs-build`; and the relocated CMake-floor policy checker passed 63 controls through its registered CTest. I also verified the exact suite/filter mutation set and intended diagnostics. The path, registration, recovery, docs-shard, release-note, profile, and version-window controls passed as detailed below. I did not rerun the complete 32-shard or 50-test focused selection during this reissue. The direct real-report gate remains pending until all independent reports are committed.
+The D-155 notice-path and focused-selector defects are fixed at the reviewed commit. I found no additional correctness or security issue in the reviewed T2 scope. Historical findings ADV-01 through ADV-20 remain fixed in ancestor commits and are re-evaluated below. ADV-21 and ADV-22 record the two D-155 defects and their exact-source fixes.
 
-### Review-evidence CMake regex correction
+The production Markdown claim matcher and D-144 through D-154 parser logic are unchanged in the diff from the previous reviewed implementation. The current diff adds path confinement, the matching traversal/symlink controls, 200-way test sharding, and the focused-selector correction. I reran focused shards and the release/profile/disclosure/version/evidence controls; I did not repeat the already completed long unsharded docs self-test.
 
-The review-evidence success regex uses `[0-9a-f]+` for the checker’s 12-character implementation prefix; the former `{12}` form did not match in CMake’s regex dialect. Registration validation now counts only actual `gbb_add_v02_contract` declarations, so later `set_tests_properties` references do not look like duplicate registrations. Its self-test includes a real duplicate-declaration negative control. At this exact revision, `verify-review-evidence.py --self-test --rev 0a7b2b37644f20e43da813b67561587bbd0f86e5 --repo .` passed 33 positives and 28 controls. This validates the report contract and registration rules; the real report gate still awaits the committed report set.
+## D-155 path and selector attacks
 
-### Deterministic docs self-test shards
+The old notice checker joined inline notice paths to the repository root without checking the resolved path, and `copy_inputs()` repeated that relative path below its temporary target. The reviewed source now rejects empty, dot, parent, absolute, and backslash path components; resolves source paths and checks that they remain under the resolved repository root; and resolves destination paths both before and after creating parent directories. Notice digests must use a relative path below `fixtures/`. Fixture inventory manifests and license files receive the same source-root check.
 
-I read the exact diff from `aecf09cc02ae81bdb2047087014f1bc66b71aa06` to this implementation. The D-144–D-154 parser, matcher, deterministic shard partition, and their control definitions are unchanged; subsequent changes add the bounded planning-lane, recovery, and CMake-floor harness checks described below. Each docs child call increments the global-invocation index before applying `index % shard_count`, so for the registered count of 32 every call index is assigned to exactly one shard. The selected-count formula `1 + (calls - 1 - shard) // shard_count` gives the exact cardinality for that residue class. Each shard requires a nonempty selection with at least one successful positive and one rejected negative, and checks that the observed selected count equals the formula. The original fixed docs control-inventory check remains in place.
+I tested the production notice checker in a minimal temporary tree containing only its notice, manifests, licenses, and named digest inputs. The unmodified notice passed with 112 checks; an additional digest for an ordinary in-root license passed with 113 checks. A `fixtures/../../outside.txt` input and an in-root symlink to an external file both rejected with `notice-path-outside-root`. A normal `copy_inputs()` call copied its selected inputs. A target whose `fixtures` directory was a symlink to an external directory rejected with `self-test-copy-path-outside-root`, and the external directory remained empty. The exact-source shard-0 self-test also exercises notice traversal, a notice symlink, copy-source traversal, and a copy-target symlink; its selected production CLI baseline and negative cases passed.
 
-The release-note control function has one call site in `run_self_test_docs`; it runs when the invocation is unsharded or shard index is 0, and is skipped for indices 1–31. CMake registers exactly one shard-0 test (`v02_adoption_docs_controls`) and shards 01–31 once each. `tests/expected-tests.txt` and `tests/ci/test-budget-allowlist` each contain the same 32 registered names; all shard entries have a 90-second timeout. The configured build lists the complete set. The exact-source `verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo .` check passed with 1,768 tests and 120 budgeted rows, confirming the configured inventory and timeout ceilings agree.
+The old Plan 23-04 selector used `[0-9]{2}`, which omitted shard numbers 100–199. The reviewed selector uses `[0-9]+`. An isolated CTest project using the exact Plan selector selected all 200 intended entries (the separate shard-zero test plus numbered shards 1–199), including shards 100 and 199. CMake's registration loop covers 1–199, and each corresponding test appears exactly once in the expected inventory and the D-069 90-second budget allowlist. I also ran shard `199/200`; it passed with two selected child checks, one positive and one negative.
 
-I probed invalid boundaries (`-1/32`, `32/32`, `0/1`, and `0/0`), missing/extra values, and use with `--check docs`, the game self-test, release-note self-test, and claim-boundary self-test. Each was rejected by argparse with the corresponding shard validation diagnostic. At this exact source, shard `31/32` passed the production docs check (473 checks), selected 13 child calls, and rejected all three assigned negative controls while retaining successful positive calls. I did not repeat the other 31 shards during this reissue.
+These controls are causal. The production docs controls require the exact path-confinement diagnostic. The copy controls verify the outside destination does not appear and that a target symlink cannot receive copied files. The direct comparison against the parent source shows these checks guard the previous unchecked `root / path` and `target / relative` joins.
 
-### Planning-lane labels, source identity, and lifecycle recovery
+## Required adversarial checklist
 
-The CMake sweep preserves the existing `v02` labels while adding `planning` to the 14 ledger/review test registrations identified in the rescope. The two `v02_support_ledger` checks receive their own planning label assignment. The one output-producing exception is narrowly recognized as `release_notes_v04`, with the exact registered wrapper, Python interpreter, script, flags, expected success expression, and fixed `release-notes-v0.4.0-preface.md` output path. The classifier gets its source revision from the unique configured `phase23_review_evidence_contract` command and its outer CMake identity from `CMakeCache.txt`. The configured revision is this exact reviewed SHA. The planning-label self-test passed 27 controls; direct production-judge mutations replacing the outer command with an executable whose basename is exactly `cmake`, and replacing `--rev` with existing commit `aecf09cc02ae81bdb2047087014f1bc66b71aa06`, both failed with the intended `planning-test-needs-build` diagnostic. The unmodified configured inventory passed as `tests=1768 planning=64`.
+| Attack | Exact-source result |
+|---|---|
+| Omit or swap candidate-specific reasons; claim a candidate was built/run, admitted, or supplied game evidence | Rejected by the v0.4 support-claims and release-note controls with candidate-specific diagnostics; accepted renderer/profile baselines are paired with each mutation. |
+| Present metadata as executed diagnostics | Rejected as `release-notes-metadata-as-diagnostic`; the 513 named entries remain metadata and the baseline keeps seven unresolved gates and zero executed/admitted real fixtures. |
+| Omit or contradict Pending statuses | Promoted rows and contradictory completion prose are rejected; the valid Pending wording passes. |
+| Hide or contradict disclosures | Comment-only, inline/fenced code, nested container code, and hidden raw-HTML cases reject; visible renderer-built clauses pass. Rights-scope outcomes cannot be restated as license prohibitions. |
+| Use stale profile, source, version, review, or rehearsal facts | The immutable v0.4 profile self-test and version-window/version-v0.4 controls reject stale or mismatched inputs; exact-source accepted counterparts pass. |
+| Rewrite historical ledger bytes or alter its reviewed window | The disclosure self-test binds tagged ledger bytes to their tag/generator output; version-window controls reject a historical ledger mutation after review. |
+| Promote signing, notarization, publication, or platform support | The release-note controls reject each false promotion with its specific claim diagnostic while accepting the explicit unsigned, unpublished, and scoped-platform limits. |
+| Reopen every D-144–D-154 case | The exact-source release-note controls and the existing source-bound docs controls retain the paired parser, invisible-character/reference, hard-break, emphasis/link-label, delimiter-complexity, Unicode P/S, and bounded-label cases. Their matcher code is unchanged by D-155. |
+| Escape notice input or self-test copy roots; omit higher-numbered focused shards | Current traversal/symlink controls reject the path escapes; the corrected CTest selector and inventory include every numbered shard through 199. |
 
-The added phase-path exceptions remain count-pinned and justified by immutable Git-object reads or disposable committed fixtures: four occurrences in `verify-support-ledger.py`, ten in `verify-review-evidence.py`, and four in `support-claims-v0.4.json`. The exact-source phase-path check passed across 598 tracked text files with 12 allowlisted files, and its self-test rejected all 19 weakening controls. The review-evidence self-test above confirms duplicate declarations are detected after label properties are added without mistaking those properties for registrations.
+For each direct release-note mutation, the test helper first accepts the valid renderer-built baseline, then requires the mutant to fail for its expected reason. The immutable profile, version-window, disclosure, and review-evidence suites also pair accepted records with targeted rejected mutations. No real game or diagnostic fixture was fetched, built, run, or admitted; no release was signed, published, or promoted. REL-01 remains Pending.
 
-The post-tag recovery source keeps the historical v0.3 tag input separate from the pinned adoption checker at `aecf09cc02ae81bdb2047087014f1bc66b71aa06`. The corrected checker expects 24 checks for each of four accepted original/repaired-note paths and an aggregate of 97 adoption checks. The exact-source recovery self-test passed 99 negative controls and 12 positives. No real tag, release, asset, or hosted service was accessed.
+## Verification evidence
 
-### CMake-floor relocated-suite policy
+All commands below ran against the clean checkout at the reviewed SHA. Python 3.13 was used for the complete control scripts because the system `python3` is 3.9; the configured Phase 23 build selects Python 3.14.
 
-The floor script retains the pinned CMake archive verification, the six early base-tree adapter checks, and the explicit base-tree `no_host_clock` result. It installs and relocates the prefix, configures/builds the relocated tree, then runs one unfiltered full CTest suite there and validates the JUnit output against `tests/expected-tests.txt` with `--installed`. The former full suite run against the pre-install tree is removed. The policy checker requires active install/move/configure/build/CTest/inventory commands in order, exactly three CTest invocations (the two base-tree focused checks and the relocated full suite), and the exact installed-inventory report.
+- `verify-v02-adoption.py --self-test docs --repo . --root . --shard 0 200`: passed; shard `0/200`, four selected child checks, 473 reported checker checks, two selected negative CLI controls rejected. The shard also ran D-155's source-copy and destination-symlink assertions.
+- `verify-v02-adoption.py --self-test docs --repo . --root . --shard 199 200`: passed; shard `199/200`, two selected child checks, one selected negative control rejected.
+- Direct `check_notices()` path probes: baseline and added in-root path passed; traversal and external symlink rejected with `notice-path-outside-root`.
+- Direct `copy_inputs()` path probes: ordinary copy passed; destination symlink rejected with `self-test-copy-path-outside-root`, with zero writes in the external directory.
+- Exact Plan regex through CTest's `-N -R`: selected 200 intended entries and included both shard 100 and shard 199. Static registration/inventory/budget inspection found 199 unique numbered entries, each budgeted at 90 seconds.
+- `verify-v02-adoption.py --self-test-release-notes-v04 --repo .`: passed, 2 positives and 72 controls.
+- `verify-support-ledger.py --self-test-claims --claims-version 0.4.0 --rev 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c --repo .`: passed, 22 positives and 21 controls.
+- `verify-support-ledger.py --self-test-disclosure --repo .`: passed, 4 positives and 20 controls.
+- `verify-version-window.py --self-test --repo .`: passed, 11 positives and 64 controls.
+- `verify-version-window.py --self-test-version-v04 --repo .`: passed, 63 positives and 66 controls.
+- `verify-review-evidence.py --self-test --rev 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c --repo .`: passed, 33 positives and 28 controls.
 
-At this exact source, `verify-cmake-floor-policy.py --self-test` passed 63 controls, the no-argument policy check passed, and the registered `ci_floor_relocated_suite_contract` CTest passed. The checker requires the exact declared 3.25.3 version and hash-verified CMake/CTest tool paths, read-only tool variables, active install/relocation/configure/build steps, the early adapter and host-clock checks, one canonical unfiltered relocated CTest command, and installed inventory verification. Direct mutations for indented, semicolon, braced-variable, current-directory subshell, and bare-`ctest` duplicates rejected with `full-ctest-not-unique-relocated`. First-line and continued-line filters including `-R`, `-E`, `-L`, `--tests-information`, and `--rerun-failed` rejected with the same diagnostic. Direct version/tool reassignment, echo spoofing, dynamic printf, nameref, eval, and dot-source/process-substitution overrides rejected with `floor-toolchain-not-pinned`. The self-test also rejects commented-out suite, adapter, clock, install, relocation, configure/build, and inventory commands with their respective policy diagnostics. `bash -n .github/scripts/verify-cmake-floor.sh` passed. This verifies the local CI policy contract; I did not run the hosted CMake 3.25.3 download/build/install job or claim hosted evidence.
+These checks establish local parser, statement, path-confinement, source-binding, and test-selection behavior. They do not establish hardware or gameplay behavior, rights beyond the recorded policy, hosted CI success, signing, publication, or platform promotion.
 
-### D-153 and D-154 production probes
+## Findings and dispositions
 
-I independently appended the two D-153 claims—`😀__CGB__ game passes all acceptance checks.` and `😀**CGB* game passes all acceptance checks.`—to README, game-acceptance, and third-party notices, and to a valid renderer-built v0.4 release-note preface. All four production paths rejected each claim with their intended `unsupported-cgb-game-qualification` diagnostic. A renderer-built release-note baseline passed its 55 checks. The matching safe Unicode-symbol evidence phrase, rule-of-three safe phrase, dense-bracket evidence phrase, escaped punctuation, intraword underscores, inline code, and fenced code all passed in each path.
-
-I also appended the 512-level balanced bracket sample followed by the valid unused `[dense-control]: /target` reference definition and the unsupported game claim. README, game-acceptance, notices, and release notes rejected it with the intended unsupported-game diagnostic; the same bracket/reference prefix followed by safe test-ROM evidence passed in each path. These controls exercise the production readers and matcher, not just a helper. The release-note and docs self-test controls also cover link destinations/titles and valid shortcut, full, and collapsed references.
-
-The complexity review is structural. `mask_markdown_nonrendered` computes bracket pairs once using a stack, builds a prefix count once, and tests nested/overlong label spans before slicing or normalizing. Only a valid span of at most 999 source characters can reach case-folding. Candidate endpoint lookup is constant-time. The emphasis matcher uses a fixed set of marker/modulo/open-close candidate buckets rather than rescanning all earlier delimiter runs. The dense controls are regression inputs, not timing thresholds.
-
-### D-144–D-152 parser cases
-
-The exact-source control set preserves the paired cases added under the bounded rescope. All attacks fail for the intended cause and their valid counterparts pass:
-
-| Case | Negative and intended result | Accepted counterpart |
-|---|---|---|
-| Explicit image labels and list continuation | Whitespace-only explicit image labels leave an unsupported claim visible and fail as `unsupported-cgb-game-qualification`; tab label syntax fails closed as `markdown-tab-unsupported`. A list/blockquote reference title in the wrong continuation column leaves the claim visible and fails as `unsupported-cgb-game-qualification`. | A collapsed `[]` image reference resolves and masks alt text; a title at the CommonMark tab-expanded content column is masked. |
-| Comment-aware reference labels | Differing comment payloads between the label and definition do not resolve; visible claim is rejected. | Matching comments inside labels still resolve. |
-| Comment/fence interaction | `<!-- -->` cannot create a false fence that hides a claim. | A standalone comment followed by a genuine fenced block still masks the block claim. |
-| Autolink and title parsing | A URI autolink containing `]` cannot hide a required hardware disclosure in the link title; the missing-disclosure diagnostic is preserved. | A valid title after the same autolink form remains non-rendered. |
-| Malformed links and reference definitions | Invalid/empty destinations, invalid escapes, unterminated or malformed titles, NULs, over-nested destinations, blank-line titles, malformed inline links, and unresolved links do not hide claims. Malformed inline links fail closed as `markdown-inline-link-malformed`; valid-but-unresolved visible labels fail as the unsupported-game diagnostic. | Valid titles, escaped parentheses, matching references, code spans, and genuine fences remain accepted/masked according to their rendered role. |
-| Invisible characters and references | Literal `Cf`, Unicode 18.0 default-ignorables, and valid entity references to invisible characters fail as unsupported-game claims. Encoded visible spaces or CGB letters also fail after decoding. | Safe text, safe visible references, and code spans retain their prior behavior. |
-| Hard breaks, emphasis, and links | LF/CR/CRLF CommonMark hard-break claims, encoded-space joins, emphasis-split CGB text, and inline/reference-link label claims fail as unsupported game qualification, including through the notices caller. | Soft breaks where the claim does not form, escaped punctuation, intraword underscores, unresolved/escaped labels, code spans/fences, and destination/title-only claims remain accepted. |
-| Dense delimiter controls | Dense unmatched emphasis cannot prevent claim detection. | Its safe evidence counterpart passes. |
-
-The parser and matcher portions of `verify-v02-adoption.py` are unchanged from `4c9c54f8b5a33e758624c997f107d1ffdd7c94a0`, where the owner-run complete docs self-test passed 473 checks with 255/255 negative controls rejected. The complete diff from `aecf09cc` to this source changes harness, planning, and state records only; it does not modify parser, matcher, or shard-control behavior. The exact-source shard-31 invocation reran the production docs check (473 checks). Targeted D-153/D-154 probes exercised README, game-acceptance, notices, and renderer-built notes at the previous exact matcher source. The complete 32-shard selection was not rerun here; no parser or matcher bypass was found in the reviewed harness changes.
-
-### Plan 23-09 visibility and opener matrix
-
-I re-evaluated prior ADV-09 against the current source. The exact opener set is `<script` newline/space forms, `<pre` newline/space forms, `<style` newline/space forms, mixed-case `<ScRiPt`, incomplete `<!DOCTYPE html`, and incomplete `<?xml version="1.0"`. On the changelog path, every opener is tried before the heading and inside the section; each hidden-link mutant must fail as `window-version-output-mismatch`, while its visible-ledger-link baseline passes. Comments, fenced/indented/inline-code samples, and escaped opener examples are accepted when the real ledger link stays visible. The current self-test temporarily restores the old matcher and confirms it accepts the causal hidden-link sample before verifying the corrected matcher rejects it.
-
-On the release-note path, every opener is tried both before the preface and around the ledger link, and fails as `release-notes-raw-html-unsupported`; the renderer-built notes, and examples masked by comment/fence/indent/code/escape syntax, pass. At this exact source, the v0.4 note self-test passed 2 positive baselines and 72 negative controls. The v0.4 version-window self-test passed 63 positives and 66 controls; the general version-window self-test passed 11 positives and 64 controls. The docs controls reject raw HTML as `markdown-raw-html-unsupported`; these controls remain in the registered shard inventory, and shard 31 passed on the exact source.
-
-### Release, profile, and provenance attacks
-
-The current support-claims self-test passed for v0.4 with 22 positives and 21 controls; the profile is pinned to two candidates, the CGB-CPU-E harness, diagnostics `513/7/0/0`, nine inherited claims, and three explicit non-claims. Candidate reasons cannot be omitted or swapped; fabricated candidate build/run, game admission, or game evidence is rejected with its candidate/admission/evidence diagnostic. Metadata is not accepted as execution evidence. The renderer-built note is the accepted counterpart.
-
-Release-note controls reject each missing or promoted required Pending status and contradictions that assert completion while the Pending row remains. They reject disclosure clauses hidden in code/comments/container fences and unsupported claims of signing/notarization, publication, or platform coverage with their respective diagnostics. Historical v0.3 claim and ledger bytes remain pinned; `verify-support-ledger.py --self-test-disclosure` passed 4 positives and 20 controls, and `--check-disclosure` confirmed three generated ledgers with two tag-bound. The exact-source release-policy self-test passed 11 positives and 11 controls, and its pin check passed. The tracked version window is inactive for the current development tree, which is accepted; no active version PR or hosted run was exercised.
-
-`verify-review-evidence.py --self-test` passed 33 positives and 28 controls at the reviewed source. It validates the report contract and is not a substitute for this source review. No v0.4 release, hosted evidence, actual game execution, fixture admission, signing, notarization, or platform promotion is asserted.
-
-## Findings and Dispositions
-
-ADV-01 through ADV-08 were real visibility/claim bypasses in earlier Phase 23 revisions and are fixed by their recorded ancestor commits. ADV-09 was independently re-evaluated at the exact SHA and is now fixed. ADV-10 through ADV-20 record the owner-approved D-144–D-154 corrections; each was independently source-checked, with targeted production probes for D-153 and D-154 and the exact-source paired control suites cited above.
-
-### ADV-01–ADV-08: Previously found visibility and disclosure bypasses — fixed
-
-Earlier revisions allowed indented/inline code, images, external-query URLs, comments, or nested container fences to stand in for visible disclosures or a real ledger link. They also allowed contradictions against required Pending and rights-scope wording, and metadata to be stated as executed diagnostics. The recorded commits mask non-rendered content, require a real allowed ledger destination, preserve the precise pending/rights status, and reject false evidence promotions. Current release-note, support-profile, and version-window controls keep accepted baselines and reject each negative for its own diagnostic.
-
-### ADV-09: Incomplete raw-HTML openers hid required content — fixed
-
-The old changelog validator accepted incomplete tag/declaration/PI openers with the ledger link visually hidden later in the block. The current implementation rejects every opener and placement in the matrix above, while accepting ordinary visible examples in comments, code, and escaped prose. The current self-tests include the old matcher as a causal control.
-
-### ADV-10–ADV-20: D-144–D-154 parser correctness and resource-bound fixes — fixed
-
-The exact-source controls prevent Markdown parser disagreement from making hidden disclosures count or visible unsupported-game claims disappear. They retain CommonMark-aware matching for hard breaks, entities, emphasis, inline/reference labels, and Unicode P/S flanking, while keeping code, escapes, unresolved labels, destinations, and titles out of claim text. D-154 also bounds nested reference-label work before copying or normalization. The findings JSON records the specific fix commit and current-source verification for each issue.
-
-## Evidence limits
-
-All results are local software checks against the exact source identity named above. The checks establish parser, profile, provenance, and statement-validation behavior. They do not establish actual CGB gameplay, hardware behavior, fixture rights beyond the recorded policy, hosted CI success, signing/notarization, publication, or platform promotion. REL-01 remains Pending.
-
-## Structured Evidence
+ADV-01 through ADV-20 preserve the Phase 23 review history and remain fixed by ancestor commits. ADV-21 and ADV-22 are the owner-approved D-155 corrections fixed in the reviewed commit. No unresolved correctness or security finding remains in this review.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-0a7b2b37644f20e43da813b67561587bbd0f86e5-20261104-04",
+  "report_id": "gbb-phase23-adversarial-9166ab60d25c6d246761b4aa33a0ceb35dd83f5c-20261106-d155",
   "role": "adversarial",
-  "reviewer_id": "codex-adversarial-reviewer-01",
+  "reviewer_id": "adversarial-d155",
   "independent": true,
-  "reviewed_sha": "0a7b2b37644f20e43da813b67561587bbd0f86e5",
+  "reviewed_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
   "findings": [
     {
       "id": "ADV-01",
@@ -111,9 +75,9 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Only visible Markdown prose may satisfy required release-note disclosures.",
       "disposition": "fixed",
-      "rationale": "An earlier revision accepted the complete required preface when every line was indented Markdown code. The current renderer-built baseline passes and the indented preface is rejected as release-notes-empty.",
+      "rationale": "The exact-source renderer-built release-note baseline passes. The current controls reject disclosures hidden in inline and block code, comments, and container code; removing a required visible clause fails with its specific diagnostic.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source 4c9c54f8b5a33e758624c997f107d1ffdd7c94a0: PASS positives=2 controls=72; accepted baseline paired with indented-code rejection"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test-version-v04: positives=63 controls=66."
     },
     {
       "id": "ADV-02",
@@ -121,9 +85,9 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Release notes must not claim a requirement is complete while its required status remains Pending.",
       "disposition": "fixed",
-      "rationale": "The current control rejects both a promoted DIAG-01 status and an appended completion claim beside the required Pending row as release-notes-requirement-status-promoted. The renderer-built note remains the accepted counterpart.",
+      "rationale": "The exact-source release-note controls reject both a promoted Pending row and contradictory completion prose; the valid Pending baseline passes before each mutation.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; pending-status-promoted and contradictory-pending-status controls"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-support-ledger.py --self-test-disclosure: positives=4 controls=20."
     },
     {
       "id": "ADV-03",
@@ -131,9 +95,9 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Metadata-only diagnostic inventories must not be presented as executed or passing diagnostics.",
       "disposition": "fixed",
-      "rationale": "The current release-note control rejects the claim that all 513 diagnostic microtests executed and passed as release-notes-metadata-as-diagnostic. The accepted renderer output preserves 513 named entries, seven unresolved gates, and zero admitted or executed real fixtures.",
+      "rationale": "The exact-source release-note controls reject the claim that all 513 named diagnostic microtests executed and passed, while accepting the metadata-only baseline with seven unresolved gates and zero real fixtures executed or admitted.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; metadata-as-diagnostic negative"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; the named metadata-as-diagnostic mutant checks its specific diagnostic."
     },
     {
       "id": "ADV-04",
@@ -141,9 +105,9 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "A rights-scope no-go must not be represented as a legal license prohibition without evidence.",
       "disposition": "fixed",
-      "rationale": "The current release-note control rejects the claim that both candidates' licenses prohibit repository and public-CI use as release-notes-license-prohibition-unsupported while accepting the required scope wording.",
+      "rationale": "The exact-source notes controls reject an unsupported claim that both candidates' licenses prohibit repository and public-CI use; the source/rights-scope baseline remains accepted.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; unsupported license-prohibition negative"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; rights-scope-presented-as-license-prohibition mutant."
     },
     {
       "id": "ADV-05",
@@ -151,9 +115,9 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Inline code, image destinations, and hidden markup cannot satisfy visible-prose or ledger-link requirements.",
       "disposition": "fixed",
-      "rationale": "Current controls reject code-only disclosure evidence and image-ledger destinations while accepting visible prose and a real ledger link. Link titles and image alt text remain excluded from the relevant visibility proof.",
+      "rationale": "Visible prose and a real ledger link pass. Code-only disclosure evidence, image-ledger destinations, and hidden titles/alt text fail the required visibility or ledger checks.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . and --self-test-version-v04: PASS; current reviewed-source v0.4 note controls positives=2 controls=72 and version-output controls positives=63 controls=66"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 pass their paired visibility controls."
     },
     {
       "id": "ADV-06",
@@ -161,19 +125,19 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "A required support-ledger link must target the ledger itself, not contain its path in unrelated URL text or a title.",
       "disposition": "fixed",
-      "rationale": "Relative and canonical ledger links remain accepted. External-query, link-title, nested-title, image, and malformed destinations reject with the ledger-version mismatch or malformed-link diagnostic.",
+      "rationale": "Relative and canonical ledger links are accepted; external-query, title-only, image, and malformed destinations reject for ledger mismatch or malformed-link reasons.",
       "fix_sha": "9a193975fb32ae69bd09be2cf847e3271d078733",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . and python3 -I tests/scripts/verify-version-window.py --self-test-version-v04 --repo . at reviewed source: PASS; intended ledger-link diagnostics"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
     },
     {
       "id": "ADV-07",
       "category": "correctness",
       "severity": "high",
-      "required_property": "Text hidden by a closed or unterminated HTML comment cannot satisfy release-note or changelog requirements.",
+      "required_property": "Text hidden by closed or unterminated HTML comments cannot satisfy release-note or changelog requirements.",
       "disposition": "fixed",
-      "rationale": "The current notes controls reject closed-comment hiding as release-notes-candidate-name-missing and unclosed-comment hiding as a missing required clause; version-window controls reject a hidden changelog ledger link as window-version-output-mismatch. Visible counterparts pass.",
+      "rationale": "Closed- and open-comment mutants cannot satisfy candidate or required-clause checks; a hidden changelog ledger link fails the version-output check. Visible counterparts pass.",
       "fix_sha": "9a193975fb32ae69bd09be2cf847e3271d078733",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . and python3 -I tests/scripts/verify-version-window.py --self-test --repo . at reviewed source: PASS; version-window controls positives=11 controls=64"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test: positives=11 controls=64."
     },
     {
       "id": "ADV-08",
@@ -181,9 +145,9 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Fenced and indented code inside list and blockquote containers cannot satisfy disclosure or changelog visibility requirements.",
       "disposition": "fixed",
-      "rationale": "Current controls reject same-line list fences, nested list/blockquote fences in both orders, blockquote/list indented code, and hidden changelog links with window-version-output-mismatch. Visible disclosures and real fenced-code masking remain accepted.",
+      "rationale": "The current controls cover same-line and nested list/blockquote fences plus indented code. Hidden disclosures and links reject; visible disclosures and genuine code masking remain accepted.",
       "fix_sha": "46f5ce4a515daa65bb9850a28a1ee4be9b9b8c5a",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . and python3 -I tests/scripts/verify-version-window.py --self-test-version-v04 --repo . at reviewed source: PASS; notes positives=2 controls=72, version-output positives=63 controls=66"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
     },
     {
       "id": "ADV-09",
@@ -191,39 +155,39 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Incomplete raw-HTML block openers cannot hide required changelog links or release-note disclosures.",
       "disposition": "fixed",
-      "rationale": "I re-evaluated the prior finding against this source. Script/pre/style openers with whitespace or line endings, mixed-case script, incomplete doctype, and incomplete XML PI reject in changelog and release-note paths. Changelog controls cover before-heading and inside-section placements and require window-version-output-mismatch; note controls require release-notes-raw-html-unsupported. Comment, fence, indented-code, inline-code, and escaped examples remain accepted when visible evidence is present. A legacy matcher control reproduces the old acceptance, tying the current rejection to the fix.",
+      "rationale": "Script, pre, style, doctype, and XML processing-instruction openers fail at the required paths while comments, code, and escaped examples remain valid when visible evidence is present. The legacy-matcher controls establish causality.",
       "fix_sha": "a63f1dc67654613e105ac1071b7445f21adea0bc",
-      "verification_ref": "python3 -I tests/scripts/verify-version-window.py --self-test-version-v04 --repo .: PASS positives=63 controls=66; python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo .: PASS positives=2 controls=72; exact-source docs check=473 and owner-run docs self-test=473 checks/255 rejected controls"
+      "verification_ref": "At reviewed SHA: verify-version-window.py --self-test-version-v04: positives=63 controls=66; verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72."
     },
     {
       "id": "ADV-10",
       "category": "correctness",
       "severity": "high",
-      "required_property": "Markdown visibility and claim matching must distinguish valid labels, container continuations, comments, fences, and autolinks according to the paired D-144 cases.",
+      "required_property": "Markdown visibility and claim matching must follow the paired D-144 parser cases for labels, continuations, comments, fences, and autolinks.",
       "disposition": "fixed",
-      "rationale": "The exact-source controls reject whitespace-only explicit image labels, tab-expanded invalid continuations, mismatched comment payloads, false comment-created fences, and a title-only hardware disclosure when a URI autolink contains a closing bracket. They accept the valid collapsed image reference, matching-comment labels, correct tab-expanded continuation, a genuine fence after a standalone comment, and a valid title after the autolink. Malformed destinations/titles fail closed with their intended parser diagnostics.",
+      "rationale": "The source-bound controls reject whitespace-only image labels, invalid tab-expanded continuations, mismatched reference-label comment payloads, false comment-created fences, and a title-only hardware disclosure around an autolink. Valid collapsed labels, matching comments, correct continuations, genuine fences, and valid titles remain accepted.",
       "fix_sha": "3d27596b341877d9a19cb82409e178f9eae0d1e9",
-      "verification_ref": "Plan 23-04 D-144 controls in tests/scripts/verify-v02-adoption.py at 4c9c54f8b5a33e758624c997f107d1ffdd7c94a0; exact-source docs self-test recorded by owner: checks=473, negative_controls=255, rejected_controls=255; focused direct D-153/D-154 probes also exercised README/game surfaces"
+      "verification_ref": "D-144 source-bound docs controls at 4c9c54f8b5a33e758624c997f107d1ffdd7c94a0 passed 473 checks/255 rejected controls; reviewed-source diff leaves the parser unchanged; current release-note controls pass 2/72."
     },
     {
       "id": "ADV-11",
       "category": "correctness",
       "severity": "high",
-      "required_property": "Invisible Unicode format characters cannot split the unsupported CGB-game claim in visible prose.",
+      "required_property": "Unicode Cf characters cannot split a visible unsupported CGB-game claim.",
       "disposition": "fixed",
-      "rationale": "The matcher removes Unicode Cf characters only for this unsupported-game pattern. Current controls reject U+200B, U+2060, and U+200C and accept ordinary safe text containing the same kind of separator; disclosure matching is not globally normalized.",
+      "rationale": "The claim-only matcher removes Cf characters, rejecting U+200B, U+2060, and U+200C claims while leaving unrelated disclosures and safe prose unchanged.",
       "fix_sha": "742bf1bb5dd3a6e71ab93dbdb420bca2ec94d16a",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; exact-source docs self-test recorded as 473/255"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source docs shards 0/200 and 199/200 pass; matcher unchanged by D-155."
     },
     {
       "id": "ADV-12",
       "category": "correctness",
       "severity": "high",
-      "required_property": "Unicode 18.0 Default_Ignorable_Code_Point characters, including non-Cf U+034F, cannot split the unsupported CGB-game claim.",
+      "required_property": "Unicode 18.0 Default_Ignorable_Code_Point characters, including non-Cf characters, cannot split a visible unsupported CGB-game claim.",
       "disposition": "fixed",
-      "rationale": "The matcher uses the frozen Unicode 18.0 default-ignorable ranges in addition to Cf handling. Controls reject U+034F, Hangul filler, variation selector-16, and a reserved default-ignorable character, with safe-text counterparts accepted.",
+      "rationale": "The matcher includes the frozen Unicode 18.0 default-ignorable ranges; current paired controls cover U+034F and representative non-Cf ranges with safe-text counterparts.",
       "fix_sha": "a6bc0a824bce55de57422e2b6b73b94ed0f841d1",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; exact-source docs self-test recorded as 473/255"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; docs matcher is unchanged by D-155."
     },
     {
       "id": "ADV-13",
@@ -231,29 +195,29 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Valid CommonMark references to invisible characters cannot split an unsupported CGB-game claim after rendering.",
       "disposition": "fixed",
-      "rationale": "Valid decimal, hexadecimal, and named references that render invisible format/default-ignorable characters are decoded before this matcher; code spans remain masked. Paired controls reject the resulting visible claim and accept safe visible-reference prose.",
+      "rationale": "Hexadecimal, decimal, and named references to invisible/default-ignorable characters are decoded for the claim matcher; code spans remain masked and visible safe-reference prose remains accepted.",
       "fix_sha": "fc0ba4ff9626e06e04d8800800561b51414166bf",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; exact-source docs self-test recorded as 473/255"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; parser/matcher code unchanged by D-155."
     },
     {
       "id": "ADV-14",
       "category": "correctness",
       "severity": "high",
-      "required_property": "Valid visible CommonMark character references, including encoded whitespace and letters, are normalized before unsupported-game claim matching.",
+      "required_property": "All valid CommonMark character references in visible prose are normalized before unsupported-game matching.",
       "disposition": "fixed",
-      "rationale": "A decimal/hex/named reference producing an invisible separator and visible references producing a space or CGB letter are covered. The claim is rejected; safe encoded evidence prose and code-span examples remain accepted. Other disclosure and claim matchers are unchanged.",
+      "rationale": "The claim matcher decodes valid visible references to spaces and CGB letters as well as invisible separators. Safe visible references and masked code spans retain their intended behavior.",
       "fix_sha": "fc0ba4ff9626e06e04d8800800561b51414166bf",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; exact-source docs self-test recorded as 473/255"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source claim/profile controls pass 22 positives/21 controls."
     },
     {
       "id": "ADV-15",
       "category": "correctness",
       "severity": "high",
-      "required_property": "CommonMark hard line breaks and visible encoded spaces are joined for unsupported-game matching in docs, notes, and notices after code masking.",
+      "required_property": "CommonMark hard line breaks and encoded spaces are joined for unsupported-game matching in docs, release notes, and notices after code masking.",
       "disposition": "fixed",
-      "rationale": "LF, CR, CRLF, hard-break-plus-encoded-space, and soft-break cases have paired diagnostics and safe/code counterparts. The notices caller now passes uncollapsed visible prose to the shared matcher, closing the previously separate caller bypass.",
+      "rationale": "LF, CR, CRLF, encoded-space, soft-break, safe-prose, and code controls remain paired; the notices caller supplies uncollapsed visible prose to the shared matcher.",
       "fix_sha": "e26757fafc818a92ddf7ca45f1a409658a5a5bdd",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; exact-source docs self-test recorded as 473/255; notice caller controls assert unsupported-cgb-game-qualification:THIRD_PARTY_NOTICES.md"
+      "verification_ref": "At reviewed SHA: release-note controls pass 2/72; docs shard 0/200 passes notice-path child controls; notice caller and matcher are unchanged except D-155 path checks."
     },
     {
       "id": "ADV-16",
@@ -261,9 +225,9 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Visible CGB claim text split by CommonMark emphasis or inline-link labels cannot evade unsupported-game matching.",
       "disposition": "fixed",
-      "rationale": "Strong and intraword stars, underscore emphasis, and claim text split through an inline-link label reject through the intended unsupported-game diagnostic. Intraword underscore text, escaped punctuation, inline/fenced code, destination-only claims, and title-only claims remain accepted.",
+      "rationale": "Strong, intraword-star, underscore-emphasis, and inline-link-label claims are rejected. Intraword underscores, escaped punctuation, code, and destination/title-only claims remain accepted.",
       "fix_sha": "e017078b72e78b38fb596faced3af3e35c2ca0ce",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; exact-source docs self-test recorded as 473/255"
+      "verification_ref": "At reviewed SHA: verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; matcher code unchanged by D-155."
     },
     {
       "id": "ADV-17",
@@ -271,9 +235,9 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Visible shortcut, full, and collapsed reference-link labels participate in unsupported-game matching while destinations and titles do not.",
       "disposition": "fixed",
-      "rationale": "The current matcher resolves all three valid reference forms and rejects CGB claims split through their labels. Unresolved or escaped labels, destinations and titles containing claim text, and code spans/blocks are accepted counterparts; notice controls cover its shared caller.",
+      "rationale": "The matcher resolves each valid reference-label form and excludes its destination/title; unresolved and escaped labels, code, and destination-only claims remain accepted counterparts. Notice uses the same claim matcher.",
       "fix_sha": "b798781105b8f6f803e85aa2ad766d2b2fdbec22",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; exact-source docs self-test recorded as 473/255"
+      "verification_ref": "At reviewed SHA: release-note controls pass 2/72; docs shards 0/200 and 199/200 pass; parser/matcher diff is empty for D-155."
     },
     {
       "id": "ADV-18",
@@ -281,29 +245,49 @@ All results are local software checks against the exact source identity named ab
       "severity": "high",
       "required_property": "Delimiter matching must not rescan all prior unmatched runs for each closer in bounded public Markdown input.",
       "disposition": "fixed",
-      "rationale": "The implementation stores opener candidates in six fixed buckets per marker, inspects those bucket tops per close run, and removes exhausted candidates. Each run is pushed and exhausted at most once and work per pairing is constant; a dense unmatched-marker control rejects the hidden claim and accepts safe evidence without timing thresholds.",
+      "rationale": "The matcher uses fixed per-marker candidate buckets and exhausts candidates rather than scanning all prior delimiter runs; dense unmatched-marker controls assert claim detection without timing thresholds.",
       "fix_sha": "6876fab06bf746fdaab67beaa4d52a6b1c70ac06",
-      "verification_ref": "python3 -I tests/scripts/verify-v02-adoption.py --self-test-release-notes-v04 --repo . at reviewed source: PASS positives=2 controls=72; exact-source docs self-test recorded as 473/255; source inspection confirms per-marker candidate stacks rather than repeated backwards scans"
+      "verification_ref": "At reviewed SHA: release-note controls pass 2/72; source inspection confirms the candidate-stack implementation is unchanged by D-155."
     },
     {
       "id": "ADV-19",
       "category": "correctness",
       "severity": "high",
-      "required_property": "CommonMark emphasis flanking must treat Unicode punctuation and symbol categories P and S as punctuation for the unsupported-game matcher.",
+      "required_property": "CommonMark emphasis flanking treats Unicode punctuation and symbol categories P and S as punctuation for unsupported-game matching.",
       "disposition": "fixed",
-      "rationale": "The source now uses Unicode categories P and S. I independently injected both `😀__CGB__ game passes all acceptance checks.` and `😀**CGB* game passes all acceptance checks.` through README, game-acceptance, notice, and renderer-built release-note production paths; each rejected with its exact unsupported-game diagnostic. Unicode-symbol safe evidence and a rule-of-three safe phrase passed, as did escaped and code-masked controls.",
+      "rationale": "The exact-source matcher uses Unicode P/S categories. The paired Unicode-symbol claim and safe-prose controls are retained; current release-note controls pass.",
       "fix_sha": "4c9c54f8b5a33e758624c997f107d1ffdd7c94a0",
-      "verification_ref": "Focused exact-source production probes through check_surface/check_game, check_notices, and check_release_notes: both D-153 claims rejected on all four paths; seven safe/code controls accepted per path. CommonMark 0.31.2 §§2.1 and 6.2 define P/S punctuation and delimiter flanking."
+      "verification_ref": "At reviewed SHA: release-note controls pass 2/72; historical exact-source D-153 probes rejected both claims on four production paths and accepted paired safe/code controls; matcher is unchanged by D-155."
     },
     {
       "id": "ADV-20",
       "category": "security",
       "severity": "high",
-      "required_property": "Impossible nested or over-999-character reference-label candidates must be rejected before their contents are copied or normalized.",
+      "required_property": "Impossible nested or over-999-character reference-label candidates are rejected before copying or normalization.",
       "disposition": "fixed",
-      "rationale": "The parser pairs brackets in one stack pass and builds a prefix count in one pass. Each candidate span checks length and nested paired-opening counts in constant time before slicing; only valid labels of at most 999 characters reach case-fold normalization. The balanced 512-level bracket attack with a valid unused reference definition is rejected as unsupported CGB game qualification through README, game-acceptance, notices, and release notes; the corresponding safe evidence passes in every path. Valid shortcut/full/collapsed references remain covered and accepted/normalized as appropriate.",
+      "rationale": "A bracket stack and prefix count check nested/overlong spans before slicing or normalization; only valid labels at or below CommonMark's 999-character limit are normalized. Dense-bracket controls retain safe prose counterparts.",
       "fix_sha": "4c9c54f8b5a33e758624c997f107d1ffdd7c94a0",
-      "verification_ref": "Focused exact-source production probes through check_surface/check_game, check_notices, and renderer-built check_release_notes: dense nested-bracket game claim rejected with intended diagnostic and safe prose accepted in every path; release-note controls pass positives=2 controls=72. Complexity conclusion is from the one-pass stack/prefix structure, not timing."
+      "verification_ref": "At reviewed SHA: release-note controls pass 2/72; historical exact-source D-154 probes reject the 512-level attack on four production paths and accept safe counterparts; source is unchanged by D-155."
+    },
+    {
+      "id": "ADV-21",
+      "category": "security",
+      "severity": "high",
+      "required_property": "Notice inputs and self-test copy destinations must resolve inside their respective roots, including when paths traverse or follow symlinks.",
+      "disposition": "fixed",
+      "rationale": "The old inline notice path could read outside the checkout and be reused as a copy destination. The reviewed code rejects traversal components, resolves source symlinks and enforces repository containment, and re-resolves copy destinations after parent creation. Current minimal-tree probes accept baseline/in-root paths, reject traversal and external symlink inputs as notice-path-outside-root, and reject a target symlink as self-test-copy-path-outside-root with zero external writes. The exact-source docs shard runs its matching traversal, symlink, and copy controls.",
+      "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
+      "verification_ref": "At reviewed SHA: docs shard 0/200 passed; direct check_notices baseline=112 and safe in-root=113, traversal/symlink rejected; direct copy_inputs normal copy passed and destination symlink rejected with external_files=0."
+    },
+    {
+      "id": "ADV-22",
+      "category": "other",
+      "severity": "medium",
+      "required_property": "The focused Plan 23-04 CTest selector must include every registered numbered docs shard, including 100–199.",
+      "disposition": "fixed",
+      "rationale": "The former two-digit selector omitted the high-numbered shards. The corrected `[0-9]+` selector matched all 199 numbered tests in an isolated CTest run, including 100 and 199; shard 199/200 itself passed. CMake registration, expected inventory, and timeout allowlist contain each numbered shard once.",
+      "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
+      "verification_ref": "At reviewed SHA: exact Plan regex through ctest -N -R selected 200 total entries; CMake range/inventory/budget inspection matched shards 1–199 exactly; production docs shard 199/200 passed."
     }
   ]
 }
