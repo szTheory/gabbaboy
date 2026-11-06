@@ -1462,15 +1462,56 @@ gbb_add_v02_contract(v02_game_claims_controls 60
 gbb_add_v02_contract(v02_adoption_docs 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "docs"]=]
   verify-v02-adoption.py --check docs)
+# The complete docs self-test runs every production CLI case, each reading the full public-doc set and
+# multi-megabyte support ledger. Keep every case, but distribute calls deterministically so each CTest
+# stays within the existing per-test timeout budget. Hosted four-worker runs showed the 32-shard split
+# still reached the 90-second ceiling, so use 200 shards with separately balanced positive/negative calls.
+# The release-note controls run once in shard 0.
+set(gbb_docs_control_shard_count 200)
+math(EXPR gbb_docs_control_shard_max "${gbb_docs_control_shard_count} - 1")
 gbb_add_v02_contract(v02_adoption_docs_controls 90
-  [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "docs"]=]
-  verify-v02-adoption.py --self-test docs)
+  [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "shard": "0/200", "target": "docs"]=]
+  verify-v02-adoption.py --self-test docs --shard 0 ${gbb_docs_control_shard_count})
+foreach(gbb_docs_control_shard RANGE 1 ${gbb_docs_control_shard_max})
+  if(gbb_docs_control_shard LESS 10)
+    set(gbb_docs_control_shard_suffix "0${gbb_docs_control_shard}")
+  else()
+    set(gbb_docs_control_shard_suffix "${gbb_docs_control_shard}")
+  endif()
+  set(gbb_docs_control_shard_regex
+    "\"mode\": \"self-test\", \"negative_controls\": [1-9][0-9]*, \"positive_success\": true, \"rejected_controls\": [1-9][0-9]*, \"shard\": \"${gbb_docs_control_shard}/${gbb_docs_control_shard_count}\", \"target\": \"docs\"")
+  gbb_add_v02_contract(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} 90
+    "${gbb_docs_control_shard_regex}"
+    verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} ${gbb_docs_control_shard_count})
+endforeach()
+# The four-worker run identified this small subset as the only shards near the timeout. Reserve all
+# four CTest slots for them; the rest of the docs controls remain parallel.
+set(gbb_docs_control_slow_tests
+  v02_adoption_docs_controls
+  phase23_docs_controls_shard_02
+  phase23_docs_controls_shard_16
+  phase23_docs_controls_shard_62
+  phase23_docs_controls_shard_65
+  phase23_docs_controls_shard_74
+  phase23_docs_controls_shard_75
+  phase23_docs_controls_shard_92
+  phase23_docs_controls_shard_93
+  phase23_docs_controls_shard_94
+  phase23_docs_controls_shard_109
+  phase23_docs_controls_shard_127
+  phase23_docs_controls_shard_170
+  phase23_docs_controls_shard_171
+  phase23_docs_controls_shard_172
+  phase23_docs_controls_shard_174
+)
+set_tests_properties(${gbb_docs_control_slow_tests} PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_support_ledger 60
   [=[support-ledger static pass version=0\.[0-9]+\.[0-9]+ cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)
 gbb_add_v02_contract(v02_support_ledger_controls 120
   [=[support ledger static self-test passed: positive=1 rejected_controls=5 controls=changed-covered-input,missing-covered-input,added-case-inventory,removed-case-inventory,unparseable-ledger]=]
   verify-support-ledger.py --self-test)
+set_tests_properties(v02_support_ledger v02_support_ledger_controls PROPERTIES LABELS "v02;planning")
 # Phase 16 D-28/D-29 (16-06): the v0.2.0 ledger is frozen to the tag blob plus the one disclosed #93 block, and README links the
 # ledger that this tree's version selects. The version in the binding regex comes from the project VERSION at configure time, so
 # the same test follows the tree to v0.2.1 without an edit; the freeze reads the v0.2.0 tag, which every full-suite job fetches.
@@ -1513,6 +1554,11 @@ gbb_add_ledger_contract(release_disclosure_controls
   [=[release-disclosure controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-disclosure)
 unset(GBB_LEDGER_MIN)
+# Phase 23 D-01/D-03: the existing release-notes judge must reject copy that omits either
+# source-bound candidate reason, even when the old disclosure checks still pass.
+gbb_add_v02_contract(release_notes_v04_controls 90
+  [=[release-notes-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  verify-v02-adoption.py --self-test-release-notes-v04 --repo "${PROJECT_SOURCE_DIR}")
 # Phase 17 RM-028 / D-19 (17-08): the version-PR content window. The contract test checks the tracked record is a
 # well-formed inactive (or statically valid active) record and that every generator input the window digests exists in
 # the tree; the controls run the checker over disposable repositories (body overwrite, stale head/input, a changed
@@ -1524,6 +1570,9 @@ gbb_add_v02_contract(release_window_contract 60
 gbb_add_v02_contract(release_window_controls 60
   [=[version-window controls pass positives=[1-9][0-9]* controls=([2-9][0-9]|[1-9][0-9][0-9]+)]=]
   verify-version-window.py --self-test)
+gbb_add_v02_contract(release_version_v04_controls 90
+  [=[release-version-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  verify-version-window.py --self-test-version-v04)
 # Phase 19 D-19: local and hosted rehearsal outcomes share this message-key rule. The checker
 # refuses empty, ambiguous and cross-job log evidence instead of manufacturing a comparable result.
 add_test(NAME judge_outcome_controls
@@ -2613,6 +2662,12 @@ add_test(NAME ci_floor_parallel_serial_selftest
     -DGBB_EXPECT_CODE=1
     "-DGBB_EXPECT_REGEX=doc-contract-missing: CTEST_PARALLEL_LEVEL: 4"
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
+add_test(NAME ci_floor_relocated_suite_contract
+  COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-cmake-floor-policy.py" --self-test)
+set_tests_properties(ci_floor_relocated_suite_contract PROPERTIES
+  TIMEOUT 10
+  PASS_REGULAR_EXPRESSION "cmake-floor policy pass full-suite=relocated installed-inventory=ok controls=[0-9]+"
+  LABELS "planning")
 
 # Each native job runs the full suite, which serially took about 20 minutes of the CI critical path. The job
 # environment keeps its ctest calls parallel, like the floor job; each serial selftest blanks that one job's
@@ -5068,14 +5123,54 @@ if(NOT GBB_STATE_REV_RESULT EQUAL 0 OR NOT GBB_STATE_SOURCE_REV_LENGTH EQUAL 40 
   message(STATUS
     "State evidence CTests remain registered with an unresolved revision and will fail closed when invoked")
 endif()
+# Phase 23 D-07/D-08: committed independent review reports bind the implementation source and
+# the qualification comparison permits only the fixed report/evidence allowlist. Register after
+# the configure-time immutable source revision is resolved above.
+gbb_add_v02_contract(phase23_review_evidence_contract 60
+  [=[review-evidence contract pass reports=3 findings=[0-9]+ implementation=[0-9a-f]+]=]
+  verify-review-evidence.py --check --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+gbb_add_v02_contract(phase23_review_evidence_controls 60
+  [=[review-evidence controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  verify-review-evidence.py --self-test --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+# Phase 23 D-01/D-02: keep the v0.4.0 release path pinned to its reviewed version across all
+# trusted version-window workflows, with mutation controls for missing/wrong pins and tag identity.
+gbb_add_v02_contract(phase23_release_workflow_contract 30
+  [=[release workflow v0.4.0 pins pass]=]
+  verify-v04-release-policy.py --check --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
+gbb_add_v02_contract(phase23_release_workflow_controls 30
+  [=[release workflow v0.4.0 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  verify-v04-release-policy.py --self-test --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 gbb_add_ledger_contract(support_claims
   [=[support-claims pass claims=9 non_claims=10 rev=[0-9a-f]+]=]
   --check-claims --rev "${GBB_STATE_SOURCE_REV}")
+gbb_add_ledger_contract(support_claims_v04
+  [=[support-claims-v04 pass candidates=2 harness=CGB-CPU-E mode=cgb-native diagnostics=513/7/0/0 inherited-claims=9 rev=[0-9a-f]+]=]
+  --check-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
+gbb_add_ledger_contract(support_claims_v04_controls
+  [=[support-claims-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  --self-test-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
+gbb_add_ledger_contract(release_notes_v04
+  [=[release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+]=]
+  --render-release-notes-preface --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}"
+  --repo "${PROJECT_SOURCE_DIR}" --output "${PROJECT_BINARY_DIR}/release-notes-v0.4.0-preface.md")
+gbb_add_ledger_contract(support_ledger_v04_tracer
+  [=[support-ledger-v04 tracer pass version=0\.4\.0 candidates=2]=]
+  --self-test-tracer --rev "${GBB_STATE_SOURCE_REV}")
 set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=16)
 gbb_add_ledger_contract(support_claims_controls
   [=[support-claims controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-claims --rev "${GBB_STATE_SOURCE_REV}")
 unset(GBB_LEDGER_MIN)
+# These immutable ledger/review contracts read version-bound planning evidence. Preserve their v0.2
+# grouping and include them in the unbuilt planning lane. The v0.4 note generator's only build-tree
+# path is its exact output file, checked by verify-planning-labels.py.
+set_tests_properties(
+  ledger_freeze support_ledger_binding ledger_freeze_controls support_ledger_binding_controls
+  release_disclosure_generator release_disclosure_controls
+  phase23_review_evidence_contract phase23_review_evidence_controls
+  support_claims support_claims_v04 support_claims_v04_controls release_notes_v04
+  support_ledger_v04_tracer support_claims_controls
+  PROPERTIES LABELS "v02;planning")
 add_test(NAME adoption_claim_boundaries_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-adoption.py"
     --self-test-claim-boundaries --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")

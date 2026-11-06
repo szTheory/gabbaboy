@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -121,7 +122,46 @@ def is_phase22_inventory_reader(name: str, command: list[str], labels: list[str]
     return build_tokens == [_norm(build_value)]
 
 
-def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
+def is_release_notes_v04_output_only(name: str, command: list[str], labels: list[str],
+                                    source: str, build: str, cmake_executable: str,
+                                    source_revision: str) -> bool:
+    """Allow the v0.4 planning check to write its one fixed output under build/."""
+    if name != "release_notes_v04" or "planning" not in labels or "v02" not in labels:
+        return False
+    if len(command) != 6:
+        return False
+    try:
+        if Path(command[0]).resolve(strict=True) != Path(cmake_executable).resolve(strict=True):
+            return False
+    except (OSError, RuntimeError):
+        return False
+    expected_regex = "-DGBB_EXPECT_REGEX=release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+"
+    if command[2] != "-DGBB_EXPECT_CODE=0" or command[3] != expected_regex:
+        return False
+    expected_exit = _norm(str(Path(source) / "tests/expect_exit.cmake"))
+    if command[4] != "-P" or _norm(command[5]) != expected_exit or not command[1].startswith("-DGBB_CMD="):
+        return False
+    wrapped = command[1][len("-DGBB_CMD="):].split(";")
+    expected_script = _norm(str(Path(source) / "tests/scripts/verify-support-ledger.py"))
+    expected_output = _norm(str(Path(build) / "release-notes-v0.4.0-preface.md"))
+    if len(wrapped) != 12 or wrapped[1] != "-I" or _norm(wrapped[2]) != expected_script:
+        return False
+    try:
+        if Path(wrapped[0]).resolve(strict=True) != Path(sys.executable).resolve(strict=True):
+            return False
+    except (OSError, RuntimeError):
+        return False
+    if wrapped[3:7] != ["--render-release-notes-preface", "--claims-version", "0.4.0", "--rev"]:
+        return False
+    if wrapped[7] != source_revision \
+            or wrapped[8:] != ["--repo", _norm(source), "--output", expected_output]:
+        return False
+    build_tokens = [_norm(token) for token in _tokens(command) if _under(token, build)]
+    return build_tokens == [expected_output]
+
+
+def judge(tests: list[dict], source: str, build: str, cmake_executable: str,
+          source_revision: str) -> tuple[int, int]:
     planning = 0
     for test in tests:
         name = test.get("name", "?")
@@ -134,7 +174,10 @@ def judge(tests: list[dict], source: str, build: str) -> tuple[int, int]:
         labelled = "planning" in labels
         if labelled:
             planning += 1
-            if uses_build_tree(command, build) and not is_phase22_inventory_reader(name, command, labels, source, build):
+            if uses_build_tree(command, build) \
+                    and not is_phase22_inventory_reader(name, command, labels, source, build) \
+                    and not is_release_notes_v04_output_only(name, command, labels, source, build,
+                                                              cmake_executable, source_revision):
                 raise Reject(f"REJECT planning-test-needs-build: {name} is labelled planning but its command references the build directory")
         elif is_planning_reader(command, source, build):
             raise Reject(f"REJECT unlabelled-planning-reader: {name} reads .planning/ or AGENTS.md but lacks the planning label")
@@ -155,6 +198,52 @@ def load(build_dir: Path) -> list[dict]:
     return tests
 
 
+def configured_cmake(build_dir: Path) -> str:
+    """Return the CMake executable recorded by the build that generated the CTest inventory."""
+    cache = build_dir / "CMakeCache.txt"
+    try:
+        contents = cache.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise Reject(f"REJECT inventory-unreadable: cannot read configured CMake identity: {exc}") from exc
+    match = re.search(r"(?m)^CMAKE_COMMAND:INTERNAL=(.+)$", contents)
+    if match is None:
+        raise Reject("REJECT inventory-unreadable: configured CMake identity is missing")
+    try:
+        return str(Path(match.group(1)).resolve(strict=True))
+    except (OSError, RuntimeError) as exc:
+        raise Reject(f"REJECT inventory-unreadable: configured CMake executable is unavailable: {exc}") from exc
+
+
+def configured_source_revision(tests: list[dict], source: str, cmake_executable: str) -> str:
+    """Read the configure-time source revision from the immutable review contract's CTest command."""
+    contracts = [test for test in tests if test.get("name") == "phase23_review_evidence_contract"]
+    if len(contracts) != 1:
+        raise Reject("REJECT inventory-unreadable: unique review-evidence contract is missing")
+    command = [str(item) for item in contracts[0].get("command", [])]
+    if len(command) != 6:
+        raise Reject("REJECT inventory-unreadable: review-evidence contract command shape changed")
+    try:
+        if Path(command[0]).resolve(strict=True) != Path(cmake_executable).resolve(strict=True):
+            raise Reject("REJECT inventory-unreadable: review-evidence contract uses another CMake executable")
+    except (OSError, RuntimeError) as exc:
+        raise Reject(f"REJECT inventory-unreadable: review-evidence CMake command is unavailable: {exc}") from exc
+    if not command[1].startswith("-DGBB_CMD=") or command[2] != "-DGBB_EXPECT_CODE=0" \
+            or command[4] != "-P" or _norm(command[5]) != _norm(str(Path(source) / "tests/expect_exit.cmake")):
+        raise Reject("REJECT inventory-unreadable: review-evidence contract wrapper changed")
+    wrapped = command[1][len("-DGBB_CMD="):].split(";")
+    expected_script = _norm(str(Path(source) / "tests/scripts/verify-review-evidence.py"))
+    try:
+        interpreter_matches = Path(wrapped[0]).resolve(strict=True) == Path(sys.executable).resolve(strict=True)
+    except (IndexError, OSError, RuntimeError):
+        interpreter_matches = False
+    if len(wrapped) != 8 or not interpreter_matches or wrapped[1] != "-I" \
+            or _norm(wrapped[2]) != expected_script or wrapped[3:5] != ["--check", "--rev"] \
+            or wrapped[6:] != ["--repo", _norm(source)] \
+            or not re.fullmatch(r"[0-9a-f]{40}", wrapped[5]):
+        raise Reject("REJECT inventory-unreadable: review-evidence source revision is invalid")
+    return wrapped[5]
+
+
 def self_test() -> int:
     controls = 0
     with tempfile.TemporaryDirectory(prefix="gbb-planning-labels.") as directory:
@@ -171,6 +260,10 @@ def self_test() -> int:
         evidence = source / "tests/scripts" / "verify-diagnostic-evidence.py"
         evidence.parent.mkdir(parents=True, exist_ok=True)
         evidence.write_text("open('.planning/STATE.md')\n", encoding="utf-8")
+        ledger = source / "tests/scripts" / "verify-support-ledger.py"
+        ledger.write_text("open('.planning/STATE.md')\n", encoding="utf-8")
+        expect_exit = source / "tests" / "expect_exit.cmake"
+        expect_exit.write_text("message(STATUS 'ok')\n", encoding="utf-8")
 
         def test(name: str, command: list[str], labels: list[str] | None = None) -> dict:
             props = [{"name": "LABELS", "value": labels}] if labels else []
@@ -190,6 +283,27 @@ def self_test() -> int:
             str(source), "--source-revision", "a" * 40,
             "--build-dir", str(build).replace("/", "\\"),
         ]
+        release_notes_regex = "-DGBB_EXPECT_REGEX=release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+"
+
+        def release_notes_command(output: Path, revision: str = "a" * 40) -> list[str]:
+            wrapped = [py, "-I", str(ledger), "--render-release-notes-preface", "--claims-version", "0.4.0",
+                       "--rev", revision, "--repo", str(source), "--output", str(output)]
+            return [shutil.which("cmake") or "cmake", "-DGBB_CMD=" + ";".join(wrapped),
+                    "-DGBB_EXPECT_CODE=0", release_notes_regex,
+                    "-P", str(expect_exit)]
+
+        release_notes_writer = release_notes_command(build / "release-notes-v0.4.0-preface.md")
+        release_notes_wrong_output = release_notes_command(build / "unexpected.md")
+        release_notes_stale_revision = release_notes_command(build / "release-notes-v0.4.0-preface.md", "b" * 40)
+        release_notes_extra_artifact = list(release_notes_writer)
+        release_notes_extra_artifact[1] += f";{build}/gabbaboy-runner"
+        fake_cmake_dir = source / "untrusted-cmake"
+        fake_cmake_dir.mkdir()
+        fake_cmake = fake_cmake_dir / "cmake"
+        fake_cmake.write_text("#!/bin/sh\nprintf 'release-notes-preface pass\\n'\n", encoding="utf-8")
+        fake_cmake.chmod(0o755)
+        release_notes_fake_cmake = list(release_notes_writer)
+        release_notes_fake_cmake[0] = str(fake_cmake)
         wrong_windows_build = str(build / "unexpected").replace("/", "\\")
         cases = [
             ("unlabelled test reading .planning/ is rejected", [test("a", [py, str(reader)])], "unlabelled-planning-reader"),
@@ -246,10 +360,24 @@ def self_test() -> int:
                    [str(fake_python), "-I", str(evidence), "--check", "--repo-root", str(source),
                     "--source-revision", "a" * 40, "--build-dir", str(build)],
                    ["planning", "ctest-inventory-only"])], "planning-test-needs-build"),
+            ("the exact v0.4 notes renderer may write its fixed output under build",
+             [test("release_notes_v04", release_notes_writer, ["v02", "planning"])], None),
+            ("the release-notes output exception cannot be reused by another test",
+             [test("other_release_notes", release_notes_writer, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output exception rejects an unexpected output path",
+             [test("release_notes_v04", release_notes_wrong_output, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output exception rejects a valid but stale source revision",
+             [test("release_notes_v04", release_notes_stale_revision, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output exception cannot smuggle a built executable",
+             [test("release_notes_v04", release_notes_extra_artifact, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output exception rejects a fake outer CMake executable",
+             [test("release_notes_v04", release_notes_fake_cmake, ["v02", "planning"])], "planning-test-needs-build"),
+            ("the release-notes output renderer must remain in the planning lane",
+             [test("release_notes_v04", release_notes_writer, ["v02"])], "unlabelled-planning-reader"),
         ]
         for label, tests, expected in cases:
             try:
-                judge(tests, str(source), str(build))
+                judge(tests, str(source), str(build), shutil.which("cmake") or "cmake", "a" * 40)
             except Reject as exc:
                 if expected is None or f"REJECT {expected}:" not in str(exc):
                     raise SystemExit(f"planning-labels self-test: {label}: unexpected {exc}")
@@ -257,7 +385,8 @@ def self_test() -> int:
                 if expected is not None:
                     raise SystemExit(f"planning-labels self-test: {label}: accepted, wanted REJECT {expected}")
             controls += 1
-        total, planning = judge([test("a", [py, str(reader)], ["planning"]), test("b", [py, str(clean)])], str(source), str(build))
+        total, planning = judge([test("a", [py, str(reader)], ["planning"]), test("b", [py, str(clean)])],
+                                str(source), str(build), shutil.which("cmake") or "cmake", "a" * 40)
         if (total, planning) != (2, 1):
             raise SystemExit("planning-labels self-test: counts are wrong")
         controls += 1
@@ -276,7 +405,10 @@ def main() -> int:
         parser.error("--build-dir or --self-test is required")
     build = args.build_dir.resolve()
     try:
-        total, planning = judge(load(build), str(ROOT), str(build))
+        tests = load(build)
+        cmake_executable = configured_cmake(build)
+        source_revision = configured_source_revision(tests, str(ROOT), cmake_executable)
+        total, planning = judge(tests, str(ROOT), str(build), cmake_executable, source_revision)
     except Reject as exc:
         print(str(exc), file=sys.stderr)
         return 1

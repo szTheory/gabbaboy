@@ -1,0 +1,127 @@
+# Phase 23 Plan 23-04 T2 bounded rescope
+
+**Status:** Owner approved 2026-11-04. This amends Plan 23-04 T2 in place; it adds no plan.
+
+## Evidence and exact scope
+
+At implementation commit `d98b4af34627dbd0d6a18d2edc2a1e93f3b3e91c`, independent review reproduced five CommonMark parsing interactions that let false CGB-game claims or required disclosures pass through Markdown metadata:
+
+1. An explicit image label containing only spaces or tabs (`![claim][ ]`, `![claim][\t]`) fell back to the image alt label as though the suffix were the truly empty collapsed form `[]`.
+2. `container_content_start()` counted a tab after a list marker as one column. In `-\t[unused]: /url` followed by a two-space continuation, it treated the continuation as a reference title even though tab expansion places the list content at column four.
+3. Removing HTML comments before reference-label matching made nonmatching source labels match after comment removal. This affected explicit and shortcut image references. The correction must also preserve comment identity: `alt` and `def` comment payloads between otherwise identical label text must not collapse to the same reference label.
+4. Removing a leading HTML comment before block parsing turned trailing backticks on that line into a false fenced-code opener, hiding following prose through end of document.
+5. The bracket scanner treated `]` inside a URI autolink in link text as the outer link-text close. The actual inline-link title then remained visible to the checker and could supply a required disclosure.
+
+Reviewers and the orchestrator reproduced these cases through the production `--check docs` path using disposable copies of the repository inputs. The autolink case removes all ordinary copies of the required disclosure and leaves it only in the link title.
+
+The implementation change is limited to `tests/scripts/verify-v02-adoption.py` and its self-test controls. Correct the parser ordering and Markdown context handling for only the cases above. Do not add a parser library, dependency, release path, product claim, fixture, or unrelated source change. Preserve the existing whitespace normalization and visible/masked-copy contract. Keep the security review's separate low Git-output-bound finding explicit; this exception does not include its remediation.
+
+## Required paired controls
+
+- Reject all-whitespace explicit image labels when their alt text contains an unsupported game claim; accept a valid collapsed `[]` reference with a matching definition.
+- Keep a two-space title continuation visible after a `-\t` marker; mask a valid continuation at the expanded list-content column.
+- Keep claims visible when comments make explicit or shortcut labels differ; preserve a valid matching-comment reference and ordinary non-comment reference.
+- Reject the false fence created by `<!-- -->```markdown` followed by an unclosed claim line; mask a real fenced block after an ordinary comment line.
+- Reject a disclosure found only in an inline-link title when the link text contains a URI autolink with `]`; confirm a valid title after the same autolink form is masked.
+
+Every negative must fail for its intended cause, and every paired valid case must pass. Keep the older Plan 23-09 exact-opener, malformed-title, reference-definition, and raw-HTML controls intact.
+
+## D-145 owner-approved extension
+
+At implementation commit `4bb708fd137f7831b9af720220a09cee57e8d47c`, security reproduced a further bypass through the production docs checker: appending `CGB\u200b game passes all acceptance checks.` to README passed with the same success summary as the baseline. U+200B is invisible and is not Python `\s`. Follow-up disposable checks also accepted U+2060 WORD JOINER and U+200C ZERO WIDTH NON-JOINER in the same position.
+
+On 2026-11-04 the owner approved a narrow D-145 correction in the same existing T2. Normalize Unicode format-category characters only when evaluating the unsupported CGB-game claim pattern, and add causal docs and release-note controls for U+200B, U+2060, and U+200C. Include an ordinary safe-text counterpart. Preserve the D-144 parser cases, including a distinct-comment-payload reference mismatch, and do not broaden normalization to required disclosures or unrelated claim rules.
+
+A separate inline-comment fence hypothesis was withdrawn after checking CommonMark 0.31.2: a comment that starts mid-paragraph does not meet the type-2 HTML block start condition, and a fenced block may interrupt a paragraph (§§4.5–4.6). It is not part of D-145.
+
+## D-146 owner-approved extension
+
+At implementation commit `742bf1bb5dd3a6e71ab93dbdb420bca2ec94d16a`, security reproduced another unsupported-game-claim bypass through the production docs checker: `CGB\u034f game passes all acceptance checks.` was accepted with the baseline summary. U+034F is a combining mark (`Mn`) with no visible display of its own; Unicode 18.0 classifies it as `Default_Ignorable_Code_Point`.
+
+On 2026-11-04 the owner approved D-146 to extend only the unsupported CGB-game claim matcher to remove Unicode 18.0 `Default_Ignorable_Code_Point` characters, while retaining D-145's removal of all `Cf` characters. Add paired docs and release-note rejection controls for U+034F and representative non-`Cf` default-ignorable ranges, plus an ordinary safe-text counterpart. Do not normalize required disclosures or any other claim matcher. The range table is frozen to Unicode 18.0 `DerivedCoreProperties.txt`; record its version in code and keep the matcher scoped to this single claim pattern. The [Unicode 18.0 UCD](https://www.unicode.org/Public/18.0.0/ucd/DerivedCoreProperties.txt) lists U+034F as default-ignorable, and [Unicode Standard §5.21](https://www.unicode.org/versions/Unicode18.0.0/core-spec/chapter-5/) describes default-ignorable characters as having no visible fallback glyph.
+
+## D-147 owner-approved extension
+
+At implementation commit `a6bc0a824bce55de57422e2b6b73b94ed0f841d1`, security reproduced another bypass through the production docs checker: `CGB&#x200b; game passes all acceptance checks.` was accepted with the baseline summary. CommonMark treats valid entity and numeric character references as their corresponding Unicode characters in ordinary prose; this hexadecimal reference renders as U+200B. The [CommonMark 0.31.2 §2.5](https://spec.commonmark.org/0.31.2/#entity-and-numeric-character-references) specifies valid HTML5 named entities, decimal references, and hexadecimal references, while leaving code spans and code blocks literal.
+
+On 2026-11-04 the owner approved D-147 to decode valid CommonMark character references only when their decoded output consists entirely of `Cf` or Unicode 18.0 `Default_Ignorable_Code_Point` characters, and only for unsupported CGB-game claim matching. Add paired docs and release-note controls for hexadecimal, decimal, and named references, including the reproduced U+200B case and a reference to U+034F. Preserve a visible-entity counterpart and code-span behavior. Do not add a Markdown/HTML parser or dependency, decode ordinary visible entity text for claim matching, or normalize required disclosures or other claim matchers.
+
+## D-148 owner-approved extension
+
+At implementation commit `a6bc0a824bce55de57422e2b6b73b94ed0f841d1`, security also reproduced a visible-reference bypass through the production docs checker: `CGB&#x20; game passes all acceptance checks.` was accepted with the same 473-check success summary as baseline. CommonMark renders `&#x20;` as a space, so restricting D-147 to invisible decoded characters did not cover the visible claim.
+
+On 2026-11-04 the owner approved D-148 to decode all valid CommonMark entity and numeric character references in already-visible prose before applying the unsupported CGB-game claim matcher. Keep the change confined to that matcher; `prose()` must continue masking code spans and code blocks before it runs. Add paired docs and release-note controls for invisible hex/decimal/named references, a visible encoded space, and an encoded `CGB` letter. Keep safe visible-reference prose and code-span examples accepted. Add no parser library, and do not change the other claim matchers or disclosures.
+
+## D-149 owner-approved extension
+
+At implementation commit `fc0ba4ff9626e06e04d8800800561b51414166bf`, the adversarial review reproduced two production docs-checker bypasses: a claim split by a backslash hard line break before `game passes all acceptance checks.`, and the same construction followed by `&#x20;game`. CommonMark renders a backslash immediately before a line ending as a hard line break, so the phrase remains visible although the collapsed source keeps a backslash that prevents the claim matcher from joining it. The [CommonMark 0.31.2 §6.7](https://spec.commonmark.org/0.31.2/#hard-line-breaks) defines this behavior.
+
+On 2026-11-04 the owner approved D-149 to normalize CommonMark backslash hard line breaks as whitespace only for the unsupported CGB-game claim matcher. Preserve code-span and code-block masking before matching, and do not change other claim matchers or disclosures. Add paired docs and release-note rejection controls for LF, CR, CRLF, and a hard break followed by an encoded visible space. The same matcher also runs on third-party notices, so pass that caller uncollapsed visible prose and add notice-path hard-break controls. Keep a soft-break control, safe evidence prose, and inline/fenced-code examples as valid counterparts. Add no parser library or plan, and do not reset review/gap counts or budgets.
+
+## D-150 owner-approved extension
+
+At implementation commit `e26757fafc818a92ddf7ca45f1a409658a5a5bdd`, adversarial review reproduced production docs-checker acceptance of `**CGB** game passes all acceptance checks.`, `C*G*B game passes all acceptance checks.`, and `C[GB](https://example.invalid) game passes all acceptance checks.` CommonMark renders the emphasized letters and inline link label as visible text while the matcher sees the source delimiters. See [CommonMark 0.31.2 §§6.2–6.3](https://spec.commonmark.org/0.31.2/#emphasis-and-strong-emphasis).
+
+On 2026-11-04 the owner approved D-150 to normalize CommonMark emphasis markers and inline link-label text only for the unsupported CGB-game claim matcher. Keep inline code spans and fenced/indented code masked before matching, and ignore link destinations and titles. Add paired docs and release-note controls for strong emphasis, intraword emphasis, underscore emphasis, and a visible CGB claim split across prose and an inline-link label; keep intraword underscores, escaped punctuation, code spans/blocks, and link destinations as accepted counterparts. Add no Markdown parser library or plan, and do not change other claim matchers or disclosures.
+
+## D-151 owner-approved extension
+
+At exact source `e017078b72e78b38fb596faced3af3e35c2ca0ce`, independent release-consumer and adversarial reviewers found that the production docs checker accepted visible unsupported CGB-game claims split through valid shortcut, full, and collapsed CommonMark reference links. For example, `C[GB] game passes all acceptance checks.` with `[GB]: https://example.invalid` renders as the unsupported claim while the matcher still sees the brackets.
+
+On 2026-11-04 the owner approved D-151 to expose valid shortcut, full, and collapsed reference-link labels only in the unsupported CGB-game claim matcher. Ignore reference destinations and titles. Add paired docs/release-note controls for all three reference forms and notice-path controls because notices share this matcher. Keep unresolved bracket text, escaped brackets, inline/fenced code, and claims present only in destinations as accepted counterparts. Add no parser library or plan, do not alter other claim matchers/disclosures, and do not reset review/gap counts or budgets.
+
+## D-152 owner-approved extension
+
+At exact source `b798781105b8f6f803e85aa2ad766d2b2fdbec22`, security review found quadratic work in `normalize_commonmark_emphasis`: every unmatched closing delimiter run rescanned all prior runs to find an opener. Measured inputs with 500/1,000/2,000/4,000/8,000 runs took 0.0046/0.0177/0.0672/0.2673/1.0667 seconds. The public validator accepts Markdown documents up to 1 MiB, so attacker-controlled documentation can consume minutes of CPU.
+
+On 2026-11-04 the owner approved D-152 to replace the repeated backward scan with per-marker delimiter candidate stacks, keeping the existing CommonMark pairing and rule-of-three behavior and changing only the unsupported CGB-game matcher. Add a dense unmatched-marker regression control plus paired docs/release-note/notice coverage as appropriate. Preserve paired stars/underscores, intraword stars, underscore flanking, escapes, code masking, and all D-144–D-151 cases. Do not rely on clocks, run counts, or artificial size quotas as evidence. Add no parser library or plan, change no other matchers/disclosures, and reset no review/gap counts or budgets.
+
+## D-153 owner-approved extension
+
+At exact source `6876fab06bf746fdaab67beaa4d52a6b1c70ac06`, adversarial review reproduced two visible unsupported game claims that pass the docs checker: `😀__CGB__ game passes all acceptance checks.` and `😀**CGB* game passes all acceptance checks.` CommonMark treats Unicode symbol characters as punctuation for emphasis flanking; the matcher recognized Unicode punctuation categories but omitted symbol categories.
+
+On 2026-11-04 the owner approved D-153 to apply Unicode punctuation and symbol categories (P and S) as punctuation in CommonMark emphasis normalization, only for the unsupported CGB-game matcher. Add paired docs, notice, and release-note controls for both bypasses, plus safe prose with Unicode-symbol emphasis. Preserve paired-delimiter/rule-of-three behavior, escaped punctuation, code masking, and all D-144–D-152 cases. Add no parser library or plan; change no unrelated claim matcher/disclosure and reset no review/gap counts or budgets.
+
+## D-154 owner-approved extension
+
+At exact source `6876fab06bf746fdaab67beaa4d52a6b1c70ac06`, security review found that the shortcut-reference branch normalized a copied label at every opening bracket. A nested bracket payload therefore rescanned decreasing-length spans quadratically even when the document contained a valid unrelated reference definition; a sub-1 MiB input could exceed the existing 60-second docs-check timeout.
+
+On 2026-11-04 the owner approved D-154 to reject impossible reference-label candidates before copying or normalization, using constant-time span checks for paired unescaped nested brackets and the CommonMark 999-character label limit. Keep valid shortcut, full, and collapsed reference rendering unchanged. Add paired dense nested-bracket docs, notice, and release-note controls with safe prose. Do not use clocks, run counts, or size thresholds as evidence. Add no parser library or plan; change no unrelated matcher/disclosure and reset no review/gap counts or budgets.
+
+## D-155 owner-approved extension
+
+At exact source `98b7252f2da241b75c6e838b1a45ab9c2a77d290`, security review found that the inline notice digest matcher accepted `fixtures/../../...` paths. The checker joined the accepted path to the repository root without confirming the resolved file remained inside it, and `copy_inputs()` used that same relative path for its source and isolated destination. A crafted notice could therefore read outside the checkout and write outside the self-test root. The focused Plan 23-04 selector also used a two-digit shard pattern and omitted shards 100–199.
+
+On 2026-11-06 the owner approved D-155 to confine notice fixture paths and self-test copies to their roots, including symlink resolution, and to correct the existing focused selector. Add causal traversal and symlink controls for external notice inputs and copy destinations, preserving valid in-root files and ordinary paths. Update the selector to `[0-9]+`; do not change CTest registration or remove controls. Keep the source correction in `tests/scripts/verify-v02-adoption.py`; the selector change remains in the existing 23-04 plan. Add no plan, reset no review/gap counts or budgets, and keep release, fixture-admission, product, and matcher behavior unchanged. Require all three reviewers to inspect the exact corrected source and rerun the approved gates. Any further correctness/security finding remains an owner decision before source changes.
+
+## CTest execution amendment
+
+The full production docs self-test passed directly, including its accepted and rejected CLI cases, but its single CTest invocation exceeded the existing 180-second bound while every case reparsed the complete public-doc set and support ledger. The first full-suite attempt also exposed sandbox denials when other controls created temporary Git worktrees. The timeout is a test-harness execution issue; the docs assertions and admission policy remain unchanged.
+
+Keep the direct unsharded CLI path intact. For CTest, distribute every existing docs `child_result` invocation deterministically across 32 shards, require each shard's computed selection count and at least one positive and one negative case, and run the shared release-note control sweep once with shard 0. Register the 31 additional shards in the test inventory and give each a 90-second budget entry tied to D-069. Running the complete registered shard set preserves all controls without multiplying the release-note sweep. This amendment changes only test execution and inventory; it removes no control, adds no phase plan, and does not reset review or gap limits.
+
+## T3 measured shard adjustment
+
+The first hosted qualification of the 32-shard layout passed all docs controls locally but hit the existing 90-second CTest timeout on 18 Linux shards and 19 Windows shards. Successful hosted shards took 54–86 seconds under the configured four-worker load. A 64-shard draft reduced per-test work but failed the per-shard requirement because modulo-64 assignment left some shards with only positive or only negative cases. A 63-shard draft restored both control types, but the elevated local four-worker run still timed out on 24 of 63 shards, showing that expensive cases were clustered by global call index. A 127-shard draft assigned positive and negative calls on independent modulo counters and verified that every shard retained both, but 12 of 127 shards still exceeded the 90-second CTest limit. Use 200 shards with the same separate counters; the production self-test derives each shard's exact positive and negative assignment and requires both. The fixture-free docs self-test has 216 positive and 206 negative calls, so all 200 shards receive both and each runs at most four selected child checks. In sharded mode, the parent uses an assigned successful child check for the reported check count instead of reparsing the unchanged public-doc set. An un-locked local four-worker run passed 184 shards and timed out on 16; applying a single shared lock to all 200 then passed but took 2186.23 seconds. Reserve all four CTest slots only for the measured 16 slow shards via `PROCESSORS 4`, leaving the other 184 parallel. Register the added test names and D-069 budget rows. Re-review the CTest registration/inventory change and rerun exact-head required gates before merge. This is a measured execution adjustment: it changes no matcher, docs policy, release behavior, fixture admission or scheduled plan, and does not reset review/gap limits.
+
+## T3 full-suite control corrections
+
+The first full local qualification run exposed planning-harness assumptions. The phase-path scan found exact historical Phase 21/22 paths in the version-bound support profile and duplicated checker pins, plus fixed report paths and disposable committed fixtures in the new review verifier. Add only count-pinned allowlist rows with reasons explaining their immutable Git-object or temporary-fixture use. The profile paths remain read from their recorded commits; no checker reads the live phase tree. Inventory inspection found 14 existing `v02` ledger/review CTests whose referenced checker supports planning reads. Preserve their `v02` label and add `planning`; all but `release_notes_v04` have no build-tree argument. That renderer writes exactly one generated preface into the build directory without consuming a built artifact, so extend the planning-label checker to accept only its exact interpreter, script, flags, source revision, success regex, and output path. Five causal controls reject a changed test name, output, injected binary, or missing planning label. Configure and both `planning_labels` CTests now pass after applying the property only after all named tests are registered.
+
+The planning gate found nine scheduled Phase 23 plans used all nine roadmap cap slots, leaving no slot for the policy-required gap round. Keep all nine plans and reserve total cap 10 for that round by reallocating one unused ordinary-plan slot from completed Phase 21 (cap 10 to 9); retain every Phase 21 plan and its evidence and keep the four-phase cap sum at 40. This changes cap accounting only and adds no plan or phase work.
+
+The added `planning` labels also made the review-evidence registration checker misread the same CTest names in `set_tests_properties` as duplicate registrations. Count only the actual `gbb_add_v02_contract` declarations and preserve duplicate-declaration rejection with a dedicated negative control. The release-notes output-only exception must bind its outer CMake command to the executable recorded in the configured build cache and its `--rev` value to the revision in the configured review-evidence CTest command. Causal negatives use an untrusted executable whose basename is exactly `cmake` and a different valid 40-character revision. These are test-harness corrections within T2, with no plan or review-count change.
+
+The post-tag recovery control pinned the production adoption checker to commit `802555ac42264561d6b3f6fbad233d9aac6db0a9`, which predates the reviewed Phase 23 matcher updates. Re-pin to reviewed source commit `aecf09cc02ae81bdb2047087014f1bc66b71aa06`, preserving the byte comparison between the selected immutable source and working tree. With the updated checker, both tagged v0.3.0 positive notes paths report 24 checks rather than 22, so update the per-positive and aggregate expectations from 22/89 to 24/97. This keeps the historical tag/source and exact note-repair assertions unchanged. The recovery self-test then passes with 99 negative controls and 12 positives; no publication or release behavior changes.
+
+## Phase and review limits
+
+These owner-approved in-place exceptions do not add a scheduled plan, reset review-fix/gap counts, or renew any phase budget. Phase 23 retains its nine scheduled plans under a total cap of 10, which includes the single required gap-closure slot. To keep the four-phase cap sum at 40, the roadmap reallocates one unused ordinary-plan slot from completed Phase 21 (cap 10 to 9); all eight Phase 21 plans and their evidence remain unchanged. The Markdown behavior correction remains scoped to the existing validator's unsupported CGB-game matcher and its causal controls, plus the three independently owned reports. The CTest execution amendment above additionally changes only test registration, inventory and timeout-budget records; it does not expand matcher behavior. D-144 covers the five Markdown interactions above; D-145 covers literal `Cf` claim separators; D-146 covers literal Unicode 18.0 default-ignorable separators; D-147 covers references to invisible characters; D-148 extends matching to every valid CommonMark character reference in visible prose; D-149 normalizes CommonMark backslash hard line breaks; D-150 removes CommonMark emphasis delimiters and exposes inline link-label text; D-151 renders valid shortcut, full, and collapsed reference-link labels while ignoring destinations and titles; D-152 replaces the quadratic delimiter scan with bounded candidate stacks; D-153 applies Unicode punctuation/symbol flanking; and D-154 bounds reference-label candidate normalization. D-155 additionally confines notice paths and self-test copies and fixes the existing focused shard selector. If any further correctness/security finding remains after these bounded corrections, stop T2 and obtain a new explicit owner decision before further source changes.
+
+After the fixes, commit the implementation, set `IMPLEMENTATION_SHA` to that exact commit, and have all three independent reviewers reissue their reports at that SHA. Do not commit or qualify stale `d98b4af3` or `4bb708fd` reports. Run the full docs self-test, normal configure/build, the direct real-report gate, and Plan 23-04 T2's exact focused CTest selection. T3 remains held until all reports and mechanical gates pass.
+
+No real CGB game or diagnostic fixture is fetched, built, run, or admitted. REL-01 remains Pending; this exception changes no release, rights, platform, hardware, or publication claim.
+
+## Primary syntax reference
+
+The correction follows [CommonMark 0.31.2](https://spec.commonmark.org/0.31.2/), particularly its tab-stop rules (§2.2), fenced-code block rules (§4.5), emphasis and strong-emphasis flanking (§6.2), link-label rules (§6.3), and autolink/link-text precedence (§§6.3, 6.5).

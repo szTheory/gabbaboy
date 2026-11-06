@@ -21,13 +21,13 @@
     {
       "number": "23",
       "name": "Qualified v0.4.0 Release",
-      "status": "pending"
+      "status": "in_progress"
     }
   ],
   "next": {
-    "command": "/gsd-discuss-phase 23",
-    "label": "Owner-controlled Phase 23 discussion",
-    "reason": "Phase 22 and repository cleanup are complete; Phase 23 remains owner-controlled"
+    "command": "$gsd-progress",
+    "label": "Show progress",
+    "reason": "Unsure of state — showing progress"
   },
-  "updated_at": "2026-11-03T21:32:00Z"
+  "updated_at": "2026-11-04T12:49:20.186Z"
 }

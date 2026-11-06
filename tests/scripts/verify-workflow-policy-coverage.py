@@ -22,8 +22,8 @@ BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
-REVIEWED_POLICY_SHA256 = "17e9204c8b625bbc4c30fd2b3b10056708c5af102d4ca395ec84ff06ca5e35b4"
+REVIEWED_POLICY_COMMIT = "9e09eef8b379ca8d329cb13bf354058661296daa"
+REVIEWED_POLICY_SHA256 = "d1d25d4a53a553540b5ec8777024cf00480a3144f2343c79c0165e4731f80d08"
 REVIEWED_ARCHIVE_HELPER_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
 REVIEWED_ARCHIVE_HELPER_SHA256 = "54fcfd4869ca2f3d085cfac690804858b42c37d73e7032ff6912a4e972123ce5"
 GROUPS = {
@@ -72,9 +72,9 @@ INSTRUMENTED_POLICY_FUNCTIONS = {
     "_ledger_git_object_controls", "_ledger_disclosure_scratch_controls", "_ledger_release_object_scratch_controls",
     "verify_cited_stub_controls", "rehearsal_bash_resolver_controls", "rehearsal_tag_guard_controls", "self_test",
 }
-# These existing functions changed in the exact reviewed snapshot above. Their full source
-# bytes are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
-REVIEWED_CHANGED_POLICY_FUNCTIONS = {"_copy_fixture", "main", "self_test"}
+# These existing functions changed in their exact reviewed snapshots. Their full source bytes
+# are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
+REVIEWED_CHANGED_POLICY_FUNCTIONS = {"_copy_fixture", "check_version_window", "check_version_pr_gate", "main", "self_test"}
 ADDED_MUTATION_CONTROLS = (
     ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
     ("P20 Linux stage gate prefixes an untrusted PATH assignment", "release.yml", "fixture-product-stage"),

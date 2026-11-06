@@ -4,19 +4,18 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
-current_plan: 0
-status: Phase 22 and repository cleanup are complete; Phase 23 remains owner-controlled and unstarted
-stopped_at: Phase 22 qualification complete; Phase 23 remains unstarted and owner-controlled
-last_updated: "2026-11-03T21:32:00Z"
-last_activity: 2026-11-03
-state_head: 4eee5b51f8725ab588e2aa5a71760826185fa42b
+current_plan: 4
+status: executing
+stopped_at: Plan 23-04 T2: correct qualification-control assumptions, reissue all exact-source reports, and rerun focused/full qualification.
+last_updated: "2026-11-05T01:46:15.000Z"
+last_activity: "2026-11-05: The full suite's four failures were planning/test-harness issues. Historical-path pins, the Phase 23 gap-reserve allocation, and lifecycle recovery pin/count are corrected. The planning-label sweep adds `planning` to 14 source-bound ledger/review tests while preserving `v02`; its exact release-notes output exception has five boundary controls. Review-evidence self-test exposed that duplicate-registration detection counted allowed set_tests_properties references. The output-only exception also accepted a fake outer executable named cmake. Count only actual declarations, bind the wrapper to configured CMakeCache identity, use an exact-basename cmake negative control, and bind --rev to the configured review-evidence contract's source revision with a stale-revision negative. Then commit and reissue all source reviews at the final SHA before focused/full reruns with escalated access. The sandbox-denied partial run remains incomplete evidence."
+state_head: 1a7558d9749538a894e23a9cf965210d57bb77dd
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 22
-  completed_plans: 22
+  total_plans: 31
+  completed_plans: 26
   percent: 75
-last_activity_desc: PR #143 main CI and PR #144 documentation handoff passed; local main is reconciled with remote and Phase 23 remains owner-controlled
 ---
 
 # Project State
@@ -26,19 +25,23 @@ last_activity_desc: PR #143 main CI and PR #144 documentation handoff passed; lo
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Phase 23 — Qualified v0.4.0 Release (owner-controlled; not started)
+**Current focus:** Plan 23-04 T2: commit the qualification-control fixes, reissue the three reviews at the exact implementation source, and pass the direct report, focused, and full-suite gates.
 
 ## Current Position
 
-Current Plan: 0 (Phase 23 discussion has not started)
-Total Plans in Phase: TBD
-Phase: 23 (Qualified v0.4.0 Release) — NOT STARTED
+Current Plan: 4
+Total Plans in Phase: 9
+Phase: GB-23 (Qualified v0.4.0 Release) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
-Status: Phase 22 and repository cleanup are complete. PR #143's post-merge main CI, fixture reproduction, and release-please checks passed; PR #144's documentation handoff and planning-only main CI passed. Local main is reconciled with remote main, no PRs or issues remain open, and Phase 23 remains owner-controlled and unstarted.
-Last activity: 2026-11-03
+Status: Executing Phase 23
+Last activity: 2026-11-05: The initial 1,767-test run passed 1,763 and failed four planning/test-harness controls. Their causes are addressed: count-pin historical Git-object paths, allocate one gap slot to Phase 23 within the 40-slot cap, and update the post-tag recovery control for the reviewed checker and its 24 positive checks. The planning-label inventory sweep found 14 existing source-bound ledger/review tests; labels preserve `v02`, and the one build-tree output path is covered by an exact-mode classifier exception with five negative/positive controls. Direct no-phase-path checks pass (19 controls), planning-cap/hygiene passes (96 controls), lifecycle recovery passes (99 controls, 12 positives), and after reconfiguration the two planning-label CTests pass. The first default-sandbox focused attempt hit `/bin/ps` permission denials and two shard timeouts; rerun with escalated access after the final source review. Neither failed run is qualification evidence.
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
+
+## Phase 23 Execution Handoff
+
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The D-144 through D-154 matcher corrections and 32 deterministic docs shards passed their source-bound checks. The first full suite exposed four planning/test-harness assumptions; direct controls now pass after narrow fixes, and the nine scheduled plans remain unchanged under a total cap of 10 that includes the required gap reserve. Reissue all three reports against the new exact implementation, pass the direct gate, reconfigure/build, rerun the focused controls and full suite, then proceed to T3. Keep REL-01 and all Pending evidence limits. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Performance Metrics
 
@@ -57,6 +60,9 @@ All nine Phase 20 plans have executed. Configure/build and release-candidate rep
 | Phase GB-22 P01 | 19min | 2 tasks | 6 files |
 | Phase 22 P10 | about 24 min | 2 tasks | 5 files |
 | Phase GB-22 P11 | about 90 min through local evidence preparation | 3 tasks | 19 files |
+| Phase GB-23 P01 | 56min | 2 tasks | 4 files |
+| Phase 23 P02 | 1h | 2 tasks | 5 files |
+| Phase 23 P03 | 25min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -81,13 +87,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-03T21:32:00Z
-**Stopped at:** Phase 22 and repository cleanup complete; Phase 23 remains unstarted and owner-controlled
-**Resume file:** .planning/phases/GB-22-composition-and-microtest-evidence/.continue-here.md
+**Last session:** 2026-11-05T01:46:15.000Z
+**Stopped at:** Plan 23-04 T2's 14-test planning-label audit and exact output-only exception pass direct checks. Commit the final harness changes, reissue all three exact-source reviews, then rerun focused/full qualification with escalated access.
+**Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 22 is complete and merged. The seven real-fixture evidence gates remain open; no real diagnostic fixture is admitted, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. PR #143 passed protected exact-head checks and post-merge main CI; PR #144 completed the documentation handoff. Local main is tree-identical to origin/main at cleanup reconciliation, all three local v0.4 commits remain in history, and no PRs or issues are open. The next phase is Phase 23 — Qualified v0.4.0 Release — via the owner-controlled **/gsd-discuss-phase 23** command. Do not begin Phase 23 automatically.
+Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The full docs controls and direct planning/lifecycle checks pass; both planning-label CTests now pass with the exact output-only exception. The first full suite remains a failed run with four diagnosed planning/test-harness issues, and the initial default-sandbox focused attempt is incomplete due denied `/bin/ps` calls and two shard timeouts. Commit the final harness changes, reissue all three reports at the resulting exact implementation source, pass the direct report gate, then rerun configure/build, the focused selection, and the full suite under escalated access before T3. Phase 23 keeps nine scheduled plans under total cap 10, including the gap reserve; the four-phase cap sum remains 40. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Decisions
 
@@ -114,8 +120,25 @@ Phase 22 is complete and merged. The seven real-fixture evidence gates remain op
 - [Phase 22]: Plan 22-10 checks the immutable metadata inventory and exact no-go claims while DIAG-01, DIAG-02, and RIGHTS-01 remain Pending.
 - [Phase GB-22]: Retarget the Phase 21 primary-record pointer to PR #140’s squash commit only after exact record-blob identity was established; keep digest and ancestry mutants.
 - [Phase GB-22]: Reduce the completed Phase 21 plan cap to 10, leaving two reserve slots and a four-phase total cap of 40.
+- [Phase GB-23]: Keep the nine scheduled Phase 23 plans and reserve the tenth total-cap slot for the required single gap-closure round. Reallocate one unused ordinary-plan slot from completed Phase 21 by setting its active roadmap cap to 9; all eight Phase 21 plan files and evidence remain unchanged, and the four-phase cap sum stays 40.
 - [Phase GB-22]: Allow planning inventory inspection only through the narrowly pinned configured CTest inventory invocation.
+- [Phase GB-23]: Carry the nine state/core/player support claims from the pinned v0.3 profile without creating new producer receipts.
+- [Phase GB-23]: Report the CGB-CPU-E native harness as repeatability-only and Phase 22 diagnostics as synthetic plus metadata-only.
+- [Phase GB-23]: REL-01 remains Pending until Plan 23-06 establishes actual release evidence.
+- [Phase 23]: Render the concise preface from the existing immutable support-claims-v0.4.json profile; preserve release-disclosure.json and v0.3 output. — The validated profile already contains all managed v0.4 facts, so a second copy would add drift risk without supplying new evidence.
+- [Phase 23]: Owner approved the bounded Phase 23 T2 matcher correction and three-role re-review at the exact findings; amend Plan 23-04 in place and add no scheduled plan. The nine scheduled plans remain under total cap 10, including the single gap reserve, with unchanged review/gap counters; any new correctness/security finding requires another explicit owner decision.
+- [Phase 23]: Owner approved D-145: extend Plan 23-04 T2 in place to reject unsupported CGB-game claims containing invisible Unicode format characters, with paired controls; no plan or budget reset.
+- [Phase 23]: Owner approved D-146: extend the unsupported CGB-game claim matcher to ignore Unicode Default_Ignorable_Code_Point characters, including U+034F, with paired docs/release-note controls and exact-source review.
+- [Phase 23]: Owner approved D-147: decode valid CommonMark character references only when they produce Cf or Unicode 18.0 Default_Ignorable_Code_Point characters in unsupported CGB-game claims, with paired controls and exact-source review.
+- [Phase 23]: Owner approved D-148: decode all valid CommonMark character references in already-visible prose before unsupported CGB-game claim matching; preserve code masking and keep the change confined to that matcher.
+- [Phase 23]: Owner approved D-149: normalize CommonMark hard line breaks only for unsupported CGB-game claim matching; preserve code masking and add paired controls. — At fc0ba4ff, adversarial review reproduced visible claims split by a backslash hard line break, including a reference-encoded space. The owner approved an in-place T2 correction and exact-source re-review; no plan or counter reset.
+- [Phase 23]: Owner approved D-150: normalize CommonMark emphasis markers and inline link-label text only in the unsupported CGB-game matcher; preserve code masking and ignore destinations. — At e26757fa, adversarial review reproduced production docs-checker acceptance of bold, intraword emphasis, and inline link-label forms that CommonMark renders as visible CGB game claims. The owner approved the bounded in-place correction, paired docs/release-note controls, exact-source review, and gates on 2026-11-04; no plan or counter reset.
+- [Phase 23]: Owner approved D-151: render shortcut, full, and collapsed CommonMark reference-link labels only for unsupported CGB-game claim matching; ignore destinations and titles and preserve code masking plus safe unresolved/escaped counterparts. — At exact source e017078b, release-consumer and adversarial review independently reproduced production docs-checker acceptance of visible CGB-game claims split through valid reference links. The owner approved paired docs/release-note and notice controls plus exact-source re-review on 2026-11-04; no plan or counter reset.
+- [Phase 23]: Owner approved D-152: make CommonMark emphasis normalization linear in delimiter-run count using per-marker candidate stacks; preserve matched-delimiter behavior and add dense unmatched-marker controls. — At exact source b7987811, security review measured quadratic growth from rescanning all prior delimiter runs for each unmatched closer; 8,000 runs took about 1.07 seconds and the validator accepts documents up to 1 MiB. The owner approved the correction and exact-source review on 2026-11-04; no plan or counter reset.
+- [Phase 23]: Owner approved D-153: apply Unicode punctuation and symbol categories as CommonMark emphasis punctuation only in unsupported CGB-game claim matching, with emoji and rule-of-three controls. — At exact source 6876fab0, adversarial review reproduced both visible claims passing the production docs matcher; no plan or counter reset.
+- [Phase 23]: Owner approved D-154: reject impossible reference-label spans before copy/normalization using bounded span checks, with dense nested-bracket controls. — At exact source 6876fab0, security review found quadratic work over nested bracket spans that could exceed the docs gate timeout under the existing input limit; no plan or counter reset.
 
 ### Blockers
 
 - No active Phase 22 blocker. The seven evidence gates still block real fixture admission, but D-141 scoped the completed phase to synthetic composition, metadata assessment, and explicit no-go controls. Do not fetch, build, run, or admit real diagnostic fixtures without a new owner-approved scope.
+- Plan 23-04 T2 is active under owner-approved D-144 through D-154. Apply only the scoped Markdown normalization for unsupported CGB-game claim matching, preserve paired behavior, code masking and safe counterparts, then re-review exact source and pass report/focused CTest gates. REL-01 and publication remain Pending.

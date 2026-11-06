@@ -97,6 +97,10 @@ jobs:
             echo "Missing or malformed release-please tag/source output." >&2
             exit 1
           }
+          [[ "$RELEASE_TAG" == "v0.4.0" ]] || {
+            echo "This qualified release path accepts only the requested v0.4.0 tag." >&2
+            exit 1
+          }
           if [[ "$RETRY" == true ]]; then
             [[ "$INPUT_RELEASE_ID" =~ ^[0-9]+$ ]] || { echo "Retry requires an existing draft release ID." >&2; exit 1; }
           else
@@ -138,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           git show "${GITHUB_SHA}:tests/scripts/verify-version-window.py" > "$RUNNER_TEMP/verify-version-window.py"
-          python3 -I "$RUNNER_TEMP/verify-version-window.py" --check-tracked --rev "$SOURCE_SHA" --require-active --repo .
+          python3 -I "$RUNNER_TEMP/verify-version-window.py" --check-tracked --rev "$SOURCE_SHA" --require-active --repo . --expect-version 0.4.0
       - name: Require final release notes to satisfy the v0.2 adoption contract
         env:
           RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}

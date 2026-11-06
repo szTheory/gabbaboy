@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "kind": "release-support-claims",
+  "applies_from_version": "0.4.0",
+  "evidence_revision": "4a4513998ba026d1c6e1dec6d8ab6fc5cd517f4f",
+  "candidate_order": ["potion-panic-gbcompo25", "ucity-1.3"],
+  "candidate_outcomes": [
+    {
+      "candidate_id": "potion-panic-gbcompo25",
+      "name": "Potion Panic",
+      "record_path": "tests/data/cgb-candidates/potion-panic.json",
+      "record_blob_oid": "f3583f2933e48479b275e68beb275cfd1f356c01",
+      "disposition": "source-rights-no-go",
+      "reason": "The creator-linked Codeberg source could not be reached before a ref or commit identity was returned; exact component grants and repository/public-CI scope remain unestablished.",
+      "not_observed": ["build", "rom", "execution", "progress", "observations", "receipt"]
+    },
+    {
+      "candidate_id": "ucity-1.3",
+      "name": "µCity 1.3",
+      "record_path": "tests/data/cgb-candidates/ucity-1.3.json",
+      "record_blob_oid": "d510c32410f8b46d7fdcb7917a8fabed138987b9",
+      "disposition": "source-rights-no-go",
+      "reason": "The required source/engine/hardware.inc component has no identified grant or notice establishing repository/public-CI scope.",
+      "not_observed": ["build", "rom", "execution", "progress", "observations", "receipt"]
+    }
+  ],
+  "historical_support": {
+    "claims_revision": "4a4513998ba026d1c6e1dec6d8ab6fc5cd517f4f",
+    "claims_path": "tests/data/support-claims-v0.3.json",
+    "claims_blob_oid": "58c0302f8fbb6e3ebcb3410e3d876bd3182b247d",
+    "claim_ids": [
+      "state-api",
+      "state-continuation",
+      "state-refusal",
+      "state-canonical-pins",
+      "state-battery-rtc",
+      "host-raw-save",
+      "host-signals-exit",
+      "host-format-table",
+      "player-slots"
+    ]
+  },
+  "harness": {
+    "evidence_revision": "bef2cfbdbdd0fc9b2d78631586827e29e0241b3b",
+    "verification_path": ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md",
+    "verification_blob_oid": "055ace7cdbf103f38c0217933db3b6bd2a77d612",
+    "uat_path": ".planning/phases/GB-21-cgb-game-progress-and-scene-regressions/21-UAT-EVIDENCE.md",
+    "uat_blob_oid": "6e64ca315cbf0b675ca2e1296e5552b1b279a2d1",
+    "source_revision": "e0845db5841a1d56d8a297cbfaa3e0811af6ad67",
+    "model": "CGB-CPU-E",
+    "mode": "cgb-native",
+    "result": "original-harness-only",
+    "observations": ["RGB555", "PCM"],
+    "interpretation": "RGB555/PCM digests establish repeatability only.",
+    "not_claimed": [
+      "admitted-game progress",
+      "rendering accuracy",
+      "perceptual video or audio quality",
+      "physical CGB-CPU-E behavior",
+      "mode-3 timing",
+      "general compatibility"
+    ]
+  },
+  "diagnostics": {
+    "evidence_revision": "d18db4c56d2a79e6138df37a9d16e3d346a86e13",
+    "evidence_path": ".planning/phases/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md",
+    "evidence_blob_oid": "4c0474cbaa14895fc349485d14891f813c70a46d",
+    "uat_path": ".planning/phases/GB-22-composition-and-microtest-evidence/22-UAT.md",
+    "uat_blob_oid": "1f8b11a36872d8d02c7d4dd8b524470cbdb9cb76",
+    "assessment_path": "tests/external/diagnostic-assessment.json",
+    "assessment_blob_oid": "55bd8a0a95cb04d34fd3628519c3bdfda0ee3b56",
+    "assessment_source_revision": "559b5f7296f957a1a1fea278056a908f9a3d9339",
+    "inventory_path": "tests/external/gbmicrotest-inventory.json",
+    "inventory_blob_oid": "b59483788d44ab43d27a59ac365f9311d90f750d",
+    "upstream_revision": "463eb6bc0fe31d61781ef63060ad6d74090c0255",
+    "expected_counts": {
+      "named_entries": 513,
+      "unresolved_gates": 7,
+      "real_fixtures_admitted": 0,
+      "real_fixtures_executed": 0
+    },
+    "unresolved_gate_ids": [
+      "acid2_derivative_build_reproducibility",
+      "acid2_component_rights_and_output_scope",
+      "acid2_profile_applicability",
+      "gbmicrotest_component_rights_and_output_scope",
+      "gbmicrotest_prebuilt_rom_sha256",
+      "gbmicrotest_case_applicability",
+      "gbmicrotest_independent_oracle"
+    ]
+  },
+  "requirements": {
+    "revision": "d18db4c56d2a79e6138df37a9d16e3d346a86e13",
+    "path": ".planning/REQUIREMENTS.md",
+    "blob_oid": "378b62ee7da44744baf1f314e8410731b50840cc",
+    "statuses": [
+      {"id": "FIXT-01", "status": "Pending"},
+      {"id": "RIGHTS-01", "status": "Pending"},
+      {"id": "DIAG-01", "status": "Pending"},
+      {"id": "DIAG-02", "status": "Pending"},
+      {"id": "REL-01", "status": "Pending"}
+    ]
+  },
+  "limitations": [
+    "Physical DMG-CPU-B or CGB-CPU-E hardware behavior is not qualified.",
+    "RGB555/PCM repeatability does not establish rendering accuracy or perceptual video/audio quality.",
+    "CGB mode-3 timing is not qualified.",
+    "No Linux or Windows packaged-player game smoke is claimed; inherited platform support remains limited to the pinned v0.3 claim rows.",
+    "General game compatibility is not claimed.",
+    "Release artifacts are unsigned and not notarized; checksums and source binding are not code signing or notarization."
+  ],
+  "non_claims": [
+    "Neither candidate was built or run.",
+    "No CGB game was admitted.",
+    "These source/rights-scope no-go outcomes do not establish a license prohibition."
+  ]
+}
