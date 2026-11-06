@@ -64,7 +64,7 @@ RECOVERY_CLAIMS = "tests/scripts/verify-cgb-corpus-claims.py"
 RECOVERY_RELEASE_DOC = "docs/release.md"
 # The historical v0.3 recovery source remains RECOVERY_SOURCE_SHA. Pin the reviewed production
 # checker separately so the original tagged notes are exercised by the exact current checker.
-RECOVERY_ADOPTION_PIN_SHA = "aecf09cc02ae81bdb2047087014f1bc66b71aa06"
+RECOVERY_ADOPTION_PIN_SHA = "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c"
 PLATFORM_PRODUCT_ARCHIVES = (
     "gabbaboy-core-macos-arm64.tar.gz",
     "gabbaboy-preview-macos-arm64.tar.gz",
