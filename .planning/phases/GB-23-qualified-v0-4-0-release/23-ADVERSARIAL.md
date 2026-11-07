@@ -1,25 +1,31 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** `9166ab60d25c6d246761b4aa33a0ceb35dd83f5c`
+**Reviewed implementation:** `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`
 **Role:** adversarial
 **Reviewer:** `adversarial-d155`
-**Review posture:** I inspected the exact immutable commit in a clean detached checkout, including the Plan 23-04 and D-155 diffs, the execution contract, the notice checker and its controls, the focused CTest selector, and the source-bound release/profile/version controls. I did not use the concurrently modified working tree as implementation evidence.
+**Review posture:** I inspected the exact immutable commit in a clean detached checkout, including Plan 23-04, the full execution contract, the D-155 and D-156 corrections, the D-068/D-069 budget mapping, the notice checker and causal controls, the focused CTest selector, and the source-bound release/profile/version controls. I used the checked-out source at the reviewed SHA, not the concurrently modified working tree.
 
 ## Result
 
-The D-155 notice-path and focused-selector defects are fixed at the reviewed commit. I found no additional correctness or security issue in the reviewed T2 scope. Historical findings ADV-01 through ADV-20 remain fixed in ancestor commits and are re-evaluated below. ADV-21 and ADV-22 record the two D-155 defects and their exact-source fixes.
+D-155 path confinement and selector coverage remain fixed. D-156 now pins the recovery check to the byte-identical D-155 adoption checker. The D-068 mapping correction fixes the prior base-reference finding: the plan-pinned and PR-base timeout-budget checks both pass, and D-069 remains the governing timeout policy. The existing adversarial findings ADV-01 through ADV-22 remain fixed; ADV-23 records the repaired budget-reference issue and ADV-24 records the lifecycle-pin correction. I found no additional correctness or security issue in the reviewed T2 scope.
 
-The production Markdown claim matcher and D-144 through D-154 parser logic are unchanged in the diff from the previous reviewed implementation. The current diff adds path confinement, the matching traversal/symlink controls, 200-way test sharding, and the focused-selector correction. I reran focused shards and the release/profile/disclosure/version/evidence controls; I did not repeat the already completed long unsharded docs self-test.
+The production Markdown matcher and its D-144 through D-155 controls are unchanged in the reviewed source relative to the prior exact-source report. The source delta since the earlier review is limited to the recovery pin, decision/plan documentation, and timeout-budget references. I did not repeat the full docs-control suite; I ran the targeted shard and lifecycle checks needed for these corrections.
 
 ## D-155 path and selector attacks
 
-The old notice checker joined inline notice paths to the repository root without checking the resolved path, and `copy_inputs()` repeated that relative path below its temporary target. The reviewed source now rejects empty, dot, parent, absolute, and backslash path components; resolves source paths and checks that they remain under the resolved repository root; and resolves destination paths both before and after creating parent directories. Notice digests must use a relative path below `fixtures/`. Fixture inventory manifests and license files receive the same source-root check.
+The notice checker resolves each inline path and requires it to remain below the repository root; it also rejects empty, dot, parent, absolute, and backslash components. Fixture manifests and license files use the same root check. `copy_inputs()` validates source paths and target paths after resolving symlinks, including after creating parents, before copying bytes.
 
-I tested the production notice checker in a minimal temporary tree containing only its notice, manifests, licenses, and named digest inputs. The unmodified notice passed with 112 checks; an additional digest for an ordinary in-root license passed with 113 checks. A `fixtures/../../outside.txt` input and an in-root symlink to an external file both rejected with `notice-path-outside-root`. A normal `copy_inputs()` call copied its selected inputs. A target whose `fixtures` directory was a symlink to an external directory rejected with `self-test-copy-path-outside-root`, and the external directory remained empty. The exact-source shard-0 self-test also exercises notice traversal, a notice symlink, copy-source traversal, and a copy-target symlink; its selected production CLI baseline and negative cases passed.
+The exact-source shard-0 CTest passed. That self-test exercises a valid baseline, notice traversal, an in-root symlink to an external source, copy-source traversal, and a copy-target symlink; its controls require the path-confinement diagnostics and verify the outside destination remains absent. The exact-source shard-199 CTest also passed with both a positive and a negative selected child check. At the preceding exact source, direct `check_notices()` probes accepted baseline and additional in-root input, and rejected traversal and external symlink paths with `notice-path-outside-root`; direct copy probes accepted an ordinary copy and rejected the external target symlink with `self-test-copy-path-outside-root` without writing outside. The production checker blob is byte-identical at the reviewed SHA.
 
-The old Plan 23-04 selector used `[0-9]{2}`, which omitted shard numbers 100–199. The reviewed selector uses `[0-9]+`. An isolated CTest project using the exact Plan selector selected all 200 intended entries (the separate shard-zero test plus numbered shards 1–199), including shards 100 and 199. CMake's registration loop covers 1–199, and each corresponding test appears exactly once in the expected inventory and the D-069 90-second budget allowlist. I also ran shard `199/200`; it passed with two selected child checks, one positive and one negative.
+I ran CTest's dry-run using the exact focused selector from Plan 23-04. It selected 218 total tests, including all 200 docs-control shards, and included shards 100 and 199. The selector uses `[0-9]+`, while CMake registers numbered shards 1 through 199 and the shard-0 test separately. The budget verifier confirms the corresponding 90-second ceilings and inventory entries.
 
-These controls are causal. The production docs controls require the exact path-confinement diagnostic. The copy controls verify the outside destination does not appear and that a target symlink cannot receive copied files. The direct comparison against the parent source shows these checks guard the previous unchecked `root / path` and `target / relative` joins.
+## D-156 recovery pin
+
+The lifecycle checker now sets `RECOVERY_ADOPTION_PIN_SHA` to `9166ab60d25c6d246761b4aa33a0ceb35dd83f5c`. The recovery control retains comparisons of the adoption checker at that immutable pin and at the exact `--rev`. Their blobs have the same SHA-256 at the reviewed source. The exact-source post-tag recovery control passed with 99 controls and 12 production-adoption positives.
+
+## D-068/D-069 timeout-budget mapping
+
+The prior budget rows for docs shards 32–199 cited D-154, which was absent from the immutable plan base and caused the base-relative verifier to report 168 unresolved references. The reviewed commit changes those rows to D-068; the 90-second ceilings and full shard inventory remain intact. D-068 exists and was unused in both the pinned plan base and the PR base. The exact plan-pinned check against `f2b05c9fb3ba314cfe46959b64073ce9441724ca` and PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c` both pass. The mapping is the provenance key; D-069 continues to state the timeout policy.
 
 ## Required adversarial checklist
 
@@ -39,35 +45,32 @@ For each direct release-note mutation, the test helper first accepts the valid r
 
 ## Verification evidence
 
-All commands below ran against the clean checkout at the reviewed SHA. Python 3.13 was used for the complete control scripts because the system `python3` is 3.9; the configured Phase 23 build selects Python 3.14.
+Commands below ran against a clean detached checkout configured from the exact reviewed SHA.
 
-- `verify-v02-adoption.py --self-test docs --repo . --root . --shard 0 200`: passed; shard `0/200`, four selected child checks, 473 reported checker checks, two selected negative CLI controls rejected. The shard also ran D-155's source-copy and destination-symlink assertions.
-- `verify-v02-adoption.py --self-test docs --repo . --root . --shard 199 200`: passed; shard `199/200`, two selected child checks, one selected negative control rejected.
-- Direct `check_notices()` path probes: baseline and added in-root path passed; traversal and external symlink rejected with `notice-path-outside-root`.
-- Direct `copy_inputs()` path probes: ordinary copy passed; destination symlink rejected with `self-test-copy-path-outside-root`, with zero writes in the external directory.
-- Exact Plan regex through CTest's `-N -R`: selected 200 intended entries and included both shard 100 and shard 199. Static registration/inventory/budget inspection found 199 unique numbered entries, each budgeted at 90 seconds.
-- `verify-v02-adoption.py --self-test-release-notes-v04 --repo .`: passed, 2 positives and 72 controls.
-- `verify-support-ledger.py --self-test-claims --claims-version 0.4.0 --rev 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c --repo .`: passed, 22 positives and 21 controls.
-- `verify-support-ledger.py --self-test-disclosure --repo .`: passed, 4 positives and 20 controls.
-- `verify-version-window.py --self-test --repo .`: passed, 11 positives and 64 controls.
-- `verify-version-window.py --self-test-version-v04 --repo .`: passed, 63 positives and 66 controls.
-- `verify-review-evidence.py --self-test --rev 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c --repo .`: passed, 33 positives and 28 controls.
+- `ctest --test-dir build --output-on-failure --no-tests=error -R '^v02_adoption_docs_controls$'`: passed shard 0; this selected run includes D-155 notice traversal/symlink and copy traversal/symlink controls.
+- `ctest --test-dir build --output-on-failure --no-tests=error -R '^phase23_docs_controls_shard_199$'`: passed shard 199 with positive and negative selected child checks.
+- Exact Plan 23-04 selector with `ctest -N -R`: selected 218 tests overall, including every docs shard from shard 0 through shard 199.
+- `python3.14 -I tests/scripts/verify-release-lifecycle.py --rev 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc --self-test-post-tag-recovery`: passed, 99 controls and 12 positives.
+- `python3.14 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo .`: passed, 1936 tests and 288 allowlisted rows.
+- The same immutable budget checker against PR base `1ab65414d60828fa9505babeaeea9de0571f016c`: passed, 1936 tests and 288 allowlisted rows. The exact previous parent `bd5ab993a3f09307e6a5ef31185f554740a0787b` also passed as a supplemental base check.
+- `python3.14 -I tests/scripts/verify-test-budget.py --self-test`: passed 54 controls.
+- At the previous exact source 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c, paired release/profile/version/disclosure/evidence controls passed: verify-v02-adoption.py --self-test-release-notes-v04 (2 positives/72 controls); verify-support-ledger.py --self-test-claims --claims-version 0.4.0 --rev 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c --repo . (22 positives/21 controls); verify-support-ledger.py --self-test-disclosure --repo . (4 positives/20 controls); verify-version-window.py --self-test --repo . (11 positives/64 controls); verify-version-window.py --self-test-version-v04 --repo . (63 positives/66 controls); verify-review-evidence.py --self-test --rev 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c --repo . (33 positives/28 controls). The matcher, support-ledger, version-window, review-evidence, CTest registration, and inventory source blobs are byte-identical between 9166 and the reviewed SHA, so these exact-source controls still apply without repeating the broad suites.
 
-These checks establish local parser, statement, path-confinement, source-binding, and test-selection behavior. They do not establish hardware or gameplay behavior, rights beyond the recorded policy, hosted CI success, signing, publication, or platform promotion.
+These checks establish local Markdown control behavior, path confinement, recovery-source pinning, base-relative budget references, and focused test selection. They do not establish hardware or gameplay behavior, rights beyond the recorded policy, hosted CI success, signing, publication, or platform promotion.
 
 ## Findings and dispositions
 
-ADV-01 through ADV-20 preserve the Phase 23 review history and remain fixed by ancestor commits. ADV-21 and ADV-22 are the owner-approved D-155 corrections fixed in the reviewed commit. No unresolved correctness or security finding remains in this review.
+ADV-01 through ADV-22 preserve the prior source-bound findings and remain fixed by ancestor commits. ADV-23 closes the corrected timeout-budget base reference. ADV-24 records the D-156 recovery pin. No unresolved correctness or security finding remains in this review.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-9166ab60d25c6d246761b4aa33a0ceb35dd83f5c-20261106-d155",
+  "report_id": "gbb-phase23-adversarial-7c6f01ad5ecf3b6736bf694324acc1671d9e20cc-20261106-d155",
   "role": "adversarial",
   "reviewer_id": "adversarial-d155",
   "independent": true,
-  "reviewed_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
+  "reviewed_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
   "findings": [
     {
       "id": "ADV-01",
@@ -288,6 +291,26 @@ ADV-01 through ADV-20 preserve the Phase 23 review history and remain fixed by a
       "rationale": "The former two-digit selector omitted the high-numbered shards. The corrected `[0-9]+` selector matched all 199 numbered tests in an isolated CTest run, including 100 and 199; shard 199/200 itself passed. CMake registration, expected inventory, and timeout allowlist contain each numbered shard once.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
       "verification_ref": "At reviewed SHA: exact Plan regex through ctest -N -R selected 200 total entries; CMake range/inventory/budget inspection matched shards 1–199 exactly; production docs shard 199/200 passed."
+    },
+    {
+      "id": "ADV-23",
+      "category": "other",
+      "severity": "medium",
+      "required_property": "Every new 90-second docs-shard budget row must resolve against both the plan-pinned and PR-base checker, while D-069 remains the governing timeout policy.",
+      "disposition": "fixed",
+      "rationale": "At the preceding source the 168 shard rows cited D-154, which did not resolve at the immutable plan base. The exact reviewed source remaps those rows to D-068. D-068 exists and was unused in both checker bases; D-069 still governs the timeout. The immutable budget checker passes against both the plan-pinned base and exact PR base.",
+      "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
+      "verification_ref": "python3.14 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same command with --base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/scripts/verify-test-budget.py --self-test (54 controls pass)."
+    },
+    {
+      "id": "ADV-24",
+      "category": "other",
+      "severity": "medium",
+      "required_property": "The post-tag recovery control must pin the exact D-155 adoption-checker bytes and preserve comparisons against both the immutable pin and the reviewed revision.",
+      "disposition": "fixed",
+      "rationale": "The lifecycle checker pin now names 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c. The adoption checker at that pin and at the reviewed source has identical SHA-256 bytes, and the recovery self-test passed with both immutable checks retained.",
+      "fix_sha": "bd5ab993a3f09307e6a5ef31185f554740a0787b",
+      "verification_ref": "At reviewed SHA: python3.14 -I tests/scripts/verify-release-lifecycle.py --rev 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc --self-test-post-tag-recovery (controls=99 positives=12); verify-v02-adoption.py blob SHA-256 at 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c and reviewed SHA both 4d0ac0c724e10c7cbca3f22d57c35dd90e98dddde396f47eda23f7289ab29e93."
     }
   ]
 }

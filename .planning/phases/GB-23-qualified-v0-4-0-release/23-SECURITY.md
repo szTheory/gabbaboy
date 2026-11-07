@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed tree at `9166ab60d25c6d246761b4aa33a0ceb35dd83f5c`, including the D-155 notice-path and self-test-copy correction, the immutable review/version-window validators, the version-PR gate, and the release/package authority paths. I read the Phase 23 execution contract, Plan 23-04 and its T2 rescope, and checked the relevant committed source and control definitions directly at that SHA.
+I reviewed the exact committed tree at `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`, including the D-155 notice-path and self-test-copy correction, D-156 recovery-checker pin, immutable review/version-window validators, version-PR gate, release/package authority paths, and the D-068/D-069 budget-reference adjustment. I read the Phase 23 execution contract, Plan 23-04 and its T2 rescope, and inspected the relevant source and controls at that commit.
 
-D-155 closes the previously reproduced notice-path escape. Inline digest paths are now constrained to regular files under the resolved repository root, including after symlink resolution. Self-test input reads and copy destinations receive the same root checks; a destination is resolved again after its parent is created. The committed controls cover `..` traversal, an external symlink used as a notice input, a traversal path through `copy_inputs`, and a symlinked copy destination. I found no additional correctness or security issue in the reviewed scope. The existing low-severity availability-hardening issue SEC-23-09 remains open because several Git-output paths still lack output caps.
+D-155 closes the previously reproduced notice-path escape. Inline digest paths are constrained to regular files under the resolved repository root, including after symlink resolution. Self-test input reads and copy destinations receive the same root checks; a destination is resolved again after its parent is created. The D-155 controls cover traversal and external symlink inputs, traversal through `copy_inputs`, and a symlinked copy destination. D-156 repins the post-tag recovery control to the byte-identical D-155 checker while preserving both immutable-byte comparisons. The approved D-068 mapping correction gives the newly added budget rows a decision reference present and unused in both immutable bases; D-069 remains the timeout policy. I found no unresolved correctness or security issue in the reviewed scope. The existing low-severity Git-output availability issue SEC-23-09 remains open because several subprocess paths still lack output caps.
 
-This review does not claim the controls were executed here, hosted checks passed, release publication was exercised, or any real fixture was fetched, built, run, or admitted. The orchestrator is running the phase gates separately.
+This review records the focused controls run below; it does not claim the full 200-shard suite or hosted required checks passed, release publication was exercised, or any real fixture was fetched, built, run, or admitted. The orchestrator is handling the remaining phase gates separately.
 
 ## Input, path and source boundaries
 
@@ -110,21 +110,27 @@ The parser precomputes paired-opening counts and rejects empty, over-999-charact
 
 **Severity:** Medium. **Disposition:** Fixed in `9166ab60d25c6d246761b4aa33a0ceb35dd83f5c`.
 
-At the preceding implementation source, a notice digest path such as `fixtures/../../...` could resolve outside the repository; `copy_inputs` used that path for both the source and isolated copy. At the reviewed source, path components are checked and the resolved source must be a regular file beneath the canonical root. Notice manifest/license paths and inline digest rows use that same confinement. Self-test source paths are validated before copy; destination symlinks are resolved and checked under the destination root before and after parent creation. The committed D-155 controls target traversal, an external symlink as a notice input, a traversal source passed through `copy_inputs`, and a symlinked copy target. I inspected these causal controls and their named expected failure paths; this review does not claim that the orchestrator's CTest execution has completed.
+At the preceding implementation source, a notice digest path such as `fixtures/../../...` could resolve outside the repository; `copy_inputs` used that path for both the source and isolated copy. At the reviewed source, path components are checked and the resolved source must be a regular file beneath the canonical root. Notice manifest/license paths and inline digest rows use that same confinement. Self-test source paths are validated before copy; destination symlinks are resolved and checked under the destination root before and after parent creation. The committed D-155 controls target traversal, an external symlink as a notice input, a traversal source passed through `copy_inputs`, and a symlinked copy target. The shard-0 production docs self-test passed, executing these confined-path assertions in its disposable root; I did not run the complete 200-shard CTest selector.
+
+### SEC-23-15 — New timeout-budget rows must resolve and remain distinct at immutable bases
+
+**Severity:** Medium. **Disposition:** Fixed in `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`.
+
+The earlier mapping used D-154, which did not exist in the plan-pinned base and therefore could not authorize those new allowlist rows. The approved correction maps the 168 newly introduced shard 32–199 rows to D-068, present and unused in both the plan-pinned and PR bases. The 90-second ceiling and shard coverage stay the same, and D-069 remains the timeout-policy decision. The plan-pinned budget checker passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`; the orchestrator also confirmed a pass against PR base `1ab65414d60828fa9505babeaeea9de0571f016c`.
 
 ## Verification and limits
 
-The source review is bound to `9166ab60d25c6d246761b4aa33a0ceb35dd83f5c`. Static inspection confirms the D-155 helpers are used by production notice hashing and self-test copying, and that the four D-155 negative paths are present in the docs self-test. I did not run CTest or the direct report gate in this reviewer turn; the orchestrator is running the approved gates. I did not inspect hosted required-check state, exercise release publication, fetch/build/run/admit real fixtures, or inspect downloaded package bytes.
+This review is bound to `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`. I ran the docs self-test shard 0, which passed its selected production CLI checks and the shard-0-only D-155 traversal/symlink copy controls. I ran post-tag recovery controls against this exact revision; they passed with the D-156 immutable adoption-checker pin. I ran the budget checker against the plan-pinned base `f2b05c9fb3ba314cfe46959b64073ce9441724ca`; it passed. The orchestrator separately confirmed the same checker passes against PR base `1ab65414d60828fa9505babeaeea9de0571f016c`. A structural inventory check found the focused selector includes shard 0 and all numbered shards 1–199. I did not run the full 200-shard suite or the direct committed-report gate. I did not inspect hosted required-check state, exercise release publication, fetch/build/run/admit real fixtures, or inspect downloaded package bytes.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-9166ab60-20261106-d155",
+  "report_id": "phase23-security-7c6f01ad-20261106-security-d155",
   "role": "security",
   "reviewer_id": "security-d155",
   "independent": true,
-  "reviewed_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
+  "reviewed_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -262,9 +268,19 @@ The source review is bound to `9166ab60d25c6d246761b4aa33a0ceb35dd83f5c`. Static
       "severity": "medium",
       "required_property": "Inline notice paths and self-test source/destination paths must resolve to regular files beneath their respective canonical roots, including when symlinks are present.",
       "disposition": "fixed",
-      "rationale": "The previous implementation accepted traversal in a notice digest path and reused it as a copy input/output. The reviewed source rejects unsafe components, resolves source files strictly beneath the root, and resolves copy destinations beneath the target before and after creating parents. D-155 includes traversal, external-source-symlink, traversal-copy and symlinked-destination controls; this report confirms those code paths are present without claiming their CTest execution.",
+      "rationale": "The reviewed source rejects unsafe path components, resolves source files strictly beneath the canonical repository root, and resolves copy destinations beneath the target before and after parent creation. The D-155 traversal and symlink controls are present; the shard-0 production docs self-test completed successfully at the reviewed commit, exercising the copy-path controls.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "tests/scripts/verify-v02-adoption.py:1898-2005,2481-2498,3106-3129,4121-4165; D-155 source controls"
+      "verification_ref": "tests/scripts/verify-v02-adoption.py:1922-1970,2002-2004,2481-2498,3106-3129,4121-4165; python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 --repo . at 7c6f01ad"
+    },
+    {
+      "id": "SEC-23-15",
+      "category": "correctness",
+      "severity": "medium",
+      "required_property": "Every newly added test-budget row must cite a distinct decision reference present in each immutable base used by the plan and PR checkers, while D-069 remains the governing timeout policy.",
+      "disposition": "fixed",
+      "rationale": "D-154 was absent from the plan-pinned base, so the new rows did not resolve. The approved correction maps the 168 new shard 32–199 rows to D-068, which exists and is unused in both checker bases. The 90-second ceilings and shard inventory are unchanged, and D-069 remains the timeout policy. Both exact-base budget checks passed.",
+      "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
+      "verification_ref": "python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same checker against PR base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/ci/test-budget-allowlist: 168 rows use D-068; D-068 exists and is unused at both bases"
     }
   ]
 }

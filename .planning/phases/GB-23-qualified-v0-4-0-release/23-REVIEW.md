@@ -1,42 +1,45 @@
 # Phase 23 Release-Consumer Review
 
-**Reviewed implementation:** 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c
+**Reviewed implementation:** 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc
 **Role:** release-consumer
-**Reviewer:** release-consumer-d155
+**Reviewer:** release-consumer-d068
 
 ## Scope and conclusion
 
-I reviewed the implementation from an isolated archive of the full reviewed commit and confirmed the shared checkout was at the same SHA before editing this report. I read the Phase 23 Plan 23-04 report contract, the D-144–D-155 rescope record, the release guidance, version-window checker and controls, trusted version/release workflows, installed-consumer and fixture-product policies, notice checker, and the exact D-155 source diff. The assigned scope is release provenance, version-window and lifecycle behavior, product/consumer boundaries, and notices.
+I verified that the shared checkout is at the exact implementation commit, 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc. I rechecked Plan 23-04, the T2 rescope, timeout-budget mapping, and the final implementation delta from bd5ab993a3f09307e6a5ef31185f554740a0787b. That delta changes only DECISIONS.md, the Phase 23 plan and rescope, and the timeout-budget allowlist; release, lifecycle, version-window, product/consumer, fixture, and notice implementation files are unchanged. I re-evaluated those exact source paths alongside the previously approved D-144–D-156 work.
 
-The existing RC-01–RC-13 properties remain satisfied at this source. Their recorded fix commits are ancestors of the reviewed commit, and I verified the corresponding current source paths and controls. D-155's traversal and symlink boundaries are fixed in the reviewed source and have a focused passing control run recorded below. I found no remaining release-consumer correctness or security issue.
+The source satisfies RC-01–RC-15. The D-155 adoption-checker blob at this commit is identical to the blob at 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c. D-156 points the post-tag recovery verifier at that exact checker and retains its immutable-source byte comparisons. The final D-068 mapping correction resolves RC-16: the Plan 23-04 pinned check and PR-base budget check both pass, and all shard rows resolve their decision references. I found no remaining open correctness or security issue in this review scope.
 
-The version-PR workflows run the window, exact tracked 0.4.0 version, and release-note checks from the trusted base checkout while reading the generated version PR as data. The active window binds the main base, source, managed notes/ledger, generated PR body, and rehearsal identities. It is content-bound rather than time-bound; a changed source or regenerated content keeps the release held until exact-head checks and rehearsal are repeated. Plan 23-09's production version-window checker masks comments and code before checking the judged changelog, rejects raw HTML openers (including incomplete script/pre/style, doctype, and processing-instruction forms) before the version heading and within the selected release section, then requires the visible exact ledger link. Its self-test has visible-link counterparts, causal incomplete-opener cases, and a control showing the former matcher would accept the hidden-link fixture.
+The version-PR gate reads generated content as data and runs trusted checkers from the PR base against the exact version-PR head. It checks the active content window, exact tracked 0.4.0 version, and rendered notes. The version-window checker masks comments and code, rejects raw HTML constructs in the judged changelog prefix, and requires a visible exact ledger link. Its controls cover incomplete HTML openers both before the version heading and inside the selected section, with visible-link counterparts and a causal comparison against the prior matcher.
 
-The candidate lifecycle keeps the tag and source SHA equal, checks the version from that exact source, requires one unpublished draft, downloads uniquely named assets, and judges the bytes with trusted checkers from the workflow revision. Publication depends on successful candidate jobs, downloaded product validation, final API/receipt checks, and the exact-tree nightly gate. Release guidance accurately says v0.4.0 is preparation only; no publication, game admission, game execution, signing, or notarization is claimed. It preserves the documented fixture-rights scope outcomes without claiming a license prohibition and distinguishes harness-only RGB555/PCM repeatability from gameplay, rendering accuracy, physical hardware, or broad compatibility.
+The release lifecycle binds the tag to release-please's source SHA and version, requires a single unpublished draft, and downloads named assets for validation by trusted workflow code. Publication requires successful platform candidate jobs, downloaded-byte product checks, final receipt/API checks, and the exact-tree nightly gate. Release guidance remains explicit that v0.4.0 is preparation only, that the reviewed game candidates were neither built nor run, and that the current harness and software-model evidence do not establish game compatibility, physical hardware behavior, or perceptual output. The product policy keeps source archives with admitted notices distinct from binary packages with only the approved authored fixtures. Installed and downloaded consumer evidence remains separate.
 
-Product and consumer boundaries remain separate. Source archives may include admitted, noticed test fixtures; binary products are checked against the pinned product policy and contain only the approved project-authored tracer, visible demo, and MBC1 continuation fixtures. The downloaded product archive is validated by the trusted workflow before consumers run against it; receipts bind the archive bytes, source, and build evidence. The installed-prefix path and downloaded-asset path are described as separate evidence. None of these source contracts establishes that v0.4.0 has actually been built, downloaded, qualified, or published.
+The D-155 notice checker strictly resolves fixture paths, rejects traversal/backslashes, checks the resolved file stays within the repository root, and confines self-test copy destinations before and after parent-directory creation. The existing controls cover traversal, source symlinks, and a symlinked fixture destination. The claim matcher remains limited to unsupported CGB-game claims after Markdown code masking; I reread its D-144 parser cases, D-145–D-149 invisible/reference/hard-break handling, D-150–D-153 emphasis and link-label behavior, and D-154 bounded label-span checks. The focused selector still uses [0-9]+; CMake registers 200 shards, and the immutable inventory and budget cover every added shard 01–199.
 
-For notices, D-155 now rejects traversal components and backslashes before path use, resolves source files strictly, and confirms the resolved target remains inside the repository root. The notice lookup is constrained to fixture paths and regular files, including symlink resolution. Self-test copies resolve destinations against their isolated root and check confinement before and after parent-directory creation. The controls exercise traversal and external symlink paths for notice inputs and a symlinked fixture directory for copy destinations; the ordinary in-root notice inputs remain the accepted counterpart. The release-note and documentation claim matcher remains separate from this path policy, and its D-144–D-154 normalization remains limited to unsupported CGB-game claims after code masking.
+At 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc, RECOVERY_ADOPTION_PIN_SHA remains 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c. The post-tag recovery control reads the adoption checker at the requested implementation revision and the pinned revision, then checks both against the working-tree bytes. This is the intended source binding; its targeted control passes at the reviewed commit.
 
-The focused Plan 23-04 selector now uses phase23_docs_controls_shard_[0-9]+. CMake generates shard 0/200 under the existing v02_adoption_docs_controls name and shards 1–199 in the phase23_docs_controls_shard_* family. I checked that the immutable test inventory and budget each contain exactly the 199 added shard names 01–199, including 100–199. This corrects the previous two-digit selector without changing CTest registration or dropping controls.
+The final timeout-budget mapping is coherent with both immutable checker bases. Shards 01–31 cite D-069; shards 32–199 cite D-068. D-068 and D-069 are present in the plan-pinned base f2b05c9fb3ba314cfe46959b64073ce9441724ca and the PR base 1ab65414d60828fa9505babeaeea9de0571f016c. The D-068 note documents all-build-leg inventory provenance for the new rows, while D-069 remains the governing timeout policy. The current checker passes the exact Plan 23-04 command against f2b, and the checker copied from the immutable PR base passes against that base. This closes the prior RC-16 finding.
 
 ## Verification at the reviewed source
 
-- The source review was bound to 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c. The previously committed report in this path named a stale SHA; this report replaces it rather than preserving its structured evidence.
-- I ran python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 at the reviewed checkout. It passed with shard 0/200, selected=4, checks=473, and two selected CLI negative controls rejected. The shard-0 path also executes the notice traversal, external notice symlink, source-copy traversal, and destination-symlink checks; those paths completed without a control failure.
-- The focused selector, generated shard range, test inventory, and timeout-budget entries were source-inspected. I did not run the complete 200-shard CTest selection or the full suite in this review. I did not inspect live hosted checks, branch protection, a v0.4.0 version PR, tag, downloaded release assets, or publication.
+- `python3 -I tests/scripts/verify-release-lifecycle.py --rev 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc --self-test-post-tag-recovery` passed with 99 controls and 12 positives.
+- `python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200` passed with 4 selected CLI calls, 473 checks, and two selected negative controls rejected. This is shard 0 only; I did not run the complete 200-shard selection.
+- The Plan 23-04 pinned command, `python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo .`, passed at the exact implementation checkout: 1,936 registered tests and 288 allowlisted rows.
+- The checker copied from PR base `1ab65414d60828fa9505babeaeea9de0571f016c` also passed when run against that base on the reviewed source, as confirmed by the orchestrator's bounded check. The CI workflow uses this immutable-base checker pattern.
+- The exact source inventory contains 199 rows for shards 01–199: 31 cite D-069 and 168 cite D-068. The focused selector includes the full numbered shard range.
+- I did not run the full CTest suite, hosted checks, or any live version PR/tag/download/publication workflow. These controls establish the scoped source and budget contracts; they do not claim release qualification or game compatibility.
 
-These checks support the source-level review and the shard-0 controls only. They do not qualify a release or establish live release evidence.
+The previous base-reference failure is resolved by the approved D-068 mapping. No open correctness/security finding remains in this release-consumer review.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-9166ab60-20261106-01",
+  "report_id": "gb-23-release-consumer-7c6f01ad-20261106-01",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-d155",
+  "reviewer_id": "release-consumer-d068",
   "independent": true,
-  "reviewed_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
+  "reviewed_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
   "findings": [
     {
       "id": "RC-01",
@@ -176,7 +179,27 @@ These checks support the source-level review and the shard-0 controls only. They
       "disposition": "fixed",
       "rationale": "D-155 rejects traversal and backslash components, resolves source inputs and copy destinations, checks containment, and keeps failures closed. The reviewed implementation contains paired traversal and symlink controls for notice inputs and copy destinations.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "At the reviewed source, python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 passed. This shard exercises notice traversal/symlink and copy-source/copy-destination path controls."
+      "verification_ref": "At the reviewed source, the D-155 adoption checker blob is unchanged from 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c; its shard-0 self-test passed with the D-155 path controls."
+    },
+    {
+      "id": "RC-15",
+      "category": "correctness",
+      "severity": "high",
+      "required_property": "The post-tag recovery control pins and byte-compares the exact reviewed adoption checker while preserving the original historical recovery source pin.",
+      "disposition": "fixed",
+      "rationale": "D-156 updates only RECOVERY_ADOPTION_PIN_SHA to the D-155 implementation source. The checker still compares bytes from the requested revision, the immutable pin, and the working tree; the recovery control passes at this revision.",
+      "fix_sha": "bd5ab993a3f09307e6a5ef31185f554740a0787b",
+      "verification_ref": "At 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc: python3 -I tests/scripts/verify-release-lifecycle.py --rev 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc --self-test-post-tag-recovery passed with 99 controls and 12 positives."
+    },
+    {
+      "id": "RC-16",
+      "category": "correctness",
+      "severity": "high",
+      "required_property": "Timeout-budget rows must cite a decision present in the plan-pinned and PR-base commits used by the immutable checker, while retaining documented timeout policy and shard-inventory provenance.",
+      "disposition": "fixed",
+      "rationale": "The corrected inventory maps shards 01–31 to D-069 and 32–199 to D-068. Both decisions exist in the plan-pinned f2b base and PR base 1ab65414; D-068 records the all-build-leg inventory provenance and D-069 remains the timeout policy. The exact plan command and PR-base checker both pass against the reviewed source.",
+      "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
+      "verification_ref": "At 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc, the plan-pinned current checker passed with tests=1936 and allowlisted=288. The checker copied from PR base 1ab65414d60828fa9505babeaeea9de0571f016c also passed against that base. Exact inventory: 199 shard rows, 31 D-069 and 168 D-068; .github/workflows/ci.yml uses the checker copied from BUDGET_BASE."
     }
   ]
 }
