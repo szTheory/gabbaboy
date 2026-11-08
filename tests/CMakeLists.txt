@@ -5171,6 +5171,9 @@ set_tests_properties(
   support_claims support_claims_v04 support_claims_v04_controls release_notes_v04
   support_ledger_v04_tracer support_claims_controls
   PROPERTIES LABELS "v02;planning")
+set_tests_properties(
+  release_disclosure_controls release_version_v04_controls support_claims_v04_controls
+  PROPERTIES PROCESSORS 4)
 add_test(NAME adoption_claim_boundaries_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-adoption.py"
     --self-test-claim-boundaries --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")

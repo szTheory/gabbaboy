@@ -97,6 +97,7 @@ ADDED_MUTATION_CONTROLS = (
     ("P20 Linux stage gate repeats the repository root option", "release.yml", "fixture-product-stage"),
     ("P20 Linux stage gate appends a second product tree", "release.yml", "fixture-product-stage"),
     ("downloaded product archive controls", "release.yml", "fixture-product-trust"),
+    ("ci push trigger runs on every branch", "ci.yml", "workflow-trigger"),
 )
 
 

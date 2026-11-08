@@ -2563,8 +2563,11 @@ def _trusted_bash_executable() -> str:
 def _check_ci_planning_lane(workflow: str, tree: dict) -> None:
     """The planning-only lane (D-21): a read-only classifier on the base commit's copy, a real planning-checks job, and
     the full-matrix condition on every heavy job. required-native itself is judged by check_ci."""
-    if "pull_request_target" in _trigger_names(tree):
-        raise Reject("workflow-trigger", f"{workflow} must not use pull_request_target")
+    triggers = tree.get("on")
+    if not isinstance(triggers, dict) or set(triggers) != {"pull_request", "push"} \
+            or triggers.get("pull_request") != {"types": ["opened", "synchronize", "reopened"]} \
+            or triggers.get("push") != {"branches": ["main"]}:
+        raise Reject("workflow-trigger", f"{workflow} must run on PR updates and pushes to main only")
     changes = _require_job(workflow, tree, "changes")
     if _permissions(changes, tree["permissions"]) != {"contents": "read"}:
         raise Reject("producer-write-authority", "ci.changes must hold only contents: read")
@@ -4883,7 +4886,10 @@ def _mutations():
            "required-command-not-executed"),
         _m("planning-checks runs for every kind", "ci.yml", "  planning-checks:\n", "    if: needs.changes.outputs.kind == 'planning'\n", "",
            "planning-lane"),
-        _m("ci gains pull_request_target", "ci.yml", "", "  push:\n", "  pull_request_target:\n  push:\n", "workflow-trigger"),
+        _m("ci gains pull_request_target", "ci.yml", "", "  push:\n    branches: [main]\n",
+           "  pull_request_target:\n  push:\n    branches: [main]\n", "workflow-trigger"),
+        _m("ci push trigger runs on every branch", "ci.yml", "", "  push:\n    branches: [main]\n", "  push:\n",
+           "workflow-trigger"),
         _m("required-native stops waiting for perf-gate", "ci.yml", "  required-native:\n", "      - perf-gate\n", "", "workflow-dependency"),
         _m("required-native ignores the perf-gate result", "ci.yml", "  required-native:\n",
            "          PERF_GATE: ${{ needs.perf-gate.result }}\n", "", "workflow-dependency"),
@@ -5686,16 +5692,17 @@ def _ledger_mutations():
 
     bound = {"timeout_minutes": 5, "release_bound": True, "provisional": False, "sizing_basis": "sized from a worst-case budget"}
     return [
-        ("ledger: edited YAML timeout", yaml_edit("ci.yml", "    runs-on: ubuntu-22.04\n    timeout-minutes: 31\n", "    runs-on: ubuntu-22.04\n    timeout-minutes: 32\n"), (), "timeout-ledger-stale"),
+        ("ledger: edited YAML timeout", yaml_edit("ci.yml", "    runs-on: ubuntu-22.04\n    timeout-minutes: 60\n", "    runs-on: ubuntu-22.04\n    timeout-minutes: 61\n"), (), "timeout-ledger-stale"),
         ("ledger: removed row", ledger(lambda d: d.pop("ci.yml:native-linux")), (), "timeout-ledger-missing-row"),
-        ("ledger: p50 above half of the timeout", ledger(lambda d: d["ci.yml:native-linux"].update(p50_minutes="15.51")), (), "timeout-ledger-ratio"),
+        ("ledger: p50 above half of the timeout", ledger(lambda d: d["ci.yml:native-linux"].update(p50_minutes="30.01")), (), "timeout-ledger-ratio"),
         ("ledger: stale ledger value", ledger(lambda d: d["ci.yml:native-linux"].update(timeout_minutes=29)), (), "timeout-ledger-stale"),
         ("ledger: new job with no row", yaml_edit("ci.yml", "\n  required-native:\n", "\n  extra-job:\n    runs-on: ubuntu-22.04\n    timeout-minutes: 5\n    steps:\n      - run: true\n\n  required-native:\n"), (), "timeout-ledger-missing-row"),
         ("ledger: row for a job that no longer exists", ledger(lambda d: d.update({"ci.yml:gone": dict(d["ci.yml:native-linux"])})), (), "timeout-ledger-stale"),
         ("ledger: duplicate key", lambda fixture: (fixture / LEDGER_PATH).write_text(
             (fixture / LEDGER_PATH).read_text(encoding="utf-8").replace('"ci.yml:native-linux": {', '"ci.yml:native-linux": {"samples": 1, "samples": 2, ', 1), encoding="utf-8"), (), "timeout-ledger-schema"),
         ("ledger: provisional row under --release-head", ledger(lambda d: d["ci.yml:native-linux"].update(provisional=True)), ("--release-head",), "timeout-ledger-provisional"),
-        ("ledger: longest gating p50 of 30.1", both(yaml_edit("ci.yml", "timeout-minutes: 50\n", "timeout-minutes: 70\n"),
+        ("ledger: longest gating p50 of 30.1", both(yaml_edit("ci.yml", "runs-on: windows-2022\n    timeout-minutes: 60\n",
+            "runs-on: windows-2022\n    timeout-minutes: 70\n"),
             ledger(lambda d: d["ci.yml:native-windows"].update(timeout_minutes=70, p50_minutes="30.1"))), (), "timeout-ledger-whole-run"),
         ("ledger: release_bound row under a different key", ledger(lambda d: d.update({"ci.yml:native-linux": {**bound, "timeout_minutes": 31}})), (), "timeout-ledger-release-bound"),
         ("ledger: release_bound row under a third key", ledger(lambda d: d["fixture-repro.yml:fixture-repro"].clear() or d["fixture-repro.yml:fixture-repro"].update({**bound, "timeout_minutes": 15})), (), "timeout-ledger-release-bound"),

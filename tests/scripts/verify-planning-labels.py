@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -56,7 +57,19 @@ def _tokens(command: list[str]) -> list[str]:
 
 
 def _norm(path: str) -> str:
-    return path.replace("\\", "/")
+    normalized = path.replace("\\", "/")
+    # Windows paths are case-insensitive on the hosted runner. Normalize them
+    # with the host path rules before comparing the fixed build-tree exception.
+    if os.name == "nt":
+        normalized = os.path.normcase(normalized).replace("\\", "/")
+    return normalized
+
+
+def _same_file(left: str, right: str) -> bool:
+    try:
+        return os.path.samefile(left, right)
+    except (OSError, RuntimeError):
+        return False
 
 
 def _under(path: str, directory: str) -> bool:
@@ -130,10 +143,7 @@ def is_release_notes_v04_output_only(name: str, command: list[str], labels: list
         return False
     if len(command) != 6:
         return False
-    try:
-        if Path(command[0]).resolve(strict=True) != Path(cmake_executable).resolve(strict=True):
-            return False
-    except (OSError, RuntimeError):
+    if not _same_file(command[0], cmake_executable):
         return False
     expected_regex = "-DGBB_EXPECT_REGEX=release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+"
     if command[2] != "-DGBB_EXPECT_CODE=0" or command[3] != expected_regex:
@@ -222,11 +232,8 @@ def configured_source_revision(tests: list[dict], source: str, cmake_executable:
     command = [str(item) for item in contracts[0].get("command", [])]
     if len(command) != 6:
         raise Reject("REJECT inventory-unreadable: review-evidence contract command shape changed")
-    try:
-        if Path(command[0]).resolve(strict=True) != Path(cmake_executable).resolve(strict=True):
-            raise Reject("REJECT inventory-unreadable: review-evidence contract uses another CMake executable")
-    except (OSError, RuntimeError) as exc:
-        raise Reject(f"REJECT inventory-unreadable: review-evidence CMake command is unavailable: {exc}") from exc
+    if not _same_file(command[0], cmake_executable):
+        raise Reject("REJECT inventory-unreadable: review-evidence contract uses another CMake executable")
     if not command[1].startswith("-DGBB_CMD=") or command[2] != "-DGBB_EXPECT_CODE=0" \
             or command[4] != "-P" or _norm(command[5]) != _norm(str(Path(source) / "tests/expect_exit.cmake")):
         raise Reject("REJECT inventory-unreadable: review-evidence contract wrapper changed")
@@ -285,10 +292,14 @@ def self_test() -> int:
         ]
         release_notes_regex = "-DGBB_EXPECT_REGEX=release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+"
 
+        cmake_executable = shutil.which("cmake")
+        if not cmake_executable:
+            raise SystemExit("planning-labels self-test: configured CMake executable is unavailable")
+
         def release_notes_command(output: Path, revision: str = "a" * 40) -> list[str]:
             wrapped = [py, "-I", str(ledger), "--render-release-notes-preface", "--claims-version", "0.4.0",
                        "--rev", revision, "--repo", str(source), "--output", str(output)]
-            return [shutil.which("cmake") or "cmake", "-DGBB_CMD=" + ";".join(wrapped),
+            return [cmake_executable, "-DGBB_CMD=" + ";".join(wrapped),
                     "-DGBB_EXPECT_CODE=0", release_notes_regex,
                     "-P", str(expect_exit)]
 
@@ -375,9 +386,28 @@ def self_test() -> int:
             ("the release-notes output renderer must remain in the planning lane",
              [test("release_notes_v04", release_notes_writer, ["v02"])], "unlabelled-planning-reader"),
         ]
+        if os.name == "nt":
+            # CMake may preserve a different path casing in its cache than the
+            # Python temporary path spelling. Windows resolves these to the same
+            # output file; the fixed-output exception must recognize that form.
+            output_variant = list(release_notes_writer)
+            wrapped = output_variant[1][len("-DGBB_CMD="):].split(";")
+            output_index = wrapped.index("--output") + 1
+            original_output = wrapped[output_index]
+            case_variant = next((index for index, char in enumerate(original_output)
+                                 if index > 2 and char.isalpha()), None)
+            if case_variant is not None:
+                char = original_output[case_variant]
+                swapped = char.swapcase()
+                if swapped != char:
+                    wrapped[output_index] = original_output[:case_variant] + swapped + original_output[case_variant + 1:]
+                    output_variant[1] = "-DGBB_CMD=" + ";".join(wrapped)
+                    cases.append(("the fixed renderer output accepts Windows path casing", [
+                        test("release_notes_v04", output_variant, ["v02", "planning"])], None))
+
         for label, tests, expected in cases:
             try:
-                judge(tests, str(source), str(build), shutil.which("cmake") or "cmake", "a" * 40)
+                judge(tests, str(source), str(build), cmake_executable, "a" * 40)
             except Reject as exc:
                 if expected is None or f"REJECT {expected}:" not in str(exc):
                     raise SystemExit(f"planning-labels self-test: {label}: unexpected {exc}")
@@ -386,7 +416,7 @@ def self_test() -> int:
                     raise SystemExit(f"planning-labels self-test: {label}: accepted, wanted REJECT {expected}")
             controls += 1
         total, planning = judge([test("a", [py, str(reader)], ["planning"]), test("b", [py, str(clean)])],
-                                str(source), str(build), shutil.which("cmake") or "cmake", "a" * 40)
+                                str(source), str(build), cmake_executable, "a" * 40)
         if (total, planning) != (2, 1):
             raise SystemExit("planning-labels self-test: counts are wrong")
         controls += 1

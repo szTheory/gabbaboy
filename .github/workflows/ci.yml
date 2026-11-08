@@ -4,6 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -69,9 +70,9 @@ jobs:
 
   native-linux:
     name: native-linux-x64
-    # Timeout ledger (D-20): p50 11.07 min in main run 40159200194; 31 keeps a margin over ceil(2 x p50) for slow hosted days.
+    # Timeout ledger (D-20): p50 11.07 min in main run 40159200194. PR #146 stopped at 31 min with 1134/1942 tests; 60 lets the full measured suite finish.
     runs-on: ubuntu-22.04
-    timeout-minutes: 31
+    timeout-minutes: 60
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
@@ -313,9 +314,9 @@ jobs:
 
   native-windows:
     name: native-windows-x64
-    # Timeout ledger (D-20): p50 18.59 min in main run 40163270595; planning-time samples reached 23 min, so 50 covers ceil(2 x 23) = 46.
+    # Timeout ledger (D-20): p50 18.59 min in main run 40163270595. PR #146 stopped at 50 min with 1799/1804 tests; 60 lets the full measured suite finish.
     runs-on: windows-2022
-    timeout-minutes: 50
+    timeout-minutes: 60
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
@@ -567,7 +568,7 @@ jobs:
   cmake-floor-3-25-3:
     name: cmake-floor-3.25.3
     runs-on: ubuntu-22.04
-    timeout-minutes: 40
+    timeout-minutes: 50
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:

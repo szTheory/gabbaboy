@@ -8,12 +8,13 @@
   "provisional": false
  },
  "ci.yml:cmake-floor-3-25-3": {
-  "timeout_minutes": 40,
+  "timeout_minutes": 50,
   "cited_run_id": 40159200194,
   "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
   "p50_minutes": "13.00",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "Phase 23 PR #146 reached the 40-minute cap with 1869/1942 tests complete; the job cap is raised to 50 minutes. Historical p50 citation is unchanged; changed this job's body after the cited run."
  },
  "ci.yml:linux-sanitizers": {
   "timeout_minutes": 45,
@@ -49,13 +50,13 @@
   "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
  },
  "ci.yml:native-linux": {
-  "timeout_minutes": 31,
+  "timeout_minutes": 60,
   "cited_run_id": 40159200194,
   "cited_sha": "f98e57e32d2c388fed1ebfc57baf1d06895bb6f2",
   "p50_minutes": "11.07",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The native Linux job body changed after the cited sample; changed this job's body after the cited run."
+  "disclosure": "Phase 23 PR #146 reached the 31-minute cap with 1134/1942 tests complete; the job cap is raised to 60 minutes. Historical p50 citation is unchanged; changed this job's body after the cited run."
  },
  "ci.yml:native-macos": {
   "timeout_minutes": 40,
@@ -67,12 +68,13 @@
   "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
  },
  "ci.yml:native-windows": {
-  "timeout_minutes": 50,
+  "timeout_minutes": 60,
   "cited_run_id": 40163270595,
   "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
   "p50_minutes": "18.59",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "Phase 23 PR #146 reached the 50-minute cap with 1799/1804 tests complete; the job cap is raised to 60 minutes. Historical p50 citation is unchanged; changed this job's body after the cited run."
  },
  "ci.yml:perf-gate": {
   "timeout_minutes": 40,
@@ -197,30 +199,31 @@
   "provisional": false
  },
  "preview.yml:installed-package-smoke-linux-x64": {
-  "timeout_minutes": 55,
+  "timeout_minutes": 75,
   "cited_run_id": 40153459897,
   "cited_sha": "e719aa7e2a336717d0c9500eb7e473b774847078",
   "p50_minutes": "25.32",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "The exact-head wait is extended to cover the measured full CI runtimes from Phase 23 PR #146; the job cap is 75 minutes. Historical p50 citation is unchanged; changed this job's body after the cited run."
  },
  "preview.yml:installed-package-smoke-macos-arm64": {
-  "timeout_minutes": 55,
+  "timeout_minutes": 75,
   "cited_run_id": 40157490726,
   "cited_sha": "8738d07e61cf50bc3cb297c50b3ebe690112ebbe",
   "p50_minutes": "22.75",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
+  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples are unchanged. The exact-head wait is extended to cover measured full CI runtimes from Phase 23 PR #146 and the job cap is 75 minutes; changed this job's body after the cited run."
  },
  "preview.yml:player-package-smoke-macos": {
-  "timeout_minutes": 60,
+  "timeout_minutes": 75,
   "cited_run_id": 40154479072,
   "cited_sha": "5d26b7eb8cc4f7bf2fc725615becb5e494d02ba2",
   "p50_minutes": "22.50",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
+  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples are unchanged. The exact-head wait is extended to cover measured full CI runtimes from Phase 23 PR #146 and the job cap is 75 minutes; changed this job's body after the cited run."
  },
  "preview.yml:preview-package-smoke": {
   "timeout_minutes": 5,
