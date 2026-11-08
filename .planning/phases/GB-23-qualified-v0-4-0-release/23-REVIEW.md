@@ -1,42 +1,40 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** c08d18ef4ac5eda6c622b4102301ed888b98f80a
-**Review delta:** b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae through c08d18ef4ac5eda6c622b4102301ed888b98f80a
+**Reviewed implementation:** 8f6f7cf3184828b1d0aa9d50528a8fa029b1ced6
+**Review delta:** f833e181 through 8f6f7cf3184828b1d0aa9d50528a8fa029b1ced6, with prior D-157 through D-159 review evidence retained
 **Role:** release-consumer
-**Reviewer:** release-consumer-d159c08d18
+**Reviewer:** release-consumer-d160-8f6f7cf3
 
 ## Scope and conclusion
 
-I re-reviewed the release and consumer paths from the prior b75 source review, the b75-to-af5 D-158 changes, the af5-to-d0fb coverage correction, and the d0fb-to-c08d D-159 CTest scheduling changes. RC-01 through RC-20 retain their identities and fixed dispositions; each recorded fix commit is an ancestor of c08d18ef4ac5eda6c622b4102301ed888b98f80a.
+I reviewed D-160's nine CTest reservation changes, the source-bound workflow-policy coverage update, and the follow-up that corrects platform scoping and host signal processor counts. The nine D-160 controls reserve four slots while retaining their original assertions and timeouts. RC-01 through RC-20 retain their identities and fixed dispositions; each recorded fix SHA is an ancestor of the reviewed source.
 
-The D-159 change adds four-slot reservations for `phase23_docs_controls_shard_183` and `preview_package_smoke`. The existing 90-second docs-shard timeout and 180-second package-smoke timeout are unchanged. The coverage checker adds both names to its reserved inventory, confirms their actual CTest registrations and `PROCESSORS=4`, and includes one negative processor-count mutation for each. Exact-source coverage and the targeted tests pass. I found no new correctness, security, high, critical, or blocking finding.
+The earlier D-160 reservation checker was corrected before this review: the host helper again assigns two slots to `host_signal_term`, `host_signal_int`, and `host_signal_inherited_ign`, while `host_exit_crash_storm` has an explicit four-slot override. The Windows checker path excludes the two POSIX-only reserved registrations, `host_exit_crash_storm` and `save_format_controls`, and its self-test accepts their absence while rejecting a missing cross-platform reservation and an unexpected POSIX-only registration. The exact-source coverage checks pass. I found no remaining correctness, security, high, critical, or blocking finding.
 
-The earlier RC-20 at af5 was fixed at d0fb: the checker now validates the actual support-ledger control's environment and labels along with its timeout and four-slot reservation. The c08d checker retains that validation and its causal controls while extending reservations to the two D-159 tests.
+## D-160 source and verification
 
-## D-159 source and verification
+The D-160 CMake delta adds docs shards 112, 115, 118, 119, and 122 to the existing four-slot slow-shard group; adds `PROCESSORS 4` to `v02_fuzz_controls`, `v03_dispositions_controls`, and `save_format_controls`; and explicitly reserves all four slots for `host_exit_crash_storm`. Their existing timeouts remain 90 seconds for the five docs shards, 180 for fuzz controls, and 60 for the remaining controls. The diff changes CTest scheduling only; commands and assertions are unchanged.
 
-The CMake change adds `phase23_docs_controls_shard_183` to the existing measured slow-shard set assigned `PROCESSORS 4`. It adds `PROCESSORS 4` to `preview_package_smoke` while retaining its explicit `TIMEOUT 180`. The shard's registered timeout remains 90 seconds. Neither test's assertions, product behavior, or docs matching behavior changed.
+The host helper continues to apply `PROCESSORS 2` to the three sibling signal tests. Only the crash-storm test receives a subsequent `PROCESSORS 4` override. The configured CTest JSON confirms the three siblings remain at two slots and 60 seconds, while `host_exit_crash_storm` has four slots and a 60-second timeout.
 
-The workflow-policy coverage checker adds both test names to `PHASE23_RESERVED_TESTS`. That set is required in the expected inventory and configured CTest listing, each reservation must be registered once, and each test must reserve all four native slots. Its self-test adds both registrations and a `PROCESSORS=3` negative mutation for each, increasing the suite to 107 controls. This directly tests both D-159 reservations.
+The workflow-policy checker includes all nine reservations in its exact inventory and registration checks and requires `PROCESSORS=4`. Its self-test has a three-slot negative mutation for each reservation. For Windows it removes the POSIX-only crash-storm and save-format controls from the configured-test fixture, accepts that inventory, rejects a missing cross-platform reservation, and rejects an unexpected POSIX-only registration. The self-test passes 118 controls.
 
-A fresh normal configure at the reviewed source passed `verify-workflow-policy-coverage.py --check` with 540 controls across six groups. Configured CTest properties show `phase23_docs_controls_shard_183` with `PROCESSORS=4` and `TIMEOUT=90`, and `preview_package_smoke` with `PROCESSORS=4` and `TIMEOUT=180`. The selected docs shard, preview smoke, workflow-policy coverage check, and coverage self-test passed 4/4; their observed durations were 6.38, 27.12, 0.72, and 1.79 seconds respectively.
-
-D-159 records that the prior full writable-clone run had two timeouts under four-worker load, with no assertion failures, and both tests passed in isolated reruns. The new reservations are consistent with that measured contention evidence and preserve global CTest parallelism and per-test ceilings. I did not run the full suite or hosted qualification; those remain with the orchestrator's final qualification pass.
+A fresh normal configure at the reviewed source passed `verify-workflow-policy-coverage.py --check` with 540 controls across six groups. The registered workflow-policy coverage check and its self-test passed 2/2. Configured CTest properties confirm all nine D-160 reservations have four slots and their existing timeouts. I did not run the full suite or a Windows hosted job; the Windows inventory cases are exercised by the source checker self-test, and the orchestrator owns final qualification.
 
 ## Prior release and consumer findings
 
-RC-01 through RC-19 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-20 remains fixed at d0fb, with current c08d coverage evidence recorded in its verification reference. All fixed SHAs resolve and are ancestors of the reviewed implementation.
+RC-01 through RC-19 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-20 remains fixed at d0fb with current checker evidence recorded in its verification reference. All fixed SHAs resolve and are ancestors of this implementation.
 
-The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged by the d0fb-to-c08d source diff. D-159 changes CTest scheduling and coverage only.
+The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged by the f833-to-current source delta. D-160 changes test scheduling and its coverage contract only.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-c08d18ef-20261108-01",
+  "report_id": "gb-23-release-consumer-8f6f7cf3-20261108-01",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-d159c08d18",
+  "reviewer_id": "release-consumer-d160-8f6f7cf3",
   "independent": true,
-  "reviewed_sha": "c08d18ef4ac5eda6c622b4102301ed888b98f80a",
+  "reviewed_sha": "8f6f7cf3184828b1d0aa9d50528a8fa029b1ced6",
   "findings": [
     {
       "id": "RC-01",
@@ -236,7 +234,7 @@ The release/version-window, lifecycle, product/consumer, fixture, notice-path, a
       "disposition": "fixed",
       "rationale": "The d0fb checker now models and validates the actual support-ledger test contract: exact 120-second normal/360-second sanitizer timeout, PROCESSORS=4, GBB_TEST_BUILD_DIR (plus the sanitizer link-option environment when enabled), and the planning/v02 labels. The self-test fixture includes the real environment and labels; it rejects a missing planning label, unexpected environment entry, a 119-second native timeout, an unscaled 120-second sanitizer timeout, and PROCESSORS=3 for the support control and each D-157 reservation. The exact configured coverage check and all three selected CTests pass at d0fb, closing the af5 mismatch.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "At c08d18ef4ac5eda6c622b4102301ed888b98f80a: exact workflow-policy coverage check passed with 540 controls across six groups; coverage self-test passed 107 controls. Fresh configured CTest JSON confirms phase23_docs_controls_shard_183 has PROCESSORS=4/TIMEOUT=90 and preview_package_smoke has PROCESSORS=4/TIMEOUT=180. The selected docs shard, preview smoke, workflow_policy_coverage, and workflow_policy_coverage_controls passed 4/4."
+      "verification_ref": "At 8f6f7cf3184828b1d0aa9d50528a8fa029b1ced6: exact workflow-policy coverage check passed with 540 controls across six groups; coverage self-test passed 118 controls, including the real support-ledger environment/labels, timeout scaling, and processor negatives. The two coverage CTests passed. The d0fb68361f3ffd82e1205e16609f644d4f733df2 fix remains an ancestor and its configured support-ledger contract is included in the current checker."
     }
   ]
 }
