@@ -572,7 +572,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
-      # Serially the floor suite took 20-40 of these 40 minutes (LESSONS GB-CI-010); every ctest call runs 4 at once.
+      # Serially the floor suite took 20-40 of these 50 minutes (LESSONS GB-CI-010); every ctest call runs 4 at once.
       CTEST_PARALLEL_LEVEL: 4
     steps:
       - name: Check out source
