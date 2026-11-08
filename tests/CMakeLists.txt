@@ -1503,6 +1503,7 @@ set(gbb_docs_control_slow_tests
   phase23_docs_controls_shard_171
   phase23_docs_controls_shard_172
   phase23_docs_controls_shard_174
+  phase23_docs_controls_shard_183
 )
 set_tests_properties(${gbb_docs_control_slow_tests} PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_support_ledger 60
@@ -1964,7 +1965,8 @@ add_test(NAME preview_package_smoke
     -DGBB_SANITIZER_LINK_OPTIONS=${GBB_TEST_SANITIZER_LINK_OPTIONS}
     -DGBB_CONFIGURATION=$<CONFIG>
     -P ${PROJECT_SOURCE_DIR}/cmake/PreviewPackageSmoke.cmake)
-set_tests_properties(preview_package_smoke PROPERTIES TIMEOUT 180)
+# This smoke builds several isolated packages; reserve the test runner to avoid local full-suite contention.
+set_tests_properties(preview_package_smoke PROPERTIES TIMEOUT 180 PROCESSORS 4)
 
 # Phase 16 D-18: the base TIMEOUT for tests that set none. The player child scope inherits it and
 # applies the same sweep, because this directory's pass cannot reach child-directory tests.
