@@ -5,10 +5,11 @@
 | Identity | Commit | Meaning |
 |---|---|---|
 | Reviewed implementation | `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` | Exact source independently reviewed by release-consumer, security and adversarial reviewers. |
-| Review evidence / local qualification | `f595fb0572fe65e9b4df91069c97470af6b02a04` | Committed review reports; the exact configured source for the focused and full local runs. |
+| Review reports / full local run source | `f595fb0572fe65e9b4df91069c97470af6b02a04` | Committed review reports and the configured source for the focused and full local runs. |
+| Current qualification candidate | `0996981cb1ced18665b45770bb0fe725a3d29867` | Exact PR #146 head; contains only the reviewed implementation and allowlisted evidence records. The direct real-report gate passes here. |
 | PR base | `f2b05c9fb3ba314cfe46959b64073ce9441724ca` | `main` base observed for PR #146 and used for local state-pin and timeout-budget checks. |
 
-PR #146 is open at `https://github.com/szTheory/gabbaboy/pull/146`. At the last GitHub read, its remote head was still `308b02fbaade17e4e5ff9bc7a4fbe9a3b699ff7a`; the local reviewed commits had not yet been pushed. Hosted exact-head checks are pending. The PR is not merged, and no v0.4.0 version PR, tag or publication is claimed.
+PR #146 is open at `https://github.com/szTheory/gabbaboy/pull/146`, based on `main` at `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, with exact head `0996981cb1ced18665b45770bb0fe725a3d29867`. The PR is not merged, and no v0.4.0 version PR, tag or publication is claimed.
 
 ## Local verification
 
@@ -23,7 +24,7 @@ cmake --build --preset phase1 --parallel 4
 
 | Check | Result |
 |---|---|
-| Direct real-report gate | Passed at `f595fb05`: 3 independent reports, 60 findings, implementation exactly `b75ecb97`; no open correctness, security, high, critical or blocking finding. SEC-23-09 remains a low-severity resource-bound note. |
+| Direct real-report gate | Passed at both `f595fb05` and qualification candidate `0996981c`: 3 independent reports, 60 findings, implementation exactly `b75ecb97`; no open correctness, security, high, critical or blocking finding. SEC-23-09 remains a low-severity resource-bound note. |
 | Planning-label path controls | Passed: 33 controls, including wrong-repository negatives and simulated Windows case variants on POSIX. |
 | Workflow-policy coverage | Passed: 94 self-test controls and 540 configured controls across 6 groups. The CI group passed 112 negative plus 1 positive; the ledger group passed 20 negative plus 1 positive. |
 | Timeout-budget check | Passed: 1,942 configured tests, 288 allowlisted rows, 11 existing player rows skipped under policy. |
@@ -43,6 +44,15 @@ The first sandboxed full-suite attempt stopped after four performance/review con
 
 ## Hosted checks and evidence limits
 
-One current PR run remains necessary for required native Linux, macOS and Windows checks, the CMake floor, fixture reproduction, installed consumers, player package, sanitizers, fuzz and performance lanes. Running these checks locally avoided repeated hosted runs, but a macOS local run cannot prove Windows behavior, GitHub branch protection or exact-head workflow status. Record the current PR head, required run/job IDs and measured queue/dependency waits when that hosted run finishes.
+The exact-head hosted checks for PR #146 are running on candidate `0996981cb1ced18665b45770bb0fe725a3d29867`:
+
+| Workflow | Run | Observed state |
+|---|---:|---|
+| `fixture-repro` | 42504378712 (run 941) | Passed. |
+| `ci` | 42504378731 (run 942) | In progress; native Linux/macOS/Windows, CMake floor, installed consumers, player package, sanitizer, fuzz and performance jobs are included. |
+| `preview-package-smoke` | 42504378802 (run 352) | In progress; waits for the matching successful CI and package artifacts. |
+| `version-pr-gate` | 42504378789 (run 86) | Skipped by its non-version-PR condition; not a qualification check for this PR. |
+
+The required CI and preview jobs are still in progress, so no merge eligibility or hosted qualification is claimed. A local macOS run cannot establish Linux/Windows results, GitHub branch protection or exact-head workflow status. Record completed required job IDs, conclusions and measured queue/dependency waits after these runs finish.
 
 No candidate game or diagnostic fixture was fetched, admitted or run for Phase 23 qualification. REL-01, DIAG-01, DIAG-02 and RIGHTS-01 remain Pending where their evidence gates are unresolved. Local tests do not qualify or publish v0.4.0.
