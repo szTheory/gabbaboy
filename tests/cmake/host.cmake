@@ -424,8 +424,8 @@ if(NOT WIN32)
 
   # ---- HOST-02 / D-17: real signals sent to real runner processes (POSIX-only: Windows has no SIGTERM and
   # host mode is refused there, D-05). Each row sends exactly one signal and keeps the base 60 s TIMEOUT;
-  # PROCESSORS 2 keeps hosted ctest (4-wide) from starving the rows' watchdogs. No row uses elapsed time as
-  # evidence (IN-07): the term row's proof is the --frames replay of the signalled .sav.
+  # PROCESSORS 4 keeps hosted ctest (4-wide) from starving the rows' watchdogs. No row uses elapsed
+  # time as evidence (IN-07): the term row's proof is the --frames replay of the signalled .sav.
   set(GBB_HOST_SIGNALS_HARNESS "${PROJECT_SOURCE_DIR}/tests/scripts/test_host_signals.py")
 
   # gbb_add_host_signal_test(name scenario [PROCESSORS2]): one python3 -I scenario against the real runner.
@@ -438,7 +438,7 @@ if(NOT WIN32)
     set_tests_properties(${name} PROPERTIES
       PASS_REGULAR_EXPRESSION "host-signals scenario=${scenario} pass")
     if(ARGN)
-      set_tests_properties(${name} PROPERTIES PROCESSORS 2)
+      set_tests_properties(${name} PROPERTIES PROCESSORS 4)
     endif()
   endfunction()
 

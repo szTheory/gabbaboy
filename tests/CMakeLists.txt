@@ -1484,8 +1484,8 @@ foreach(gbb_docs_control_shard RANGE 1 ${gbb_docs_control_shard_max})
     "${gbb_docs_control_shard_regex}"
     verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} ${gbb_docs_control_shard_count})
 endforeach()
-# The four-worker run identified this small subset as the only shards near the timeout. Reserve all
-# four CTest slots for them; the rest of the docs controls remain parallel.
+# Measured four-worker runs identified these shards as near the timeout. Reserve all four CTest
+# slots for them; the rest of the docs controls remain parallel.
 set(gbb_docs_control_slow_tests
   v02_adoption_docs_controls
   phase23_docs_controls_shard_02
@@ -1498,6 +1498,11 @@ set(gbb_docs_control_slow_tests
   phase23_docs_controls_shard_93
   phase23_docs_controls_shard_94
   phase23_docs_controls_shard_109
+  phase23_docs_controls_shard_112
+  phase23_docs_controls_shard_115
+  phase23_docs_controls_shard_118
+  phase23_docs_controls_shard_119
+  phase23_docs_controls_shard_122
   phase23_docs_controls_shard_127
   phase23_docs_controls_shard_170
   phase23_docs_controls_shard_171
@@ -1600,6 +1605,7 @@ gbb_add_v02_contract(v02_performance_controls 90
 gbb_add_v02_contract(v02_fuzz_controls 180
   [=[self-test=pass positive_controls=[1-9][0-9]* negative_controls=[1-9][0-9]*]=]
   verify-v02-fuzz.py --self-test)
+set_tests_properties(v02_fuzz_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_source_archive_controls 90
   [=[PASS: source archive checker accepted [1-9][0-9]* cases and rejected [1-9][0-9]* negative controls]=]
   verify-v02-source-archive.py --self-test)
@@ -1665,6 +1671,7 @@ add_test(NAME v03_dispositions_controls
     -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=51
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_dispositions_controls PROPERTIES TIMEOUT 60 LABELS "planning")
+set_tests_properties(v03_dispositions_controls PROPERTIES PROCESSORS 4)
 # D-23 (19-05): the v0.3 readback is checked against tag objects and its embedded pre-publish artifact;
 # this fixture shares a module with planning readers and is the executable contract for 19-07.
 add_test(NAME v03_readback_controls

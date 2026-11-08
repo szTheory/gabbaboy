@@ -35,13 +35,22 @@ GROUPS = {
     "helpers": "workflow_policy_group_helpers",
 }
 PHASE23_RESERVED_TESTS = {
+    "host_exit_crash_storm",
     "phase21_fixture_admission_controls",
+    "phase23_docs_controls_shard_112",
+    "phase23_docs_controls_shard_115",
+    "phase23_docs_controls_shard_118",
+    "phase23_docs_controls_shard_119",
+    "phase23_docs_controls_shard_122",
     "phase23_docs_controls_shard_183",
     "preview_package_smoke",
     "release_disclosure_controls",
     "release_version_v04_controls",
+    "save_format_controls",
     "support_claims_v04_controls",
+    "v02_fuzz_controls",
     "v02_support_ledger_controls",
+    "v03_dispositions_controls",
 }
 PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], *PHASE23_RESERVED_TESTS}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
@@ -1564,7 +1573,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 107:
+    if controls != 116:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
