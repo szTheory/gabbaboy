@@ -33,12 +33,13 @@
   "provisional": false
  },
  "ci.yml:linux-sanitizers-tests": {
-  "timeout_minutes": 45,
+  "timeout_minutes": 55,
   "cited_run_id": 40163270595,
   "cited_sha": "2bd618db0a48587bddedc535bad5722fcbf479aa",
   "p50_minutes": "21.55",
   "samples": 5,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "Phase 23 PR #146 exact-head run 42504839710 reached 1843/1853 tests before the 45-minute cap; the job cap is raised to 55 minutes. Historical p50 citation is unchanged; changed this job's body after the cited run."
  },
  "ci.yml:macos-player-package": {
   "timeout_minutes": 45,

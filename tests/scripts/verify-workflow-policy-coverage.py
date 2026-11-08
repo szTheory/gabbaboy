@@ -34,6 +34,7 @@ GROUPS = {
     "ledger": "workflow_policy_group_ledger",
     "helpers": "workflow_policy_group_helpers",
 }
+PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], "v02_support_ledger_controls"}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
                           "rehearsal": "rehearsal", "ledger": "ledger", "helpers": "helpers"}
 GROUP_BY_WORKFLOW = {
@@ -918,6 +919,8 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
     inventory = set(expected_tests)
     if not POLICY_TEST_NAMES <= inventory:
         reject("tests/expected-tests.txt is missing a workflow-policy group, coverage test, or production check")
+    if not PROCESSOR_RESERVED_TESTS <= inventory:
+        reject("tests/expected-tests.txt is missing a CTest slot-reserved control")
     if any(name.startswith("workflow_policy_") and name not in POLICY_TEST_NAMES for name in inventory):
         reject("tests/expected-tests.txt contains an unexpected workflow-policy registration")
 
@@ -932,13 +935,16 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
     for name in POLICY_TEST_NAMES:
         if len(actual_by_name.get(name, [])) != 1:
             reject(f"CTest must register {name} exactly once")
+    for name in PROCESSOR_RESERVED_TESTS:
+        if len(actual_by_name.get(name, [])) != 1:
+            reject(f"CTest must register slot-reserved control {name} exactly once")
 
     completion_paths: set[str] = set()
     for name in sorted(POLICY_TEST_NAMES):
         test = actual_by_name[name][0]
         properties = _test_properties(test)
         expected_properties = {"TIMEOUT", "WORKING_DIRECTORY"}
-        if name == GROUPS["release_jobs"]:
+        if name in PROCESSOR_RESERVED_TESTS:
             expected_properties.add("PROCESSORS")
         if set(properties) != expected_properties:
             reject(f"CTest {name} has an unexpected property that can change execution or qualification")
@@ -1026,6 +1032,18 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         if definitions != expected_definitions:
             reject(f"CTest {name} wrapper definitions differ from the exact exit-plus-marker contract")
 
+    support_ledger = actual_by_name["v02_support_ledger_controls"][0]
+    support_properties = _test_properties(support_ledger)
+    if set(support_properties) != {"TIMEOUT", "WORKING_DIRECTORY", "PROCESSORS"}:
+        reject("CTest v02_support_ledger_controls has an unexpected property that can change execution or qualification")
+    expected_support_timeout = 120 * (3 if sanitizer_enabled else 1)
+    if support_properties.get("TIMEOUT") != expected_support_timeout:
+        reject(f"CTest v02_support_ledger_controls must retain its {expected_support_timeout}-second timeout")
+    if not _same_path(str(support_properties.get("WORKING_DIRECTORY", "")), build_dir / "tests"):
+        reject("CTest v02_support_ledger_controls has an unexpected working directory")
+    if support_properties.get("PROCESSORS") != 4:
+        reject("CTest v02_support_ledger_controls must reserve all four native test slots")
+
     validate_cmake_registration(ci_lanes)
 
 
@@ -1038,7 +1056,7 @@ def _self_test(root: Path, revision: str) -> int:
     build_dir = root / "build/phase19-policy-coverage-fixture"
     cmake_executable = shutil.which("cmake") or "cmake"
     python_executable = sys.executable
-    expected_tests = sorted(POLICY_TEST_NAMES)
+    expected_tests = sorted(POLICY_TEST_NAMES | {"v02_support_ledger_controls"})
     ci_lanes = "\n".join(f"gbb_add_ci_lane_test({name} 0 marker 60 \"\")" for name in expected_tests)
     controls = 0
 
@@ -1107,6 +1125,8 @@ def _self_test(root: Path, revision: str) -> int:
         ]
         if name == GROUPS["release_jobs"]:
             properties.append({"name": "PROCESSORS", "value": 4})
+        elif name == "v02_support_ledger_controls":
+            properties.append({"name": "PROCESSORS", "value": 4})
         return {
             "name": name,
             "command": command,
@@ -1138,6 +1158,7 @@ def _self_test(root: Path, revision: str) -> int:
         command.extend(("--completed-file", str(completion)))
         tests.append(test_entry(name, command,
                                 marker, 180, completion))
+    tests.append(test_entry("v02_support_ledger_controls", [], "", 120))
     coverage_script = root / "tests/scripts/verify-workflow-policy-coverage.py"
     tests.extend((
         test_entry("workflow_policy_coverage",
@@ -1187,8 +1208,12 @@ def _self_test(root: Path, revision: str) -> int:
 
     # Inventory omissions, stale rows, and duplicate or unexpected CTest registrations.
     rejected("missing expected inventory row", lambda: validate(tests, [name for name in expected_tests if name != GROUPS["ledger"]]))
+    rejected("missing slot-reserved expected inventory row",
+             lambda: validate(tests, [name for name in expected_tests if name != "v02_support_ledger_controls"]))
     rejected("missing configured CTest registration",
              lambda: validate([test for test in tests if test["name"] != GROUPS["ledger"]]))
+    rejected("missing slot-reserved CTest registration",
+             lambda: validate([test for test in tests if test["name"] != "v02_support_ledger_controls"]))
     rejected("missing CMake declaration",
              lambda: validate_cmake_registration(ci_lanes.replace(
                  f"gbb_add_ci_lane_test({GROUPS['ledger']}", "# removed\ngbb_add_ci_lane_test(omitted_group")))
@@ -1205,6 +1230,10 @@ def _self_test(root: Path, revision: str) -> int:
         target = next(test for test in test_list if test["name"] == GROUPS["release_jobs"])
         next(prop for prop in target["properties"] if prop["name"] == "PROCESSORS")["value"] = value
 
+    def set_support_processors(test_list: list[dict], value: int) -> None:
+        target = next(test for test in test_list if test["name"] == "v02_support_ledger_controls")
+        next(prop for prop in target["properties"] if prop["name"] == "PROCESSORS")["value"] = value
+
     mutant = copy.deepcopy(tests)
     set_timeout(mutant, 540)
     rejected("incorrectly scaled native timeout", lambda: validate(mutant))
@@ -1214,6 +1243,9 @@ def _self_test(root: Path, revision: str) -> int:
     mutant = copy.deepcopy(tests)
     set_policy_processors(mutant, 3)
     rejected("unreserved release policy processors", lambda: validate(mutant))
+    mutant = copy.deepcopy(tests)
+    set_support_processors(mutant, 3)
+    rejected("unreserved support ledger control processors", lambda: validate(mutant))
 
     def named_test(test_list: list[dict], name: str) -> dict:
         return next(test for test in test_list if test["name"] == name)
@@ -1475,7 +1507,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 94:
+    if controls != 97:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
