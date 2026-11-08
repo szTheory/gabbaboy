@@ -1,49 +1,40 @@
-# Phase 23 Release-Consumer Review
+# Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae
+**Reviewed implementation:** d0fb68361f3ffd82e1205e16609f644d4f733df2
+**Review delta:** b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae through d0fb68361f3ffd82e1205e16609f644d4f733df2
 **Role:** release-consumer
-**Reviewer:** release-consumer-d157b75
+**Reviewer:** release-consumer-d158d0fb6836
 
 ## Scope and conclusion
 
-I verified the checkout at the exact implementation commit, b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae. I reviewed the complete source delta since 7c6f01ad, including D-157's CI trigger and measured timeout changes, exact-head preview waits, four-slot CTest reservations, Windows path normalization, and the final workflow-policy coverage snapshot correction. The final follow-up changes the planning-label path checks and adds POSIX-simulated Windows case controls; it also updates the CMake-floor timeout comment. Release, lifecycle, version-window, product/consumer, fixture, notice, and adoption implementation paths remain unchanged from the prior exact-source review. RC-01 through RC-17 remain fixed.
+I re-reviewed the release and consumer paths from the prior b75 source review, the b75-to-af5 D-158 changes, and the af5-to-d0fb workflow-coverage checker and contract changes. RC-01 through RC-19 retain their identities and fixed dispositions; every recorded fix commit is an ancestor of d0fb68361f3ffd82e1205e16609f644d4f733df2.
 
-RC-18 and RC-19 are fixed at b75ecb97. The floor-job comment now says the current 50-minute cap. The planning-label checker normalizes both configured repository and output paths, and the 33-control self-test passes on POSIX with simulated Windows casing for the renderer output, renderer repository, and review-evidence repository paths. I found no remaining correctness, security, high, critical, or blocking finding.
+The earlier RC-20 finding was valid at af5: the configured coverage checker rejected existing helper-generated ENVIRONMENT and LABELS on `v02_support_ledger_controls`. The d0fb correction adds the exact existing environment and `planning;v02` labels to the validated contract, models them in its fixture, and adds negative controls for property mutations. A fresh exact-source configure, the production coverage check, and the targeted CTests now pass. RC-20 is fixed at d0fb; I found no remaining correctness, security, high, critical, or blocking finding.
 
-The version-PR gate reads generated content as data and runs trusted checkers from the PR base against the exact version-PR head. It checks the active content window, exact tracked 0.4.0 version, and rendered notes. The version-window checker masks comments and code, rejects raw HTML constructs in the judged changelog prefix, and requires a visible exact ledger link. Its controls cover incomplete HTML openers both before the version heading and inside the selected section, with visible-link counterparts and a causal comparison against the prior matcher.
+The D-158 sanitizer inventory cap remains 55 minutes with its 21.55-minute historical p50 citation unchanged and a disclosure of the observed 1,843/1,853 result and changed job body. The timeout-ledger policy check and its negative controls pass. The 3,900-second exact-head waiter still accommodates the job. The support-ledger test retains its 120-second native timeout and four-slot reservation.
 
-The release lifecycle binds the tag to release-please's source SHA and version, requires a single unpublished draft, and downloads named assets for validation by trusted workflow code. Publication requires successful platform candidate jobs, downloaded-byte product checks, final receipt/API checks, and the exact-tree nightly gate. Release guidance remains explicit that v0.4.0 is preparation only, that the reviewed game candidates were neither built nor run, and that the current harness and software-model evidence do not establish game compatibility, physical hardware behavior, or perceptual output. The product policy keeps source archives with admitted notices distinct from binary packages with only the approved authored fixtures. Installed and downloaded consumer evidence remains separate.
+## RC-20 correction and verification
 
-The D-155 notice checker strictly resolves fixture paths, rejects traversal/backslashes, checks the resolved file stays within the repository root, and confines self-test copy destinations before and after parent-directory creation. The existing controls cover traversal, source symlinks, and a symlinked fixture destination. The claim matcher remains limited to unsupported CGB-game claims after Markdown code masking; I reread its D-144 parser cases, D-145–D-149 invisible/reference/hard-break handling, D-150–D-153 emphasis and link-label behavior, and D-154 bounded label-span checks. The focused selector still uses [0-9]+; CMake registers 200 shards, and the immutable inventory and budget cover every added shard 01–199.
+The coverage checker now requires all processor-reserved tests in both the expected inventory and configured CTest list and verifies PROCESSORS=4. The reserved set includes the four D-157 controls and `v02_support_ledger_controls`. For the support-ledger test specifically, it also checks the exact timeout (120 seconds normally, 360 with sanitizers), working directory, `GBB_TEST_BUILD_DIR` environment (plus the sanitizer link option in sanitizer mode), and `[planning, v02]` labels.
 
-At b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae, RECOVERY_ADOPTION_PIN_SHA remains 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c. The post-tag recovery control reads the adoption checker at the requested implementation revision and the pinned revision, then checks both against the working-tree bytes. This is the intended source binding; its targeted control passes at the reviewed commit.
+The 105-control self-test models the real helper-generated environment and labels. It rejects a missing planning label, unexpected environment entry, timeout below the native bound, unscaled sanitizer timeout, and insufficient processor reservations for each D-157 test and the support-ledger control. It retains missing inventory/registration negatives. This covers the property mismatch observed at af5 and guards the corrected contract.
 
-The final timeout-budget mapping is coherent with both immutable checker bases. Shards 01–31 cite D-069; shards 32–199 cite D-068. D-068 and D-069 are present in the plan-pinned base f2b05c9fb3ba314cfe46959b64073ce9441724ca and the PR base 1ab65414d60828fa9505babeaeea9de0571f016c. The D-068 note documents all-build-leg inventory provenance for the new rows, while D-069 remains the governing timeout policy. The current checker passes the exact Plan 23-04 command against f2b, and the checker copied from the immutable PR base passes against that base. This closes the prior RC-16 finding.
+A fresh normal configure at the reviewed source passed `verify-workflow-policy-coverage.py --check` with 540 controls across six groups. The selected `v02_support_ledger_controls`, `workflow_policy_coverage`, and `workflow_policy_coverage_controls` CTests passed 3/3. The direct workflow privilege/trust check passed. The D-158 timeout-ledger self-test passed 20 controls with its positive control, including the changed-body disclosure against b75; the planning-label self-test passed 33 controls.
 
-The CI workflow retains its pull-request update trigger and runs branch-push CI only for `main`; the policy check accepts that exact trigger shape and its CI controls reject an unfiltered push. The native Linux and Windows job limits are 60 minutes, the CMake-floor limit is 50, and the three preview waiters use a 3,900-second exact-head deadline with 75-minute job limits. Historical p50 citations remain unchanged, with disclosures explaining changed job bodies and observed Phase 23 run caps. The four near-limit CTest controls reserve `PROCESSORS 4`; an exact-source CMake configure confirms their original 60/90-second timeouts. The floor comment matches its 50-minute cap.
+I could not configure the sanitizer build on this macOS host because the project intentionally supports `GABBABOY_ENABLE_SANITIZERS` only on Linux. The workflow-coverage self-test did validate the sanitizer-scaled timeout and environment, including a negative for the unscaled timeout. I did not run the full CTest suite or hosted qualification.
 
-The planning-label checker now normalizes the `--repo` and `--output` path arguments using Windows host rules, and `configured_source_revision` applies the same comparison to its `--repo` argument. It retains executable identity checks through `samefile`, wrong-repository and fake-CMake negatives, and adds case-variant positives for these paths. The POSIX self-test simulates Windows case-insensitive comparisons for renderer output, renderer repository, and review-evidence repository paths; all 33 controls pass.
+## Release and consumer boundaries
 
-The final workflow-policy coverage fix pins the judged policy checker to its exact D-157 source commit, adds only the changed policy functions to the reviewed-function set, and continues comparing the rest of the checker against its immutable baseline. This closes the previously observed exact-source coverage failure without bypassing the coverage inventory or mutation controls.
-
-## Verification at the reviewed source
-
-- `python3 -I tests/scripts/verify-workflow-policy-coverage.py --check --root . --build-dir /private/tmp/gabbaboy-review-b75 --rev b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` passed with 540 controls across six groups on POSIX. Its self-test passed 94 controls.
-- `python3 -I .github/scripts/verify-workflow-policy.py --check --root .` passed. The CI policy group completed 112 controls and the timeout-ledger group completed 20 controls; the ledger controls reject stale values, ratio violations, and a required-matrix p50 above its ceiling.
-- `python3 -I tests/scripts/verify-planning-labels.py --self-test` passed 33 controls. This POSIX run simulated case-insensitive Windows paths for renderer output, renderer repository, and review-evidence repository arguments. A fresh CMake configure at the reviewed SHA confirmed all four reserved tests use `PROCESSORS=4` and retain their original timeouts.
-- The plan-pinned budget check and the checker copied from PR base `1ab65414d60828fa9505babeaeea9de0571f016c` both passed with 1,936 tests and 288 allowlisted rows.
-- The docs shard-0 self-test passed with 4 selected calls, 473 checks, and two negative controls rejected. The post-tag recovery control passed with 99 controls and 12 positives.
-- I did not run the full CTest suite or hosted qualification. Local checks do not establish the Windows hosted context or release qualification.
-
+The release, version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed at b75 remain unchanged by the af5-to-d0fb source diff. The D-158 changes adjust only CI budgeting, CTest reservations, and their coverage contract. RC-01 through RC-19 retain their recorded source-linked verification references; the fix-commit ancestry check passes against this reviewed source.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-b75ecb97-20261108-01",
+  "report_id": "gb-23-release-consumer-d0fb6836-20261108-01",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-d157b75",
+  "reviewer_id": "release-consumer-d158d0fb6836",
   "independent": true,
-  "reviewed_sha": "b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae",
+  "reviewed_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
   "findings": [
     {
       "id": "RC-01",
@@ -201,7 +192,7 @@ The final workflow-policy coverage fix pins the judged policy checker to its exa
       "severity": "high",
       "required_property": "Timeout-budget rows must cite a decision present in the plan-pinned and PR-base commits used by the immutable checker, while retaining documented timeout policy and shard-inventory provenance.",
       "disposition": "fixed",
-      "rationale": "The corrected inventory maps shards 01–31 to D-069 and 32–199 to D-068. Both decisions exist in the plan-pinned f2b base and PR base 1ab65414; D-068 records the all-build-leg inventory provenance and D-069 remains the timeout policy. The exact plan command and PR-base checker both pass against the reviewed source.",
+      "rationale": "The corrected inventory maps shards 01\u201331 to D-069 and 32\u2013199 to D-068. Both decisions exist in the plan-pinned f2b base and PR base 1ab65414; D-068 records the all-build-leg inventory provenance and D-069 remains the timeout policy. The exact plan command and PR-base checker both pass against the reviewed source.",
       "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
       "verification_ref": "At b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae, the plan-pinned checker passed with tests=1936 and allowlisted=288. The checker copied from PR base 1ab65414d60828fa9505babeaeea9de0571f016c also passed against that base. The inventory has 199 shard rows: 31 D-069 and 168 D-068; CI reads the checker from BUDGET_BASE."
     },
@@ -234,6 +225,16 @@ The final workflow-policy coverage fix pins the judged policy checker to its exa
       "rationale": "The checker now compares normalized wrapped[9] to normalized source for the renderer --repo path, normalizes the renderer --output path, and normalizes the review-evidence --repo path. The self-test includes a wrong-repository negative plus simulated Windows case variants for renderer output, renderer repository, and review-evidence repository; all 33 controls pass on POSIX.",
       "fix_sha": "b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae",
       "verification_ref": "At b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae, python3 -I tests/scripts/verify-planning-labels.py --self-test passed with controls=33; the POSIX simulation exercises case-insensitive renderer output, renderer repository and review-evidence repository paths."
+    },
+    {
+      "id": "RC-20",
+      "category": "correctness",
+      "severity": "high",
+      "required_property": "The workflow-policy coverage checker must accept the actual D-158 CTest registration for v02_support_ledger_controls, including its existing helper-generated ENVIRONMENT and LABELS properties, while enforcing PROCESSORS=4 and the normal/sanitizer timeout mapping.",
+      "disposition": "fixed",
+      "rationale": "The d0fb checker now models and validates the actual support-ledger test contract: exact 120-second normal/360-second sanitizer timeout, PROCESSORS=4, GBB_TEST_BUILD_DIR (plus the sanitizer link-option environment when enabled), and the planning/v02 labels. The self-test fixture includes the real environment and labels; it rejects a missing planning label, unexpected environment entry, a 119-second native timeout, an unscaled 120-second sanitizer timeout, and PROCESSORS=3 for the support control and each D-157 reservation. The exact configured coverage check and all three selected CTests pass at d0fb, closing the af5 mismatch.",
+      "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
+      "verification_ref": "At d0fb68361f3ffd82e1205e16609f644d4f733df2: workflow-policy coverage self-test passed 105 controls; a fresh normal CMake configure plus verify-workflow-policy-coverage.py --check passed with 540 controls across six groups; CTest v02_support_ledger_controls, workflow_policy_coverage, and workflow_policy_coverage_controls passed 3/3. The exact test JSON includes ENVIRONMENT, LABELS=[planning,v02], PROCESSORS=4, and TIMEOUT=120. The checker self-test validates the sanitizer-scaled 360-second timeout and corresponding environment, with a negative for an unscaled timeout. D-158 workflow policy check and ledger self-test passed with the changed-body disclosure against b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae."
     }
   ]
 }

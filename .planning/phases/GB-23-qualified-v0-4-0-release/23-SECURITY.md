@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed tree at `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae`, including the final D-157 Windows path-normalization and source-revision controls, the exact workflow-policy coverage pin, and all prior T2 path, recovery-pin, CI trigger/scheduling, package-authority and D-068/D-069 budget changes. I read Plan 23-04, its T2 rescope and the applicable workflow policy, and inspected the complete implementation diff and committed source/control definitions.
+I reviewed the exact committed tree at `d0fb68361f3ffd82e1205e16609f644d4f733df2`, including the full source delta from `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` through this commit, the current Plan 23-04 T2 contract, and the D-157/D-158 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, D-157 workflow and Windows path changes, and D-158 timeout-ledger and CTest scheduling controls.
 
-The D-155 path confinement, D-156 recovery pin and D-068 budget mapping remain intact. The CI trigger, four-slot scheduling, measured job/waiter limits and timeout disclosures remain as reviewed; the final workflow delta only corrects a timeout comment from 40 to 50 minutes. The final Windows path correction normalizes case using host rules and binds the planning exception to the same configured CMake/Python files, fixed renderer output, exact source root and configured source revision. The workflow-policy coverage pin still matches the exact D-157 policy snapshot and preserves baseline AST checks outside the three D-157-changed functions. I found no correctness or security regression or path-exception broadening. SEC-23-09 remains open as a low-severity Git-output resource-bound concern.
+The input-path, source-revision, and package-authority boundaries remain intact. D-158 changes only the `linux-sanitizers-tests` job cap from 45 to 55 minutes and discloses the observed incomplete exact-head run; its 21.55-minute historical p50 and citation remain unchanged. The 3,900-second exact-head waiter still exceeds the 55-minute job cap. The support-ledger test retains its 120-second native bound and four-slot reservation; its checker now also pins the sanitizer-scaled timeout, environment and labels. The checker requires all four D-157 reservations and rejects removing each one in turn. No event filter, permission, publisher authority, or test inventory change was introduced.
 
-The D-155/D-156 focused controls and budget checks cited below passed at prior review SHA `7c6f01ad`; those validators and the budget allowlist are unchanged through this revision. At this final source I ran the planning-label self-test, which passed all 33 controls, including simulated Windows case variants on POSIX and negatives for wrong output/repository paths, stale revision, fake CMake and extra artifacts. I also invoked the coverage checker’s exact-source and baseline-AST validation against this candidate; it passed. I did not run the full CTest suite or hosted Windows CI, and do not claim hosted required checks passed, release publication was exercised, or any real fixture was fetched, built, run, or admitted.
+At this exact revision, the coverage self-test passed with 105 controls, and the production coverage check passed against the configured CTest registrations with 540 policy controls. The timeout-ledger group passed its 20 negative and one positive control. SEC-23-16 is fixed at this source; SEC-23-09 remains open as a low-severity Git-output resource-bound concern. No correctness or security finding or high/blocking finding remains open. The D-155/D-156 focused checks and budget-base checks cited below passed at their earlier exact revisions; their validators and allowlist are unchanged in this delta. I did not run the full CTest suite or hosted CI, exercise publication, or fetch, build, run, or admit a real fixture.
 
 ## Input, path and source boundaries
 
@@ -37,6 +37,14 @@ CTest now reserves all four configured workers for `phase21_fixture_admission_co
 The exception remains limited to the `release_notes_v04` test with both required labels, the exact CMake wrapper, exact Python renderer and script, fixed success regex, source root, output file, and a `--rev` equal to the full 40-hex revision extracted from the unique review-evidence contract. The output must be the one named file under the configured build directory, and no additional build-tree arguments are accepted. `_norm` applies `os.path.normcase` only on Windows; `_same_file` checks that CMake and Python resolve to the configured executables. The self-test rejects a wrong output, wrong repository, stale source revision, extra artifact and fake outer CMake. It adds case-variant positives for output, repository, interpreter and outer CMake paths on Windows, plus the review-contract repository path; POSIX simulates case-insensitive path strings only within the self-test and resets that mode in `finally`. `configured_source_revision` continues to validate the exact contract command and does not accept a changed repository or revision. I found no path exception broadening or workflow trust regression.
 
 The final coverage harness pins `verify-workflow-policy.py` to commit `013703528fcba6bce371887d5e6dec757e103ecf` and blob SHA-256 `e0d6410b8263cb449d14bd0b36a7c5fdf5f3fc1c3af213193c68ac655082451d`. The final candidate policy blob is byte-identical to that snapshot. Relative to the prior pin, the policy diff contains exactly `_check_ci_planning_lane`, `_ledger_mutations` and `_mutations`; the harness adds only those three names to its changed-function set. It retains the original immutable baseline commit/hash and compares every other function and ordered module structure with the baseline AST. I invoked the checker's `verify_source_identity` against the final candidate; its exact snapshot and baseline AST checks passed.
+
+## D-158 measured timeout and CTest reservation
+
+The rescope records that exact-head run `42504839710` reached 1,843/1,853 sanitizer tests before the prior 45-minute cap, with no assertion failure reported before cancellation. It also records that `v02_support_ledger_controls` exceeded its existing 120-second Windows CTest bound in that run but passed locally in 29.89 seconds. These observations document the bounded change's rationale; they are not successful qualification or new timing samples.
+
+The final ledger row keeps run `40163270595`, its SHA and p50 of 21.55 minutes, changes only the sanitizer job cap to 55 minutes, and discloses the observed incomplete run and changed job body. The timeout-ledger self-test passed at this SHA with 20 negative and one positive control, covering stale values, ratio, whole-run p50, schema and changed-body disclosure. The workflow changes do not touch sanitizer acceptance, fuzz jobs, branch filters, CTest parallelism or per-test ceilings.
+
+The CTest registration keeps `v02_support_ledger_controls` at a 120-second native timeout, with sanitizer scaling to 360 seconds, and requires its build-directory environment and `planning;v02` labels plus `PROCESSORS 4`. The coverage checker now requires the support control in the expected inventory and exactly one configured registration; it rejects unexpected properties, a changed working directory, timeout, environment, label set or processor count. The checker also registers and requires `PROCESSORS 4` for each D-157 reservation: `phase21_fixture_admission_controls`, `release_disclosure_controls`, `release_version_v04_controls` and `support_claims_v04_controls`. Separate negative controls lower each reservation to three slots. The exact-source coverage self-test passed all 105 controls, including native and sanitizer timeout mutations and all four D-157 slot-removal mutations. The production coverage check passed against the configured CTest JSON registration. No code path, workflow credential or release authority was added or widened.
 
 ## Findings
 
@@ -130,19 +138,24 @@ At the preceding implementation source, a notice digest path such as `fixtures/.
 
 The earlier mapping used D-154, which did not exist in the plan-pinned base and therefore could not authorize those new allowlist rows. The approved correction maps the 168 newly introduced shard 32–199 rows to D-068, present and unused in both the plan-pinned and PR bases. The 90-second ceiling and shard coverage stay the same, and D-069 remains the timeout-policy decision. The plan-pinned budget checker passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`; the orchestrator also confirmed a pass against PR base `1ab65414d60828fa9505babeaeea9de0571f016c`.
 
+### SEC-23-16 — D-157 CTest slot reservations require causal regression controls
+
+**Severity:** Low. **Disposition:** Fixed in `d0fb68361f3ffd82e1205e16609f644d4f733df2`.
+
+The prior checker verified only the support-ledger and separate release-policy reservations, although the four D-157 qualification controls had `PROCESSORS 4` in CMake. At this source, `PHASE23_RESERVED_TESTS` includes all four controls; inventory and exact-once registration are required, and the checker rejects a three-slot mutation for each. The exact-source self-test passed all 105 controls, including those four reservation negatives. This closes the regression-control gap; it does not change the runtime scheduling or security authority boundary.
+
 ## Verification and limits
 
-This review is bound to `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae`. The D-155 docs shard-0 self-test and D-156 post-tag recovery control passed at prior review SHA `7c6f01ad`; neither validator changed through this commit. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. At this SHA the planning-label self-test passed with 33 controls, and the exact coverage-source pin plus baseline AST comparison passed. The full CTest suite, hosted Windows CI and committed-report gate were not run in this reviewer turn. I did not inspect live branch-protection state, exercise publication, or fetch/build/run/admit real fixtures.
-
+This review is bound to `d0fb68361f3ffd82e1205e16609f644d4f733df2`. At this exact SHA, `python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev d0fb68361f3ffd82e1205e16609f644d4f733df2` passed with 105 controls. `python3 -I tests/scripts/verify-workflow-policy-coverage.py --check --root /Users/jon/projects/gabbaboy --build-dir /Users/jon/projects/gabbaboy/build --rev d0fb68361f3ffd82e1205e16609f644d4f733df2` passed against the configured CTest registrations with 540 controls. The timeout-ledger group self-test passed with 20 negative and one positive control. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. The full CTest suite, hosted cross-platform CI and committed-report gate were not run in this reviewer turn. I did not inspect live branch protection, exercise publication, or fetch/build/run/admit real fixtures.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-b75ecb97-20261108-security-d155",
+  "report_id": "phase23-security-d0fb6836-20261108-security-d155",
   "role": "security",
   "reviewer_id": "security-d155",
   "independent": true,
-  "reviewed_sha": "b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae",
+  "reviewed_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -282,7 +295,7 @@ This review is bound to `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae`. The D-155 do
       "disposition": "fixed",
       "rationale": "The reviewed source rejects unsafe path components, resolves source files strictly beneath the canonical repository root, and resolves copy destinations beneath the target before and after parent creation. The D-155 traversal and symlink controls remain unchanged; the shard-0 production docs self-test passed at 7c6f01ad.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "tests/scripts/verify-v02-adoption.py:1922-1970,2002-2004,2481-2498,3106-3129,4121-4165; python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 --repo . passed at 7c6f01ad; git diff 7c6f01ad..b75ecb97: no adoption-checker changes"
+      "verification_ref": "tests/scripts/verify-v02-adoption.py:1922-1970,2002-2004,2481-2498,3106-3129,4121-4165; python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 --repo . passed at 7c6f01ad; git diff 7c6f01ad..d0fb6836: no adoption-checker changes"
     },
     {
       "id": "SEC-23-15",
@@ -292,7 +305,17 @@ This review is bound to `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae`. The D-155 do
       "disposition": "fixed",
       "rationale": "D-154 was absent from the plan-pinned base, so the new rows did not resolve. The approved correction maps the 168 new shard 32–199 rows to D-068, which exists and is unused in both checker bases. The 90-second ceilings and shard inventory are unchanged, and D-069 remains the timeout policy. Both exact-base budget checks passed.",
       "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
-      "verification_ref": "python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same checker against PR base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/ci/test-budget-allowlist: 168 rows use D-068; D-068 exists and is unused at both bases; git diff 7c6f01ad..b75ecb97: no test-budget checker or allowlist changes"
+      "verification_ref": "python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same checker against PR base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/ci/test-budget-allowlist: 168 rows use D-068; D-068 exists and is unused at both bases; git diff 7c6f01ad..d0fb6836: no test-budget checker or allowlist changes"
+    },
+    {
+      "id": "SEC-23-16",
+      "category": "other",
+      "severity": "low",
+      "required_property": "All four D-157 CTest slot reservations must be asserted by a registration control with a negative mutation so scheduling regressions cannot pass qualification controls silently.",
+      "disposition": "fixed",
+      "rationale": "The prior checker verified only the support-ledger and separate release-policy reservations, while the four D-157 qualification controls were configured with PROCESSORS 4 but had no causal check. At this source all four are in PHASE23_RESERVED_TESTS, present in the expected inventory, registered exactly once, and required to reserve four slots. Independent three-slot mutations for all four are rejected by the coverage self-test, which passed with 105 controls.",
+      "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
+      "verification_ref": "tests/scripts/verify-workflow-policy-coverage.py:37-44,952-957,1286-1289; python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev d0fb68361f3ffd82e1205e16609f644d4f733df2 (pass, 105 controls); production --check against configured CTest registrations (pass, 540 controls)"
     }
   ]
 }
