@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed tree at `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`, including the D-155 notice-path and self-test-copy correction, D-156 recovery-checker pin, immutable review/version-window validators, version-PR gate, release/package authority paths, and the D-068/D-069 budget-reference adjustment. I read the Phase 23 execution contract, Plan 23-04 and its T2 rescope, and inspected the relevant source and controls at that commit.
+I reviewed the exact committed tree at `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae`, including the final D-157 Windows path-normalization and source-revision controls, the exact workflow-policy coverage pin, and all prior T2 path, recovery-pin, CI trigger/scheduling, package-authority and D-068/D-069 budget changes. I read Plan 23-04, its T2 rescope and the applicable workflow policy, and inspected the complete implementation diff and committed source/control definitions.
 
-D-155 closes the previously reproduced notice-path escape. Inline digest paths are constrained to regular files under the resolved repository root, including after symlink resolution. Self-test input reads and copy destinations receive the same root checks; a destination is resolved again after its parent is created. The D-155 controls cover traversal and external symlink inputs, traversal through `copy_inputs`, and a symlinked copy destination. D-156 repins the post-tag recovery control to the byte-identical D-155 checker while preserving both immutable-byte comparisons. The approved D-068 mapping correction gives the newly added budget rows a decision reference present and unused in both immutable bases; D-069 remains the timeout policy. I found no unresolved correctness or security issue in the reviewed scope. The existing low-severity Git-output availability issue SEC-23-09 remains open because several subprocess paths still lack output caps.
+The D-155 path confinement, D-156 recovery pin and D-068 budget mapping remain intact. The CI trigger, four-slot scheduling, measured job/waiter limits and timeout disclosures remain as reviewed; the final workflow delta only corrects a timeout comment from 40 to 50 minutes. The final Windows path correction normalizes case using host rules and binds the planning exception to the same configured CMake/Python files, fixed renderer output, exact source root and configured source revision. The workflow-policy coverage pin still matches the exact D-157 policy snapshot and preserves baseline AST checks outside the three D-157-changed functions. I found no correctness or security regression or path-exception broadening. SEC-23-09 remains open as a low-severity Git-output resource-bound concern.
 
-This review records the focused controls run below; it does not claim the full 200-shard suite or hosted required checks passed, release publication was exercised, or any real fixture was fetched, built, run, or admitted. The orchestrator is handling the remaining phase gates separately.
+The D-155/D-156 focused controls and budget checks cited below passed at prior review SHA `7c6f01ad`; those validators and the budget allowlist are unchanged through this revision. At this final source I ran the planning-label self-test, which passed all 33 controls, including simulated Windows case variants on POSIX and negatives for wrong output/repository paths, stale revision, fake CMake and extra artifacts. I also invoked the coverage checker’s exact-source and baseline-AST validation against this candidate; it passed. I did not run the full CTest suite or hosted Windows CI, and do not claim hosted required checks passed, release publication was exercised, or any real fixture was fetched, built, run, or admitted.
 
 ## Input, path and source boundaries
 
@@ -18,13 +18,25 @@ For notices, the inline digest pattern only captures fixture-relative paths. `sa
 
 The same path can be represented with separators or aliases on different hosts, but the implementation combines component checks with the host path resolver and a post-resolution containment check. Drive-relative or other platform-specific spellings that survive the text checks still have to resolve below the canonical root. I found no static path spelling that bypasses the containment check. The helper is used to create a disposable self-test snapshot, not as an atomic copy primitive against a concurrent process that can mutate the same temporary directory.
 
-The review-evidence checker reads fixed report blobs from full commit IDs, disables replace objects and lazy fetch, checks each Git object size before materializing its blob, and applies a 30-second timeout to Git subprocesses. It compares implementation and qualification trees with `git diff --quiet` and fixed evidence exclusions instead of buffering a changed-path list. The version-window checker likewise requires full commit IDs, disables replacements/lazy fetch, validates safe repository-relative paths, size-checks blobs before reading them, and times out Git commands. Several related paths remain less hardened and are recorded as SEC-23-09.
+The review-evidence checker reads fixed report blobs from full commit IDs, disables replace objects and lazy fetch, checks each Git object size before materializing its blob, and applies a 30-second timeout to Git subprocesses. It compares implementation and qualification trees with `git diff --quiet` and fixed evidence exclusions instead of buffering a changed-path list. The version-window checker likewise requires full commit IDs, disables replacements/lazy fetch, validates safe repository-relative paths, size-checks blobs before reading them, and times out Git commands. The workflow-policy coverage checker also captures fixed baseline, reviewed and candidate Git blobs with timeouts but no pre-read size cap. These less-hardened paths remain in SEC-23-09.
 
 ## Release and package authority
 
 The version-PR gate checks out the trusted PR base separately from the version-PR head, disables persisted checkout credentials, and runs the base checkers against candidate data with read-only permissions. The release path ties the tag to the exact release-please source commit and version. The trusted workflow checkout supplies the final downloaded-package validators; the tagged tree is treated as data at the final publication gate, and publication remains a single gated transition after candidate, source, and downloaded-byte checks.
 
-The existing workflow policy and release documentation explicitly retain residual write authority in five named release jobs while candidate code is built or release state is judged. The policy classifies and constrains those jobs; it does not claim that this residual is closed. D-155 changes neither workflows nor package/publisher authority. No new authority was introduced by the notice validator or its self-test.
+The existing workflow policy and release documentation explicitly retain residual write authority in five named release jobs while candidate code is built or release state is judged. The policy classifies and constrains those jobs; it does not claim that this residual is closed. D-155 changes no package or publisher authority. D-157 changes only CI event selection, job/waiter bounds and test scheduling; the workflow permissions and protected release/package authority paths are unchanged. The branch-trigger contract requires PR updates and main-only pushes, with a causal negative for unfiltered pushes.
+
+## D-157 CI triggers, execution bounds and Windows planning labels
+
+The CI workflow now accepts exactly `pull_request` updates of type opened/synchronize/reopened and pushes to `main`. The read-only CI permissions and PR event remain in place. `_check_ci_planning_lane` enforces that closed trigger set; its controls include the existing `pull_request_target` refusal and a new mutation that removes the push branch filter. The workflow-policy coverage inventory includes that new mutation for both POSIX and Windows.
+
+The timeout changes are recorded in `.github/ci-timeouts.json`: native Linux and Windows are 60 minutes, the CMake-floor job is 50 minutes, and the three preview exact-head wait/build jobs are 75 minutes with 3,900-second waits. Their cited run IDs, SHAs, samples and p50 values are unchanged; each changed workflow body has a disclosure. The ledger checker still requires YAML/ledger agreement, a timeout at least twice the cited p50, a full-run p50 at or below 30 minutes, and a disclosure when a job body changed after its cited run. Its negative controls were updated so stale-value, ratio and whole-run mutations still target their intended failures under the new caps. The failed PR #146 observations are disclosed as the reason for increasing headroom and are not substituted for successful timing samples.
+
+CTest now reserves all four configured workers for `phase21_fixture_admission_controls`, `release_disclosure_controls`, `release_version_v04_controls` and `support_claims_v04_controls` through `PROCESSORS 4`. The existing 60/90-second test ceilings and control bodies are unchanged. The Phase 21 fixture control no longer uses `RUN_SERIAL`; with the configured four-worker CI invocation, the processor reservation keeps it exclusive from other tests.
+
+The exception remains limited to the `release_notes_v04` test with both required labels, the exact CMake wrapper, exact Python renderer and script, fixed success regex, source root, output file, and a `--rev` equal to the full 40-hex revision extracted from the unique review-evidence contract. The output must be the one named file under the configured build directory, and no additional build-tree arguments are accepted. `_norm` applies `os.path.normcase` only on Windows; `_same_file` checks that CMake and Python resolve to the configured executables. The self-test rejects a wrong output, wrong repository, stale source revision, extra artifact and fake outer CMake. It adds case-variant positives for output, repository, interpreter and outer CMake paths on Windows, plus the review-contract repository path; POSIX simulates case-insensitive path strings only within the self-test and resets that mode in `finally`. `configured_source_revision` continues to validate the exact contract command and does not accept a changed repository or revision. I found no path exception broadening or workflow trust regression.
+
+The final coverage harness pins `verify-workflow-policy.py` to commit `013703528fcba6bce371887d5e6dec757e103ecf` and blob SHA-256 `e0d6410b8263cb449d14bd0b36a7c5fdf5f3fc1c3af213193c68ac655082451d`. The final candidate policy blob is byte-identical to that snapshot. Relative to the prior pin, the policy diff contains exactly `_check_ci_planning_lane`, `_ledger_mutations` and `_mutations`; the harness adds only those three names to its changed-function set. It retains the original immutable baseline commit/hash and compares every other function and ordered module structure with the baseline AST. I invoked the checker's `verify_source_identity` against the final candidate; its exact snapshot and baseline AST checks passed.
 
 ## Findings
 
@@ -110,7 +122,7 @@ The parser precomputes paired-opening counts and rejects empty, over-999-charact
 
 **Severity:** Medium. **Disposition:** Fixed in `9166ab60d25c6d246761b4aa33a0ceb35dd83f5c`.
 
-At the preceding implementation source, a notice digest path such as `fixtures/../../...` could resolve outside the repository; `copy_inputs` used that path for both the source and isolated copy. At the reviewed source, path components are checked and the resolved source must be a regular file beneath the canonical root. Notice manifest/license paths and inline digest rows use that same confinement. Self-test source paths are validated before copy; destination symlinks are resolved and checked under the destination root before and after parent creation. The committed D-155 controls target traversal, an external symlink as a notice input, a traversal source passed through `copy_inputs`, and a symlinked copy target. The shard-0 production docs self-test passed, executing these confined-path assertions in its disposable root; I did not run the complete 200-shard CTest selector.
+At the preceding implementation source, a notice digest path such as `fixtures/../../...` could resolve outside the repository; `copy_inputs` used that path for both the source and isolated copy. At the reviewed source, path components are checked and the resolved source must be a regular file beneath the canonical root. Notice manifest/license paths and inline digest rows use that same confinement. Self-test source paths are validated before copy; destination symlinks are resolved and checked under the destination root before and after parent creation. The committed D-155 controls target traversal, an external symlink as a notice input, a traversal source passed through `copy_inputs`, and a symlinked copy target. The shard-0 production docs self-test passed at `7c6f01ad`; the adoption checker and those controls are unchanged in the D-157 diff. The complete 200-shard CTest selector was not run by this reviewer.
 
 ### SEC-23-15 — New timeout-budget rows must resolve and remain distinct at immutable bases
 
@@ -120,17 +132,17 @@ The earlier mapping used D-154, which did not exist in the plan-pinned base and 
 
 ## Verification and limits
 
-This review is bound to `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`. I ran the docs self-test shard 0, which passed its selected production CLI checks and the shard-0-only D-155 traversal/symlink copy controls. I ran post-tag recovery controls against this exact revision; they passed with the D-156 immutable adoption-checker pin. I ran the budget checker against the plan-pinned base `f2b05c9fb3ba314cfe46959b64073ce9441724ca`; it passed. The orchestrator separately confirmed the same checker passes against PR base `1ab65414d60828fa9505babeaeea9de0571f016c`. A structural inventory check found the focused selector includes shard 0 and all numbered shards 1–199. I did not run the full 200-shard suite or the direct committed-report gate. I did not inspect hosted required-check state, exercise release publication, fetch/build/run/admit real fixtures, or inspect downloaded package bytes.
+This review is bound to `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae`. The D-155 docs shard-0 self-test and D-156 post-tag recovery control passed at prior review SHA `7c6f01ad`; neither validator changed through this commit. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. At this SHA the planning-label self-test passed with 33 controls, and the exact coverage-source pin plus baseline AST comparison passed. The full CTest suite, hosted Windows CI and committed-report gate were not run in this reviewer turn. I did not inspect live branch-protection state, exercise publication, or fetch/build/run/admit real fixtures.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-7c6f01ad-20261106-security-d155",
+  "report_id": "phase23-security-b75ecb97-20261108-security-d155",
   "role": "security",
   "reviewer_id": "security-d155",
   "independent": true,
-  "reviewed_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
+  "reviewed_sha": "b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -218,7 +230,7 @@ This review is bound to `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`. I ran the do
       "severity": "low",
       "required_property": "Git-derived blobs, repository listings and changed-path lists should be bounded before materialization, and their subprocesses should have explicit timeouts.",
       "disposition": "open",
-      "rationale": "identity_at_revision captures fixed Git blobs and a tree listing without output caps; adoption immutable_blob captures blob bytes before checking its 4 MiB limit and omits timeouts; version-window changed_paths captures the full diff path list; verify-no-phase-paths captures all tracked paths without timeout/output caps and reads files in full; lifecycle git_show has timeouts but no output caps. This remains a low availability-hardening concern, not a source-identity or authority bypass.",
+      "rationale": "identity_at_revision captures fixed Git blobs and a tree listing without output caps; adoption immutable_blob captures blob bytes before checking its 4 MiB limit and omits timeouts; version-window changed_paths captures the full diff path list; verify-no-phase-paths captures all tracked paths without timeout/output caps and reads files in full; lifecycle git_show has timeouts but no output caps. This remains a low availability-hardening concern, not a source-identity or authority bypass. The workflow-policy coverage checker also captures fixed baseline/reviewed/candidate Git blobs with subprocess timeouts but no pre-read output cap; this is the same low availability-hardening concern.",
       "fix_sha": null,
       "verification_ref": null
     },
@@ -268,9 +280,9 @@ This review is bound to `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`. I ran the do
       "severity": "medium",
       "required_property": "Inline notice paths and self-test source/destination paths must resolve to regular files beneath their respective canonical roots, including when symlinks are present.",
       "disposition": "fixed",
-      "rationale": "The reviewed source rejects unsafe path components, resolves source files strictly beneath the canonical repository root, and resolves copy destinations beneath the target before and after parent creation. The D-155 traversal and symlink controls are present; the shard-0 production docs self-test completed successfully at the reviewed commit, exercising the copy-path controls.",
+      "rationale": "The reviewed source rejects unsafe path components, resolves source files strictly beneath the canonical repository root, and resolves copy destinations beneath the target before and after parent creation. The D-155 traversal and symlink controls remain unchanged; the shard-0 production docs self-test passed at 7c6f01ad.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "tests/scripts/verify-v02-adoption.py:1922-1970,2002-2004,2481-2498,3106-3129,4121-4165; python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 --repo . at 7c6f01ad"
+      "verification_ref": "tests/scripts/verify-v02-adoption.py:1922-1970,2002-2004,2481-2498,3106-3129,4121-4165; python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 --repo . passed at 7c6f01ad; git diff 7c6f01ad..b75ecb97: no adoption-checker changes"
     },
     {
       "id": "SEC-23-15",
@@ -280,7 +292,7 @@ This review is bound to `7c6f01ad5ecf3b6736bf694324acc1671d9e20cc`. I ran the do
       "disposition": "fixed",
       "rationale": "D-154 was absent from the plan-pinned base, so the new rows did not resolve. The approved correction maps the 168 new shard 32–199 rows to D-068, which exists and is unused in both checker bases. The 90-second ceilings and shard inventory are unchanged, and D-069 remains the timeout policy. Both exact-base budget checks passed.",
       "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
-      "verification_ref": "python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same checker against PR base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/ci/test-budget-allowlist: 168 rows use D-068; D-068 exists and is unused at both bases"
+      "verification_ref": "python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same checker against PR base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/ci/test-budget-allowlist: 168 rows use D-068; D-068 exists and is unused at both bases; git diff 7c6f01ad..b75ecb97: no test-budget checker or allowlist changes"
     }
   ]
 }
