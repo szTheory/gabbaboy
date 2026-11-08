@@ -1,41 +1,48 @@
 # Phase 23 Qualification Evidence
 
-## Revisions
+## Revisions and PR
 
 | Identity | Commit | Meaning |
 |---|---|---|
-| Reviewed implementation | `0a7b2b37644f20e43da813b67561587bbd0f86e5` | Exact source read by the three independent reviewers. |
-| Review evidence | `e4fec7198d8488b4c0271a1363695e8c395248d3` | Commit containing the three reports bound to the reviewed implementation. |
-| Local qualification run | `e4fec7198d8488b4c0271a1363695e8c395248d3` | Exact configured source used for the focused selection and final full relocated run. |
+| Reviewed implementation | `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` | Exact source independently reviewed by release-consumer, security and adversarial reviewers. |
+| Review evidence / local qualification | `f595fb0572fe65e9b4df91069c97470af6b02a04` | Committed review reports; the exact configured source for the focused and full local runs. |
+| PR base | `f2b05c9fb3ba314cfe46959b64073ce9441724ca` | `main` base observed for PR #146 and used for local state-pin and timeout-budget checks. |
 
-The review-evidence gate passed at the qualification commit. The evidence-only candidate remains subject to live required checks for its exact PR head before merge. The v0.4.0 version PR, tag, and publication are outside this phase task.
+PR #146 is open at `https://github.com/szTheory/gabbaboy/pull/146`. At the last GitHub read, its remote head was still `308b02fbaade17e4e5ff9bc7a4fbe9a3b699ff7a`; the local reviewed commits had not yet been pushed. Hosted exact-head checks are pending. The PR is not merged, and no v0.4.0 version PR, tag or publication is claimed.
 
 ## Local verification
 
+The final local build was configured at the review-evidence commit with the native-CI install prefix and immutable main-base state pin:
+
+```text
+cmake --preset phase1 \
+  -DGBB_TEST_INSTALL_PREFIX=build/package-prefix \
+  -DGBB_STATE_PIN_BASE_REV=f2b05c9fb3ba314cfe46959b64073ce9441724ca
+cmake --build --preset phase1 --parallel 4
+```
+
 | Check | Result |
 |---|---|
-| `cmake --preset cmake-3.25.3-relocated` | Passed at `e4fec719`; CMake recorded the report-bound source revision. |
-| `cmake --build build-cmake-3.25.3-relocated --parallel 4` | Passed at `e4fec719` (339 build steps). |
-| Review-evidence self-test | Passed: 33 positive cases and 28 controls at implementation `0a7b2b37`. |
-| Real review-evidence gate | Passed at qualification `e4fec719`: 3 independent reports, 46 findings, no open correctness/security or high/critical/blocking finding. SEC-23-09 remains a low-severity availability note. |
-| Focused Phase 23 selection | Passed 55/55 in 429.81 seconds with four CTest workers. It covered all 32 docs-control shards, report and release/consumer controls, fixture policy, planning checks, and the relocated CMake-floor contract. |
-| Full relocated CTest suite | Passed 1,774/1,774 in 841.80 seconds with four workers at `e4fec719`. The installed-tree JUnit inventory check verified 1,774 executed cases and none skipped. |
-| Test-budget check | Passed for 1,774 tests; 120 timeout rows are allowlisted and 11 player rows are skipped by the existing budget policy. |
-| Planning-label inventory | Passed: 1,774 tests, 64 labelled planning. Its self-test passed 27 controls. |
-| CMake-floor policy | Self-test passed 63 controls; live policy check and `bash -n .github/scripts/verify-cmake-floor.sh` passed. The registered relocated CTest passed in both focused and full runs. |
+| Direct real-report gate | Passed at `f595fb05`: 3 independent reports, 60 findings, implementation exactly `b75ecb97`; no open correctness, security, high, critical or blocking finding. SEC-23-09 remains a low-severity resource-bound note. |
+| Planning-label path controls | Passed: 33 controls, including wrong-repository negatives and simulated Windows case variants on POSIX. |
+| Workflow-policy coverage | Passed: 94 self-test controls and 540 configured controls across 6 groups. The CI group passed 112 negative plus 1 positive; the ledger group passed 20 negative plus 1 positive. |
+| Timeout-budget check | Passed: 1,942 configured tests, 288 allowlisted rows, 11 existing player rows skipped under policy. |
+| State-pin checks | Passed 2/2 on this macOS host with the `macos-arm64` platform identity. |
+| Installed package | `cmake --install build --prefix build/package-prefix` passed; the package includes the public library, headers, runner, CMake package files and licensed public fixtures. |
+| Focused Phase 23 CTest selection | Passed 223/223 in 679.93 seconds with four workers. It included all 200 docs-control shards, the committed review contract and controls, release/consumer controls, fixture controls, planning labels and workflow-policy groups. |
+| Full configured CTest stream | Passed 1,942/1,942 in 980.81 seconds with four workers. No test was skipped. |
+| Installed test inventory | Passed: the same full-run JUnit verified 1,942 executed cases and no skips. |
+| CGB corpus receipt and public claims | Passed: 107/107 cases, 25 observed passes, 82 expected failures, 4,959 assertions. The privacy check passed for 3 artifacts (1,488,355 bytes). |
+| Acceptance/Mooneye observations | The two Libbet observations and the declared Mooneye suite completed successfully. They are repeatability/regression observations, not accuracy or game-compatibility qualification. |
 
-The focused log is `/private/tmp/phase23-focused-e4fec719.log`. The successful full log is `/private/tmp/phase23-full-e4fec719.log`. CTest wrote JUnit to `build-cmake-3.25.3-relocated/build-cmake-3.25.3-relocated/phase23-floor-final.xml`; its installed inventory verification passed. Build outputs and logs are local evidence, not source inputs.
+CTest's full-run JUnit was written under `build/build/` because the local command passed a `build/...` relative output path with `--test-dir build`. The exact JUnit bytes were copied to the canonical `build/` path before receipt and inventory validation; the CTest dashboard XML and JUnit both came from the same 1,942-test run. No tests were rerun to create the receipt.
 
 ## Sandbox diagnosis
 
-The first full attempt in the default sandbox completed 1,769 tests and reported five failures. Four performance/review tests could not create temporary Git worktrees because the sandbox denied writes under `.git`; the delivery control then saw the checkout error instead of its intended malformed-evidence refusal. The five affected tests passed 5/5 when rerun with Git metadata access, then the complete relocated suite passed 1,774/1,774 under that same access. No source change was needed for this environment issue.
+The first sandboxed full-suite attempt stopped after four performance/review controls could not create temporary Git worktrees under `.git/worktrees`. The same four tests passed 4/4 with local Git metadata access. The complete suite was then rerun with that access and passed 1,942/1,942. This was an execution-permission issue; no source change was needed.
 
-## CI efficiency and hosted evidence
+## Hosted checks and evidence limits
 
-Two earlier hosted CMake-floor runs at `4183ea298bd134578576bdb186b29ba4661dd6b3` exposed that the job ran the full suite on both the base and relocated builds. On slow hosted runners, the additional Phase 23 docs controls pushed CTest past its 90-second per-test limit and left the 40-minute job with little headroom. The floor script now keeps its focused adapter and no-host-clock checks on the base tree, installs and relocates the package, then runs the complete expected inventory once on the relocated build. It also verifies the installed JUnit inventory. The floor-policy checker pins the 3.25.3 tools, required build/install order, one canonical unfiltered relocated CTest invocation, and installed inventory check.
+One current PR run remains necessary for required native Linux, macOS and Windows checks, the CMake floor, fixture reproduction, installed consumers, player package, sanitizers, fuzz and performance lanes. Running these checks locally avoided repeated hosted runs, but a macOS local run cannot prove Windows behavior, GitHub branch protection or exact-head workflow status. Record the current PR head, required run/job IDs and measured queue/dependency waits when that hosted run finishes.
 
-The local macOS run verifies the configured test suite and installed consumers; it does not execute the Linux x86_64 CMake 3.25.3 download/build job. Current exact-head hosted results, queue and dependency waits, and release-gate eligibility are pending until the current PR candidate has completed its required workflows.
-
-## Evidence boundaries
-
-No candidate game or diagnostic fixture was fetched, admitted, or run for Phase 23 qualification. REL-01, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending where their evidence gates are unresolved. Local tests do not qualify or publish v0.4.0; exact-head hosted checks, fixture reproduction, package/consumer checks, and live branch-protection eligibility remain required.
+No candidate game or diagnostic fixture was fetched, admitted or run for Phase 23 qualification. REL-01, DIAG-01, DIAG-02 and RIGHTS-01 remain Pending where their evidence gates are unresolved. Local tests do not qualify or publish v0.4.0.
