@@ -1452,6 +1452,7 @@ gbb_add_v02_contract(fixture_product_core_controls 120
 gbb_add_v02_contract(fixture_product_player_controls 120
   [=[PASS: fixture admission product layout=player positive=1 negative_controls=[1-9][0-9]*]=]
   verify-fixture-admission.py --self-test-packages --layout player)
+set_tests_properties(fixture_product_player_controls PROPERTIES PROCESSORS 4)
 
 gbb_add_v02_contract(v02_game_claims 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "game"]=]
