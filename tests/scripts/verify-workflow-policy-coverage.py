@@ -34,7 +34,14 @@ GROUPS = {
     "ledger": "workflow_policy_group_ledger",
     "helpers": "workflow_policy_group_helpers",
 }
-PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], "v02_support_ledger_controls"}
+PHASE23_RESERVED_TESTS = {
+    "phase21_fixture_admission_controls",
+    "release_disclosure_controls",
+    "release_version_v04_controls",
+    "support_claims_v04_controls",
+    "v02_support_ledger_controls",
+}
+PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], *PHASE23_RESERVED_TESTS}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
                           "rehearsal": "rehearsal", "ledger": "ledger", "helpers": "helpers"}
 GROUP_BY_WORKFLOW = {
@@ -904,6 +911,13 @@ def _expected_timeout(name: str, sanitizer_enabled: bool) -> int:
     return base * (3 if sanitizer_enabled else 1)
 
 
+def _expected_v02_environment(build_dir: Path, sanitizer_enabled: bool) -> list[str]:
+    environment = [f"GBB_TEST_BUILD_DIR={build_dir}"]
+    if sanitizer_enabled:
+        environment.append("GBB_SANITIZER_LINK_OPTIONS=-fsanitize=address,undefined")
+    return environment
+
+
 def validate_cmake_registration(ci_lanes: str) -> None:
     calls = re.findall(r"(?im)^\s*gbb_add_ci_lane_test\s*\(\s*([A-Za-z0-9_]+)", ci_lanes)
     policy_calls = [name for name in calls if name.startswith("workflow_policy_")]
@@ -938,6 +952,9 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
     for name in PROCESSOR_RESERVED_TESTS:
         if len(actual_by_name.get(name, [])) != 1:
             reject(f"CTest must register slot-reserved control {name} exactly once")
+        properties = _test_properties(actual_by_name[name][0])
+        if properties.get("PROCESSORS") != 4:
+            reject(f"CTest {name} must reserve all four native test slots")
 
     completion_paths: set[str] = set()
     for name in sorted(POLICY_TEST_NAMES):
@@ -1034,7 +1051,7 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
 
     support_ledger = actual_by_name["v02_support_ledger_controls"][0]
     support_properties = _test_properties(support_ledger)
-    if set(support_properties) != {"TIMEOUT", "WORKING_DIRECTORY", "PROCESSORS"}:
+    if set(support_properties) != {"TIMEOUT", "WORKING_DIRECTORY", "PROCESSORS", "ENVIRONMENT", "LABELS"}:
         reject("CTest v02_support_ledger_controls has an unexpected property that can change execution or qualification")
     expected_support_timeout = 120 * (3 if sanitizer_enabled else 1)
     if support_properties.get("TIMEOUT") != expected_support_timeout:
@@ -1043,6 +1060,10 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         reject("CTest v02_support_ledger_controls has an unexpected working directory")
     if support_properties.get("PROCESSORS") != 4:
         reject("CTest v02_support_ledger_controls must reserve all four native test slots")
+    if support_properties.get("ENVIRONMENT") != _expected_v02_environment(build_dir, sanitizer_enabled):
+        reject("CTest v02_support_ledger_controls has an unexpected environment")
+    if support_properties.get("LABELS") != ["planning", "v02"]:
+        reject("CTest v02_support_ledger_controls must retain its planning and v02 labels")
 
     validate_cmake_registration(ci_lanes)
 
@@ -1056,7 +1077,7 @@ def _self_test(root: Path, revision: str) -> int:
     build_dir = root / "build/phase19-policy-coverage-fixture"
     cmake_executable = shutil.which("cmake") or "cmake"
     python_executable = sys.executable
-    expected_tests = sorted(POLICY_TEST_NAMES | {"v02_support_ledger_controls"})
+    expected_tests = sorted(POLICY_TEST_NAMES | PROCESSOR_RESERVED_TESTS)
     ci_lanes = "\n".join(f"gbb_add_ci_lane_test({name} 0 marker 60 \"\")" for name in expected_tests)
     controls = 0
 
@@ -1123,10 +1144,13 @@ def _self_test(root: Path, revision: str) -> int:
             {"name": "TIMEOUT", "value": timeout},
             {"name": "WORKING_DIRECTORY", "value": str(build_dir / "tests")},
         ]
-        if name == GROUPS["release_jobs"]:
+        if name in PROCESSOR_RESERVED_TESTS:
             properties.append({"name": "PROCESSORS", "value": 4})
-        elif name == "v02_support_ledger_controls":
-            properties.append({"name": "PROCESSORS", "value": 4})
+        if name == "v02_support_ledger_controls":
+            properties.extend((
+                {"name": "ENVIRONMENT", "value": _expected_v02_environment(build_dir, False)},
+                {"name": "LABELS", "value": ["planning", "v02"]},
+            ))
         return {
             "name": name,
             "command": command,
@@ -1159,6 +1183,8 @@ def _self_test(root: Path, revision: str) -> int:
         tests.append(test_entry(name, command,
                                 marker, 180, completion))
     tests.append(test_entry("v02_support_ledger_controls", [], "", 120))
+    for name in sorted(PHASE23_RESERVED_TESTS - {"v02_support_ledger_controls"}):
+        tests.append(test_entry(name, [], "", 60))
     coverage_script = root / "tests/scripts/verify-workflow-policy-coverage.py"
     tests.extend((
         test_entry("workflow_policy_coverage",
@@ -1185,6 +1211,10 @@ def _self_test(root: Path, revision: str) -> int:
         for prop in test["properties"]:
             if prop["name"] == "TIMEOUT":
                 prop["value"] *= 3
+    support_ledger_scaled = next(test for test in scaled if test["name"] == "v02_support_ledger_controls")
+    next(prop for prop in support_ledger_scaled["properties"] if prop["name"] == "ENVIRONMENT")["value"] = (
+        _expected_v02_environment(build_dir, True)
+    )
     validate(scaled, sanitizer=True)
 
     reordered = copy.deepcopy(tests)
@@ -1234,6 +1264,13 @@ def _self_test(root: Path, revision: str) -> int:
         target = next(test for test in test_list if test["name"] == "v02_support_ledger_controls")
         next(prop for prop in target["properties"] if prop["name"] == "PROCESSORS")["value"] = value
 
+    def set_test_property(test_list: list[dict], test_name: str, property_name: str, value: object) -> None:
+        target = next(test for test in test_list if test["name"] == test_name)
+        next(prop for prop in target["properties"] if prop["name"] == property_name)["value"] = value
+
+    def set_support_timeout(test_list: list[dict], value: int) -> None:
+        set_test_property(test_list, "v02_support_ledger_controls", "TIMEOUT", value)
+
     mutant = copy.deepcopy(tests)
     set_timeout(mutant, 540)
     rejected("incorrectly scaled native timeout", lambda: validate(mutant))
@@ -1246,6 +1283,24 @@ def _self_test(root: Path, revision: str) -> int:
     mutant = copy.deepcopy(tests)
     set_support_processors(mutant, 3)
     rejected("unreserved support ledger control processors", lambda: validate(mutant))
+    for name in sorted(PHASE23_RESERVED_TESTS - {"v02_support_ledger_controls"}):
+        mutant = copy.deepcopy(tests)
+        set_test_property(mutant, name, "PROCESSORS", 3)
+        rejected(f"unreserved {name} processors", lambda mutant=mutant: validate(mutant))
+    mutant = copy.deepcopy(tests)
+    set_support_timeout(mutant, 119)
+    rejected("support ledger timeout below the native bound", lambda: validate(mutant))
+    scaled_mutant = copy.deepcopy(scaled)
+    set_support_timeout(scaled_mutant, 120)
+    rejected("unscaled sanitizer support ledger timeout",
+             lambda: validate(scaled_mutant, sanitizer=True))
+    mutant = copy.deepcopy(tests)
+    set_test_property(mutant, "v02_support_ledger_controls", "LABELS", ["v02"])
+    rejected("missing support ledger planning label", lambda: validate(mutant))
+    mutant = copy.deepcopy(tests)
+    set_test_property(mutant, "v02_support_ledger_controls", "ENVIRONMENT",
+                      ["GBB_TEST_BUILD_DIR=" + str(build_dir), "GBB_UNEXPECTED=1"])
+    rejected("unexpected support ledger environment", lambda: validate(mutant))
 
     def named_test(test_list: list[dict], name: str) -> dict:
         return next(test for test in test_list if test["name"] == name)
@@ -1507,7 +1562,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 97:
+    if controls != 105:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
