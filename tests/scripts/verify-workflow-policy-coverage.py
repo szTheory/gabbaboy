@@ -53,6 +53,7 @@ PHASE23_RESERVED_TESTS = {
     "v03_dispositions_controls",
 }
 PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], *PHASE23_RESERVED_TESTS}
+POSIX_ONLY_RESERVED_TESTS = {"host_exit_crash_storm", "save_format_controls"}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
                           "rehearsal": "rehearsal", "ledger": "ledger", "helpers": "helpers"}
 GROUP_BY_WORKFLOW = {
@@ -938,7 +939,9 @@ def validate_cmake_registration(ci_lanes: str) -> None:
 
 def validate_registration(root: Path, expected_tests: list[str], ctest_tests: list[dict], ci_lanes: str,
                           *, build_dir: Path, candidate: str, sanitizer_enabled: bool,
-                          cmake_executable: str, python_executable: str) -> None:
+                          cmake_executable: str, python_executable: str, platform: str) -> None:
+    if platform not in ALL_PLATFORMS:
+        reject(f"unsupported CTest inventory platform: {platform}")
     if len(expected_tests) != len(set(expected_tests)):
         reject("tests/expected-tests.txt contains duplicate test names")
     inventory = set(expected_tests)
@@ -954,13 +957,18 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         name = test.get("name")
         if isinstance(name, str):
             actual_by_name.setdefault(name, []).append(test)
+    if platform == "windows" and POSIX_ONLY_RESERVED_TESTS.intersection(actual_by_name):
+        reject("Windows CTest inventory includes a POSIX-only slot reservation")
+    active_reserved_tests = PROCESSOR_RESERVED_TESTS
+    if platform == "windows":
+        active_reserved_tests = PROCESSOR_RESERVED_TESTS - POSIX_ONLY_RESERVED_TESTS
     actual_policy_names = {name for name in actual_by_name if name.startswith("workflow_policy_")}
     if actual_policy_names != POLICY_TEST_NAMES:
         reject("configured CTest workflow-policy names contain an omission or unexpected group")
     for name in POLICY_TEST_NAMES:
         if len(actual_by_name.get(name, [])) != 1:
             reject(f"CTest must register {name} exactly once")
-    for name in PROCESSOR_RESERVED_TESTS:
+    for name in active_reserved_tests:
         if len(actual_by_name.get(name, [])) != 1:
             reject(f"CTest must register slot-reserved control {name} exactly once")
         properties = _test_properties(actual_by_name[name][0])
@@ -972,7 +980,7 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         test = actual_by_name[name][0]
         properties = _test_properties(test)
         expected_properties = {"TIMEOUT", "WORKING_DIRECTORY"}
-        if name in PROCESSOR_RESERVED_TESTS:
+        if name in active_reserved_tests:
             expected_properties.add("PROCESSORS")
         if set(properties) != expected_properties:
             reject(f"CTest {name} has an unexpected property that can change execution or qualification")
@@ -1211,12 +1219,21 @@ def _self_test(root: Path, revision: str) -> int:
     ))
 
     def validate(tests_to_check: list[dict] = tests, names: list[str] = expected_tests, *, sanitizer: bool = False,
-                 lanes: str = ci_lanes) -> None:
+                 lanes: str = ci_lanes, platform: str = "posix") -> None:
         validate_registration(root, names, tests_to_check, lanes, build_dir=build_dir, candidate=candidate,
                               sanitizer_enabled=sanitizer, cmake_executable=cmake_executable,
-                              python_executable=python_executable)
+                              python_executable=python_executable, platform=platform)
 
     validate()
+    windows_tests = [test for test in tests if test["name"] not in POSIX_ONLY_RESERVED_TESTS]
+    validate(windows_tests, platform="windows")
+    windows_missing_reservation = [test for test in windows_tests
+                                  if test["name"] != "phase23_docs_controls_shard_183"]
+    rejected("missing Windows slot-reserved CTest registration",
+             lambda: validate(windows_missing_reservation, platform="windows"))
+    windows_with_posix_reservation = [*windows_tests, test_entry("save_format_controls", [], "", 60)]
+    rejected("Windows registers a POSIX-only slot reservation",
+             lambda: validate(windows_with_posix_reservation, platform="windows"))
     scaled = copy.deepcopy(tests)
     for test in scaled:
         for prop in test["properties"]:
@@ -1573,7 +1590,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 116:
+    if controls != 118:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
@@ -1605,10 +1622,11 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     if not cmake_executable or not python_executable:
         reject("configured CMake/Python executable paths are missing from CMakeCache.txt")
     sanitizer_enabled = _truthy_cmake(cache.get("GABBABOY_ENABLE_SANITIZERS", "OFF"))
+    platform = "windows" if os.name == "nt" else "posix"
     validate_registration(root, expected_tests, ctest_tests, ci_lanes, build_dir=build_dir,
                           candidate=candidate, sanitizer_enabled=sanitizer_enabled,
-                          cmake_executable=cmake_executable, python_executable=python_executable)
-    platform = "windows" if os.name == "nt" else "posix"
+                          cmake_executable=cmake_executable, python_executable=python_executable,
+                          platform=platform)
     controls = sum(1 for row in manifest["controls"] if platform in row["platforms"])
     print(f"PASS: workflow policy coverage controls={controls} groups={len(GROUPS)} platform={platform}")
 
