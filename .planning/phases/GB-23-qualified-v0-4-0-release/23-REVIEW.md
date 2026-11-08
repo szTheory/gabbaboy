@@ -1,40 +1,42 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** d0fb68361f3ffd82e1205e16609f644d4f733df2
-**Review delta:** b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae through d0fb68361f3ffd82e1205e16609f644d4f733df2
+**Reviewed implementation:** c08d18ef4ac5eda6c622b4102301ed888b98f80a
+**Review delta:** b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae through c08d18ef4ac5eda6c622b4102301ed888b98f80a
 **Role:** release-consumer
-**Reviewer:** release-consumer-d158d0fb6836
+**Reviewer:** release-consumer-d159c08d18
 
 ## Scope and conclusion
 
-I re-reviewed the release and consumer paths from the prior b75 source review, the b75-to-af5 D-158 changes, and the af5-to-d0fb workflow-coverage checker and contract changes. RC-01 through RC-19 retain their identities and fixed dispositions; every recorded fix commit is an ancestor of d0fb68361f3ffd82e1205e16609f644d4f733df2.
+I re-reviewed the release and consumer paths from the prior b75 source review, the b75-to-af5 D-158 changes, the af5-to-d0fb coverage correction, and the d0fb-to-c08d D-159 CTest scheduling changes. RC-01 through RC-20 retain their identities and fixed dispositions; each recorded fix commit is an ancestor of c08d18ef4ac5eda6c622b4102301ed888b98f80a.
 
-The earlier RC-20 finding was valid at af5: the configured coverage checker rejected existing helper-generated ENVIRONMENT and LABELS on `v02_support_ledger_controls`. The d0fb correction adds the exact existing environment and `planning;v02` labels to the validated contract, models them in its fixture, and adds negative controls for property mutations. A fresh exact-source configure, the production coverage check, and the targeted CTests now pass. RC-20 is fixed at d0fb; I found no remaining correctness, security, high, critical, or blocking finding.
+The D-159 change adds four-slot reservations for `phase23_docs_controls_shard_183` and `preview_package_smoke`. The existing 90-second docs-shard timeout and 180-second package-smoke timeout are unchanged. The coverage checker adds both names to its reserved inventory, confirms their actual CTest registrations and `PROCESSORS=4`, and includes one negative processor-count mutation for each. Exact-source coverage and the targeted tests pass. I found no new correctness, security, high, critical, or blocking finding.
 
-The D-158 sanitizer inventory cap remains 55 minutes with its 21.55-minute historical p50 citation unchanged and a disclosure of the observed 1,843/1,853 result and changed job body. The timeout-ledger policy check and its negative controls pass. The 3,900-second exact-head waiter still accommodates the job. The support-ledger test retains its 120-second native timeout and four-slot reservation.
+The earlier RC-20 at af5 was fixed at d0fb: the checker now validates the actual support-ledger control's environment and labels along with its timeout and four-slot reservation. The c08d checker retains that validation and its causal controls while extending reservations to the two D-159 tests.
 
-## RC-20 correction and verification
+## D-159 source and verification
 
-The coverage checker now requires all processor-reserved tests in both the expected inventory and configured CTest list and verifies PROCESSORS=4. The reserved set includes the four D-157 controls and `v02_support_ledger_controls`. For the support-ledger test specifically, it also checks the exact timeout (120 seconds normally, 360 with sanitizers), working directory, `GBB_TEST_BUILD_DIR` environment (plus the sanitizer link option in sanitizer mode), and `[planning, v02]` labels.
+The CMake change adds `phase23_docs_controls_shard_183` to the existing measured slow-shard set assigned `PROCESSORS 4`. It adds `PROCESSORS 4` to `preview_package_smoke` while retaining its explicit `TIMEOUT 180`. The shard's registered timeout remains 90 seconds. Neither test's assertions, product behavior, or docs matching behavior changed.
 
-The 105-control self-test models the real helper-generated environment and labels. It rejects a missing planning label, unexpected environment entry, timeout below the native bound, unscaled sanitizer timeout, and insufficient processor reservations for each D-157 test and the support-ledger control. It retains missing inventory/registration negatives. This covers the property mismatch observed at af5 and guards the corrected contract.
+The workflow-policy coverage checker adds both test names to `PHASE23_RESERVED_TESTS`. That set is required in the expected inventory and configured CTest listing, each reservation must be registered once, and each test must reserve all four native slots. Its self-test adds both registrations and a `PROCESSORS=3` negative mutation for each, increasing the suite to 107 controls. This directly tests both D-159 reservations.
 
-A fresh normal configure at the reviewed source passed `verify-workflow-policy-coverage.py --check` with 540 controls across six groups. The selected `v02_support_ledger_controls`, `workflow_policy_coverage`, and `workflow_policy_coverage_controls` CTests passed 3/3. The direct workflow privilege/trust check passed. The D-158 timeout-ledger self-test passed 20 controls with its positive control, including the changed-body disclosure against b75; the planning-label self-test passed 33 controls.
+A fresh normal configure at the reviewed source passed `verify-workflow-policy-coverage.py --check` with 540 controls across six groups. Configured CTest properties show `phase23_docs_controls_shard_183` with `PROCESSORS=4` and `TIMEOUT=90`, and `preview_package_smoke` with `PROCESSORS=4` and `TIMEOUT=180`. The selected docs shard, preview smoke, workflow-policy coverage check, and coverage self-test passed 4/4; their observed durations were 6.38, 27.12, 0.72, and 1.79 seconds respectively.
 
-I could not configure the sanitizer build on this macOS host because the project intentionally supports `GABBABOY_ENABLE_SANITIZERS` only on Linux. The workflow-coverage self-test did validate the sanitizer-scaled timeout and environment, including a negative for the unscaled timeout. I did not run the full CTest suite or hosted qualification.
+D-159 records that the prior full writable-clone run had two timeouts under four-worker load, with no assertion failures, and both tests passed in isolated reruns. The new reservations are consistent with that measured contention evidence and preserve global CTest parallelism and per-test ceilings. I did not run the full suite or hosted qualification; those remain with the orchestrator's final qualification pass.
 
-## Release and consumer boundaries
+## Prior release and consumer findings
 
-The release, version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed at b75 remain unchanged by the af5-to-d0fb source diff. The D-158 changes adjust only CI budgeting, CTest reservations, and their coverage contract. RC-01 through RC-19 retain their recorded source-linked verification references; the fix-commit ancestry check passes against this reviewed source.
+RC-01 through RC-19 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-20 remains fixed at d0fb, with current c08d coverage evidence recorded in its verification reference. All fixed SHAs resolve and are ancestors of the reviewed implementation.
+
+The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged by the d0fb-to-c08d source diff. D-159 changes CTest scheduling and coverage only.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-d0fb6836-20261108-01",
+  "report_id": "gb-23-release-consumer-c08d18ef-20261108-01",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-d158d0fb6836",
+  "reviewer_id": "release-consumer-d159c08d18",
   "independent": true,
-  "reviewed_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
+  "reviewed_sha": "c08d18ef4ac5eda6c622b4102301ed888b98f80a",
   "findings": [
     {
       "id": "RC-01",
@@ -234,7 +236,7 @@ The release, version-window, lifecycle, product/consumer, fixture, notice-path, 
       "disposition": "fixed",
       "rationale": "The d0fb checker now models and validates the actual support-ledger test contract: exact 120-second normal/360-second sanitizer timeout, PROCESSORS=4, GBB_TEST_BUILD_DIR (plus the sanitizer link-option environment when enabled), and the planning/v02 labels. The self-test fixture includes the real environment and labels; it rejects a missing planning label, unexpected environment entry, a 119-second native timeout, an unscaled 120-second sanitizer timeout, and PROCESSORS=3 for the support control and each D-157 reservation. The exact configured coverage check and all three selected CTests pass at d0fb, closing the af5 mismatch.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "At d0fb68361f3ffd82e1205e16609f644d4f733df2: workflow-policy coverage self-test passed 105 controls; a fresh normal CMake configure plus verify-workflow-policy-coverage.py --check passed with 540 controls across six groups; CTest v02_support_ledger_controls, workflow_policy_coverage, and workflow_policy_coverage_controls passed 3/3. The exact test JSON includes ENVIRONMENT, LABELS=[planning,v02], PROCESSORS=4, and TIMEOUT=120. The checker self-test validates the sanitizer-scaled 360-second timeout and corresponding environment, with a negative for an unscaled timeout. D-158 workflow policy check and ledger self-test passed with the changed-body disclosure against b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae."
+      "verification_ref": "At c08d18ef4ac5eda6c622b4102301ed888b98f80a: exact workflow-policy coverage check passed with 540 controls across six groups; coverage self-test passed 107 controls. Fresh configured CTest JSON confirms phase23_docs_controls_shard_183 has PROCESSORS=4/TIMEOUT=90 and preview_package_smoke has PROCESSORS=4/TIMEOUT=180. The selected docs shard, preview smoke, workflow_policy_coverage, and workflow_policy_coverage_controls passed 4/4."
     }
   ]
 }

@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed tree at `d0fb68361f3ffd82e1205e16609f644d4f733df2`, including the full source delta from `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` through this commit, the current Plan 23-04 T2 contract, and the D-157/D-158 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, D-157 workflow and Windows path changes, and D-158 timeout-ledger and CTest scheduling controls.
+I reviewed the exact committed tree at `c08d18ef4ac5eda6c622b4102301ed888b98f80a`, including the full source delta from `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` through this commit, the current Plan 23-04 T2 contract, and the D-157/D-158/D-159 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, D-157 workflow and Windows path changes, D-158 timeout-ledger and CTest controls, and D-159 slot reservations.
 
-The input-path, source-revision, and package-authority boundaries remain intact. D-158 changes only the `linux-sanitizers-tests` job cap from 45 to 55 minutes and discloses the observed incomplete exact-head run; its 21.55-minute historical p50 and citation remain unchanged. The 3,900-second exact-head waiter still exceeds the 55-minute job cap. The support-ledger test retains its 120-second native bound and four-slot reservation; its checker now also pins the sanitizer-scaled timeout, environment and labels. The checker requires all four D-157 reservations and rejects removing each one in turn. No event filter, permission, publisher authority, or test inventory change was introduced.
+The input-path, source-revision, and package-authority boundaries remain intact. D-158 changes only the `linux-sanitizers-tests` job cap from 45 to 55 minutes and discloses the observed incomplete exact-head run; its 21.55-minute historical p50 and citation remain unchanged. The 3,900-second exact-head waiter still exceeds the 55-minute job cap. The support-ledger test retains its 120-second native bound and four-slot reservation; its checker pins the sanitizer-scaled timeout, environment and labels. The checker also requires all four D-157 reservations and both D-159 reservations, with an independent three-slot negative for each. D-159 preserves the 90- and 180-second ceilings and global four-worker CTest setting. These changes do not alter workflow permissions, publisher authority, or package behavior.
 
-At this exact revision, the coverage self-test passed with 105 controls, and the production coverage check passed against the configured CTest registrations with 540 policy controls. The timeout-ledger group passed its 20 negative and one positive control. SEC-23-16 is fixed at this source; SEC-23-09 remains open as a low-severity Git-output resource-bound concern. No correctness or security finding or high/blocking finding remains open. The D-155/D-156 focused checks and budget-base checks cited below passed at their earlier exact revisions; their validators and allowlist are unchanged in this delta. I did not run the full CTest suite or hosted CI, exercise publication, or fetch, build, run, or admit a real fixture.
+At this exact revision, the workflow-policy coverage self-test passed with 107 controls. Its production check passed against the configured CTest registrations in an exact-SHA clone with 540 controls. The timeout-ledger group passed 20 negative and one positive control. SEC-23-16 remains fixed, and SEC-23-09 is the only open finding: a low-severity Git-output resource-bound concern. No correctness or security finding or high/blocking finding remains open. The D-155/D-156 focused checks and budget-base checks cited below passed at their earlier exact revisions; their validators and allowlist are unchanged in this delta. I did not run the full CTest suite or hosted CI, exercise publication, or fetch, build, run, or admit a real fixture.
 
 ## Input, path and source boundaries
 
@@ -44,7 +44,13 @@ The rescope records that exact-head run `42504839710` reached 1,843/1,853 saniti
 
 The final ledger row keeps run `40163270595`, its SHA and p50 of 21.55 minutes, changes only the sanitizer job cap to 55 minutes, and discloses the observed incomplete run and changed job body. The timeout-ledger self-test passed at this SHA with 20 negative and one positive control, covering stale values, ratio, whole-run p50, schema and changed-body disclosure. The workflow changes do not touch sanitizer acceptance, fuzz jobs, branch filters, CTest parallelism or per-test ceilings.
 
-The CTest registration keeps `v02_support_ledger_controls` at a 120-second native timeout, with sanitizer scaling to 360 seconds, and requires its build-directory environment and `planning;v02` labels plus `PROCESSORS 4`. The coverage checker now requires the support control in the expected inventory and exactly one configured registration; it rejects unexpected properties, a changed working directory, timeout, environment, label set or processor count. The checker also registers and requires `PROCESSORS 4` for each D-157 reservation: `phase21_fixture_admission_controls`, `release_disclosure_controls`, `release_version_v04_controls` and `support_claims_v04_controls`. Separate negative controls lower each reservation to three slots. The exact-source coverage self-test passed all 105 controls, including native and sanitizer timeout mutations and all four D-157 slot-removal mutations. The production coverage check passed against the configured CTest JSON registration. No code path, workflow credential or release authority was added or widened.
+The CTest registration keeps `v02_support_ledger_controls` at a 120-second native timeout, with sanitizer scaling to 360 seconds, and requires its build-directory environment and `planning;v02` labels plus `PROCESSORS 4`. The coverage checker requires the support control in the expected inventory and exactly one configured registration; it rejects unexpected properties, a changed working directory, timeout, environment, label set or processor count. It also requires `PROCESSORS 4` for each D-157 reservation and rejects an independent three-slot mutation for each. Those checks passed in the 107-control self-test at the current source.
+
+## D-159 measured full-suite CTest reservations
+
+The rescope records that the full local suite had 1,940 passes and two timeout failures under four-worker load: `phase23_docs_controls_shard_183` exceeded its 90-second ceiling, and `preview_package_smoke` exceeded its 180-second ceiling. Each passed alone; no assertion failure was reported. I treated those as documented local contention observations, not repeatable functional failures or a new timing basis.
+
+The implementation adds `phase23_docs_controls_shard_183` to the existing slow-doc reservation set, which applies `PROCESSORS 4`; its 90-second timeout remains unchanged. `preview_package_smoke` now has `PROCESSORS 4` alongside its unchanged 180-second timeout. The coverage checker adds both names to `PHASE23_RESERVED_TESTS`, requires each in the expected inventory and exactly one CTest registration, and rejects a three-slot mutation for each. The exact-source self-test passed with 107 controls; the production coverage check against the configured exact-SHA CTest registration passed with 540 controls. Global CTest parallelism and test behavior remain unchanged. No package or workflow trust boundary was widened.
 
 ## Findings
 
@@ -146,16 +152,16 @@ The prior checker verified only the support-ledger and separate release-policy r
 
 ## Verification and limits
 
-This review is bound to `d0fb68361f3ffd82e1205e16609f644d4f733df2`. At this exact SHA, `python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev d0fb68361f3ffd82e1205e16609f644d4f733df2` passed with 105 controls. `python3 -I tests/scripts/verify-workflow-policy-coverage.py --check --root /Users/jon/projects/gabbaboy --build-dir /Users/jon/projects/gabbaboy/build --rev d0fb68361f3ffd82e1205e16609f644d4f733df2` passed against the configured CTest registrations with 540 controls. The timeout-ledger group self-test passed with 20 negative and one positive control. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. The full CTest suite, hosted cross-platform CI and committed-report gate were not run in this reviewer turn. I did not inspect live branch protection, exercise publication, or fetch/build/run/admit real fixtures.
+This review is bound to `c08d18ef4ac5eda6c622b4102301ed888b98f80a`. At this exact SHA, `python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev c08d18ef4ac5eda6c622b4102301ed888b98f80a` passed with 107 controls. The production `verify-workflow-policy-coverage.py --check` passed against the configured CTest registration in an exact-SHA clone with 540 controls. The timeout-ledger group self-test passed with 20 negative and one positive control. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. The full CTest suite, hosted cross-platform CI and committed-report gate were not run in this reviewer turn. I did not inspect live branch protection, exercise publication, or fetch/build/run/admit real fixtures.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-d0fb6836-20261108-security-d155",
+  "report_id": "phase23-security-c08d18ef-20261108-security-d155",
   "role": "security",
   "reviewer_id": "security-d155",
   "independent": true,
-  "reviewed_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
+  "reviewed_sha": "c08d18ef4ac5eda6c622b4102301ed888b98f80a",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -295,7 +301,7 @@ This review is bound to `d0fb68361f3ffd82e1205e16609f644d4f733df2`. At this exac
       "disposition": "fixed",
       "rationale": "The reviewed source rejects unsafe path components, resolves source files strictly beneath the canonical repository root, and resolves copy destinations beneath the target before and after parent creation. The D-155 traversal and symlink controls remain unchanged; the shard-0 production docs self-test passed at 7c6f01ad.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "tests/scripts/verify-v02-adoption.py:1922-1970,2002-2004,2481-2498,3106-3129,4121-4165; python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 --repo . passed at 7c6f01ad; git diff 7c6f01ad..d0fb6836: no adoption-checker changes"
+      "verification_ref": "tests/scripts/verify-v02-adoption.py:1922-1970,2002-2004,2481-2498,3106-3129,4121-4165; python3 -I tests/scripts/verify-v02-adoption.py --self-test docs --shard 0 200 --repo . passed at 7c6f01ad; git diff 7c6f01ad..c08d18ef: no adoption-checker changes"
     },
     {
       "id": "SEC-23-15",
@@ -305,7 +311,7 @@ This review is bound to `d0fb68361f3ffd82e1205e16609f644d4f733df2`. At this exac
       "disposition": "fixed",
       "rationale": "D-154 was absent from the plan-pinned base, so the new rows did not resolve. The approved correction maps the 168 new shard 32–199 rows to D-068, which exists and is unused in both checker bases. The 90-second ceilings and shard inventory are unchanged, and D-069 remains the timeout policy. Both exact-base budget checks passed.",
       "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
-      "verification_ref": "python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same checker against PR base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/ci/test-budget-allowlist: 168 rows use D-068; D-068 exists and is unused at both bases; git diff 7c6f01ad..d0fb6836: no test-budget checker or allowlist changes"
+      "verification_ref": "python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same checker against PR base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/ci/test-budget-allowlist: 168 rows use D-068; D-068 exists and is unused at both bases; git diff 7c6f01ad..c08d18ef: no test-budget checker or allowlist changes"
     },
     {
       "id": "SEC-23-16",

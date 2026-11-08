@@ -1,13 +1,13 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** d0fb68361f3ffd82e1205e16609f644d4f733df2
+**Reviewed implementation:** c08d18ef4ac5eda6c622b4102301ed888b98f80a
 **Role:** adversarial
 **Reviewer:** adversarial-d155
-**Review posture:** I inspected the exact immutable commit, the complete source changes from b75ecb97 through af5b719 and the follow-up changes from af5b719 through this source, plus the current Plan 23-04 and D-157/D-158 rescope. I rechecked prior findings and ran the bounded exact-source controls; earlier evidence is identified where its source remains unchanged.
+**Review posture:** I inspected the exact immutable commit, the complete source changes from b75ecb97 through af5b719 and subsequent bounded corrections through this source, plus the current Plan 23-04 and D-157–D-159 rescope. I rechecked prior findings and ran the bounded exact-source controls; earlier evidence is identified where its source remains unchanged.
 
 ## Result
 
-ADV-01 through ADV-28 are fixed at or before this commit. The D-158 sanitizer cap and timeout-ledger row preserve their historical citation and disclose the observed incomplete run; an explicit comparison against b75 passes. The support-ledger control keeps its 120-second bound and four-slot reservation. The coverage checker now validates the actual labels and environment, and the exact configured-inventory CTest passes. Its 105-control self-test causally rejects weakened native and sanitizer-scaled timeouts and unreserved slot counts. No correctness or security finding remains open.
+ADV-01 through ADV-28 are fixed at or before this commit. The D-158 sanitizer cap and timeout-ledger row preserve their historical citation and disclose the observed incomplete run; an explicit comparison against b75 passes. The support-ledger control keeps its 120-second bound and four-slot reservation. The exact configured-inventory CTest passes. The 107-control self-test causally rejects weakened native and sanitizer-scaled timeouts and unreserved slot counts, including the two D-159 reservations. No correctness or security finding remains open.
 
 ## D-155 path and selector attacks
 
@@ -33,7 +33,7 @@ The configured CTest inventory reports PROCESSORS=4 for phase21_fixture_admissio
 
 ## D-157 workflow-policy coverage snapshot
 
-At 01370352 the workflow-policy checker source had changed, but verify-workflow-policy-coverage.py still pinned the older checker blob. Its exact-source self-test rejected with “candidate workflow-policy source differs from the exact reviewed snapshot.” The reviewed follow-up pins the D-157 checker blob at 01370352, records only the functions changed by D-157 as historical AST exceptions, and continues comparing the rest against the immutable baseline. At this source the 105-control self-test and exact configured-inventory check both pass, including the D-158 CTest registration properties.
+At 01370352 the workflow-policy checker source had changed, but verify-workflow-policy-coverage.py still pinned the older checker blob. Its exact-source self-test rejected with “candidate workflow-policy source differs from the exact reviewed snapshot.” The reviewed follow-up pins the D-157 checker blob at 01370352, records only the functions changed by D-157 as historical AST exceptions, and continues comparing the rest against the immutable baseline. At this source the 107-control self-test and exact configured-inventory check both pass, including the D-158 and D-159 CTest registration properties.
 
 ## D-157 Windows planning-label path comparison
 
@@ -47,7 +47,7 @@ The `linux-sanitizers-tests` job cap changes from 45 to 55 minutes. Its ledger r
 
 The CMake registration preserves `v02_support_ledger_controls` at 120 seconds and adds `PROCESSORS 4`; it retains the `planning;v02` labels and build-directory environment, and remains in the expected inventory. The exact control passed locally in 27.52 seconds. The coverage checker now expects the exact labels and environment for native and sanitizer configurations. The exact configured inventory reports 120 seconds and four processors for this test, and 60/60/90/60 seconds and four processors for the four D-157 controls.
 
-The 105-control coverage self-test rejects a native support-ledger timeout of 119 seconds and a sanitizer-scaled timeout left at 120 rather than 360 seconds. It also rejects reducing the reservation from four processors for each of the four D-157 controls and the D-158 support-ledger control. It pairs those mutations with accepted native/scaled fixtures and exact label/environment checks. The exact configured-inventory CTest now passes.
+The coverage self-test rejects a native support-ledger timeout of 119 seconds and a sanitizer-scaled timeout left at 120 rather than 360 seconds. It also rejects reducing the reservation from four processors for each of the four D-157 controls, the D-158 support-ledger control, and both D-159 controls. It pairs these mutations with accepted native/scaled fixtures and exact label/environment checks. The exact configured-inventory CTest passes.
 
 ## Required adversarial checklist
 
@@ -63,13 +63,14 @@ The 105-control coverage self-test rejects a native support-ledger timeout of 11
 | Reopen every D-144–D-154 case | The exact-source release-note controls and the existing source-bound docs controls retain the paired parser, invisible-character/reference, hard-break, emphasis/link-label, delimiter-complexity, Unicode P/S, and bounded-label cases. Their matcher code is unchanged by D-155. |
 | Escape notice input or self-test copy roots; omit higher-numbered focused shards | Current traversal/symlink controls reject the path escapes; the corrected CTest selector and inventory include every numbered shard through 199. |
 | D-157 CI trigger, timeout ledger, four-slot scheduling, Windows path, and coverage snapshot | CI and ledger controls pass their paired mutation sets; CTest assigns all four measured controls four slots without changing their timeouts; the coverage snapshot correction passes. The 33-control planning-label self-test accepts normalized case variants and rejects wrong repository paths. |
-| D-158 sanitizer cap/disclosure and support-ledger CTest reservation | The 55-minute cap and disclosure pass the explicit b75 comparison. The support-ledger test passes at 120 seconds with four slots, and its environment/labels match the contract. The 105-control self-test rejects native/scaled timeout and slot mutations; the configured-inventory CTest passes. |
+| D-158 sanitizer cap/disclosure and support-ledger CTest reservation | The 55-minute cap and disclosure pass the explicit b75 comparison. The support-ledger test passes at 120 seconds with four slots, and its environment/labels match the contract. The coverage self-test rejects native/scaled timeout and slot mutations; the configured-inventory CTest passes. |
+| D-159 docs-shard and preview-package slot reservations | The exact inventory reports `phase23_docs_controls_shard_183` at 90 seconds and `preview_package_smoke` at 180 seconds, each with four processors. Both reservation mutations reject in the 107-control self-test, and both tests pass in the focused CTest run. |
 
 For each direct release-note mutation, the test helper first accepts the valid renderer-built baseline, then requires the mutant to fail for its expected reason. The immutable profile, version-window, disclosure, and review-evidence suites also pair accepted records with targeted rejected mutations. No real game or diagnostic fixture was fetched, built, run, or admitted; no release was signed, published, or promoted. REL-01 remains Pending.
 
 ## Verification evidence
 
-- Exact-source workflow-policy coverage self-test at the reviewed SHA: 105 controls pass.
+- Exact-source workflow-policy coverage self-test at the reviewed SHA: 107 controls pass.
 - Exact-source workflow-policy coverage check against the configured CTest inventory: 540 controls across 6 groups pass.
 - Exact-source workflow-policy CI group: 112 negative controls and 1 positive pass, including the unfiltered-push mutation.
 - Exact-source timeout-ledger group: 20 negative controls and 1 positive pass, including stale timeout, p50-ratio, and whole-run ceiling controls.
@@ -77,8 +78,9 @@ For each direct release-note mutation, the test helper first accepts the valid r
 - Exact-source CI comment says the CMake floor suite's 20–40 minute observed duration is measured against its 50-minute cap. Review of the full D-157 diff confirms only the three measured CI job caps and three exact-head waiters were extended, all four slow controls reserve four slots, and per-test timeouts remain 60/60/90/60 seconds.
 - Exact configured CTest metadata: all four D-157 controls reserve four slots; their existing TIMEOUT values remain 60/60/90/60 seconds.
 - Exact-source ledger group passes 20 negative controls and 1 positive; helper group passes 66 negative and 19 positive controls, including changed-body disclosure refused/accepted cases. The D-158 disclosure comparison against b75 passes.
-- Exact-source targeted CTest selection passes `v02_support_ledger_controls`, `workflow_policy_coverage`, and `workflow_policy_coverage_controls` (3/3). The support-ledger test completes in 27.52 seconds; configured metadata shows timeout 120, processors 4, labels `planning;v02`, and the build-directory environment.
-- Exact-source CTest metadata confirms all four D-157 controls and the D-158 support-ledger control reserve four processors; their native timeouts remain 60/60/90/60 and 120 seconds.
+- Exact-source workflow-policy coverage CTest pair passes (2/2); the coverage check reports 540 controls across 6 groups. The D-158 support-ledger test passed in the preceding exact-source selection.
+- Exact-source D-159 focused CTest selection passes `phase23_docs_controls_shard_183` and `preview_package_smoke` (2/2, 87.57 seconds total). They complete in 6.75 and 80.80 seconds respectively; configured metadata shows unchanged 90/180-second limits and four processors for both.
+- Exact-source CTest metadata confirms the four D-157 controls, the D-158 support-ledger control, and both D-159 controls reserve four processors; their timeouts remain 60/60/90/60, 120, and 90/180 seconds respectively.
 - Earlier D-155 shard 0 and shard 199 runs, exact selector dry-run, D-156 recovery run, D-068 plan/PR base budget checks, and D-069 self-test remain applicable because their implementation/checker/allowlist inputs did not change from 7c6 to the reviewed SHA.
 - Earlier exact-source release/profile/version/disclosure/evidence controls remain applicable: the matcher, support-ledger, version-window, review-evidence, CTest registration, and inventory sources are unchanged from their cited reviewed revisions.
 
@@ -86,17 +88,17 @@ These checks establish local controls, test selection/scheduling metadata, path-
 
 ## Findings and dispositions
 
-ADV-01 through ADV-28 are fixed at or before the reviewed commit. The D-158 support-ledger registration properties are accepted by the configured check, and its native/sanitizer timeout and all five phase-specific slot reservations have causal negative controls. No correctness or security finding remains open.
+ADV-01 through ADV-28 are fixed at or before the reviewed commit. The D-158 support-ledger registration properties and timeout controls pass, and the checker now causally rejects reservation changes for the D-157, D-158, and D-159 tests. No correctness or security finding remains open.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-d0fb68361f3ffd82e1205e16609f644d4f733df2-20261108-d158-correction",
+  "report_id": "gbb-phase23-adversarial-c08d18ef4ac5eda6c622b4102301ed888b98f80a-20261108-d159",
   "role": "adversarial",
   "reviewer_id": "adversarial-d155",
   "independent": true,
-  "reviewed_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
+  "reviewed_sha": "c08d18ef4ac5eda6c622b4102301ed888b98f80a",
   "findings": [
     {
       "id": "ADV-01",
@@ -346,7 +348,7 @@ ADV-01 through ADV-28 are fixed at or before the reviewed commit. The D-158 supp
       "disposition": "fixed",
       "rationale": "At 01370352 the D-157 policy source changed but the coverage checker still pinned the earlier snapshot, so its self-test rejected the candidate source. The follow-up commit pins the exact 01370352 policy blob and lists only the reviewed changed functions for the historical AST exception. The exact-source self-test and configured-inventory check now pass.",
       "fix_sha": "ecdde9d5f63500dd0ad32d9e101f47e29ded0eb2",
-      "verification_ref": "At reviewed SHA: verify-workflow-policy-coverage.py --self-test (105 controls pass); exact-source --check against configured CTest inventory (540 controls, 6 groups pass)."
+      "verification_ref": "At reviewed SHA: verify-workflow-policy-coverage.py --self-test (107 controls pass); exact-source --check against configured CTest inventory (540 controls, 6 groups pass)."
     },
     {
       "id": "ADV-26",
@@ -366,7 +368,7 @@ ADV-01 through ADV-28 are fixed at or before the reviewed commit. The D-158 supp
       "disposition": "fixed",
       "rationale": "The coverage checker now accepts and validates the exact support-ledger test properties, including LABELS=[planning,v02] and ENVIRONMENT=[GBB_TEST_BUILD_DIR=<configured build>], while retaining timeout=120 and PROCESSORS=4 checks. Exact configured-inventory validation passes at this source; the targeted CTest selection passes all three tests.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "At reviewed SHA: ctest --test-dir /private/tmp/gbb-policy-d0fb --parallel 4 --output-on-failure --no-tests=error -R '^(v02_support_ledger_controls|workflow_policy_coverage|workflow_policy_coverage_controls)$' (3/3 passed); verify-workflow-policy-coverage.py --check against the same exact-source configured inventory (540 controls, 6 groups pass)."
+      "verification_ref": "Fixed at d0fb68361f3ffd82e1205e16609f644d4f733df2; at reviewed SHA, workflow_policy_coverage and workflow_policy_coverage_controls CTests pass (2/2), with configured coverage reporting 540 controls across 6 groups."
     },
     {
       "id": "ADV-28",
@@ -376,7 +378,7 @@ ADV-01 through ADV-28 are fixed at or before the reviewed commit. The D-158 supp
       "disposition": "fixed",
       "rationale": "The checker self-test now changes the support-ledger native timeout to 119 seconds and the sanitizer-scaled timeout to 120 instead of 360; both mutations are rejected. It also reduces PROCESSORS to 3 for each of the four D-157 controls and the D-158 support-ledger control, and those mutations reject. Accepted native/scaled fixtures retain the exact labels and environment.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "At reviewed SHA: verify-workflow-policy-coverage.py --self-test --root . --rev d0fb68361f3ffd82e1205e16609f644d4f733df2 (105 controls pass); configured `workflow_policy_coverage_controls` CTest passes."
+      "verification_ref": "Fixed at d0fb68361f3ffd82e1205e16609f644d4f733df2; at reviewed SHA, verify-workflow-policy-coverage.py --self-test --root . --rev c08d18ef4ac5eda6c622b4102301ed888b98f80a passes 107 controls, including native/sanitizer timeout negatives and processor-count negatives for D-157, D-158, and D-159 reservations."
     }
   ]
 }
