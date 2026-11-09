@@ -1,13 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-10-31T19:01:44.469697+00:00",
-  "phase": "19",
-  "phase_name": "Qualified v0.3.0 Release",
-  "phase_dir": ".planning/milestones/v0.3-phases/GB-19-qualified-v0-3-0-release",
-  "status": "milestone_completed",
-  "completed_stage": "v0.3 Save States & Host Contract milestone completion and archival",
-  "blockers": [],
+  "timestamp": "2026-11-09T06:45:18.000Z",
+  "phase": "23",
+  "phase_name": "Qualified v0.4.0 Release",
+  "phase_dir": ".planning/phases/GB-23-qualified-v0-4-0-release",
+  "status": "awaiting_owner_decision",
+  "completed_stage": "Phase 23 Plan 23-04 local Windows path correction, independent exact-source reviews, and focused gates; Phase 23 itself is incomplete",
+  "blockers": [
+    "Exact hosted PR head 6ae7a46777348d02bf4e20419df0bfc8a5929591 passed native Linux but failed native Windows workflow_policy_coverage because the checker compared GBB_TEST_BUILD_DIR path spelling literally. Local correction b7d86939c25fca93dc928c494b9834513e5c1bc5 and review-evidence commit 4f5f498921d502502fe07fab5717447bf7112abb are not pushed.",
+    "The same exact hosted run canceled native macOS at its existing 40-minute cap after 1,927/1,942 tests and canceled CMake-floor at its existing 50-minute cap after about 1,920/1,942. No b7 hosted run was started.",
+    "SEC-23-09 remains the one open low Git-output resource-bound finding; D-102 requires a rescope for an unresolved security finding in new code.",
+    "Owner-directed constraint: leave CI budgets and per-test timeouts unchanged."
+  ],
   "async_jobs": [],
-  "next_action": "Owner may run /gsd-new-milestone to initialize proposed v0.4 Evidence Floor; no next phase number/title exists.",
-  "context_notes": "Owner approved override closeout; no next milestone started; both automatic-advance flags false. Owner config/AGENTS working edits remain uncommitted."
+  "next_action": "Owner: decide whether to authorize an in-place Plan 23-04 rescope that closes SEC-23-09 and redesigns hosted test scheduling to fit the existing CI budgets and per-test timeouts while preserving required coverage. After the decision, resume with /gsd-execute-phase 23. No later phase has started.",
+  "context_notes": "The exact-source self-test passed 136 controls; focused workflow-policy, review-evidence, and fixture-admission CTests passed 5/5 after fresh configure and runner-qualification rebuild. Earlier full local CTest at 3c passed 1,942/1,942; the b7 full local attempt was stopped at 206/1,942 after 34 minutes and is incomplete evidence. No merge, release, auto-advance, or phase completion is authorized by this handoff."
 }
