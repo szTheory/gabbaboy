@@ -1,13 +1,13 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** 61f08de30b4f74ae539f827c5b04e1188fc3ea79
+**Reviewed implementation:** bc282cc229c887d7034e533175249861db846154
 **Role:** adversarial
 **Reviewer:** adversarial-d155
-**Review posture:** I inspected the exact D-163 source changes from c09e06e91a47614d727b71e345423035cf0e068a, current Plan 23-04, and the D-163 rescope, and rechecked prior findings against the final tree. The implementation delta changes CTest scheduling for the docs controls and expands the source-bound coverage checker; it does not change product behavior, CI budgets, test commands, assertions, labels, or per-test timeouts. I ran bounded exact-source checker and inventory controls at this SHA; the full local suite and hosted qualification were not rerun.
+**Review posture:** I inspected the owner-approved D-163 two-slot amendment at bc against the previous reviewed source 61f08de30b4f74ae539f827c5b04e1188fc3ea79, current Plan 23-04, and the amended rescope, and rechecked prior findings. The implementation changes only docs-control processor reservations and the matching checker expectations/negative controls; it does not change commands, assertions, labels, environments, per-test timeouts, CI caps, or non-doc reservations. I freshly configured CTest and ran bounded exact-source controls; the full local suite and a new hosted run were not rerun at bc.
 
 ## Result
 
-ADV-01 through ADV-29 remain fixed at or before this commit. At exact source 61, the configured inventory contains all 200 docs controls once, each with `PROCESSORS=4`, `TIMEOUT=90`, `LABELS=["v02"]`, its build-directory environment, and the expected shard command. The coverage-checker self-test passes 526 controls, including one three-slot and one wrong-label negative for every docs control; the exact configured production check passes 540 controls across six groups, and the focused coverage CTest pair passes 2/2. The CMake diff changes only processor reservations and comments; the command, assertion, label, environment, and per-test timeout remain unchanged. Previously approved Windows path normalization still accepts the slash/case variant and rejects a wrong directory. D-163 adds no new finding. Hosted qualification at 6ae7a467 was not green; its outcomes remain historical and are not presented as passes for this source.
+ADV-01 through ADV-29 remain fixed at or before this commit. At exact source bc, all 200 docs controls have `PROCESSORS=2`, `TIMEOUT=90`, `LABELS=["v02"]`, their build-directory environments, and their expected shard commands; all non-doc reservations remain at four slots. The 526-control self-test rejects the former four-slot value and a wrong label for every docs control. The exact configured production check passes 540 controls across six groups, and the focused coverage CTest pair passes 2/2. The CMake/checker diff changes only processor reservations and their validation; commands, assertions, labels, environments, timeouts, and CI caps remain unchanged. The previously approved Windows slash/case positive and wrong-directory negative still pass. D-163 adds no new finding. The hosted run on the preceding four-slot implementation did not qualify; no hosted run covers this two-slot source.
 
 ## D-155 path and selector attacks
 
@@ -51,13 +51,13 @@ The 160-control self-test rejects the native support-ledger timeout of 119 secon
 
 ## D-160 additional CTest reservations
 
-The nine D-160 reservations are docs shards 112, 115, 118, 119 and 122; `v02_fuzz_controls`; `v03_dispositions_controls`; `save_format_controls`; and `host_exit_crash_storm`. The CMake registrations change only `PROCESSORS` properties and comments; test commands, assertions, expected inventory entries, and TIMEOUT values remain unchanged. Exact configured metadata reports timeouts 90/180/60/60/60 seconds for these categories with four processors.
+At the D-160 source, the nine reservations were docs shards 112, 115, 118, 119 and 122; `v02_fuzz_controls`; `v03_dispositions_controls`; `save_format_controls`; and `host_exit_crash_storm`. The CMake registrations changed only `PROCESSORS` properties and comments; test commands, assertions, expected inventory entries, and TIMEOUT values remained unchanged. Exact metadata then reported timeouts 90/180/60/60/60 seconds with four processors. Under the later D-163 amendment, those five docs shards now use two processors; the non-doc reservations remain four.
 
 `host.cmake` leaves `host_signal_term`, `host_signal_int`, and `host_signal_inherited_ign` at two processors and adds a separate four-slot property only for `host_exit_crash_storm`. The coverage checker lists the nine tests, and the D-160 118-control self-test applies an isolated PROCESSORS=3 mutation to each reservation. Its Windows path removes POSIX-only `host_exit_crash_storm` and `save_format_controls` from the accepted inventory; it rejects a missing cross-platform reservation and an unexpected POSIX-only registration. The exact POSIX configured inventory check reports 540 controls across six groups, and both coverage CTests pass. Windows behavior is exercised by the checker self-test, not by a hosted Windows run in this review.
 
 ## D-161 ten CTest reservations
 
-The ten controls are `fixture_product_core_controls`, `fixture_product_player_controls`, `fixture_admission_controls`, `v02_consumer_controls_c`, `v02_consumer_controls_cpp`, `acceptance_dense_input_controls`, `workflow_policy_group_ci`, `workflow_policy_group_rehearsal`, and docs shards 108 and 114. Exact configured CTest JSON at the reviewed source reports four processors for every registration. The fixture controls retain 120/120/90-second timeouts; the two consumer controls and dense-input control retain 600-second timeouts (with existing `COST=600` on those three); policy groups retain 180 seconds; docs shards retain 90 seconds. Existing `v02` labels and `GBB_TEST_BUILD_DIR` environments remain on fixture, consumer, and docs controls. The dense-input working directory and lack of label/environment, and the policy groups' existing working directories and completion-file arguments, remain unchanged.
+The ten controls were `fixture_product_core_controls`, `fixture_product_player_controls`, `fixture_admission_controls`, `v02_consumer_controls_c`, `v02_consumer_controls_cpp`, `acceptance_dense_input_controls`, `workflow_policy_group_ci`, `workflow_policy_group_rehearsal`, and docs shards 108 and 114. At the D-161 source, exact CTest JSON reported four processors for every registration. Under the later D-163 amendment, docs shards 108 and 114 use two; the other eight D-161 controls remain at four. The fixture controls retain 120/120/90-second timeouts; the two consumer controls and dense-input control retain 600-second timeouts (with existing `COST=600` on those three); policy groups retain 180 seconds; docs shards retain 90 seconds. Existing `v02` labels and `GBB_TEST_BUILD_DIR` environments remain on fixture, consumer, and docs controls. The dense-input working directory and lack of label/environment, and the policy groups' existing working directories and completion-file arguments, remain unchanged.
 
 The D-161 CMake delta from 4343d95d was empty, so it changed no commands, expected output patterns, assertions, timeouts, labels, environments, or inventory entries. The new checker requires exact `LABELS=[\"v02\"]` for the seven reserved fixture, consumer, and docs controls; the two policy groups, acceptance dense-input test, and other reservations have no new label requirement. Its self-test creates each label fixture with `v02`, then applies one `LABELS=[\"unexpected\"]` negative per named test. At b7d86939 the self-test passed 136 controls, including all seven D-161 wrong-label negatives.
 
@@ -75,13 +75,22 @@ At b677, D-162 added shards 05, 07, 89, 154, 155, 160, 181, 182, 191, 192, 198, 
 
 The checker adds all twelve names to both `PHASE23_RESERVED_TESTS` and `EXPECTED_RESERVED_LABELS`. Its per-reservation loop lowers each to three processors and rejects, and its per-label loop changes each label to `unexpected` and rejects. At b677, the exact-source self-test passed 160 controls, including twelve reservation and twelve wrong-label negatives; the production check passed 540 controls across six groups and the local exact coverage CTest pair passed 2/2. These twelve checks remain included in the 526-control self-test at 61.
 
-## D-163 all 200 docs controls reserve four slots
+## D-163 original all-200 four-slot reservation at 61
 
-The exact configured CTest inventory contains the base docs control (`v02_adoption_docs_controls`, shard 0) and numbered shards 1–199 exactly once. Each has `TIMEOUT=90`, `PROCESSORS=4`, `LABELS=["v02"]`, the existing `GBB_TEST_BUILD_DIR` environment, and its matching `--self-test docs --shard N 200` command. `tests/expected-tests.txt` contains each of the 200 names exactly once. The CMake diff adds a four-slot reservation for every numbered shard and shard 0; it leaves the existing `gbb_add_v02_contract` invocations and their 90-second ceilings unchanged.
+At source 61, the configured CTest inventory contained the base docs control (`v02_adoption_docs_controls`, shard 0) and numbered shards 1–199 exactly once. Each had `TIMEOUT=90`, `PROCESSORS=4`, `LABELS=["v02"]`, the existing `GBB_TEST_BUILD_DIR` environment, and its matching `--self-test docs --shard N 200` command. `tests/expected-tests.txt` contained each name exactly once. That CMake change added four-slot reservations for every numbered shard and shard 0 while leaving the existing `gbb_add_v02_contract` invocations and 90-second ceilings unchanged.
 
-The checker derives the same 200 names, adds them to `PHASE23_RESERVED_TESTS` and `EXPECTED_RESERVED_LABELS`, and requires each registration exactly once, four processors, and the exact `v02` label. The 526-control self-test passed, including one three-slot negative and one wrong-label negative per docs control. The exact configured check passed 540 controls across six groups; the focused coverage CTest pair passed 2/2. The self-test's simulated-Windows support-ledger path controls also accept the slash/case variant and reject a wrong directory. This rechecks the previously approved Windows path logic; it does not establish a hosted Windows run.
+The checker derived the same 200 names, added them to `PHASE23_RESERVED_TESTS` and `EXPECTED_RESERVED_LABELS`, and required each registration exactly once, four processors, and the exact `v02` label. At 61, the 526-control self-test passed with one three-slot and one wrong-label negative per docs control; the configured check passed 540 controls across six groups and the focused coverage CTest pair passed 2/2. The simulated-Windows support-ledger path controls accepted the slash/case variant and rejected a wrong directory. This is the historical four-slot configuration superseded by the two-slot amendment below.
 
-D-163 replaces the changing slow-shard subset from D-159–D-162 with reservations for the complete docs-control set. The remaining non-docs reservations are retained. Every docs control now reserves all four workers, so the configured four-worker suite schedules these docs controls serially. This change does not raise a timeout or CI job budget; the full docs selection and complete local suite were not rerun in this review.
+At source 61, D-163 replaced the changing slow-shard subset from D-159–D-162 with reservations for the complete docs-control set; non-doc reservations remained. Under the four-worker CTest budget, each four-slot docs test ran serially. The hosted attempt at evidence-only candidate `343606f0cb105c837e928dc58d2ecea8b37e9670` used the same implementation: Linux passed 1,942/1,942; macOS canceled at its 40-minute cap after 1,895/1,942; CMake-floor at 50 minutes after 1,839/1,942; sanitizer inventory at 55 minutes after 1,785/1,853; and Windows at 60 minutes after 1,746/1,804. Fixture reproduction passed, while preview package smoke failed because the required CI run did not complete successfully. The exact-head attempt was not merge-eligible. The canceled logs show docs shards passing in sequence. A separate local probe ran two docs shards concurrently in 9.5 seconds. These observations led to the owner-approved two-slot amendment; they are not qualification for the current source.
+
+### Owner-approved amendment: two slots per docs control
+
+The amended D-163 rescope requires exactly two CTest slots for all 200 docs controls, including shard 0, while preserving the global four-worker setting. At exact source bc, the configured inventory confirms each entry once with `PROCESSORS=2`, `TIMEOUT=90`, the existing `v02` label, build-directory environment, and unchanged shard command. `tests/expected-tests.txt` contains the complete 200-entry set exactly once. The CMake diff from 61 changes only `PROCESSORS 4` to `PROCESSORS 2` for the base control and numbered shards, plus explanatory comments.
+
+The coverage checker sets the expected processor count to two for `DOC_CONTROL_TESTS` and four for every non-doc reservation. For each docs entry, its self-test changes the expected two slots back to four and requires rejection, then separately changes the label to `unexpected` and requires rejection. Its 526-control run passed; the exact configured inventory check passed 540 controls across six groups; the focused coverage CTest pair passed 2/2. A metadata audit confirmed all 200 docs entries have exactly two processors and all non-doc reserved controls remain at four. The Windows support-ledger slash/case positive and wrong-directory negative remain included and pass.
+
+No command, assertion, existing label/environment, per-test timeout, CI job cap, or non-doc reservation changed. With four CTest workers, two docs shards can run concurrently; this review did not rerun the complete docs selection, full local suite, or hosted qualification on the two-slot source.
+
 
 
 ## Required adversarial checklist
@@ -99,22 +108,23 @@ D-163 replaces the changing slow-shard subset from D-159–D-162 with reservatio
 | Escape notice input or self-test copy roots; omit higher-numbered focused shards | Current traversal/symlink controls reject the path escapes; the corrected CTest selector and inventory include every numbered shard through 199. |
 | D-157 CI trigger, timeout ledger, four-slot scheduling, Windows path, and coverage snapshot | CI and ledger controls pass their paired mutation sets; CTest assigns all four measured controls four slots without changing their timeouts; the coverage snapshot correction passes. The 33-control planning-label self-test accepts normalized case variants and rejects wrong repository paths. |
 | D-158 sanitizer cap/disclosure and support-ledger CTest reservation | The 55-minute cap and disclosure pass the explicit b75 comparison. The support-ledger test passes at 120 seconds with four slots, and its environment/labels match the contract. The coverage self-test rejects native/scaled timeout and slot mutations; the configured-inventory CTest passes. |
-| D-159 docs-shard and preview-package slot reservations | The exact inventory reports `phase23_docs_controls_shard_183` at 90 seconds and `preview_package_smoke` at 180 seconds, each with four processors. Their three-slot negatives passed in the D-159 checker evidence; both tests passed in their exact-source focused CTest run. The later 526-control self-test retains all reservation checks. |
-| D-160 nine CTest reservations | Exact configured metadata confirms all five new docs shards (90 seconds), v0.2 fuzz (180), v0.3 dispositions (60), save-format (60), and host crash-storm (60) use four processors. D-160 three-slot negatives and the Windows POSIX-only inventory controls passed in the 118-control self-test; the 526-control self-test retains all non-doc reservations. The three sibling host signal tests remain at two slots. |
-| D-161 ten reservations and exact labels | The exact configured inventory confirms all ten four-slot reservations and the expected `v02` labels. The 136-control self-test at b7 passed one wrong-label mutant per designated control; later 160- and 526-control self-tests retain those negatives and the Windows support-ledger path pair. The exact configured coverage CTest pair passes at 61. |
-| D-162 twelve docs shards | At b677, all twelve shards had exact `v02` labels, 90-second timeouts, and four-slot reservations, with one three-slot and one wrong-label negative per shard. The 526-control self-test at 61 retains those checks while adding the remaining docs controls. |
-| D-163 all 200 docs controls | Exact configured inventory and `expected-tests.txt` contain all 200 entries exactly once; every entry is four-slot, 90-second, and `v02`. The 526-control self-test rejects one three-slot and one wrong-label mutation per entry; coverage check and CTest pair pass. |
+| D-159 docs-shard and preview-package slot reservations | At the D-159 source, `phase23_docs_controls_shard_183` had a 90-second limit and four processors, while `preview_package_smoke` had 180 seconds and four processors; both passed their exact-source focused CTest run. The shard now has two processors under D-163, while preview smoke retains four. The 526-control self-test retains the reservation checks. |
+| D-160 nine CTest reservations | At the D-160 source, the five docs shards used four processors with 90-second limits; v0.2 fuzz, v0.3 dispositions, save-format, and host crash-storm also used four with their existing limits. The D-160 three-slot negatives and Windows POSIX-only inventory controls passed in the 118-control self-test. D-163 changes the docs shards to two slots; the non-doc reservations remain four and the three sibling host signal tests remain at two. |
+| D-161 ten reservations and exact labels | At the D-161 source all ten reservations used four slots and the seven designated `v02` labels. The 136-control self-test at b7 passed one wrong-label mutant per designated control; later 160- and 526-control self-tests retain those negatives and the Windows support-ledger path pair. D-163 moves the two docs entries to two slots; the other eight remain four. The exact bc coverage CTest pair passes. |
+| D-162 twelve docs shards | At b677, all twelve shards had exact `v02` labels, 90-second timeouts, and four-slot reservations, with one three-slot and one wrong-label negative per shard. The 526-control self-test at 61 retains those checks; bc now requires two slots and rejects four for every docs shard. |
+| D-163 all 200 docs controls | At 61, all 200 entries were four-slot; the owner-approved bc amendment requires two slots per entry. Exact bc inventory and `expected-tests.txt` contain every entry exactly once with 90-second timeout and `v02` label. The 526-control self-test rejects one former-four-slot and one wrong-label mutation per entry; non-doc reservations remain four-slot. |
 
 For each direct release-note mutation, the test helper first accepts the valid renderer-built baseline, then requires the mutant to fail for its expected reason. The immutable profile, version-window, disclosure, and review-evidence suites also pair accepted records with targeted rejected mutations. No real game or diagnostic fixture was fetched, built, run, or admitted; no release was signed, published, or promoted. REL-01 remains Pending.
 
 ## Verification evidence
 
-Evidence boundary: the historical 160-control D-162 checks below were recorded at b677. At exact source 61, I freshly configured CTest and ran the 526-control workflow-policy self-test, 540-control production inventory check, and focused coverage CTest pair. I did not run the full docs selection, complete local CTest suite, or hosted qualification.
+Evidence boundary: at source 61, the 526-control self-test, 540-control production check, and focused coverage CTest pair validated the original four-slot D-163 setting. At exact source bc, I freshly configured CTest and reran those bounded checks; its 526-control self-test now rejects the former four-slot setting per docs entry. I did not run the full docs selection, complete local suite, or hosted qualification at bc.
 
 - At b677, the exact-source workflow-policy coverage self-test passed 160 controls, including one three-slot negative per prior reserved test, seven D-161 wrong-label negatives, twelve D-162 wrong-label negatives, and the Windows environment path controls.
-- At 61f08de30b4f74ae539f827c5b04e1188fc3ea79, the exact-source self-test passes 526 controls, including one three-slot and one wrong-label negative for each of the 200 docs controls and the Windows path variants.
-- The exact configured production check at 61 passes 540 controls across six groups; the focused workflow-policy coverage CTest pair passes 2/2.
-- Exact configured CTest JSON and `tests/expected-tests.txt` contain all 200 docs controls exactly once; every entry retains its expected command, `TIMEOUT=90`, `PROCESSORS=4`, `LABELS=["v02"]`, and build-directory environment.
+- At 61, the exact-source self-test passed 526 controls with one three-slot and one wrong-label negative for each of the 200 four-slot docs reservations.
+- At bc282cc229c887d7034e533175249861db846154, the exact-source self-test passes 526 controls, including one former-four-slot and one wrong-label negative for each docs control, plus the Windows path variants.
+- At bc, the exact configured production check passes 540 controls across six groups and the focused workflow-policy coverage CTest pair passes 2/2.
+- Exact bc CTest JSON and `tests/expected-tests.txt` contain all 200 docs controls exactly once; each retains its expected command, `TIMEOUT=90`, `PROCESSORS=2`, `LABELS=["v02"]`, and build-directory environment. All non-doc reserved tests retain four processors.
 - Exact-source workflow-policy production check passes 540 controls across six groups; the local exact coverage CTest pair passes 2/2.
 - Exact-source workflow-policy CI group: 112 negative controls and 1 positive pass, including the unfiltered-push mutation.
 - Exact-source timeout-ledger group: 20 negative controls and 1 positive pass, including stale timeout, p50-ratio, and whole-run ceiling controls.
@@ -122,28 +132,28 @@ Evidence boundary: the historical 160-control D-162 checks below were recorded a
 - Exact-source CI comment says the CMake floor suite's 20–40 minute observed duration is measured against its 50-minute cap. Review of the full D-157 diff confirms only the three measured CI job caps and three exact-head waiters were extended, all four slow controls reserve four slots, and per-test timeouts remain 60/60/90/60 seconds.
 - Exact configured CTest metadata: all four D-157 controls reserve four slots; their existing TIMEOUT values remain 60/60/90/60 seconds.
 - Exact-source ledger group passes 20 negative controls and 1 positive; helper group passes 66 negative and 19 positive controls, including changed-body disclosure refused/accepted cases. The D-158 disclosure comparison against b75 passes.
-- The local exact workflow-policy coverage CTest pair passes 2/2. The full local CTest suite passed 1,942/1,942 at preceding source 3c908d7f and was not rerun at b677a36e, c09e06e9, or 61f08de3. The D-158 support-ledger test passed in a preceding exact-source selection.
-- Exact-source D-159 focused CTest selection at c08d18ef passes `phase23_docs_controls_shard_183` and `preview_package_smoke` (2/2, 87.57 seconds total); configured metadata shows unchanged 90/180-second limits and four processors for both.
-- Exact-source D-160 metadata confirms the nine new tests reserve four processors with unchanged timeouts: docs shards 112/115/118/119/122 at 90 seconds; `v02_fuzz_controls` at 180; `v03_dispositions_controls` and `save_format_controls` at 60; `host_exit_crash_storm` at 60. The three sibling signal tests remain at 60 seconds and two processors.
-- Exact-source CTest metadata confirms all D-157 through D-163 reserved controls keep their existing timeout values and four-slot reservations; `host_exit_crash_storm` is reserved separately while its three sibling signal tests remain at two processors.
+- The local exact workflow-policy coverage CTest pair passes 2/2. The full local CTest suite passed 1,942/1,942 at exact candidate 9f38c43e with the four-slot implementation unchanged from 61; it was not rerun at the two-slot source bc. The D-158 support-ledger test passed in a preceding exact-source selection.
+- Exact-source D-159 focused CTest selection at c08d18ef passed `phase23_docs_controls_shard_183` and `preview_package_smoke` (2/2, 87.57 seconds total); configured metadata then showed 90/180-second limits and four processors for both. D-163 now sets the docs shard to two processors; preview smoke remains four.
+- D-160 metadata at its reviewed source confirmed the nine tests had four processors with unchanged timeouts: docs shards 112/115/118/119/122 at 90 seconds; `v02_fuzz_controls` at 180; `v03_dispositions_controls` and `save_format_controls` at 60; `host_exit_crash_storm` at 60. D-163 now sets the docs shards to two; the non-doc reservations remain four. The three sibling signal tests remain at 60 seconds and two processors.
+- Exact bc CTest metadata confirms all 200 docs controls use two slots and retain 90-second timeouts; all non-doc reserved controls keep their four-slot reservations. `host_exit_crash_storm` remains separately reserved while its three sibling signal tests remain at two processors.
 - Earlier D-155 shard 0 and shard 199 runs, exact selector dry-run, D-156 recovery run, D-068 plan/PR base budget checks, and D-069 self-test remain applicable because their implementation/checker/allowlist inputs did not change from 7c6 to the reviewed SHA.
 - Earlier exact-source release/profile/version/disclosure/evidence controls remain applicable: the matcher, support-ledger, version-window, review-evidence, CTest registration, and inventory sources are unchanged from their cited reviewed revisions.
 
-These checks establish local controls, test selection/scheduling metadata, path-confinement behavior, and immutable checker identities. They do not establish hosted cross-platform success for this reviewed source. The D-157 exact-PR qualification run remains a separate required boundary.
+These checks establish local checker controls and test scheduling metadata for bc, plus the previously reviewed path-confinement and release controls. They do not establish hosted cross-platform success for the two-slot source; exact-head hosted qualification remains pending.
 
 ## Findings and dispositions
 
-ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was open at fdccc15a after the duplicate-fixture self-test failure and is fixed at 4343d95d. D-163 adds no correctness finding: all 200 docs controls have the required reservations and labels, and every three-slot and wrong-label mutation rejects in the exact-source self-test. No correctness or security finding remains open.
+ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was open at fdccc15a after the duplicate-fixture self-test failure and is fixed at 4343d95d. The owner-approved D-163 amendment adds no correctness finding: every docs control requires two slots and its existing label, each former-four-slot and wrong-label mutation rejects, and non-doc reservations remain at four. No correctness or security finding remains open.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-61f08de30b4f74ae539f827c5b04e1188fc3ea79-20261109-d163",
+  "report_id": "gbb-phase23-adversarial-bc282cc229c887d7034e533175249861db846154-20261109-d163-two-slot",
   "role": "adversarial",
   "reviewer_id": "adversarial-d155",
   "independent": true,
-  "reviewed_sha": "61f08de30b4f74ae539f827c5b04e1188fc3ea79",
+  "reviewed_sha": "bc282cc229c887d7034e533175249861db846154",
   "findings": [
     {
       "id": "ADV-01",
@@ -393,7 +403,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "At 01370352 the D-157 policy source changed but the coverage checker still pinned the earlier snapshot, so its self-test rejected the candidate source. The follow-up commit pins the exact 01370352 policy blob and lists only the reviewed changed functions for the historical AST exception. The exact-source self-test and configured-inventory check now pass.",
       "fix_sha": "ecdde9d5f63500dd0ad32d9e101f47e29ded0eb2",
-      "verification_ref": "At exact source 61: workflow-policy coverage self-test passes 526 controls; configured --check passes 540 controls/6 groups; focused coverage CTest pair passes 2/2. All 200 docs reservation and label negatives are included."
+      "verification_ref": "At exact source bc282cc229c887d7034e533175249861db846154: workflow-policy coverage self-test passes 526 controls, including one former-four-slot and one wrong-label negative for each of 200 docs controls; configured --check passes 540 controls/6 groups; focused coverage CTest pair passes 2/2."
     },
     {
       "id": "ADV-26",
@@ -413,7 +423,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The coverage checker now accepts and validates the exact support-ledger test properties, including LABELS=[planning,v02] and ENVIRONMENT=[GBB_TEST_BUILD_DIR=<configured build>], while retaining timeout=120 and PROCESSORS=4 checks. Exact configured-inventory validation passes at this source; the targeted CTest selection passes all three tests.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "At exact source 61, the configured coverage check passes 540 controls/6 groups and the focused coverage CTest pair passes 2/2; the 526-control self-test retains the Windows environment-path positive and wrong-directory negative."
+      "verification_ref": "At exact source bc, configured coverage check passes 540 controls/6 groups and focused coverage CTest pair passes 2/2; the 526-control self-test retains the Windows environment-path positive and wrong-directory negative. All docs reservations are two slots; non-doc reservations remain four."
     },
     {
       "id": "ADV-28",
@@ -423,7 +433,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The checker self-test now changes the support-ledger native timeout to 119 seconds and the sanitizer-scaled timeout to 120 instead of 360; both mutations are rejected. It also reduces PROCESSORS to 3 for each of the four D-157 controls and the D-158 support-ledger control, and those mutations reject. Accepted native/scaled fixtures retain the exact labels and environment.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "At exact source 61, the 526-control self-test rejects the native/scaled support-ledger timeout mutants, all reserved-slot mutants, all 200 docs wrong-label mutants, and the Windows wrong-directory mutant; configured check and focused coverage CTest pair pass."
+      "verification_ref": "At exact source bc, the 526-control self-test rejects native/scaled support-ledger timeout mutants, three-slot non-doc mutants, former-four-slot docs mutants, all docs wrong-label mutants, and the Windows wrong-directory mutant; configured check and focused coverage CTest pair pass."
     },
     {
       "id": "ADV-29",
@@ -433,7 +443,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "At fdccc15a, adding workflow_policy_group_ci and workflow_policy_group_rehearsal to PHASE23_RESERVED_TESTS made _self_test append each twice: once from GROUPS and once from the generic reserved-test loop. The initial validation rejected before any reservation mutation and the coverage CTest pair failed 1/2. At 4343d95d, the fixture generator subtracts POLICY_TEST_NAMES from only the generic synthesis loop. Both policy tests remain in PHASE23_RESERVED_TESTS and in the per-reservation mutation loop, so all ten D-161 three-slot negatives still execute.",
       "fix_sha": "4343d95dde8597253994efff2e030ae25089d288",
-      "verification_ref": "At exact source 61, the 526-control self-test and 2/2 coverage CTest pair pass. The expanded inventory includes 200 unique docs controls and executes every slot/label mutation without duplicate synthetic entries."
+      "verification_ref": "At exact source bc, the 526-control self-test and 2/2 coverage CTest pair pass. The expanded inventory includes 200 unique docs controls and exercises one former-four-slot and one wrong-label mutation per entry without duplicate fixtures."
     }
   ]
 }

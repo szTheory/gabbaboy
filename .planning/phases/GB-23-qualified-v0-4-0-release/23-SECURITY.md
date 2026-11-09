@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed tree at `61f08de30b4f74ae539f827c5b04e1188fc3ea79`, using the writable clone as the Git evidence root. The review includes the full source delta from `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` through this commit, the current Plan 23-04 T2 contract, and the D-157 through D-163 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, the D-157 through D-161 workflow and CTest scheduling controls, the D-162 and D-163 shard reservations, and the approved Windows path comparison.
+I reviewed the exact committed tree at `bc282cc229c887d7034e533175249861db846154`, using the writable clone as the Git evidence root. The review includes the full source delta from `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` through this commit, the current Plan 23-04 T2 contract, and the D-157 through D-163 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, the D-157 through D-161 workflow and CTest scheduling controls, the D-162 and D-163 shard reservations, and the approved Windows path comparison.
 
-The input-path, source-revision, and package-authority boundaries remain intact. The D-161 follow-up adds only `PROCESSORS 4` reservations for five existing CTest controls: `fixture_product_player_controls`, `fixture_admission_controls`, both `v02_consumer_controls_*` builds, and `acceptance_dense_input_controls`. Their commands, assertions, environments, labels, fixtures, and per-test timeouts remain unchanged. All five are cross-platform. The coverage checker requires each inventory row and exact-once registration and rejects a three-slot mutation for each. No product behavior or fixture data changed.
+The input-path, source-revision, and package-authority boundaries remain intact. D-161 historically added four-slot reservations for five existing CTest controls; the owner-approved D-163 amendment now assigns two slots to all 200 docs controls, while every non-doc reservation stays at four. Commands, assertions, environments, labels, fixtures, and per-test timeouts remain unchanged. No product behavior or fixture data changed.
 
-At this exact revision, the workflow-policy coverage self-test passed with 526 controls, the production check passed with 540 controls across six groups, and both focused workflow-policy CTests passed (2/2). D-163 extends four-slot scheduling and exact-source inventory/processor/label negatives to all 200 docs controls; metadata confirms `PROCESSORS 4`, `LABELS ["v02"]`, and the unchanged 90-second timeout for every shard. The approved Windows path normalization and its slash/case positive and wrong-path negative remain in the passing controls. SEC-23-17 remains fixed; SEC-23-09 is the only open finding, a low-severity Git-output resource-bound concern. No new correctness or security finding was identified. Hosted qualification remains incomplete; the 6ae run was not green and no hosted rerun at this SHA is recorded.
+At this exact revision, the workflow-policy coverage self-test passed with 526 controls, the production check passed with 540 controls across six groups, and both focused workflow-policy CTests passed (2/2). The owner-approved D-163 amendment assigns exactly two CTest slots to each of the 200 docs controls, while all other reserved registrations remain at `PROCESSORS 4`. Metadata confirms docs controls retain their `v02` label and 90-second timeout. The checker rejects the former four-slot value and a wrong label for every docs control. The approved Windows path normalization and its slash/case positive and wrong-path negative remain covered. SEC-23-17 remains fixed; SEC-23-09 is the only open finding, a low-severity Git-output resource-bound concern. No new correctness or security finding was identified.
 
 ## Input, path and source boundaries
 
@@ -45,6 +45,8 @@ The rescope records that exact-head run `42504839710` reached 1,843/1,853 saniti
 The final ledger row keeps run `40163270595`, its SHA and p50 of 21.55 minutes, changes only the sanitizer job cap to 55 minutes, and discloses the observed incomplete run and changed job body. The timeout-ledger self-test passed at this SHA with 20 negative and one positive control, covering stale values, ratio, whole-run p50, schema and changed-body disclosure. The workflow changes do not touch sanitizer acceptance, fuzz jobs, branch filters, CTest parallelism or per-test ceilings.
 
 The CTest registration keeps `v02_support_ledger_controls` at a 120-second native timeout, with sanitizer scaling to 360 seconds, and requires its build-directory environment and `planning;v02` labels plus `PROCESSORS 4`. The coverage checker requires the support control in the expected inventory and exactly one configured registration; it rejects unexpected properties, a changed working directory, timeout, environment, label set or processor count. It also requires `PROCESSORS 4` for each D-157 reservation and rejects an independent three-slot mutation for each. The exact-source self-test now passes with 128 controls, including reservation mutations for all reserved entries.
+
+The following D-159 through D-162 sections record the original scheduling decisions and evidence at their source revisions. Their docs-shard four-slot assignments were superseded by the owner-approved D-163 amendment below; the non-doc reservations remain unchanged.
 
 ## D-159 measured full-suite CTest reservations
 
@@ -88,13 +90,15 @@ The immutable-source coverage checker adds all twelve names to `PHASE23_RESERVED
 The prior Windows support-ledger path correction remains unchanged: Windows comparison normalizes separators and case with `ntpath`, accepts the slash/case positive, and rejects a wrong build path. The existing Git-output paths without pre-read output caps also remain unchanged, so SEC-23-09 is still applicable.
 
 
-## D-163 complete docs-shard scheduling and coverage
+## D-163 docs-shard two-slot scheduling amendment
 
-The rescope records that a 224-test focused four-worker selection timed out sixteen additional docs shards (03, 04, 17, 35, 46, 50, 97, 103, 110, 123, 135, 144, 156, 158, 189, and 190); all passed sequentially on the same build in 91.02 seconds total, with the other focused gates passing. The earlier D-162 timeout subset differed, consistent with contention moving across this large test inventory rather than assertion failures.
+The rescope records that a 224-test focused four-worker selection timed out sixteen docs shards (03, 04, 17, 35, 46, 50, 97, 103, 110, 123, 135, 144, 156, 158, 189, and 190); all passed sequentially on the same build in 91.02 seconds total, with the other focused gates passing. Earlier D-162 timeouts affected a different subset, consistent with contention moving across the inventory rather than assertion failures.
 
-D-163 replaces the subset slow-shard list with `PROCESSORS 4` on every generated shard from 01 through 199 and on `v02_adoption_docs_controls`, covering all 200 docs controls. The checker derives those same 200 names into `DOC_CONTROL_TESTS`, reserves them, requires one expected inventory row and one configured registration each, and requires `PROCESSORS 4` plus the exact `v02` label. Its per-test three-slot and wrong-label mutations cover every entry. Exact CTest metadata confirms all 200 controls retain `LABELS ["v02"]` and `TIMEOUT 90` while reserving four workers. The commands, assertions, fixture inputs, platform coverage, and CI budgets are unchanged; the change affects scheduling only.
+D-163 first reserved all 200 docs controls for four workers. The owner-approved amendment now reserves exactly two workers per docs control, including `v02_adoption_docs_controls` and shards 01–199, allowing at most two docs controls to run together under global `--parallel 4`. Exact configured metadata confirms all 200 retain their existing `v02` label and 90-second CTest timeout. Their commands, assertions, fixtures, platform registration, and CI job caps are unchanged. All other reserved registrations remain at `PROCESSORS 4`.
 
-The exact-source self-test passed with 526 controls, the production check passed with 540 controls across six groups, and the focused coverage CTest pair passed 2/2. The existing Windows path normalization and its positive slash/case and wrong-path negative remain in the self-test. The change introduces no new security or correctness concern. The unchanged Git-output paths still lack pre-read output caps, so SEC-23-09 remains open.
+The immutable-source checker derives all 200 docs names, requires each inventory row and one CTest registration, and requires `PROCESSORS 2` plus the exact `v02` label for each. It rejects the former four-slot value and a wrong label per docs control; non-doc processor checks and their three-slot negatives remain at four slots. At this SHA, the self-test passed with 526 controls, the production check passed with 540 controls across six groups, and the focused coverage CTest pair passed 2/2. The Windows support-ledger path normalization positive and wrong-path negative remain covered. The amendment changes CTest scheduling only and introduces no new security or correctness issue.
+
+The rescope cites hosted run `42654987218`: native Linux completed all 1,942 tests, while macOS, CMake-floor, sanitizer-inventory, and Windows reached their existing job caps. This is not a complete hosted qualification pass. No test timeout or CI job budget was raised.
 
 ## Findings
 
@@ -203,20 +207,20 @@ At the preceding source `fdccc15a`, the self-test appended synthetic reserved-te
 
 ## Verification and limits
 
-This review is bound to `61f08de30b4f74ae539f827c5b04e1188fc3ea79`. At this exact SHA, `python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev 61f08de30b4f74ae539f827c5b04e1188fc3ea79` passed with 526 controls; the production `--check` passed with 540 controls across six groups; and `workflow_policy_coverage` plus `workflow_policy_coverage_controls` passed 2/2. Configured CTest metadata confirms all 200 docs controls have `PROCESSORS 4`, `LABELS ["v02"]`, and `TIMEOUT 90`. The exact-source self-test continues to cover the Windows slash/case path positive and wrong-path negative for `GBB_TEST_BUILD_DIR`.
+This review is bound to `bc282cc229c887d7034e533175249861db846154`. At this exact SHA, `python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev bc282cc229c887d7034e533175249861db846154` passed with 526 controls; the production `--check` passed with 540 controls across six groups; and `workflow_policy_coverage` plus `workflow_policy_coverage_controls` passed 2/2. Configured CTest metadata confirms all 200 docs controls have `PROCESSORS 2`, `LABELS ["v02"]`, and `TIMEOUT 90`; all other reserved registrations retain `PROCESSORS 4`. The exact-source self-test rejects `PROCESSORS 4` and wrong labels for each docs control, and keeps the Windows support-ledger slash/case positive and wrong-path negative.
 
-Hosted run `6ae7a46777348d02bf4e20419df0bfc8a5929591` was not green: native Linux passed; Windows failed `workflow_policy_coverage` on the support-ledger environment path spelling; native macOS was canceled at its 40-minute cap after 1,927/1,942 tests; and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. No hosted rerun at this SHA is recorded. The prior full local CTest run passed 1,942/1,942 at `3c908d7f`; no full local CTest run at this SHA is included in this review.
+The D-163 rescope cites hosted run `42654987218`: native Linux completed 1,942/1,942; macOS, CMake-floor, sanitizer-inventory, and Windows reached their existing job caps while docs shards passed in sequence. This is not a complete hosted qualification pass. The earlier hosted run `6ae7a46777348d02bf4e20419df0bfc8a5929591` was also not green: Windows failed workflow-policy coverage on the support-ledger path spelling, native macOS was canceled at its 40-minute cap after 1,927/1,942 tests, and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. The current checker retains the approved Windows path comparison. No full local CTest run at this SHA is included in this review; the previous complete local run passed 1,942/1,942 at `3c908d7f`.
 
 SEC-23-09 remains the only open finding. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. I did not inspect live branch protection, exercise publication, or fetch/build/run/admit real fixtures.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-61f08de3-20261109-security-d155",
+  "report_id": "phase23-security-bc282cc2-20261109-security-d155",
   "role": "security",
   "reviewer_id": "security-d155",
   "independent": true,
-  "reviewed_sha": "61f08de30b4f74ae539f827c5b04e1188fc3ea79",
+  "reviewed_sha": "bc282cc229c887d7034e533175249861db846154",
   "findings": [
     {
       "id": "SEC-23-01",
