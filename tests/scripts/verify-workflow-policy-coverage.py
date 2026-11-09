@@ -7,6 +7,7 @@ import ast
 import copy
 import hashlib
 import json
+import ntpath
 import os
 import re
 import shutil
@@ -840,6 +841,13 @@ def _same_path(left: str | Path, right: str | Path) -> bool:
     return os.path.normcase(str(Path(left).resolve())) == os.path.normcase(str(Path(right).resolve()))
 
 
+def _same_environment_path(left: str, right: str | Path, platform: str) -> bool:
+    if platform == "windows":
+        return ntpath.normcase(ntpath.normpath(left.replace("/", "\\"))) == ntpath.normcase(
+            ntpath.normpath(str(right).replace("/", "\\")))
+    return _same_path(left, right)
+
+
 def _cmake_cache(build_dir: Path) -> dict[str, str]:
     cache_path = build_dir / "CMakeCache.txt"
     try:
@@ -947,6 +955,29 @@ def _expected_v02_environment(build_dir: Path, sanitizer_enabled: bool) -> list[
     if sanitizer_enabled:
         environment.append("GBB_SANITIZER_LINK_OPTIONS=-fsanitize=address,undefined")
     return environment
+
+
+def _same_environment(actual: object, expected: list[str], build_dir: Path, platform: str) -> bool:
+    if not isinstance(actual, list) or not all(isinstance(item, str) for item in actual):
+        return False
+
+    def entries(values: list[str]) -> dict[str, str] | None:
+        result: dict[str, str] = {}
+        for item in values:
+            name, separator, value = item.partition("=")
+            if not separator or name in result:
+                return None
+            result[name] = value
+        return result
+
+    actual_entries = entries(actual)
+    expected_entries = entries(expected)
+    if actual_entries is None or expected_entries is None or actual_entries.keys() != expected_entries.keys():
+        return False
+    if not _same_environment_path(actual_entries["GBB_TEST_BUILD_DIR"], build_dir, platform):
+        return False
+    return all(actual_entries[name] == value for name, value in expected_entries.items()
+               if name != "GBB_TEST_BUILD_DIR")
 
 
 def validate_cmake_registration(ci_lanes: str) -> None:
@@ -1100,7 +1131,8 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         reject("CTest v02_support_ledger_controls has an unexpected working directory")
     if support_properties.get("PROCESSORS") != 4:
         reject("CTest v02_support_ledger_controls must reserve all four native test slots")
-    if support_properties.get("ENVIRONMENT") != _expected_v02_environment(build_dir, sanitizer_enabled):
+    if not _same_environment(support_properties.get("ENVIRONMENT"),
+                             _expected_v02_environment(build_dir, sanitizer_enabled), build_dir, platform):
         reject("CTest v02_support_ledger_controls has an unexpected environment")
     if support_properties.get("LABELS") != ["planning", "v02"]:
         reject("CTest v02_support_ledger_controls must retain its planning and v02 labels")
@@ -1250,6 +1282,13 @@ def _self_test(root: Path, revision: str) -> int:
     validate()
     windows_tests = [test for test in tests if test["name"] not in POSIX_ONLY_RESERVED_TESTS]
     validate(windows_tests, platform="windows")
+    windows_path_variant = copy.deepcopy(windows_tests)
+    windows_environment = _test_properties(
+        next(test for test in windows_path_variant if test["name"] == "v02_support_ledger_controls"))
+    windows_environment["ENVIRONMENT"][0] = (
+        "GBB_TEST_BUILD_DIR=" + str(build_dir).replace("/", "\\").upper()
+    )
+    validate(windows_path_variant, platform="windows")
     windows_missing_reservation = [test for test in windows_tests
                                   if test["name"] != "phase23_docs_controls_shard_183"]
     rejected("missing Windows slot-reserved CTest registration",
@@ -1356,6 +1395,11 @@ def _self_test(root: Path, revision: str) -> int:
     set_test_property(mutant, "v02_support_ledger_controls", "ENVIRONMENT",
                       ["GBB_TEST_BUILD_DIR=" + str(build_dir), "GBB_UNEXPECTED=1"])
     rejected("unexpected support ledger environment", lambda: validate(mutant))
+    windows_wrong_path = copy.deepcopy(windows_tests)
+    set_test_property(windows_wrong_path, "v02_support_ledger_controls", "ENVIRONMENT",
+                      ["GBB_TEST_BUILD_DIR=" + str(build_dir) + "/wrong"])
+    rejected("wrong Windows support ledger build directory",
+             lambda: validate(windows_wrong_path, platform="windows"))
 
     def named_test(test_list: list[dict], name: str) -> dict:
         return next(test for test in test_list if test["name"] == name)
@@ -1617,7 +1661,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 135:
+    if controls != 136:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
