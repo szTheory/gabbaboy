@@ -1469,7 +1469,8 @@ gbb_add_v02_contract(v02_adoption_docs 60
 # multi-megabyte support ledger. Keep every case, but distribute calls deterministically so each CTest
 # stays within the existing per-test timeout budget. Hosted four-worker runs showed the 32-shard split
 # still reached the 90-second ceiling, so use 200 shards with separately balanced positive/negative calls.
-# The release-note controls run once in shard 0.
+# The release-note controls run once in shard 0; each shard reserves two of the four CTest slots so two
+# independent shards can progress at once without changing the per-test timeout.
 set(gbb_docs_control_shard_count 200)
 math(EXPR gbb_docs_control_shard_max "${gbb_docs_control_shard_count} - 1")
 gbb_add_v02_contract(v02_adoption_docs_controls 90
@@ -1486,12 +1487,12 @@ foreach(gbb_docs_control_shard RANGE 1 ${gbb_docs_control_shard_max})
   gbb_add_v02_contract(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} 90
     "${gbb_docs_control_shard_regex}"
     verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} ${gbb_docs_control_shard_count})
-  set_tests_properties(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} PROPERTIES PROCESSORS 4)
+  set_tests_properties(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} PROPERTIES PROCESSORS 2)
 endforeach()
-# Four-worker focused runs produced stalls in different docs shards each time, while every
-# affected shard passed in isolation. Reserve the full CTest worker group for each shard so the
-# complete docs-control inventory runs serially without changing any per-test timeout.
-set_tests_properties(v02_adoption_docs_controls PROPERTIES PROCESSORS 4)
+# Four-worker runs produced stalls in different docs shards when they competed without reservations,
+# while every affected shard passed in isolation. Each docs shard reserves two CTest slots, preserving
+# the global four-worker budget and allowing at most two docs shards to run together.
+set_tests_properties(v02_adoption_docs_controls PROPERTIES PROCESSORS 2)
 gbb_add_v02_contract(v02_support_ledger 60
   [=[support-ledger static pass version=0\.[0-9]+\.[0-9]+ cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)

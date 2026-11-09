@@ -85,3 +85,23 @@ The `7e0a252e` to `9f38c43e` change contains only the two allowlisted evidence d
 | Hosted qualification | Not run for this local candidate. PR #146 still points to `6ae7a46777348d02bf4e20419df0bfc8a5929591`, so no protected exact-head result covers the current local commits. |
 
 SEC-23-09 remains a low availability-hardening note about unbounded captured Git output; the accepted review gate does not classify it as a blocking correctness finding. CI budgets and per-test timeouts remain unchanged. REL-01 and publication remain Pending.
+
+
+## Exact-head hosted attempt at `343606f0` (2026-11-09)
+
+PR #146 remained at `343606f0cb105c837e928dc58d2ecea8b37e9670`. The exact-head attempt completed without merge eligibility.
+
+| Lane | Run / result |
+|---|---|
+| Native Linux | CI run `42654987218`: passed 1,942/1,942; job duration 47m56s. |
+| Native macOS arm64 | Cancelled at the existing 40-minute job cap after 1,895/1,942 tests. |
+| CMake 3.25.3 floor | Cancelled at the existing 50-minute job cap after 1,839/1,942 tests. |
+| ASan/UBSan test inventory | Cancelled at the existing 55-minute job cap after 1,785/1,853 tests; sanitizer build/fuzz and acceptance lanes passed. |
+| Native Windows x64 | Cancelled at the existing 60-minute job cap after 1,746/1,804 tests. |
+| Fixture reproduction | Run `42654987232`: passed. |
+| Preview package smoke | Run `42654987242`: failed because the matching required CI run did not succeed. |
+| Performance and macOS player package | CI run `42654987218`: passed. |
+
+The canceled CTest logs show docs shards passing in sequence until the workflow job ended; no assertion failure was reported in those lanes. Native Linux completed the same 200-shard suite under its existing 60-minute limit. The current four-slot reservation for every docs shard serializes the group on slower native/floor runners. Two independent docs shards passed concurrently on the local macOS host in 9.5 seconds total; this is a diagnostic probe, not full concurrency qualification.
+
+D-163 explicitly prohibits changing CI job budgets and per-test timeouts. No job cap, test timeout, source behavior, or test assertion was changed in response to this attempt. The PR remains open and unmerged. A new hosted qualification requires an owner-approved scheduling rescope, followed by updated source-bound review and local gates. REL-01 and publication remain Pending.

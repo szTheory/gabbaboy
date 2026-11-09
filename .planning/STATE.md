@@ -6,10 +6,10 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: "Plan 23-04 T2: Windows environment-path correction reviewed; awaiting owner decision on CI and security rescope."
-last_updated: "2026-11-09T06:45:18.000Z"
-last_activity: "2026-11-09: The Windows CTest environment-path checker fix is committed locally at b7d86939c25fca93dc928c494b9834513e5c1bc5 and reviewed at 4f5f498921d502502fe07fab5717447bf7112abb; the 136-control self-test and five focused CTests pass. Exact hosted run 6ae7a46777348d02bf4e20419df0bfc8a5929591 passed native Linux, failed the Windows workflow-policy coverage check on the path mismatch fixed in b7, and canceled native macOS and CMake-floor CTest at the existing 40- and 50-minute caps. No b7 hosted run has been started. SEC-23-09 remains open and D-102 requires a rescope for unresolved security findings. The owner also directed that CI budgets and per-test timeouts stay unchanged. Phase 23 remains incomplete; do not merge or advance. Await owner choice on an in-place scope correction that preserves these limits."
-state_head: 1a7558d9749538a894e23a9cf965210d57bb77dd
+stopped_at: "Plan 23-04 T3: exact-head qualification run 42654987218 hit existing job limits; owner scheduling-scope decision is needed."
+last_updated: "2026-11-09T17:30:40.000Z"
+last_activity: "2026-11-09: Implementation 61f08de3 remains bound to three independent reviews; the exact local suite passed 1,942/1,942 at 9f38c43e. PR #146 remains at 343606f0. Its fixture, performance, player-package, sanitizer-build/fuzz, and Linux full-suite lanes passed; the exact-head CI run was cancelled after macOS, CMake-floor, sanitizer-inventory, and Windows jobs reached the existing 40/50/55/60-minute caps. No CTest assertion failure appeared before cancellation; native Linux passed in 47m56s. Preview smoke failed because its required CI run did not pass. D-163 prohibits changing job budgets and per-test timeouts. The serial 200-shard reservation prevents several required lanes from finishing, so merge is held for an owner decision on a bounded scheduling rescope. SEC-23-09 remains a low Git-output resource-bound note accepted by the report gate; no source change was made for it."
+state_head: 343606f0cb105c837e928dc58d2ecea8b37e9670
 progress:
   total_phases: 4
   completed_phases: 3
@@ -25,7 +25,7 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Plan 23-04 T2: the Windows path correction and three exact-source reviews are complete locally. Hosted qualification remains red at the existing macOS/CMake-floor caps, and SEC-23-09 remains open. Await the owner's decision on an in-place rescope; keep budgets and per-test timeouts unchanged.
+**Current focus:** Plan 23-04 T3 is held on PR #146 at `343606f0cb105c837e928dc58d2ecea8b37e9670`. Local full CTest passed 1,942/1,942 at `9f38c43e`, and native Linux passed the hosted suite. macOS, CMake-floor, sanitizer-inventory, and Windows jobs hit their existing caps while running passing docs shards; preview smoke consequently failed. D-163 prohibits changing job budgets and per-test timeouts. Await the owner decision on a scheduling rescope before editing the PR branch or rerunning hosted qualification.
 
 ## Current Position
 
@@ -35,13 +35,19 @@ Phase: GB-23 (Qualified v0.4.0 Release) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
 Status: Executing Phase 23
-Last activity: 2026-11-09: At b7, the exact workflow-policy CTest pair, review-evidence pair, and fixture-admission qualification control passed 5/5 after a fresh configure and runner-qualification rebuild. A later full local CTest attempt stalled at 206/1,942 and was stopped after process inspection showed no active test children; it is incomplete evidence. The earlier 3c full local run passed 1,942/1,942. The latest hosted exact head was 6ae: native Linux passed, Windows exposed the path-normalization defect fixed locally at b7, and native macOS/CMake-floor hit their existing 40/50-minute caps. No further CI run was started because it would repeat known cap failures under the owner-directed unchanged budgets. SEC-23-09 remains open. Phase 23 is not complete.
+Last activity: 2026-11-09: The immutable report gate passed on `343606f0` with three reports and 68 findings. The exact local candidate `9f38c43e` passed configure/build and 1,942/1,942 CTests with no skips after the build was refreshed. PR #146 now points to `343606f0`; fixture reproduction, performance, and macOS player package passed. Required native and dependent hosted checks are still running. SEC-23-09 remains a low availability-hardening note; no release fixture was fetched/admitted and REL-01 remains pending. Phase 23 is not complete.
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
 ## Phase 23 Execution Handoff
 
-Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The D-144 through D-154 matcher corrections and 32 deterministic docs shards passed their source-bound checks. The first full suite exposed four planning/test-harness assumptions; direct controls now pass after narrow fixes, and the nine scheduled plans remain unchanged under a total cap of 10 that includes the required gap reserve. Reissue all three reports against the new exact implementation, pass the direct gate, reconfigure/build, rerun the focused controls and full suite, then proceed to T3. Keep REL-01 and all Pending evidence limits. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
+Phase 23 is incomplete at Plan 23-04 T3. The reviewed implementation is `61f08de30b4f74ae539f827c5b04e1188fc3ea79`; the local exact-candidate suite passed 1,942/1,942 at `9f38c43ecc312f7ef868e4f359a8d30eee21760e`. PR #146 remains open at `343606f0cb105c837e928dc58d2ecea8b37e9670`.
+
+Hosted run `42654987218` completed without qualification: native Linux passed 1,942/1,942 in 47m56s, while macOS stopped at 1,895/1,942 at 40 minutes, CMake 3.25.3 at 1,839/1,942 at 50 minutes, the sanitizer test shard at 1,785/1,853 at 55 minutes, and Windows at 1,746/1,804 at 60 minutes. The cancellation logs show passing docs shards and no assertion failures. Fixture reproduction run `42654987232` succeeded; preview run `42654987242` failed because its required CI run did not pass. D-163 explicitly forbids changing job budgets or per-test timeouts, and the four-slot reservation for all 200 docs shards makes the current native/floor jobs exceed those windows.
+
+The PR body now records those results. Merge is held. The recommended next step is an owner-approved scheduling rescope that runs two docs shards concurrently while preserving all 200 assertions, labels, 90-second per-test ceilings, four-worker global CTest limit, and current job caps. After that decision, update the rescope/checker controls, reissue all three exact-source reviews, rerun the focused and full local suites, then run one fresh exact-head hosted qualification. Do not merge or advance to Phase 24 until Phase 23 closes.
+
+Continue with `/gsd-execute-phase 23` after the owner decision. REL-01, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending where evidence is unestablished. No real game or diagnostic fixture is admitted, and no tag or publication is claimed.
 
 ## Performance Metrics
 
@@ -87,13 +93,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-05T01:46:15.000Z
-**Stopped at:** Plan 23-04 T2's 14-test planning-label audit and exact output-only exception pass direct checks. Commit the final harness changes, reissue all three exact-source reviews, then rerun focused/full qualification with escalated access.
+**Last session:** 2026-11-09T17:30:40.000Z
+**Stopped at:** Plan 23-04 T3 hosted qualification on PR #146 did not pass because four required jobs reached their existing time caps. Local full CTest and hosted Linux passed. All docs shards passed before cancellation; no assertion failure was observed. Await a decision on amending D-163's four-slot reservation.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Phase 23 — Qualified v0.4.0 Release — is in progress at Plan 23-04 T2. The full docs controls and direct planning/lifecycle checks pass; both planning-label CTests now pass with the exact output-only exception. The first full suite remains a failed run with four diagnosed planning/test-harness issues, and the initial default-sandbox focused attempt is incomplete due denied `/bin/ps` calls and two shard timeouts. Commit the final harness changes, reissue all three reports at the resulting exact implementation source, pass the direct report gate, then rerun configure/build, the focused selection, and the full suite under escalated access before T3. Phase 23 keeps nine scheduled plans under total cap 10, including the gap reserve; the four-phase cap sum remains 40. No v0.4.0 qualification or publication is claimed. Continue with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
+Phase 23 — Qualified v0.4.0 Release — is at Plan 23-04 T3, held on PR #146. Local exact-candidate CTest passed 1,942/1,942 at `9f38c43e`; hosted Linux passed 1,942/1,942. The latest exact-head hosted run did not qualify: macOS, CMake-floor, sanitizer-inventory, and Windows reached their existing job caps while executing passing docs shards; fixture reproduction passed and preview smoke failed because the required CI run did not pass. D-163 keeps the four-slot reservation for all 200 docs shards and prohibits changing job budgets or per-test timeouts. The supported correction is to amend only the shard reservation to two slots, preserving all 200 controls, assertions, labels, 90-second per-test ceilings, global CTest parallelism of four, and existing CI caps. No source or CI change is authorized until that scheduling decision is made. If approved, update the decision and controls, reissue the three exact-source reviews, run focused and full local qualification, then make one fresh exact-head hosted attempt. No merge, tag, publication, or Phase 24 work is eligible. Resume with `/gsd-execute-phase 23` and stop at the Phase 23 boundary.
 
 ## Decisions
 

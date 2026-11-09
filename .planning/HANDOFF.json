@@ -1,18 +1,33 @@
 {
   "version": "1.0",
-  "timestamp": "2026-11-09T06:45:18.000Z",
+  "timestamp": "2026-11-09T17:30:40.000Z",
   "phase": "23",
   "phase_name": "Qualified v0.4.0 Release",
   "phase_dir": ".planning/phases/GB-23-qualified-v0-4-0-release",
-  "status": "awaiting_owner_decision",
-  "completed_stage": "Phase 23 Plan 23-04 local Windows path correction, independent exact-source reviews, and focused gates; Phase 23 itself is incomplete",
+  "status": "executing",
+  "completed_stage": "Plan 23-04 T2 exact-source reviews and exact local qualification at 9f38c43e; T3 hosted qualification at PR #146 head 343606f0 did not pass the existing job windows",
   "blockers": [
-    "Exact hosted PR head 6ae7a46777348d02bf4e20419df0bfc8a5929591 passed native Linux but failed native Windows workflow_policy_coverage because the checker compared GBB_TEST_BUILD_DIR path spelling literally. Local correction b7d86939c25fca93dc928c494b9834513e5c1bc5 and review-evidence commit 4f5f498921d502502fe07fab5717447bf7112abb are not pushed.",
-    "The same exact hosted run canceled native macOS at its existing 40-minute cap after 1,927/1,942 tests and canceled CMake-floor at its existing 50-minute cap after about 1,920/1,942. No b7 hosted run was started.",
-    "SEC-23-09 remains the one open low Git-output resource-bound finding; D-102 requires a rescope for an unresolved security finding in new code.",
-    "Owner-directed constraint: leave CI budgets and per-test timeouts unchanged."
+    "PR #146 remains open at 343606f0cb105c837e928dc58d2ecea8b37e9670. Hosted CI run 42654987218 was cancelled at existing job caps: macOS 1,895/1,942 at 40m, CMake 1,839/1,942 at 50m, sanitizer inventory 1,785/1,853 at 55m, and Windows 1,746/1,804 at 60m. Native Linux passed 1,942/1,942 in 47m56s. The canceled logs show passing docs shards, with no assertion failure.",
+    "Fixture reproduction 42654987232 passed. Preview package smoke 42654987242 failed because the required matching CI run did not succeed. No protected merge is eligible.",
+    "D-163 explicitly prohibits changing CI job budgets and per-test timeouts. The current four-slot reservation for all 200 docs shards serializes them and makes required macOS, floor, sanitizer, and Windows jobs exceed their windows. An owner decision is needed before changing the approved scheduling policy."
   ],
-  "async_jobs": [],
-  "next_action": "Owner: decide whether to authorize an in-place Plan 23-04 rescope that closes SEC-23-09 and redesigns hosted test scheduling to fit the existing CI budgets and per-test timeouts while preserving required coverage. After the decision, resume with /gsd-execute-phase 23. No later phase has started.",
-  "context_notes": "The exact-source self-test passed 136 controls; focused workflow-policy, review-evidence, and fixture-admission CTests passed 5/5 after fresh configure and runner-qualification rebuild. Earlier full local CTest at 3c passed 1,942/1,942; the b7 full local attempt was stopped at 206/1,942 after 34 minutes and is incomplete evidence. No merge, release, auto-advance, or phase completion is authorized by this handoff."
+  "async_jobs": [
+    {
+      "workflow": "ci",
+      "run_id": 42654987218,
+      "status": "cancelled"
+    },
+    {
+      "workflow": "fixture-repro",
+      "run_id": 42654987232,
+      "status": "success"
+    },
+    {
+      "workflow": "preview-package-smoke",
+      "run_id": 42654987242,
+      "status": "failure"
+    }
+  ],
+  "next_action": "Await the owner decision on whether to amend D-163 to reserve two CTest slots per docs shard, preserving all 200 controls, 90-second per-test limits, the global four-worker CTest limit, and current CI job caps. If approved, update the rescope and controls, reissue all three exact-source reviews, rerun focused and full local qualification, then run one fresh exact-head protected qualification. Resume with /gsd-execute-phase 23; do not merge or start Phase 24 before Phase 23 closes.",
+  "context_notes": "Reviewed implementation 61f08de30b4f74ae539f827c5b04e1188fc3ea79 and allowlisted evidence-only PR head 343606f0. Local exact-candidate CTest passed 1,942/1,942 at 9f38c43e; hosted Linux full suite passed. The exact-head hosted run did not qualify because four job caps expired while serial docs shards continued passing. No merge, tag, publication, or real diagnostic fixture admission. SEC-23-09 remains a low resource-bound note accepted by the review gate."
 }

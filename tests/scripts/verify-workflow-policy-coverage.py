@@ -1016,8 +1016,9 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         if len(actual_by_name.get(name, [])) != 1:
             reject(f"CTest must register slot-reserved control {name} exactly once")
         properties = _test_properties(actual_by_name[name][0])
-        if properties.get("PROCESSORS") != 4:
-            reject(f"CTest {name} must reserve all four native test slots")
+        expected_processors = 2 if name in DOC_CONTROL_TESTS else 4
+        if properties.get("PROCESSORS") != expected_processors:
+            reject(f"CTest {name} must reserve exactly {expected_processors} native test slots")
         if name in EXPECTED_RESERVED_LABELS and properties.get("LABELS") != EXPECTED_RESERVED_LABELS[name]:
             reject(f"CTest {name} must retain its exact existing labels")
 
@@ -1211,7 +1212,7 @@ def _self_test(root: Path, revision: str) -> int:
             {"name": "WORKING_DIRECTORY", "value": str(build_dir / "tests")},
         ]
         if name in PROCESSOR_RESERVED_TESTS:
-            properties.append({"name": "PROCESSORS", "value": 4})
+            properties.append({"name": "PROCESSORS", "value": 2 if name in DOC_CONTROL_TESTS else 4})
         if name in EXPECTED_RESERVED_LABELS:
             properties.append({"name": "LABELS", "value": EXPECTED_RESERVED_LABELS[name]})
         if name == "v02_support_ledger_controls":
@@ -1369,8 +1370,9 @@ def _self_test(root: Path, revision: str) -> int:
     rejected("unreserved support ledger control processors", lambda: validate(mutant))
     for name in sorted(PHASE23_RESERVED_TESTS - {"v02_support_ledger_controls"}):
         mutant = copy.deepcopy(tests)
-        set_test_property(mutant, name, "PROCESSORS", 3)
-        rejected(f"unreserved {name} processors", lambda mutant=mutant: validate(mutant))
+        wrong_processors = 4 if name in DOC_CONTROL_TESTS else 3
+        set_test_property(mutant, name, "PROCESSORS", wrong_processors)
+        rejected(f"incorrect {name} processor reservation", lambda mutant=mutant: validate(mutant))
     for name in sorted(EXPECTED_RESERVED_LABELS):
         mutant = copy.deepcopy(tests)
         set_test_property(mutant, name, "LABELS", ["unexpected"])
