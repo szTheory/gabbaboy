@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 if not __debug__ or sys.flags.optimize:
@@ -1633,6 +1634,29 @@ def _self_test(root: Path, revision: str) -> int:
 
     candidate_namespace = {"__name__": "candidate_workflow_policy", "__file__": str(root / POLICY_PATH)}
     exec(compile(candidate_source, POLICY_PATH, "exec"), candidate_namespace)
+    macos_block = candidate_namespace["_workflow_job_block"](
+        (root / ".github/workflows/ci.yml").read_text(encoding="utf-8"), "native-macos")
+    if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 50\s*$", macos_block):
+        reject("native-macos timeout must be the owner-approved 50 minutes")
+    with tempfile.TemporaryDirectory(prefix="gbb-macos-timeout-ledger.") as directory:
+        timeout_fixture = Path(directory)
+        shutil.copytree(root / ".github/workflows", timeout_fixture / ".github/workflows")
+        shutil.copy2(root / ".github/ci-timeouts.json", timeout_fixture / ".github/ci-timeouts.json")
+        shutil.copy2(root / "CMakeLists.txt", timeout_fixture / "CMakeLists.txt")
+        candidate_namespace["check_timeout_ledger"](timeout_fixture, git_root=root)
+        controls += 1
+        ledger_path = timeout_fixture / ".github/ci-timeouts.json"
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        ledger["ci.yml:native-macos"]["timeout_minutes"] = 40
+        ledger_path.write_text(json.dumps(ledger, indent=1) + "\n", encoding="utf-8")
+        try:
+            candidate_namespace["check_timeout_ledger"](timeout_fixture, git_root=root)
+        except candidate_namespace["Reject"] as error:
+            if error.code != "timeout-ledger-stale":
+                reject(f"native-macos timeout mismatch refused for the wrong reason: {error}")
+            controls += 1
+        else:
+            reject("native-macos 40-minute ledger row was accepted against the 50-minute workflow")
     recorder = candidate_namespace.get("_record_policy_completion")
     if not callable(recorder):
         reject("candidate checker is missing its runtime completion-ID validator")
@@ -1657,7 +1681,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 526:
+    if controls != 528:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 

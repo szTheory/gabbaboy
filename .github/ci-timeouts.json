@@ -60,13 +60,13 @@
   "disclosure": "Phase 23 PR #146 reached the 31-minute cap with 1134/1942 tests complete; the job cap is raised to 60 minutes. Historical p50 citation is unchanged; changed this job's body after the cited run."
  },
  "ci.yml:native-macos": {
-  "timeout_minutes": 40,
+  "timeout_minutes": 50,
   "cited_run_id": 40156247875,
   "cited_sha": "711f4fd7e66a8ae67f2013edc39c98cfa21ea5fe",
   "p50_minutes": "17.80",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The qualification runner changed from macos-14 to macos-15; cited timing samples and timeout are unchanged. The runner migration changed this job's body after the cited run."
+  "disclosure": "The qualification runner moved from macos-14 to macos-15 after the cited sample. Phase 23 PR #146 run 42679813590 reached the 40-minute cap at 1928/1942 tests; owner-approved D-164 raises the cap to 50. Historical p50 citation is unchanged; the job body changed after the cited run."
  },
  "ci.yml:native-windows": {
   "timeout_minutes": 60,
