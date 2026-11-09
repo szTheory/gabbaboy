@@ -1634,15 +1634,31 @@ def _self_test(root: Path, revision: str) -> int:
 
     candidate_namespace = {"__name__": "candidate_workflow_policy", "__file__": str(root / POLICY_PATH)}
     exec(compile(candidate_source, POLICY_PATH, "exec"), candidate_namespace)
+    workflow_listing = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", candidate, "--", ".github/workflows"],
+        cwd=root, capture_output=True, text=True, check=False, timeout=15,
+    )
+    if workflow_listing.returncode != 0:
+        reject(f"candidate workflow inventory is unavailable: {workflow_listing.stderr.strip()}")
+    candidate_workflows = [path for path in workflow_listing.stdout.splitlines()
+                           if path.startswith(".github/workflows/") and path.endswith(".yml")]
+    if ".github/workflows/ci.yml" not in candidate_workflows:
+        reject("candidate workflow inventory is missing ci.yml")
+    candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
     macos_block = candidate_namespace["_workflow_job_block"](
-        (root / ".github/workflows/ci.yml").read_text(encoding="utf-8"), "native-macos")
+        candidate_ci, "native-macos")
     if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 50\s*$", macos_block):
         reject("native-macos timeout must be the owner-approved 50 minutes")
     with tempfile.TemporaryDirectory(prefix="gbb-macos-timeout-ledger.") as directory:
         timeout_fixture = Path(directory)
-        shutil.copytree(root / ".github/workflows", timeout_fixture / ".github/workflows")
-        shutil.copy2(root / ".github/ci-timeouts.json", timeout_fixture / ".github/ci-timeouts.json")
-        shutil.copy2(root / "CMakeLists.txt", timeout_fixture / "CMakeLists.txt")
+        for relative in candidate_workflows:
+            destination = timeout_fixture / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(git_text(root, candidate, relative))
+        (timeout_fixture / ".github/ci-timeouts.json").write_bytes(
+            git_text(root, candidate, ".github/ci-timeouts.json"))
+        (timeout_fixture / "CMakeLists.txt").write_bytes(
+            git_text(root, candidate, "CMakeLists.txt"))
         candidate_namespace["check_timeout_ledger"](timeout_fixture, git_root=root)
         controls += 1
         ledger_path = timeout_fixture / ".github/ci-timeouts.json"
