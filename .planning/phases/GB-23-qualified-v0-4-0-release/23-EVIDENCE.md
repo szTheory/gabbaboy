@@ -72,3 +72,16 @@ This later local run supersedes the earlier local-suite result for the current i
 | Hosted qualification | Not run for `7e0a252e`; this local candidate is not the recorded PR #146 head. Required exact-head hosted checks and protected merge therefore remain unproven. |
 
 No candidate game or diagnostic fixture was fetched, built, run or admitted. REL-01 and publication remain Pending.
+
+## Exact-candidate full local run at `9f38c43e` (2026-11-09)
+
+The `7e0a252e` to `9f38c43e` change contains only the two allowlisted evidence documents. The build was reconfigured at `9f38c43e`, rebuilt, and the full suite was run against that exact configured revision.
+
+| Check | Result |
+|---|---|
+| Immutable real-report gate | Passed at `9f38c43ecc312f7ef868e4f359a8d30eee21760e`: 3 independent reports, 68 findings, reviewed implementation `61f08de30b4f74ae539f827c5b04e1188fc3ea79`. |
+| Configure/build | `cmake -S . -B build` and `cmake --build build --parallel 4` passed; CMake captured `9f38c43e` as the immutable source revision. |
+| Full configured CTest | `ctest --test-dir build --output-on-failure -j4` passed 1,942/1,942 in 2,237.57 seconds. |
+| Hosted qualification | Not run for this local candidate. PR #146 still points to `6ae7a46777348d02bf4e20419df0bfc8a5929591`, so no protected exact-head result covers the current local commits. |
+
+SEC-23-09 remains a low availability-hardening note about unbounded captured Git output; the accepted review gate does not classify it as a blocking correctness finding. CI budgets and per-test timeouts remain unchanged. REL-01 and publication remain Pending.
