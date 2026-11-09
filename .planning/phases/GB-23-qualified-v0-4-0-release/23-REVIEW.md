@@ -1,13 +1,13 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** c09e06e91a47614d727b71e345423035cf0e068a
-**Review delta:** b7d86939c25fca93dc928c494b9834513e5c1bc5 through c09e06e91a47614d727b71e345423035cf0e068a, with earlier Phase 23 review findings retained
+**Reviewed implementation:** 61f08de30b4f74ae539f827c5b04e1188fc3ea79
+**Review delta:** c09e06e91a47614d727b71e345423035cf0e068a through 61f08de30b4f74ae539f827c5b04e1188fc3ea79, with earlier Phase 23 review findings retained
 **Role:** release-consumer
-**Reviewer:** release-consumer-c09e06e9
+**Reviewer:** release-consumer-61f08de3
 
 ## Scope and conclusion
 
-I revalidated the final implementation at `c09e06e91a47614d727b71e345423035cf0e068a` in `/private/tmp/gabbaboy-phase23.t6o3vA`. The amendment from b677 adds only `.planning/context/LESSONS.md`; source code and CMake are unchanged. The D-162 conclusion therefore remains the same: twelve already-registered docs shards have four-slot CTest reservations, while their commands, assertions, `v02` labels, and 90-second timeouts remain intact. The checker still requires each reservation and label and rejects a three-slot or wrong-label mutation for every shard. The approved Windows support-ledger environment-path correction remains intact. No release, consumer, package, notice, or version-window behavior changed. RC-01 through RC-22 retain their identities and fixed dispositions; no additional correctness or security finding remains open.
+I reviewed the exact implementation at `61f08de30b4f74ae539f827c5b04e1188fc3ea79` in `/private/tmp/gabbaboy-phase23.t6o3vA`. D-163 supersedes the earlier subset reservations by reserving all 200 docs controls: `v02_adoption_docs_controls` (shard 0) and shards 1–199 each receive `PROCESSORS=4`. The existing commands, assertions, `v02` labels, 90-second limits, and global four-worker CTest setting remain unchanged. The checker requires all 200 inventory entries, registrations, reservations, and labels, with one three-slot and one wrong-label negative per control. CI job caps are unchanged. The approved Windows support-ledger path correction remains intact. The source delta does not touch release, consumer, package, notice, or version-window implementation. RC-01 through RC-22 retain their identities and fixed dispositions; no additional correctness or security finding remains open.
 
 ## Reserved-label contract
 
@@ -23,30 +23,36 @@ The checker parses CTest's support-ledger `ENVIRONMENT` property into unique key
 
 The D-162 rescope records twelve docs shards that timed out without assertion output in the four-worker run and passed in isolated reruns. The implementation adds only `PROCESSORS 4` for those existing tests. Their CTest commands, positive/negative assertions, labels, and 90-second ceilings remain unchanged. The source-bound checker adds all twelve to both the reservation set and exact `v02` label map. Its existing generic reservation loop supplies one three-slot negative per shard, and the label loop supplies one wrong-label negative per shard. The Windows inventory continues to require these cross-platform docs shards; only the established POSIX-only tests are omitted.
 
+## D-163 all-shard scheduling and checker contract
+
+D-163 records that four-worker focused runs timed out different docs shards, while each affected shard passed in isolation. The CMake change sets `PROCESSORS 4` inside the registration loop for shards 1–199 and separately for shard 0; the former subset list is removed. It does not change the helper call, test command, assertion regex, label, timeout, or CTest parallelism. Since each test reserves all four workers, docs controls run one at a time under the existing four-worker suite. No `.github/workflows/ci.yml` change was made, so CI job caps remain unchanged.
+
+The workflow-policy checker generates the full 200-test docs set, adds it to the slot-reservation and exact-label maps, and exercises each member through the existing three-slot and wrong-label mutation loops. All docs shards remain in Windows inventory; only the pre-existing POSIX-only tests are excluded. The exact CTest inventory and the direct checker controls below confirm the all-shard contract.
+
 ## Verification
 
 At 3c908d7, after a fresh configure pinned to that commit, the workflow-policy production check passed 540 controls across six groups, its self-test passed 135 controls, the focused exact-source CTest gate passed 14/14, and full local CTest passed 1,942/1,942. At b7d86939c25fca93dc928c494b9834513e5c1bc5, the direct exact-source self-test passed 136 controls and the two configured coverage CTests passed 2/2.
 
-At b677a36e6523f65f838f2c53447b5a00394625d1, the direct production check passed 540 controls across six groups, the exact-source self-test passed 160 controls, and the two focused workflow-policy CTests passed 2/2. Their configured commands pinned `--rev` to b677. The configured inventory showed each of the twelve new reservations with `PROCESSORS=4`, `TIMEOUT=90`, and `LABELS=[v02]`.
+At b677a36e6523f65f838f2c53447b5a00394625d1, the direct production check passed 540 controls across six groups, the exact-source self-test passed 160 controls, and the two focused workflow-policy CTests passed 2/2. Their configured commands pinned `--rev` to b677. The configured inventory showed the twelve then-reserved shards with `PROCESSORS=4`, `TIMEOUT=90`, and `LABELS=[v02]`.
 
-At final source c09e06e91a47614d727b71e345423035cf0e068a, the direct exact-source self-test passed 160 controls and the production check passed 540 controls across six groups. The CTest inventory and source are unchanged from b677, so the focused 2/2 CTest result above covers the same implementation and registrations; this reissue does not represent it as a new c09-configured CTest run. The self-test exercises the retained Windows path normalization and its positive and wrong-directory cases.
+At exact source 61f08de30b4f74ae539f827c5b04e1188fc3ea79, the production check passed 540 controls across six groups and the self-test passed 526 controls. The focused workflow-policy CTest pair passed 2/2, and its configured commands pin `--rev` to 61f. The configured inventory contains each of the 200 docs controls exactly once with `PROCESSORS=4`, `TIMEOUT=90`, and `LABELS=[v02]`. The 526-control self-test exercises a three-slot and wrong-label negative per docs control, as well as the retained Windows path-normalization cases.
 
-The hosted run previously recorded at 6ae was not green: Linux native passed; Windows `workflow_policy_coverage` failed on the support-ledger environment-path comparison; native macOS was canceled at its 40-minute cap after 1,927/1,942 tests; and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. These results predate the b7 Windows correction and the b677 D-162 change. No hosted result for final source c09 was provided for this reissue.
+The hosted run previously recorded at 6ae was not green: Linux native passed; Windows `workflow_policy_coverage` failed on the support-ledger environment-path comparison; native macOS was canceled at its 40-minute cap after 1,927/1,942 tests; and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. These results predate the b7 Windows correction and D-163. No hosted result for 61f was available in this review.
 
 ## Prior release and consumer findings
 
 RC-01 through RC-21 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-22 is fixed at b7d86939c25fca93dc928c494b9834513e5c1bc5. All fixed SHAs resolve and are ancestors of this implementation.
 
-The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged. D-162 changes only CTest scheduling and the workflow-policy inventory/negative-control contract; the final c09 amendment adds only the durable lesson. Release, consumer, package, notice, and version-window boundaries remain intact.
+The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged. D-163 changes only CTest scheduling and workflow-policy coverage evidence; CI job caps and the release, consumer, package, notice, and version-window boundaries remain intact.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-c09e06e9-20261109-01",
+  "report_id": "gb-23-release-consumer-61f08de3-20261109-01",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-c09e06e9",
+  "reviewer_id": "release-consumer-61f08de3",
   "independent": true,
-  "reviewed_sha": "c09e06e91a47614d727b71e345423035cf0e068a",
+  "reviewed_sha": "61f08de30b4f74ae539f827c5b04e1188fc3ea79",
   "findings": [
     {
       "id": "RC-01",

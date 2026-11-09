@@ -1,13 +1,13 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** c09e06e91a47614d727b71e345423035cf0e068a
+**Reviewed implementation:** 61f08de30b4f74ae539f827c5b04e1188fc3ea79
 **Role:** adversarial
 **Reviewer:** adversarial-d155
-**Review posture:** I revalidated the exact immutable commit and its diff from b677a36e6523f65f838f2c53447b5a00394625d1, alongside the current Plan 23-04 and D-157–D-162 rescope. The only b677-to-c09 delta is `.planning/context/LESSONS.md`; implementation, CMake, checker, and test files are unchanged. Prior bounded exact-source evidence is therefore applicable; no tests were rerun at c09.
+**Review posture:** I inspected the exact D-163 source changes from c09e06e91a47614d727b71e345423035cf0e068a, current Plan 23-04, and the D-163 rescope, and rechecked prior findings against the final tree. The implementation delta changes CTest scheduling for the docs controls and expands the source-bound coverage checker; it does not change product behavior, CI budgets, test commands, assertions, labels, or per-test timeouts. I ran bounded exact-source checker and inventory controls at this SHA; the full local suite and hosted qualification were not rerun.
 
 ## Result
 
-ADV-01 through ADV-29 are fixed at or before this commit. The D-158 sanitizer cap and timeout-ledger row preserve their historical citation and disclose the observed incomplete run; an explicit comparison against b75 passes. At b677, the exact-source workflow-policy self-test passed 160 controls, the configured production check passed 540 controls across six groups, and the local exact coverage CTest pair passed 2/2. The 12 D-162 shard reservations retain their commands, 90-second timeouts, and `v02` labels; three-slot and wrong-label negatives pass. Windows environment path normalization and its slash/case positive and wrong-path negative still pass. Because c09 changes only the durable lesson, this implementation evidence remains applicable; it was not rerun at c09. D-162 adds no new finding. Hosted qualification at the preceding 6ae7a467 SHA was not green; its exact outcomes are recorded below and are not presented as passes for c09.
+ADV-01 through ADV-29 remain fixed at or before this commit. At exact source 61, the configured inventory contains all 200 docs controls once, each with `PROCESSORS=4`, `TIMEOUT=90`, `LABELS=["v02"]`, its build-directory environment, and the expected shard command. The coverage-checker self-test passes 526 controls, including one three-slot and one wrong-label negative for every docs control; the exact configured production check passes 540 controls across six groups, and the focused coverage CTest pair passes 2/2. The CMake diff changes only processor reservations and comments; the command, assertion, label, environment, and per-test timeout remain unchanged. Previously approved Windows path normalization still accepts the slash/case variant and rejects a wrong directory. D-163 adds no new finding. Hosted qualification at 6ae7a467 was not green; its outcomes remain historical and are not presented as passes for this source.
 
 ## D-155 path and selector attacks
 
@@ -33,7 +33,7 @@ The configured CTest inventory reports PROCESSORS=4 for phase21_fixture_admissio
 
 ## D-157 workflow-policy coverage snapshot
 
-At 01370352 the workflow-policy checker source had changed, but verify-workflow-policy-coverage.py still pinned the older checker blob. Its exact-source self-test rejected with “candidate workflow-policy source differs from the exact reviewed snapshot.” The reviewed follow-up pins the D-157 checker blob at 01370352, records only the functions changed by D-157 as historical AST exceptions, and continues comparing the rest against the immutable baseline. At b7d86939, the 136-control self-test passed, including all ten D-161 reservations and the seven wrong-label controls. At b677a36e, the 160-control self-test passes with the D-162 shard reservation and label negatives; the exact configured production check passes 540 controls across six groups and the local coverage CTest pair passes 2/2.
+At 01370352 the workflow-policy checker source had changed, but verify-workflow-policy-coverage.py still pinned the older checker blob. Its exact-source self-test rejected with “candidate workflow-policy source differs from the exact reviewed snapshot.” The reviewed follow-up pins the D-157 checker blob at 01370352, records only the functions changed by D-157 as historical AST exceptions, and continues comparing the rest against the immutable baseline. At b7d86939, the 136-control self-test passed, including all ten D-161 reservations and the seven wrong-label controls. At b677a36e, the 160-control self-test passed with the D-162 shard reservation and label negatives; the exact configured production check passed 540 controls across six groups and the local coverage CTest pair passed 2/2. At 61f08de3, the expanded self-test passes 526 controls, the production check passes 540/6, and the focused coverage CTest pair passes 2/2.
 
 ## D-157 Windows planning-label path comparison
 
@@ -61,18 +61,28 @@ The ten controls are `fixture_product_core_controls`, `fixture_product_player_co
 
 The D-161 CMake delta from 4343d95d was empty, so it changed no commands, expected output patterns, assertions, timeouts, labels, environments, or inventory entries. The new checker requires exact `LABELS=[\"v02\"]` for the seven reserved fixture, consumer, and docs controls; the two policy groups, acceptance dense-input test, and other reservations have no new label requirement. Its self-test creates each label fixture with `v02`, then applies one `LABELS=[\"unexpected\"]` negative per named test. At b7d86939 the self-test passed 136 controls, including all seven D-161 wrong-label negatives.
 
-At b7d86939 the self-test passed 136 controls, including Windows environment-path variants; its local workflow-policy coverage CTest pair passed 2/2 and production check passed 540 controls across six groups. At the reviewed b677a36e source, the self-test passes 160 controls and the local coverage CTest pair passes 2/2. The full 1,942-test local suite passed at preceding source 3c908d7f, but was not rerun for the checker/CMake scheduling delta.
+At b7d86939 the self-test passed 136 controls, including Windows environment-path variants; its local workflow-policy coverage CTest pair passed 2/2 and production check passed 540 controls across six groups. At b677a36e, the self-test passed 160 controls and the local coverage CTest pair passed 2/2. At 61f08de3, the self-test passes 526 controls and the local coverage CTest pair passes 2/2. The full 1,942-test local suite passed at preceding source 3c908d7f and was not rerun at either source.
+
 ## Windows support-ledger environment path comparison
 
-The checker now compares `GBB_TEST_BUILD_DIR` with Windows path normalization (`ntpath.normpath` and `normcase`) after slash conversion, while retaining exact checks for environment variable names and other values. Its simulated-Windows positive control accepts an uppercase path using backslashes; the paired wrong-directory negative rejects. At b7d86939 the exact self-test passed 136 controls and the local coverage CTest pair passed 2/2. The b7 checker delta changed no CMake registration, timeout, or CI budget; b677 adds only the D-162 shard scheduling list and checker controls. The current exact self-test passes 160 controls, and the local coverage CTest pair passes 2/2.
+The checker now compares `GBB_TEST_BUILD_DIR` with Windows path normalization (`ntpath.normpath` and `normcase`) after slash conversion, while retaining exact checks for environment variable names and other values. Its simulated-Windows positive control accepts an uppercase path using backslashes; the paired wrong-directory negative rejects. At b7d86939 the exact self-test passed 136 controls and the local coverage CTest pair passed 2/2. The b7 checker delta changed no CMake registration, timeout, or CI budget; b677 adds only the D-162 shard scheduling list and checker controls. At b677, the exact self-test passed 160 controls and the local coverage CTest pair passed 2/2. At 61f08de3, the 526-control self-test and focused coverage CTest pair pass; the Windows case/slash positive and wrong-directory negative remain included.
 
-The hosted run at 6ae7a467 was not green: Linux native passed; Windows failed `workflow_policy_coverage` on the support-ledger `ENVIRONMENT` path comparison; native macOS was canceled at the 40-minute cap after 1,927/1,942 tests; and CMake-floor was canceled at the 50-minute cap after about 1,920/1,942 tests. These outcomes are for 6ae7a467, not passing evidence for b7d86939, b677a36e, or c09e06e9; no exact c09 hosted success is established.
+The hosted run at 6ae7a467 was not green: Linux native passed; Windows failed `workflow_policy_coverage` on the support-ledger `ENVIRONMENT` path comparison; native macOS was canceled at the 40-minute cap after 1,927/1,942 tests; and CMake-floor was canceled at the 50-minute cap after about 1,920/1,942 tests. These outcomes are for 6ae7a467, not passing evidence for b7d86939, b677a36e, c09e06e9, or 61f08de3; no exact 61f08de3 hosted success is established.
 
 ## D-162 twelve docs-shard reservations
 
-The new reservations are shards 05, 07, 89, 154, 155, 160, 181, 182, 191, 192, 198, and 199. The exact configured CTest inventory reports each once with `PROCESSORS=4`, `TIMEOUT=90`, `LABELS=["v02"]`, and its existing build-directory environment. The CMake diff only appends these names to the existing four-slot slow-shard list; it changes no shard command, expected result pattern, assertion, timeout, label, or environment.
+At b677, D-162 added shards 05, 07, 89, 154, 155, 160, 181, 182, 191, 192, 198, and 199 to the four-slot set. Its exact configured CTest inventory reported each once with `PROCESSORS=4`, `TIMEOUT=90`, `LABELS=["v02"]`, and its existing build-directory environment. That CMake change appended those names to the measured slow-shard list without changing commands, assertions, timeout, label, or environment. D-163 supersedes that subset with all 200 docs controls.
 
-The checker adds all twelve names to both `PHASE23_RESERVED_TESTS` and `EXPECTED_RESERVED_LABELS`. Its existing per-reservation loop lowers each to three processors and rejects, and its per-label loop changes each label to `unexpected` and rejects. The exact-source self-test passes 160 controls (24 more than 136: twelve reservation negatives and twelve wrong-label negatives). The production check passes 540 controls across six groups, and the exact local coverage CTest pair passes 2/2. The previously approved Windows support-ledger path normalization, slash/case-variant positive, and wrong-path negative remain covered by the same self-test.
+The checker adds all twelve names to both `PHASE23_RESERVED_TESTS` and `EXPECTED_RESERVED_LABELS`. Its per-reservation loop lowers each to three processors and rejects, and its per-label loop changes each label to `unexpected` and rejects. At b677, the exact-source self-test passed 160 controls, including twelve reservation and twelve wrong-label negatives; the production check passed 540 controls across six groups and the local exact coverage CTest pair passed 2/2. These twelve checks remain included in the 526-control self-test at 61.
+
+## D-163 all 200 docs controls reserve four slots
+
+The exact configured CTest inventory contains the base docs control (`v02_adoption_docs_controls`, shard 0) and numbered shards 1–199 exactly once. Each has `TIMEOUT=90`, `PROCESSORS=4`, `LABELS=["v02"]`, the existing `GBB_TEST_BUILD_DIR` environment, and its matching `--self-test docs --shard N 200` command. `tests/expected-tests.txt` contains each of the 200 names exactly once. The CMake diff adds a four-slot reservation for every numbered shard and shard 0; it leaves the existing `gbb_add_v02_contract` invocations and their 90-second ceilings unchanged.
+
+The checker derives the same 200 names, adds them to `PHASE23_RESERVED_TESTS` and `EXPECTED_RESERVED_LABELS`, and requires each registration exactly once, four processors, and the exact `v02` label. The 526-control self-test passed, including one three-slot negative and one wrong-label negative per docs control. The exact configured check passed 540 controls across six groups; the focused coverage CTest pair passed 2/2. The self-test's simulated-Windows support-ledger path controls also accept the slash/case variant and reject a wrong directory. This rechecks the previously approved Windows path logic; it does not establish a hosted Windows run.
+
+D-163 replaces the changing slow-shard subset from D-159–D-162 with reservations for the complete docs-control set. The remaining non-docs reservations are retained. Every docs control now reserves all four workers, so the configured four-worker suite schedules these docs controls serially. This change does not raise a timeout or CI job budget; the full docs selection and complete local suite were not rerun in this review.
+
 
 ## Required adversarial checklist
 
@@ -89,19 +99,22 @@ The checker adds all twelve names to both `PHASE23_RESERVED_TESTS` and `EXPECTED
 | Escape notice input or self-test copy roots; omit higher-numbered focused shards | Current traversal/symlink controls reject the path escapes; the corrected CTest selector and inventory include every numbered shard through 199. |
 | D-157 CI trigger, timeout ledger, four-slot scheduling, Windows path, and coverage snapshot | CI and ledger controls pass their paired mutation sets; CTest assigns all four measured controls four slots without changing their timeouts; the coverage snapshot correction passes. The 33-control planning-label self-test accepts normalized case variants and rejects wrong repository paths. |
 | D-158 sanitizer cap/disclosure and support-ledger CTest reservation | The 55-minute cap and disclosure pass the explicit b75 comparison. The support-ledger test passes at 120 seconds with four slots, and its environment/labels match the contract. The coverage self-test rejects native/scaled timeout and slot mutations; the configured-inventory CTest passes. |
-| D-159 docs-shard and preview-package slot reservations | The exact inventory reports `phase23_docs_controls_shard_183` at 90 seconds and `preview_package_smoke` at 180 seconds, each with four processors. Both reservation mutations reject in the current 135-control self-test; both tests passed in their exact-source focused CTest run. |
-| D-160 nine CTest reservations | Exact configured metadata confirms all five new docs shards (90 seconds), v0.2 fuzz (180), v0.3 dispositions (60), save-format (60), and host crash-storm (60) use four processors. The current 135-control self-test rejects a three-slot mutation for each. The three sibling host signal tests remain at two slots. Windows positive/negative inventory controls accept omission of both POSIX-only tests and reject a missing cross-platform reservation or unexpected POSIX-only registration. |
-| D-161 ten reservations and exact labels | The exact configured inventory confirms all ten four-slot reservations and the expected `v02` labels. The current 160-control self-test rejects one wrong-label mutant per designated control and exercises the Windows support-ledger path positive/negative pair; the local exact coverage CTest pair passes 2/2. |
-
-| D-162 twelve docs shards | All twelve shards have exact `v02` labels, 90-second timeouts, and four-slot reservations. The 160-control self-test rejects one three-slot and one wrong-label mutant per shard; exact production check and coverage CTest pair pass. |
+| D-159 docs-shard and preview-package slot reservations | The exact inventory reports `phase23_docs_controls_shard_183` at 90 seconds and `preview_package_smoke` at 180 seconds, each with four processors. Their three-slot negatives passed in the D-159 checker evidence; both tests passed in their exact-source focused CTest run. The later 526-control self-test retains all reservation checks. |
+| D-160 nine CTest reservations | Exact configured metadata confirms all five new docs shards (90 seconds), v0.2 fuzz (180), v0.3 dispositions (60), save-format (60), and host crash-storm (60) use four processors. D-160 three-slot negatives and the Windows POSIX-only inventory controls passed in the 118-control self-test; the 526-control self-test retains all non-doc reservations. The three sibling host signal tests remain at two slots. |
+| D-161 ten reservations and exact labels | The exact configured inventory confirms all ten four-slot reservations and the expected `v02` labels. The 136-control self-test at b7 passed one wrong-label mutant per designated control; later 160- and 526-control self-tests retain those negatives and the Windows support-ledger path pair. The exact configured coverage CTest pair passes at 61. |
+| D-162 twelve docs shards | At b677, all twelve shards had exact `v02` labels, 90-second timeouts, and four-slot reservations, with one three-slot and one wrong-label negative per shard. The 526-control self-test at 61 retains those checks while adding the remaining docs controls. |
+| D-163 all 200 docs controls | Exact configured inventory and `expected-tests.txt` contain all 200 entries exactly once; every entry is four-slot, 90-second, and `v02`. The 526-control self-test rejects one three-slot and one wrong-label mutation per entry; coverage check and CTest pair pass. |
 
 For each direct release-note mutation, the test helper first accepts the valid renderer-built baseline, then requires the mutant to fail for its expected reason. The immutable profile, version-window, disclosure, and review-evidence suites also pair accepted records with targeted rejected mutations. No real game or diagnostic fixture was fetched, built, run, or admitted; no release was signed, published, or promoted. REL-01 remains Pending.
 
 ## Verification evidence
 
-Evidence boundary: the 160-control self-test, 540-control production check, and focused coverage CTest outcomes in this section were recorded at b677, whose implementation, CMake, checker, and test files are identical to c09. No tests were rerun at c09.
+Evidence boundary: the historical 160-control D-162 checks below were recorded at b677. At exact source 61, I freshly configured CTest and ran the 526-control workflow-policy self-test, 540-control production inventory check, and focused coverage CTest pair. I did not run the full docs selection, complete local CTest suite, or hosted qualification.
 
-- At b677, the exact-source workflow-policy coverage self-test passed 160 controls, including one three-slot negative per reserved test, seven D-161 wrong-label negatives, twelve D-162 wrong-label negatives, and the Windows environment path controls.
+- At b677, the exact-source workflow-policy coverage self-test passed 160 controls, including one three-slot negative per prior reserved test, seven D-161 wrong-label negatives, twelve D-162 wrong-label negatives, and the Windows environment path controls.
+- At 61f08de30b4f74ae539f827c5b04e1188fc3ea79, the exact-source self-test passes 526 controls, including one three-slot and one wrong-label negative for each of the 200 docs controls and the Windows path variants.
+- The exact configured production check at 61 passes 540 controls across six groups; the focused workflow-policy coverage CTest pair passes 2/2.
+- Exact configured CTest JSON and `tests/expected-tests.txt` contain all 200 docs controls exactly once; every entry retains its expected command, `TIMEOUT=90`, `PROCESSORS=4`, `LABELS=["v02"]`, and build-directory environment.
 - Exact-source workflow-policy production check passes 540 controls across six groups; the local exact coverage CTest pair passes 2/2.
 - Exact-source workflow-policy CI group: 112 negative controls and 1 positive pass, including the unfiltered-push mutation.
 - Exact-source timeout-ledger group: 20 negative controls and 1 positive pass, including stale timeout, p50-ratio, and whole-run ceiling controls.
@@ -109,10 +122,10 @@ Evidence boundary: the 160-control self-test, 540-control production check, and 
 - Exact-source CI comment says the CMake floor suite's 20–40 minute observed duration is measured against its 50-minute cap. Review of the full D-157 diff confirms only the three measured CI job caps and three exact-head waiters were extended, all four slow controls reserve four slots, and per-test timeouts remain 60/60/90/60 seconds.
 - Exact configured CTest metadata: all four D-157 controls reserve four slots; their existing TIMEOUT values remain 60/60/90/60 seconds.
 - Exact-source ledger group passes 20 negative controls and 1 positive; helper group passes 66 negative and 19 positive controls, including changed-body disclosure refused/accepted cases. The D-158 disclosure comparison against b75 passes.
-- The local exact workflow-policy coverage CTest pair passes 2/2. The full local CTest suite passed 1,942/1,942 at preceding source 3c908d7f and was not rerun at b677a36e or c09e06e9. The D-158 support-ledger test passed in a preceding exact-source selection.
+- The local exact workflow-policy coverage CTest pair passes 2/2. The full local CTest suite passed 1,942/1,942 at preceding source 3c908d7f and was not rerun at b677a36e, c09e06e9, or 61f08de3. The D-158 support-ledger test passed in a preceding exact-source selection.
 - Exact-source D-159 focused CTest selection at c08d18ef passes `phase23_docs_controls_shard_183` and `preview_package_smoke` (2/2, 87.57 seconds total); configured metadata shows unchanged 90/180-second limits and four processors for both.
 - Exact-source D-160 metadata confirms the nine new tests reserve four processors with unchanged timeouts: docs shards 112/115/118/119/122 at 90 seconds; `v02_fuzz_controls` at 180; `v03_dispositions_controls` and `save_format_controls` at 60; `host_exit_crash_storm` at 60. The three sibling signal tests remain at 60 seconds and two processors.
-- Exact-source CTest metadata confirms all D-157 through D-162 reserved controls keep their existing timeout values and four-slot reservations; `host_exit_crash_storm` is reserved separately while its three sibling signal tests remain at two processors.
+- Exact-source CTest metadata confirms all D-157 through D-163 reserved controls keep their existing timeout values and four-slot reservations; `host_exit_crash_storm` is reserved separately while its three sibling signal tests remain at two processors.
 - Earlier D-155 shard 0 and shard 199 runs, exact selector dry-run, D-156 recovery run, D-068 plan/PR base budget checks, and D-069 self-test remain applicable because their implementation/checker/allowlist inputs did not change from 7c6 to the reviewed SHA.
 - Earlier exact-source release/profile/version/disclosure/evidence controls remain applicable: the matcher, support-ledger, version-window, review-evidence, CTest registration, and inventory sources are unchanged from their cited reviewed revisions.
 
@@ -120,17 +133,17 @@ These checks establish local controls, test selection/scheduling metadata, path-
 
 ## Findings and dispositions
 
-ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was open at fdccc15a after the duplicate-fixture self-test failure and is fixed at 4343d95d. D-162 adds no correctness finding; its twelve scheduling and label controls pass in the exact-source evidence collected at b677. No correctness or security finding remains open.
+ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was open at fdccc15a after the duplicate-fixture self-test failure and is fixed at 4343d95d. D-163 adds no correctness finding: all 200 docs controls have the required reservations and labels, and every three-slot and wrong-label mutation rejects in the exact-source self-test. No correctness or security finding remains open.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-c09e06e91a47614d727b71e345423035cf0e068a-20261109-d162-final",
+  "report_id": "gbb-phase23-adversarial-61f08de30b4f74ae539f827c5b04e1188fc3ea79-20261109-d163",
   "role": "adversarial",
   "reviewer_id": "adversarial-d155",
   "independent": true,
-  "reviewed_sha": "c09e06e91a47614d727b71e345423035cf0e068a",
+  "reviewed_sha": "61f08de30b4f74ae539f827c5b04e1188fc3ea79",
   "findings": [
     {
       "id": "ADV-01",
@@ -140,7 +153,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The exact-source renderer-built release-note baseline passes. The current controls reject disclosures hidden in inline and block code, comments, and container code; removing a required visible clause fails with its specific diagnostic.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test-version-v04: positives=63 controls=66."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test-version-v04: positives=63 controls=66."
     },
     {
       "id": "ADV-02",
@@ -150,7 +163,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The exact-source release-note controls reject both a promoted Pending row and contradictory completion prose; the valid Pending baseline passes before each mutation.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-support-ledger.py --self-test-disclosure: positives=4 controls=20."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-support-ledger.py --self-test-disclosure: positives=4 controls=20."
     },
     {
       "id": "ADV-03",
@@ -160,7 +173,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The exact-source release-note controls reject the claim that all 513 named diagnostic microtests executed and passed, while accepting the metadata-only baseline with seven unresolved gates and zero real fixtures executed or admitted.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; the named metadata-as-diagnostic mutant checks its specific diagnostic."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; the named metadata-as-diagnostic mutant checks its specific diagnostic."
     },
     {
       "id": "ADV-04",
@@ -170,7 +183,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The exact-source notes controls reject an unsupported claim that both candidates' licenses prohibit repository and public-CI use; the source/rights-scope baseline remains accepted.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; rights-scope-presented-as-license-prohibition mutant."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; rights-scope-presented-as-license-prohibition mutant."
     },
     {
       "id": "ADV-05",
@@ -180,7 +193,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "Visible prose and a real ledger link pass. Code-only disclosure evidence, image-ledger destinations, and hidden titles/alt text fail the required visibility or ledger checks.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 pass their paired visibility controls."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 pass their paired visibility controls."
     },
     {
       "id": "ADV-06",
@@ -190,7 +203,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "Relative and canonical ledger links are accepted; external-query, title-only, image, and malformed destinations reject for ledger mismatch or malformed-link reasons.",
       "fix_sha": "9a193975fb32ae69bd09be2cf847e3271d078733",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
     },
     {
       "id": "ADV-07",
@@ -200,7 +213,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "Closed- and open-comment mutants cannot satisfy candidate or required-clause checks; a hidden changelog ledger link fails the version-output check. Visible counterparts pass.",
       "fix_sha": "9a193975fb32ae69bd09be2cf847e3271d078733",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test: positives=11 controls=64."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test: positives=11 controls=64."
     },
     {
       "id": "ADV-08",
@@ -210,7 +223,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The current controls cover same-line and nested list/blockquote fences plus indented code. Hidden disclosures and links reject; visible disclosures and genuine code masking remain accepted.",
       "fix_sha": "46f5ce4a515daa65bb9850a28a1ee4be9b9b8c5a",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
     },
     {
       "id": "ADV-09",
@@ -220,7 +233,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "Script, pre, style, doctype, and XML processing-instruction openers fail at the required paths while comments, code, and escaped examples remain valid when visible evidence is present. The legacy-matcher controls establish causality.",
       "fix_sha": "a63f1dc67654613e105ac1071b7445f21adea0bc",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-version-window.py --self-test-version-v04: positives=63 controls=66; verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-version-window.py --self-test-version-v04: positives=63 controls=66; verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72."
     },
     {
       "id": "ADV-10",
@@ -240,7 +253,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The claim-only matcher removes Cf characters, rejecting U+200B, U+2060, and U+200C claims while leaving unrelated disclosures and safe prose unchanged.",
       "fix_sha": "742bf1bb5dd3a6e71ab93dbdb420bca2ec94d16a",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source docs shards 0/200 and 199/200 pass; matcher unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source docs shards 0/200 and 199/200 pass; matcher unchanged by D-155."
     },
     {
       "id": "ADV-12",
@@ -250,7 +263,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The matcher includes the frozen Unicode 18.0 default-ignorable ranges; current paired controls cover U+034F and representative non-Cf ranges with safe-text counterparts.",
       "fix_sha": "a6bc0a824bce55de57422e2b6b73b94ed0f841d1",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; docs matcher is unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; docs matcher is unchanged by D-155."
     },
     {
       "id": "ADV-13",
@@ -260,7 +273,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "Hexadecimal, decimal, and named references to invisible/default-ignorable characters are decoded for the claim matcher; code spans remain masked and visible safe-reference prose remains accepted.",
       "fix_sha": "fc0ba4ff9626e06e04d8800800561b51414166bf",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; parser/matcher code unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; parser/matcher code unchanged by D-155."
     },
     {
       "id": "ADV-14",
@@ -270,7 +283,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The claim matcher decodes valid visible references to spaces and CGB letters as well as invisible separators. Safe visible references and masked code spans retain their intended behavior.",
       "fix_sha": "fc0ba4ff9626e06e04d8800800561b51414166bf",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source claim/profile controls pass 22 positives/21 controls."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source claim/profile controls pass 22 positives/21 controls."
     },
     {
       "id": "ADV-15",
@@ -280,7 +293,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "LF, CR, CRLF, encoded-space, soft-break, safe-prose, and code controls remain paired; the notices caller supplies uncollapsed visible prose to the shared matcher.",
       "fix_sha": "e26757fafc818a92ddf7ca45f1a409658a5a5bdd",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): release-note controls pass 2/72; docs shard 0/200 passes notice-path child controls; notice caller and matcher are unchanged except D-155 path checks."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; docs shard 0/200 passes notice-path child controls; notice caller and matcher are unchanged except D-155 path checks."
     },
     {
       "id": "ADV-16",
@@ -290,7 +303,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "Strong, intraword-star, underscore-emphasis, and inline-link-label claims are rejected. Intraword underscores, escaped punctuation, code, and destination/title-only claims remain accepted.",
       "fix_sha": "e017078b72e78b38fb596faced3af3e35c2ca0ce",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; matcher code unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; matcher code unchanged by D-155."
     },
     {
       "id": "ADV-17",
@@ -300,7 +313,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The matcher resolves each valid reference-label form and excludes its destination/title; unresolved and escaped labels, code, and destination-only claims remain accepted counterparts. Notice uses the same claim matcher.",
       "fix_sha": "b798781105b8f6f803e85aa2ad766d2b2fdbec22",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): release-note controls pass 2/72; docs shards 0/200 and 199/200 pass; parser/matcher diff is empty for D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; docs shards 0/200 and 199/200 pass; parser/matcher diff is empty for D-155."
     },
     {
       "id": "ADV-18",
@@ -310,7 +323,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The matcher uses fixed per-marker candidate buckets and exhausts candidates rather than scanning all prior delimiter runs; dense unmatched-marker controls assert claim detection without timing thresholds.",
       "fix_sha": "6876fab06bf746fdaab67beaa4d52a6b1c70ac06",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): release-note controls pass 2/72; source inspection confirms the candidate-stack implementation is unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; source inspection confirms the candidate-stack implementation is unchanged by D-155."
     },
     {
       "id": "ADV-19",
@@ -320,7 +333,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The exact-source matcher uses Unicode P/S categories. The paired Unicode-symbol claim and safe-prose controls are retained; current release-note controls pass.",
       "fix_sha": "4c9c54f8b5a33e758624c997f107d1ffdd7c94a0",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): release-note controls pass 2/72; historical exact-source D-153 probes rejected both claims on four production paths and accepted paired safe/code controls; matcher is unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; historical exact-source D-153 probes rejected both claims on four production paths and accepted paired safe/code controls; matcher is unchanged by D-155."
     },
     {
       "id": "ADV-20",
@@ -330,7 +343,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "A bracket stack and prefix count check nested/overlong spans before slicing or normalization; only valid labels at or below CommonMark's 999-character limit are normalized. Dense-bracket controls retain safe prose counterparts.",
       "fix_sha": "4c9c54f8b5a33e758624c997f107d1ffdd7c94a0",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): release-note controls pass 2/72; historical exact-source D-154 probes reject the 512-level attack on four production paths and accept safe counterparts; source is unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; historical exact-source D-154 probes reject the 512-level attack on four production paths and accept safe counterparts; source is unchanged by D-155."
     },
     {
       "id": "ADV-21",
@@ -340,7 +353,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The old inline notice path could read outside the checkout and be reused as a copy destination. The reviewed code rejects traversal components, resolves source symlinks and enforces repository containment, and re-resolves copy destinations after parent creation. Current minimal-tree probes accept baseline/in-root paths, reject traversal and external symlink inputs as notice-path-outside-root, and reject a target symlink as self-test-copy-path-outside-root with zero external writes. The exact-source docs shard runs its matching traversal, symlink, and copy controls.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): docs shard 0/200 passed; direct check_notices baseline=112 and safe in-root=113, traversal/symlink rejected; direct copy_inputs normal copy passed and destination symlink rejected with external_files=0."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): docs shard 0/200 passed; direct check_notices baseline=112 and safe in-root=113, traversal/symlink rejected; direct copy_inputs normal copy passed and destination symlink rejected with external_files=0."
     },
     {
       "id": "ADV-22",
@@ -350,7 +363,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The former two-digit selector omitted the high-numbered shards. The corrected `[0-9]+` selector matched all 199 numbered tests in an isolated CTest run, including 100 and 199; shard 199/200 itself passed. CMake registration, expected inventory, and timeout allowlist contain each numbered shard once.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): exact Plan regex through ctest -N -R selected 200 total entries; CMake range/inventory/budget inspection matched shards 1\u2013199 exactly; production docs shard 199/200 passed."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): exact Plan regex through ctest -N -R selected 200 total entries; CMake range/inventory/budget inspection matched shards 1\u2013199 exactly; production docs shard 199/200 passed."
     },
     {
       "id": "ADV-23",
@@ -370,7 +383,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The lifecycle checker pin now names 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c. The adoption checker at that pin and at the reviewed source has identical SHA-256 bytes, and the recovery self-test passed with both immutable checks retained.",
       "fix_sha": "bd5ab993a3f09307e6a5ef31185f554740a0787b",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 differs only in `.planning/context/LESSONS.md`): python3.14 -I tests/scripts/verify-release-lifecycle.py --rev 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc --self-test-post-tag-recovery (controls=99 positives=12); verify-v02-adoption.py blob SHA-256 at 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c and b677 both 4d0ac0c724e10c7cbca3f22d57c35dd90e98dddde396f47eda23f7289ab29e93."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): python3.14 -I tests/scripts/verify-release-lifecycle.py --rev 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc --self-test-post-tag-recovery (controls=99 positives=12); verify-v02-adoption.py blob SHA-256 at 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c and b677 both 4d0ac0c724e10c7cbca3f22d57c35dd90e98dddde396f47eda23f7289ab29e93."
     },
     {
       "id": "ADV-25",
@@ -380,7 +393,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "At 01370352 the D-157 policy source changed but the coverage checker still pinned the earlier snapshot, so its self-test rejected the candidate source. The follow-up commit pins the exact 01370352 policy blob and lists only the reviewed changed functions for the historical AST exception. The exact-source self-test and configured-inventory check now pass.",
       "fix_sha": "ecdde9d5f63500dd0ad32d9e101f47e29ded0eb2",
-      "verification_ref": "At b677 (the immediately preceding implementation; c09 changes only `.planning/context/LESSONS.md`): self-test passes 160 controls; configured-inventory --check passes 540 controls/6 groups; local workflow-policy coverage CTest pair passes 2/2. The D-162 three-slot and wrong-label negatives, and prior Windows environment-path controls, pass."
+      "verification_ref": "At exact source 61: workflow-policy coverage self-test passes 526 controls; configured --check passes 540 controls/6 groups; focused coverage CTest pair passes 2/2. All 200 docs reservation and label negatives are included."
     },
     {
       "id": "ADV-26",
@@ -400,7 +413,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The coverage checker now accepts and validates the exact support-ledger test properties, including LABELS=[planning,v02] and ENVIRONMENT=[GBB_TEST_BUILD_DIR=<configured build>], while retaining timeout=120 and PROCESSORS=4 checks. Exact configured-inventory validation passes at this source; the targeted CTest selection passes all three tests.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "Fixed at d0fb68361f3ffd82e1205e16609f644d4f733df2; at b677 (the immediately preceding implementation; c09 changes only `.planning/context/LESSONS.md`) the configured-inventory check passes 540 controls/6 groups and coverage CTest pair passes 2/2; Windows path controls remain covered in the 160-control self-test."
+      "verification_ref": "At exact source 61, the configured coverage check passes 540 controls/6 groups and the focused coverage CTest pair passes 2/2; the 526-control self-test retains the Windows environment-path positive and wrong-directory negative."
     },
     {
       "id": "ADV-28",
@@ -410,7 +423,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "The checker self-test now changes the support-ledger native timeout to 119 seconds and the sanitizer-scaled timeout to 120 instead of 360; both mutations are rejected. It also reduces PROCESSORS to 3 for each of the four D-157 controls and the D-158 support-ledger control, and those mutations reject. Accepted native/scaled fixtures retain the exact labels and environment.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "Fixed at d0fb68361f3ffd82e1205e16609f644d4f733df2; at b677 (the immediately preceding implementation; c09 changes only `.planning/context/LESSONS.md`), workflow-policy self-test passes 160 controls, including support-ledger timeout negatives, all reserved-slot negatives, twelve D-162 wrong-label negatives, and the Windows path pair."
+      "verification_ref": "At exact source 61, the 526-control self-test rejects the native/scaled support-ledger timeout mutants, all reserved-slot mutants, all 200 docs wrong-label mutants, and the Windows wrong-directory mutant; configured check and focused coverage CTest pair pass."
     },
     {
       "id": "ADV-29",
@@ -420,7 +433,7 @@ ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was ope
       "disposition": "fixed",
       "rationale": "At fdccc15a, adding workflow_policy_group_ci and workflow_policy_group_rehearsal to PHASE23_RESERVED_TESTS made _self_test append each twice: once from GROUPS and once from the generic reserved-test loop. The initial validation rejected before any reservation mutation and the coverage CTest pair failed 1/2. At 4343d95d, the fixture generator subtracts POLICY_TEST_NAMES from only the generic synthesis loop. Both policy tests remain in PHASE23_RESERVED_TESTS and in the per-reservation mutation loop, so all ten D-161 three-slot negatives still execute.",
       "fix_sha": "4343d95dde8597253994efff2e030ae25089d288",
-      "verification_ref": "Fixed at 4343d95dde8597253994efff2e030ae25089d288; at b677 (the immediately preceding implementation; c09 changes only `.planning/context/LESSONS.md`) the 160-control self-test, production check (540 controls/6 groups), and local coverage CTest pair (2/2) pass; D-162 adds twelve slot and twelve label mutants without reintroducing duplicate fixtures."
+      "verification_ref": "At exact source 61, the 526-control self-test and 2/2 coverage CTest pair pass. The expanded inventory includes 200 unique docs controls and executes every slot/label mutation without duplicate synthetic entries."
     }
   ]
 }
