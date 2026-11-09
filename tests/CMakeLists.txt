@@ -1450,6 +1450,7 @@ gbb_add_v02_contract(fixture_admission_repository 30
 gbb_add_v02_contract(fixture_product_core_controls 120
   [=[PASS: fixture admission product layout=core positive=1 negative_controls=[1-9][0-9]*]=]
   verify-fixture-admission.py --self-test-packages --layout core)
+set_tests_properties(fixture_product_core_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(fixture_product_player_controls 120
   [=[PASS: fixture admission product layout=player positive=1 negative_controls=[1-9][0-9]*]=]
   verify-fixture-admission.py --self-test-packages --layout player)
@@ -1499,8 +1500,10 @@ set(gbb_docs_control_slow_tests
   phase23_docs_controls_shard_92
   phase23_docs_controls_shard_93
   phase23_docs_controls_shard_94
+  phase23_docs_controls_shard_108
   phase23_docs_controls_shard_109
   phase23_docs_controls_shard_112
+  phase23_docs_controls_shard_114
   phase23_docs_controls_shard_115
   phase23_docs_controls_shard_118
   phase23_docs_controls_shard_119

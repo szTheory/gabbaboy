@@ -36,10 +36,15 @@ GROUPS = {
 }
 PHASE23_RESERVED_TESTS = {
     "host_exit_crash_storm",
+    "fixture_product_core_controls",
     "fixture_admission_controls",
     "v02_consumer_controls_c",
     "v02_consumer_controls_cpp",
     "acceptance_dense_input_controls",
+    "workflow_policy_group_ci",
+    "workflow_policy_group_rehearsal",
+    "phase23_docs_controls_shard_108",
+    "phase23_docs_controls_shard_114",
     "phase21_fixture_admission_controls",
     "fixture_product_player_controls",
     "phase23_docs_controls_shard_112",
@@ -1595,7 +1600,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 123:
+    if controls != 128:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 

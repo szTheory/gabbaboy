@@ -117,6 +117,7 @@ set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-pol
 gbb_add_ci_lane_test(workflow_policy_group_ci 0 "PASS: workflow policy group ci controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --group ci --root "${PROJECT_SOURCE_DIR}"
   --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-ci.json")
+set_tests_properties(workflow_policy_group_ci PROPERTIES PROCESSORS 4)
 set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-release-jobs.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
 gbb_add_ci_lane_test(workflow_policy_group_release_jobs 0 "PASS: workflow policy group release_jobs controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --group release_jobs --root "${PROJECT_SOURCE_DIR}" --build-dir "${PROJECT_BINARY_DIR}"
@@ -130,6 +131,7 @@ set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-pol
 gbb_add_ci_lane_test(workflow_policy_group_rehearsal 0 "PASS: workflow policy group rehearsal controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --group rehearsal --root "${PROJECT_SOURCE_DIR}"
   --completed-file "${PROJECT_BINARY_DIR}/workflow-policy-rehearsal.json")
+set_tests_properties(workflow_policy_group_rehearsal PROPERTIES PROCESSORS 4)
 set(GBB_CI_LANE_EXTRA_ARGS "-DGBB_EXPECT_FILE=${PROJECT_BINARY_DIR}/workflow-policy-ledger.json" -DGBB_EXPECT_FILE_FRESH=TRUE)
 gbb_add_ci_lane_test(workflow_policy_group_ledger 0 "PASS: workflow policy group ledger controls=[0-9]+ ids_sha256=[0-9a-f]+" 180 ""
   "${GBB_WORKFLOW_POLICY}" --self-test --group ledger --root "${PROJECT_SOURCE_DIR}"
