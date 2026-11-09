@@ -1154,3 +1154,12 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Verification:** The direct immutable report gate passed at the evidence commit; the failing CTest's exit code was zero and only the output matcher failed. The corrected registered contract and self-test will be re-run against the reissued exact-source reports.
 - **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-review-evidence.py`, and Phase 23 CTest evidence for the review-evidence gate.
 - **Status:** Fix implemented; exact-source CTest re-verification pending.
+
+### GB-CI-024 / 2026-11-08 / Deduplicate overlapping CTest policy fixtures
+
+- **Cause and evidence:** While adding exact PROCESSORS coverage for workflow-policy CI and rehearsal groups, both names entered `PHASE23_RESERVED_TESTS`, even though the synthetic self-test already creates them from `POLICY_TEST_NAMES`. The production inventory check passed, but the self-test rejected duplicate registrations and the `workflow_policy_coverage_controls` CTest failed.
+- **Remedy:** Keep overlapping names in the reservation set for property verification and negative mutations, but exclude existing policy test names from the generic reserved-test fixture loop.
+- **Applies when:** A CTest checker synthesizes policy-group entries and additional reservation entries from separate sets that may overlap.
+- **Verification:** The corrected self-test reports 128 controls, including one three-slot rejection per reservation; the exact configured inventory reports 540 controls across six groups, and both coverage CTests pass. Exact-source phase review is reissued after the checker fix commit.
+- **Source:** `tests/scripts/verify-workflow-policy-coverage.py`; Phase 23 T2 D-161.
+- **Status:** Corrected; exact-source review pending.

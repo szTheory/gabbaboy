@@ -1212,7 +1212,7 @@ def _self_test(root: Path, revision: str) -> int:
         tests.append(test_entry(name, command,
                                 marker, 180, completion))
     tests.append(test_entry("v02_support_ledger_controls", [], "", 120))
-    for name in sorted(PHASE23_RESERVED_TESTS - {"v02_support_ledger_controls"}):
+    for name in sorted(PHASE23_RESERVED_TESTS - POLICY_TEST_NAMES - {"v02_support_ledger_controls"}):
         tests.append(test_entry(name, [], "", 60))
     coverage_script = root / "tests/scripts/verify-workflow-policy-coverage.py"
     tests.extend((
