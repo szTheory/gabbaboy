@@ -1172,3 +1172,12 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Verification:** At `b677a36e`, the 160-control self-test, 540-control inventory check, 14 focused CTests, and all twelve affected-shard CTests passed. The full local suite must still be rerun after the reviewed source is final.
 - **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-workflow-policy-coverage.py`, and Phase 23 T2 D-162.
 - **Status:** Implemented and focused-gate verified; final full-suite result pending.
+
+### GB-CI-026 / 2026-11-09 / Reserve the full generated docs-shard inventory
+
+- **Cause and evidence:** After the twelve D-162 shards were reserved, a different set of sixteen docs shards timed out in the 224-test focused run under four-worker load. Every one passed sequentially on the same build; the prior timeout set did too. The affected shard set changes between parallel runs.
+- **Remedy:** Reserve four CTest slots for all 200 docs controls, including the unnumbered shard-0 registration. Keep the global four-worker limit and each shard's existing command, `v02` label, assertions, and 90-second timeout. Generate exact inventory, processor, and label checks plus one three-slot and one wrong-label negative per entry.
+- **Applies when:** A deterministic generated test inventory shows shifting, isolation-only timeouts across its members under bounded parallel execution.
+- **Verification:** The new checker self-test passes 526 controls. The sixteen newly affected shards passed 16/16 sequentially; the exact CMake registration, full focused selection, and full suite remain to be rerun on the final reviewed source.
+- **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-workflow-policy-coverage.py`, and Phase 23 T2 D-163.
+- **Status:** Implemented; exact-source configure, review, and suite gates pending.

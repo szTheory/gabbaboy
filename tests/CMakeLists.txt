@@ -1486,48 +1486,12 @@ foreach(gbb_docs_control_shard RANGE 1 ${gbb_docs_control_shard_max})
   gbb_add_v02_contract(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} 90
     "${gbb_docs_control_shard_regex}"
     verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} ${gbb_docs_control_shard_count})
+  set_tests_properties(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} PROPERTIES PROCESSORS 4)
 endforeach()
-# Measured four-worker runs identified these shards as near the timeout. Reserve all four CTest
-# slots for them; the rest of the docs controls remain parallel.
-set(gbb_docs_control_slow_tests
-  v02_adoption_docs_controls
-  phase23_docs_controls_shard_02
-  phase23_docs_controls_shard_16
-  phase23_docs_controls_shard_62
-  phase23_docs_controls_shard_65
-  phase23_docs_controls_shard_74
-  phase23_docs_controls_shard_75
-  phase23_docs_controls_shard_92
-  phase23_docs_controls_shard_93
-  phase23_docs_controls_shard_94
-  phase23_docs_controls_shard_108
-  phase23_docs_controls_shard_109
-  phase23_docs_controls_shard_112
-  phase23_docs_controls_shard_114
-  phase23_docs_controls_shard_115
-  phase23_docs_controls_shard_118
-  phase23_docs_controls_shard_119
-  phase23_docs_controls_shard_122
-  phase23_docs_controls_shard_127
-  phase23_docs_controls_shard_170
-  phase23_docs_controls_shard_171
-  phase23_docs_controls_shard_172
-  phase23_docs_controls_shard_174
-  phase23_docs_controls_shard_183
-  phase23_docs_controls_shard_05
-  phase23_docs_controls_shard_07
-  phase23_docs_controls_shard_89
-  phase23_docs_controls_shard_154
-  phase23_docs_controls_shard_155
-  phase23_docs_controls_shard_160
-  phase23_docs_controls_shard_181
-  phase23_docs_controls_shard_182
-  phase23_docs_controls_shard_191
-  phase23_docs_controls_shard_192
-  phase23_docs_controls_shard_198
-  phase23_docs_controls_shard_199
-)
-set_tests_properties(${gbb_docs_control_slow_tests} PROPERTIES PROCESSORS 4)
+# Four-worker focused runs produced stalls in different docs shards each time, while every
+# affected shard passed in isolation. Reserve the full CTest worker group for each shard so the
+# complete docs-control inventory runs serially without changing any per-test timeout.
+set_tests_properties(v02_adoption_docs_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_support_ledger 60
   [=[support-ledger static pass version=0\.[0-9]+\.[0-9]+ cases=[1-9][0-9]* source-inputs=[1-9][0-9]*]=]
   verify-support-ledger.py --check-ledger)

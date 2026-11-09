@@ -35,6 +35,8 @@ GROUPS = {
     "ledger": "workflow_policy_group_ledger",
     "helpers": "workflow_policy_group_helpers",
 }
+DOC_SHARD_TESTS = {f"phase23_docs_controls_shard_{shard:02d}" for shard in range(1, 200)}
+DOC_CONTROL_TESTS = {"v02_adoption_docs_controls", *DOC_SHARD_TESTS}
 PHASE23_RESERVED_TESTS = {
     "host_exit_crash_storm",
     "fixture_product_core_controls",
@@ -44,28 +46,8 @@ PHASE23_RESERVED_TESTS = {
     "acceptance_dense_input_controls",
     "workflow_policy_group_ci",
     "workflow_policy_group_rehearsal",
-    "phase23_docs_controls_shard_108",
-    "phase23_docs_controls_shard_114",
-    "phase23_docs_controls_shard_05",
-    "phase23_docs_controls_shard_07",
-    "phase23_docs_controls_shard_89",
-    "phase23_docs_controls_shard_154",
-    "phase23_docs_controls_shard_155",
-    "phase23_docs_controls_shard_160",
-    "phase23_docs_controls_shard_181",
-    "phase23_docs_controls_shard_182",
-    "phase23_docs_controls_shard_191",
-    "phase23_docs_controls_shard_192",
-    "phase23_docs_controls_shard_198",
-    "phase23_docs_controls_shard_199",
     "phase21_fixture_admission_controls",
     "fixture_product_player_controls",
-    "phase23_docs_controls_shard_112",
-    "phase23_docs_controls_shard_115",
-    "phase23_docs_controls_shard_118",
-    "phase23_docs_controls_shard_119",
-    "phase23_docs_controls_shard_122",
-    "phase23_docs_controls_shard_183",
     "preview_package_smoke",
     "release_disclosure_controls",
     "release_version_v04_controls",
@@ -75,6 +57,7 @@ PHASE23_RESERVED_TESTS = {
     "v02_support_ledger_controls",
     "v03_dispositions_controls",
 }
+PHASE23_RESERVED_TESTS.update(DOC_CONTROL_TESTS)
 PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], *PHASE23_RESERVED_TESTS}
 EXPECTED_RESERVED_LABELS = {
     "fixture_product_core_controls": ["v02"],
@@ -82,21 +65,8 @@ EXPECTED_RESERVED_LABELS = {
     "fixture_admission_controls": ["v02"],
     "v02_consumer_controls_c": ["v02"],
     "v02_consumer_controls_cpp": ["v02"],
-    "phase23_docs_controls_shard_108": ["v02"],
-    "phase23_docs_controls_shard_114": ["v02"],
-    "phase23_docs_controls_shard_05": ["v02"],
-    "phase23_docs_controls_shard_07": ["v02"],
-    "phase23_docs_controls_shard_89": ["v02"],
-    "phase23_docs_controls_shard_154": ["v02"],
-    "phase23_docs_controls_shard_155": ["v02"],
-    "phase23_docs_controls_shard_160": ["v02"],
-    "phase23_docs_controls_shard_181": ["v02"],
-    "phase23_docs_controls_shard_182": ["v02"],
-    "phase23_docs_controls_shard_191": ["v02"],
-    "phase23_docs_controls_shard_192": ["v02"],
-    "phase23_docs_controls_shard_198": ["v02"],
-    "phase23_docs_controls_shard_199": ["v02"],
 }
+EXPECTED_RESERVED_LABELS.update({name: ["v02"] for name in DOC_CONTROL_TESTS})
 POSIX_ONLY_RESERVED_TESTS = {"host_exit_crash_storm", "save_format_controls"}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
                           "rehearsal": "rehearsal", "ledger": "ledger", "helpers": "helpers"}
@@ -1685,7 +1655,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 160:
+    if controls != 526:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
