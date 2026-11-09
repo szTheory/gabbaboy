@@ -1,13 +1,13 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** 8f6f7cf3184828b1d0aa9d50528a8fa029b1ced6
+**Reviewed implementation:** 3c908d7f5a927953b84dd6123c497ec9907cac8b
 **Role:** adversarial
 **Reviewer:** adversarial-d155
-**Review posture:** I inspected the exact immutable commit, the complete source changes from b75ecb97 through af5b719 and all subsequent bounded corrections through this source, plus the current Plan 23-04 and D-157–D-160 rescope. I rechecked prior findings and ran the bounded exact-source controls; earlier evidence is identified where its source remains unchanged.
+**Review posture:** I inspected the exact immutable commit, the complete source changes from b75ecb97 through af5b719 and all subsequent bounded corrections through this source, plus the current Plan 23-04 and D-157–D-161 rescope. I rechecked prior findings and ran the bounded exact-source controls; earlier evidence is identified where its source remains unchanged.
 
 ## Result
 
-ADV-01 through ADV-28 are fixed at or before this commit. The D-158 sanitizer cap and timeout-ledger row preserve their historical citation and disclose the observed incomplete run; an explicit comparison against b75 passes. The exact configured-inventory CTest passes. The 118-control self-test causally rejects weakened timeout and reservation properties, including all nine D-160 reservations and Windows-specific inventory errors. The host crash-storm test alone receives four slots; its three sibling signal tests retain two. No correctness or security finding remains open.
+ADV-01 through ADV-29 are fixed at or before this commit. The D-158 sanitizer cap and timeout-ledger row preserve their historical citation and disclose the observed incomplete run; an explicit comparison against b75 passes. At the exact implementation SHA, the workflow-policy production check passes 540 controls across six groups, the self-test passes 135 controls including the seven wrong-label negatives, the focused CTest gate passes 14/14, and the full local CTest suite passes 1,942/1,942. The delta adds no new finding.
 
 ## D-155 path and selector attacks
 
@@ -33,7 +33,7 @@ The configured CTest inventory reports PROCESSORS=4 for phase21_fixture_admissio
 
 ## D-157 workflow-policy coverage snapshot
 
-At 01370352 the workflow-policy checker source had changed, but verify-workflow-policy-coverage.py still pinned the older checker blob. Its exact-source self-test rejected with “candidate workflow-policy source differs from the exact reviewed snapshot.” The reviewed follow-up pins the D-157 checker blob at 01370352, records only the functions changed by D-157 as historical AST exceptions, and continues comparing the rest against the immutable baseline. At this source the 118-control self-test and exact configured-inventory check both pass, including the D-158, D-159, and D-160 CTest registration properties.
+At 01370352 the workflow-policy checker source had changed, but verify-workflow-policy-coverage.py still pinned the older checker blob. Its exact-source self-test rejected with “candidate workflow-policy source differs from the exact reviewed snapshot.” The reviewed follow-up pins the D-157 checker blob at 01370352, records only the functions changed by D-157 as historical AST exceptions, and continues comparing the rest against the immutable baseline. At this source the 135-control self-test passes, including the D-158, D-159, D-160, all ten D-161 reservations, and the seven label checks. After fresh CMake configuration pinned to this exact source, the production check passes 540 controls across six groups; the focused CTest gate passes 14/14 and the full local suite passes 1,942/1,942.
 
 ## D-157 Windows planning-label path comparison
 
@@ -47,14 +47,21 @@ The `linux-sanitizers-tests` job cap changes from 45 to 55 minutes. Its ledger r
 
 The CMake registration preserves `v02_support_ledger_controls` at 120 seconds and adds `PROCESSORS 4`; it retains the `planning;v02` labels and build-directory environment, and remains in the expected inventory. The exact control passed locally in 27.52 seconds. The coverage checker now expects the exact labels and environment for native and sanitizer configurations. The exact configured inventory reports 120 seconds and four processors for this test, and 60/60/90/60 seconds and four processors for the four D-157 controls.
 
-The coverage self-test rejects a native support-ledger timeout of 119 seconds and a sanitizer-scaled timeout left at 120 rather than 360 seconds. It rejects reducing each registered D-157–D-160 reservation from four processors, paired with accepted configured fixtures and exact label/environment checks. The exact configured-inventory CTest passes.
+The 135-control self-test rejects a native support-ledger timeout of 119 seconds, the sanitizer-scaled timeout of 120 rather than 360 seconds, a three-slot reservation for each D-157–D-161 test, and a wrong-label mutation for each of the seven label-constrained reservations. The exact-source configured inventory passes 540 controls across six groups, and the focused CTest gate passes 14/14.
 
 ## D-160 additional CTest reservations
 
-The nine added reservations are docs shards 112, 115, 118, 119 and 122; `v02_fuzz_controls`; `v03_dispositions_controls`; `save_format_controls`; and `host_exit_crash_storm`. The CMake registrations change only `PROCESSORS` properties and comments; test commands, assertions, expected inventory entries, and TIMEOUT values remain unchanged. Exact configured metadata reports timeouts 90/180/60/60/60 seconds for these categories with four processors.
+The nine D-160 reservations are docs shards 112, 115, 118, 119 and 122; `v02_fuzz_controls`; `v03_dispositions_controls`; `save_format_controls`; and `host_exit_crash_storm`. The CMake registrations change only `PROCESSORS` properties and comments; test commands, assertions, expected inventory entries, and TIMEOUT values remain unchanged. Exact configured metadata reports timeouts 90/180/60/60/60 seconds for these categories with four processors.
 
-`host.cmake` leaves `host_signal_term`, `host_signal_int`, and `host_signal_inherited_ign` at two processors and adds a separate four-slot property only for `host_exit_crash_storm`. The coverage checker lists the nine tests, and the 118-control self-test applies an isolated PROCESSORS=3 mutation to each reservation. Its Windows path removes POSIX-only `host_exit_crash_storm` and `save_format_controls` from the accepted inventory; it rejects a missing cross-platform reservation and an unexpected POSIX-only registration. The exact POSIX configured inventory check reports 540 controls across six groups, and both coverage CTests pass. Windows behavior is exercised by the checker self-test, not by a hosted Windows run in this review.
+`host.cmake` leaves `host_signal_term`, `host_signal_int`, and `host_signal_inherited_ign` at two processors and adds a separate four-slot property only for `host_exit_crash_storm`. The coverage checker lists the nine tests, and the D-160 118-control self-test applies an isolated PROCESSORS=3 mutation to each reservation. Its Windows path removes POSIX-only `host_exit_crash_storm` and `save_format_controls` from the accepted inventory; it rejects a missing cross-platform reservation and an unexpected POSIX-only registration. The exact POSIX configured inventory check reports 540 controls across six groups, and both coverage CTests pass. Windows behavior is exercised by the checker self-test, not by a hosted Windows run in this review.
 
+## D-161 ten CTest reservations
+
+The ten controls are `fixture_product_core_controls`, `fixture_product_player_controls`, `fixture_admission_controls`, `v02_consumer_controls_c`, `v02_consumer_controls_cpp`, `acceptance_dense_input_controls`, `workflow_policy_group_ci`, `workflow_policy_group_rehearsal`, and docs shards 108 and 114. Exact configured CTest JSON after fresh configuration pinned to 3c908d7f reports four processors for every registration. The fixture controls retain 120/120/90-second timeouts; the two consumer controls and dense-input control retain 600-second timeouts (with existing `COST=600` on those three); policy groups retain 180 seconds; docs shards retain 90 seconds. Existing `v02` labels and `GBB_TEST_BUILD_DIR` environments remain on fixture, consumer, and docs controls. The dense-input working directory and lack of label/environment, and the policy groups' existing working directories and completion-file arguments, remain unchanged.
+
+The CMake delta from 4343d95d is empty, so it changes no commands, expected output patterns, assertions, timeouts, labels, environments, or inventory entries. The new checker requires exact `LABELS=[\"v02\"]` for the seven reserved fixture, consumer, and docs controls; the two policy groups, acceptance dense-input test, and other reservations have no new label requirement. Its self-test creates each label fixture with `v02`, then applies one `LABELS=[\"unexpected\"]` negative per named test. At exact source the self-test passes 135 controls, including all seven wrong-label negatives.
+
+At the exact reviewed SHA, the 135-control self-test passes, the configured production check passes 540 controls across six groups, the focused exact-source CTest gate passes 14/14, and the full local CTest suite passes 1,942/1,942. The ten reservation properties and seven required labels are present in the exact configured inventory.
 ## Required adversarial checklist
 
 | Attack | Exact-source result |
@@ -70,25 +77,26 @@ The nine added reservations are docs shards 112, 115, 118, 119 and 122; `v02_fuz
 | Escape notice input or self-test copy roots; omit higher-numbered focused shards | Current traversal/symlink controls reject the path escapes; the corrected CTest selector and inventory include every numbered shard through 199. |
 | D-157 CI trigger, timeout ledger, four-slot scheduling, Windows path, and coverage snapshot | CI and ledger controls pass their paired mutation sets; CTest assigns all four measured controls four slots without changing their timeouts; the coverage snapshot correction passes. The 33-control planning-label self-test accepts normalized case variants and rejects wrong repository paths. |
 | D-158 sanitizer cap/disclosure and support-ledger CTest reservation | The 55-minute cap and disclosure pass the explicit b75 comparison. The support-ledger test passes at 120 seconds with four slots, and its environment/labels match the contract. The coverage self-test rejects native/scaled timeout and slot mutations; the configured-inventory CTest passes. |
-| D-159 docs-shard and preview-package slot reservations | The exact inventory reports `phase23_docs_controls_shard_183` at 90 seconds and `preview_package_smoke` at 180 seconds, each with four processors. Both reservation mutations reject in the 118-control self-test, and both tests pass in the focused CTest run. |
-| D-160 nine CTest reservations | Exact configured metadata confirms all five new docs shards (90 seconds), v0.2 fuzz (180), v0.3 dispositions (60), save-format (60), and host crash-storm (60) use four processors. The 118-control self-test rejects a three-slot mutation for each. The three sibling host signal tests remain at two slots. Windows positive/negative inventory controls accept omission of both POSIX-only tests and reject a missing cross-platform reservation or unexpected POSIX-only registration. |
+| D-159 docs-shard and preview-package slot reservations | The exact inventory reports `phase23_docs_controls_shard_183` at 90 seconds and `preview_package_smoke` at 180 seconds, each with four processors. Both reservation mutations reject in the current 135-control self-test; both tests passed in their exact-source focused CTest run. |
+| D-160 nine CTest reservations | Exact configured metadata confirms all five new docs shards (90 seconds), v0.2 fuzz (180), v0.3 dispositions (60), save-format (60), and host crash-storm (60) use four processors. The current 135-control self-test rejects a three-slot mutation for each. The three sibling host signal tests remain at two slots. Windows positive/negative inventory controls accept omission of both POSIX-only tests and reject a missing cross-platform reservation or unexpected POSIX-only registration. |
+| D-161 ten reservations and exact labels | The exact configured inventory confirms all ten four-slot reservations and the expected `v02` labels. The 135-control self-test rejects one wrong-label mutant per designated control; the focused CTest gate passes 14/14 and the full local suite passes 1,942/1,942. No source finding is added. |
 
 For each direct release-note mutation, the test helper first accepts the valid renderer-built baseline, then requires the mutant to fail for its expected reason. The immutable profile, version-window, disclosure, and review-evidence suites also pair accepted records with targeted rejected mutations. No real game or diagnostic fixture was fetched, built, run, or admitted; no release was signed, published, or promoted. REL-01 remains Pending.
 
 ## Verification evidence
 
-- Exact-source workflow-policy coverage self-test at the reviewed SHA: 118 controls pass.
-- Exact-source workflow-policy coverage check against the configured CTest inventory: 540 controls across 6 groups pass.
+- Exact-source workflow-policy coverage self-test at the reviewed SHA: 135 controls pass, including one three-slot negative per D-161 reservation and one wrong-label negative for each of seven reserved controls.
+- Exact-source workflow-policy production check passes 540 controls across six groups after fresh CMake configuration pinned to the reviewed SHA.
 - Exact-source workflow-policy CI group: 112 negative controls and 1 positive pass, including the unfiltered-push mutation.
 - Exact-source timeout-ledger group: 20 negative controls and 1 positive pass, including stale timeout, p50-ratio, and whole-run ceiling controls.
 - Exact-source POSIX planning-label self-test: 33 controls pass, including simulated Windows case variants for renderer `--repo`, renderer `--output`, and review-evidence `--repo`; wrong-repository negative controls reject.
 - Exact-source CI comment says the CMake floor suite's 20–40 minute observed duration is measured against its 50-minute cap. Review of the full D-157 diff confirms only the three measured CI job caps and three exact-head waiters were extended, all four slow controls reserve four slots, and per-test timeouts remain 60/60/90/60 seconds.
 - Exact configured CTest metadata: all four D-157 controls reserve four slots; their existing TIMEOUT values remain 60/60/90/60 seconds.
 - Exact-source ledger group passes 20 negative controls and 1 positive; helper group passes 66 negative and 19 positive controls, including changed-body disclosure refused/accepted cases. The D-158 disclosure comparison against b75 passes.
-- Exact-source workflow-policy coverage CTest pair passes (2/2); the coverage check reports 540 controls across 6 groups. The D-158 support-ledger test passed in the preceding exact-source selection.
+- Focused exact-source CTest gate passes 14/14, including the workflow-policy coverage controls; the full local CTest suite passes 1,942/1,942. The D-158 support-ledger test passed in the preceding exact-source selection.
 - Exact-source D-159 focused CTest selection at c08d18ef passes `phase23_docs_controls_shard_183` and `preview_package_smoke` (2/2, 87.57 seconds total); configured metadata shows unchanged 90/180-second limits and four processors for both.
 - Exact-source D-160 metadata confirms the nine new tests reserve four processors with unchanged timeouts: docs shards 112/115/118/119/122 at 90 seconds; `v02_fuzz_controls` at 180; `v03_dispositions_controls` and `save_format_controls` at 60; `host_exit_crash_storm` at 60. The three sibling signal tests remain at 60 seconds and two processors.
-- Exact-source CTest metadata confirms all D-157 through D-160 reserved controls keep their existing timeout values and four-slot reservations; `host_exit_crash_storm` is reserved separately while its three sibling signal tests remain at two processors.
+- Exact-source CTest metadata confirms all D-157 through D-161 reserved controls keep their existing timeout values and four-slot reservations; `host_exit_crash_storm` is reserved separately while its three sibling signal tests remain at two processors.
 - Earlier D-155 shard 0 and shard 199 runs, exact selector dry-run, D-156 recovery run, D-068 plan/PR base budget checks, and D-069 self-test remain applicable because their implementation/checker/allowlist inputs did not change from 7c6 to the reviewed SHA.
 - Earlier exact-source release/profile/version/disclosure/evidence controls remain applicable: the matcher, support-ledger, version-window, review-evidence, CTest registration, and inventory sources are unchanged from their cited reviewed revisions.
 
@@ -96,17 +104,17 @@ These checks establish local controls, test selection/scheduling metadata, path-
 
 ## Findings and dispositions
 
-ADV-01 through ADV-28 are fixed at or before the reviewed commit. The checker causally rejects reservation changes for the D-157 through D-160 tests, and its Windows-aware validation distinguishes the two POSIX-only registrations. No correctness or security finding remains open.
+ADV-01 through ADV-29 are fixed at or before the reviewed commit. ADV-29 was open at fdccc15a after the duplicate-fixture self-test failure and is fixed here; the checker now creates each policy test once and retains all ten D-161 reservation mutations. No correctness or security finding remains open.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-8f6f7cf3184828b1d0aa9d50528a8fa029b1ced6-20261108-d160",
+  "report_id": "gbb-phase23-adversarial-3c908d7f5a927953b84dd6123c497ec9907cac8b-20261108-d161-labels",
   "role": "adversarial",
   "reviewer_id": "adversarial-d155",
   "independent": true,
-  "reviewed_sha": "8f6f7cf3184828b1d0aa9d50528a8fa029b1ced6",
+  "reviewed_sha": "3c908d7f5a927953b84dd6123c497ec9907cac8b",
   "findings": [
     {
       "id": "ADV-01",
@@ -322,11 +330,11 @@ ADV-01 through ADV-28 are fixed at or before the reviewed commit. The checker ca
       "id": "ADV-22",
       "category": "other",
       "severity": "medium",
-      "required_property": "The focused Plan 23-04 CTest selector must include every registered numbered docs shard, including 100–199.",
+      "required_property": "The focused Plan 23-04 CTest selector must include every registered numbered docs shard, including 100\u2013199.",
       "disposition": "fixed",
       "rationale": "The former two-digit selector omitted the high-numbered shards. The corrected `[0-9]+` selector matched all 199 numbered tests in an isolated CTest run, including 100 and 199; shard 199/200 itself passed. CMake registration, expected inventory, and timeout allowlist contain each numbered shard once.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "At reviewed SHA: exact Plan regex through ctest -N -R selected 200 total entries; CMake range/inventory/budget inspection matched shards 1–199 exactly; production docs shard 199/200 passed."
+      "verification_ref": "At reviewed SHA: exact Plan regex through ctest -N -R selected 200 total entries; CMake range/inventory/budget inspection matched shards 1\u2013199 exactly; production docs shard 199/200 passed."
     },
     {
       "id": "ADV-23",
@@ -356,7 +364,7 @@ ADV-01 through ADV-28 are fixed at or before the reviewed commit. The checker ca
       "disposition": "fixed",
       "rationale": "At 01370352 the D-157 policy source changed but the coverage checker still pinned the earlier snapshot, so its self-test rejected the candidate source. The follow-up commit pins the exact 01370352 policy blob and lists only the reviewed changed functions for the historical AST exception. The exact-source self-test and configured-inventory check now pass.",
       "fix_sha": "ecdde9d5f63500dd0ad32d9e101f47e29ded0eb2",
-      "verification_ref": "At reviewed SHA: verify-workflow-policy-coverage.py --self-test (118 controls pass); exact-source --check against configured CTest inventory (540 controls, 6 groups pass)."
+      "verification_ref": "At exact reviewed SHA after fresh CMake configuration: verify-workflow-policy-coverage.py --self-test passes 135 controls including seven wrong-label negatives; --check passes 540 controls across six groups; focused CTest gate passes 14/14 and full local CTest passes 1,942/1,942."
     },
     {
       "id": "ADV-26",
@@ -376,7 +384,7 @@ ADV-01 through ADV-28 are fixed at or before the reviewed commit. The checker ca
       "disposition": "fixed",
       "rationale": "The coverage checker now accepts and validates the exact support-ledger test properties, including LABELS=[planning,v02] and ENVIRONMENT=[GBB_TEST_BUILD_DIR=<configured build>], while retaining timeout=120 and PROCESSORS=4 checks. Exact configured-inventory validation passes at this source; the targeted CTest selection passes all three tests.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "Fixed at d0fb68361f3ffd82e1205e16609f644d4f733df2; at reviewed SHA, workflow_policy_coverage and workflow_policy_coverage_controls CTests pass (2/2), with configured coverage reporting 540 controls across 6 groups."
+      "verification_ref": "Fixed at d0fb68361f3ffd82e1205e16609f644d4f733df2; at exact reviewed SHA the configured-inventory check passes 540 controls across six groups and the focused CTest gate passes 14/14."
     },
     {
       "id": "ADV-28",
@@ -386,7 +394,17 @@ ADV-01 through ADV-28 are fixed at or before the reviewed commit. The checker ca
       "disposition": "fixed",
       "rationale": "The checker self-test now changes the support-ledger native timeout to 119 seconds and the sanitizer-scaled timeout to 120 instead of 360; both mutations are rejected. It also reduces PROCESSORS to 3 for each of the four D-157 controls and the D-158 support-ledger control, and those mutations reject. Accepted native/scaled fixtures retain the exact labels and environment.",
       "fix_sha": "d0fb68361f3ffd82e1205e16609f644d4f733df2",
-      "verification_ref": "Fixed at d0fb68361f3ffd82e1205e16609f644d4f733df2; at reviewed SHA, verify-workflow-policy-coverage.py --self-test --root . --rev 8f6f7cf3184828b1d0aa9d50528a8fa029b1ced6 passes 118 controls, including native/sanitizer timeout negatives, the D-160 three-slot mutations, and Windows inventory positives/negatives."
+      "verification_ref": "Fixed at d0fb68361f3ffd82e1205e16609f644d4f733df2; at exact reviewed SHA, verify-workflow-policy-coverage.py --self-test passes 135 controls, including timeout, reservation, and seven exact-label negatives; focused CTest gate passes 14/14."
+    },
+    {
+      "id": "ADV-29",
+      "category": "correctness",
+      "severity": "high",
+      "required_property": "The source-bound workflow-policy coverage self-test must create one synthetic CTest entry per policy or reserved test and execute a three-slot negative for every reserved control.",
+      "disposition": "fixed",
+      "rationale": "At fdccc15a, adding workflow_policy_group_ci and workflow_policy_group_rehearsal to PHASE23_RESERVED_TESTS made _self_test append each twice: once from GROUPS and once from the generic reserved-test loop. The initial validation rejected before any reservation mutation and the coverage CTest pair failed 1/2. At 4343d95d, the fixture generator subtracts POLICY_TEST_NAMES from only the generic synthesis loop. Both policy tests remain in PHASE23_RESERVED_TESTS and in the per-reservation mutation loop, so all ten D-161 three-slot negatives still execute.",
+      "fix_sha": "4343d95dde8597253994efff2e030ae25089d288",
+      "verification_ref": "Fixed at 4343d95dde8597253994efff2e030ae25089d288; at exact reviewed SHA, the 135-control self-test, configured production check (540 controls/6 groups), focused CTest gate (14/14), and full local CTest suite (1,942/1,942) pass."
     }
   ]
 }
