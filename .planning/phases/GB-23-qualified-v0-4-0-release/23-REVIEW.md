@@ -1,13 +1,13 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** b7d86939c25fca93dc928c494b9834513e5c1bc5
-**Review delta:** 6ae7a46777348d02bf4e20419df0bfc8a5929591 through b7d86939c25fca93dc928c494b9834513e5c1bc5, with earlier Phase 23 review findings retained
+**Reviewed implementation:** c09e06e91a47614d727b71e345423035cf0e068a
+**Review delta:** b7d86939c25fca93dc928c494b9834513e5c1bc5 through c09e06e91a47614d727b71e345423035cf0e068a, with earlier Phase 23 review findings retained
 **Role:** release-consumer
-**Reviewer:** release-consumer-b7d86939
+**Reviewer:** release-consumer-c09e06e9
 
 ## Scope and conclusion
 
-I re-reviewed the exact checker delta in `/private/tmp/gabbaboy-phase23.t6o3vA` at `b7d86939c25fca93dc928c494b9834513e5c1bc5`. It fixes the Windows support-ledger environment-path comparison failure observed at 6ae: the checker now accepts host-equivalent path separator and case spellings for `GBB_TEST_BUILD_DIR`, while retaining exact environment keys and values for all other entries. The self-test includes a Windows positive path variant and a wrong-directory negative. The delta changes only `tests/scripts/verify-workflow-policy-coverage.py`; CMake registrations, timeouts, budgets, labels, and assertions are unchanged. RC-01 through RC-21 retain their identities and fixed dispositions; RC-22 records this corrected Windows checker issue as fixed. The exact-source self-test passed 136 controls and the two focused coverage CTests passed 2/2. No correctness or security finding remains open. The hosted run at 6ae is not green evidence for b7; its failures and cancellations are recorded below.
+I revalidated the final implementation at `c09e06e91a47614d727b71e345423035cf0e068a` in `/private/tmp/gabbaboy-phase23.t6o3vA`. The amendment from b677 adds only `.planning/context/LESSONS.md`; source code and CMake are unchanged. The D-162 conclusion therefore remains the same: twelve already-registered docs shards have four-slot CTest reservations, while their commands, assertions, `v02` labels, and 90-second timeouts remain intact. The checker still requires each reservation and label and rejects a three-slot or wrong-label mutation for every shard. The approved Windows support-ledger environment-path correction remains intact. No release, consumer, package, notice, or version-window behavior changed. RC-01 through RC-22 retain their identities and fixed dispositions; no additional correctness or security finding remains open.
 
 ## Reserved-label contract
 
@@ -19,26 +19,34 @@ The self-test fixture assigns each of the seven tests its expected label, then m
 
 The checker parses CTest's support-ledger `ENVIRONMENT` property into unique key/value entries and requires the exact expected key set. It applies Windows path normalization only to `GBB_TEST_BUILD_DIR`; sanitizer options and all other environment values remain exact. The self-test retains the Windows inventory with POSIX-only registrations omitted, accepts an uppercase backslash spelling of the configured build path, and rejects a wrong Windows build directory. This exercises the Windows comparison on the local POSIX host through `ntpath`.
 
+## D-162 scheduling and checker contract
+
+The D-162 rescope records twelve docs shards that timed out without assertion output in the four-worker run and passed in isolated reruns. The implementation adds only `PROCESSORS 4` for those existing tests. Their CTest commands, positive/negative assertions, labels, and 90-second ceilings remain unchanged. The source-bound checker adds all twelve to both the reservation set and exact `v02` label map. Its existing generic reservation loop supplies one three-slot negative per shard, and the label loop supplies one wrong-label negative per shard. The Windows inventory continues to require these cross-platform docs shards; only the established POSIX-only tests are omitted.
+
 ## Verification
 
-At 3c908d7, after a fresh configure pinned to that commit, the workflow-policy production check passed 540 controls across six groups, its self-test passed 135 controls, the focused exact-source CTest gate passed 14/14, and full local CTest passed 1,942/1,942. At b7d86939c25fca93dc928c494b9834513e5c1bc5, the direct exact-source self-test passed 136 controls. The configured CTest command pins both coverage tests to b7; `ctest --test-dir build --output-on-failure -R '^workflow_policy_coverage(_controls)?$'` passed 2/2.
+At 3c908d7, after a fresh configure pinned to that commit, the workflow-policy production check passed 540 controls across six groups, its self-test passed 135 controls, the focused exact-source CTest gate passed 14/14, and full local CTest passed 1,942/1,942. At b7d86939c25fca93dc928c494b9834513e5c1bc5, the direct exact-source self-test passed 136 controls and the two configured coverage CTests passed 2/2.
 
-The hosted run at 6ae was not green: Linux native passed; Windows `workflow_policy_coverage` failed on the support-ledger environment-path comparison; native macOS was canceled at its 40-minute cap after 1,927/1,942 tests; and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. These results predate the b7 checker fix and do not establish hosted success for b7. No hosted b7 result was available in this review.
+At b677a36e6523f65f838f2c53447b5a00394625d1, the direct production check passed 540 controls across six groups, the exact-source self-test passed 160 controls, and the two focused workflow-policy CTests passed 2/2. Their configured commands pinned `--rev` to b677. The configured inventory showed each of the twelve new reservations with `PROCESSORS=4`, `TIMEOUT=90`, and `LABELS=[v02]`.
+
+At final source c09e06e91a47614d727b71e345423035cf0e068a, the direct exact-source self-test passed 160 controls and the production check passed 540 controls across six groups. The CTest inventory and source are unchanged from b677, so the focused 2/2 CTest result above covers the same implementation and registrations; this reissue does not represent it as a new c09-configured CTest run. The self-test exercises the retained Windows path normalization and its positive and wrong-directory cases.
+
+The hosted run previously recorded at 6ae was not green: Linux native passed; Windows `workflow_policy_coverage` failed on the support-ledger environment-path comparison; native macOS was canceled at its 40-minute cap after 1,927/1,942 tests; and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. These results predate the b7 Windows correction and the b677 D-162 change. No hosted result for final source c09 was provided for this reissue.
 
 ## Prior release and consumer findings
 
 RC-01 through RC-21 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-22 is fixed at b7d86939c25fca93dc928c494b9834513e5c1bc5. All fixed SHAs resolve and are ancestors of this implementation.
 
-The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged by the 6ae-to-b7 source delta. This delta only corrects Windows path equivalence in the workflow-policy checker.
+The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged. D-162 changes only CTest scheduling and the workflow-policy inventory/negative-control contract; the final c09 amendment adds only the durable lesson. Release, consumer, package, notice, and version-window boundaries remain intact.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-b7d86939-20261108-01",
+  "report_id": "gb-23-release-consumer-c09e06e9-20261109-01",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-b7d86939",
+  "reviewer_id": "release-consumer-c09e06e9",
   "independent": true,
-  "reviewed_sha": "b7d86939c25fca93dc928c494b9834513e5c1bc5",
+  "reviewed_sha": "c09e06e91a47614d727b71e345423035cf0e068a",
   "findings": [
     {
       "id": "RC-01",
