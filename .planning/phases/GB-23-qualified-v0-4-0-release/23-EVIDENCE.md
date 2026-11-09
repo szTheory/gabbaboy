@@ -123,3 +123,19 @@ The D-163 amendment changes only CTest processor reservations: all 200 generated
 | Hosted qualification | Pending: the prior PR head 343606f0 is not valid evidence for the two-slot schedule. The final two-slot branch candidate must pass a fresh exact-head required CI, fixture-reproduction and preview-package run. |
 
 The focused log is /private/tmp/gabbaboy-phase23-two-slot-focused.log; the full-suite log is /private/tmp/gabbaboy-phase23-two-slot-full.log. Neither is repository content. No game or diagnostic fixture was fetched, built, run or admitted. REL-01, DIAG-01, DIAG-02 and RIGHTS-01 remain Pending where their evidence gates are unresolved. No merge, tag or publication is claimed yet.
+
+## D-164 local requalification at `b8619f99` (2026-11-09)
+
+This candidate applies the owner-approved native-macOS CI cap change from 40 to 50 minutes. Only the native macOS job value changed; all other hosted job caps, per-test timeouts, CTest reservations, assertions, labels, and the preview wait policy remain unchanged. The existing timeout-budget citation values are preserved and the ledger discloses the changed workflow body. The PR remains open until one fresh exact-head hosted qualification completes.
+
+| Check | Result |
+|---|---|
+| Reviewed implementation | `48d8e501872b9a19138a4653830a40b983199adc`; three independent release-consumer, security, and adversarial reports bind this exact source. The corrected candidate-source binding was re-reviewed by all three roles. |
+| Review evidence / candidate | `b8619f99683bd07412286373823c989798eccfcb`. The immutable real-report gate passed with 3 reports and 71 findings; no blocking correctness/security finding is open. SEC-23-09 remains a low-severity resource-bound note. |
+| Configure and build | `cmake --preset phase1` and `cmake --build --preset phase1` passed at `b8619f99`. |
+| Workflow and timeout gates | Workflow-policy check passed. The source-bound workflow-policy self-test passed 528 controls, including the 50-minute positive and stale 40-minute negative. Test-budget validation passed for 1,942 tests and 288 allowlisted timeout rows. |
+| Focused Phase 23 selection | 223/224 passed in 1,313.09 seconds; `support_claims_v04_controls` reached its unchanged 60-second ceiling. That control passed alone immediately afterward in 35.14 seconds. Every selected test therefore has a passing result on this candidate; the timeout is retained here as load-sensitive evidence. |
+| Full configured CTest | 1,934/1,942 passed in 4,688.23 seconds. Eight controls timed out without assertion output: `perf_gate_receipt_controls`, `perf_repeat_controls`, `perf_advisory_pipeline`, `perf_advisory_controls`, `classify_changes_controls`, `workflow_policy_group_release_jobs`, `workflow_policy_group_rehearsal`, and `support_claims_v04_controls`. Each passed when rerun alone on the same build (the seven-test recovery group passed 7/7 in 161.29 seconds; the remaining control passed in 3.24 seconds). The final focused-selection recovery also passed `support_claims_v04_controls` in 35.14 seconds. The timeout handler emitted `/bin/ps: Operation not permitted`; no source, CTest timeout, or CI cap was changed. All 1,942 tests have a passing result across the full run and these bounded isolated recoveries. |
+| Hosted qualification | Pending one fresh exact-head run on the updated PR candidate. The prior hosted run at `c9a6320671b56d1092b2884aeac15d6a9320b60f` is not evidence for D-164. No merge, tag, or publication is claimed. |
+
+No candidate game or diagnostic fixture was fetched, built, run, or admitted. REL-01, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending where evidence gates are unresolved.
