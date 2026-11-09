@@ -56,3 +56,19 @@ The exact-head hosted checks for PR #146 are running on candidate `0996981cb1ced
 The required CI and preview jobs are still in progress, so no merge eligibility or hosted qualification is claimed. A local macOS run cannot establish Linux/Windows results, GitHub branch protection or exact-head workflow status. Record completed required job IDs, conclusions and measured queue/dependency waits after these runs finish.
 
 No candidate game or diagnostic fixture was fetched, admitted or run for Phase 23 qualification. REL-01, DIAG-01, DIAG-02 and RIGHTS-01 remain Pending where their evidence gates are unresolved. Local tests do not qualify or publish v0.4.0.
+
+## Local requalification at `7e0a252e` (2026-11-09)
+
+This later local run supersedes the earlier local-suite result for the current implementation. It does not update the old PR #146 hosted evidence above: the current local commits have not been pushed, and no hosted run has been started for them.
+
+| Check | Result |
+|---|---|
+| Reviewed implementation | `61f08de30b4f74ae539f827c5b04e1188fc3ea79`, independently reviewed in all three roles. |
+| Review evidence / local candidate | `7e0a252e710d76688a60dd3aeafb82fd945ab382`. The immutable real-report gate passed with 3 reports and 68 findings. |
+| Fresh configure and build | `cmake -S . -B build` and `cmake --build build --parallel 4` passed; configure recorded the exact `7e0a252e` source revision. |
+| Initial stale-build diagnostics | The first full run at this checkout had 1,940 passes and two source-stamp failures (`cgb_corpus_report_controls`, `state_purity`). Both reported generated artifacts from an older checkout, not assertion failures. After reconfigure/build, the two isolated controls passed 2/2. |
+| Final full configured CTest | `ctest --test-dir build --output-on-failure -j4` passed 1,942/1,942 with no failures in 2,360.76 seconds. |
+| Open finding | SEC-23-09 remains a low-severity Git-output resource-bound hardening note. The exact real-report gate accepts it; no source change was made for that separate finding. |
+| Hosted qualification | Not run for `7e0a252e`; this local candidate is not the recorded PR #146 head. Required exact-head hosted checks and protected merge therefore remain unproven. |
+
+No candidate game or diagnostic fixture was fetched, built, run or admitted. REL-01 and publication remain Pending.
