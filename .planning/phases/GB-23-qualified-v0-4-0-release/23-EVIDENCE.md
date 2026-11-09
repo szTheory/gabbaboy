@@ -4,14 +4,14 @@
 
 | Identity | Commit | Meaning |
 |---|---|---|
-| Reviewed implementation | `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` | Exact source independently reviewed by release-consumer, security and adversarial reviewers. |
-| Review reports / full local run source | `f595fb0572fe65e9b4df91069c97470af6b02a04` | Committed review reports and the configured source for the focused and full local runs. |
-| Current qualification candidate | `0996981cb1ced18665b45770bb0fe725a3d29867` | Exact PR #146 head; contains only the reviewed implementation and allowlisted evidence records. The direct real-report gate passes here. |
-| PR base | `f2b05c9fb3ba314cfe46959b64073ce9441724ca` | `main` base observed for PR #146 and used for local state-pin and timeout-budget checks. |
+| Reviewed implementation | bc282cc229c887d7034e533175249861db846154 | Exact two-slot scheduling and checker source reviewed independently by all three roles. |
+| Review reports and local gate source | dd5d29654fc5964f27dfdde0ea97f6973e1f1a13 | All three reports bind the implementation above; configure/build, focused and full local CTest were run at this source. |
+| Prior non-qualifying PR head | 343606f0cb105c837e928dc58d2ecea8b37e9670 | Historical four-slot hosted run; no longer the candidate schedule. |
+| PR base | f2b05c9fb3ba314cfe46959b64073ce9441724ca | main base observed for PR #146 and used by the local immutable state-pin and timeout-budget checks. |
 
-PR #146 is open at `https://github.com/szTheory/gabbaboy/pull/146`, based on `main` at `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, with exact head `0996981cb1ced18665b45770bb0fe725a3d29867`. The PR is not merged, and no v0.4.0 version PR, tag or publication is claimed.
+PR #146 is open at [the phase PR](https://github.com/szTheory/gabbaboy/pull/146), based on main at f2b05c9fb3ba314cfe46959b64073ce9441724ca. Its remote branch has not yet been advanced to the two-slot candidate. The next step is one fast-forward push, followed by fresh exact-head hosted qualification. The PR remains unmerged; no version PR, tag or publication is claimed.
 
-## Local verification
+## Earlier local verification at f595fb05 (historical)
 
 The final local build was configured at the review-evidence commit with the native-CI install prefix and immutable main-base state pin:
 
@@ -105,3 +105,21 @@ PR #146 remained at `343606f0cb105c837e928dc58d2ecea8b37e9670`. The exact-head a
 The canceled CTest logs show docs shards passing in sequence until the workflow job ended; no assertion failure was reported in those lanes. Native Linux completed the same 200-shard suite under its existing 60-minute limit. The current four-slot reservation for every docs shard serializes the group on slower native/floor runners. Two independent docs shards passed concurrently on the local macOS host in 9.5 seconds total; this is a diagnostic probe, not full concurrency qualification.
 
 D-163 explicitly prohibits changing CI job budgets and per-test timeouts. No job cap, test timeout, source behavior, or test assertion was changed in response to this attempt. The PR remains open and unmerged. A new hosted qualification requires an owner-approved scheduling rescope, followed by updated source-bound review and local gates. REL-01 and publication remain Pending.
+
+
+## Owner-approved two-slot local qualification (2026-11-09)
+
+The D-163 amendment changes only CTest processor reservations: all 200 generated docs controls now reserve two of four global slots. Their commands, assertions, v02 labels and 90-second timeouts remain unchanged; non-doc reservations remain at four, and hosted job caps are unchanged.
+
+| Check | Result |
+|---|---|
+| Exact-source report reissue | Three independent reports committed at dd5d29654fc5964f27dfdde0ea97f6973e1f1a13, each reviewing implementation bc282cc229c887d7034e533175249861db846154. No new correctness or security finding. |
+| Report gate | Passed: 3 reports and 68 findings; SEC-23-09 remains the accepted low resource-bound note. |
+| Workflow-policy coverage | Self-test passed 526 controls; configured inventory check passed 540 controls across six groups. Exact CTest metadata confirms 200 docs controls at PROCESSORS 2, LABELS [v02], TIMEOUT 90; all other reserved tests remain at four processors. |
+| Test budget and timeout ledger | Passed: 1,942 configured tests and 288 allowlisted timeout rows; no timeout or CI budget change. |
+| Focused Phase 23 T2 CTest selection | Passed 224/224 in 986.32 seconds with four global workers. All 200 docs controls ran; maximum docs-control duration was 18.01 seconds. |
+| Full configured CTest | Passed 1,942/1,942 in 1,679.55 seconds with four global workers and no skips. All 200 docs controls ran; maximum docs-control duration was 19.22 seconds. |
+| Workflow-policy CTest wrappers | Passed 3/3, including source-bound coverage and review-evidence controls. |
+| Hosted qualification | Pending: the prior PR head 343606f0 is not valid evidence for the two-slot schedule. The final two-slot branch candidate must pass a fresh exact-head required CI, fixture-reproduction and preview-package run. |
+
+The focused log is /private/tmp/gabbaboy-phase23-two-slot-focused.log; the full-suite log is /private/tmp/gabbaboy-phase23-two-slot-full.log. Neither is repository content. No game or diagnostic fixture was fetched, built, run or admitted. REL-01, DIAG-01, DIAG-02 and RIGHTS-01 remain Pending where their evidence gates are unresolved. No merge, tag or publication is claimed yet.
