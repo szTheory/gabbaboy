@@ -1163,3 +1163,12 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Verification:** The corrected self-test reports 128 controls, including one three-slot rejection per reservation; the exact configured inventory reports 540 controls across six groups, and both coverage CTests pass. Exact-source phase review is reissued after the checker fix commit.
 - **Source:** `tests/scripts/verify-workflow-policy-coverage.py`; Phase 23 T2 D-161.
 - **Status:** Corrected; exact-source review pending.
+
+### GB-CI-025 / 2026-11-09 / Reserve docs shards that stall only under suite load
+
+- **Cause and evidence:** The four-worker Phase 23 local suite timed out twelve docs shards without assertion output. All twelve passed sequentially on the same build, and shard 181 also passed directly. CTest cleanup printed `/bin/ps: Operation not permitted`; no test processes remained after the run was stopped.
+- **Remedy:** Reserve all four CTest slots for the twelve measured shards. Require exact inventory, `PROCESSORS 4`, and existing `v02` labels, with a three-slot negative and wrong-label negative for each. Preserve commands and all timeouts.
+- **Applies when:** Exact docs controls pass in isolation but hang during a four-worker suite without reporting a checker assertion failure.
+- **Verification:** At `b677a36e`, the 160-control self-test, 540-control inventory check, 14 focused CTests, and all twelve affected-shard CTests passed. The full local suite must still be rerun after the reviewed source is final.
+- **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-workflow-policy-coverage.py`, and Phase 23 T2 D-162.
+- **Status:** Implemented and focused-gate verified; final full-suite result pending.

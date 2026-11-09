@@ -46,6 +46,18 @@ PHASE23_RESERVED_TESTS = {
     "workflow_policy_group_rehearsal",
     "phase23_docs_controls_shard_108",
     "phase23_docs_controls_shard_114",
+    "phase23_docs_controls_shard_05",
+    "phase23_docs_controls_shard_07",
+    "phase23_docs_controls_shard_89",
+    "phase23_docs_controls_shard_154",
+    "phase23_docs_controls_shard_155",
+    "phase23_docs_controls_shard_160",
+    "phase23_docs_controls_shard_181",
+    "phase23_docs_controls_shard_182",
+    "phase23_docs_controls_shard_191",
+    "phase23_docs_controls_shard_192",
+    "phase23_docs_controls_shard_198",
+    "phase23_docs_controls_shard_199",
     "phase21_fixture_admission_controls",
     "fixture_product_player_controls",
     "phase23_docs_controls_shard_112",
@@ -72,6 +84,18 @@ EXPECTED_RESERVED_LABELS = {
     "v02_consumer_controls_cpp": ["v02"],
     "phase23_docs_controls_shard_108": ["v02"],
     "phase23_docs_controls_shard_114": ["v02"],
+    "phase23_docs_controls_shard_05": ["v02"],
+    "phase23_docs_controls_shard_07": ["v02"],
+    "phase23_docs_controls_shard_89": ["v02"],
+    "phase23_docs_controls_shard_154": ["v02"],
+    "phase23_docs_controls_shard_155": ["v02"],
+    "phase23_docs_controls_shard_160": ["v02"],
+    "phase23_docs_controls_shard_181": ["v02"],
+    "phase23_docs_controls_shard_182": ["v02"],
+    "phase23_docs_controls_shard_191": ["v02"],
+    "phase23_docs_controls_shard_192": ["v02"],
+    "phase23_docs_controls_shard_198": ["v02"],
+    "phase23_docs_controls_shard_199": ["v02"],
 }
 POSIX_ONLY_RESERVED_TESTS = {"host_exit_crash_storm", "save_format_controls"}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
@@ -1661,7 +1685,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 136:
+    if controls != 160:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 

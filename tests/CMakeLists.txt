@@ -1514,6 +1514,18 @@ set(gbb_docs_control_slow_tests
   phase23_docs_controls_shard_172
   phase23_docs_controls_shard_174
   phase23_docs_controls_shard_183
+  phase23_docs_controls_shard_05
+  phase23_docs_controls_shard_07
+  phase23_docs_controls_shard_89
+  phase23_docs_controls_shard_154
+  phase23_docs_controls_shard_155
+  phase23_docs_controls_shard_160
+  phase23_docs_controls_shard_181
+  phase23_docs_controls_shard_182
+  phase23_docs_controls_shard_191
+  phase23_docs_controls_shard_192
+  phase23_docs_controls_shard_198
+  phase23_docs_controls_shard_199
 )
 set_tests_properties(${gbb_docs_control_slow_tests} PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(v02_support_ledger 60
