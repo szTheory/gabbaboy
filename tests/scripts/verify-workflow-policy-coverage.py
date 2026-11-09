@@ -63,6 +63,15 @@ PHASE23_RESERVED_TESTS = {
     "v03_dispositions_controls",
 }
 PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], *PHASE23_RESERVED_TESTS}
+EXPECTED_RESERVED_LABELS = {
+    "fixture_product_core_controls": ["v02"],
+    "fixture_product_player_controls": ["v02"],
+    "fixture_admission_controls": ["v02"],
+    "v02_consumer_controls_c": ["v02"],
+    "v02_consumer_controls_cpp": ["v02"],
+    "phase23_docs_controls_shard_108": ["v02"],
+    "phase23_docs_controls_shard_114": ["v02"],
+}
 POSIX_ONLY_RESERVED_TESTS = {"host_exit_crash_storm", "save_format_controls"}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
                           "rehearsal": "rehearsal", "ledger": "ledger", "helpers": "helpers"}
@@ -984,6 +993,8 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         properties = _test_properties(actual_by_name[name][0])
         if properties.get("PROCESSORS") != 4:
             reject(f"CTest {name} must reserve all four native test slots")
+        if name in EXPECTED_RESERVED_LABELS and properties.get("LABELS") != EXPECTED_RESERVED_LABELS[name]:
+            reject(f"CTest {name} must retain its exact existing labels")
 
     completion_paths: set[str] = set()
     for name in sorted(POLICY_TEST_NAMES):
@@ -1175,6 +1186,8 @@ def _self_test(root: Path, revision: str) -> int:
         ]
         if name in PROCESSOR_RESERVED_TESTS:
             properties.append({"name": "PROCESSORS", "value": 4})
+        if name in EXPECTED_RESERVED_LABELS:
+            properties.append({"name": "LABELS", "value": EXPECTED_RESERVED_LABELS[name]})
         if name == "v02_support_ledger_controls":
             properties.extend((
                 {"name": "ENVIRONMENT", "value": _expected_v02_environment(build_dir, False)},
@@ -1325,6 +1338,10 @@ def _self_test(root: Path, revision: str) -> int:
         mutant = copy.deepcopy(tests)
         set_test_property(mutant, name, "PROCESSORS", 3)
         rejected(f"unreserved {name} processors", lambda mutant=mutant: validate(mutant))
+    for name in sorted(EXPECTED_RESERVED_LABELS):
+        mutant = copy.deepcopy(tests)
+        set_test_property(mutant, name, "LABELS", ["unexpected"])
+        rejected(f"changed {name} labels", lambda mutant=mutant: validate(mutant))
     mutant = copy.deepcopy(tests)
     set_support_timeout(mutant, 119)
     rejected("support ledger timeout below the native bound", lambda: validate(mutant))
@@ -1600,7 +1617,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 128:
+    if controls != 135:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
