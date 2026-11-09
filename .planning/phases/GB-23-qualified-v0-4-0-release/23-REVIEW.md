@@ -1,13 +1,13 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** bc282cc229c887d7034e533175249861db846154
-**Review delta:** 61f08de30b4f74ae539f827c5b04e1188fc3ea79 through bc282cc229c887d7034e533175249861db846154, with earlier Phase 23 review findings retained
+**Reviewed implementation:** 48d8e501872b9a19138a4653830a40b983199adc
+**Review delta:** 61f08de30b4f74ae539f827c5b04e1188fc3ea79 through 48d8e501872b9a19138a4653830a40b983199adc, with earlier Phase 23 review findings retained
 **Role:** release-consumer
-**Reviewer:** release-consumer-bc282cc2
+**Reviewer:** release-consumer-48d8e501
 
 ## Scope and conclusion
 
-I reviewed the exact implementation at `bc282cc229c887d7034e533175249861db846154` in `/private/tmp/gabbaboy-phase23.t6o3vA`. The D-163 amendment sets `PROCESSORS=2` for all 200 docs controls, including shard 0 and shards 1–199. Their commands, assertions, `v02` labels, 90-second limits, and global four-worker CTest setting are unchanged. The checker requires exactly two slots and has a former-four-slot negative plus a wrong-label negative for each docs control; the non-doc reservations remain at four slots. CI job caps are unchanged. The approved Windows support-ledger path correction remains intact. The source delta does not touch release, consumer, package, notice, or version-window implementation. RC-01 through RC-22 retain their identities and fixed dispositions; no additional correctness or security finding remains open.
+I reviewed the exact implementation at `48d8e501872b9a19138a4653830a40b983199adc` in `/private/tmp/gabbaboy-phase23.t6o3vA`. The D-163 amendment sets `PROCESSORS=2` for all 200 docs controls, including shard 0 and shards 1–199. Their commands, assertions, `v02` labels, 90-second limits, and global four-worker CTest setting are unchanged. The checker requires exactly two slots and has a former-four-slot negative plus a wrong-label negative for each docs control; the non-doc reservations remain at four slots. D-164 raises only the native macOS job cap to 50 minutes and synchronizes its ledger row; all per-test ceilings and other job caps remain unchanged. The approved Windows support-ledger path correction remains intact. The source delta does not touch release, consumer, package, notice, or version-window implementation. RC-01 through RC-22 retain their identities and fixed dispositions; RC-23 records and closes a source-binding gap in the new timeout control. No finding remains open.
 
 ## Reserved-label contract
 
@@ -27,7 +27,13 @@ The D-162 rescope records twelve docs shards that timed out without assertion ou
 
 D-163 records that four-worker runs timed out different docs shards, while affected shards passed in isolation. The first all-shard change reserved four slots per docs test; the owner-approved amendment now reserves exactly two slots for all 200 controls. The rescope records a later exact-head run where native Linux completed all 1,942 tests, while macOS, CMake-floor, sanitizer-inventory, and Windows hit their existing job caps as docs shards continued in sequence. Two independent docs shards passed concurrently on the local Mac in 9.5 seconds. This evidence motivates the two-slot schedule but is not full qualification at bc282.
 
-CMake sets `PROCESSORS 2` inside the registration loop for shards 1–199 and separately on `v02_adoption_docs_controls` (shard 0). The former four-slot settings are gone. Test registration commands, assertion regexes, `v02` labels, 90-second timeouts, and global `--parallel 4` are unchanged. The checker generates all 200 docs test names, requires exactly two slots and each exact label, rejects `PROCESSORS=4` for every docs test, and has a wrong-label negative per entry. Non-doc reserved controls retain four-slot requirements. No CI workflow file changed, so job caps remain unchanged. Windows includes all 200 cross-platform docs controls and retains the existing support-ledger path-normalization controls.
+CMake sets `PROCESSORS 2` inside the registration loop for shards 1–199 and separately on `v02_adoption_docs_controls` (shard 0). The former four-slot settings are gone. Test registration commands, assertion regexes, `v02` labels, 90-second timeouts, and global `--parallel 4` are unchanged. The checker generates all 200 docs test names, requires exactly two slots and each exact label, rejects `PROCESSORS=4` for every docs test, and has a wrong-label negative per entry. Non-doc reserved controls retain four-slot requirements. The D-163 change itself did not edit CI workflows; D-164's separate native macOS cap amendment is reviewed below. Windows includes all 200 cross-platform docs controls and retains the existing support-ledger path-normalization controls.
+
+## D-164 native macOS cap and ledger contract
+
+At `48d8e501872b9a19138a4653830a40b983199adc`, only `native-macos` changes from a 40-minute to a 50-minute job cap. Its ledger row matches 50, retains the historical citation run `40156247875`, cited SHA, `p50_minutes=17.80`, and five samples. The disclosure explains the macOS-15 runner move and the exact-head run `42679813590` stopping at 1,928/1,942; the workflow comment explicitly says this run is workload evidence, not a new timing sample. The cap remains above `ceil(2 x 17.80)=36`. No other job timeout or per-test ceiling changed.
+
+The coverage self-test accepts the source-bound 50-minute workflow/ledger pair and rejects a 40-minute ledger row as `timeout-ledger-stale`. Its first implementation read those files from the mutable working tree; that allowed `--rev c9a6320671b56d1092b2884aeac15d6a9320b60f` to pass while the checkout held the 50-minute change. RC-23 records this test defect. The fix at `48d8e501` loads the workflow inventory, workflow YAML, timeout ledger, and `CMakeLists.txt` from the supplied candidate commit using Git object reads before applying the negative mutation. At the reviewed SHA, the direct workflow-policy check passes and the 528-control coverage self-test passes; invoking the same self-test with c9 now rejects because that candidate still has a 40-minute cap.
 
 ## Verification
 
@@ -39,22 +45,24 @@ At 61f08de30b4f74ae539f827c5b04e1188fc3ea79, the production check passed 540 con
 
 At exact source `bc282cc229c887d7034e533175249861db846154`, direct production check passed 540 controls across six groups, and the self-test passed 526 controls. After fresh `cmake --preset phase1` configuration, the focused workflow-policy CTest pair passed 2/2 with both commands pinned to bc282. The configured inventory has one registration per docs control; all 200 have `PROCESSORS=2`, `TIMEOUT=90`, and `LABELS=[v02]`, while all other reserved registrations remain at `PROCESSORS=4`. The self-test rejects `PROCESSORS=4` and wrong labels for each docs control and retains the Windows path-normalization positive and negative cases.
 
+At `48d8e501872b9a19138a4653830a40b983199adc`, the direct workflow-policy check passes. The coverage self-test passes 528 controls against the reviewed candidate. Running that self-test with c9 as the candidate rejects the historical 40-minute macOS cap, confirming the timeout check reads the immutable candidate rather than the checkout.
+
 Earlier hosted evidence remains historical: the 6ae run had a Windows support-ledger path-comparison failure and macOS/CMake-floor cancellations; the later four-slot exact-head run completed native Linux but hit existing job caps on macOS, CMake-floor, sanitizer-inventory, and Windows while shards continued in sequence. Neither establishes hosted success for bc282. No hosted result for bc282 was available in this review.
 
 ## Prior release and consumer findings
 
-RC-01 through RC-21 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-22 is fixed at b7d86939c25fca93dc928c494b9834513e5c1bc5. All fixed SHAs resolve and are ancestors of this implementation.
+RC-01 through RC-22 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-22 is fixed at b7d86939c25fca93dc928c494b9834513e5c1bc5. RC-23 is fixed at 48d8e501872b9a19138a4653830a40b983199adc. All fixed SHAs resolve and are ancestors of this implementation.
 
 The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged. The D-163 amendment changes only CTest processor reservations and their coverage evidence; CI job caps and release, consumer, package, notice, and version-window boundaries remain intact.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-bc282cc2-20261109-01",
+  "report_id": "gb-23-release-consumer-48d8e501-20261109-02",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-bc282cc2",
+  "reviewer_id": "release-consumer-48d8e501",
   "independent": true,
-  "reviewed_sha": "bc282cc229c887d7034e533175249861db846154",
+  "reviewed_sha": "48d8e501872b9a19138a4653830a40b983199adc",
   "findings": [
     {
       "id": "RC-01",
@@ -275,6 +283,16 @@ The release/version-window, lifecycle, product/consumer, fixture, notice-path, a
       "rationale": "At 6ae, the required Windows workflow_policy_coverage check failed because the checker compared the support-ledger ENVIRONMENT path as a raw string. The b7 checker parses unique environment entries, applies ntpath normalization only to GBB_TEST_BUILD_DIR on Windows, and keeps the expected environment-key set and other values exact. Its self-test accepts an uppercase backslash path variant in a Windows inventory and rejects a wrong build-directory path.",
       "fix_sha": "b7d86939c25fca93dc928c494b9834513e5c1bc5",
       "verification_ref": "At b7d86939c25fca93dc928c494b9834513e5c1bc5, python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev b7d86939c25fca93dc928c494b9834513e5c1bc5 passed with 136 controls. The configured workflow_policy_coverage and workflow_policy_coverage_controls CTests both pin --rev to b7 and passed 2/2. The hosted 6ae Windows failure predates this fix; hosted results at b7 were not available."
+    },
+    {
+      "id": "RC-23",
+      "category": "other",
+      "severity": "low",
+      "required_property": "The D-164 macOS timeout positive and mismatch controls must read workflow, ledger, and project-version inputs from the immutable candidate passed through --rev.",
+      "disposition": "fixed",
+      "rationale": "At d3811b8, the new controls parsed the current working tree while using the supplied revision only for the policy checker source. This let an old 40-minute candidate pass when the checkout contained the new 50-minute cap. The fix reads the candidate's workflow inventory and each required file with git ls-tree/git show, then applies the stale-ledger mutation only in a temporary fixture.",
+      "fix_sha": "48d8e501872b9a19138a4653830a40b983199adc",
+      "verification_ref": "At 48d8e501872b9a19138a4653830a40b983199adc: workflow-policy coverage self-test passes 528 controls; the same self-test with --rev c9a6320671b56d1092b2884aeac15d6a9320b60f rejects the 40-minute candidate; the direct workflow-policy check passes."
     }
   ]
 }

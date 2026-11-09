@@ -1,13 +1,13 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** bc282cc229c887d7034e533175249861db846154
+**Reviewed implementation:** 48d8e501872b9a19138a4653830a40b983199adc
 **Role:** adversarial
 **Reviewer:** adversarial-d155
-**Review posture:** I inspected the owner-approved D-163 two-slot amendment at bc against the previous reviewed source 61f08de30b4f74ae539f827c5b04e1188fc3ea79, current Plan 23-04, and the amended rescope, and rechecked prior findings. The implementation changes only docs-control processor reservations and the matching checker expectations/negative controls; it does not change commands, assertions, labels, environments, per-test timeouts, CI caps, or non-doc reservations. I freshly configured CTest and ran bounded exact-source controls; the full local suite and a new hosted run were not rerun at bc.
+**Review posture:** I re-reviewed the owner-approved D-164 macOS cap amendment at 48d8e501 against the exact two-slot candidate c9a6320671b56d1092b2884aeac15d6a9320b60f, current Plan 23-04, and the amended rescope, and rechecked prior findings. I verified the prior exact-head run and its macOS logs, the 50-minute YAML/ledger pair, and its positive and mismatch controls. I found and reported a source-binding defect in the first D-164 control implementation at d3811b8e; 48d8e501 fixes it by seeding the fixture from the resolved candidate commit. At 48d8e501 the exact-source coverage self-test passes 528 controls and the workflow-policy production check passes. The full local suite and a hosted attempt on 48d8e501 have not run yet.
 
 ## Result
 
-ADV-01 through ADV-29 remain fixed at or before this commit. At exact source bc, all 200 docs controls have `PROCESSORS=2`, `TIMEOUT=90`, `LABELS=["v02"]`, their build-directory environments, and their expected shard commands; all non-doc reservations remain at four slots. The 526-control self-test rejects the former four-slot value and a wrong label for every docs control. The exact configured production check passes 540 controls across six groups, and the focused coverage CTest pair passes 2/2. The CMake/checker diff changes only processor reservations and their validation; commands, assertions, labels, environments, timeouts, and CI caps remain unchanged. The previously approved Windows slash/case positive and wrong-directory negative still pass. D-163 adds no new finding. The hosted run on the preceding four-slot implementation did not qualify; no hosted run covers this two-slot source.
+ADV-01 through ADV-29 remain fixed at or before this commit. The D-164 change raises only native macOS from 40 to 50 minutes, pairs the YAML value with the timeout-ledger row, preserves its historical p50 citation, and records the measured incomplete run as non-sample evidence. It leaves other job caps and every per-test timeout unchanged. All 200 docs controls remain at two slots with their existing 90-second timeout and `v02` label; non-doc reservations remain at four slots. The 528-control self-test now reads the complete workflow inventory, ledger, and CMake version from the immutable `--rev`; it accepts the exact 50-minute pair and rejects a stale 40-minute ledger value. The exact-source policy check passes. ADV-30, the mutable-worktree source-binding defect found in the first D-164 control implementation, is fixed at 48d8e501. No correctness or security finding remains open. The prior hosted run on the two-slot candidate c9a63206 did not qualify because macOS hit its 40-minute cap; hosted qualification of the 50-minute amendment remains pending.
 
 ## D-155 path and selector attacks
 
@@ -93,6 +93,14 @@ No command, assertion, existing label/environment, per-test timeout, CI job cap,
 
 
 
+## D-164 native macOS timeout amendment
+
+GitHub run `42679813590` is bound to candidate `c9a6320671b56d1092b2884aeac15d6a9320b60f` and PR #146. Its native macOS arm64 job was cancelled at the existing 40-minute cap. The job log shows 1,928/1,942 tests complete, with `workflow_policy_group_ci` the next test; all 200 docs-control tests passed and there is no failed CTest assertion before cancellation. The run supports adding completion headroom and is not treated as a timing sample.
+
+At implementation source `48d8e501872b9a19138a4653830a40b983199adc`, `native-macos` alone is set to 50 minutes and its `ci.yml:native-macos` ledger row matches. The row retains the historical p50 `17.80`, cited run `40156247875`, and sample count 5; its disclosure identifies the runner migration and incomplete Phase 23 run. The D-164 diff does not change any other workflow cap, per-test timeout, CTest reservation, command, assertion, or label.
+
+The first D-164 self-test implementation at `d3811b8e` read `ci.yml`, the ledger, and `CMakeLists.txt` from the mutable checkout, so dirty files could mask a mismatch with `--rev`. At `48d8e501`, the control enumerates `.github/workflows/*.yml` from the resolved candidate's Git tree and reads each workflow, `.github/ci-timeouts.json`, and `CMakeLists.txt` with `git show` at that commit. It accepts the candidate's 50-minute workflow/ledger pair and rejects a 40-minute ledger row with `timeout-ledger-stale`. The exact-source self-test passes 528 controls, and `python3 -I .github/scripts/verify-workflow-policy.py --check --root .` passes. No local full-suite or new hosted result exists for this implementation SHA yet.
+
 ## Required adversarial checklist
 
 | Attack | Exact-source result |
@@ -118,6 +126,8 @@ For each direct release-note mutation, the test helper first accepts the valid r
 
 ## Verification evidence
 
+At exact implementation source 48d8e501, the workflow-policy coverage self-test passes 528 controls and the workflow-policy production check passes. D-164's positive control reads workflow files, ledger, and CMakeLists.txt from that immutable candidate; its negative requires `timeout-ledger-stale` for a 40-minute macOS ledger row. GitHub run 42679813590 is bound to c9a63206, not 48d8e501. Its macOS arm64 job stopped at the old 40-minute cap after 1,928/1,942 tests; all 200 docs controls passed, and no assertion failure appears before cancellation. It does not qualify the new 50-minute cap.
+
 Evidence boundary: at source 61, the 526-control self-test, 540-control production check, and focused coverage CTest pair validated the original four-slot D-163 setting. At exact source bc, I freshly configured CTest and reran those bounded checks; its 526-control self-test now rejects the former four-slot setting per docs entry. I did not run the full docs selection, complete local suite, or hosted qualification at bc.
 
 - At b677, the exact-source workflow-policy coverage self-test passed 160 controls, including one three-slot negative per prior reserved test, seven D-161 wrong-label negatives, twelve D-162 wrong-label negatives, and the Windows environment path controls.
@@ -139,21 +149,21 @@ Evidence boundary: at source 61, the 526-control self-test, 540-control producti
 - Earlier D-155 shard 0 and shard 199 runs, exact selector dry-run, D-156 recovery run, D-068 plan/PR base budget checks, and D-069 self-test remain applicable because their implementation/checker/allowlist inputs did not change from 7c6 to the reviewed SHA.
 - Earlier exact-source release/profile/version/disclosure/evidence controls remain applicable: the matcher, support-ledger, version-window, review-evidence, CTest registration, and inventory sources are unchanged from their cited reviewed revisions.
 
-These checks establish local checker controls and test scheduling metadata for bc, plus the previously reviewed path-confinement and release controls. They do not establish hosted cross-platform success for the two-slot source; exact-head hosted qualification remains pending.
+These checks establish the exact-source timeout-ledger control and workflow-policy check for 48d8e501, plus the previously reviewed path-confinement and release controls. They do not establish full local-suite or hosted cross-platform success for the 50-minute source; exact-head qualification remains pending.
 
 ## Findings and dispositions
 
-ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was open at fdccc15a after the duplicate-fixture self-test failure and is fixed at 4343d95d. The owner-approved D-163 amendment adds no correctness finding: every docs control requires two slots and its existing label, each former-four-slot and wrong-label mutation rejects, and non-doc reservations remain at four. No correctness or security finding remains open.
+ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was open at fdccc15a after the duplicate-fixture self-test failure and is fixed at 4343d95d. ADV-30 was open at d3811b8e because the new timeout self-test read live checkout configuration instead of its immutable revision; 48d8e501 fixes it. D-163 and D-164 have no open correctness or security finding at this source.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-bc282cc229c887d7034e533175249861db846154-20261109-d163-two-slot",
+  "report_id": "gbb-phase23-adversarial-48d8e501872b9a19138a4653830a40b983199adc-20261109-d164-macos-cap",
   "role": "adversarial",
   "reviewer_id": "adversarial-d155",
   "independent": true,
-  "reviewed_sha": "bc282cc229c887d7034e533175249861db846154",
+  "reviewed_sha": "48d8e501872b9a19138a4653830a40b983199adc",
   "findings": [
     {
       "id": "ADV-01",
@@ -444,6 +454,16 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "rationale": "At fdccc15a, adding workflow_policy_group_ci and workflow_policy_group_rehearsal to PHASE23_RESERVED_TESTS made _self_test append each twice: once from GROUPS and once from the generic reserved-test loop. The initial validation rejected before any reservation mutation and the coverage CTest pair failed 1/2. At 4343d95d, the fixture generator subtracts POLICY_TEST_NAMES from only the generic synthesis loop. Both policy tests remain in PHASE23_RESERVED_TESTS and in the per-reservation mutation loop, so all ten D-161 three-slot negatives still execute.",
       "fix_sha": "4343d95dde8597253994efff2e030ae25089d288",
       "verification_ref": "At exact source bc, the 526-control self-test and 2/2 coverage CTest pair pass. The expanded inventory includes 200 unique docs controls and exercises one former-four-slot and one wrong-label mutation per entry without duplicate fixtures."
+    },
+    {
+      "id": "ADV-30",
+      "category": "correctness",
+      "severity": "medium",
+      "required_property": "The native macOS timeout self-test must read workflow YAML, timeout ledger, and project version from its immutable --rev instead of mutable checkout files.",
+      "disposition": "fixed",
+      "rationale": "At d3811b8e the positive pair check and mismatch fixture copied live .github/workflows, .github/ci-timeouts.json, and CMakeLists.txt after resolving --rev, allowing dirty configuration to mask a committed mismatch. At 48d8e501 the fixture lists workflow paths from the candidate tree and reads every workflow, the timeout ledger, and CMakeLists.txt with git show at the resolved candidate commit before running the positive and stale-ledger negative.",
+      "fix_sha": "48d8e501872b9a19138a4653830a40b983199adc",
+      "verification_ref": "At exact source 48d8e501872b9a19138a4653830a40b983199adc: python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev 48d8e501872b9a19138a4653830a40b983199adc passed with 528 controls; python3 -I .github/scripts/verify-workflow-policy.py --check --root . passed."
     }
   ]
 }

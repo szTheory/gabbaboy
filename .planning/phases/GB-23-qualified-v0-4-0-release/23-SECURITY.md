@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed tree at `bc282cc229c887d7034e533175249861db846154`, using the writable clone as the Git evidence root. The review includes the full source delta from `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` through this commit, the current Plan 23-04 T2 contract, and the D-157 through D-163 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, the D-157 through D-161 workflow and CTest scheduling controls, the D-162 and D-163 shard reservations, and the approved Windows path comparison.
+I reviewed the exact committed tree at `48d8e501872b9a19138a4653830a40b983199adc`, using the writable clone as the Git evidence root. The review includes the full source delta through this commit, the current Plan 23-04 T2 contract, and the D-157 through D-164 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, the D-157 through D-163 workflow and CTest scheduling controls, the D-164 macOS timeout amendment, and the approved Windows path comparison.
 
 The input-path, source-revision, and package-authority boundaries remain intact. D-161 historically added four-slot reservations for five existing CTest controls; the owner-approved D-163 amendment now assigns two slots to all 200 docs controls, while every non-doc reservation stays at four. Commands, assertions, environments, labels, fixtures, and per-test timeouts remain unchanged. No product behavior or fixture data changed.
 
-At this exact revision, the workflow-policy coverage self-test passed with 526 controls, the production check passed with 540 controls across six groups, and both focused workflow-policy CTests passed (2/2). The owner-approved D-163 amendment assigns exactly two CTest slots to each of the 200 docs controls, while all other reserved registrations remain at `PROCESSORS 4`. Metadata confirms docs controls retain their `v02` label and 90-second timeout. The checker rejects the former four-slot value and a wrong label for every docs control. The approved Windows path normalization and its slash/case positive and wrong-path negative remain covered. SEC-23-17 remains fixed; SEC-23-09 is the only open finding, a low-severity Git-output resource-bound concern. No new correctness or security finding was identified.
+At this exact revision, the workflow-policy coverage self-test passed with 528 controls and the production check passed with 540 controls across six groups. The timeout control accepts the source-bound 50-minute macOS workflow/ledger pair and rejects a stale 40-minute ledger value; the same self-test rejects the historical c9 candidate, whose macOS cap is 40 minutes. D-163 still reserves exactly two CTest slots for each of the 200 docs controls, while all other reserved registrations remain at `PROCESSORS 4`; docs retain their `v02` label and 90-second timeout. The approved Windows path normalization and its slash/case positive and wrong-path negative remain covered. SEC-23-17 remains fixed, SEC-23-18 records the corrected immutable-candidate control, and SEC-23-09 is the only open finding: a low-severity Git-output resource-bound concern. T-23-SC remains accepted under the plan's explicit no-dependency-change scope, recorded below.
 
 ## Input, path and source boundaries
 
@@ -98,7 +98,24 @@ D-163 first reserved all 200 docs controls for four workers. The owner-approved 
 
 The immutable-source checker derives all 200 docs names, requires each inventory row and one CTest registration, and requires `PROCESSORS 2` plus the exact `v02` label for each. It rejects the former four-slot value and a wrong label per docs control; non-doc processor checks and their three-slot negatives remain at four slots. At this SHA, the self-test passed with 526 controls, the production check passed with 540 controls across six groups, and the focused coverage CTest pair passed 2/2. The Windows support-ledger path normalization positive and wrong-path negative remain covered. The amendment changes CTest scheduling only and introduces no new security or correctness issue.
 
-The rescope cites hosted run `42654987218`: native Linux completed all 1,942 tests, while macOS, CMake-floor, sanitizer-inventory, and Windows reached their existing job caps. This is not a complete hosted qualification pass. No test timeout or CI job budget was raised.
+The rescope cites hosted run `42654987218`: native Linux completed all 1,942 tests, while macOS, CMake-floor, sanitizer-inventory, and Windows reached their existing job caps. This is not a complete hosted qualification pass. The later D-164 macOS-only cap change is detailed below.
+
+## D-164 native macOS timeout and ledger
+
+The exact-head run `42679813590` reached the previous native macOS cap at 1,928/1,942 tests; all 200 docs controls passed and the cancellation log had no CTest assertion failure. The owner-approved amendment raises only this job's cap from 40 to 50 minutes. Its existing `17.80`-minute p50, cited run/SHA and five samples are unchanged. The disclosure identifies the macOS-15 runner migration and the incomplete exact-head run without treating that run as a timing sample. The workflow-policy checker still enforces YAML/ledger equality and the existing p50 ratio. No permissions, job dependencies, per-test timeout, other job cap, fixture scope, package, or dependency changed.
+
+The coverage self-test now reads its workflow inventory, YAML files, timeout ledger and `CMakeLists.txt` from the exact `--rev` commit through Git-object commands, builds the temporary validation tree only from those committed bytes, accepts the matching 50-minute pair, and rejects a 40-minute ledger value as `timeout-ledger-stale`. This prevents dirty working-tree files from masking a stale candidate. The exact 48d self-test passes with 528 controls; the same self-test at c9 correctly refuses the 40-minute candidate. SEC-23-18 records and closes the source-binding defect in the first version of this control.
+
+## Threat verification and accepted risk
+
+| Plan threat | Disposition in the plan | Review evidence and remaining gate |
+|---|---|---|
+| T-23-07 — reviewed/hosted revision identity | Mitigate | The review-evidence gate checks immutable implementation/report identities and source drift. This report names the exact implementation SHA; final hosted exact-head verification remains a later qualification gate. |
+| T-23-08 — review and adversarial disposition | Mitigate | The immutable gate is in place and exact-source reports are being reissued. The complete committed-report check and qualification remain prerequisites; this security report does not claim they have passed. |
+| T-23-09 — workflow optimization privilege | Mitigate | D-164 changes only the native macOS timeout and paired ledger/test control. Workflow permissions, required job dependencies, and trusted release/package authority are unchanged. |
+| T-23-SC — package-install tampering | **Accept (plan-approved)** | Plan 23-04 explicitly accepts this risk because no dependency changes are planned. The D-164 amendment changes no package inputs or dependencies. Revisit this acceptance if a dependency change enters scope; this report records the existing plan disposition and does not create new owner approval. |
+
+The report gate and exact-head protected checks are still required before Phase 23 qualification or merge.
 
 ## Findings
 
@@ -205,22 +222,28 @@ The prior checker verified only the support-ledger and separate release-policy r
 
 At the preceding source `fdccc15a`, the self-test appended synthetic reserved-test records after it had already created records for each `GROUPS` entry. Since `workflow_policy_group_ci` and `workflow_policy_group_rehearsal` were in both sets, the positive fixture contained duplicate test names and rejected before running reservation mutations. The fix excludes `POLICY_TEST_NAMES` from the synthetic append loop but leaves both groups in the processor-reserved set and the mutation loop. The exact-source 128-control self-test and production check passed, and both coverage CTests passed. The ten CTest reservations and their runtime properties are unchanged.
 
+### SEC-23-18 — macOS timeout control must read the immutable candidate
+
+**Severity:** Medium. **Disposition:** Fixed in `48d8e501872b9a19138a4653830a40b983199adc`.
+
+The first D-164 control read the live worktree's workflow, timeout ledger, and `CMakeLists.txt`. A caller could supply an older candidate with a 40-minute cap while a dirty worktree supplied the new 50-minute values, causing a false pass. The corrected control enumerates the workflow files and reads each input from the resolved candidate commit before constructing its temporary fixture. The exact-candidate self-test accepts 48d's 50-minute pair and rejects c9's stale 40-minute candidate; it also mutates the committed 50-minute ledger to 40 and verifies the intended `timeout-ledger-stale` diagnostic.
+
 ## Verification and limits
 
-This review is bound to `bc282cc229c887d7034e533175249861db846154`. At this exact SHA, `python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev bc282cc229c887d7034e533175249861db846154` passed with 526 controls; the production `--check` passed with 540 controls across six groups; and `workflow_policy_coverage` plus `workflow_policy_coverage_controls` passed 2/2. Configured CTest metadata confirms all 200 docs controls have `PROCESSORS 2`, `LABELS ["v02"]`, and `TIMEOUT 90`; all other reserved registrations retain `PROCESSORS 4`. The exact-source self-test rejects `PROCESSORS 4` and wrong labels for each docs control, and keeps the Windows support-ledger slash/case positive and wrong-path negative.
+This review is bound to `48d8e501872b9a19138a4653830a40b983199adc`. At this exact SHA, `python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev 48d8e501872b9a19138a4653830a40b983199adc` passed with 528 controls. The production `--check` passed with 540 controls across six groups. The same self-test with `--rev c9a6320671b56d1092b2884aeac15d6a9320b60f` rejected the historical 40-minute macOS cap. The focused CTest pair was not rerun by this reviewer at 48d; the implementation commit's local qualification will bind it separately. Configured CTest metadata from the prior reviewed source confirms all 200 docs controls have `PROCESSORS 2`, `LABELS ["v02"]`, and `TIMEOUT 90`; all other reserved registrations retain `PROCESSORS 4`.
 
 The D-163 rescope cites hosted run `42654987218`: native Linux completed 1,942/1,942; macOS, CMake-floor, sanitizer-inventory, and Windows reached their existing job caps while docs shards passed in sequence. This is not a complete hosted qualification pass. The earlier hosted run `6ae7a46777348d02bf4e20419df0bfc8a5929591` was also not green: Windows failed workflow-policy coverage on the support-ledger path spelling, native macOS was canceled at its 40-minute cap after 1,927/1,942 tests, and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. The current checker retains the approved Windows path comparison. No full local CTest run at this SHA is included in this review; the previous complete local run passed 1,942/1,942 at `3c908d7f`.
 
-SEC-23-09 remains the only open finding. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. I did not inspect live branch protection, exercise publication, or fetch/build/run/admit real fixtures.
+SEC-23-09 remains the only open finding. The plan-approved T-23-SC package-install risk is explicitly recorded above as accepted; no dependency changes are present. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. This review does not inspect live branch protection or exercise publication, and does not fetch/build/run/admit real fixtures.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-bc282cc2-20261109-security-d155",
+  "report_id": "phase23-security-48d8e501-20261109-d164",
   "role": "security",
-  "reviewer_id": "security-d155",
+  "reviewer_id": "security-48d8e501",
   "independent": true,
-  "reviewed_sha": "bc282cc229c887d7034e533175249861db846154",
+  "reviewed_sha": "48d8e501872b9a19138a4653830a40b983199adc",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -391,6 +414,16 @@ SEC-23-09 remains the only open finding. The D-155 docs shard-0 self-test and D-
       "rationale": "At fdccc15a, the self-test appended synthetic reserved-test records after it had already created records for each GROUPS entry. Since workflow_policy_group_ci and workflow_policy_group_rehearsal were in both sets, the positive fixture contained duplicate test names and rejected before reservation mutations. The fix excludes POLICY_TEST_NAMES from the synthetic append loop while retaining both groups in the processor-reserved set and mutation loop. The exact-source 128-control self-test and 540-control production check passed, and both coverage CTests passed.",
       "fix_sha": "4343d95dde8597253994efff2e030ae25089d288",
       "verification_ref": "tests/scripts/verify-workflow-policy-coverage.py:1212-1216,1318-1323; python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev 4343d95dde8597253994efff2e030ae25089d288 (pass, 128 controls); --check --root . --rev 4343d95dde8597253994efff2e030ae25089d288 --build-dir build (pass, 540 controls); ctest --test-dir build --output-on-failure --no-tests=error -R \"^workflow_policy_coverage(_controls)?$\" (2/2 pass)"
+    },
+    {
+      "id": "SEC-23-18",
+      "category": "correctness",
+      "severity": "medium",
+      "required_property": "The native macOS cap control must read the workflow, timeout ledger, and project version from the exact candidate commit rather than the mutable working tree.",
+      "disposition": "fixed",
+      "rationale": "The first D-164 coverage control could validate dirty 50-minute worktree files while the supplied candidate still had a 40-minute cap. The corrected self-test enumerates candidate workflow paths with git ls-tree and reads each fixture input with git show from the resolved candidate SHA before validation and mutation.",
+      "fix_sha": "48d8e501872b9a19138a4653830a40b983199adc",
+      "verification_ref": "python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev 48d8e501872b9a19138a4653830a40b983199adc (pass, 528 controls); same command with --rev c9a6320671b56d1092b2884aeac15d6a9320b60f rejects the stale 40-minute candidate; the 48d fixture also rejects a 40-minute ledger row as timeout-ledger-stale."
     }
   ]
 }
