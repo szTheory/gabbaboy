@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed tree at `3c908d7f5a927953b84dd6123c497ec9907cac8b`, using the writable clone as the Git evidence root. The review includes the full source delta from `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` through this commit, the current Plan 23-04 T2 contract, and the D-157 through D-161 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, and the D-157 through D-161 workflow and CTest scheduling controls, including the ten-test D-161 reservation follow-up.
+I reviewed the exact committed tree at `b7d86939c25fca93dc928c494b9834513e5c1bc5`, using the writable clone as the Git evidence root. The review includes the full source delta from `b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae` through this commit, the current Plan 23-04 T2 contract, and the D-157 through D-161 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, and the D-157 through D-161 workflow and CTest scheduling controls, including the ten-test D-161 reservation follow-up.
 
 The input-path, source-revision, and package-authority boundaries remain intact. The D-161 follow-up adds only `PROCESSORS 4` reservations for five existing CTest controls: `fixture_product_player_controls`, `fixture_admission_controls`, both `v02_consumer_controls_*` builds, and `acceptance_dense_input_controls`. Their commands, assertions, environments, labels, fixtures, and per-test timeouts remain unchanged. All five are cross-platform. The coverage checker requires each inventory row and exact-once registration and rejects a three-slot mutation for each. No product behavior or fixture data changed.
 
-At this exact revision, the coverage self-test passed with 135 controls, the production check passed with 540 controls across six groups, the focused exact-source CTest gate passed 14/14, and the full local CTest suite passed 1,942/1,942. CTest metadata confirms all ten reservations with their expected labels, unchanged commands, and unchanged timeouts. The duplicate-fixture defect SEC-23-17 remains fixed. SEC-23-09 is the only open finding: a low-severity Git-output resource-bound concern. No correctness or security finding or high/blocking finding remains open. Earlier D-155/D-156 focused checks and budget-base checks remain valid; their validators and allowlist are unchanged in this delta. I did not run hosted cross-platform CI, exercise publication, or fetch, build, run, or admit a real fixture.
+At this exact revision, the workflow-policy coverage self-test passed with 136 controls, the production check passed with 540 controls across six groups, and the focused exact-source CTest pair passed 2/2. The checker-only delta adds Windows-aware comparison for the support-ledger build-directory environment, with a positive slash/case variant and a wrong-path negative. It changes no product code, fixtures, CMake properties, timeout values, or workflow/package authority. SEC-23-17 remains fixed; SEC-23-09 is the only open finding, a low-severity Git-output resource-bound concern. No new correctness or security finding was identified. The previous full local CTest run passed 1,942/1,942 at `3c908d7f` before this checker-only change; it was not rerun at this SHA.
 
 ## Input, path and source boundaries
 
@@ -72,6 +72,12 @@ The exact-source checker now passes its positive fixture and all reservation mut
 ## Exact existing labels for reserved CTest controls
 
 The checker now requires the exact existing `LABELS ["v02"]` property for `fixture_product_core_controls`, `fixture_product_player_controls`, `fixture_admission_controls`, both v0.2 consumer controls, and docs shards 108 and 114. It adds one wrong-label mutation per test. The exact-source coverage self-test passed with 135 controls, confirming the seven mutations and accepted counterparts. After a fresh CMake configure pinned to `3c908d7f`, the production check passed with 540 controls across six groups; the full local suite and focused exact-source CTest gate also passed. The configured CTest inventory shows all seven with exactly `v02`, `PROCESSORS 4`, and their unchanged timeouts. No CMake property, test command, fixture, timeout, platform condition, or trust boundary changes in the `4343d95d` to `3c908d7f` delta.
+
+## Windows support-ledger environment path comparison
+
+The checker now compares the `GBB_TEST_BUILD_DIR` value using Windows path rules when validating a Windows inventory: it converts slash styles, applies `ntpath.normpath` and case normalization, and still requires the same normalized build path. The Windows positive control changes slash style and case and is accepted; the wrong-build-path negative is rejected. Exact-source self-test=136 confirms both controls. The CTest registration still has the existing `v02` label, four-slot reservation, and unchanged timeout; no CMake or runtime behavior changed.
+
+The earlier hosted run at `6ae7a467` was not green: Linux native passed, Windows failed `workflow_policy_coverage` on the support-ledger `ENVIRONMENT` path comparison, native macOS was canceled at its 40-minute cap after 1,927/1,942 tests, and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. The current change addresses the Windows comparison failure, but no hosted rerun evidence was provided; I do not treat the earlier run as qualification success.
 
 ## Findings
 
@@ -180,16 +186,16 @@ At the preceding source `fdccc15a`, the self-test appended synthetic reserved-te
 
 ## Verification and limits
 
-This review is bound to `3c908d7f5a927953b84dd6123c497ec9907cac8b`. At this exact SHA, the workflow-policy coverage self-test passed with 135 controls, the production check passed with 540 controls across six groups, the focused exact-source CTest gate passed 14/14, and the full local CTest suite passed 1,942/1,942. The seven label-constrained controls have exactly `LABELS ["v02"]`, `PROCESSORS 4`, and unchanged timeout values. The timeout-ledger group self-test last passed with 20 negative and one positive control at `4844d39d`; its inputs are unchanged in this diff. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. Hosted cross-platform CI and the committed-report gate were not run in this reviewer turn. I did not inspect live branch protection, exercise publication, or fetch/build/run/admit real fixtures.
+This review is bound to `b7d86939c25fca93dc928c494b9834513e5c1bc5`. At this exact SHA, `python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev b7d86939c25fca93dc928c494b9834513e5c1bc5` passed with 136 controls, the exact production `--check` passed with 540 controls across six groups, and the local focused CTest pair `workflow_policy_coverage` / `workflow_policy_coverage_controls` passed 2/2. The Windows path positive (slash/case variant) and wrong-path negative are included in the 136 controls. The support-ledger `GBB_TEST_BUILD_DIR` inventory remains the same path under Windows normalization; CMake registration sources and all test timeouts are unchanged. Full local CTest passed 1,942/1,942 at `3c908d7f` before this checker-only change and was not rerun at b7d86939. Hosted results at `6ae7a467` remain incomplete: Linux native passed; Windows failed the workflow-policy coverage test on this path comparison; native macOS was canceled after 1,927/1,942 at 40 minutes; and CMake-floor was canceled after about 1,920/1,942 at 50 minutes. No hosted rerun at this exact SHA is recorded. SEC-23-09 remains the only open finding. The timeout-ledger group self-test last passed with 20 negative and one positive control at `4844d39d`; its inputs are unchanged in this diff. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. I did not inspect live branch protection, exercise publication, or fetch/build/run/admit real fixtures.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-3c908d7f-20261108-security-d155",
+  "report_id": "phase23-security-b7d86939-20261108-security-d155",
   "role": "security",
   "reviewer_id": "security-d155",
   "independent": true,
-  "reviewed_sha": "3c908d7f5a927953b84dd6123c497ec9907cac8b",
+  "reviewed_sha": "b7d86939c25fca93dc928c494b9834513e5c1bc5",
   "findings": [
     {
       "id": "SEC-23-01",

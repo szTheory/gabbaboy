@@ -1,13 +1,13 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** 3c908d7f5a927953b84dd6123c497ec9907cac8b
-**Review delta:** 4343d95dde8597253994efff2e030ae25089d288 through 3c908d7f5a927953b84dd6123c497ec9907cac8b, with earlier Phase 23 review findings retained
+**Reviewed implementation:** b7d86939c25fca93dc928c494b9834513e5c1bc5
+**Review delta:** 6ae7a46777348d02bf4e20419df0bfc8a5929591 through b7d86939c25fca93dc928c494b9834513e5c1bc5, with earlier Phase 23 review findings retained
 **Role:** release-consumer
-**Reviewer:** release-consumer-3c908d7f
+**Reviewer:** release-consumer-b7d86939
 
 ## Scope and conclusion
 
-I reviewed the checker-only delta in the clone at `/private/tmp/gabbaboy-phase23.t6o3vA`. It adds exact `v02` label validation for seven existing reserved tests and a wrong-label negative mutation for each. No CMake property, timeout, budget, or assertion changed in this delta. RC-01 through RC-21 retain their identities and fixed dispositions; every recorded fix SHA is an ancestor of the reviewed source. The new self-test passes 135 controls, including the Windows inventory fixture, and I found no additional finding.
+I re-reviewed the exact checker delta in `/private/tmp/gabbaboy-phase23.t6o3vA` at `b7d86939c25fca93dc928c494b9834513e5c1bc5`. It fixes the Windows support-ledger environment-path comparison failure observed at 6ae: the checker now accepts host-equivalent path separator and case spellings for `GBB_TEST_BUILD_DIR`, while retaining exact environment keys and values for all other entries. The self-test includes a Windows positive path variant and a wrong-directory negative. The delta changes only `tests/scripts/verify-workflow-policy-coverage.py`; CMake registrations, timeouts, budgets, labels, and assertions are unchanged. RC-01 through RC-21 retain their identities and fixed dispositions; RC-22 records this corrected Windows checker issue as fixed. The exact-source self-test passed 136 controls and the two focused coverage CTests passed 2/2. No correctness or security finding remains open. The hosted run at 6ae is not green evidence for b7; its failures and cancellations are recorded below.
 
 ## Reserved-label contract
 
@@ -15,24 +15,30 @@ The seven exact label checks cover `fixture_product_core_controls`, `fixture_pro
 
 The self-test fixture assigns each of the seven tests its expected label, then mutates each label to `unexpected` and requires rejection. The count increases from 128 to 135. Its positive Windows inventory still removes only `host_exit_crash_storm` and `save_format_controls`; these seven cross-platform tests remain required. The Windows-positive case and existing Windows negative cases pass within the 135-control self-test.
 
+## Windows support-ledger environment-path contract
+
+The checker parses CTest's support-ledger `ENVIRONMENT` property into unique key/value entries and requires the exact expected key set. It applies Windows path normalization only to `GBB_TEST_BUILD_DIR`; sanitizer options and all other environment values remain exact. The self-test retains the Windows inventory with POSIX-only registrations omitted, accepts an uppercase backslash spelling of the configured build path, and rejects a wrong Windows build directory. This exercises the Windows comparison on the local POSIX host through `ntpath`.
+
 ## Verification
 
-After a fresh CMake configure pinned to `3c908d7f5a927953b84dd6123c497ec9907cac8b`, the workflow-policy production check passed 540 controls across six groups, and its self-test passed 135 controls. The focused exact-source CTest gate passed 14/14 tests, and the full local CTest run passed 1,942/1,942 tests. This replaces the earlier stale-config limitation: the configured inventory and exact-source checks now bind to the reviewed commit.
+At 3c908d7, after a fresh configure pinned to that commit, the workflow-policy production check passed 540 controls across six groups, its self-test passed 135 controls, the focused exact-source CTest gate passed 14/14, and full local CTest passed 1,942/1,942. At b7d86939c25fca93dc928c494b9834513e5c1bc5, the direct exact-source self-test passed 136 controls. The configured CTest command pins both coverage tests to b7; `ctest --test-dir build --output-on-failure -R '^workflow_policy_coverage(_controls)?$'` passed 2/2.
+
+The hosted run at 6ae was not green: Linux native passed; Windows `workflow_policy_coverage` failed on the support-ledger environment-path comparison; native macOS was canceled at its 40-minute cap after 1,927/1,942 tests; and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. These results predate the b7 checker fix and do not establish hosted success for b7. No hosted b7 result was available in this review.
 
 ## Prior release and consumer findings
 
-RC-01 through RC-19 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-20 remains fixed at d0fb and RC-21 remains fixed at 4343d95d. All fixed SHAs resolve and are ancestors of this implementation.
+RC-01 through RC-21 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-22 is fixed at b7d86939c25fca93dc928c494b9834513e5c1bc5. All fixed SHAs resolve and are ancestors of this implementation.
 
-The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged by the 4343-to-current source delta. This delta only tightens the reserved-test label checker.
+The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged by the 6ae-to-b7 source delta. This delta only corrects Windows path equivalence in the workflow-policy checker.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-3c908d7f-20261108-01",
+  "report_id": "gb-23-release-consumer-b7d86939-20261108-01",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-3c908d7f",
+  "reviewer_id": "release-consumer-b7d86939",
   "independent": true,
-  "reviewed_sha": "3c908d7f5a927953b84dd6123c497ec9907cac8b",
+  "reviewed_sha": "b7d86939c25fca93dc928c494b9834513e5c1bc5",
   "findings": [
     {
       "id": "RC-01",
@@ -243,6 +249,16 @@ The release/version-window, lifecycle, product/consumer, fixture, notice-path, a
       "rationale": "The self-test fixture builder now appends only reserved names that are not already policy-group registrations, so workflow_policy_group_ci and workflow_policy_group_rehearsal each appear once. Both remain in PHASE23_RESERVED_TESTS and the common three-slot mutation loop, preserving their individual reservation negatives. The Windows inventory positive and negative cases now execute after the initial POSIX fixture validates. The exact checker self-test reaches 128 controls, the configured coverage check passes, and both coverage CTests pass.",
       "fix_sha": "4343d95dde8597253994efff2e030ae25089d288",
       "verification_ref": "At 3c908d7f5a927953b84dd6123c497ec9907cac8b, after fresh configure, workflow-policy production check passed 540 controls across six groups, self-test passed 135 controls (including one wrong-label negative per reserved v02 test and Windows inventory fixtures), focused exact-source CTest passed 14/14, and full local CTest passed 1,942/1,942. The configured CTest inventory reports LABELS=[v02] for all seven reserved v02 tests; CMake registration/properties are unchanged in the 4343-to-3c source delta."
+    },
+    {
+      "id": "RC-22",
+      "category": "correctness",
+      "severity": "high",
+      "required_property": "The Windows workflow-policy coverage check accepts case- and separator-equivalent spellings of the configured support-ledger build-directory environment path, while rejecting a different directory and preserving exact non-path environment values.",
+      "disposition": "fixed",
+      "rationale": "At 6ae, the required Windows workflow_policy_coverage check failed because the checker compared the support-ledger ENVIRONMENT path as a raw string. The b7 checker parses unique environment entries, applies ntpath normalization only to GBB_TEST_BUILD_DIR on Windows, and keeps the expected environment-key set and other values exact. Its self-test accepts an uppercase backslash path variant in a Windows inventory and rejects a wrong build-directory path.",
+      "fix_sha": "b7d86939c25fca93dc928c494b9834513e5c1bc5",
+      "verification_ref": "At b7d86939c25fca93dc928c494b9834513e5c1bc5, python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev b7d86939c25fca93dc928c494b9834513e5c1bc5 passed with 136 controls. The configured workflow_policy_coverage and workflow_policy_coverage_controls CTests both pin --rev to b7 and passed 2/2. The hosted 6ae Windows failure predates this fix; hosted results at b7 were not available."
     }
   ]
 }
