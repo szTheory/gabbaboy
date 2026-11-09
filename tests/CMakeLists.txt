@@ -1443,6 +1443,7 @@ endfunction()
 gbb_add_v02_contract(fixture_admission_controls 90
   [=[PASS: fixture admission self-test positives=[1-9][0-9]* negative_controls=[1-9][0-9]*]=]
   verify-fixture-admission.py --self-test)
+set_tests_properties(fixture_admission_controls PROPERTIES PROCESSORS 4)
 gbb_add_v02_contract(fixture_admission_repository 30
   [=[PASS: fixture admission repository legacy_files=[1-9][0-9]* admitted_changes=0 baseline=[0-9a-f]+]=]
   verify-fixture-admission.py --check-repository --repo-root "${PROJECT_SOURCE_DIR}")
@@ -1599,7 +1600,7 @@ gbb_add_v02_contract(v02_consumer_controls_cpp 600
   [=["consumer": "cpp", "negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-consumers.py --self-test --consumer cpp)
 # Start these long tests first in a parallel run (see the stall replay note in tests/acceptance/CMakeLists.txt).
-set_tests_properties(v02_consumer_controls_c v02_consumer_controls_cpp PROPERTIES COST 600)
+set_tests_properties(v02_consumer_controls_c v02_consumer_controls_cpp PROPERTIES COST 600 PROCESSORS 4)
 gbb_add_v02_contract(v02_performance_controls 90
   [=["negative_controls": [1-9][0-9]*, "positive_successes": [1-9][0-9]*, "status": "passed"]=]
   verify-v02-performance.py --self-test)

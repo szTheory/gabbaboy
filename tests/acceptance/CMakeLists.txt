@@ -210,7 +210,7 @@ add_test(NAME acceptance_dense_input_controls
     "-DGBB_FORBID_REGEX=no-refill-mutant=passed"
     -DGBB_WORKDIR=${PROJECT_SOURCE_DIR}
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
-set_tests_properties(acceptance_dense_input_controls PROPERTIES TIMEOUT 600 COST 600 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+set_tests_properties(acceptance_dense_input_controls PROPERTIES TIMEOUT 600 COST 600 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR} PROCESSORS 4)
 
 # Private borrowed-span controls from plans 15.1-02 (core fixes 929ce2e and 73d8a53). They drive the
 # private run entry points through the real core, so each one is registered here and is paired below with a
