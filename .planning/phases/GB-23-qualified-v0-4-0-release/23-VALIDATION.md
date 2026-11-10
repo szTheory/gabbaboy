@@ -104,3 +104,7 @@ Plan 23-05 includes the expressly required one-way decision immediately before v
 - [ ] Set `nyquist_compliant: true` only after the verification map is complete and passing.
 
 **Planning status:** Exact task map complete; execution and approval evidence pending. `nyquist_compliant` and `wave_0_complete` remain false until the required checks actually run and pass.
+
+## D-165 hosted qualification result
+
+The one authorized exact-head attempt at `0916cb465211a97b09bf970971f113861adb7141` failed its required native inventory: Linux had one 60-second CTest timeout; Windows had two 60-second timeouts and one 90-second timeout. The Linux sanitizer inventory was cancelled at its existing 55-minute job cap after 1,819/1,853 tests. macOS native and the other completed lanes passed. The three preview jobs failed because required CI failed. See [23-EVIDENCE.md](23-EVIDENCE.md#d-165-exact-head-hosted-qualification-at-0916cb46) for exact timings and run records. This result does not qualify the phase; a new hosted attempt requires an owner-approved rescope.

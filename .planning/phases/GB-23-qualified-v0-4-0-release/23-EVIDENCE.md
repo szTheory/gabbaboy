@@ -189,3 +189,21 @@ The owner approved the narrow environment-binding correction recorded in [D-167]
 | Hosted qualification | Pending. At the read-only check, PR #146 remained open on `gsd/phase-23-qualified-v0-4-0-release` at old head `029a77f5a87682cee545aa99edc1fe5263e5a77c`. The single D-165 exact-head attempt has not started. Push only the final allowlisted qualification candidate after its report gate, then inspect all required exact-head workflows to completion. |
 
 No game or diagnostic fixture was fetched, built, run, or admitted. REL-01 and publication remain Pending. Do not advance beyond Phase 23.
+
+
+## D-165 exact-head hosted qualification at `0916cb46` (2026-11-10)
+
+The single D-165 attempt ran on PR #146 at exact head `0916cb465211a97b09bf970971f113861adb7141`. It did not qualify. CI run [42854792963](https://github.com/szTheory/gabbaboy/actions/runs/42854792963) ended failed/cancelled; preview run [42854792759](https://github.com/szTheory/gabbaboy/actions/runs/42854792759) failed because its required exact-head CI run did not pass. Fixture-reproduction run [42854793507](https://github.com/szTheory/gabbaboy/actions/runs/42854793507) passed. The push event also ran the same short fixture matrix at [42854068884](https://github.com/szTheory/gabbaboy/actions/runs/42854068884), a duplicate trigger observation with seven short jobs; no trigger change is made in this attempt.
+
+| Lane | Result |
+|---|---|
+| Native Linux x64 | Failed at CTest `release_disclosure_controls` timeout 60.05s; 1,941/1,942 tests passed. CTest real time 3,079.67s; job time 3,407s. |
+| Native macOS arm64 | Passed 1,942/1,942 in 2,758s (45m58s). |
+| Native Windows x64 | Failed at `phase21_fixture_admission_controls` 60.03s, `release_disclosure_controls` 60.02s, and `v02_source_archive_controls` 90.01s timeouts; 1,801/1,804 tests passed. CTest real time 4,031.70s; job time 4,163s. |
+| Linux ASan/UBSan inventory | Job hit its existing 55-minute cap and was cancelled at 1,819/1,853 completed tests. `v02_consumer_controls_c` was active when the job ended. |
+| Other CI lanes | CMake 3.25.3 passed in 1,787s; sanitizer build/fuzz passed in 224s; sanitizer acceptance passed in 1,290s; performance gate passed in 63s; macOS player package passed in 491s. |
+| Preview | The three waiters observed the required CI failure and failed before their 4,500-second wait deadline; the aggregate preview gate failed. |
+
+The timed-out controls are existing tests, not changed by the D-167 correction. Local full CTest at the qualified source passed 1,942/1,942 in 1,891.20s; local recorded mean costs are 5.41s for `release_disclosure_controls`, 58.70s for `phase21_fixture_admission_controls`, and 14.96s for `v02_source_archive_controls`. Those local costs do not explain the Linux/Windows hosted timeouts. No code assertion failure or review finding was reported. The ASan job cap and the three test-level timeouts did not complete the required inventory.
+
+D-165 authorized one exact-head hosted attempt and explicitly requires a new owner decision after failure. PR #146 remains open and unmerged. The current approval does not authorize a retry or further budget change. Do not merge, tag, publish, or advance to Phase 24. The next step is an owner decision on an in-place, evidence-bounded T2 rescope for the timed-out controls and incomplete ASan inventory, followed by exact-source reviews and local qualification before any newly authorized hosted attempt. REL-01 and publication remain Pending.
