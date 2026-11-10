@@ -24,8 +24,8 @@ BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "3dd7b17d0761fe3fb90863aed0ece189d62b38c2"
-REVIEWED_POLICY_SHA256 = "26257ef7295c8e443ef3c0ef565b5d54a460741610dbc4dc96c76054a8b2c607"
+REVIEWED_POLICY_COMMIT = "03fb184930754aa845308ea714869cc3c2deef0c"
+REVIEWED_POLICY_SHA256 = "6f7017bce8b3241fd4d9af5bf7c37105a3c9825b1aa5e6e24aab21c4aad36e55"
 REVIEWED_ARCHIVE_HELPER_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
 REVIEWED_ARCHIVE_HELPER_SHA256 = "54fcfd4869ca2f3d085cfac690804858b42c37d73e7032ff6912a4e972123ce5"
 GROUPS = {
@@ -385,6 +385,12 @@ def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
     if event.words != expected:
         reject(f"preview job {job_id} exact-head waiter arguments differ from the required literal command")
     return ["4800"]
+
+
+def validate_fixture_repro_triggers(workflow: str, policy_namespace: dict) -> None:
+    tree = _parse_workflow_text(workflow, "fixture-repro.yml", policy_namespace)
+    if tree.get("on") != {"pull_request": "", "push": {"branches": ["main"]}, "workflow_dispatch": ""}:
+        reject("fixture reproduction must run for every PR, main push, and manual dispatch without duplicate branch pushes")
 
 
 def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
@@ -1899,8 +1905,21 @@ def _self_test(root: Path, revision: str) -> int:
     candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
     candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
     validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
+    candidate_fixture = git_text(root, candidate, ".github/workflows/fixture-repro.yml").decode("utf-8")
+    validate_fixture_repro_triggers(candidate_fixture, candidate_namespace)
     preview_tree = _parse_workflow_text(candidate_preview, "preview.yml", candidate_namespace)
     controls += 1
+    for label, old, new in (
+        ("unrestricted duplicate push", "  push:\n    branches: [main]\n", "  push:\n"),
+        ("missing PR coverage", "  pull_request:\n", ""),
+        ("missing manual recovery", "  workflow_dispatch:\n", ""),
+        ("wrong push branch", "    branches: [main]\n", "    branches: [other]\n"),
+    ):
+        if candidate_fixture.count(old) != 1:
+            reject(f"fixture trigger negative anchor is ambiguous: {label}")
+        mutant = candidate_fixture.replace(old, new, 1)
+        rejected_as(label, "fixture reproduction must run",
+                    lambda mutant=mutant: validate_fixture_repro_triggers(mutant, candidate_namespace))
     # Reject the immediately preceding approved limits as well as older stale limits below.
     for old, stale, reason in (
         ("CI_RUN_WAIT_ATTEMPTS: 160", "CI_RUN_WAIT_ATTEMPTS: 150", "must allow 160 polling attempts"),
@@ -2119,7 +2138,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 594:
+    if controls != 598:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
@@ -2140,6 +2159,8 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
     candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
     validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
+    candidate_fixture = git_text(root, candidate, ".github/workflows/fixture-repro.yml").decode("utf-8")
+    validate_fixture_repro_triggers(candidate_fixture, candidate_namespace)
     expected_tests = git_text(root, candidate, "tests/expected-tests.txt").decode("utf-8").splitlines()
     result = subprocess.run(["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"], cwd=root,
                             capture_output=True, text=True, check=False, timeout=30)

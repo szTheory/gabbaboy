@@ -255,3 +255,9 @@ On 2026-11-10, after session recovery, the owner approved the bounded extension 
 This adds at most five configured runner-minutes to each of four reader jobs (20 total) relative to D-169; it does not renew the existing single hosted-attempt authorization. Preserve every CI producer cap, per-test timeout, assertion, fixture/release gate, required check, historical p50 citation, phase boundary, and review/gap count. Synchronize the four ledger rows and add causal stale-value controls for both the prior D-169/D-165 limits and older historical limits. Complete exact-source reviews and local qualification before the single hosted attempt. Stop after Phase 23.
 
 The owner also requested evidence-supported low-hanging CI optimization during recovery. Inspect measured duplication and dependency costs; preserve coverage and release authority. Do not add speculative caches, dependencies, or concurrency.
+
+## D-171 measured duplicate fixture workflow removal
+
+The owner requested low-hanging CI optimization on 2026-11-10. Recorded runs 42854793507 (PR) and 42854068884 (branch push) reproduced the same seven-job fixture matrix. Restrict only fixture-repro push events to `main`, retaining unconditional PR and workflow_dispatch events and every job body. Non-main branches without PRs use manual dispatch or wait for their PR. The registered immutable workflow-coverage check validates the exact trigger mapping and rejects unrestricted pushes, missing PR coverage, missing manual recovery, and a wrong push branch. This removes one duplicate seven-job workflow on ordinary PR branch updates without changing required evidence.
+
+The production workflow-policy snapshot is re-pinned to its D-170 source solely because D-169/D-170 synchronize existing release self-test mutation anchors with approved values. Preserve baseline AST checks and every other immutable source guard.
