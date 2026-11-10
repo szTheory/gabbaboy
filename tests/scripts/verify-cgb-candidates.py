@@ -9,14 +9,14 @@ acceptance path and is validated from its bound receipt.
 from __future__ import annotations
 
 import argparse
-import contextlib
+import atexit
 import copy
 import hashlib
 import io
 import json
 import os
+import queue
 import re
-import runpy
 import shutil
 import shlex
 import subprocess
@@ -1805,28 +1805,163 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_bytes((json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
 
 
+_CHECKER_WORKER_SOURCE = r'''import contextlib, io, json, runpy, sys, traceback
+
+class OutputLimit(Exception):
+    pass
+
+class LimitedOutput(io.StringIO):
+    def __init__(self, limit):
+        super().__init__()
+        self.limit = limit
+        self.size = 0
+
+    def write(self, value):
+        size = len(value.encode("utf-8", "replace"))
+        if size > self.limit - self.size:
+            raise OutputLimit
+        self.size += size
+        return super().write(value)
+
+def invoke(request):
+    stdout = LimitedOutput(request["output_limit"])
+    stderr = LimitedOutput(request["output_limit"])
+    exit_code = 1
+    output_limit = False
+    try:
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            namespace = runpy.run_path(request["script"], run_name="gbb_candidate_checker_cli")
+            try:
+                exit_code = namespace["main"](request["args"])
+            except SystemExit as error:
+                exit_code = error.code if isinstance(error.code, int) else (0 if error.code is None else 1)
+    except OutputLimit:
+        output_limit = True
+    except BaseException:
+        try:
+            stderr.write(traceback.format_exc())
+        except OutputLimit:
+            output_limit = True
+    return {"exit_code": exit_code, "stdout": stdout.getvalue(), "stderr": stderr.getvalue(),
+            "output_limit": output_limit}
+
+for line in sys.stdin.buffer:
+    try:
+        request = json.loads(line)
+        response = invoke(request)
+    except BaseException:
+        response = {"exit_code": 1, "stdout": "", "stderr": traceback.format_exc(),
+                    "output_limit": False}
+    sys.stdout.write(json.dumps(response, ensure_ascii=True, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+'''
+
+_CHECKER_WORKER: subprocess.Popen | None = None
+_CHECKER_WORKER_RESPONSES: queue.Queue[bytes | None] | None = None
+_CHECKER_WORKER_READER: threading.Thread | None = None
+
+
+def _read_checker_worker(stream: Any, responses: queue.Queue[bytes | None]) -> None:
+    try:
+        for line in iter(stream.readline, b""):
+            responses.put(line)
+    finally:
+        responses.put(None)
+
+
+def _stop_checker_worker() -> None:
+    global _CHECKER_WORKER, _CHECKER_WORKER_RESPONSES, _CHECKER_WORKER_READER
+    process = _CHECKER_WORKER
+    _CHECKER_WORKER = None
+    _CHECKER_WORKER_RESPONSES = None
+    _CHECKER_WORKER_READER = None
+    if process is None:
+        return
+    if process.poll() is None:
+        try:
+            process.terminate()
+            process.wait(timeout=2)
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                process.kill()
+                process.wait(timeout=2)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+    for stream in (process.stdin, process.stdout):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+
+def _checker_worker(root: Path) -> tuple[subprocess.Popen, queue.Queue[bytes | None]]:
+    global _CHECKER_WORKER, _CHECKER_WORKER_RESPONSES, _CHECKER_WORKER_READER
+    if _CHECKER_WORKER is None:
+        script = Path(__file__).resolve()
+        try:
+            _CHECKER_WORKER = subprocess.Popen(
+                [sys.executable, "-I", "-c", _CHECKER_WORKER_SOURCE], cwd=root,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            )
+        except OSError as error:
+            raise Reject("candidate-subprocess-unavailable", f"{script.name}: {error.strerror}") from None
+        _CHECKER_WORKER_RESPONSES = queue.Queue()
+        _CHECKER_WORKER_READER = threading.Thread(
+            target=_read_checker_worker, args=(_CHECKER_WORKER.stdout, _CHECKER_WORKER_RESPONSES), daemon=True,
+        )
+        _CHECKER_WORKER_READER.start()
+        atexit.register(_stop_checker_worker)
+    assert _CHECKER_WORKER is not None and _CHECKER_WORKER_RESPONSES is not None
+    return _CHECKER_WORKER, _CHECKER_WORKER_RESPONSES
+
+
+def _run_checker_cli(root: Path, script: Path, args: tuple[str, ...]) -> subprocess.CompletedProcess[bytes]:
+    process, responses = _checker_worker(root)
+    request = {"script": str(script), "args": list(args), "output_limit": MAX_SUBPROCESS_OUTPUT}
+    try:
+        assert process.stdin is not None
+        process.stdin.write((json.dumps(request, ensure_ascii=True, separators=(",", ":")) + "\n").encode("utf-8"))
+        process.stdin.flush()
+    except (BrokenPipeError, OSError):
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-output-read-failed", script.name) from None
+    try:
+        line = responses.get(timeout=MAX_SUBPROCESS_SECONDS)
+    except queue.Empty:
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-timeout", script.name) from None
+    if line is None:
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-output-read-failed", script.name)
+    try:
+        response = json.loads(line)
+        exit_code = response["exit_code"]
+        stdout = response["stdout"].encode("utf-8", errors="replace")
+        stderr = response["stderr"].encode("utf-8", errors="replace")
+        output_limit = response["output_limit"]
+    except (KeyError, TypeError, ValueError, UnicodeError):
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-output-read-failed", script.name) from None
+    if type(exit_code) is not int or type(output_limit) is not bool:
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-output-read-failed", script.name)
+    if output_limit:
+        raise Reject("candidate-subprocess-output-limit", script.name)
+    return subprocess.CompletedProcess([sys.executable, "-I", str(script), *args], exit_code, stdout, stderr)
+
+
 def run_checker(root: Path, *args: str, expect_code: int = 0,
                 expect_text: str = "") -> str:
     script = root / "tests/scripts/verify-cgb-candidates.py"
-    # Exercise the real CLI parser and main function for every synthetic input, while avoiding
-    # dozens of identical interpreter startups in this one self-test. Each call gets a fresh
-    # script namespace, matching the isolation of a new process for module-level state.
-    stdout = io.StringIO()
-    stderr = io.StringIO()
-    started = time.monotonic()
-    try:
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            namespace = runpy.run_path(str(script), run_name="gbb_candidate_checker_cli")
-            exit_code = namespace["main"](list(args))
-    except SystemExit as error:
-        exit_code = error.code if isinstance(error.code, int) else (0 if error.code is None else 1)
-    if time.monotonic() - started > MAX_SUBPROCESS_SECONDS:
-        raise Reject("candidate-self-test-failed", f"CLI exceeded {MAX_SUBPROCESS_SECONDS}-second bound")
-    output = stdout.getvalue() + stderr.getvalue()
-    if exit_code != expect_code:
+    # Reuse one isolated interpreter, but load the real CLI into a fresh namespace per case.
+    # The worker is forcibly terminated at the original 30-second bound and caps each output stream.
+    result = _run_checker_cli(root, script, args)
+    output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
+    if result.returncode != expect_code:
         detail = output.strip().replace("\n", " ")[-512:]
         raise Reject("candidate-self-test-failed",
-                     f"CLI exit={exit_code} expected={expect_code}: {detail}")
+                     f"CLI exit={result.returncode} expected={expect_code}: {detail}")
     if expect_text and expect_text not in output:
         detail = output.strip().replace("\n", " ")[-512:]
         raise Reject("candidate-self-test-failed", f"CLI omitted {expect_text}: {detail}")

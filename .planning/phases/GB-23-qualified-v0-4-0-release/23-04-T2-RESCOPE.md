@@ -227,7 +227,7 @@ The D-165 exact-head run `42854792963` timed out three existing controls: `relea
 
 On 2026-11-10 the owner approved this narrow correction in place:
 
-- `phase21_fixture_admission_controls` invokes the cloned checker's actual CLI parser and `main()` in a fresh script namespace for each synthetic case, avoiding repeated interpreter startup while retaining return-code/output checks and the 30-second completion threshold. Its outer CTest invocation remains a real isolated Python CLI process.
+- `phase21_fixture_admission_controls` reuses one isolated Python worker for the cloned checker's actual CLI parser and `main()`, loading each synthetic case into a fresh script namespace. The parent kills a timed-out worker at the original 30-second per-call bound; the worker retains separate 1 MiB stdout/stderr caps. Return-code/output checks and the outer real Python CLI CTest invocation remain.
 - `release_disclosure_controls` copies the read-only adoption inputs into one fresh private workspace, then continues to launch the actual adoption CLI for every existing positive and negative case. Each case overwrites only the disposable ledger.
 - `v02_source_archive_controls` caches only immutable Git blobs up to 1 MiB each and 16 MiB total, scoped to one synthetic self-test. Worktree-vs-baseline checks and all product/archive cases remain active; the self-test asserts the cache was reused.
 - `v02_consumer_controls_c` and `_cpp` keep `PROCESSORS 4` and existing CTest timeouts. Their scheduling `COST` remains 600 in ordinary builds and becomes 1,800 in sanitizer builds so both four-slot controls start before short inventory cases.

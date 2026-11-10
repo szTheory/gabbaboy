@@ -215,7 +215,7 @@ The owner approved the profile-driven correction in [23-04-T2-RESCOPE.md](23-04-
 
 Local profiles identified:
 
-- `phase21_fixture_admission_controls`: the full profile run was about 50 seconds under cProfile. Its synthetic cases invoked the checker CLI 54 times, with those child invocations accounting for about 27 seconds cumulatively. The CTest's historical mean is 58.70 seconds. The harness now calls the real parser and `main()` from a fresh script namespace per synthetic case, checks the same exit code/output, and rejects a completion exceeding the existing 30-second bound.
+- `phase21_fixture_admission_controls`: the full profile run was about 50 seconds under cProfile. Its synthetic cases invoked the checker CLI 54 times, with those child invocations accounting for about 27 seconds cumulatively. The CTest's historical mean is 58.70 seconds. The corrected harness reuses one isolated worker, runs the real parser and `main()` in a fresh script namespace per case, preserves the hard 30-second per-call kill and separate 1 MiB stdout/stderr caps, and keeps the same exit-code/output assertions. An earlier in-process prototype passed locally in 35.76 seconds but was rejected in review for losing those subprocess bounds; it is not qualification evidence for the corrected worker.
 - `release_disclosure_controls`: six calls recreated the same read-only adoption input tree; the profiled copies and verifier calls accounted for about 22.6 seconds under cProfile. The self-test now creates one fresh private input workspace and still launches the adoption CLI for every existing positive and negative case. Direct concurrent execution passed 4 positives and 20 negatives.
 - `v02_source_archive_controls`: the profile showed repeated `git show` retrieval of immutable fixture-policy blobs. A self-test-local cache now caps each blob at 1 MiB and aggregate bytes at 16 MiB, and asserts reuse while ordinary worktree checks continue. The self-test passed 17 cases and 92 negative controls during the concurrent direct run.
 
@@ -225,9 +225,9 @@ The sanitizer job was cancelled at 1,819/1,853 tests under the existing 55-minut
 |---|---|
 | Disclosure self-test | Passed: positives=4, controls=20. |
 | Source-archive self-test | Passed: accepted=17, negative controls=92; the bounded-cache-reuse assertion passed. |
-| Candidate-checker controls | Pending exact-source rerun. An exploratory run against old revision `0916cb46` correctly refused because the working source had changed. |
+| Candidate-checker controls | Pending exact-source rerun at the corrected worker commit. A throwaway worker probe confirmed hard timeout, output-cap rejection, and worker reuse; the earlier in-process CTest result is superseded. |
 | Configure/build, workflow and budget checks | Pending. |
-| Exact-source reviews and immutable real-report gate | Pending. |
+| Exact-source reviews and immutable real-report gate | Initial D-168 source `8a6e1536` received BLOCK from security/adversarial/release-consumer review. The timeout/output-bound issue is corrected in a follow-up; the separate release `candidate-fuzz` wait-budget question needs owner direction before changing release workflow budgets. |
 | Focused Phase 23 CTest and full local CTest | Pending. |
 | New hosted qualification | Authorized once, only after the preceding reviews and local gates pass. |
 
