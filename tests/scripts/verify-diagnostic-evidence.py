@@ -23,6 +23,11 @@ MAX_OUTPUT = 32 * 1024 * 1024
 # subprocess text capture and stream it to disk with a 128 MiB ceiling.
 MAX_SOURCE_ARCHIVE_BYTES = 128 * 1024 * 1024
 BASELINE = "f2542c8053db1e5183e0dd0e8702e77afbb2eb59"
+# D-168/D-172 changed only the archive checker's self-test harness. Keep the
+# historical boundary intact and permit exactly its independently reviewed bytes.
+ARCHIVE_HARNESS_PATH = "tests/scripts/verify-v02-source-archive.py"
+ARCHIVE_HARNESS_PIN = "b50f0c10e0794591a212edbfd083f10084805532"
+ARCHIVE_HARNESS_SHA256 = "5a3083b6a7d32c0692672645564241a81d9be0b0939c9ee198afb951f43f183a"
 CHECKER = "tests/scripts/verify-diagnostic-admission.py"
 ASSESSMENT = "tests/external/diagnostic-assessment.json"
 INVENTORY = "tests/external/gbmicrotest-inventory.json"
@@ -832,11 +837,29 @@ def source_archive_configure_control(root: pathlib.Path, revision: str) -> None:
             raise Reject(f"source-archive-configure-failed:{detail}")
 
 
+def reviewed_archive_harness(root: pathlib.Path, revision: str = ARCHIVE_HARNESS_PIN,
+                             digest: str = ARCHIVE_HARNESS_SHA256) -> bytes:
+    try:
+        raw = git(root, "show", f"{revision}:{ARCHIVE_HARNESS_PATH}", limit=MAX_BYTES)
+    except Reject:
+        raise Reject("source-package-review-pin-unavailable") from None
+    if hashlib.sha256(raw).hexdigest() != digest:
+        raise Reject("source-package-review-pin-digest-mismatch")
+    return raw
+
+
+def validate_preserved_path(path: str, raw: bytes | None, root: pathlib.Path) -> None:
+    baseline = git(root, "show", f"{BASELINE}:{path}", limit=MAX_BYTES)
+    if raw == baseline:
+        return
+    if path == ARCHIVE_HARNESS_PATH and raw == reviewed_archive_harness(root):
+        return
+    raise Reject(f"source-package-boundary-changed:{path}")
+
+
 def validate_boundaries(snapshot: dict[str, bytes], root: pathlib.Path,
                         revision: str) -> list[dict[str, Any]]:
-    for path in PRESERVED:
-        if snapshot[path] != git(root, "show", f"{BASELINE}:{path}", limit=MAX_BYTES):
-            raise Reject(f"source-package-boundary-changed:{path}")
+    validate_preserved(snapshot, root)
     added = added_paths(root, revision)
     entries = tree_entries(root, revision)
     for directory in FORBIDDEN_DIRS:
@@ -1019,8 +1042,7 @@ def run_admission_mutant(snapshot: dict[str, bytes], kind: str,
 
 def validate_preserved(snapshot: dict[str, bytes], root: pathlib.Path) -> None:
     for path in PRESERVED:
-        if snapshot.get(path) != git(root, "show", f"{BASELINE}:{path}", limit=MAX_BYTES):
-            raise Reject(f"source-package-boundary-changed:{path}")
+        validate_preserved_path(path, snapshot.get(path), root)
 
 
 def diagnostic_sanitization_control(root: pathlib.Path) -> None:
@@ -1278,11 +1300,26 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
         doc[path] = doc[path].replace(old, new, 1)
         expect_reject(lambda candidate=doc: validate_docs(candidate, complete=True),
                       reason, label)
-    for path in ("LICENSE", "THIRD_PARTY_NOTICES.md", "cmake/FixtureAdmissionPolicy.json"):
-        value = dict(snapshot)
-        value[path] += b"\nmutated\n"
-        expect_reject(lambda item=value: validate_preserved(item, pathlib.Path.cwd()),
-                      "source-package-boundary-changed", "preserved-boundary")
+    preserved_baseline = {path: git(repo, "show", f"{BASELINE}:{path}", limit=MAX_BYTES)
+                          for path in PRESERVED}
+    validate_preserved(preserved_baseline, repo)
+    reviewed = dict(preserved_baseline)
+    reviewed[ARCHIVE_HARNESS_PATH] = reviewed_archive_harness(repo)
+    validate_preserved(reviewed, repo)
+    for path in PRESERVED:
+        changed = dict(reviewed)
+        changed[path] += b"\nmutated\n"
+        try:
+            validate_preserved(changed, repo)
+        except Reject as error:
+            if str(error) != f"source-package-boundary-changed:{path}":
+                raise Reject(f"control-wrong-reason:preserved-boundary:{path}:{error}") from None
+        else:
+            raise Reject(f"control-accepted-mutant:preserved-boundary:{path}")
+    expect_reject(lambda: reviewed_archive_harness(repo, revision="0" * 40),
+                  "source-package-review-pin-unavailable", "unavailable-harness-pin")
+    expect_reject(lambda: reviewed_archive_harness(repo, digest="0" * 64),
+                  "source-package-review-pin-digest-mismatch", "mismatched-harness-pin")
     boundary = minimal_boundary()
     value = dict(boundary)
     value[BOUNDARY_PATHS[-1]] = value[BOUNDARY_PATHS[-1]].replace(
