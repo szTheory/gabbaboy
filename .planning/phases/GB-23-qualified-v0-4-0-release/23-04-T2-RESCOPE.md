@@ -195,3 +195,28 @@ No real CGB game or diagnostic fixture is fetched, built, run, or admitted. REL-
 ## Primary syntax reference
 
 The correction follows [CommonMark 0.31.2](https://spec.commonmark.org/0.31.2/), particularly its tab-stop rules (§2.2), fenced-code block rules (§4.5), emphasis and strong-emphasis flanking (§6.2), link-label rules (§6.3), and autolink/link-text precedence (§§6.3, 6.5).
+
+
+## D-165 Owner-approved Windows and preview runner windows
+
+On 2026-11-10 the owner approved an in-place T3 budget amendment after exact-head run `42718334209` reached the unchanged native-Windows cap at 1,799/1,804 tests. All 200 docs shards passed and no assertion failure appeared before cancellation. The previous comparable Windows run `42679813590` passed 1,804/1,804 in 2,129.15 seconds. In the 199 docs-shard timing rows parsed from each log, mean/median times increased from 9.99/7.19 seconds to 18.66/12.97 seconds. This establishes a slower run, not its cause.
+
+The native Windows job cap increases from 60 to 70 minutes. Because all three exact-head preview jobs wait only 3,900 seconds (65 minutes) and have 75-minute job caps, a Windows-only increase would leave the preview gate waiting too little. Therefore all three preview waiter deadlines increase to 4,500 seconds (75 minutes), and their job caps increase to 85 minutes. This creates a nominal 10-minute cap margin above the waiter deadline; checkout and preflight also consume the job budget. If exact-head CI passes near the deadline, less than 10 minutes remain for package checks; if the waiter expires before success, the job fails and package steps do not run. This increases configured timeout ceilings by up to 40 runner-minutes for the four affected jobs per attempt; successful jobs may complete sooner.
+
+Preserve the historical Windows p50 citation, update the Windows timeout-ledger disclosure, and add paired source-bound positive/stale-value controls for the Windows 70/60-minute ledger values, preview 4,500/3,900-second waits, and preview 85/75-minute job caps. Keep all per-test timeouts, all 200 docs controls and their two-slot reservations, global CTest parallelism, all other job caps, all required checks, and release policy unchanged. Re-review the exact source, rerun local gates, then make one new exact-head hosted attempt. No plan is added and no plan, review, or gap counters are reset. This amendment authorizes only the new T3 attempt; a failed result requires a new owner decision. Phase 24 remains out of scope.
+
+## D-166 owner-approved prior-step waiter isolation
+
+At exact source `e5a2f71dbf2ed27912d0ba810d434e95b9fc8c4c`, independent adversarial and security re-review found that a new step before the exact-head waiter could write a `python3` function to a file and set `BASH_ENV` through `$GITHUB_ENV`. The next shell could source that wrapper and append a stale deadline after the checked `4500` argument. The existing direct workflow/job/step environment checks did not cover environment-file mutations by prior steps.
+
+On 2026-11-10, the owner approved the narrow correction in place. At `170b7eb2ba24ea166376ddf2088ce3d731fddc37`, the source-bound profile requires the waiter to be step 2 immediately after the exact pinned `actions/checkout` step, with the pull-request head ref, full history, and credentials disabled. It pins workflow environment/defaults, requires no job environment/default override, and retains the exact fail-closed waiter step and argv. A causal negative inserts a prior run step that writes a poisoned `BASH_ENV` through `$GITHUB_ENV`; all three preview jobs exercise that negative. Existing comment, variable, branch, function-shadow, disabled-step, shell, and environment negatives remain. The workflow limits, package flow, test inventory, and per-test timeouts do not change.
+
+This correction adds no plan and resets no review/gap counter or CI-attempt budget. Re-review the exact implementation, pass the immutable real-report gate and local qualification, and use only the one D-165 hosted attempt. Any further correctness/security finding requires another owner decision before source changes.
+
+## D-167 owner-approved preview execution-environment binding
+
+At exact source `170b7eb2ba24ea166376ddf2088ce3d731fddc37`, the independent security and adversarial reviewers found that the Linux preview waiter did not bind its execution environment. Adding a job-level `container` with `BASH_ENV` could install a `python3` wrapper and bypass the exact waiter argv check; the Phase 23 profile also did not pin that job's runner.
+
+On 2026-11-10, the owner approved the narrow in-place correction. Require `installed-package-smoke-linux-x64` to use `runs-on: ubuntu-22.04` in the source-bound profile and reject `container` or `services` on all three preview waiter jobs. Add causal negative controls for both keys on each lane and for a changed Linux runner value. Keep the workflow's current runner, D-165 waiter windows and job caps, package flow, test inventory, and all per-test timeouts unchanged.
+
+This adds no plan and resets no review/gap counter or hosted-attempt budget. Reissue all three exact-source reviews and rerun the required local evidence, workflow, focused, and full-suite gates. Use only the single D-165 hosted attempt; any further correctness/security finding requires another owner decision before source changes.

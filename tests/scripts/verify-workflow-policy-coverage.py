@@ -88,6 +88,7 @@ PREVIEW_BUDGET_JOBS = (
     "installed-package-smoke-macos-arm64",
     "player-package-smoke-macos",
 )
+PREVIEW_HOST_RUNNERS = {"installed-package-smoke-linux-x64": "ubuntu-22.04"}
 ADDED_POLICY_FUNCTIONS = {
     "_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test",
     "_fixture_step", "_fixture_call", "_fixture_call_exact", "_fixture_step_event", "check_fixture_admission_workflows",
@@ -321,6 +322,10 @@ def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
         reject("preview workflow may not override the waiter environment or run defaults")
     if job.get("env") or "defaults" in job:
         reject(f"preview job {job_id} may not override the waiter environment or run defaults")
+    if job_id in PREVIEW_HOST_RUNNERS and job.get("runs-on") != PREVIEW_HOST_RUNNERS[job_id]:
+        reject(f"preview job {job_id} must run on {PREVIEW_HOST_RUNNERS[job_id]}")
+    if "container" in job or "services" in job:
+        reject(f"preview job {job_id} may not use a job container or services")
     if job.get("if") or job.get("continue-on-error", "false") not in (False, "false", ""):
         reject(f"preview job {job_id} must remain enabled and fail closed")
     steps = job.get("steps", [])
@@ -1862,7 +1867,27 @@ def _self_test(root: Path, revision: str) -> int:
     stale_windows = _replace_job_block_value(
         candidate_ci, "native-windows", "    timeout-minutes: 70", "    timeout-minutes: 60")
     rejected("stale native-Windows 60-minute cap", lambda: validate_phase23_timeout_profile(stale_windows, candidate_preview, candidate_namespace))
+    unpinned_linux_runner = _replace_job_block_value(
+        candidate_preview, "installed-package-smoke-linux-x64",
+        "    runs-on: ubuntu-22.04", "    runs-on: ubuntu-latest")
+    rejected_as("unpinned Linux preview runner", "must run on ubuntu-22.04",
+                lambda: validate_phase23_timeout_profile(
+                    candidate_ci, unpinned_linux_runner, candidate_namespace))
     for job_id in PREVIEW_BUDGET_JOBS:
+        injected_container = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 85",
+            "    timeout-minutes: 85\n    container:\n      image: ubuntu:22.04\n      env:\n        BASH_ENV: .github/scripts/override.sh")
+        rejected_as(f"job container in {job_id} overrides waiter shell environment",
+                    "may not use a job container or services",
+                    lambda injected_container=injected_container: validate_phase23_timeout_profile(
+                        candidate_ci, injected_container, candidate_namespace))
+        injected_services = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 85",
+            "    timeout-minutes: 85\n    services:\n      override:\n        image: ubuntu:22.04\n        env:\n          BASH_ENV: .github/scripts/override.sh")
+        rejected_as(f"job service in {job_id} adds an unreviewed service environment",
+                    "may not use a job container or services",
+                    lambda injected_services=injected_services: validate_phase23_timeout_profile(
+                        candidate_ci, injected_services, candidate_namespace))
         stale_wait = _replace_job_block_value(
             candidate_preview, job_id, "--deadline-seconds 4500", "--deadline-seconds 3900")
         rejected(f"stale {job_id} 65-minute exact-head wait", lambda stale_wait=stale_wait: validate_phase23_timeout_profile(candidate_ci, stale_wait, candidate_namespace))
@@ -2013,7 +2038,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 566:
+    if controls != 573:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
