@@ -709,28 +709,104 @@ def _private_baseline_repo(scratch, checker):
     return repo
 
 
-def _synthetic_core_product(scratch):
-    checker = _load_product_policy_module()
+# The self-test has two processes. Each owns at most 8 MiB of immutable blobs,
+# keeping combined retained blob data within the existing 16 MiB limit.
+SELF_TEST_BLOB_CACHE_BYTES = 8 << 20
+SELF_TEST_BLOB_CACHE_ENTRY_BYTES = 1 << 20
+
+
+def _cache_self_test_blobs(checker, cache):
     original_blob = checker.blob
-    blob_cache = {}
-    cache_bytes = 0
-    cache_hits = 0
 
     def cached_blob(root, revision, path):
-        nonlocal cache_bytes, cache_hits
-        key = (str(pathlib.Path(root).resolve()), revision, path)
-        if key in blob_cache:
-            cache_hits += 1
-            return blob_cache[key]
+        # Never retain symbolic refs or mutable worktree results. Include checker
+        # bytes so changing a supplied checker cannot inherit its predecessor's cache.
+        if not isinstance(revision, str) or SHA1_RE.fullmatch(revision) is None:
+            return original_blob(root, revision, path)
+        key = (hashlib.sha256(pathlib.Path(checker.__file__).read_bytes()).digest(),
+               str(pathlib.Path(root).resolve()), revision, path)
+        if key in cache["entries"]:
+            cache["hits"] += 1
+            return cache["entries"][key]
         data = original_blob(root, revision, path)
-        if len(data) <= 1 << 20 and cache_bytes + len(data) <= 16 << 20:
-            blob_cache[key] = data
-            cache_bytes += len(data)
+        if len(data) <= SELF_TEST_BLOB_CACHE_ENTRY_BYTES and cache["bytes"] + len(data) <= SELF_TEST_BLOB_CACHE_BYTES:
+            cache["entries"][key] = data
+            cache["bytes"] += len(data)
         return data
 
-    # Git blobs are immutable. This cache is scoped to one synthetic self-test and does
-    # not bypass the worktree byte checks performed by the shared product validator.
     checker.blob = cached_blob
+
+
+def _cache_self_test_cli_blobs(namespace, cache):
+    original_loader = namespace["_shared_policy_checker"]
+    wrapped = set()
+
+    def load_checker(checker_path=None):
+        checker = original_loader(checker_path)
+        if id(checker) not in wrapped:
+            _cache_self_test_blobs(checker, cache)
+            wrapped.add(id(checker))
+        return checker
+
+    namespace["_shared_policy_checker"] = load_checker
+
+
+def _self_test_blob_cache_controls(scratch):
+    from types import SimpleNamespace
+
+    checker_path = scratch / "cache-checker.py"
+    checker_path.write_text("original checker\n", encoding="utf-8")
+    calls = []
+    payload = b"original blob"
+
+    def original_blob(root, revision, path):
+        calls.append((str(root), revision, path))
+        return payload
+
+    checker = SimpleNamespace(__file__=str(checker_path), blob=original_blob)
+    cache = {"entries": {}, "bytes": 0, "hits": 0}
+    _cache_self_test_blobs(checker, cache)
+    revision = "a" * 40
+    first = checker.blob(scratch, revision, "fixture")
+    payload = b"replacement"
+    if checker.blob(scratch, revision, "fixture") != first or len(calls) != 1:
+        raise SystemExit("self-test immutable blob cache did not reuse the exact immutable identity")
+    for root, rev, path in ((scratch / "other", revision, "fixture"),
+                            (scratch, "b" * 40, "fixture"), (scratch, revision, "other")):
+        if checker.blob(root, rev, path) != payload:
+            raise SystemExit("self-test immutable blob cache crossed a root/revision/path boundary")
+    checker_path.write_text("changed checker\n", encoding="utf-8")
+    if checker.blob(scratch, revision, "fixture") != payload:
+        raise SystemExit("self-test immutable blob cache reused bytes across checker source changes")
+    checker.blob(scratch, "HEAD", "fixture")
+    payload = b"moved symbolic ref"
+    if checker.blob(scratch, "HEAD", "fixture") != payload:
+        raise SystemExit("self-test immutable blob cache retained a mutable revision")
+    cache["entries"].clear()
+    cache["bytes"] = 0
+    payload = b"x" * SELF_TEST_BLOB_CACHE_ENTRY_BYTES
+    for index in range(SELF_TEST_BLOB_CACHE_BYTES // len(payload)):
+        checker.blob(scratch, revision, f"entry-{index}")
+    if cache["bytes"] != SELF_TEST_BLOB_CACHE_BYTES:
+        raise SystemExit("self-test immutable blob cache rejected its exact aggregate bound")
+    before = len(calls)
+    checker.blob(scratch, revision, "over-budget")
+    checker.blob(scratch, revision, "over-budget")
+    if cache["bytes"] != SELF_TEST_BLOB_CACHE_BYTES or len(calls) != before + 2:
+        raise SystemExit("self-test immutable blob cache retained data above its aggregate bound")
+    cache["entries"].clear()
+    cache["bytes"] = 0
+    payload += b"x"
+    checker.blob(scratch, revision, "oversized-entry")
+    if cache["entries"] or cache["bytes"]:
+        raise SystemExit("self-test immutable blob cache retained an oversized entry")
+    print("PASS: immutable blob cache identity isolation and resource boundaries")
+
+
+def _synthetic_core_product(scratch):
+    checker = _load_product_policy_module()
+    blob_cache = {"entries": {}, "bytes": 0, "hits": 0}
+    _cache_self_test_blobs(checker, blob_cache)
     repo = _private_baseline_repo(scratch, checker)
     rules, _policy_bytes = checker._product_rules(repo)
     source_contract = checker._product_source_expectations(repo, rules, "core")
@@ -747,7 +823,7 @@ def _synthetic_core_product(scratch):
     inventory = checker.check_product_entries(entries, "core", repo)
     forbidden_source = "fixtures/mooneye-cgb/boot_regs-cgb.gb"
     forbidden_bytes = checker.blob(repo, checker.BASELINE_COMMIT, forbidden_source)
-    if cache_hits == 0:
+    if blob_cache["hits"] == 0:
         raise Reject("source-archive-self-test-failed", "immutable Git blob cache was not reused")
     return checker, repo, product, inventory, forbidden_bytes, rules, source_contract
 
@@ -892,6 +968,8 @@ MAX_SELF_TEST_CLI_OUTPUT = 1_048_576
 
 _SOURCE_ARCHIVE_WORKER_SOURCE = r'''import contextlib, io, json, runpy, sys, traceback
 
+blob_cache = {"entries": {}, "bytes": 0, "hits": 0}
+
 class OutputLimit(Exception):
     pass
 
@@ -913,9 +991,12 @@ def invoke(request):
     stderr = LimitedOutput(request["output_limit"])
     exit_code = 1
     output_limit = False
+    hits_before = blob_cache["hits"]
     try:
         with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             namespace = runpy.run_path(request["script"], run_name="gabbaboy_source_archive_cli")
+            if "_cache_self_test_cli_blobs" in namespace:
+                namespace["_cache_self_test_cli_blobs"](namespace["main"].__globals__, blob_cache)
             try:
                 exit_code = namespace["main"](request["args"])
             except SystemExit as error:
@@ -930,7 +1011,8 @@ def invoke(request):
     if not isinstance(exit_code, int):
         exit_code = 0 if exit_code is None else 1
     return {"exit_code": exit_code, "stdout": stdout.getvalue(), "stderr": stderr.getvalue(),
-            "output_limit": output_limit}
+            "output_limit": output_limit, "blob_cache_hits": blob_cache["hits"] - hits_before,
+            "blob_cache_bytes": blob_cache["bytes"]}
 
 for line in sys.stdin.buffer:
     try:
@@ -938,7 +1020,7 @@ for line in sys.stdin.buffer:
         response = invoke(request)
     except BaseException:
         response = {"exit_code": 1, "stdout": "", "stderr": traceback.format_exc(),
-                    "output_limit": False}
+                    "output_limit": False, "blob_cache_hits": 0, "blob_cache_bytes": blob_cache["bytes"]}
     sys.stdout.write(json.dumps(response, ensure_ascii=True, separators=(",", ":")) + "\n")
     sys.stdout.flush()
 '''
@@ -948,6 +1030,7 @@ _SOURCE_ARCHIVE_WORKER_RESPONSES = None
 _SOURCE_ARCHIVE_WORKER_READER = None
 _SOURCE_ARCHIVE_WORKER_STARTS = 0
 _SOURCE_ARCHIVE_WORKER_CALLS = 0
+_SOURCE_ARCHIVE_WORKER_CACHE_HITS = 0
 
 
 def _read_source_archive_worker(stream, responses):
@@ -1016,7 +1099,7 @@ def _source_archive_worker():
 
 
 def _invoke_cli(script, args, timeout=MAX_SELF_TEST_CLI_SECONDS):
-    global _SOURCE_ARCHIVE_WORKER_CALLS
+    global _SOURCE_ARCHIVE_WORKER_CALLS, _SOURCE_ARCHIVE_WORKER_CACHE_HITS
     process, responses = _source_archive_worker()
     _SOURCE_ARCHIVE_WORKER_CALLS += 1
     request = {"script": str(pathlib.Path(script).resolve()), "args": list(args),
@@ -1041,12 +1124,19 @@ def _invoke_cli(script, args, timeout=MAX_SELF_TEST_CLI_SECONDS):
         stdout = response["stdout"]
         stderr = response["stderr"]
         output_limit = response["output_limit"]
+        cache_hits = response["blob_cache_hits"]
+        cache_bytes = response["blob_cache_bytes"]
     except (KeyError, TypeError, ValueError, UnicodeError):
         _stop_source_archive_worker()
         raise Reject("source-archive-self-test-failed", "isolated CLI worker response was malformed") from None
     if type(code) is not int or not isinstance(stdout, str) or not isinstance(stderr, str) or type(output_limit) is not bool:
         _stop_source_archive_worker()
         raise Reject("source-archive-self-test-failed", "isolated CLI worker response had invalid fields")
+    if (type(cache_hits) is not int or cache_hits < 0 or type(cache_bytes) is not int
+            or not 0 <= cache_bytes <= SELF_TEST_BLOB_CACHE_BYTES):
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker cache exceeded its bound")
+    _SOURCE_ARCHIVE_WORKER_CACHE_HITS += cache_hits
     if output_limit:
         raise Reject("source-archive-self-test-cli-output-limit", pathlib.Path(script).name)
     return code, stderr, stdout
@@ -1146,13 +1236,15 @@ def notice_digest_problems(root, table):
 
 
 def self_test():
-    global _SOURCE_ARCHIVE_WORKER_STARTS, _SOURCE_ARCHIVE_WORKER_CALLS
+    global _SOURCE_ARCHIVE_WORKER_STARTS, _SOURCE_ARCHIVE_WORKER_CALLS, _SOURCE_ARCHIVE_WORKER_CACHE_HITS
     _SOURCE_ARCHIVE_WORKER_STARTS = 0
     _SOURCE_ARCHIVE_WORKER_CALLS = 0
+    _SOURCE_ARCHIVE_WORKER_CACHE_HITS = 0
     script = pathlib.Path(__file__).resolve()
     positives = negatives = 0
     with tempfile.TemporaryDirectory(prefix="gabbaboy-source-archive-") as scratch_name:
         scratch = pathlib.Path(scratch_name)
+        _self_test_blob_cache_controls(scratch)
         negatives += _source_archive_worker_controls(script, scratch)
         sha = "a" * 40
         tag = "v0.0.1"
@@ -1817,6 +1909,8 @@ def self_test():
         raise SystemExit("self-test selected no positive or no negative cases")
     if _SOURCE_ARCHIVE_WORKER_CALLS <= _SOURCE_ARCHIVE_WORKER_STARTS:
         raise SystemExit("self-test CLI worker did not serve multiple isolated invocations")
+    if _SOURCE_ARCHIVE_WORKER_CACHE_HITS == 0:
+        raise SystemExit("self-test CLI worker did not reuse immutable Git blobs")
     _stop_source_archive_worker()
     print(f"PASS: source archive checker accepted {positives} cases and rejected {negatives} negative controls")
 
