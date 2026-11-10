@@ -3758,10 +3758,14 @@ def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tu
         results.append("the lab refuses a permissive replacement of a production gate")
     else:
         raise Reject("control-accepted", "lab integrity accepted a replaced production gate")
-    positives += positive_baselines(ctx)
     with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+        # Baselines use private scenarios and frozen stage snapshots. Give their
+        # existing serial sequence one pool slot so it can overlap independent
+        # controls without increasing the established worker ceiling.
+        baseline = pool.submit(positive_baselines, ctx)
         futures = [pool.submit(fn, ctx) for fn in (*TASK1_CONTROLS, *task2_controls(ctx), *task3_controls(ctx))]
         futures.append(pool.submit(control_transport, template))
+        positives += baseline.result()
         for future in futures:
             outcome = future.result()
             results.extend(outcome if isinstance(outcome, list) else [outcome])
