@@ -314,9 +314,9 @@ jobs:
 
   native-windows:
     name: native-windows-x64
-    # Timeout ledger (D-20): p50 18.59 min in main run 40163270595. PR #146 stopped at 50 min with 1799/1804 tests; 60 lets the full measured suite finish.
+    # Timeout ledger (D-20): historical p50 18.59 min in main run 40163270595. PR #146 run 42718334209 reached the 60-minute cap at 1799/1804 tests without an assertion failure; owner-approved D-165 raises this job to 70 minutes. Historical p50 is unchanged.
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 70
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:

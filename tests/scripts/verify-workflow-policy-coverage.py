@@ -83,6 +83,11 @@ EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workf
 POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
 ALL_PLATFORMS = ("posix", "windows")
 POSIX_ONLY = ("posix",)
+PREVIEW_BUDGET_JOBS = (
+    "installed-package-smoke-linux-x64",
+    "installed-package-smoke-macos-arm64",
+    "player-package-smoke-macos",
+)
 ADDED_POLICY_FUNCTIONS = {
     "_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test",
     "_fixture_step", "_fixture_call", "_fixture_call_exact", "_fixture_step_event", "check_fixture_admission_workflows",
@@ -201,6 +206,39 @@ def git_text(root: Path, revision: str, path: str) -> bytes:
     if result.returncode != 0:
         reject(f"immutable candidate source is unavailable: {revision}:{path}")
     return result.stdout
+
+
+def _workflow_job_block_text(workflow: str, job_id: str) -> str | None:
+    """Extract a top-level job block without executing the workflow being checked."""
+    match = re.search(rf"(?m)^  {re.escape(job_id)}:\s*$", workflow)
+    if match is None:
+        return None
+    next_job = re.search(r"(?m)^  [A-Za-z0-9_-]+:\s*$", workflow[match.end():])
+    end = match.end() + next_job.start() if next_job else len(workflow)
+    return workflow[match.start():end]
+
+
+def _replace_job_block_value(workflow: str, job_id: str, old: str, new: str) -> str:
+    block = _workflow_job_block_text(workflow, job_id)
+    if block is None or block.count(old) != 1:
+        reject(f"cannot create the {job_id} timeout-policy negative control")
+    changed = block.replace(old, new, 1)
+    return workflow.replace(block, changed, 1)
+
+
+def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str) -> None:
+    """Keep the Windows cap and all exact-head preview wait budgets compatible."""
+    windows = _workflow_job_block_text(ci_workflow, "native-windows")
+    if windows is None or re.findall(r"(?m)^    timeout-minutes:\s*(\d+)\s*$", windows) != ["70"]:
+        reject("native-windows timeout must be the owner-approved 70 minutes")
+    for job_id in PREVIEW_BUDGET_JOBS:
+        block = _workflow_job_block_text(preview_workflow, job_id)
+        if block is None:
+            reject(f"preview timeout policy is missing job {job_id}")
+        if re.findall(r"(?m)^    timeout-minutes:\s*(\d+)\s*$", block) != ["85"]:
+            reject(f"preview job {job_id} must retain 10 package minutes after the 75-minute exact-head wait")
+        if re.findall(r"--deadline-seconds\s+(\d+)(?:\s|$)", block) != ["4500"]:
+            reject(f"preview job {job_id} must wait 75 minutes for the exact-head CI result")
 
 
 def resolve_commit(root: Path, revision: str) -> str:
@@ -1644,7 +1682,23 @@ def _self_test(root: Path, revision: str) -> int:
                            if path.startswith(".github/workflows/") and path.endswith(".yml")]
     if ".github/workflows/ci.yml" not in candidate_workflows:
         reject("candidate workflow inventory is missing ci.yml")
+    required_workflows = {".github/workflows/ci.yml", ".github/workflows/preview.yml"}
+    if not required_workflows.issubset(candidate_workflows):
+        reject("candidate workflow inventory is missing ci.yml or preview.yml")
     candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
+    candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
+    validate_phase23_timeout_profile(candidate_ci, candidate_preview)
+    controls += 1
+    stale_windows = _replace_job_block_value(
+        candidate_ci, "native-windows", "    timeout-minutes: 70", "    timeout-minutes: 60")
+    rejected("stale native-Windows 60-minute cap", lambda: validate_phase23_timeout_profile(stale_windows, candidate_preview))
+    for job_id in PREVIEW_BUDGET_JOBS:
+        stale_wait = _replace_job_block_value(
+            candidate_preview, job_id, "--deadline-seconds 4500", "--deadline-seconds 3900")
+        rejected(f"stale {job_id} 65-minute exact-head wait", lambda stale_wait=stale_wait: validate_phase23_timeout_profile(candidate_ci, stale_wait))
+        stale_cap = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 85", "    timeout-minutes: 75")
+        rejected(f"stale {job_id} 75-minute job cap", lambda stale_cap=stale_cap: validate_phase23_timeout_profile(candidate_ci, stale_cap))
     macos_block = candidate_namespace["_workflow_job_block"](
         candidate_ci, "native-macos")
     if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 50\s*$", macos_block):
@@ -1673,6 +1727,24 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject("native-macos 40-minute ledger row was accepted against the 50-minute workflow")
+        stale_ledger_rows = (
+            ("ci.yml:native-windows", 60),
+            ("preview.yml:installed-package-smoke-linux-x64", 75),
+            ("preview.yml:installed-package-smoke-macos-arm64", 75),
+            ("preview.yml:player-package-smoke-macos", 75),
+        )
+        for key, stale_timeout in stale_ledger_rows:
+            fresh_ledger = json.loads(git_text(root, candidate, ".github/ci-timeouts.json").decode("utf-8"))
+            fresh_ledger[key]["timeout_minutes"] = stale_timeout
+            ledger_path.write_text(json.dumps(fresh_ledger, indent=1) + "\n", encoding="utf-8")
+            try:
+                candidate_namespace["check_timeout_ledger"](timeout_fixture, git_root=root)
+            except candidate_namespace["Reject"] as error:
+                if error.code != "timeout-ledger-stale":
+                    reject(f"stale timeout row {key} refused for the wrong reason: {error}")
+                controls += 1
+            else:
+                reject(f"stale timeout row {key} was accepted")
     recorder = candidate_namespace.get("_record_policy_completion")
     if not callable(recorder):
         reject("candidate checker is missing its runtime completion-ID validator")
@@ -1697,7 +1769,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 528:
+    if controls != 540:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
@@ -1713,6 +1785,9 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     validate_manifest(manifest, expected)
     verify_source_identity(root, git_text(root, candidate, POLICY_PATH))
     verify_archive_helper_identity(root, git_text(root, candidate, ARCHIVE_HELPER_PATH))
+    candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
+    candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
+    validate_phase23_timeout_profile(candidate_ci, candidate_preview)
     expected_tests = git_text(root, candidate, "tests/expected-tests.txt").decode("utf-8").splitlines()
     result = subprocess.run(["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"], cwd=root,
                             capture_output=True, text=True, check=False, timeout=30)
