@@ -1,13 +1,15 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** 950c78b0bac936992403511a3cfa41f7cb1069c6
-**Review delta:** 029a77f5a87682cee545aa99edc1fe5263e5a77c through 950c78b0bac936992403511a3cfa41f7cb1069c6, with earlier Phase 23 review findings retained
+**Reviewed implementation:** b50f0c10e0794591a212edbfd083f10084805532
+**Review delta:** 950c78b0bac936992403511a3cfa41f7cb1069c6 through b50f0c10e0794591a212edbfd083f10084805532, with earlier Phase 23 review findings retained
 **Role:** release-consumer
-**Reviewer:** release-consumer-48d8e501
+**Reviewer:** recovery-release-20261110
 
 ## Scope and conclusion
 
-I re-reviewed the exact implementation at `950c78b0bac936992403511a3cfa41f7cb1069c6` in `/private/tmp/gabbaboy-phase23.t6o3vA`. The D-163 amendment sets `PROCESSORS=2` for all 200 docs controls, including shard 0 and shards 1–199. Their commands, assertions, `v02` labels, 90-second limits, and global four-worker CTest setting are unchanged. The checker requires exactly two slots and has a former-four-slot negative plus a wrong-label negative for each docs control; the non-doc reservations remain at four slots. D-164 raises only the native macOS job cap to 50 minutes and synchronizes its ledger row; all per-test ceilings and other job caps remain unchanged. The approved Windows support-ledger path correction remains intact. The source delta does not touch release, consumer, package, notice, or version-window implementation. RC-01 through RC-22 retain their identities and fixed dispositions; RC-23 records and closes a source-binding gap in the new timeout control. No finding remains open.
+I independently reviewed the exact implementation at `b50f0c10e0794591a212edbfd083f10084805532`, including the D-168 harness changes, D-169 worker lifecycle and release-reader correction, D-170 complete CI dependency window, D-171 fixture trigger reduction, and D-172 extension of immutable blob caching into the isolated archive CLI worker. ACCEPT for release/consumer review: no current blocker or warning was proven. The reader budgets match the owner-approved values, worker cleanup precedes synthetic-directory removal even on exceptions, and immutable policy controls reject the superseded budgets and lost fixture triggers. The cache retains only successful bounded immutable reads while fresh CLI namespaces and mutable product checks remain active. The existing release provenance, version-window, installed-consumer, product, and notice implementations have no source changes since the prior reviewed baseline. RC-01 through RC-23 retain their identities, fixes, and historical verification; RC-24 records the corrected release-reader dependency-window defect. Full final local and hosted qualification are separate pending gates, not established by this review.
+
+The historical correctness/security findings were **BLOCKER** findings before remediation; the two historical low-severity quality records (RC-18 and RC-23) were **WARNING** findings. All structured records below are fixed. No necessity finding is asserted.
 
 ## Reserved-label contract
 
@@ -59,15 +61,59 @@ The release/version-window, lifecycle, product/consumer, fixture, notice-path, a
 
 I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original candidate `029a77f5a87682cee545aa99edc1fe5263e5a77c` and the D-167 delta from `170b7eb2ba24ea166376ddf2088ce3d731fddc37`. ACCEPT; no release or consumer blocker. Windows remains 70 minutes; all three preview jobs retain 4,500-second waiters, 85-minute caps, and matching ledger entries. The disclosures correctly call ten minutes nominal, account for checkout/preflight time, and state that expiry fails the package job. The Linux runner is pinned to `ubuntu-22.04`; all three waiter jobs reject containers and services. Package build, smoke, receipt, artifact upload, version, and required release gates are unchanged. The source-bound coverage self-test passed 573 controls; workflow-policy `ci` and `ledger` groups passed; the configured focused Plan 23-04 selection passed 224/224 at this implementation source. No hosted CI ran during review.
 
+## D-168 through D-171 exact-source review
+
+This section records the review performed at `10fee4515c9db0e8b259e089ef2ec41f0453b811`. Its source delta is retained at the current implementation apart from the source-archive cache amendment reviewed separately below.
+
+The changed source scope is `.github/ci-timeouts.json`, `.github/scripts/verify-workflow-policy.py`, the CI/preview/release/fixture-repro workflows, `tests/CMakeLists.txt`, and the candidate, support-ledger, source-archive, and workflow-policy-coverage checkers. I inspected their delta from the prior reviewed baseline and traced the worker/CLI, adoption-copy, immutable-blob, scheduling, and reader-policy call paths. Unchanged product/notice paths were cross-referenced through `verify-fixture-admission.py` and `verify-v02-adoption.py`. No source implementation was edited during this review.
+
+### Harness behavior and cleanup
+
+`verify-cgb-candidates.py:1809-2030` reuses one isolated interpreter but calls the actual CLI `main(args)` after a fresh `runpy.run_path` namespace load. The parent retains the 30-second queue deadline; each captured stream has its own 1,048,576-byte UTF-8 limit. Timeout kills and reaps the worker before a later invocation starts another worker. `:1915-1921` encloses the synthetic directory in a context manager whose `finally` stops the worker before `TemporaryDirectory` cleanup; this covers an exception anywhere in the test body. The causal cleanup control first substitutes a no-op stop and requires `candidate-subprocess-stop-failed`, then performs real cleanup. Its separate exception control verifies process exit and directory deletion after a synthetic exception. These are test-harness changes; admission/source/rights checks and the real outer CLI remain in place.
+
+`verify-support-ledger.py:4213-4418` copies the adoption inputs once into a private self-test workspace. Each case rewrites that workspace's ledger, then invokes the unchanged adoption CLI in a separate process. I traced the generator and all existing altered-value, omission, handwritten-edit, and relocated-disclosure calls: they all retain their assertions and intended diagnostics. The adoption docs check reads these inputs; mutations from an earlier ledger do not survive the next explicit ledger overwrite. Production callers without a workspace retain a fresh temporary copy.
+
+`verify-v02-source-archive.py:713-751` caches only successful immutable Git blob reads keyed by resolved repository, revision, and path, with 1 MiB per blob and 16 MiB total bounds. The source contract, current policy bytes, worktree checks, archive inspection, inventory, and notice checks are still executed. `:890-1085` reuses the real CLI parser/main in a fresh namespace per request, with separate output limits and a bounded response deadline; the existing overflow/deadline controls prove worker reuse after both failures. Unlike the CGB worker, this worker does not select the synthetic directory as its cwd. No Windows process-directory cleanup obstruction was found in this path. All original archive cases remain; the new worker controls add coverage.
+
+The two consumer controls retain four CTest slots, their normal 600-second ceilings, and existing sanitizer timeout scaling. Only their COST hint becomes 1800 in sanitizer builds (`tests/CMakeLists.txt:1582-1591`). The registration checker requires the correct native/sanitizer COST and rejects native 601 and unscaled sanitizer 600. Its Windows fixture retains both controls. The only producer job-cap change in this delta is the approved sanitizer-inventory increase from 55 to 65 minutes. These scheduling hints do not prove final hosted completion.
+
+### Complete reader dependency windows
+
+RC-24 closes the prior short release-reader wait. All three preview waiters now use literal 4800-second deadlines with 90-minute job caps; `candidate-fuzz` uses 160 attempts at 30 seconds, a 4800-second deadline, and a 142-minute job cap (`release.yml:1152-1173`). The configured dependency path is five minutes for changes, 70 for Windows, and five for required-native. A shorter reader wait could expire before that successful path completed because the reader's prerequisites do not guarantee a head start. The release budget check accepts 4800 + 60 + 30 + 2700 + 900 = 8490 seconds within 8520. Preview's nominal ten-minute margin is reduced by checkout/preflight, as the ledger discloses. Hosted queue/service delays remain unbounded by this arithmetic; deadline expiry fails the gate.
+
+The release reader still selects the exact-source main push run, validates its tag/source binding through the trusted checkout, downloads that run and attempt's fuzz/performance receipts, and uses the trusted validators. No publication privilege, receipt identity, package boundary, or release gate was weakened. Historical p50/run citations remain unchanged, and all four reader ledger rows disclose the changed budgets. The coverage checker loads workflows, CMake, and ledger through immutable Git reads before applying stale-value mutations. It rejects the prior 150-attempt/4500-second/137-minute release profile, the older 90-attempt/3000-second/112-minute profile, each former preview deadline/cap, and stale ledger rows. The final policy snapshot matches the actual approved D-170 mutation anchors; its independent baseline AST proof remains active.
+
+### Fixture reproduction triggers
+
+D-171 changes only `fixture-repro.yml:6` by limiting push branches to main. Every PR and manual dispatch still runs, and all seven job bodies are byte-identical to the prior source. This preserves required PR evidence, post-merge main evidence, and manual recovery while removing the measured duplicate feature-branch push matrix. Feature branches without a PR now need manual dispatch or a PR to obtain this evidence, as the decision records. The source-bound checker requires the exact event mapping in both its production check and self-test. Four causal mutations independently reject unrestricted pushes, missing PR coverage, missing dispatch recovery, and the wrong push branch.
+
+### Evidence produced by this reviewer
+
+Against final `10fee4515c9db0e8b259e089ef2ec41f0453b811`, an isolated Python check loaded the coverage verifier and candidate workflow bytes directly from Git objects. The exact reviewed-policy identity and independent baseline AST comparison passed. The approved timeout and fixture-trigger positive cases passed, as did the production release worst-case budget check; all thirteen targeted stale-budget/trigger mutations were rejected. Four mutations exercised the fixture triggers, three the release budget, and six the preview deadlines/caps. This was a focused boundary check, not another full coverage run.
+
+Separate cheap worker reproductions passed: stdout overflow, stderr overflow, shortened timeout, reuse after timeout/overflow, exact exit-code/stdout/stderr preservation, the no-op cleanup negative, and cleanup after a synthetic exception for the CGB worker; source-archive's own overflow, shortened deadline, reuse, and explicit-stop controls passed. The shortened timeouts make these causal reproductions fast; source inspection confirms the real 30-second candidate deadline remains unchanged. They do not claim a live Windows execution or a full-suite timing result.
+
+Prior fixed SHAs were checked for existence and ancestry to the final implementation. The recorded historical verification above remains historical. The parent qualification run owns the final configured/focused/full suite and hosted attempt; no expensive suite or hosted run was launched by this reviewer. Those gates must pass at the actual qualification head before merge/release authority is exercised.
+
+## D-172 isolated archive-worker cache delta
+
+I inspected the complete immutable delta from `10fee4515c9db0e8b259e089ef2ec41f0453b811` to `b50f0c10e0794591a212edbfd083f10084805532`. Only `verify-v02-source-archive.py` and the decision/rescope records change. The unchanged 90-second CTest timeout at 10fee remains failure evidence; the timing profile motivates this cache extension but does not establish the new head's qualification.
+
+`verify-v02-source-archive.py:713-751` now shares the same cache wrapper between the parent harness and fresh CLI helper namespaces. Each process has its own 8 MiB retained-data budget, preserving the previous combined 16 MiB ceiling; each retained entry is at most 1 MiB. A cache key contains the checker source digest, canonical repository root, full lowercase 40-character revision, and path. Symbolic revisions bypass caching. The original bounded blob read completes successfully before an entry is added, so errors are not retained. The wrapper substitutes only `blob()`; I traced `verify-fixture-admission.py:934-949` and confirmed that source policy, repository, notice, and current worktree-byte comparisons continue to run. A cache hit does not substitute a previous product verdict.
+
+The worker still loads the actual script and helper into a fresh namespace for every parser/main invocation (`:991-1003`). It retains one bounded immutable-byte dictionary outside those namespaces, not prior CLI globals or mutable check results. Each returned cache hit/byte statistic is type-checked, negative hits and excess bytes reject, and the self-test requires real worker cache reuse (`:1127-1140`, `:1912-1913`). Every original archive/product/notice case and CLI call remains in the delta; timeout/output handling, job caps and CTest registration are unchanged.
+
+I executed the cache's exact-source boundary controls from the b50 Git object in isolation. They passed identity separation for repository/revision/path/checker bytes, moved symbolic refs, exact aggregate capacity, excess capacity, and oversized entries. I also reran the cheap worker overflow, shortened deadline, reuse, and explicit-stop controls successfully with the new response fields. No full archive self-test, expensive suite or hosted run was started by this reviewer. Final configured CTest timing and full local/hosted qualification remain the parent's responsibility; no success at b50 is inferred from the previous head's results.
+
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-950c78b0-20261110-d167",
+  "report_id": "gb-23-release-consumer-b50f0c10-20261110-recovery",
   "role": "release-consumer",
-  "reviewer_id": "release-consumer-48d8e501",
+  "reviewer_id": "recovery-release-20261110",
   "independent": true,
-  "reviewed_sha": "950c78b0bac936992403511a3cfa41f7cb1069c6",
+  "reviewed_sha": "b50f0c10e0794591a212edbfd083f10084805532",
   "findings": [
     {
       "id": "RC-01",
@@ -298,6 +344,16 @@ I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original
       "rationale": "At d3811b8, the new controls parsed the current working tree while using the supplied revision only for the policy checker source. This let an old 40-minute candidate pass when the checkout contained the new 50-minute cap. The fix reads the candidate's workflow inventory and each required file with git ls-tree/git show, then applies the stale-ledger mutation only in a temporary fixture.",
       "fix_sha": "48d8e501872b9a19138a4653830a40b983199adc",
       "verification_ref": "At 48d8e501872b9a19138a4653830a40b983199adc: workflow-policy coverage self-test passes 528 controls; the same self-test with --rev c9a6320671b56d1092b2884aeac15d6a9320b60f rejects the 40-minute candidate; the direct workflow-policy check passes."
+    },
+    {
+      "id": "RC-24",
+      "category": "correctness",
+      "severity": "high",
+      "required_property": "The exact-source release CI reader can wait through the complete approved producer dependency path, with a reachable attempt/deadline budget, sufficient job cap and matching immutable ledger controls.",
+      "disposition": "fixed",
+      "rationale": "At 3c0489d7 the 3000-second release wait could expire before the 65-minute sanitizer or 70-minute Windows producer plus aggregator completed, with no guaranteed prerequisite head start. D-169 increased the reader budget; D-170 includes the five-minute changes job as well. Final source uses 160 attempts at 30 seconds and a 4800-second deadline, matching the complete 5+70+5-minute path. Its 142-minute cap admits the checked 8490-second worst case. All three preview readers use the same deadline and 90-minute caps, with historical citations preserved and changed-body disclosures. Superseded attempts, deadlines, caps and ledger rows have immutable source-bound negatives.",
+      "fix_sha": "03fb184930754aa845308ea714869cc3c2deef0c",
+      "verification_ref": "At 10fee4515c9db0e8b259e089ef2ec41f0453b811, this reviewer loaded candidate workflows and coverage source directly from Git objects: approved timeout/trigger positives, exact policy snapshot plus baseline AST, production fuzz-wait budget, and thirteen targeted stale-budget/trigger negatives passed. D-169's initial release correction is ancestor 3af81d66d1503f6ae4766d6a411f7604e5d4bd1d; D-170 completes the dependency window at the recorded fix SHA. Final local and hosted qualification remain separate gates."
     }
   ]
 }

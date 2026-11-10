@@ -244,11 +244,11 @@ I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-950c78b0-20261110-d167",
+  "report_id": "phase23-security-recovery-20261110-b50f0c10",
   "role": "security",
-  "reviewer_id": "security-48d8e501",
+  "reviewer_id": "recovery-security-20261110",
   "independent": true,
-  "reviewed_sha": "950c78b0bac936992403511a3cfa41f7cb1069c6",
+  "reviewed_sha": "b50f0c10e0794591a212edbfd083f10084805532",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -396,7 +396,7 @@ I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original
       "severity": "medium",
       "required_property": "Every newly added test-budget row must cite a distinct decision reference present in each immutable base used by the plan and PR checkers, while D-069 remains the governing timeout policy.",
       "disposition": "fixed",
-      "rationale": "D-154 was absent from the plan-pinned base, so the new rows did not resolve. The approved correction maps the 168 new shard 32–199 rows to D-068, which exists and is unused in both checker bases. The 90-second ceilings and shard inventory are unchanged, and D-069 remains the timeout policy. Both exact-base budget checks passed.",
+      "rationale": "D-154 was absent from the plan-pinned base, so the new rows did not resolve. The approved correction maps the 168 new shard 32\u2013199 rows to D-068, which exists and is unused in both checker bases. The 90-second ceilings and shard inventory are unchanged, and D-069 remains the timeout policy. Both exact-base budget checks passed.",
       "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
       "verification_ref": "python3 -I tests/scripts/verify-test-budget.py --build-dir build --base f2b05c9fb3ba314cfe46959b64073ce9441724ca --repo . (pass); same checker against PR base 1ab65414d60828fa9505babeaeea9de0571f016c (pass); tests/ci/test-budget-allowlist: 168 rows use D-068; D-068 exists and is unused at both bases; git diff 7c6f01ad..3c908d7f: no test-budget checker or allowlist changes"
     },
@@ -464,3 +464,31 @@ I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original
 }
 ```
 <!-- gbb-review-evidence:end -->
+
+## Recovery exact-source security re-review (2026-11-10)
+
+I independently reviewed the exact committed implementation at `10fee4515c9db0e8b259e089ef2ec41f0453b811`, including the delta from the previously reviewed `950c78b0` baseline and the relevant unchanged source-identity, input and release-authority boundaries. D-168 through D-171 introduce bounded self-test reuse, approved scheduling and reader-budget changes, and removal of duplicate feature-branch fixture pushes. Earlier verification observations remain historical evidence.
+
+The candidate-checker worker executes the actual CLI parser and `main()` in a fresh script namespace for each case. Its parent retains the 30-second response deadline and separate 1 MiB captured stdout/stderr limits. The context manager stops the worker before synthetic-directory cleanup, including exception exits. At the reviewed source, I ran the production live-worker refusal and exception-cleanup controls; both passed. Independent stdout and stderr overflow probes each rejected with `candidate-subprocess-output-limit`. A synthetic short-deadline probe rejected with `candidate-subprocess-timeout` and confirmed that the worker had been stopped.
+
+The source-archive worker retains a 90-second call bound and separate 1 MiB captured streams. I ran its production overflow, timeout and subsequent-recovery controls; both controls passed. Its immutable blob cache is scoped to the synthetic test and retains at most 1 MiB per entry and 16 MiB total. Disclosure controls reuse only their private copied inputs and continue launching the actual adoption CLI for each case. Neither change expands publication authority.
+
+The immutable D-170 profile accepts all four 4,800-second readers, the three 90-minute preview caps and candidate-fuzz's 160 attempts, 30-second interval and 142-minute cap. Direct probes rejected the preceding release attempt/deadline/cap values and a 4,500-second waiter in each preview lane. Candidate-fuzz's declared worst-case work remains 8,490 seconds within its 8,520-second job cap. Hosted queue or service delays can still cause closed failures.
+
+D-171 changes only fixture-repro's push branch filter to main; PR and manual dispatch coverage and every job body remain present. I exercised the exact immutable trigger validator: the accepted workflow passed, and unrestricted pushes, missing PR coverage, missing manual dispatch and the wrong push branch each rejected for the trigger diagnostic.
+
+I also executed the exact policy snapshot identity and independent historical AST comparison; both passed. The snapshot re-pin changes no production policy behavior beyond the previously inspected mutation anchors. Existing waiter shell/environment protections remain present. Validation of the preserved 21-finding structured record against the new implementation SHA passed, including fix-commit ancestry.
+
+These were cheap targeted probes against source loaded from the reviewed Git commit. I did not run the full suite, complete workflow self-tests, live hosted checks, publication operations or Windows execution. They remain required qualification evidence and are not implied by this security verdict.
+
+No new correctness or security finding. All 21 existing structured findings retain their provenance. SEC-23-09 remains open, low and nonblocking: the cache bounds retained storage but does not cap every Git-output read before materialization.
+
+## D-172 exact-source security delta review
+
+I independently reviewed the D-172 delta at `b50f0c10e0794591a212edbfd083f10084805532`, following my review of `10fee451`. Only the source-archive self-test implementation and its decision records changed; workflow authority and the previously verified threat dispositions remain unchanged.
+
+The parent and worker each retain at most 8 MiB of blob payloads, preserving the combined 16 MiB budget and 1 MiB entry limit. Keys include the helper-source digest, canonical repository, full commit and path. Symbolic revisions bypass caching, and failed reads cannot populate it. The wrapper changes only immutable blob retrieval during self-testing; actual CLI/main calls, fresh namespaces, archive/policy computation and mutable worktree checks remain.
+
+I ran the production cache identity/resource controls against this exact source. They passed root/revision/path separation, changed checker identity, symbolic-ref bypass, exact capacity, excess capacity and oversized-entry checks. An additional probe confirmed failed reads are retried. A small synthetic probe through the actual worker demonstrated cache reuse across fresh namespaces and refusal to reuse bytes after checker-source changes. Existing worker overflow, timeout and recovery controls also passed.
+
+No new correctness/security issue was found. SEC-23-09 remains open and non-blocking. I did not run the full archive self-test, CTest suite, Windows execution or hosted qualification; those remain separate qualification gates.
