@@ -1,13 +1,15 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** b312148d23993a210e3adbc943882d923eab8f36
-**Review delta:** 950c78b0bac936992403511a3cfa41f7cb1069c6 through b312148d23993a210e3adbc943882d923eab8f36, with earlier Phase 23 review findings retained
+**Reviewed implementation:** 5eefa412e679afe6044e3a80f93a73d269ec0c9d
+**Review delta:** b312148d23993a210e3adbc943882d923eab8f36 through 5eefa412e679afe6044e3a80f93a73d269ec0c9d, with earlier Phase 23 review findings retained
 **Role:** release-consumer
-**Reviewer:** recovery-release-20261110
+**Reviewer:** reservation-release-20261110
 
 ## Scope and conclusion
 
-I independently reviewed the exact implementation at `b312148d23993a210e3adbc943882d923eab8f36`, including the D-168 harness changes, D-169 worker lifecycle and release-reader correction, D-170 complete CI dependency window, D-171 fixture trigger reduction, D-172 extension of immutable blob caching into the isolated archive CLI worker, D-173 overlap of the unchanged lifecycle baseline sequence with independent controls inside the existing worker bound, and D-174 integration of the exact reviewed archive-harness snapshot into Phase 22's preservation guard. ACCEPT for release/consumer review: no current blocker or warning was proven. The reader budgets match the owner-approved values, worker cleanup precedes synthetic-directory removal even on exceptions, and immutable policy controls reject the superseded budgets and lost fixture triggers. The cache retains only successful bounded immutable reads while fresh CLI namespaces and mutable product checks remain active. Lifecycle scenarios own their mutable state, and baseline/control exceptions still prevent success. The preservation guard accepts only historical bytes or the specifically reviewed archive snapshot; every other preserved path remains baseline-exact. The existing release provenance, version-window, installed-consumer, product, and notice implementations have no source changes since the prior reviewed baseline. RC-01 through RC-23 retain their identities, fixes, and historical verification; RC-24 records the corrected release-reader dependency-window defect. Full final local and hosted qualification are separate pending gates, not established by this review.
+At exact implementation `5eefa412e679afe6044e3a80f93a73d269ec0c9d`, I independently reviewed the incremental D-175 release/consumer delta from `b312148d23993a210e3adbc943882d923eab8f36`. It reserves four CTest slots for the existing `phase23_review_evidence_controls` test and adds the corresponding immutable coverage-check reservation and three-slot negative. This changes no release workflow, package, consumer, or disclosure behavior. ACCEPT for this incremental release/consumer review: no new blocker or warning was proven.
+
+The prior review at `b312148d23993a210e3adbc943882d923eab8f36` covered the D-168 harness changes, D-169 worker lifecycle and release-reader correction, D-170 complete CI dependency window, D-171 fixture trigger reduction, D-172 extension of immutable blob caching into the isolated archive CLI worker, D-173 overlap of the unchanged lifecycle baseline sequence with independent controls inside the existing worker bound, and D-174 integration of the exact reviewed archive-harness snapshot into Phase 22's preservation guard. Its reader budgets matched the owner-approved values, worker cleanup preceded synthetic-directory removal even on exceptions, and immutable policy controls rejected the superseded budgets and lost fixture triggers. The cache retained only successful bounded immutable reads while fresh CLI namespaces and mutable product checks remained active. Lifecycle scenarios owned their mutable state, and baseline/control exceptions still prevented success. The preservation guard accepted only historical bytes or the specifically reviewed archive snapshot; every other preserved path remained baseline-exact. The existing release provenance, version-window, installed-consumer, product, and notice implementations had no source changes since the prior reviewed baseline. RC-01 through RC-23 retain their identities, fixes, and historical verification; RC-24 records the corrected release-reader dependency-window defect. Full final local and hosted qualification are separate pending gates, not established by either review.
 
 The historical correctness/security findings were **BLOCKER** findings before remediation; the two historical low-severity quality records (RC-18 and RC-23) were **WARNING** findings. All structured records below are fixed. No necessity finding is asserted.
 
@@ -123,15 +125,21 @@ The delta leaves added-payload detection, forbidden fixture directories, the syn
 
 Using the b312 checker read directly from its Git object, I ran only the isolated preservation rule: both full-set positive counterparts passed, all twelve preserved-file mutations rejected with their exact path, and both invalid-pin controls rejected with their intended diagnostic. This is fourteen targeted negative checks, not the complete Phase 22 control/contract or a full qualification run. Historical findings remain fixed and unchanged; no new open release/consumer finding was proven. The parent owns the affected configured checks and final local/hosted qualification. No source changes, expensive duplicate suite, or hosted attempt was made by this reviewer.
 
+## D-175 release-consumer reservation delta
+
+The exact `b312148d23993a210e3adbc943882d923eab8f36` to `5eefa412e679afe6044e3a80f93a73d269ec0c9d` source delta adds `phase23_review_evidence_controls` to the existing CMake `PROCESSORS 4` property group. Its registered command, marker, `v02;planning` labels, 60-second timeout, and expected-test inventory entry are unchanged. The D-175 rescope records that this unchanged control passed isolated at 22.71 seconds, while a full 1,942-test run with no skips reached its existing 60-second timeout at 60.02 seconds under competing load; the reservation uses the existing four-slot ceiling and does not increase CTest's global parallelism.
+
+The immutable workflow-policy checker adds this test to `PHASE23_RESERVED_TESTS`, which feeds the processor-reservation validator. The validator requires one CTest registration, an inventory entry, and exactly four slots for this non-doc control. Its self-test fixture now includes the reservation with four slots; the generic reservation mutation changes it to three and calls the same validator, producing one additional causal negative and changing the expected control total from 598 to 599. A cheap source-bound probe compared the immutable b312 and 5eef blobs and confirmed the inventory/property membership, validator rule, synthetic fixture, three-slot mutation, and count change. The parent reports that fresh exact-source configure/build and registration checks passed; the review-evidence controls completed in 34.47 seconds under the unchanged 60-second limit, both workflow-policy coverage checks passed, and the 599-control immutable self-test passed. I did not duplicate those checks or the expensive full suite. No new release/consumer correctness or security finding was found.
+
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-b312148d-20261110-recovery",
+  "report_id": "gb-23-release-consumer-5eefa412-20261110-reservation",
   "role": "release-consumer",
-  "reviewer_id": "recovery-release-20261110",
+  "reviewer_id": "reservation-release-20261110",
   "independent": true,
-  "reviewed_sha": "b312148d23993a210e3adbc943882d923eab8f36",
+  "reviewed_sha": "5eefa412e679afe6044e3a80f93a73d269ec0c9d",
   "findings": [
     {
       "id": "RC-01",

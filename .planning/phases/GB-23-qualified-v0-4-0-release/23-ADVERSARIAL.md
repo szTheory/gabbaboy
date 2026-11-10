@@ -1,15 +1,15 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** b312148d23993a210e3adbc943882d923eab8f36
+**Reviewed implementation:** 5eefa412e679afe6044e3a80f93a73d269ec0c9d
 **Role:** adversarial
-**Reviewer:** recovery-adversarial-20261110
+**Reviewer:** reservation-adversarial-20261110
 **Independence:** independent source review; no implementation edits or commits.
 
 ## Result
 
-ACCEPT for the reviewed implementation. No correctness or security finding remains open. ADV-01 through ADV-34 retain their historical identities, dispositions, fix commits and verification references in the evidence object below. ADV-35 records the previously reported D-169 worker-cleanup defect, independently rechecked as fixed at this source.
+ACCEPT for the reviewed implementation. No correctness or security finding remains open. ADV-01 through ADV-34 retain their historical identities, dispositions, fix commits and verification references in the evidence object below. ADV-35 records the previously reported D-169 worker-cleanup defect, independently rechecked as fixed at the prior reviewed source. All 35 historical records and their provenance are preserved unchanged.
 
-This recovery review covers the D-168 through D-174 changes from previously reviewed implementation 950c78b0bac936992403511a3cfa41f7cb1069c6, including D-172 from 10fee4515c9db0e8b259e089ef2ec41f0453b811, D-173 from b50f0c10e0794591a212edbfd083f10084805532 and a fresh D-174 integration review from 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593. I inspected the immutable revision and verified the checkout's implementation matched it. Full local qualification, live required checks, and hosted/release qualification remain separate gates; this report does not establish them.
+This adversarial re-review covers D-175 on top of implementation b312148d23993a210e3adbc943882d923eab8f36. Earlier sections preserve the recovery review of D-168 through D-174, including D-172 from 10fee4515c9db0e8b259e089ef2ec41f0453b811, D-173 from b50f0c10e0794591a212edbfd083f10084805532 and D-174 from 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593. I inspected the immutable 5eefa revision and verified the reviewed source files match its Git objects. Full local qualification, live required checks, and hosted/release qualification remain separate gates; this report does not establish them.
 
 ## D-168 bounded execution and preserved controls
 
@@ -81,11 +81,17 @@ I independently reviewed the implementation at b312148d23993a210e3adbc943882d923
 
 As an independent premise check, I compared top-level AST definitions of the historical archive checker and the permitted b50 blob. The only changed pre-existing definitions are run_cli, self_test and _synthetic_core_product; no prior definition is removed. Existing production archive/fixture validation definitions remain identical. The additions support the already reviewed bounded self-test harness. No fixture/payload admission, assessment, Pending/no-go requirement, inventory, timeout or historical boundary check changes in this integration.
 
-Cheap exact-source probes accepted the complete historical preserved snapshot and the complete snapshot using the reviewed archive blob. For each of all twelve preserved paths, both an appended-byte mutation and a missing-value mutation of the complete accepted snapshot rejected with that exact path's source-package-boundary-changed diagnostic. The real pin loader rejected an unavailable revision and a bad digest. I additionally intercepted only the pinned blob read while invoking the complete preservation rule: simulated unavailability and wrong bytes rejected with their distinct pin diagnostics. These causal checks prevent an unrelated preserved-file rejection from earning credit. No new correctness or security finding was established; all 35 historical finding records are preserved. The parent owns affected Phase 22 tests and final qualification; no duplicate full CTest ran in this review.
+Cheap exact-source probes accepted the complete historical preserved snapshot and the complete snapshot using the reviewed archive blob. For each of all twelve preserved paths, both an appended-byte mutation and a missing-value mutation of the complete accepted snapshot rejected with that exact path's source-package-boundary-changed diagnostic. The real pin loader rejected an unavailable revision and a bad digest. I additionally intercepted only the pinned blob read while invoking the complete preservation rule: simulated unavailability and wrong bytes rejected with their distinct pin diagnostics. These causal checks prevent an unrelated preserved-file rejection from earning credit. No new correctness or security finding was established; all 35 historical finding records are preserved. The parent owns affected Phase 22 tests and final qualification; no duplicate full CTest ran in that review.
+
+## D-175 four-slot review-control reservation
+
+I inspected the exact `5eefa412e679afe6044e3a80f93a73d269ec0c9d` delta against `b312148d23993a210e3adbc943882d923eab8f36`. The source delta is limited to adding `phase23_review_evidence_controls` to the existing `PROCESSORS 4` CTest property (tests/CMakeLists.txt:5170-5173), mirroring that test in `PHASE23_RESERVED_TESTS` (tests/scripts/verify-workflow-policy-coverage.py:41-64), and increasing the immutable self-test's expected negative-control count from 598 to 599 (tests/scripts/verify-workflow-policy-coverage.py:2142-2144). The command, isolated Python wrapper, `--self-test` mode, exact `--rev`, success expression, inventory row, `planning;v02` labels, and 60-second timeout are unchanged. No workflow, host cap, global four-worker setting, or merge-authority code changed.
+
+The actual configured CTest listing uses the exact `5eefa` revision and reports `PROCESSORS=4`, `TIMEOUT=60`, and the original labels. The changed source files in the checkout match their Git objects at that commit. The production coverage validator builds its synthetic reservation inventory from `PHASE23_RESERVED_TESTS`; its existing per-reservation mutant changes this test to three processors and requires rejection (tests/scripts/verify-workflow-policy-coverage.py:1458-1460,1626-1630). I invoked the production `validate_registration` against the configured POSIX inventory and the Windows-mode inventory with POSIX-only tests removed: both accept the current reservation, and both reject its omission with the reserved-test diagnostic. A three-processor mutation rejects with the exact four-slot diagnostic. This verifies Windows retention through the validator's platform path without claiming a Windows run. No control, cap, label, or merge gate was weakened, and I found no new correctness or security issue. The parent owns the full/focused CTest and hosted qualification gates.
 
 ## Historical review continuity
 
-Historical finding records below remain unchanged. The public Markdown parser, release-note/version-window matcher, notice and self-test path-confinement code, recovery adoption pin, review-evidence validator, source/package trust judge and legal fixture boundaries have no implementation delta from the reviewed baseline. I traced the changed harnesses into those unchanged production checks.
+Historical finding records below remain unchanged. The public Markdown parser, release-note/version-window matcher, notice and self-test path-confinement code, recovery adoption pin, production review-evidence validator, source/package trust judge and legal fixture boundaries have no implementation delta from the reviewed baseline. The Phase 23 coverage checker changed only to model and count the D-175 reservation, as reviewed above. I traced the changed harnesses into those unchanged production checks.
 
 Earlier source-specific runs and limitations remain historical evidence in each finding's verification_ref; they are not rerun claims for this review. No real game/diagnostic fixture was fetched, built, run or admitted during review; no hosted workflow was started, release published or platform/signing claim promoted.
 
@@ -104,11 +110,11 @@ The parent owns full local qualification and hosted evidence. At 10fee4515 the p
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-b312148d-20261110-recovery",
+  "report_id": "gbb-phase23-adversarial-5eefa412-20261110-reservation",
   "role": "adversarial",
-  "reviewer_id": "recovery-adversarial-20261110",
+  "reviewer_id": "reservation-adversarial-20261110",
   "independent": true,
-  "reviewed_sha": "b312148d23993a210e3adbc943882d923eab8f36",
+  "reviewed_sha": "5eefa412e679afe6044e3a80f93a73d269ec0c9d",
   "findings": [
     {
       "id": "ADV-01",

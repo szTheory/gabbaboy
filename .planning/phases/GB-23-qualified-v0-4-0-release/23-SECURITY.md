@@ -244,11 +244,11 @@ I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-recovery-20261110-b312148d",
+  "report_id": "phase23-security-reservation-20261110-5eefa412",
   "role": "security",
-  "reviewer_id": "recovery-security-20261110",
+  "reviewer_id": "reservation-security-20261110",
   "independent": true,
-  "reviewed_sha": "b312148d23993a210e3adbc943882d923eab8f36",
+  "reviewed_sha": "5eefa412e679afe6044e3a80f93a73d269ec0c9d",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -499,4 +499,8 @@ I independently reviewed the D-173 delta at `33a1e7faf0c4126a4840e3c1c55ee9d1589
 
 ## D-174 exact-source security delta review
 
-I independently reviewed D-174 at `b312148d23993a210e3adbc943882d923eab8f36`. Historical baseline, preserved paths and read bounds remain unchanged. The archive exception accepts only historical bytes or the exact reviewed b50 snapshot with its pinned SHA-256. Cheap probes passed both accepted counterparts, each preserved path's mutation rejection, unavailable-pin and digest-mismatch refusals, and the shared production boundary guard. Further edits reject. No security regression was found. Full qualification remains separate evidence.
+D-174 at `b312148d23993a210e3adbc943882d923eab8f36` retained baselines/bounds and allowed only historical or exact SHA-pinned b50 archive bytes. Probes covered both accepted snapshots, every preserved-path edit, missing/mismatched pins and later edits. No regression; full qualification remained separate.
+
+## D-175 exact-source security delta review
+
+Reviewed `5eefa412e679afe6044e3a80f93a73d269ec0c9d` against accepted `b312148d23993a210e3adbc943882d923eab8f36`. The diff only reserves `phase23_review_evidence_controls` at four slots, mirrors it in `PHASE23_RESERVED_TESTS`, and updates the coverage self-test count from 598 to 599. Its CTest command, assertions, labels, 60-second timeout, global four-worker cap, inventory and merge authority are unchanged. D-175 records the timeout was load-only; isolated runs passed in 35.98 and 22.71 seconds. No new security issue; all 21 structured findings and provenance remain unchanged, including open, low, non-blocking SEC-23-09.
