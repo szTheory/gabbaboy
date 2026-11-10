@@ -139,3 +139,53 @@ This candidate applies the owner-approved native-macOS CI cap change from 40 to 
 | Hosted qualification | Pending one fresh exact-head run on the updated PR candidate. The prior hosted run at `c9a6320671b56d1092b2884aeac15d6a9320b60f` is not evidence for D-164. No merge, tag, or publication is claimed. |
 
 No candidate game or diagnostic fixture was fetched, built, run, or admitted. REL-01, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending where evidence gates are unresolved.
+
+
+## D-164 exact-head hosted qualification at `029a77f5` (2026-11-10)
+
+This is the single hosted attempt authorized for D-164. It confirms the macOS 50-minute cap is sufficient, but Phase 23 T3 remains blocked by the unchanged Windows cap. PR #146 remains open at the exact attempted candidate; this handoff record is local and was not pushed, so it does not trigger another run.
+
+| Lane | Result |
+|---|---|
+| Native Linux | CI run [42718334209](https://github.com/szTheory/gabbaboy/actions/runs/42718334209): passed 1,942/1,942 in 2,265.80 seconds. |
+| Native macOS arm64 | Passed 1,942/1,942 in 2,167.82 seconds under the D-164 50-minute cap. |
+| CMake 3.25.3 floor | Passed 1,942/1,942 in 2,572.12 seconds. |
+| Native Windows x64 | Cancelled at the unchanged 60-minute cap after 1,799/1,804 tests. All 200 docs shards passed; the next workflow-policy test had just started, and no assertion failure appeared before cancellation. |
+| Other required lanes | Sanitizer build/fuzz and acceptance, performance gate, and macOS player package passed. |
+| Fixture and preview | Fixture-reproduction run [42718333927](https://github.com/szTheory/gabbaboy/actions/runs/42718333927) passed. Preview-package run [42718333948](https://github.com/szTheory/gabbaboy/actions/runs/42718333948) failed because required CI did not complete. The version-only gate was skipped by condition. |
+
+The previous exact-head run `42679813590` completed the same Windows inventory, 1,804/1,804, in 2,129.15 seconds. Parsing the 199 docs-shard duration lines present in each job log gives mean/median times of 9.99/7.19 seconds previously and 18.66/12.97 seconds on this run. The evidence shows substantial hosted-runner slowdown; it does not establish that the approved two-slot reservation caused it. No low-risk coverage-preserving CI optimization is supported by these two runs, so the 200-control schedule and required checks remain unchanged.
+
+**Owner-approved D-165 (2026-11-10):** raise native Windows 60→70 minutes; all three preview exact-head wait deadlines 3,900→4,500 seconds; and all three preview job caps 75→85 minutes. The 85-minute caps are ten minutes above the wait deadline before checkout and preflight time. If exact-head CI passes near the deadline, less than ten minutes remain for package checks; if the waiter expires before success, the job fails and package steps do not run. The configured ceilings increase by up to 40 runner-minutes per attempt. Add paired positive/stale-value policy controls, re-review exact source, rerun local gates, and use one fresh exact-head attempt. This does not renew or reset any plan, review, gap, or other phase counter. Implementation and exact-source review are in progress. No Phase 24 work is authorized.
+
+REL-01 and fixture-related release claims remain Pending. Do not advance into Phase 24; resume Plan 23-04 T3 after the owner decision.
+
+
+## D-165 owner-approved scope and implementation status (2026-11-10)
+
+The owner approved the Windows cap, downstream preview waiter, and preview job-cap changes described in [23-04-T2-RESCOPE.md](23-04-T2-RESCOPE.md#d-165-owner-approved-windows-and-preview-runner-windows). The D-164 hosted attempt at `029a77f5` is complete and cannot qualify the new D-165 policy. The corrected implementation at `e5a2f71dbf2ed27912d0ba810d434e95b9fc8c4c` requires its own exact-source reports, local gates, and one new exact-head CI plus fixture/preview workflow attempt. If that attempt does not pass, stop for another owner decision. Keep all user-visible release claims and REL-01 pending until exact-head release gates pass; do not start Phase 24.
+
+
+## D-165 exact-source review corrections at `e5a2f71d` (2026-11-10)
+
+The first adversarial review of `6774831810824740a10b6644f7452eb33091a1f1` found that the new preview-wait regex scanned raw workflow text: an old variable-backed 3,900-second waiter could pass if a shell comment contained `--deadline-seconds 4500`. Commit `07bdf08d17d253abe8d1f2ac63c6bfdf16bf40b1` used the pinned workflow reader, matched each exact folded `run: >-` block to its parsed step, and used the pinned shell parser to inspect active arguments. Re-review then found two more bypasses: an unreachable waiter inside `if false`, and a `python3()` shell function that appended a stale deadline after the checked literal. These were control-coverage defects, not hosted CI failures.
+
+Commit `e5a2f71dbf2ed27912d0ba810d434e95b9fc8c4c` now requires exactly one parsed shell event with the full expected literal argv, no shell frames/assignments/connectors, and the expected unconditional waiter step, environment, and working directory. It rejects workflow/job/step shell or Python environment overrides. Negative controls cover stale comment and variable values, dead-branch waiters, `python3()` shadowing, disabled waiter steps, BASH_ENV injection at workflow/job/step scope, and shell-default changes.
+
+At `e5a2f71d`, the workflow-policy coverage self-test passes 563 controls; direct workflow-policy CI and timeout-ledger checks pass; the timeout ledger parses as JSON; and syntax/diff checks pass. The first release-consumer review accepted `07bdf08d`, but all three roles are now re-reviewing the final exact source `e5a2f71d`. The immutable real-report gate, configure/build/full local CTest, and the single D-165 hosted attempt remain pending; no D-165 hosted attempt has started.
+
+## D-167 exact-source review and local qualification (2026-11-10)
+
+The owner approved the narrow environment-binding correction recorded in [D-167](23-04-T2-RESCOPE.md#d-167-owner-approved-preview-execution-environment-binding). Implementation `950c78b0bac936992403511a3cfa41f7cb1069c6` pins the Linux preview job to `ubuntu-22.04` and rejects `container`/`services` on all three waiter jobs. The D-165 timing values, package flow, test inventory, and per-test ceilings remain unchanged.
+
+| Check | Result |
+|---|---|
+| Independent exact-source reviews | Release-consumer, security, and adversarial reports all ACCEPT `950c78b0bac936992403511a3cfa41f7cb1069c6`; the immutable report gate passed at `7c9067ed5b2822748f611915119c61a1b4290f25` with 3 reports and 78 findings. SEC-23-09 remains the previously disclosed low-severity resource-bound note; no blocking finding is open. |
+| Workflow policy and budget | Source-bound workflow-policy coverage self-test passed 573 controls. The production `ci` and `ledger` groups passed. Test-budget validation passed for 1,942 tests and 288 allowlisted rows. |
+| Configure and build | `cmake --preset phase1` and `cmake --build --preset phase1` passed at the report-evidence candidate. |
+| Focused Phase 23 T2 selection | Passed 224/224 in 1,173.12 seconds at the report-evidence candidate, including both review-evidence CTests and all 200 docs controls. |
+| Full configured CTest | Passed 1,942/1,942 in 1,891.20 seconds with four workers and no skips. All 200 docs controls passed. The 199 numbered docs shards averaged 5.70 seconds (median 5 seconds, maximum 14 seconds). |
+| CI efficiency assessment | The two-slot docs schedule and four-worker overall run completed without timeout or assertion failure. These local timings do not justify a coverage change or speculative scheduler adjustment; assess hosted queue/job/step timing after the exact-head run. |
+| Hosted qualification | Pending. At the read-only check, PR #146 remained open on `gsd/phase-23-qualified-v0-4-0-release` at old head `029a77f5a87682cee545aa99edc1fe5263e5a77c`. The single D-165 exact-head attempt has not started. Push only the final allowlisted qualification candidate after its report gate, then inspect all required exact-head workflows to completion. |
+
+No game or diagnostic fixture was fetched, built, run, or admitted. REL-01 and publication remain Pending. Do not advance beyond Phase 23.
