@@ -244,11 +244,11 @@ I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-recovery-20261110-33a1e7fa",
+  "report_id": "phase23-security-recovery-20261110-b312148d",
   "role": "security",
   "reviewer_id": "recovery-security-20261110",
   "independent": true,
-  "reviewed_sha": "33a1e7faf0c4126a4840e3c1c55ee9d1589d2593",
+  "reviewed_sha": "b312148d23993a210e3adbc943882d923eab8f36",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -496,3 +496,7 @@ No new correctness/security issue was found. SEC-23-09 remains open and non-bloc
 ## D-173 exact-source security delta review
 
 I independently reviewed the D-173 delta at `33a1e7faf0c4126a4840e3c1c55ee9d1589d2593`. An AST comparison confirmed that executable code outside `controls()` is unchanged. Stage snapshots are finalized before pool submission; each baseline creates private Scenario roots, copied stub state and separate workspaces. The baseline sequence occupies one existing executor slot without increasing its worker ceiling. Its result and every negative-control result remain required for success; executor shutdown waits for submitted work when a failure propagates. Cheap probes using the actual Scenario implementation confirmed unique concurrent roots and isolated state. The exact `controls()` orchestration, exercised with inexpensive case stand-ins, demonstrated overlap, complete success accounting, and propagation of both baseline and negative-control failures. No security or correctness regression was found. These probes do not establish production-suite timing; the affected CTest and remaining qualification gates still require separate evidence.
+
+## D-174 exact-source security delta review
+
+I independently reviewed D-174 at `b312148d23993a210e3adbc943882d923eab8f36`. Historical baseline, preserved paths and read bounds remain unchanged. The archive exception accepts only historical bytes or the exact reviewed b50 snapshot with its pinned SHA-256. Cheap probes passed both accepted counterparts, each preserved path's mutation rejection, unavailable-pin and digest-mismatch refusals, and the shared production boundary guard. Further edits reject. No security regression was found. Full qualification remains separate evidence.

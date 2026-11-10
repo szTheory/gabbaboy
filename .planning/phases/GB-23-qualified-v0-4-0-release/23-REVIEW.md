@@ -1,13 +1,13 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593
-**Review delta:** 950c78b0bac936992403511a3cfa41f7cb1069c6 through 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593, with earlier Phase 23 review findings retained
+**Reviewed implementation:** b312148d23993a210e3adbc943882d923eab8f36
+**Review delta:** 950c78b0bac936992403511a3cfa41f7cb1069c6 through b312148d23993a210e3adbc943882d923eab8f36, with earlier Phase 23 review findings retained
 **Role:** release-consumer
 **Reviewer:** recovery-release-20261110
 
 ## Scope and conclusion
 
-I independently reviewed the exact implementation at `33a1e7faf0c4126a4840e3c1c55ee9d1589d2593`, including the D-168 harness changes, D-169 worker lifecycle and release-reader correction, D-170 complete CI dependency window, D-171 fixture trigger reduction, D-172 extension of immutable blob caching into the isolated archive CLI worker, and D-173 overlap of the unchanged lifecycle baseline sequence with independent controls inside the existing worker bound. ACCEPT for release/consumer review: no current blocker or warning was proven. The reader budgets match the owner-approved values, worker cleanup precedes synthetic-directory removal even on exceptions, and immutable policy controls reject the superseded budgets and lost fixture triggers. The cache retains only successful bounded immutable reads while fresh CLI namespaces and mutable product checks remain active. Lifecycle scenarios own their mutable state, and baseline/control exceptions still prevent success. The existing release provenance, version-window, installed-consumer, product, and notice implementations have no source changes since the prior reviewed baseline. RC-01 through RC-23 retain their identities, fixes, and historical verification; RC-24 records the corrected release-reader dependency-window defect. Full final local and hosted qualification are separate pending gates, not established by this review.
+I independently reviewed the exact implementation at `b312148d23993a210e3adbc943882d923eab8f36`, including the D-168 harness changes, D-169 worker lifecycle and release-reader correction, D-170 complete CI dependency window, D-171 fixture trigger reduction, D-172 extension of immutable blob caching into the isolated archive CLI worker, D-173 overlap of the unchanged lifecycle baseline sequence with independent controls inside the existing worker bound, and D-174 integration of the exact reviewed archive-harness snapshot into Phase 22's preservation guard. ACCEPT for release/consumer review: no current blocker or warning was proven. The reader budgets match the owner-approved values, worker cleanup precedes synthetic-directory removal even on exceptions, and immutable policy controls reject the superseded budgets and lost fixture triggers. The cache retains only successful bounded immutable reads while fresh CLI namespaces and mutable product checks remain active. Lifecycle scenarios own their mutable state, and baseline/control exceptions still prevent success. The preservation guard accepts only historical bytes or the specifically reviewed archive snapshot; every other preserved path remains baseline-exact. The existing release provenance, version-window, installed-consumer, product, and notice implementations have no source changes since the prior reviewed baseline. RC-01 through RC-23 retain their identities, fixes, and historical verification; RC-24 records the corrected release-reader dependency-window defect. Full final local and hosted qualification are separate pending gates, not established by this review.
 
 The historical correctness/security findings were **BLOCKER** findings before remediation; the two historical low-severity quality records (RC-18 and RC-23) were **WARNING** findings. All structured records below are fixed. No necessity finding is asserted.
 
@@ -113,15 +113,25 @@ I traced all three baseline functions through `Context.scenario`, `Scenario`, an
 
 For cheap causal evidence, I extracted the exact committed `controls()` AST and ran its orchestration with synthetic dependencies and two worker slots. A baseline that waited for a negative task to start completed, proving overlap without an increased pool. Separate injected baseline and negative-control exceptions both propagated with their original marker; the successful case retained the expected positive/control totals. This probe checks scheduling and failure propagation, not real release behavior or timing. The earlier d5b 60-second CTest failure remains failure evidence; the matching-environment 64.09-second diagnostic is historical. The parent owns the affected real CTest and final focused/full/hosted qualification at the new head; none was duplicated by this reviewer.
 
+## D-174 exact archive snapshot integration
+
+Before implementation I compared the complete f2542c80-to-b50 archive-checker delta and every PRESERVED path at the failed qualification source `68c144be`. Only `verify-v02-source-archive.py` differed among preserved files. Its changed existing definitions were the self-test helpers `run_cli`, `_synthetic_core_product`, and `self_test`; additions implement the bounded worker/cache already reviewed under D-168/D-172. Production archive/fixture validation was unchanged. I recommended applying that already approved harness change through an exact immutable snapshot exception, with the original baseline retained and no arbitrary successor acceptance. The full-run refusal remains recorded failure evidence; the integration does not convert that run to a pass.
+
+I reviewed the exact implementation delta from 33a to `b312148d23993a210e3adbc943882d923eab8f36`. `verify-diagnostic-evidence.py:25-30` keeps BASELINE unchanged and names only the archive checker, full b50 revision, and the independently checked SHA-256 `5a3083b6a7d32c0692672645564241a81d9be0b0939c9ee198afb951f43f183a`. PRESERVED is unchanged. `:840-858` accepts baseline bytes first; otherwise only the archive path can match the exact pinned blob, whose missing object or digest mismatch rejects. No current checkout, descendant commit, caller-supplied policy, or generic source-equivalence exception is used. Both `validate_boundaries()` and `validate_preserved()` reach this one path rule, avoiding separate acceptance policies.
+
+The delta leaves added-payload detection, forbidden fixture directories, the synthetic source requirement, all seven unresolved gates, assessment/inventory facts, Pending requirements, historical boundary checks, and CTest inventory/timeouts intact. Self-test controls accept the whole baseline set and the baseline set with the reviewed archive substituted, then mutate every preserved file independently. They require the exact offending-path rejection, preventing credit from an unrelated preserved-file failure; separate missing-pin and wrong-digest controls remain closed.
+
+Using the b312 checker read directly from its Git object, I ran only the isolated preservation rule: both full-set positive counterparts passed, all twelve preserved-file mutations rejected with their exact path, and both invalid-pin controls rejected with their intended diagnostic. This is fourteen targeted negative checks, not the complete Phase 22 control/contract or a full qualification run. Historical findings remain fixed and unchanged; no new open release/consumer finding was proven. The parent owns the affected configured checks and final local/hosted qualification. No source changes, expensive duplicate suite, or hosted attempt was made by this reviewer.
+
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-33a1e7fa-20261110-recovery",
+  "report_id": "gb-23-release-consumer-b312148d-20261110-recovery",
   "role": "release-consumer",
   "reviewer_id": "recovery-release-20261110",
   "independent": true,
-  "reviewed_sha": "33a1e7faf0c4126a4840e3c1c55ee9d1589d2593",
+  "reviewed_sha": "b312148d23993a210e3adbc943882d923eab8f36",
   "findings": [
     {
       "id": "RC-01",

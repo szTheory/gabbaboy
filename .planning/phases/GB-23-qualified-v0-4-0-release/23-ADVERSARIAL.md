@@ -1,6 +1,6 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593
+**Reviewed implementation:** b312148d23993a210e3adbc943882d923eab8f36
 **Role:** adversarial
 **Reviewer:** recovery-adversarial-20261110
 **Independence:** independent source review; no implementation edits or commits.
@@ -9,7 +9,7 @@
 
 ACCEPT for the reviewed implementation. No correctness or security finding remains open. ADV-01 through ADV-34 retain their historical identities, dispositions, fix commits and verification references in the evidence object below. ADV-35 records the previously reported D-169 worker-cleanup defect, independently rechecked as fixed at this source.
 
-This recovery review covers the D-168 through D-173 changes from previously reviewed implementation 950c78b0bac936992403511a3cfa41f7cb1069c6, including D-172 from 10fee4515c9db0e8b259e089ef2ec41f0453b811 and a fresh D-173 delta review from b50f0c10e0794591a212edbfd083f10084805532. I inspected the immutable revision and verified the checkout's implementation matched it. Full local qualification, live required checks, and hosted/release qualification remain separate gates; this report does not establish them.
+This recovery review covers the D-168 through D-174 changes from previously reviewed implementation 950c78b0bac936992403511a3cfa41f7cb1069c6, including D-172 from 10fee4515c9db0e8b259e089ef2ec41f0453b811, D-173 from b50f0c10e0794591a212edbfd083f10084805532 and a fresh D-174 integration review from 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593. I inspected the immutable revision and verified the checkout's implementation matched it. Full local qualification, live required checks, and hosted/release qualification remain separate gates; this report does not establish them.
 
 ## D-168 bounded execution and preserved controls
 
@@ -75,6 +75,14 @@ Independent cheap scheduling probes invoked the actual current controls function
 
 No new correctness or security defect was established. The earlier focused 60-second timeout and matching-environment diagnostic remain historical evidence for the scheduling decision, not current qualification. The parent owns the affected CTest and final focused/full/hosted results; this reviewer did not run an expensive duplicate lifecycle suite.
 
+## D-174 exact-source preservation-rule integration
+
+I independently reviewed the implementation at b312148d23993a210e3adbc943882d923eab8f36. The sole source delta is tests/scripts/verify-diagnostic-evidence.py. Its historical BASELINE and complete twelve-path PRESERVED tuple remain unchanged. Every preserved path must still equal the baseline, with one exact exception: the archive checker may instead equal the full blob at b50f0c10e0794591a212edbfd083f10084805532 whose SHA-256 is pinned to 5a3083b6a7d32c0692672645564241a81d9be0b0939c9ee198afb951f43f183a. This grants no permission to a descendant revision or further byte edit. Both validation entrypoints share validate_preserved and validate_preserved_path (tests/scripts/verify-diagnostic-evidence.py:837-862,1043-1045). Missing or mismatched reviewed bytes reject before they can satisfy the exception.
+
+As an independent premise check, I compared top-level AST definitions of the historical archive checker and the permitted b50 blob. The only changed pre-existing definitions are run_cli, self_test and _synthetic_core_product; no prior definition is removed. Existing production archive/fixture validation definitions remain identical. The additions support the already reviewed bounded self-test harness. No fixture/payload admission, assessment, Pending/no-go requirement, inventory, timeout or historical boundary check changes in this integration.
+
+Cheap exact-source probes accepted the complete historical preserved snapshot and the complete snapshot using the reviewed archive blob. For each of all twelve preserved paths, both an appended-byte mutation and a missing-value mutation of the complete accepted snapshot rejected with that exact path's source-package-boundary-changed diagnostic. The real pin loader rejected an unavailable revision and a bad digest. I additionally intercepted only the pinned blob read while invoking the complete preservation rule: simulated unavailability and wrong bytes rejected with their distinct pin diagnostics. These causal checks prevent an unrelated preserved-file rejection from earning credit. No new correctness or security finding was established; all 35 historical finding records are preserved. The parent owns affected Phase 22 tests and final qualification; no duplicate full CTest ran in this review.
+
 ## Historical review continuity
 
 Historical finding records below remain unchanged. The public Markdown parser, release-note/version-window matcher, notice and self-test path-confinement code, recovery adoption pin, review-evidence validator, source/package trust judge and legal fixture boundaries have no implementation delta from the reviewed baseline. I traced the changed harnesses into those unchanged production checks.
@@ -90,17 +98,17 @@ At exact implementation 10fee4515c9db0e8b259e089ef2ec41f0453b811:
 - Candidate worker probes passed separate stream boundaries, both overflow causes, actual 30-second timeout and termination, restart, actual parser execution, fresh namespaces, causal disabled-stop rejection and exception cleanup.
 - Source-archive worker probes passed parser/help reuse, both stream boundaries, overflow rejection, forced timeout and restart.
 
-The parent owns full local qualification and hosted evidence. At 10fee4515 the parent reported v02_source_archive_controls reaching its unchanged 90-second ceiling; that failure is retained as historical evidence. Subsequent D-172 and D-173 source reviews appear above; the parent runs the affected tests and final qualification. This reviewer started no additional full suite. No new correctness/security finding requires an owner rescope; the parent must establish current local and hosted results.
+The parent owns full local qualification and hosted evidence. At 10fee4515 the parent reported v02_source_archive_controls reaching its unchanged 90-second ceiling; that failure is retained as historical evidence. Subsequent source reviews appear above; the parent runs affected tests and final qualification, preserving the Phase 22 whole-file mismatch observed at 68c144be. This reviewer started no additional full suite. No new correctness/security finding requires an owner rescope; the parent must establish current local and hosted results.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-33a1e7fa-20261110-recovery",
+  "report_id": "gbb-phase23-adversarial-b312148d-20261110-recovery",
   "role": "adversarial",
   "reviewer_id": "recovery-adversarial-20261110",
   "independent": true,
-  "reviewed_sha": "33a1e7faf0c4126a4840e3c1c55ee9d1589d2593",
+  "reviewed_sha": "b312148d23993a210e3adbc943882d923eab8f36",
   "findings": [
     {
       "id": "ADV-01",
