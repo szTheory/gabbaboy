@@ -276,32 +276,97 @@ def _folded_waiter_run(preview_workflow: str, job_id: str, job: dict) -> str:
     return " ".join(parsed_runs[0].splitlines())
 
 
+def _replace_folded_waiter_run(workflow: str, job_id: str, replacement: str) -> str:
+    """Replace only the exact folded waiter scalar for a shell-policy negative control."""
+    block = _workflow_job_block_text(workflow, job_id)
+    if block is None:
+        reject(f"preview timeout policy is missing job {job_id}")
+    lines = block.splitlines()
+    matches = []
+    index = 0
+    while index < len(lines):
+        if lines[index] != "        run: >-":
+            index += 1
+            continue
+        start = index + 1
+        index += 1
+        scalar_lines = []
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() and len(line) - len(line.lstrip(" ")) <= 8:
+                break
+            if line.strip():
+                if len(line) - len(line.lstrip(" ")) != 10:
+                    reject(f"preview job {job_id} has unsupported exact-head command indentation")
+                scalar_lines.append(line[10:])
+            elif scalar_lines:
+                reject(f"preview job {job_id} exact-head command contains a folded-scalar blank line")
+            index += 1
+        if ".github/scripts/wait-exact-head-ci.py" in " ".join(scalar_lines):
+            matches.append((start, index))
+    if len(matches) != 1:
+        reject(f"preview job {job_id} does not have one folded waiter scalar to mutate")
+    start, end = matches[0]
+    lines[start:end] = [f"          {replacement}"]
+    changed = "\n".join(lines)
+    return workflow.replace(block, changed, 1)
+
+
 def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
-                            policy_namespace: dict) -> list[str]:
+                            preview_tree: dict, policy_namespace: dict) -> list[str]:
     shell_events = policy_namespace.get("shell_events")
     if shell_events is None:
         reject("pinned shell parser is unavailable")
-    invocations = []
+    for scope_name, scope in (("workflow", preview_tree), ("job", job)):
+        env = scope.get("env", {})
+        if not isinstance(env, dict) or {key.upper() for key in env} & {
+                "BASH_ENV", "ENV", "PATH", "PYTHONHOME", "PYTHONPATH"}:
+            reject(f"preview {scope_name} may not override the waiter shell or Python environment")
+        defaults = scope.get("defaults", {})
+        run_defaults = defaults.get("run", {}) if isinstance(defaults, dict) else {}
+        if run_defaults and ("shell" in run_defaults or "working-directory" in run_defaults):
+            reject(f"preview {scope_name} may not override the waiter shell or working directory")
+    if job.get("if") or job.get("continue-on-error", "false") not in (False, "false", ""):
+        reject(f"preview job {job_id} must remain enabled and fail closed")
+    waiter_steps = [step for step in job.get("steps", [])
+                    if ".github/scripts/wait-exact-head-ci.py" in step.get("run", "")]
+    if len(waiter_steps) != 1:
+        reject(f"preview job {job_id} must expose exactly one waiter step")
+    step = waiter_steps[0]
+    expected_name = ("Find the exact successful player build run" if job_id == "player-package-smoke-macos"
+                     else "Verify matching successful required CI run")
+    expected_step_env = {
+        "GH_TOKEN": "${{ github.token }}",
+        "EXPECTED_SHA": "${{ github.event.pull_request.head.sha }}",
+    }
+    if (step.get("name") != expected_name or step.get("env") != expected_step_env
+            or (step.get("id") != "candidate" if job_id == "player-package-smoke-macos" else "id" in step)
+            or "if" in step or step.get("shell") not in (None, "bash") or "working-directory" in step
+            or step.get("continue-on-error", "false") not in (False, "false", "")):
+        reject(f"preview job {job_id} waiter step must stay unconditional, trusted, and fail closed")
     try:
         events = shell_events(_folded_waiter_run(preview_workflow, job_id, job))
     except Exception as error:
         reject(f"preview job {job_id} has an unreadable shell command: {error}")
-    invocations.extend(
-        event.words for event in events
-        if event.words[:2] == ["python3", ".github/scripts/wait-exact-head-ci.py"]
-    )
-    if len(invocations) != 1:
-        reject(f"preview job {job_id} must run exactly one parsed exact-head waiter command")
-    words = invocations[0][2:]
-    deadlines = []
-    for index, word in enumerate(words):
-        if word == "--deadline-seconds":
-            if index + 1 >= len(words):
-                reject(f"preview job {job_id} has an exact-head waiter without a deadline value")
-            deadlines.append(words[index + 1])
-        elif word.startswith("--deadline-seconds="):
-            deadlines.append(word.partition("=")[2])
-    return deadlines
+    if len(events) != 1:
+        reject(f"preview job {job_id} must contain only one shell command for its exact-head waiter")
+    event = events[0]
+    if (event.frames or event.assigns or event.connector is not None or event.guard
+            or event.words[:2] != ["python3", ".github/scripts/wait-exact-head-ci.py"]):
+        reject(f"preview job {job_id} exact-head waiter must be a standalone unconditional command")
+    expected = [
+        "python3", ".github/scripts/wait-exact-head-ci.py",
+        "--sha", "$EXPECTED_SHA", "--repo", "$GITHUB_REPOSITORY",
+        "--require", "required-native",
+    ]
+    if job_id == "player-package-smoke-macos":
+        expected.extend(["--require", "macos-player-package", "--planning-skippable", "macos-player-package"])
+    expected.extend(["--deadline-seconds", "4500"])
+    if job_id == "player-package-smoke-macos":
+        expected.extend(["--github-output", "$GITHUB_OUTPUT", "--attempt-job", "macos-player-package"])
+    if event.words != expected:
+        reject(f"preview job {job_id} exact-head waiter arguments differ from the required literal command")
+    return ["4500"]
 
 
 def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
@@ -318,7 +383,7 @@ def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
             reject(f"preview timeout policy is missing job {job_id}")
         if job.get("timeout-minutes") != "85":
             reject(f"preview job {job_id} must retain an 85-minute cap for the 75-minute exact-head wait")
-        if _preview_wait_deadlines(job, job_id, preview_workflow, policy_namespace) != ["4500"]:
+        if _preview_wait_deadlines(job, job_id, preview_workflow, preview_tree, policy_namespace) != ["4500"]:
             reject(f"preview job {job_id} must wait 75 minutes for the exact-head CI result")
 
 
@@ -1769,6 +1834,7 @@ def _self_test(root: Path, revision: str) -> int:
     candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
     candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
     validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace)
+    preview_tree = _parse_workflow_text(candidate_preview, "preview.yml", candidate_namespace)
     controls += 1
     stale_windows = _replace_job_block_value(
         candidate_ci, "native-windows", "    timeout-minutes: 70", "    timeout-minutes: 60")
@@ -1783,9 +1849,60 @@ def _self_test(root: Path, revision: str) -> int:
         rejected(f"comment-only 75-minute deadline in stale {job_id} waiter",
                  lambda comment_only_wait=comment_only_wait: validate_phase23_timeout_profile(
                      candidate_ci, comment_only_wait, candidate_namespace))
+        current_waiter = _folded_waiter_run(candidate_preview, job_id, preview_tree["jobs"][job_id])
+        dead_branch_waiter = _replace_folded_waiter_run(
+            candidate_preview, job_id, f"if false; then {current_waiter}; fi; true")
+        rejected(f"unreachable {job_id} exact-head waiter decoy",
+                 lambda dead_branch_waiter=dead_branch_waiter: validate_phase23_timeout_profile(
+                     candidate_ci, dead_branch_waiter, candidate_namespace))
+        shadowed_waiter = _replace_folded_waiter_run(
+            candidate_preview, job_id,
+            f'python3() {{ command python3 "$@" --deadline-seconds 3900; }}; {current_waiter}')
+        rejected(f"shadowed {job_id} Python waiter with appended stale deadline",
+                 lambda shadowed_waiter=shadowed_waiter: validate_phase23_timeout_profile(
+                     candidate_ci, shadowed_waiter, candidate_namespace))
+        disabled_waiter = _replace_job_block_value(
+            candidate_preview, job_id, "        run: >-", "        if: false\n        run: >-")
+        rejected(f"disabled {job_id} exact-head waiter step",
+                 lambda disabled_waiter=disabled_waiter: validate_phase23_timeout_profile(
+                     candidate_ci, disabled_waiter, candidate_namespace))
+        waiter_env = (
+            "        env:\n"
+            "          GH_TOKEN: ${{ github.token }}\n"
+            "          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}"
+        )
+        injected_step_env = _replace_job_block_value(
+            candidate_preview, job_id, waiter_env,
+            waiter_env + "\n          BASH_ENV: .github/scripts/override.sh")
+        rejected(f"injected BASH_ENV in {job_id} waiter step",
+                 lambda injected_step_env=injected_step_env: validate_phase23_timeout_profile(
+                     candidate_ci, injected_step_env, candidate_namespace))
+        injected_job_env = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 85",
+            "    timeout-minutes: 85\n    env:\n      BASH_ENV: .github/scripts/override.sh")
+        rejected(f"injected BASH_ENV in {job_id} job environment",
+                 lambda injected_job_env=injected_job_env: validate_phase23_timeout_profile(
+                     candidate_ci, injected_job_env, candidate_namespace))
+        job_shell_override = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 85",
+            "    timeout-minutes: 85\n    defaults:\n      run:\n        shell: sh")
+        rejected(f"overridden shell in {job_id} run defaults",
+                 lambda job_shell_override=job_shell_override: validate_phase23_timeout_profile(
+                     candidate_ci, job_shell_override, candidate_namespace))
         stale_cap = _replace_job_block_value(
             candidate_preview, job_id, "    timeout-minutes: 85", "    timeout-minutes: 75")
         rejected(f"stale {job_id} 75-minute job cap", lambda stale_cap=stale_cap: validate_phase23_timeout_profile(candidate_ci, stale_cap, candidate_namespace))
+    root_env = "  PREVIEW_RETENTION_DAYS: 14\n"
+    if candidate_preview.count(root_env) != 1:
+        reject("cannot create the preview workflow BASH_ENV negative control")
+    injected_root_env = candidate_preview.replace(
+        root_env, root_env + "  BASH_ENV: .github/scripts/override.sh\n", 1)
+    rejected("injected workflow-level BASH_ENV", lambda: validate_phase23_timeout_profile(
+        candidate_ci, injected_root_env, candidate_namespace))
+    root_shell_override = candidate_preview.replace(
+        root_env, root_env + "defaults:\n  run:\n    shell: sh\n", 1)
+    rejected("overridden preview workflow run shell", lambda: validate_phase23_timeout_profile(
+        candidate_ci, root_shell_override, candidate_namespace))
     macos_block = candidate_namespace["_workflow_job_block"](
         candidate_ci, "native-macos")
     if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 50\s*$", macos_block):
@@ -1856,7 +1973,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 543:
+    if controls != 563:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
