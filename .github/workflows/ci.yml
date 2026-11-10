@@ -497,7 +497,7 @@ jobs:
   linux-sanitizers-tests:
     # The ASan inventory runs apart from the bounded fuzz campaign, split by the complementary '^acceptance_'
     # filter so each shard stays inside its measured 65-minute bound and the whole ci run stays inside the preview
-    # and release waiters' budgets. Each shard checks exactly its slice of tests/expected-tests.txt; together the
+    # waiters' and D-169 release-reader budgets. Each shard checks exactly its slice of tests/expected-tests.txt; together the
     # slices are the whole inventory (LESSONS GB-CI-004, GB-CI-010).
     name: linux-asan-ubsan-tests
     runs-on: ubuntu-24.04

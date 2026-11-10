@@ -160,6 +160,22 @@ The previous exact-head run `42679813590` completed the same Windows inventory, 
 
 REL-01 and fixture-related release claims remain Pending. Do not advance into Phase 24; resume Plan 23-04 T3 after the owner decision.
 
+## D-168 follow-up review and local stop at `3c0489d7` (2026-11-10)
+
+The current implementation candidate is `3c0489d722728c23f2369a0dced49c996b9ac9dc`. The owner-approved D-167 Linux runner/container guard is already present in this source: the Linux waiter is pinned to `ubuntu-22.04`, all three waiter jobs reject `container` and `services`, and the source-bound self-test exercises those mutations. The three current reviewers found no remaining D-167 bypass.
+
+| Check | Result |
+|---|---|
+| Configure/build | `cmake --preset phase1` had configured this checkout; `cmake --build --preset phase1 -j4` passed and regenerated the exact CGB runner qualification for `3c0489d7`. |
+| Exact-source reviews | Security accepted the D-168 worker timeout/output bounds. Adversarial review blocked on a Windows cleanup issue: the reusable worker keeps the synthetic `TemporaryDirectory` as its current directory until `atexit`, after the directory context exits. Release-consumer review blocked on the separate `candidate-fuzz` release waiter budget. These reviews are on the exact current source; the formal report files still need reissue after the owner-approved corrections. |
+| Targeted local CTests | 11/12 passed, including fixture-admission, release-disclosure, workflow-policy, test-budget, and review-evidence controls. `v02_source_archive_controls` timed out at its unchanged 90-second ceiling without an assertion diagnostic. It reserves all four CTest processors, and an isolated rerun also timed out at 90 seconds. |
+| Focused/full local suite | Not run at this candidate because the exact-source review found a correctness blocker and the source-archive gate is not passing. |
+| Hosted qualification | Not started. No D-168 exact-head attempt has been used. |
+
+The release-consumer finding is specific: `.github/workflows/release.yml` lets `candidate-fuzz` wait 3,000 seconds (50 minutes) for exact-source CI. Its `needs: [release, candidate]` creates no guaranteed lead time, while CI may run the 65-minute sanitizer lane or the 70-minute Windows lane plus the required-native aggregate. The current 112-minute release job cap also cannot accommodate a 75-minute wait plus its existing post-CI poll and margins. No release workflow or budget change has been made.
+
+Per the D-168 rescope stop rule, do not make further source changes until the owner decides whether to approve (a) stopping the worker before synthetic temporary-directory cleanup and (b) a bounded candidate-fuzz budget correction, recommended as a 4,500-second wait and 137-minute job cap with paired source-bound controls and ledger disclosure. If approved, preserve all other budgets and investigate the source-archive timeout within its existing 90-second limit before focused/full qualification. Phase 23 remains active at Plan 23-04 T3; stop at the Phase 23 boundary.
+
 
 ## D-165 owner-approved scope and implementation status (2026-11-10)
 
@@ -232,3 +248,20 @@ The sanitizer job was cancelled at 1,819/1,853 tests under the existing 55-minut
 | New hosted qualification | Authorized once, only after the preceding reviews and local gates pass. |
 
 No release claim is qualified by these local control results. REL-01 and publication remain Pending; no game or diagnostic fixture was fetched, built, run, or admitted. After T3 completes, continue only with plans 23-07, 23-05, 23-06, and 23-08; stop at the Phase 23 boundary.
+
+
+## D-169 implementation and local checks (2026-11-10)
+
+The owner approved both narrow D-169 corrections recorded in [23-04-T2-RESCOPE.md](23-04-T2-RESCOPE.md#d-169-owner-approved-worker-cleanup-and-release-reader-budget). Implementation is in the current working tree; exact-source review and full qualification have not yet completed.
+
+| Check | Result |
+|---|---|
+| Candidate-checker worker | `tests/scripts/verify-cgb-candidates.py --self-test --repo-root .` passed; cleanup now stops the bounded worker before the synthetic temporary directory exits, with a negative control for a live worker. |
+| Source-archive controls | Direct isolated self-test passed 17 positive cases and 94 negative controls. `v02_source_archive_controls` passed in 72.71 seconds, below its unchanged 90-second CTest ceiling. |
+| Workflow policy | Production workflow-policy check passed. The immutable-source coverage checker now validates the candidate-fuzz 4,500-second wait, 137-minute cap and ledger row, including stale-value negatives. |
+| Syntax and diff | In-memory Python compilation and JSON parsing passed before documentation reconciliation; rerun syntax and `git diff --check` on the exact commit. |
+| Exact-source reports | Pending. All three reports must bind to the implementation commit before the immutable report gate can pass. |
+| Focused/full local qualification | Pending. |
+| Hosted qualification | Not started. The single already-authorized exact-head CI/fixture/preview attempt remains conditional on reviews and all local gates. |
+
+The release-reader worst-case budget is 8,190 seconds within the 137-minute (8,220-second) cap. The 4,500-second exact-CI waiter allows for required CI lanes with no guaranteed head start, including the 65-minute sanitizer inventory and 70-minute Windows lane plus the required-native aggregate. The candidate-fuzz timeout-ledger citation and historical p50 remain unchanged; its disclosure records that the job body changed after the cited run. No unrelated timeout, assertion, inventory, release claim, or fixture policy changes. No merge, tag, publication, or Phase 24 work is eligible before exact-head hosted qualification.

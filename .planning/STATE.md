@@ -6,10 +6,10 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: "Plan 23-04 T3 recovery under approved D-168: measured harness changes and sanitizer scheduling are being implemented; exact-source review and local gates remain. Stop after Phase 23."
-last_updated: "2026-11-10T18:55:24Z"
-last_activity: "2026-11-10: Owner approved D-168 after D-165's three existing CTest timeouts and 55-minute sanitizer inventory cap failure. Implementing only the three profiled controls, sanitizer COST scheduling, and the approved +10-minute sanitizer job cap; disclosure and source-archive self-tests passed all existing controls."
-state_head: "63d96fc9547ea43ecd725b6fd54f606cee497050"
+stopped_at: "Plan 23-04 T3 D-169 corrections are implemented in the working tree after owner approval. Commit the exact candidate, reissue reviews, and complete local gates before the one authorized hosted attempt; stop after Phase 23."
+last_updated: "2026-11-10T20:01:29Z"
+last_activity: "2026-11-10: Owner approved D-169. Worker cleanup now runs before synthetic-directory removal; candidate-fuzz waits 4,500 seconds with a 137-minute cap and paired policy/ledger controls; source-archive CLI calls reuse a bounded worker. Direct source-archive self-test passed 17/94, and its CTest passed in 72.71 seconds under the unchanged 90-second ceiling. Production workflow policy and candidate-checker self-test passed. Exact-source report reissue and remaining local gates are pending; no hosted attempt started."
+state_head: "3c0489d722728c23f2369a0dced49c996b9ac9dc"
 progress:
   total_phases: 4
   completed_phases: 3
@@ -25,7 +25,7 @@ progress:
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Plan 23-04 T3 recovery is active under owner-approved D-168. The three profiled controls retain their assertions, negative controls, and existing 60/60/90-second CTest ceilings. The two v0.2 consumer tests keep four slots and timeouts, with higher CTest scheduling cost only in sanitizer builds. The sanitizer inventory cap is 65 minutes; Windows and preview limits remain as approved in D-165. Re-review exact source and pass the immutable report, workflow, focused, and full local gates before the one newly authorized exact-head attempt. Then finish the remaining Phase 23 plans and stop before Phase 24.
+**Current focus:** Plan 23-04 T3 continues under owner-approved D-169. The CGB worker is stopped before temporary-directory cleanup; `candidate-fuzz` now has the approved 75-minute wait and 137-minute cap with source-bound workflow and ledger controls. The source-archive self-test reuses its actual CLI in an isolated, bounded worker and passes its unchanged 90-second CTest ceiling. Commit this exact candidate, reissue the three reviews, then complete report, workflow/budget, focused, and full local gates. No hosted attempt has started; stop after Phase 23.
 
 ## Current Position
 
@@ -35,15 +35,15 @@ Phase: GB-23 (Qualified v0.4.0 Release) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
 Status: Executing Phase 23
-Last activity: 2026-11-10: Owner approved D-168's profiled local-work reductions, sanitizer test scheduling correction, and +10-minute cap for `linux-sanitizers-tests`. Two targeted self-tests passed; exact-source review and complete local gates remain. Stop after Phase 23.
+Last activity: 2026-11-10: Owner approved D-169 after exact-source reviews found the worker cleanup and release-reader budget issues. Implemented the bounded worker lifecycle and candidate-fuzz wait/cap with paired controls. Direct and CTest source-archive checks pass; exact-source review and remaining local gates are pending. Stop after Phase 23.
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
 ## Phase 23 Execution Handoff
 
-D-165 attempt `0916cb46` failed with the three existing CTest timeouts and the sanitizer inventory cap; native macOS passed and details are in [23-EVIDENCE.md](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md#d-165-exact-head-hosted-qualification-at-0916cb46). D-168 is approved. Its implementation and local gates are in progress; no new hosted run has started.
+D-165 attempt `0916cb46` failed with the three existing CTest timeouts and sanitizer inventory cap; details are in [23-EVIDENCE.md](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md#d-165-exact-head-hosted-qualification-at-0916cb46). D-169 corrections are implemented in the working tree under owner approval: worker cleanup before temp-directory removal, a 4,500-second candidate-fuzz wait and 137-minute job cap, and a faster source-archive control under its unchanged 90-second ceiling. Commit this candidate, reissue all three exact-source reviews, then complete the report/workflow/budget/focused/full local gates. No D-169 hosted attempt has started.
 
-**Next stage:** Plan 23-04 T3 — finish D-168 implementation and exact-source reviews, pass the immutable report gate plus workflow, test-budget, focused, and full local checks, then use the one newly authorized exact-head CI/fixture/preview attempt. If it passes, execute plans 23-07, 23-05, 23-06, and 23-08 in dependency order. Stop after Phase 23 and do not start Phase 24.
+**Next stage:** Plan 23-04 T3 — commit D-169, reissue exact-source reviews, pass the immutable report gate and workflow, timeout-ledger, focused, and full local checks, then use the one authorized exact-head CI/fixture/preview attempt. If it passes, execute plans 23-07, 23-05, 23-06, and 23-08 in dependency order. Stop after Phase 23 and do not start Phase 24.
 
 ## Performance Metrics
 
@@ -89,13 +89,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-10T18:55:24Z
-**Stopped at:** Plan 23-04 T3 recovery under D-168. Harness and scheduler changes are underway; exact-source reviews and local gates precede the authorized hosted attempt. Complete only the remaining Phase 23 plans, then stop.
+**Last session:** 2026-11-10T20:01:29Z
+**Stopped at:** Plan 23-04 T3 recovery under D-169. Implementation changes are in the working tree; exact-source review and remaining local gates precede the single authorized hosted attempt. No hosted run started.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Finish Plan 23-04 T3 under D-168: complete the three exact-source reviews, pass the immutable report gate and full local qualification, then use one exact-head CI/fixture/preview attempt. D-168 changes only the three profiled test harnesses, sanitizer CTest scheduling cost, and sanitizer inventory cap to 65 minutes. Preserve Windows 70 minutes, all preview waiters at 4,500 seconds, preview caps at 85 minutes, all assertions, inventory, and existing test ceilings. If hosted qualification passes, execute plans 23-07, 23-05, 23-06, and 23-08 in dependency order and stop at Phase 23. Do not auto-advance to Phase 24.
+Continue Plan 23-04 T3 under D-169: preserve the CGB worker's 30-second deadline and 1 MiB stream caps; preserve all CTest assertions/inventory and the source-archive 90-second ceiling; preserve all unrelated CI budgets. Reissue reviews and pass every local gate before using the one authorized hosted attempt. If qualification passes, complete only the remaining Phase 23 plans and stop before Phase 24.
 
 ## Decisions
 

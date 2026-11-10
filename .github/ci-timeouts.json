@@ -330,13 +330,13 @@
   "provisional": false
  },
  "release.yml:candidate-fuzz": {
-  "timeout_minutes": 112,
+  "timeout_minutes": 137,
   "cited_run_id": 40332345735,
   "cited_sha": "113b98c03e88f20ea5f90d9b56a22d9999ab2666",
   "p50_minutes": "0.22",
   "samples": 1,
   "provisional": false,
-  "disclosure": "Run 40332345735 is the green exact-source receipt-reader sample; later v0.3.0 receipt work changed this job's body after the cited run."
+  "disclosure": "D-169 raises the exact-CI wait 50 to 75 minutes: dependencies guarantee no head start and CI may take 70 minutes plus its 5-minute aggregator. The 137-minute cap covers the wait, bounded request/interval, 45-minute hosted poll and 15-minute setup/final-iteration margin (maximum +25). Citation and p50 remain historical; this job body changed after the cited run."
  },
  "release.yml:candidate-macos": {
   "timeout_minutes": 60,

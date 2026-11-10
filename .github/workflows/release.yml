@@ -1154,9 +1154,10 @@ jobs:
     needs: [release, candidate]
     if: ${{ always() && needs.candidate.result == 'success' }}
     runs-on: ubuntu-24.04
-    # Worst case 3000 (poll deadline) + 60 (request timeout) + 30 (interval) + 2700 (hosted poll) + 900
-    # (margin for checkout, run download, artifact upload, verifier startup and final-iteration overshoot) = 6690 s <= 6720 s.
-    timeout-minutes: 112
+    # D-169: required CI can take 75 minutes (70-minute Windows lane plus the 5-minute aggregator); needs below provide no guaranteed head start.
+    # Worst case 4500 (poll deadline) + 60 (request timeout) + 30 (interval) + 2700 (hosted poll) + 900
+    # (margin for checkout, run download, artifact upload, verifier startup and final-iteration overshoot) = 8190 s <= 8220 s.
+    timeout-minutes: 137
     permissions:
       actions: read
       contents: read
@@ -1166,7 +1167,7 @@ jobs:
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
       CI_RUN_WAIT_ATTEMPTS: 90
       CI_RUN_WAIT_SECONDS: 30
-      CI_RUN_WAIT_DEADLINE_SECONDS: 3000
+      CI_RUN_WAIT_DEADLINE_SECONDS: 4500
       CI_RUN_REQUEST_TIMEOUT_SECONDS: 60
       HOSTED_POLL_SECONDS: 2700
     steps:

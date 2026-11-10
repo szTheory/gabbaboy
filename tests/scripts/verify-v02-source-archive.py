@@ -25,6 +25,8 @@ Usage:
 Failures print `REJECT <code>: <reason>` on stderr and exit 1.
 """
 import argparse
+import atexit
+import contextlib
 import gzip
 import hashlib
 import importlib.util
@@ -32,12 +34,14 @@ import io
 import json
 import os
 import pathlib
+import queue
 import re
 import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import zipfile
 import zlib
 import shutil
@@ -883,9 +887,203 @@ def private_git(*args, cwd, input_bytes=None):
     return result.stdout
 
 
+MAX_SELF_TEST_CLI_SECONDS = 90
+MAX_SELF_TEST_CLI_OUTPUT = 1_048_576
+
+_SOURCE_ARCHIVE_WORKER_SOURCE = r'''import contextlib, io, json, runpy, sys, traceback
+
+class OutputLimit(Exception):
+    pass
+
+class LimitedOutput(io.StringIO):
+    def __init__(self, limit):
+        super().__init__()
+        self.limit = limit
+        self.size = 0
+
+    def write(self, value):
+        size = len(value.encode("utf-8", "replace"))
+        if size > self.limit - self.size:
+            raise OutputLimit
+        self.size += size
+        return super().write(value)
+
+def invoke(request):
+    stdout = LimitedOutput(request["output_limit"])
+    stderr = LimitedOutput(request["output_limit"])
+    exit_code = 1
+    output_limit = False
+    try:
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            namespace = runpy.run_path(request["script"], run_name="gabbaboy_source_archive_cli")
+            try:
+                exit_code = namespace["main"](request["args"])
+            except SystemExit as error:
+                exit_code = error.code if isinstance(error.code, int) else (0 if error.code is None else 1)
+    except OutputLimit:
+        output_limit = True
+    except BaseException:
+        try:
+            stderr.write(traceback.format_exc())
+        except OutputLimit:
+            output_limit = True
+    if not isinstance(exit_code, int):
+        exit_code = 0 if exit_code is None else 1
+    return {"exit_code": exit_code, "stdout": stdout.getvalue(), "stderr": stderr.getvalue(),
+            "output_limit": output_limit}
+
+for line in sys.stdin.buffer:
+    try:
+        request = json.loads(line)
+        response = invoke(request)
+    except BaseException:
+        response = {"exit_code": 1, "stdout": "", "stderr": traceback.format_exc(),
+                    "output_limit": False}
+    sys.stdout.write(json.dumps(response, ensure_ascii=True, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+'''
+
+_SOURCE_ARCHIVE_WORKER = None
+_SOURCE_ARCHIVE_WORKER_RESPONSES = None
+_SOURCE_ARCHIVE_WORKER_READER = None
+_SOURCE_ARCHIVE_WORKER_STARTS = 0
+_SOURCE_ARCHIVE_WORKER_CALLS = 0
+
+
+def _read_source_archive_worker(stream, responses):
+    try:
+        for line in iter(stream.readline, b""):
+            responses.put(line)
+    finally:
+        responses.put(None)
+
+
+def _stop_source_archive_worker():
+    global _SOURCE_ARCHIVE_WORKER, _SOURCE_ARCHIVE_WORKER_RESPONSES, _SOURCE_ARCHIVE_WORKER_READER
+    process = _SOURCE_ARCHIVE_WORKER
+    if process is None:
+        _SOURCE_ARCHIVE_WORKER_RESPONSES = None
+        _SOURCE_ARCHIVE_WORKER_READER = None
+        return
+    if process.poll() is None:
+        try:
+            process.terminate()
+        except OSError:
+            if process.poll() is None:
+                raise Reject("source-archive-self-test-failed", "could not stop the isolated CLI worker") from None
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+                process.wait(timeout=2)
+            except (OSError, subprocess.TimeoutExpired):
+                if process.poll() is None:
+                    raise Reject("source-archive-self-test-failed", "could not kill the isolated CLI worker") from None
+    if process.poll() is None:
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker remained alive")
+    _SOURCE_ARCHIVE_WORKER = None
+    _SOURCE_ARCHIVE_WORKER_RESPONSES = None
+    _SOURCE_ARCHIVE_WORKER_READER = None
+    for stream in (process.stdin, process.stdout):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+
+def _source_archive_worker():
+    global _SOURCE_ARCHIVE_WORKER, _SOURCE_ARCHIVE_WORKER_RESPONSES
+    global _SOURCE_ARCHIVE_WORKER_READER, _SOURCE_ARCHIVE_WORKER_STARTS
+    if _SOURCE_ARCHIVE_WORKER is None:
+        try:
+            _SOURCE_ARCHIVE_WORKER = subprocess.Popen(
+                [sys.executable, "-I", "-c", _SOURCE_ARCHIVE_WORKER_SOURCE],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            )
+        except OSError as error:
+            raise Reject("source-archive-self-test-failed", f"isolated CLI worker unavailable: {error.strerror}") from None
+        _SOURCE_ARCHIVE_WORKER_RESPONSES = queue.Queue()
+        _SOURCE_ARCHIVE_WORKER_READER = threading.Thread(
+            target=_read_source_archive_worker,
+            args=(_SOURCE_ARCHIVE_WORKER.stdout, _SOURCE_ARCHIVE_WORKER_RESPONSES), daemon=True,
+        )
+        _SOURCE_ARCHIVE_WORKER_READER.start()
+        _SOURCE_ARCHIVE_WORKER_STARTS += 1
+        atexit.register(_stop_source_archive_worker)
+    return _SOURCE_ARCHIVE_WORKER, _SOURCE_ARCHIVE_WORKER_RESPONSES
+
+
+def _invoke_cli(script, args, timeout=MAX_SELF_TEST_CLI_SECONDS):
+    global _SOURCE_ARCHIVE_WORKER_CALLS
+    process, responses = _source_archive_worker()
+    _SOURCE_ARCHIVE_WORKER_CALLS += 1
+    request = {"script": str(pathlib.Path(script).resolve()), "args": list(args),
+               "output_limit": MAX_SELF_TEST_CLI_OUTPUT}
+    try:
+        process.stdin.write((json.dumps(request, ensure_ascii=True, separators=(",", ":")) + "\n").encode())
+        process.stdin.flush()
+    except (AttributeError, BrokenPipeError, OSError):
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker input failed") from None
+    try:
+        line = responses.get(timeout=timeout)
+    except queue.Empty:
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-cli-timeout", pathlib.Path(script).name) from None
+    if line is None:
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker output ended")
+    try:
+        response = json.loads(line)
+        code = response["exit_code"]
+        stdout = response["stdout"]
+        stderr = response["stderr"]
+        output_limit = response["output_limit"]
+    except (KeyError, TypeError, ValueError, UnicodeError):
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker response was malformed") from None
+    if type(code) is not int or not isinstance(stdout, str) or not isinstance(stderr, str) or type(output_limit) is not bool:
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker response had invalid fields")
+    if output_limit:
+        raise Reject("source-archive-self-test-cli-output-limit", pathlib.Path(script).name)
+    return code, stderr, stdout
+
+
+def _source_archive_worker_controls(script, scratch):
+    noisy = scratch / "source-archive-worker-noisy.py"
+    noisy.write_text("def main(argv):\n    print('x' * 1048577)\n    return 0\n", encoding="utf-8")
+    try:
+        _invoke_cli(noisy, (), timeout=2)
+    except Reject as error:
+        if error.code != "source-archive-self-test-cli-output-limit":
+            raise SystemExit(f"self-test CLI output cap rejected for the wrong reason: {error}") from None
+    else:
+        raise SystemExit("self-test CLI output cap accepted a stream over 1 MiB")
+
+    code, _stderr, stdout = _invoke_cli(script, ("--help",), timeout=5)
+    if code != 0 or "--archive" not in stdout:
+        raise SystemExit("self-test CLI worker was not reusable after output overflow")
+
+    slow = scratch / "source-archive-worker-slow.py"
+    slow.write_text("import time\ndef main(argv):\n    time.sleep(0.5)\n    return 0\n", encoding="utf-8")
+    try:
+        _invoke_cli(slow, (), timeout=0.1)
+    except Reject as error:
+        if error.code != "source-archive-self-test-cli-timeout":
+            raise SystemExit(f"self-test CLI timeout rejected for the wrong reason: {error}") from None
+    else:
+        raise SystemExit("self-test CLI worker exceeded its hard timeout")
+    code, _stderr, stdout = _invoke_cli(script, ("--help",), timeout=5)
+    if code != 0 or "--archive" not in stdout:
+        raise SystemExit("self-test CLI worker was not reusable after timeout")
+    return 2
+
+
 def run_cli(script, *args):
-    result = subprocess.run([sys.executable, "-I", str(script), *args], capture_output=True, text=True, check=False)
-    return result.returncode, result.stderr, result.stdout
+    return _invoke_cli(script, args)
 
 
 # --------------------------------------------------------------------------- notice attribute scope
@@ -948,10 +1146,14 @@ def notice_digest_problems(root, table):
 
 
 def self_test():
+    global _SOURCE_ARCHIVE_WORKER_STARTS, _SOURCE_ARCHIVE_WORKER_CALLS
+    _SOURCE_ARCHIVE_WORKER_STARTS = 0
+    _SOURCE_ARCHIVE_WORKER_CALLS = 0
     script = pathlib.Path(__file__).resolve()
     positives = negatives = 0
     with tempfile.TemporaryDirectory(prefix="gabbaboy-source-archive-") as scratch_name:
         scratch = pathlib.Path(scratch_name)
+        negatives += _source_archive_worker_controls(script, scratch)
         sha = "a" * 40
         tag = "v0.0.1"
 
@@ -1350,7 +1552,8 @@ def self_test():
                 expect_product(f"product-known-forbidden-{directory}-{disguise}",
                                {**good_product, path: forbidden_product_bytes}, "product-fixture-leak")
 
-        policy_rules, _ = product_checker._product_rules(product_repo)
+        # Reuse the rules already read from this immutable private baseline.
+        policy_rules = product_rules
         fixture_records = [(source, record) for source, record in policy_rules["files"].items()
                            if source.startswith("fixtures/") and record["destinations"].get("core")]
         for index, (source, record) in enumerate(fixture_records):
@@ -1612,6 +1815,9 @@ def self_test():
             print("skipped: real-repository-tag (no git checkout)")
     if positives == 0 or negatives == 0:
         raise SystemExit("self-test selected no positive or no negative cases")
+    if _SOURCE_ARCHIVE_WORKER_CALLS <= _SOURCE_ARCHIVE_WORKER_STARTS:
+        raise SystemExit("self-test CLI worker did not serve multiple isolated invocations")
+    _stop_source_archive_worker()
     print(f"PASS: source archive checker accepted {positives} cases and rejected {negatives} negative controls")
 
 

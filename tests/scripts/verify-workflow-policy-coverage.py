@@ -388,8 +388,9 @@ def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
 
 
 def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
-                                     policy_namespace: dict) -> None:
-    """Keep sanitizer, Windows, and parsed exact-head preview budgets within the approved caps."""
+                                     policy_namespace: dict,
+                                     release_workflow: str | None = None) -> None:
+    """Bind Phase 23's reviewed CI, preview and release-consumer timeout budgets."""
     ci_tree = _parse_workflow_text(ci_workflow, "ci.yml", policy_namespace)
     preview_tree = _parse_workflow_text(preview_workflow, "preview.yml", policy_namespace)
     sanitizer_tests = ci_tree.get("jobs", {}).get("linux-sanitizers-tests")
@@ -406,6 +407,16 @@ def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
             reject(f"preview job {job_id} must retain an 85-minute cap for the 75-minute exact-head wait")
         if _preview_wait_deadlines(job, job_id, preview_workflow, preview_tree, policy_namespace) != ["4500"]:
             reject(f"preview job {job_id} must wait 75 minutes for the exact-head CI result")
+    if release_workflow is not None:
+        release_tree = _parse_workflow_text(release_workflow, "release.yml", policy_namespace)
+        candidate_fuzz = release_tree.get("jobs", {}).get("candidate-fuzz")
+        if candidate_fuzz is None:
+            reject("release candidate-fuzz job is missing from the Phase 23 timeout profile")
+        if candidate_fuzz.get("timeout-minutes") != "137":
+            reject("release candidate-fuzz must retain the approved 137-minute cap")
+        fuzz_env = candidate_fuzz.get("env")
+        if not isinstance(fuzz_env, dict) or str(fuzz_env.get("CI_RUN_WAIT_DEADLINE_SECONDS")) != "4500":
+            reject("release candidate-fuzz must wait 4,500 seconds for exact-source CI")
 
 
 def resolve_commit(root: Path, revision: str) -> str:
@@ -1876,12 +1887,14 @@ def _self_test(root: Path, revision: str) -> int:
                            if path.startswith(".github/workflows/") and path.endswith(".yml")]
     if ".github/workflows/ci.yml" not in candidate_workflows:
         reject("candidate workflow inventory is missing ci.yml")
-    required_workflows = {".github/workflows/ci.yml", ".github/workflows/preview.yml"}
+    required_workflows = {".github/workflows/ci.yml", ".github/workflows/preview.yml",
+                          ".github/workflows/release.yml"}
     if not required_workflows.issubset(candidate_workflows):
-        reject("candidate workflow inventory is missing ci.yml or preview.yml")
+        reject("candidate workflow inventory is missing ci.yml, preview.yml or release.yml")
     candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
     candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
-    validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace)
+    candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
+    validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
     preview_tree = _parse_workflow_text(candidate_preview, "preview.yml", candidate_namespace)
     controls += 1
     stale_windows = _replace_job_block_value(
@@ -1891,6 +1904,17 @@ def _self_test(root: Path, revision: str) -> int:
         candidate_ci, "linux-sanitizers-tests", "    timeout-minutes: 65", "    timeout-minutes: 55")
     rejected("stale sanitizer test inventory 55-minute cap",
              lambda: validate_phase23_timeout_profile(stale_sanitizer_tests, candidate_preview, candidate_namespace))
+    stale_fuzz_wait = _replace_job_block_value(
+        candidate_release, "candidate-fuzz", "CI_RUN_WAIT_DEADLINE_SECONDS: 4500",
+        "CI_RUN_WAIT_DEADLINE_SECONDS: 3000")
+    rejected_as("stale 50-minute candidate-fuzz wait", "must wait 4,500 seconds",
+                lambda: validate_phase23_timeout_profile(
+                    candidate_ci, candidate_preview, candidate_namespace, stale_fuzz_wait))
+    stale_fuzz_cap = _replace_job_block_value(
+        candidate_release, "candidate-fuzz", "    timeout-minutes: 137", "    timeout-minutes: 112")
+    rejected_as("stale 112-minute candidate-fuzz cap", "must retain the approved 137-minute cap",
+                lambda: validate_phase23_timeout_profile(
+                    candidate_ci, candidate_preview, candidate_namespace, stale_fuzz_cap))
     unpinned_linux_runner = _replace_job_block_value(
         candidate_preview, "installed-package-smoke-linux-x64",
         "    runs-on: ubuntu-22.04", "    runs-on: ubuntu-latest")
@@ -2023,6 +2047,7 @@ def _self_test(root: Path, revision: str) -> int:
         stale_ledger_rows = (
             ("ci.yml:linux-sanitizers-tests", 55),
             ("ci.yml:native-windows", 60),
+            ("release.yml:candidate-fuzz", 112),
             ("preview.yml:installed-package-smoke-linux-x64", 75),
             ("preview.yml:installed-package-smoke-macos-arm64", 75),
             ("preview.yml:player-package-smoke-macos", 75),
@@ -2063,7 +2088,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 577:
+    if controls != 580:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
@@ -2082,7 +2107,8 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     candidate_namespace = load_baseline_namespace(reviewed_policy_source(root))
     candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
     candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
-    validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace)
+    candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
+    validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
     expected_tests = git_text(root, candidate, "tests/expected-tests.txt").decode("utf-8").splitlines()
     result = subprocess.run(["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"], cwd=root,
                             capture_output=True, text=True, check=False, timeout=30)

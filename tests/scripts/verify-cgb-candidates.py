@@ -1872,27 +1872,66 @@ def _read_checker_worker(stream: Any, responses: queue.Queue[bytes | None]) -> N
 def _stop_checker_worker() -> None:
     global _CHECKER_WORKER, _CHECKER_WORKER_RESPONSES, _CHECKER_WORKER_READER
     process = _CHECKER_WORKER
-    _CHECKER_WORKER = None
-    _CHECKER_WORKER_RESPONSES = None
-    _CHECKER_WORKER_READER = None
     if process is None:
+        _CHECKER_WORKER_RESPONSES = None
+        _CHECKER_WORKER_READER = None
         return
     if process.poll() is None:
         try:
             process.terminate()
+        except OSError:
+            if process.poll() is None:
+                raise Reject("candidate-subprocess-stop-failed") from None
+        try:
             process.wait(timeout=2)
-        except (OSError, subprocess.TimeoutExpired):
+        except subprocess.TimeoutExpired:
             try:
                 process.kill()
                 process.wait(timeout=2)
             except (OSError, subprocess.TimeoutExpired):
-                pass
+                if process.poll() is None:
+                    raise Reject("candidate-subprocess-stop-failed") from None
+    if process.poll() is None:
+        raise Reject("candidate-subprocess-stop-failed")
+    _CHECKER_WORKER = None
+    _CHECKER_WORKER_RESPONSES = None
+    _CHECKER_WORKER_READER = None
     for stream in (process.stdin, process.stdout):
         if stream is not None:
             try:
                 stream.close()
             except OSError:
                 pass
+
+
+def _stop_checker_worker_before_temp_cleanup() -> None:
+    process = _CHECKER_WORKER
+    _stop_checker_worker()
+    if process is not None and process.poll() is None:
+        raise Reject("candidate-subprocess-stop-failed")
+
+
+def _checker_worker_cleanup_controls() -> int:
+    global _stop_checker_worker
+    process = _CHECKER_WORKER
+    if process is None or process.poll() is not None:
+        raise Reject("candidate-self-test-failed", "worker cleanup control needs a live worker")
+    stop_worker = _stop_checker_worker
+    try:
+        _stop_checker_worker = lambda: None
+        try:
+            _stop_checker_worker_before_temp_cleanup()
+        except Reject as error:
+            if error.code != "candidate-subprocess-stop-failed":
+                raise
+        else:
+            raise Reject("candidate-self-test-failed", "worker cleanup guard accepted a live worker")
+    finally:
+        _stop_checker_worker = stop_worker
+    _stop_checker_worker_before_temp_cleanup()
+    if process.poll() is None:
+        raise Reject("candidate-self-test-failed", "worker remained live after cleanup")
+    return 1
 
 
 def _checker_worker(root: Path) -> tuple[subprocess.Popen, queue.Queue[bytes | None]]:
@@ -3168,26 +3207,30 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
             if native.returncode != 0 or "cgb-observations status=pass" not in native_output:
                 detail = native_output.strip().replace("\n", " ")[-384:]
                 raise Reject("candidate-native-build-qualification-failed", detail)
-    with tempfile.TemporaryDirectory(prefix="gbb-candidate-contract-") as temporary:
-        root = Path(temporary)
-        project_revision = _prepare_temp_repo(source_root, root)
-        fixture = _write_synthetic_admission_fixture(root)
-        (root / "tests/data/cgb-candidates").mkdir(parents=True, exist_ok=True)
-        primary_ref, primary_no_go_commit, primary_reference_controls = _no_go_order_controls(root)
+    try:
+        with tempfile.TemporaryDirectory(prefix="gbb-candidate-contract-") as temporary:
+            root = Path(temporary)
+            project_revision = _prepare_temp_repo(source_root, root)
+            fixture = _write_synthetic_admission_fixture(root)
+            (root / "tests/data/cgb-candidates").mkdir(parents=True, exist_ok=True)
+            primary_ref, primary_no_go_commit, primary_reference_controls = _no_go_order_controls(root)
 
-        unit_test = run_process(
-            [sys.executable, "-I", str(source_root / "tests/scripts/test_cgb_candidate_order.py")],
-            source_root,
-        )
-        if unit_test.returncode != 0:
-            raise Reject("candidate-self-test-failed", "candidate contract assertions failed")
+            unit_test = run_process(
+                [sys.executable, "-I", str(source_root / "tests/scripts/test_cgb_candidate_order.py")],
+                source_root,
+            )
+            if unit_test.returncode != 0:
+                raise Reject("candidate-self-test-failed", "candidate contract assertions failed")
 
-        controls = 8 + primary_reference_controls
-        if controls_only:
-            controls += _admission_controls(root, project_revision, fixture, primary_ref)
-        else:
-            # Keep a known no-go fallback reference valid in the synthetic history.
-            _ = primary_no_go_commit
+            controls = 8 + primary_reference_controls
+            if controls_only:
+                controls += _admission_controls(root, project_revision, fixture, primary_ref)
+            else:
+                # Keep a known no-go fallback reference valid in the synthetic history.
+                _ = primary_no_go_commit
+            controls += _checker_worker_cleanup_controls()
+    finally:
+        _stop_checker_worker_before_temp_cleanup()
     if controls_only:
         print(f"PASS: candidate contract controls positives=6 negative_controls={controls} synthetic_only=true")
     else:
