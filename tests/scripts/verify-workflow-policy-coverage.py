@@ -317,22 +317,34 @@ def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
     shell_events = policy_namespace.get("shell_events")
     if shell_events is None:
         reject("pinned shell parser is unavailable")
-    for scope_name, scope in (("workflow", preview_tree), ("job", job)):
-        env = scope.get("env", {})
-        if not isinstance(env, dict) or {key.upper() for key in env} & {
-                "BASH_ENV", "ENV", "PATH", "PYTHONHOME", "PYTHONPATH"}:
-            reject(f"preview {scope_name} may not override the waiter shell or Python environment")
-        defaults = scope.get("defaults", {})
-        run_defaults = defaults.get("run", {}) if isinstance(defaults, dict) else {}
-        if run_defaults and ("shell" in run_defaults or "working-directory" in run_defaults):
-            reject(f"preview {scope_name} may not override the waiter shell or working directory")
+    if preview_tree.get("env") != {"PREVIEW_RETENTION_DAYS": "14"} or "defaults" in preview_tree:
+        reject("preview workflow may not override the waiter environment or run defaults")
+    if job.get("env") or "defaults" in job:
+        reject(f"preview job {job_id} may not override the waiter environment or run defaults")
     if job.get("if") or job.get("continue-on-error", "false") not in (False, "false", ""):
         reject(f"preview job {job_id} must remain enabled and fail closed")
-    waiter_steps = [step for step in job.get("steps", [])
-                    if ".github/scripts/wait-exact-head-ci.py" in step.get("run", "")]
-    if len(waiter_steps) != 1:
+    steps = job.get("steps", [])
+    waiter_positions = [(index, step) for index, step in enumerate(steps)
+                        if ".github/scripts/wait-exact-head-ci.py" in step.get("run", "")]
+    if len(waiter_positions) != 1:
         reject(f"preview job {job_id} must expose exactly one waiter step")
-    step = waiter_steps[0]
+    waiter_index, step = waiter_positions[0]
+    checkout_name = (
+        "Check out exact pull request head" if job_id == "player-package-smoke-macos"
+        else "Check out tested source revision"
+    )
+    checkout = {
+        "name": checkout_name,
+        "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+        "with": {
+            "ref": "${{ github.event.pull_request.head.sha }}",
+            "fetch-depth": "0",
+            "persist-credentials": "false",
+        },
+    }
+    if (waiter_index != 1 or steps[0] != checkout
+            or "if" in steps[0] or steps[0].get("continue-on-error", "false") not in (False, "false", "")):
+        reject(f"preview job {job_id} waiter must immediately follow the pinned trusted checkout")
     expected_name = ("Find the exact successful player build run" if job_id == "player-package-smoke-macos"
                      else "Verify matching successful required CI run")
     expected_step_env = {
@@ -1342,6 +1354,17 @@ def _self_test(root: Path, revision: str) -> int:
         else:
             reject(f"negative control {label} was accepted")
 
+    def rejected_as(label: str, expected_message: str, operation) -> None:
+        nonlocal controls
+        try:
+            operation()
+        except CoverageError as error:
+            if expected_message not in str(error):
+                reject(f"negative control {label} rejected for the wrong reason: {error}")
+            controls += 1
+        else:
+            reject(f"negative control {label} was accepted")
+
     validate_manifest(expected, expected)
     verify_archive_helper_identity(root, candidate_helper)
     for label, version in (("schema-boolean-true", True), ("schema-boolean-false", False),
@@ -1889,6 +1912,23 @@ def _self_test(root: Path, revision: str) -> int:
         rejected(f"overridden shell in {job_id} run defaults",
                  lambda job_shell_override=job_shell_override: validate_phase23_timeout_profile(
                      candidate_ci, job_shell_override, candidate_namespace))
+        waiter_name = ("Find the exact successful player build run" if job_id == "player-package-smoke-macos"
+                       else "Verify matching successful required CI run")
+        waiter_step = f"      - name: {waiter_name}\n"
+        env_file_writer = (
+            "      - name: Poison waiter shell environment\n"
+            "        run: |\n"
+            "          cat > \"$RUNNER_TEMP/override.sh\" <<'EOF'\n"
+            "          python3() { command python3 \"$@\" --deadline-seconds 3900; }\n"
+            "          EOF\n"
+            "          echo \"BASH_ENV=$RUNNER_TEMP/override.sh\" >> \"$GITHUB_ENV\"\n"
+        )
+        preceding_env_file_writer = _replace_job_block_value(
+            candidate_preview, job_id, waiter_step, env_file_writer + waiter_step)
+        rejected_as(f"prior {job_id} step writes BASH_ENV through GITHUB_ENV",
+                    "must immediately follow the pinned trusted checkout",
+                    lambda preceding_env_file_writer=preceding_env_file_writer: validate_phase23_timeout_profile(
+                        candidate_ci, preceding_env_file_writer, candidate_namespace))
         stale_cap = _replace_job_block_value(
             candidate_preview, job_id, "    timeout-minutes: 85", "    timeout-minutes: 75")
         rejected(f"stale {job_id} 75-minute job cap", lambda stale_cap=stale_cap: validate_phase23_timeout_profile(candidate_ci, stale_cap, candidate_namespace))
@@ -1973,7 +2013,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 563:
+    if controls != 566:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
