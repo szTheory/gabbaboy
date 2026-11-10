@@ -1,13 +1,13 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** 48d8e501872b9a19138a4653830a40b983199adc
-**Review delta:** 61f08de30b4f74ae539f827c5b04e1188fc3ea79 through 48d8e501872b9a19138a4653830a40b983199adc, with earlier Phase 23 review findings retained
+**Reviewed implementation:** 950c78b0bac936992403511a3cfa41f7cb1069c6
+**Review delta:** 029a77f5a87682cee545aa99edc1fe5263e5a77c through 950c78b0bac936992403511a3cfa41f7cb1069c6, with earlier Phase 23 review findings retained
 **Role:** release-consumer
 **Reviewer:** release-consumer-48d8e501
 
 ## Scope and conclusion
 
-I reviewed the exact implementation at `48d8e501872b9a19138a4653830a40b983199adc` in `/private/tmp/gabbaboy-phase23.t6o3vA`. The D-163 amendment sets `PROCESSORS=2` for all 200 docs controls, including shard 0 and shards 1–199. Their commands, assertions, `v02` labels, 90-second limits, and global four-worker CTest setting are unchanged. The checker requires exactly two slots and has a former-four-slot negative plus a wrong-label negative for each docs control; the non-doc reservations remain at four slots. D-164 raises only the native macOS job cap to 50 minutes and synchronizes its ledger row; all per-test ceilings and other job caps remain unchanged. The approved Windows support-ledger path correction remains intact. The source delta does not touch release, consumer, package, notice, or version-window implementation. RC-01 through RC-22 retain their identities and fixed dispositions; RC-23 records and closes a source-binding gap in the new timeout control. No finding remains open.
+I re-reviewed the exact implementation at `950c78b0bac936992403511a3cfa41f7cb1069c6` in `/private/tmp/gabbaboy-phase23.t6o3vA`. The D-163 amendment sets `PROCESSORS=2` for all 200 docs controls, including shard 0 and shards 1–199. Their commands, assertions, `v02` labels, 90-second limits, and global four-worker CTest setting are unchanged. The checker requires exactly two slots and has a former-four-slot negative plus a wrong-label negative for each docs control; the non-doc reservations remain at four slots. D-164 raises only the native macOS job cap to 50 minutes and synchronizes its ledger row; all per-test ceilings and other job caps remain unchanged. The approved Windows support-ledger path correction remains intact. The source delta does not touch release, consumer, package, notice, or version-window implementation. RC-01 through RC-22 retain their identities and fixed dispositions; RC-23 records and closes a source-binding gap in the new timeout control. No finding remains open.
 
 ## Reserved-label contract
 
@@ -54,15 +54,20 @@ Earlier hosted evidence remains historical: the 6ae run had a Windows support-le
 RC-01 through RC-22 retain their recorded identities, fixed dispositions, fix SHAs, and source-linked verification references. RC-22 is fixed at b7d86939c25fca93dc928c494b9834513e5c1bc5. RC-23 is fixed at 48d8e501872b9a19138a4653830a40b983199adc. All fixed SHAs resolve and are ancestors of this implementation.
 
 The release/version-window, lifecycle, product/consumer, fixture, notice-path, adoption matcher, and planning-label implementations reviewed previously are unchanged. The D-163 amendment changes only CTest processor reservations and their coverage evidence; CI job caps and release, consumer, package, notice, and version-window boundaries remain intact.
+
+## D-167 exact-source re-review
+
+I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original candidate `029a77f5a87682cee545aa99edc1fe5263e5a77c` and the D-167 delta from `170b7eb2ba24ea166376ddf2088ce3d731fddc37`. ACCEPT; no release or consumer blocker. Windows remains 70 minutes; all three preview jobs retain 4,500-second waiters, 85-minute caps, and matching ledger entries. The disclosures correctly call ten minutes nominal, account for checkout/preflight time, and state that expiry fails the package job. The Linux runner is pinned to `ubuntu-22.04`; all three waiter jobs reject containers and services. Package build, smoke, receipt, artifact upload, version, and required release gates are unchanged. The source-bound coverage self-test passed 573 controls; workflow-policy `ci` and `ledger` groups passed; the configured focused Plan 23-04 selection passed 224/224 at this implementation source. No hosted CI ran during review.
+
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-48d8e501-20261109-02",
+  "report_id": "gb-23-release-consumer-950c78b0-20261110-d167",
   "role": "release-consumer",
   "reviewer_id": "release-consumer-48d8e501",
   "independent": true,
-  "reviewed_sha": "48d8e501872b9a19138a4653830a40b983199adc",
+  "reviewed_sha": "950c78b0bac936992403511a3cfa41f7cb1069c6",
   "findings": [
     {
       "id": "RC-01",
@@ -220,7 +225,7 @@ The release/version-window, lifecycle, product/consumer, fixture, notice-path, a
       "severity": "high",
       "required_property": "Timeout-budget rows must cite a decision present in the plan-pinned and PR-base commits used by the immutable checker, while retaining documented timeout policy and shard-inventory provenance.",
       "disposition": "fixed",
-      "rationale": "The corrected inventory maps shards 01\u201331 to D-069 and 32\u2013199 to D-068. Both decisions exist in the plan-pinned f2b base and PR base 1ab65414; D-068 records the all-build-leg inventory provenance and D-069 remains the timeout policy. The exact plan command and PR-base checker both pass against the reviewed source.",
+      "rationale": "The corrected inventory maps shards 01–31 to D-069 and 32–199 to D-068. Both decisions exist in the plan-pinned f2b base and PR base 1ab65414; D-068 records the all-build-leg inventory provenance and D-069 remains the timeout policy. The exact plan command and PR-base checker both pass against the reviewed source.",
       "fix_sha": "7c6f01ad5ecf3b6736bf694324acc1671d9e20cc",
       "verification_ref": "At b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae, the plan-pinned checker passed with tests=1936 and allowlisted=288. The checker copied from PR base 1ab65414d60828fa9505babeaeea9de0571f016c also passed against that base. The inventory has 199 shard rows: 31 D-069 and 168 D-068; CI reads the checker from BUDGET_BASE."
     },

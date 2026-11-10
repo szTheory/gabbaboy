@@ -1,9 +1,9 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** 48d8e501872b9a19138a4653830a40b983199adc
+**Reviewed implementation:** 950c78b0bac936992403511a3cfa41f7cb1069c6
 **Role:** adversarial
 **Reviewer:** adversarial-d155
-**Review posture:** I re-reviewed the owner-approved D-164 macOS cap amendment at 48d8e501 against the exact two-slot candidate c9a6320671b56d1092b2884aeac15d6a9320b60f, current Plan 23-04, and the amended rescope, and rechecked prior findings. I verified the prior exact-head run and its macOS logs, the 50-minute YAML/ledger pair, and its positive and mismatch controls. I found and reported a source-binding defect in the first D-164 control implementation at d3811b8e; 48d8e501 fixes it by seeding the fixture from the resolved candidate commit. At 48d8e501 the exact-source coverage self-test passes 528 controls and the workflow-policy production check passes. The full local suite and a hosted attempt on 48d8e501 have not run yet.
+**Review posture:** I re-reviewed the owner-approved D-167 correction at 950c78b0bac936992403511a3cfa41f7cb1069c6 against the original candidate 029a77f5a87682cee545aa99edc1fe5263e5a77c and prior reviewed source 170b7eb2ba24ea166376ddf2088ce3d731fddc37, and rechecked the previously reported shell and environment bypasses. The final exact-source coverage self-test passes 573 controls; workflow-policy ci and ledger groups pass; the configured focused Plan 23-04 selection passes 224/224. Full local qualification and hosted qualification remain separate gates.
 
 ## Result
 
@@ -155,15 +155,20 @@ These checks establish the exact-source timeout-ledger control and workflow-poli
 
 ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was open at fdccc15a after the duplicate-fixture self-test failure and is fixed at 4343d95d. ADV-30 was open at d3811b8e because the new timeout self-test read live checkout configuration instead of its immutable revision; 48d8e501 fixes it. D-163 and D-164 have no open correctness or security finding at this source.
 
+
+## D-167 exact-source re-review
+
+I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6` against original candidate `029a77f5a87682cee545aa99edc1fe5263e5a77c`, including the D-167 delta from `170b7eb2ba24ea166376ddf2088ce3d731fddc37`. ACCEPT. The current profile rejects a job `container` or `services` for each waiter lane and rejects changing the Linux runner from `ubuntu-22.04`. Targeted in-memory mutants for the earlier comment-only deadline, dead branch, `python3` function shadow, and prior-step `GITHUB_ENV` injection also reject. All lanes retain a single exact pinned checkout at index 0 and the exact waiter at index 1, parsed YAML and shell argv agree, and the Mac runner pins remain active. The source-bound coverage self-test passed 573 controls; workflow-policy `ci` and `ledger` groups passed; the configured focused Plan 23-04 selection passed 224/224 at this implementation source. No remaining concrete bypass found; no hosted CI ran during review.
+
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-48d8e501872b9a19138a4653830a40b983199adc-20261109-d164-macos-cap",
+  "report_id": "gbb-phase23-adversarial-950c78b0-20261110-d167",
   "role": "adversarial",
   "reviewer_id": "adversarial-d155",
   "independent": true,
-  "reviewed_sha": "48d8e501872b9a19138a4653830a40b983199adc",
+  "reviewed_sha": "950c78b0bac936992403511a3cfa41f7cb1069c6",
   "findings": [
     {
       "id": "ADV-01",
@@ -173,7 +178,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The exact-source renderer-built release-note baseline passes. The current controls reject disclosures hidden in inline and block code, comments, and container code; removing a required visible clause fails with its specific diagnostic.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test-version-v04: positives=63 controls=66."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test-version-v04: positives=63 controls=66."
     },
     {
       "id": "ADV-02",
@@ -183,7 +188,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The exact-source release-note controls reject both a promoted Pending row and contradictory completion prose; the valid Pending baseline passes before each mutation.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-support-ledger.py --self-test-disclosure: positives=4 controls=20."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-support-ledger.py --self-test-disclosure: positives=4 controls=20."
     },
     {
       "id": "ADV-03",
@@ -193,7 +198,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The exact-source release-note controls reject the claim that all 513 named diagnostic microtests executed and passed, while accepting the metadata-only baseline with seven unresolved gates and zero real fixtures executed or admitted.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; the named metadata-as-diagnostic mutant checks its specific diagnostic."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; the named metadata-as-diagnostic mutant checks its specific diagnostic."
     },
     {
       "id": "ADV-04",
@@ -203,7 +208,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The exact-source notes controls reject an unsupported claim that both candidates' licenses prohibit repository and public-CI use; the source/rights-scope baseline remains accepted.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; rights-scope-presented-as-license-prohibition mutant."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; rights-scope-presented-as-license-prohibition mutant."
     },
     {
       "id": "ADV-05",
@@ -213,7 +218,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "Visible prose and a real ledger link pass. Code-only disclosure evidence, image-ledger destinations, and hidden titles/alt text fail the required visibility or ledger checks.",
       "fix_sha": "9e09eef8b379ca8d329cb13bf354058661296daa",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 pass their paired visibility controls."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 pass their paired visibility controls."
     },
     {
       "id": "ADV-06",
@@ -223,7 +228,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "Relative and canonical ledger links are accepted; external-query, title-only, image, and malformed destinations reject for ledger mismatch or malformed-link reasons.",
       "fix_sha": "9a193975fb32ae69bd09be2cf847e3271d078733",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
     },
     {
       "id": "ADV-07",
@@ -233,7 +238,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "Closed- and open-comment mutants cannot satisfy candidate or required-clause checks; a hidden changelog ledger link fails the version-output check. Visible counterparts pass.",
       "fix_sha": "9a193975fb32ae69bd09be2cf847e3271d078733",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test: positives=11 controls=64."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; verify-version-window.py --self-test: positives=11 controls=64."
     },
     {
       "id": "ADV-08",
@@ -243,7 +248,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The current controls cover same-line and nested list/blockquote fences plus indented code. Hidden disclosures and links reject; visible disclosures and genuine code masking remain accepted.",
       "fix_sha": "46f5ce4a515daa65bb9850a28a1ee4be9b9b8c5a",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04 and verify-version-window.py --self-test-version-v04 passed."
     },
     {
       "id": "ADV-09",
@@ -253,7 +258,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "Script, pre, style, doctype, and XML processing-instruction openers fail at the required paths while comments, code, and escaped examples remain valid when visible evidence is present. The legacy-matcher controls establish causality.",
       "fix_sha": "a63f1dc67654613e105ac1071b7445f21adea0bc",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-version-window.py --self-test-version-v04: positives=63 controls=66; verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-version-window.py --self-test-version-v04: positives=63 controls=66; verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72."
     },
     {
       "id": "ADV-10",
@@ -273,7 +278,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The claim-only matcher removes Cf characters, rejecting U+200B, U+2060, and U+200C claims while leaving unrelated disclosures and safe prose unchanged.",
       "fix_sha": "742bf1bb5dd3a6e71ab93dbdb420bca2ec94d16a",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source docs shards 0/200 and 199/200 pass; matcher unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source docs shards 0/200 and 199/200 pass; matcher unchanged by D-155."
     },
     {
       "id": "ADV-12",
@@ -283,7 +288,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The matcher includes the frozen Unicode 18.0 default-ignorable ranges; current paired controls cover U+034F and representative non-Cf ranges with safe-text counterparts.",
       "fix_sha": "a6bc0a824bce55de57422e2b6b73b94ed0f841d1",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; docs matcher is unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; docs matcher is unchanged by D-155."
     },
     {
       "id": "ADV-13",
@@ -293,7 +298,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "Hexadecimal, decimal, and named references to invisible/default-ignorable characters are decoded for the claim matcher; code spans remain masked and visible safe-reference prose remains accepted.",
       "fix_sha": "fc0ba4ff9626e06e04d8800800561b51414166bf",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; parser/matcher code unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; parser/matcher code unchanged by D-155."
     },
     {
       "id": "ADV-14",
@@ -303,7 +308,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The claim matcher decodes valid visible references to spaces and CGB letters as well as invisible separators. Safe visible references and masked code spans retain their intended behavior.",
       "fix_sha": "fc0ba4ff9626e06e04d8800800561b51414166bf",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source claim/profile controls pass 22 positives/21 controls."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; exact-source claim/profile controls pass 22 positives/21 controls."
     },
     {
       "id": "ADV-15",
@@ -313,7 +318,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "LF, CR, CRLF, encoded-space, soft-break, safe-prose, and code controls remain paired; the notices caller supplies uncollapsed visible prose to the shared matcher.",
       "fix_sha": "e26757fafc818a92ddf7ca45f1a409658a5a5bdd",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; docs shard 0/200 passes notice-path child controls; notice caller and matcher are unchanged except D-155 path checks."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): release-note controls pass 2/72; docs shard 0/200 passes notice-path child controls; notice caller and matcher are unchanged except D-155 path checks."
     },
     {
       "id": "ADV-16",
@@ -323,7 +328,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "Strong, intraword-star, underscore-emphasis, and inline-link-label claims are rejected. Intraword underscores, escaped punctuation, code, and destination/title-only claims remain accepted.",
       "fix_sha": "e017078b72e78b38fb596faced3af3e35c2ca0ce",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; matcher code unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): verify-v02-adoption.py --self-test-release-notes-v04: positives=2 controls=72; matcher code unchanged by D-155."
     },
     {
       "id": "ADV-17",
@@ -333,7 +338,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The matcher resolves each valid reference-label form and excludes its destination/title; unresolved and escaped labels, code, and destination-only claims remain accepted counterparts. Notice uses the same claim matcher.",
       "fix_sha": "b798781105b8f6f803e85aa2ad766d2b2fdbec22",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; docs shards 0/200 and 199/200 pass; parser/matcher diff is empty for D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): release-note controls pass 2/72; docs shards 0/200 and 199/200 pass; parser/matcher diff is empty for D-155."
     },
     {
       "id": "ADV-18",
@@ -343,7 +348,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The matcher uses fixed per-marker candidate buckets and exhausts candidates rather than scanning all prior delimiter runs; dense unmatched-marker controls assert claim detection without timing thresholds.",
       "fix_sha": "6876fab06bf746fdaab67beaa4d52a6b1c70ac06",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; source inspection confirms the candidate-stack implementation is unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): release-note controls pass 2/72; source inspection confirms the candidate-stack implementation is unchanged by D-155."
     },
     {
       "id": "ADV-19",
@@ -353,7 +358,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The exact-source matcher uses Unicode P/S categories. The paired Unicode-symbol claim and safe-prose controls are retained; current release-note controls pass.",
       "fix_sha": "4c9c54f8b5a33e758624c997f107d1ffdd7c94a0",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; historical exact-source D-153 probes rejected both claims on four production paths and accepted paired safe/code controls; matcher is unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): release-note controls pass 2/72; historical exact-source D-153 probes rejected both claims on four production paths and accepted paired safe/code controls; matcher is unchanged by D-155."
     },
     {
       "id": "ADV-20",
@@ -363,7 +368,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "A bracket stack and prefix count check nested/overlong spans before slicing or normalization; only valid labels at or below CommonMark's 999-character limit are normalized. Dense-bracket controls retain safe prose counterparts.",
       "fix_sha": "4c9c54f8b5a33e758624c997f107d1ffdd7c94a0",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): release-note controls pass 2/72; historical exact-source D-154 probes reject the 512-level attack on four production paths and accept safe counterparts; source is unchanged by D-155."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): release-note controls pass 2/72; historical exact-source D-154 probes reject the 512-level attack on four production paths and accept safe counterparts; source is unchanged by D-155."
     },
     {
       "id": "ADV-21",
@@ -373,17 +378,17 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The old inline notice path could read outside the checkout and be reused as a copy destination. The reviewed code rejects traversal components, resolves source symlinks and enforces repository containment, and re-resolves copy destinations after parent creation. Current minimal-tree probes accept baseline/in-root paths, reject traversal and external symlink inputs as notice-path-outside-root, and reject a target symlink as self-test-copy-path-outside-root with zero external writes. The exact-source docs shard runs its matching traversal, symlink, and copy controls.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): docs shard 0/200 passed; direct check_notices baseline=112 and safe in-root=113, traversal/symlink rejected; direct copy_inputs normal copy passed and destination symlink rejected with external_files=0."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): docs shard 0/200 passed; direct check_notices baseline=112 and safe in-root=113, traversal/symlink rejected; direct copy_inputs normal copy passed and destination symlink rejected with external_files=0."
     },
     {
       "id": "ADV-22",
       "category": "other",
       "severity": "medium",
-      "required_property": "The focused Plan 23-04 CTest selector must include every registered numbered docs shard, including 100\u2013199.",
+      "required_property": "The focused Plan 23-04 CTest selector must include every registered numbered docs shard, including 100–199.",
       "disposition": "fixed",
       "rationale": "The former two-digit selector omitted the high-numbered shards. The corrected `[0-9]+` selector matched all 199 numbered tests in an isolated CTest run, including 100 and 199; shard 199/200 itself passed. CMake registration, expected inventory, and timeout allowlist contain each numbered shard once.",
       "fix_sha": "9166ab60d25c6d246761b4aa33a0ceb35dd83f5c",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): exact Plan regex through ctest -N -R selected 200 total entries; CMake range/inventory/budget inspection matched shards 1\u2013199 exactly; production docs shard 199/200 passed."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): exact Plan regex through ctest -N -R selected 200 total entries; CMake range/inventory/budget inspection matched shards 1–199 exactly; production docs shard 199/200 passed."
     },
     {
       "id": "ADV-23",
@@ -403,7 +408,7 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "disposition": "fixed",
       "rationale": "The lifecycle checker pin now names 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c. The adoption checker at that pin and at the reviewed source has identical SHA-256 bytes, and the recovery self-test passed with both immutable checks retained.",
       "fix_sha": "bd5ab993a3f09307e6a5ef31185f554740a0787b",
-      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding\u2019s behavior controls unchanged): python3.14 -I tests/scripts/verify-release-lifecycle.py --rev 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc --self-test-post-tag-recovery (controls=99 positives=12); verify-v02-adoption.py blob SHA-256 at 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c and b677 both 4d0ac0c724e10c7cbca3f22d57c35dd90e98dddde396f47eda23f7289ab29e93."
+      "verification_ref": "At b677 (historical evidence; D-163 changes only docs CTest scheduling and its coverage checker, leaving this finding’s behavior controls unchanged): python3.14 -I tests/scripts/verify-release-lifecycle.py --rev 7c6f01ad5ecf3b6736bf694324acc1671d9e20cc --self-test-post-tag-recovery (controls=99 positives=12); verify-v02-adoption.py blob SHA-256 at 9166ab60d25c6d246761b4aa33a0ceb35dd83f5c and b677 both 4d0ac0c724e10c7cbca3f22d57c35dd90e98dddde396f47eda23f7289ab29e93."
     },
     {
       "id": "ADV-25",
@@ -464,6 +469,46 @@ ADV-01 through ADV-29 remain fixed at or before the reviewed commit. ADV-29 was 
       "rationale": "At d3811b8e the positive pair check and mismatch fixture copied live .github/workflows, .github/ci-timeouts.json, and CMakeLists.txt after resolving --rev, allowing dirty configuration to mask a committed mismatch. At 48d8e501 the fixture lists workflow paths from the candidate tree and reads every workflow, the timeout ledger, and CMakeLists.txt with git show at the resolved candidate commit before running the positive and stale-ledger negative.",
       "fix_sha": "48d8e501872b9a19138a4653830a40b983199adc",
       "verification_ref": "At exact source 48d8e501872b9a19138a4653830a40b983199adc: python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev 48d8e501872b9a19138a4653830a40b983199adc passed with 528 controls; python3 -I .github/scripts/verify-workflow-policy.py --check --root . passed."
+    },
+    {
+      "id": "ADV-31",
+      "category": "correctness",
+      "severity": "high",
+      "required_property": "The preview waiter deadline check must bind the parsed command event and cannot count deadline text that appears only in a shell comment.",
+      "disposition": "fixed",
+      "rationale": "At 6774831810824740a10b6644f7452eb33091a1f1, a regex-style source check accepted a stale deadline when the expected 4500 text appeared only in a comment. The corrected shell-event parser requires the exact literal argv; the causal comment-only control rejects on all three preview lanes.",
+      "fix_sha": "07bdf08d17d253abe8d1f2ac63c6bfdf16bf40b1",
+      "verification_ref": "At 950c78b0bac936992403511a3cfa41f7cb1069c6, verify-workflow-policy-coverage.py --self-test passed 573 controls, including a comment-only stale deadline mutant for each preview waiter."
+    },
+    {
+      "id": "ADV-32",
+      "category": "correctness",
+      "severity": "high",
+      "required_property": "The exact-head waiter must execute unconditionally as one parsed shell event, and a shell function must not shadow the expected Python command.",
+      "disposition": "fixed",
+      "rationale": "Re-review of 07bdf08 found dead-branch and in-command Python-function-shadow bypasses. The source-bound validator now requires one unconditional shell event with exact literal argv; both causal mutants reject for each of the three waiter jobs.",
+      "fix_sha": "e5a2f71dbf2ed27912d0ba810d434e95b9fc8c4c",
+      "verification_ref": "At 950c78b0bac936992403511a3cfa41f7cb1069c6, the 573-control exact-source coverage self-test rejects dead-branch and shadowed-Python waiter mutations on all three preview jobs."
+    },
+    {
+      "id": "ADV-33",
+      "category": "security",
+      "severity": "high",
+      "required_property": "No untrusted step may run between the exact pinned checkout and waiter and set BASH_ENV through GITHUB_ENV to alter the waiter shell.",
+      "disposition": "fixed",
+      "rationale": "At e5a2f71d, an injected prior step could write a Python wrapper and set BASH_ENV through GITHUB_ENV. The profile now requires the waiter at index 1 immediately after the exact pinned checkout, and its causal prior-step writer is rejected for each lane.",
+      "fix_sha": "170b7eb2ba24ea166376ddf2088ce3d731fddc37",
+      "verification_ref": "At 950c78b0bac936992403511a3cfa41f7cb1069c6, the 573-control exact-source coverage self-test rejects a prior-step GITHUB_ENV/BASH_ENV writer for all three preview jobs."
+    },
+    {
+      "id": "ADV-34",
+      "category": "security",
+      "severity": "high",
+      "required_property": "The exact-head waiter must run on the pinned host runner and reject job-level containers or services that could alter its shell environment or interpreter.",
+      "disposition": "fixed",
+      "rationale": "At 170b7eb2, a Linux job container with BASH_ENV could install a python3 wrapper while preserving the checked step and argv. The corrected profile pins the Linux lane to ubuntu-22.04 and rejects container/services keys on every waiter job; all causal mutants reject.",
+      "fix_sha": "950c78b0bac936992403511a3cfa41f7cb1069c6",
+      "verification_ref": "At 950c78b0bac936992403511a3cfa41f7cb1069c6, exact-source coverage self-test passed 573 controls, with a changed-runner negative and container/services negatives for each lane; adversarial and security re-reviews accepted."
     }
   ]
 }

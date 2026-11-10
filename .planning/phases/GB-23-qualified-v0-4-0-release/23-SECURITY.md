@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed tree at `48d8e501872b9a19138a4653830a40b983199adc`, using the writable clone as the Git evidence root. The review includes the full source delta through this commit, the current Plan 23-04 T2 contract, and the D-157 through D-164 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, the D-157 through D-163 workflow and CTest scheduling controls, the D-164 macOS timeout amendment, and the approved Windows path comparison.
+I re-reviewed the exact committed tree at `950c78b0bac936992403511a3cfa41f7cb1069c6`, using the writable clone as the Git evidence root. The final D-167 review includes the full source delta from the original candidate, the current Plan 23-04 T2 contract, and the D-157 through D-167 rescope. I rechecked the D-155 path confinement, D-156 lifecycle pin, D-068/D-069 budget mapping, the D-157 through D-163 workflow and CTest scheduling controls, the D-164 macOS timeout amendment, and the approved Windows path comparison.
 
 The input-path, source-revision, and package-authority boundaries remain intact. D-161 historically added four-slot reservations for five existing CTest controls; the owner-approved D-163 amendment now assigns two slots to all 200 docs controls, while every non-doc reservation stays at four. Commands, assertions, environments, labels, fixtures, and per-test timeouts remain unchanged. No product behavior or fixture data changed.
 
-At this exact revision, the workflow-policy coverage self-test passed with 528 controls and the production check passed with 540 controls across six groups. The timeout control accepts the source-bound 50-minute macOS workflow/ledger pair and rejects a stale 40-minute ledger value; the same self-test rejects the historical c9 candidate, whose macOS cap is 40 minutes. D-163 still reserves exactly two CTest slots for each of the 200 docs controls, while all other reserved registrations remain at `PROCESSORS 4`; docs retain their `v02` label and 90-second timeout. The approved Windows path normalization and its slash/case positive and wrong-path negative remain covered. SEC-23-17 remains fixed, SEC-23-18 records the corrected immutable-candidate control, and SEC-23-09 is the only open finding: a low-severity Git-output resource-bound concern. T-23-SC remains accepted under the plan's explicit no-dependency-change scope, recorded below.
+At the prior 48d8e501 review source, the workflow-policy coverage self-test passed with 528 controls and the production check passed with 540 controls across six groups. The timeout control accepts the source-bound 50-minute macOS workflow/ledger pair and rejects a stale 40-minute ledger value; the same self-test rejects the historical c9 candidate, whose macOS cap is 40 minutes. D-163 still reserves exactly two CTest slots for each of the 200 docs controls, while all other reserved registrations remain at `PROCESSORS 4`; docs retain their `v02` label and 90-second timeout. The approved Windows path normalization and its slash/case positive and wrong-path negative remain covered. SEC-23-17 remains fixed, SEC-23-18 records the corrected immutable-candidate control, and SEC-23-09 is the only open finding: a low-severity Git-output resource-bound concern. T-23-SC remains accepted under the plan's explicit no-dependency-change scope, recorded below.
 
 ## Input, path and source boundaries
 
@@ -235,15 +235,20 @@ This review is bound to `48d8e501872b9a19138a4653830a40b983199adc`. At this exac
 The D-163 rescope cites hosted run `42654987218`: native Linux completed 1,942/1,942; macOS, CMake-floor, sanitizer-inventory, and Windows reached their existing job caps while docs shards passed in sequence. This is not a complete hosted qualification pass. The earlier hosted run `6ae7a46777348d02bf4e20419df0bfc8a5929591` was also not green: Windows failed workflow-policy coverage on the support-ledger path spelling, native macOS was canceled at its 40-minute cap after 1,927/1,942 tests, and CMake-floor was canceled at its 50-minute cap after about 1,920/1,942. The current checker retains the approved Windows path comparison. No full local CTest run at this SHA is included in this review; the previous complete local run passed 1,942/1,942 at `3c908d7f`.
 
 SEC-23-09 remains the only open finding. The plan-approved T-23-SC package-install risk is explicitly recorded above as accepted; no dependency changes are present. The D-155 docs shard-0 self-test and D-156 recovery control passed at `7c6f01ad`; their validators remain unchanged. The plan-pinned budget check passed against `f2b05c9fb3ba314cfe46959b64073ce9441724ca`, and the orchestrator confirmed the PR-base check against `1ab65414d60828fa9505babeaeea9de0571f016c`; budget files remain unchanged. This review does not inspect live branch protection or exercise publication, and does not fetch/build/run/admit real fixtures.
+
+## D-167 exact-source re-review
+
+I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original candidate `029a77f5a87682cee545aa99edc1fe5263e5a77c` and the D-167 delta from `170b7eb2ba24ea166376ddf2088ce3d731fddc37`. ACCEPT. The Linux preview runner is pinned to `ubuntu-22.04`, and the profile rejects `container` and `services` for all three waiter jobs. The existing policy check pins the two macOS preview jobs to `macos-15`. The false-branch, function-shadow, comment/variable deadline, disabled-step, folded YAML, and pre-wait `GITHUB_ENV` controls remain. Exact checkout-to-waiter ordering, literal argv, and closed environments remain enforced. The waiter script hash is unchanged from the original candidate; required-native dependencies and permissions are unchanged. The source-bound coverage self-test passed 573 controls; workflow-policy `ci` and `ledger` groups passed; the configured focused Plan 23-04 selection passed 224/224 at this implementation source. No D-167 bypass remains; no hosted CI ran during review. Existing low-severity SEC-23-09 remains disclosed.
+
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-48d8e501-20261109-d164",
+  "report_id": "phase23-security-950c78b0-20261110-d167",
   "role": "security",
   "reviewer_id": "security-48d8e501",
   "independent": true,
-  "reviewed_sha": "48d8e501872b9a19138a4653830a40b983199adc",
+  "reviewed_sha": "950c78b0bac936992403511a3cfa41f7cb1069c6",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -424,6 +429,36 @@ SEC-23-09 remains the only open finding. The plan-approved T-23-SC package-insta
       "rationale": "The first D-164 coverage control could validate dirty 50-minute worktree files while the supplied candidate still had a 40-minute cap. The corrected self-test enumerates candidate workflow paths with git ls-tree and reads each fixture input with git show from the resolved candidate SHA before validation and mutation.",
       "fix_sha": "48d8e501872b9a19138a4653830a40b983199adc",
       "verification_ref": "python3 -I tests/scripts/verify-workflow-policy-coverage.py --self-test --root . --rev 48d8e501872b9a19138a4653830a40b983199adc (pass, 528 controls); same command with --rev c9a6320671b56d1092b2884aeac15d6a9320b60f rejects the stale 40-minute candidate; the 48d fixture also rejects a 40-minute ledger row as timeout-ledger-stale."
+    },
+    {
+      "id": "SEC-23-19",
+      "category": "security",
+      "severity": "high",
+      "required_property": "The shell-policy check must reject dead-branch decoys and a function that shadows the literal Python waiter command.",
+      "disposition": "fixed",
+      "rationale": "At 07bdf08, in-memory attacks showed that the exact command could be made unreachable or shadowed by a shell function. The source-bound parser now requires one unconditional shell event and exact literal argv; the negatives reject for every waiter lane.",
+      "fix_sha": "e5a2f71dbf2ed27912d0ba810d434e95b9fc8c4c",
+      "verification_ref": "At 950c78b0bac936992403511a3cfa41f7cb1069c6, the 573-control exact-source coverage self-test rejects dead-branch and Python-shadow mutations on all three preview jobs."
+    },
+    {
+      "id": "SEC-23-20",
+      "category": "security",
+      "severity": "high",
+      "required_property": "A prior step cannot inject BASH_ENV through GITHUB_ENV before the exact-head waiter executes.",
+      "disposition": "fixed",
+      "rationale": "At e5a2f71d, a step before the waiter could write a Python wrapper and set BASH_ENV through GITHUB_ENV. The profile now requires the waiter immediately after the exact pinned checkout, and the per-lane predecessor mutation rejects.",
+      "fix_sha": "170b7eb2ba24ea166376ddf2088ce3d731fddc37",
+      "verification_ref": "At 950c78b0bac936992403511a3cfa41f7cb1069c6, exact-source coverage self-test passed 573 controls, including the poisoned BASH_ENV predecessor negative for each preview lane."
+    },
+    {
+      "id": "SEC-23-21",
+      "category": "security",
+      "severity": "high",
+      "required_property": "The Linux waiter execution environment must be pinned, and no waiter lane may introduce an unreviewed job container or service.",
+      "disposition": "fixed",
+      "rationale": "At 170b7eb2, a job-level Linux container could set BASH_ENV and shadow python3 while the waiter-step checks still passed. The profile pins the Linux lane to ubuntu-22.04 and rejects container/services keys on all three lanes, with causal negatives for each.",
+      "fix_sha": "950c78b0bac936992403511a3cfa41f7cb1069c6",
+      "verification_ref": "At 950c78b0bac936992403511a3cfa41f7cb1069c6, exact-source coverage self-test passed 573 controls, workflow-policy ci and ledger groups passed, and independent security/adversarial reviews accepted."
     }
   ]
 }
