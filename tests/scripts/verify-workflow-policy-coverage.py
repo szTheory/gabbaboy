@@ -226,18 +226,99 @@ def _replace_job_block_value(workflow: str, job_id: str, old: str, new: str) -> 
     return workflow.replace(block, changed, 1)
 
 
-def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str) -> None:
-    """Keep the Windows cap and all exact-head preview wait budgets compatible."""
-    windows = _workflow_job_block_text(ci_workflow, "native-windows")
-    if windows is None or re.findall(r"(?m)^    timeout-minutes:\s*(\d+)\s*$", windows) != ["70"]:
+def _parse_workflow_text(text: str, name: str, policy_namespace: dict) -> dict:
+    """Use the pinned workflow reader for both candidate YAML and injected controls."""
+    reader_type = policy_namespace.get("_Reader")
+    if reader_type is None:
+        reject("pinned workflow reader is unavailable")
+    reader = reader_type(text, name)
+    tree = reader.mapping(0)
+    if reader.peek() is not None:
+        reject(f"{name}: content remains after parsing the workflow")
+    jobs = tree.get("jobs")
+    if not isinstance(jobs, dict) or not jobs:
+        reject(f"{name}: parsed workflow is missing its jobs mapping")
+    return tree
+
+
+def _folded_waiter_run(preview_workflow: str, job_id: str, job: dict) -> str:
+    """Read the active folded YAML scalar so shell parsing sees GitHub's actual joined command."""
+    block = _workflow_job_block_text(preview_workflow, job_id)
+    if block is None:
+        reject(f"preview timeout policy is missing job {job_id}")
+    lines = block.splitlines()
+    raw_runs = []
+    index = 0
+    while index < len(lines):
+        if lines[index] != "        run: >-":
+            index += 1
+            continue
+        index += 1
+        scalar_lines = []
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() and len(line) - len(line.lstrip(" ")) <= 8:
+                break
+            if line.strip():
+                if len(line) - len(line.lstrip(" ")) != 10:
+                    reject(f"preview job {job_id} has unsupported exact-head command indentation")
+                scalar_lines.append(line[10:])
+            elif scalar_lines:
+                reject(f"preview job {job_id} exact-head command contains a folded-scalar blank line")
+            index += 1
+        scalar = "\n".join(scalar_lines)
+        if ".github/scripts/wait-exact-head-ci.py" in scalar:
+            raw_runs.append(scalar)
+    parsed_runs = [step.get("run", "") for step in job.get("steps", [])
+                   if ".github/scripts/wait-exact-head-ci.py" in step.get("run", "")]
+    if len(raw_runs) != 1 or len(parsed_runs) != 1 or raw_runs[0] != parsed_runs[0]:
+        reject(f"preview job {job_id} must expose one parsed folded exact-head waiter command")
+    return " ".join(parsed_runs[0].splitlines())
+
+
+def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
+                            policy_namespace: dict) -> list[str]:
+    shell_events = policy_namespace.get("shell_events")
+    if shell_events is None:
+        reject("pinned shell parser is unavailable")
+    invocations = []
+    try:
+        events = shell_events(_folded_waiter_run(preview_workflow, job_id, job))
+    except Exception as error:
+        reject(f"preview job {job_id} has an unreadable shell command: {error}")
+    invocations.extend(
+        event.words for event in events
+        if event.words[:2] == ["python3", ".github/scripts/wait-exact-head-ci.py"]
+    )
+    if len(invocations) != 1:
+        reject(f"preview job {job_id} must run exactly one parsed exact-head waiter command")
+    words = invocations[0][2:]
+    deadlines = []
+    for index, word in enumerate(words):
+        if word == "--deadline-seconds":
+            if index + 1 >= len(words):
+                reject(f"preview job {job_id} has an exact-head waiter without a deadline value")
+            deadlines.append(words[index + 1])
+        elif word.startswith("--deadline-seconds="):
+            deadlines.append(word.partition("=")[2])
+    return deadlines
+
+
+def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
+                                     policy_namespace: dict) -> None:
+    """Keep the Windows cap and parsed exact-head preview wait budgets compatible."""
+    ci_tree = _parse_workflow_text(ci_workflow, "ci.yml", policy_namespace)
+    preview_tree = _parse_workflow_text(preview_workflow, "preview.yml", policy_namespace)
+    windows = ci_tree.get("jobs", {}).get("native-windows")
+    if windows is None or windows.get("timeout-minutes") != "70":
         reject("native-windows timeout must be the owner-approved 70 minutes")
     for job_id in PREVIEW_BUDGET_JOBS:
-        block = _workflow_job_block_text(preview_workflow, job_id)
-        if block is None:
+        job = preview_tree.get("jobs", {}).get(job_id)
+        if job is None:
             reject(f"preview timeout policy is missing job {job_id}")
-        if re.findall(r"(?m)^    timeout-minutes:\s*(\d+)\s*$", block) != ["85"]:
-            reject(f"preview job {job_id} must retain 10 package minutes after the 75-minute exact-head wait")
-        if re.findall(r"--deadline-seconds\s+(\d+)(?:\s|$)", block) != ["4500"]:
+        if job.get("timeout-minutes") != "85":
+            reject(f"preview job {job_id} must retain an 85-minute cap for the 75-minute exact-head wait")
+        if _preview_wait_deadlines(job, job_id, preview_workflow, policy_namespace) != ["4500"]:
             reject(f"preview job {job_id} must wait 75 minutes for the exact-head CI result")
 
 
@@ -1687,18 +1768,24 @@ def _self_test(root: Path, revision: str) -> int:
         reject("candidate workflow inventory is missing ci.yml or preview.yml")
     candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
     candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
-    validate_phase23_timeout_profile(candidate_ci, candidate_preview)
+    validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace)
     controls += 1
     stale_windows = _replace_job_block_value(
         candidate_ci, "native-windows", "    timeout-minutes: 70", "    timeout-minutes: 60")
-    rejected("stale native-Windows 60-minute cap", lambda: validate_phase23_timeout_profile(stale_windows, candidate_preview))
+    rejected("stale native-Windows 60-minute cap", lambda: validate_phase23_timeout_profile(stale_windows, candidate_preview, candidate_namespace))
     for job_id in PREVIEW_BUDGET_JOBS:
         stale_wait = _replace_job_block_value(
             candidate_preview, job_id, "--deadline-seconds 4500", "--deadline-seconds 3900")
-        rejected(f"stale {job_id} 65-minute exact-head wait", lambda stale_wait=stale_wait: validate_phase23_timeout_profile(candidate_ci, stale_wait))
+        rejected(f"stale {job_id} 65-minute exact-head wait", lambda stale_wait=stale_wait: validate_phase23_timeout_profile(candidate_ci, stale_wait, candidate_namespace))
+        comment_only_wait = _replace_job_block_value(
+            candidate_preview, job_id, "--deadline-seconds 4500",
+            '--deadline-seconds "$WAIT_SECONDS" # --deadline-seconds 4500')
+        rejected(f"comment-only 75-minute deadline in stale {job_id} waiter",
+                 lambda comment_only_wait=comment_only_wait: validate_phase23_timeout_profile(
+                     candidate_ci, comment_only_wait, candidate_namespace))
         stale_cap = _replace_job_block_value(
             candidate_preview, job_id, "    timeout-minutes: 85", "    timeout-minutes: 75")
-        rejected(f"stale {job_id} 75-minute job cap", lambda stale_cap=stale_cap: validate_phase23_timeout_profile(candidate_ci, stale_cap))
+        rejected(f"stale {job_id} 75-minute job cap", lambda stale_cap=stale_cap: validate_phase23_timeout_profile(candidate_ci, stale_cap, candidate_namespace))
     macos_block = candidate_namespace["_workflow_job_block"](
         candidate_ci, "native-macos")
     if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 50\s*$", macos_block):
@@ -1769,7 +1856,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 540:
+    if controls != 543:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
@@ -1785,9 +1872,10 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     validate_manifest(manifest, expected)
     verify_source_identity(root, git_text(root, candidate, POLICY_PATH))
     verify_archive_helper_identity(root, git_text(root, candidate, ARCHIVE_HELPER_PATH))
+    candidate_namespace = load_baseline_namespace(reviewed_policy_source(root))
     candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
     candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
-    validate_phase23_timeout_profile(candidate_ci, candidate_preview)
+    validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace)
     expected_tests = git_text(root, candidate, "tests/expected-tests.txt").decode("utf-8").splitlines()
     result = subprocess.run(["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"], cwd=root,
                             capture_output=True, text=True, check=False, timeout=30)

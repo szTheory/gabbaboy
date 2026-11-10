@@ -206,7 +206,7 @@
   "p50_minutes": "25.32",
   "samples": 5,
   "provisional": false,
-  "disclosure": "Owner-approved D-165 extends the exact-head waiter to 75 minutes and the job cap to 85 minutes, preserving 10 minutes for package checks. Historical p50 citation is unchanged; this job body changed after the cited run."
+  "disclosure": "Owner-approved D-165 extends the exact-head waiter to 75 minutes and the job cap to 85 minutes, a nominal 10-minute cap margin before checkout and preflight time. If the wait reaches its deadline, package time is less than 10 minutes. Historical p50 citation is unchanged; this job body changed after the cited run."
  },
  "preview.yml:installed-package-smoke-macos-arm64": {
   "timeout_minutes": 85,
@@ -215,7 +215,7 @@
   "p50_minutes": "22.75",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The qualification runner changed from macos-14 to macos-15 after the cited sample. Owner-approved D-165 extends the exact-head waiter to 75 minutes and the job cap to 85 minutes, preserving 10 minutes for package checks. Historical p50 citation is unchanged; this job body changed after the cited run."
+  "disclosure": "The qualification runner changed from macos-14 to macos-15 after the cited sample. Owner-approved D-165 extends the exact-head waiter to 75 minutes and the job cap to 85 minutes, a nominal 10-minute cap margin before checkout and preflight time. If the wait reaches its deadline, package time is less than 10 minutes. Historical p50 citation is unchanged; this job body changed after the cited run."
  },
  "preview.yml:player-package-smoke-macos": {
   "timeout_minutes": 85,
@@ -224,7 +224,7 @@
   "p50_minutes": "22.50",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The qualification runner changed from macos-14 to macos-15 after the cited sample. Owner-approved D-165 extends the exact-head waiter to 75 minutes and the job cap to 85 minutes, preserving 10 minutes for package checks. Historical p50 citation is unchanged; this job body changed after the cited run."
+  "disclosure": "The qualification runner changed from macos-14 to macos-15 after the cited sample. Owner-approved D-165 extends the exact-head waiter to 75 minutes and the job cap to 85 minutes, a nominal 10-minute cap margin before checkout and preflight time. If the wait reaches its deadline, package time is less than 10 minutes. Historical p50 citation is unchanged; this job body changed after the cited run."
  },
  "preview.yml:preview-package-smoke": {
   "timeout_minutes": 5,
