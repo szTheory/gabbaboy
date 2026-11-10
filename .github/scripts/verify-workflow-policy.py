@@ -5701,9 +5701,10 @@ def _ledger_mutations():
         ("ledger: duplicate key", lambda fixture: (fixture / LEDGER_PATH).write_text(
             (fixture / LEDGER_PATH).read_text(encoding="utf-8").replace('"ci.yml:native-linux": {', '"ci.yml:native-linux": {"samples": 1, "samples": 2, ', 1), encoding="utf-8"), (), "timeout-ledger-schema"),
         ("ledger: provisional row under --release-head", ledger(lambda d: d["ci.yml:native-linux"].update(provisional=True)), ("--release-head",), "timeout-ledger-provisional"),
-        ("ledger: longest gating p50 of 30.1", both(yaml_edit("ci.yml", "runs-on: windows-2022\n    timeout-minutes: 60\n",
-            "runs-on: windows-2022\n    timeout-minutes: 70\n"),
-            ledger(lambda d: d["ci.yml:native-windows"].update(timeout_minutes=70, p50_minutes="30.1"))), (), "timeout-ledger-whole-run"),
+        # Keep the approved Windows 70-minute workflow/ledger value intact and mutate only the
+        # p50 so this still causally exercises the whole-run budget guard after a cap change.
+        ("ledger: longest gating p50 of 30.1",
+         ledger(lambda d: d["ci.yml:native-windows"].update(p50_minutes="30.1")), (), "timeout-ledger-whole-run"),
         ("ledger: release_bound row under a different key", ledger(lambda d: d.update({"ci.yml:native-linux": {**bound, "timeout_minutes": 31}})), (), "timeout-ledger-release-bound"),
         ("ledger: release_bound row under a third key", ledger(lambda d: d["fixture-repro.yml:fixture-repro"].clear() or d["fixture-repro.yml:fixture-repro"].update({**bound, "timeout_minutes": 15})), (), "timeout-ledger-release-bound"),
         ("ledger: release_bound row once VERSION is above 0.2.1", both(bound_at("release-rehearsal.yml:judge"), lambda fixture: (fixture / "CMakeLists.txt").write_text(
