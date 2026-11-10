@@ -244,11 +244,11 @@ I re-reviewed `950c78b0bac936992403511a3cfa41f7cb1069c6`, compared with original
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-recovery-20261110-b50f0c10",
+  "report_id": "phase23-security-recovery-20261110-33a1e7fa",
   "role": "security",
   "reviewer_id": "recovery-security-20261110",
   "independent": true,
-  "reviewed_sha": "b50f0c10e0794591a212edbfd083f10084805532",
+  "reviewed_sha": "33a1e7faf0c4126a4840e3c1c55ee9d1589d2593",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -492,3 +492,7 @@ The parent and worker each retain at most 8 MiB of blob payloads, preserving the
 I ran the production cache identity/resource controls against this exact source. They passed root/revision/path separation, changed checker identity, symbolic-ref bypass, exact capacity, excess capacity and oversized-entry checks. An additional probe confirmed failed reads are retried. A small synthetic probe through the actual worker demonstrated cache reuse across fresh namespaces and refusal to reuse bytes after checker-source changes. Existing worker overflow, timeout and recovery controls also passed.
 
 No new correctness/security issue was found. SEC-23-09 remains open and non-blocking. I did not run the full archive self-test, CTest suite, Windows execution or hosted qualification; those remain separate qualification gates.
+
+## D-173 exact-source security delta review
+
+I independently reviewed the D-173 delta at `33a1e7faf0c4126a4840e3c1c55ee9d1589d2593`. An AST comparison confirmed that executable code outside `controls()` is unchanged. Stage snapshots are finalized before pool submission; each baseline creates private Scenario roots, copied stub state and separate workspaces. The baseline sequence occupies one existing executor slot without increasing its worker ceiling. Its result and every negative-control result remain required for success; executor shutdown waits for submitted work when a failure propagates. Cheap probes using the actual Scenario implementation confirmed unique concurrent roots and isolated state. The exact `controls()` orchestration, exercised with inexpensive case stand-ins, demonstrated overlap, complete success accounting, and propagation of both baseline and negative-control failures. No security or correctness regression was found. These probes do not establish production-suite timing; the affected CTest and remaining qualification gates still require separate evidence.

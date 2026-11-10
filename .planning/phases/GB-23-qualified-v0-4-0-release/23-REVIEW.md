@@ -1,13 +1,13 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** b50f0c10e0794591a212edbfd083f10084805532
-**Review delta:** 950c78b0bac936992403511a3cfa41f7cb1069c6 through b50f0c10e0794591a212edbfd083f10084805532, with earlier Phase 23 review findings retained
+**Reviewed implementation:** 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593
+**Review delta:** 950c78b0bac936992403511a3cfa41f7cb1069c6 through 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593, with earlier Phase 23 review findings retained
 **Role:** release-consumer
 **Reviewer:** recovery-release-20261110
 
 ## Scope and conclusion
 
-I independently reviewed the exact implementation at `b50f0c10e0794591a212edbfd083f10084805532`, including the D-168 harness changes, D-169 worker lifecycle and release-reader correction, D-170 complete CI dependency window, D-171 fixture trigger reduction, and D-172 extension of immutable blob caching into the isolated archive CLI worker. ACCEPT for release/consumer review: no current blocker or warning was proven. The reader budgets match the owner-approved values, worker cleanup precedes synthetic-directory removal even on exceptions, and immutable policy controls reject the superseded budgets and lost fixture triggers. The cache retains only successful bounded immutable reads while fresh CLI namespaces and mutable product checks remain active. The existing release provenance, version-window, installed-consumer, product, and notice implementations have no source changes since the prior reviewed baseline. RC-01 through RC-23 retain their identities, fixes, and historical verification; RC-24 records the corrected release-reader dependency-window defect. Full final local and hosted qualification are separate pending gates, not established by this review.
+I independently reviewed the exact implementation at `33a1e7faf0c4126a4840e3c1c55ee9d1589d2593`, including the D-168 harness changes, D-169 worker lifecycle and release-reader correction, D-170 complete CI dependency window, D-171 fixture trigger reduction, D-172 extension of immutable blob caching into the isolated archive CLI worker, and D-173 overlap of the unchanged lifecycle baseline sequence with independent controls inside the existing worker bound. ACCEPT for release/consumer review: no current blocker or warning was proven. The reader budgets match the owner-approved values, worker cleanup precedes synthetic-directory removal even on exceptions, and immutable policy controls reject the superseded budgets and lost fixture triggers. The cache retains only successful bounded immutable reads while fresh CLI namespaces and mutable product checks remain active. Lifecycle scenarios own their mutable state, and baseline/control exceptions still prevent success. The existing release provenance, version-window, installed-consumer, product, and notice implementations have no source changes since the prior reviewed baseline. RC-01 through RC-23 retain their identities, fixes, and historical verification; RC-24 records the corrected release-reader dependency-window defect. Full final local and hosted qualification are separate pending gates, not established by this review.
 
 The historical correctness/security findings were **BLOCKER** findings before remediation; the two historical low-severity quality records (RC-18 and RC-23) were **WARNING** findings. All structured records below are fixed. No necessity finding is asserted.
 
@@ -105,15 +105,23 @@ The worker still loads the actual script and helper into a fresh namespace for e
 
 I executed the cache's exact-source boundary controls from the b50 Git object in isolation. They passed identity separation for repository/revision/path/checker bytes, moved symbolic refs, exact aggregate capacity, excess capacity, and oversized entries. I also reran the cheap worker overflow, shortened deadline, reuse, and explicit-stop controls successfully with the new response fields. No full archive self-test, expensive suite or hosted run was started by this reviewer. Final configured CTest timing and full local/hosted qualification remain the parent's responsibility; no success at b50 is inferred from the previous head's results.
 
+## D-173 lifecycle scheduling delta
+
+I inspected the immutable implementation delta from b50 to `33a1e7faf0c4126a4840e3c1c55ee9d1589d2593`. Its only source change is `verify-release-lifecycle.py:3761-3772`: the unchanged serial `positive_baselines(ctx)` sequence is submitted as one task to the existing `ThreadPoolExecutor(max_workers=PARALLEL)`. The baseline result is awaited and added to the positive count, and every negative-control future is still awaited on a successful path. A baseline or control exception escapes `controls()`; the executor context waits for pending work during unwinding, so no failure can be converted to a passing result. The baseline uses one slot of the same pool, without a nested executor or an increased worker ceiling.
+
+I traced all three baseline functions through `Context.scenario`, `Scenario`, and their production gate helpers. Each baseline creates its own scenario; scenario numbering uses `_COUNTER_LOCK` (`:2041-2052`), copied stub state, separate workspaces/home/temp directories, and per-process environment dictionaries. `build_stages(ctx)` and judge-integrity checks complete before task submission. Baselines read the finalized `manifested`/`finalized` stage trees and judge repository; their gate execution mutates only their scenario copies. They do not call `snapshot()`, write `Template.stages`, or alter shared context/files. The existing task2/task3 control builders only assemble independent callables. Thus the new overlap introduces no shared mutable release state or prerequisite race. The baseline sequence, actual production script calls, case membership, counts, `PARALLEL`, CTest RUN_SERIAL and 60-second ceiling are unchanged.
+
+For cheap causal evidence, I extracted the exact committed `controls()` AST and ran its orchestration with synthetic dependencies and two worker slots. A baseline that waited for a negative task to start completed, proving overlap without an increased pool. Separate injected baseline and negative-control exceptions both propagated with their original marker; the successful case retained the expected positive/control totals. This probe checks scheduling and failure propagation, not real release behavior or timing. The earlier d5b 60-second CTest failure remains failure evidence; the matching-environment 64.09-second diagnostic is historical. The parent owns the affected real CTest and final focused/full/hosted qualification at the new head; none was duplicated by this reviewer.
+
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-b50f0c10-20261110-recovery",
+  "report_id": "gb-23-release-consumer-33a1e7fa-20261110-recovery",
   "role": "release-consumer",
   "reviewer_id": "recovery-release-20261110",
   "independent": true,
-  "reviewed_sha": "b50f0c10e0794591a212edbfd083f10084805532",
+  "reviewed_sha": "33a1e7faf0c4126a4840e3c1c55ee9d1589d2593",
   "findings": [
     {
       "id": "RC-01",

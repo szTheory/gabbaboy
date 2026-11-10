@@ -1,6 +1,6 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** b50f0c10e0794591a212edbfd083f10084805532
+**Reviewed implementation:** 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593
 **Role:** adversarial
 **Reviewer:** recovery-adversarial-20261110
 **Independence:** independent source review; no implementation edits or commits.
@@ -9,7 +9,7 @@
 
 ACCEPT for the reviewed implementation. No correctness or security finding remains open. ADV-01 through ADV-34 retain their historical identities, dispositions, fix commits and verification references in the evidence object below. ADV-35 records the previously reported D-169 worker-cleanup defect, independently rechecked as fixed at this source.
 
-This recovery review covers the D-168 through D-172 changes from previously reviewed implementation 950c78b0bac936992403511a3cfa41f7cb1069c6, including a fresh D-172 delta review from 10fee4515c9db0e8b259e089ef2ec41f0453b811. I inspected the immutable revision and verified the checkout's implementation matched it. Full local qualification, live required checks, and hosted/release qualification remain separate gates; this report does not establish them.
+This recovery review covers the D-168 through D-173 changes from previously reviewed implementation 950c78b0bac936992403511a3cfa41f7cb1069c6, including D-172 from 10fee4515c9db0e8b259e089ef2ec41f0453b811 and a fresh D-173 delta review from b50f0c10e0794591a212edbfd083f10084805532. I inspected the immutable revision and verified the checkout's implementation matched it. Full local qualification, live required checks, and hosted/release qualification remain separate gates; this report does not establish them.
 
 ## D-168 bounded execution and preserved controls
 
@@ -65,6 +65,16 @@ Independent focused probes at exact b50f0c10 passed the actual built-in cache co
 
 I also reran the actual worker timeout/output controls on the changed source: overflow and timeout reject for their expected causes, while real CLI help works after overflow and restart. Fresh CLI/parser/main execution and independent stream limits remain in the source. The original 17 positive and 94 negative cases remain, with new cache controls added rather than replacing archive/product/receipt controls. The original 90-second CTest ceiling remains unchanged. No new correctness or security finding was established; this review does not claim that the affected CTest or full qualification passed at b50f0c10.
 
+## D-173 exact-source lifecycle scheduling review
+
+I inspected the sole source delta at 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593 against b50f0c10e0794591a212edbfd083f10084805532. It moves the unchanged serial positive_baselines sequence into one slot of the existing ThreadPoolExecutor, then adds its result to the positive count before aggregating the unchanged negative futures (tests/scripts/verify-release-lifecycle.py:3739-3773). It does not alter the three baseline functions, case builders, real production script calls, expected diagnostics or result aggregation. The template setup remains the fourth positive, with the existing 101 control outcomes retained. PARALLEL remains between two and eight; the baseline consumes an existing slot rather than increasing that ceiling. CTest remains RUN_SERIAL with a 60-second timeout, and inventory/registration are unchanged.
+
+I traced the new concurrent boundary. build_stages completes before submitting any work, freezing attached/manifested/finalized snapshots. Each baseline creates its own Scenario. Scenario allocation uses the existing locked counter, copies snapshot state into a distinct root, and owns its stub state, home, runner directories and workspaces (Scenario:2045-2068). Subject workspaces clone the shared judge rather than modifying it; trusted scripts are copied into the private workspace. Baseline source/draft/final checks read the shared immutable evidence and use their private transport state. The newly overlapped baseline path does not call snapshot or mutate the shared capture/template. Negative cases were already mutually concurrent, and their scenario-local mutations remain isolated from the new baseline task.
+
+Independent cheap scheduling probes invoked the actual current controls function with disposable setup and synthetic task callbacks, avoiding a duplicate production suite. A baseline waiting for a control-side event succeeds only when overlapping the existing pool, and positive/control results aggregate correctly. Separate baseline-failure and negative-control-failure probes propagate their distinct exceptions. In all cases, the executor completes every submitted task before returning or raising; no failure path can produce a successful report by omitting the baseline or a later control. The successful path explicitly obtains the baseline and every control future result.
+
+No new correctness or security defect was established. The earlier focused 60-second timeout and matching-environment diagnostic remain historical evidence for the scheduling decision, not current qualification. The parent owns the affected CTest and final focused/full/hosted results; this reviewer did not run an expensive duplicate lifecycle suite.
+
 ## Historical review continuity
 
 Historical finding records below remain unchanged. The public Markdown parser, release-note/version-window matcher, notice and self-test path-confinement code, recovery adoption pin, review-evidence validator, source/package trust judge and legal fixture boundaries have no implementation delta from the reviewed baseline. I traced the changed harnesses into those unchanged production checks.
@@ -80,17 +90,17 @@ At exact implementation 10fee4515c9db0e8b259e089ef2ec41f0453b811:
 - Candidate worker probes passed separate stream boundaries, both overflow causes, actual 30-second timeout and termination, restart, actual parser execution, fresh namespaces, causal disabled-stop rejection and exception cleanup.
 - Source-archive worker probes passed parser/help reuse, both stream boundaries, overflow rejection, forced timeout and restart.
 
-The parent owns full local qualification and hosted evidence. At 10fee4515 the parent reported v02_source_archive_controls reaching its unchanged 90-second ceiling; that failure is retained as historical evidence. D-172 is reviewed above, with the parent running the affected CTest before further qualification. This reviewer started no additional full suite. No new correctness/security finding requires an owner rescope; the parent must establish current local and hosted results.
+The parent owns full local qualification and hosted evidence. At 10fee4515 the parent reported v02_source_archive_controls reaching its unchanged 90-second ceiling; that failure is retained as historical evidence. Subsequent D-172 and D-173 source reviews appear above; the parent runs the affected tests and final qualification. This reviewer started no additional full suite. No new correctness/security finding requires an owner rescope; the parent must establish current local and hosted results.
 
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-b50f0c10-20261110-recovery",
+  "report_id": "gbb-phase23-adversarial-33a1e7fa-20261110-recovery",
   "role": "adversarial",
   "reviewer_id": "recovery-adversarial-20261110",
   "independent": true,
-  "reviewed_sha": "b50f0c10e0794591a212edbfd083f10084805532",
+  "reviewed_sha": "33a1e7faf0c4126a4840e3c1c55ee9d1589d2593",
   "findings": [
     {
       "id": "ADV-01",
