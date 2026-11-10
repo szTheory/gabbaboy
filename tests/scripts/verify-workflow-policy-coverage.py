@@ -59,6 +59,7 @@ PHASE23_RESERVED_TESTS = {
     "v03_dispositions_controls",
 }
 PHASE23_RESERVED_TESTS.update(DOC_CONTROL_TESTS)
+SANITIZER_SCHEDULE_COST_TESTS = {"v02_consumer_controls_c", "v02_consumer_controls_cpp"}
 PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], *PHASE23_RESERVED_TESTS}
 EXPECTED_RESERVED_LABELS = {
     "fixture_product_core_controls": ["v02"],
@@ -388,9 +389,12 @@ def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
 
 def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
                                      policy_namespace: dict) -> None:
-    """Keep the Windows cap and parsed exact-head preview wait budgets compatible."""
+    """Keep sanitizer, Windows, and parsed exact-head preview budgets within the approved caps."""
     ci_tree = _parse_workflow_text(ci_workflow, "ci.yml", policy_namespace)
     preview_tree = _parse_workflow_text(preview_workflow, "preview.yml", policy_namespace)
+    sanitizer_tests = ci_tree.get("jobs", {}).get("linux-sanitizers-tests")
+    if sanitizer_tests is None or sanitizer_tests.get("timeout-minutes") != "65":
+        reject("linux-sanitizers-tests timeout must retain the approved 65-minute cap")
     windows = ci_tree.get("jobs", {}).get("native-windows")
     if windows is None or windows.get("timeout-minutes") != "70":
         reject("native-windows timeout must be the owner-approved 70 minutes")
@@ -1221,6 +1225,11 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         expected_processors = 2 if name in DOC_CONTROL_TESTS else 4
         if properties.get("PROCESSORS") != expected_processors:
             reject(f"CTest {name} must reserve exactly {expected_processors} native test slots")
+        if name in SANITIZER_SCHEDULE_COST_TESTS:
+            expected_cost = 1800 if sanitizer_enabled else 600
+            cost = properties.get("COST")
+            if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost != expected_cost:
+                reject(f"CTest {name} must schedule at its exact {expected_cost}-second build-mode cost")
         if name in EXPECTED_RESERVED_LABELS and properties.get("LABELS") != EXPECTED_RESERVED_LABELS[name]:
             reject(f"CTest {name} must retain its exact existing labels")
 
@@ -1426,6 +1435,8 @@ def _self_test(root: Path, revision: str) -> int:
         ]
         if name in PROCESSOR_RESERVED_TESTS:
             properties.append({"name": "PROCESSORS", "value": 2 if name in DOC_CONTROL_TESTS else 4})
+        if name in SANITIZER_SCHEDULE_COST_TESTS:
+            properties.append({"name": "COST", "value": 600})
         if name in EXPECTED_RESERVED_LABELS:
             properties.append({"name": "LABELS", "value": EXPECTED_RESERVED_LABELS[name]})
         if name == "v02_support_ledger_controls":
@@ -1509,6 +1520,8 @@ def _self_test(root: Path, revision: str) -> int:
         for prop in test["properties"]:
             if prop["name"] == "TIMEOUT":
                 prop["value"] *= 3
+            elif prop["name"] == "COST" and test["name"] in SANITIZER_SCHEDULE_COST_TESTS:
+                prop["value"] *= 3
     support_ledger_scaled = next(test for test in scaled if test["name"] == "v02_support_ledger_controls")
     next(prop for prop in support_ledger_scaled["properties"] if prop["name"] == "ENVIRONMENT")["value"] = (
         _expected_v02_environment(build_dir, True)
@@ -1568,6 +1581,13 @@ def _self_test(root: Path, revision: str) -> int:
 
     def set_support_timeout(test_list: list[dict], value: int) -> None:
         set_test_property(test_list, "v02_support_ledger_controls", "TIMEOUT", value)
+
+    mutant = copy.deepcopy(tests)
+    set_test_property(mutant, "v02_consumer_controls_c", "COST", 601)
+    rejected("incorrect native consumer schedule cost", lambda: validate(mutant))
+    mutant = copy.deepcopy(scaled)
+    set_test_property(mutant, "v02_consumer_controls_cpp", "COST", 600)
+    rejected("unscaled sanitizer consumer schedule cost", lambda: validate(mutant, sanitizer=True))
 
     mutant = copy.deepcopy(tests)
     set_timeout(mutant, 540)
@@ -1867,6 +1887,10 @@ def _self_test(root: Path, revision: str) -> int:
     stale_windows = _replace_job_block_value(
         candidate_ci, "native-windows", "    timeout-minutes: 70", "    timeout-minutes: 60")
     rejected("stale native-Windows 60-minute cap", lambda: validate_phase23_timeout_profile(stale_windows, candidate_preview, candidate_namespace))
+    stale_sanitizer_tests = _replace_job_block_value(
+        candidate_ci, "linux-sanitizers-tests", "    timeout-minutes: 65", "    timeout-minutes: 55")
+    rejected("stale sanitizer test inventory 55-minute cap",
+             lambda: validate_phase23_timeout_profile(stale_sanitizer_tests, candidate_preview, candidate_namespace))
     unpinned_linux_runner = _replace_job_block_value(
         candidate_preview, "installed-package-smoke-linux-x64",
         "    runs-on: ubuntu-22.04", "    runs-on: ubuntu-latest")
@@ -1997,6 +2021,7 @@ def _self_test(root: Path, revision: str) -> int:
         else:
             reject("native-macos 40-minute ledger row was accepted against the 50-minute workflow")
         stale_ledger_rows = (
+            ("ci.yml:linux-sanitizers-tests", 55),
             ("ci.yml:native-windows", 60),
             ("preview.yml:installed-package-smoke-linux-x64", 75),
             ("preview.yml:installed-package-smoke-macos-arm64", 75),
@@ -2038,7 +2063,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 573:
+    if controls != 577:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 

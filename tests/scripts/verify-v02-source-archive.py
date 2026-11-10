@@ -707,6 +707,26 @@ def _private_baseline_repo(scratch, checker):
 
 def _synthetic_core_product(scratch):
     checker = _load_product_policy_module()
+    original_blob = checker.blob
+    blob_cache = {}
+    cache_bytes = 0
+    cache_hits = 0
+
+    def cached_blob(root, revision, path):
+        nonlocal cache_bytes, cache_hits
+        key = (str(pathlib.Path(root).resolve()), revision, path)
+        if key in blob_cache:
+            cache_hits += 1
+            return blob_cache[key]
+        data = original_blob(root, revision, path)
+        if len(data) <= 1 << 20 and cache_bytes + len(data) <= 16 << 20:
+            blob_cache[key] = data
+            cache_bytes += len(data)
+        return data
+
+    # Git blobs are immutable. This cache is scoped to one synthetic self-test and does
+    # not bypass the worktree byte checks performed by the shared product validator.
+    checker.blob = cached_blob
     repo = _private_baseline_repo(scratch, checker)
     rules, _policy_bytes = checker._product_rules(repo)
     source_contract = checker._product_source_expectations(repo, rules, "core")
@@ -723,6 +743,8 @@ def _synthetic_core_product(scratch):
     inventory = checker.check_product_entries(entries, "core", repo)
     forbidden_source = "fixtures/mooneye-cgb/boot_regs-cgb.gb"
     forbidden_bytes = checker.blob(repo, checker.BASELINE_COMMIT, forbidden_source)
+    if cache_hits == 0:
+        raise Reject("source-archive-self-test-failed", "immutable Git blob cache was not reused")
     return checker, repo, product, inventory, forbidden_bytes, rules, source_contract
 
 

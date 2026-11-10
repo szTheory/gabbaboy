@@ -9,12 +9,14 @@ acceptance path and is validated from its bound receipt.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import copy
 import hashlib
 import io
 import json
 import os
 import re
+import runpy
 import shutil
 import shlex
 import subprocess
@@ -1806,12 +1808,25 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
 def run_checker(root: Path, *args: str, expect_code: int = 0,
                 expect_text: str = "") -> str:
     script = root / "tests/scripts/verify-cgb-candidates.py"
-    result = run_process([sys.executable, "-I", str(script), *args], root, timeout=MAX_SUBPROCESS_SECONDS)
-    output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
-    if result.returncode != expect_code:
+    # Exercise the real CLI parser and main function for every synthetic input, while avoiding
+    # dozens of identical interpreter startups in this one self-test. Each call gets a fresh
+    # script namespace, matching the isolation of a new process for module-level state.
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    started = time.monotonic()
+    try:
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            namespace = runpy.run_path(str(script), run_name="gbb_candidate_checker_cli")
+            exit_code = namespace["main"](list(args))
+    except SystemExit as error:
+        exit_code = error.code if isinstance(error.code, int) else (0 if error.code is None else 1)
+    if time.monotonic() - started > MAX_SUBPROCESS_SECONDS:
+        raise Reject("candidate-self-test-failed", f"CLI exceeded {MAX_SUBPROCESS_SECONDS}-second bound")
+    output = stdout.getvalue() + stderr.getvalue()
+    if exit_code != expect_code:
         detail = output.strip().replace("\n", " ")[-512:]
         raise Reject("candidate-self-test-failed",
-                     f"CLI exit={result.returncode} expected={expect_code}: {detail}")
+                     f"CLI exit={exit_code} expected={expect_code}: {detail}")
     if expect_text and expect_text not in output:
         detail = output.strip().replace("\n", " ")[-512:]
         raise Reject("candidate-self-test-failed", f"CLI omitted {expect_text}: {detail}")

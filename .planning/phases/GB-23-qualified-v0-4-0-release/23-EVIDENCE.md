@@ -207,3 +207,28 @@ The single D-165 attempt ran on PR #146 at exact head `0916cb465211a97b09bf97097
 The timed-out controls are existing tests, not changed by the D-167 correction. Local full CTest at the qualified source passed 1,942/1,942 in 1,891.20s; local recorded mean costs are 5.41s for `release_disclosure_controls`, 58.70s for `phase21_fixture_admission_controls`, and 14.96s for `v02_source_archive_controls`. Those local costs do not explain the Linux/Windows hosted timeouts. No code assertion failure or review finding was reported. The ASan job cap and the three test-level timeouts did not complete the required inventory.
 
 D-165 authorized one exact-head hosted attempt and explicitly requires a new owner decision after failure. PR #146 remains open and unmerged. The current approval does not authorize a retry or further budget change. Do not merge, tag, publish, or advance to Phase 24. The next step is an owner decision on an in-place, evidence-bounded T2 rescope for the timed-out controls and incomplete ASan inventory, followed by exact-source reviews and local qualification before any newly authorized hosted attempt. REL-01 and publication remain Pending.
+
+
+## D-168 profiled T2 correction status (2026-11-10)
+
+The owner approved the profile-driven correction in [23-04-T2-RESCOPE.md](23-04-T2-RESCOPE.md#d-168-profiled-control-and-sanitizer-schedule-correction). No hosted attempt has started. The scope preserves the three 60/60/90-second CTest ceilings, all control cases, all CTest inventory, four-worker execution, and D-165 Windows/preview limits.
+
+Local profiles identified:
+
+- `phase21_fixture_admission_controls`: the full profile run was about 50 seconds under cProfile. Its synthetic cases invoked the checker CLI 54 times, with those child invocations accounting for about 27 seconds cumulatively. The CTest's historical mean is 58.70 seconds. The harness now calls the real parser and `main()` from a fresh script namespace per synthetic case, checks the same exit code/output, and rejects a completion exceeding the existing 30-second bound.
+- `release_disclosure_controls`: six calls recreated the same read-only adoption input tree; the profiled copies and verifier calls accounted for about 22.6 seconds under cProfile. The self-test now creates one fresh private input workspace and still launches the adoption CLI for every existing positive and negative case. Direct concurrent execution passed 4 positives and 20 negatives.
+- `v02_source_archive_controls`: the profile showed repeated `git show` retrieval of immutable fixture-policy blobs. A self-test-local cache now caps each blob at 1 MiB and aggregate bytes at 16 MiB, and asserts reuse while ordinary worktree checks continue. The self-test passed 17 cases and 92 negative controls during the concurrent direct run.
+
+The sanitizer job was cancelled at 1,819/1,853 tests under the existing 55-minute cap, with one four-slot consumer test still active. D-168 therefore sets the lane to the approved 65-minute maximum (+10), preserves its existing historical p50 and discloses the changed job body, and raises only the two sanitizer-build CTest scheduling COST hints to 1,800 (normal builds remain 600). Their `PROCESSORS 4` reservations and test timeouts are unchanged. Source-bound policy controls now cover the ordinary/sanitizer costs and reject a stale 55-minute workflow/ledger value.
+
+| Gate | Result |
+|---|---|
+| Disclosure self-test | Passed: positives=4, controls=20. |
+| Source-archive self-test | Passed: accepted=17, negative controls=92; the bounded-cache-reuse assertion passed. |
+| Candidate-checker controls | Pending exact-source rerun. An exploratory run against old revision `0916cb46` correctly refused because the working source had changed. |
+| Configure/build, workflow and budget checks | Pending. |
+| Exact-source reviews and immutable real-report gate | Pending. |
+| Focused Phase 23 CTest and full local CTest | Pending. |
+| New hosted qualification | Authorized once, only after the preceding reviews and local gates pass. |
+
+No release claim is qualified by these local control results. REL-01 and publication remain Pending; no game or diagnostic fixture was fetched, built, run, or admitted. After T3 completes, continue only with plans 23-07, 23-05, 23-06, and 23-08; stop at the Phase 23 boundary.

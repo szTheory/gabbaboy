@@ -1,33 +1,33 @@
 {
   "version": "1.0",
-  "timestamp": "2026-11-09T17:30:40.000Z",
+  "timestamp": "2026-11-10T18:55:24Z",
   "phase": "23",
   "phase_name": "Qualified v0.4.0 Release",
   "phase_dir": ".planning/phases/GB-23-qualified-v0-4-0-release",
   "status": "executing",
-  "completed_stage": "Plan 23-04 T2 exact-source reviews and exact local qualification at 9f38c43e; T3 hosted qualification at PR #146 head 343606f0 did not pass the existing job windows",
+  "completed_stage": "Plan 23-04 T3 D-165 attempt failed; owner-approved D-168 recovery is underway before the newly authorized exact-head attempt",
   "blockers": [
-    "PR #146 remains open at 343606f0cb105c837e928dc58d2ecea8b37e9670. Hosted CI run 42654987218 was cancelled at existing job caps: macOS 1,895/1,942 at 40m, CMake 1,839/1,942 at 50m, sanitizer inventory 1,785/1,853 at 55m, and Windows 1,746/1,804 at 60m. Native Linux passed 1,942/1,942 in 47m56s. The canceled logs show passing docs shards, with no assertion failure.",
-    "Fixture reproduction 42654987232 passed. Preview package smoke 42654987242 failed because the required matching CI run did not succeed. No protected merge is eligible.",
-    "D-163 explicitly prohibits changing CI job budgets and per-test timeouts. The current four-slot reservation for all 200 docs shards serializes them and makes required macOS, floor, sanitizer, and Windows jobs exceed their windows. An owner decision is needed before changing the approved scheduling policy."
+    "The one D-165 exact-head attempt at 0916cb465211a97b09bf970971f113861adb7141 failed: Linux had a 60-second release_disclosure_controls timeout; Windows had 60-second phase21_fixture_admission_controls and release_disclosure_controls timeouts plus a 90-second v02_source_archive_controls timeout; the Linux ASan inventory hit its 55-minute cap at 1,819/1,853 while v02_consumer_controls_c was running. Native macOS passed 1,942/1,942; CMake floor, other sanitizer lanes, performance, player, and fixture reproduction passed. All three preview jobs failed downstream of required CI. Full evidence is in 23-EVIDENCE.md and 23-VALIDATION.md.",
+    "D-168 now authorizes one new exact-head attempt after the profiled harness and sanitizer scheduling correction passes exact-source reviews and local gates. No hosted attempt has started for D-168; do not merge, tag, or publish before its required checks pass.",
+    "After T3, plans 23-07, 23-05, 23-06, and 23-08 remain in scope and must execute in dependency order. Stop after Phase 23; do not start Phase 24."
   ],
   "async_jobs": [
     {
       "workflow": "ci",
-      "run_id": 42654987218,
+      "run_id": 42854792963,
       "status": "cancelled"
     },
     {
       "workflow": "fixture-repro",
-      "run_id": 42654987232,
+      "run_id": 42854793507,
       "status": "success"
     },
     {
       "workflow": "preview-package-smoke",
-      "run_id": 42654987242,
+      "run_id": 42854792759,
       "status": "failure"
     }
   ],
-  "next_action": "Await the owner decision on whether to amend D-163 to reserve two CTest slots per docs shard, preserving all 200 controls, 90-second per-test limits, the global four-worker CTest limit, and current CI job caps. If approved, update the rescope and controls, reissue all three exact-source reviews, rerun focused and full local qualification, then run one fresh exact-head protected qualification. Resume with /gsd-execute-phase 23; do not merge or start Phase 24 before Phase 23 closes.",
-  "context_notes": "Reviewed implementation 61f08de30b4f74ae539f827c5b04e1188fc3ea79 and allowlisted evidence-only PR head 343606f0. Local exact-candidate CTest passed 1,942/1,942 at 9f38c43e; hosted Linux full suite passed. The exact-head hosted run did not qualify because four job caps expired while serial docs shards continued passing. No merge, tag, publication, or real diagnostic fixture admission. SEC-23-09 remains a low resource-bound note accepted by the review gate."
+  "next_action": "Finish D-168's three profiled harness corrections, sanitizer CTest schedule costs, paired timeout ledger/control updates, exact-source reviews, immutable report gate, workflow and test-budget checks, focused tests, and full local CTest. Then use the one newly authorized exact-head CI/fixture/preview attempt. If it passes, execute plans 23-07, 23-05, 23-06, and 23-08 in dependency order and stop at Phase 23.",
+  "context_notes": "PR #146 remains open and unmerged at the D-165 head 0916cb465211a97b09bf970971f113861adb7141. The owner approved D-168; implementation is in the isolated phase23-d163-two-slot checkout. Two targeted controls passed; candidate-checker exact-source run, exact-source reviews, full local gates, and the new hosted attempt remain. Preserve Windows 70 minutes, preview 4,500-second waits/85-minute caps, all assertions and test ceilings. No merge, tag, publication, or Phase 24 work is eligible yet."
 }
