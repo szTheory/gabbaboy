@@ -17,7 +17,7 @@ jobs:
     name: installed-package-smoke-linux-x64
     runs-on: ubuntu-22.04
     # D-165: allow a 75-minute exact-head wait with a nominal 10-minute cap margin before checkout and preflight time.
-    timeout-minutes: 85
+    timeout-minutes: 90
     steps:
       - name: Check out tested source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -32,7 +32,7 @@ jobs:
         run: >-
           python3 .github/scripts/wait-exact-head-ci.py
           --sha "$EXPECTED_SHA" --repo "$GITHUB_REPOSITORY"
-          --require required-native --deadline-seconds 4500
+          --require required-native --deadline-seconds 4800
       - name: Configure, build, and install
         run: |
           cmake --preset phase1
@@ -67,7 +67,7 @@ jobs:
     name: installed-package-smoke-macos-arm64
     runs-on: macos-15
     # D-165: allow a 75-minute exact-head wait with a nominal 10-minute cap margin before checkout and preflight time.
-    timeout-minutes: 85
+    timeout-minutes: 90
     steps:
       - name: Check out tested source revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -82,7 +82,7 @@ jobs:
         run: >-
           python3 .github/scripts/wait-exact-head-ci.py
           --sha "$EXPECTED_SHA" --repo "$GITHUB_REPOSITORY"
-          --require required-native --deadline-seconds 4500
+          --require required-native --deadline-seconds 4800
       - name: Configure, build, and install
         run: |
           cmake --preset phase1
@@ -117,7 +117,7 @@ jobs:
     name: player-package-smoke-macos
     runs-on: macos-15
     # D-165: the 75-minute wait covers the Windows 70-minute cap, with a nominal 10-minute cap margin before setup.
-    timeout-minutes: 85
+    timeout-minutes: 90
     steps:
       - name: Check out exact pull request head
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -136,7 +136,7 @@ jobs:
           --sha "$EXPECTED_SHA" --repo "$GITHUB_REPOSITORY"
           --require required-native --require macos-player-package
           --planning-skippable macos-player-package
-          --deadline-seconds 4500 --github-output "$GITHUB_OUTPUT"
+          --deadline-seconds 4800 --github-output "$GITHUB_OUTPUT"
           --attempt-job macos-player-package
       # A planning-only head (the exact-head ci.yml run reports kind=planning through its own job results) changes no
       # source and builds no player package, so the three steps below are skipped for it. The guard is `!= 'planning'`,

@@ -379,12 +379,12 @@ def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
     ]
     if job_id == "player-package-smoke-macos":
         expected.extend(["--require", "macos-player-package", "--planning-skippable", "macos-player-package"])
-    expected.extend(["--deadline-seconds", "4500"])
+    expected.extend(["--deadline-seconds", "4800"])
     if job_id == "player-package-smoke-macos":
         expected.extend(["--github-output", "$GITHUB_OUTPUT", "--attempt-job", "macos-player-package"])
     if event.words != expected:
         reject(f"preview job {job_id} exact-head waiter arguments differ from the required literal command")
-    return ["4500"]
+    return ["4800"]
 
 
 def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
@@ -403,20 +403,24 @@ def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
         job = preview_tree.get("jobs", {}).get(job_id)
         if job is None:
             reject(f"preview timeout policy is missing job {job_id}")
-        if job.get("timeout-minutes") != "85":
-            reject(f"preview job {job_id} must retain an 85-minute cap for the 75-minute exact-head wait")
-        if _preview_wait_deadlines(job, job_id, preview_workflow, preview_tree, policy_namespace) != ["4500"]:
-            reject(f"preview job {job_id} must wait 75 minutes for the exact-head CI result")
+        if job.get("timeout-minutes") != "90":
+            reject(f"preview job {job_id} must retain a 90-minute cap for the 80-minute exact-head wait")
+        if _preview_wait_deadlines(job, job_id, preview_workflow, preview_tree, policy_namespace) != ["4800"]:
+            reject(f"preview job {job_id} must wait 80 minutes for the exact-head CI result")
     if release_workflow is not None:
         release_tree = _parse_workflow_text(release_workflow, "release.yml", policy_namespace)
         candidate_fuzz = release_tree.get("jobs", {}).get("candidate-fuzz")
         if candidate_fuzz is None:
             reject("release candidate-fuzz job is missing from the Phase 23 timeout profile")
-        if candidate_fuzz.get("timeout-minutes") != "137":
-            reject("release candidate-fuzz must retain the approved 137-minute cap")
+        if candidate_fuzz.get("timeout-minutes") != "142":
+            reject("release candidate-fuzz must retain the approved 142-minute cap")
         fuzz_env = candidate_fuzz.get("env")
-        if not isinstance(fuzz_env, dict) or str(fuzz_env.get("CI_RUN_WAIT_DEADLINE_SECONDS")) != "4500":
-            reject("release candidate-fuzz must wait 4,500 seconds for exact-source CI")
+        if not isinstance(fuzz_env, dict) or str(fuzz_env.get("CI_RUN_WAIT_ATTEMPTS")) != "160":
+            reject("release candidate-fuzz must allow 160 polling attempts")
+        if str(fuzz_env.get("CI_RUN_WAIT_SECONDS")) != "30":
+            reject("release candidate-fuzz must retain its 30-second polling interval")
+        if str(fuzz_env.get("CI_RUN_WAIT_DEADLINE_SECONDS")) != "4800":
+            reject("release candidate-fuzz must wait 4,800 seconds for exact-source CI")
 
 
 def resolve_commit(root: Path, revision: str) -> str:
@@ -1897,6 +1901,23 @@ def _self_test(root: Path, revision: str) -> int:
     validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
     preview_tree = _parse_workflow_text(candidate_preview, "preview.yml", candidate_namespace)
     controls += 1
+    # Reject the immediately preceding approved limits as well as older stale limits below.
+    for old, stale, reason in (
+        ("CI_RUN_WAIT_ATTEMPTS: 160", "CI_RUN_WAIT_ATTEMPTS: 150", "must allow 160 polling attempts"),
+        ("CI_RUN_WAIT_DEADLINE_SECONDS: 4800", "CI_RUN_WAIT_DEADLINE_SECONDS: 4500", "must wait 4,800 seconds"),
+        ("    timeout-minutes: 142", "    timeout-minutes: 137", "must retain the approved 142-minute cap"),
+    ):
+        mutant = _replace_job_block_value(candidate_release, "candidate-fuzz", old, stale)
+        rejected_as(f"D-169 release budget {stale}", reason,
+                    lambda mutant=mutant: validate_phase23_timeout_profile(
+                        candidate_ci, candidate_preview, candidate_namespace, mutant))
+    for job_id in PREVIEW_BUDGET_JOBS:
+        for old, stale in (("--deadline-seconds 4800", "--deadline-seconds 4500"),
+                           ("    timeout-minutes: 90", "    timeout-minutes: 85")):
+            mutant = _replace_job_block_value(candidate_preview, job_id, old, stale)
+            rejected(f"D-165 preview budget {job_id} {stale}",
+                     lambda mutant=mutant: validate_phase23_timeout_profile(
+                         candidate_ci, mutant, candidate_namespace))
     stale_windows = _replace_job_block_value(
         candidate_ci, "native-windows", "    timeout-minutes: 70", "    timeout-minutes: 60")
     rejected("stale native-Windows 60-minute cap", lambda: validate_phase23_timeout_profile(stale_windows, candidate_preview, candidate_namespace))
@@ -1904,15 +1925,21 @@ def _self_test(root: Path, revision: str) -> int:
         candidate_ci, "linux-sanitizers-tests", "    timeout-minutes: 65", "    timeout-minutes: 55")
     rejected("stale sanitizer test inventory 55-minute cap",
              lambda: validate_phase23_timeout_profile(stale_sanitizer_tests, candidate_preview, candidate_namespace))
+    stale_fuzz_attempts = _replace_job_block_value(
+        candidate_release, "candidate-fuzz", "CI_RUN_WAIT_ATTEMPTS: 160",
+        "CI_RUN_WAIT_ATTEMPTS: 90")
+    rejected_as("stale 45-minute candidate-fuzz attempt ceiling", "must allow 160 polling attempts",
+                lambda: validate_phase23_timeout_profile(
+                    candidate_ci, candidate_preview, candidate_namespace, stale_fuzz_attempts))
     stale_fuzz_wait = _replace_job_block_value(
-        candidate_release, "candidate-fuzz", "CI_RUN_WAIT_DEADLINE_SECONDS: 4500",
+        candidate_release, "candidate-fuzz", "CI_RUN_WAIT_DEADLINE_SECONDS: 4800",
         "CI_RUN_WAIT_DEADLINE_SECONDS: 3000")
-    rejected_as("stale 50-minute candidate-fuzz wait", "must wait 4,500 seconds",
+    rejected_as("stale 50-minute candidate-fuzz wait", "must wait 4,800 seconds",
                 lambda: validate_phase23_timeout_profile(
                     candidate_ci, candidate_preview, candidate_namespace, stale_fuzz_wait))
     stale_fuzz_cap = _replace_job_block_value(
-        candidate_release, "candidate-fuzz", "    timeout-minutes: 137", "    timeout-minutes: 112")
-    rejected_as("stale 112-minute candidate-fuzz cap", "must retain the approved 137-minute cap",
+        candidate_release, "candidate-fuzz", "    timeout-minutes: 142", "    timeout-minutes: 112")
+    rejected_as("stale 112-minute candidate-fuzz cap", "must retain the approved 142-minute cap",
                 lambda: validate_phase23_timeout_profile(
                     candidate_ci, candidate_preview, candidate_namespace, stale_fuzz_cap))
     unpinned_linux_runner = _replace_job_block_value(
@@ -1923,26 +1950,26 @@ def _self_test(root: Path, revision: str) -> int:
                     candidate_ci, unpinned_linux_runner, candidate_namespace))
     for job_id in PREVIEW_BUDGET_JOBS:
         injected_container = _replace_job_block_value(
-            candidate_preview, job_id, "    timeout-minutes: 85",
-            "    timeout-minutes: 85\n    container:\n      image: ubuntu:22.04\n      env:\n        BASH_ENV: .github/scripts/override.sh")
+            candidate_preview, job_id, "    timeout-minutes: 90",
+            "    timeout-minutes: 90\n    container:\n      image: ubuntu:22.04\n      env:\n        BASH_ENV: .github/scripts/override.sh")
         rejected_as(f"job container in {job_id} overrides waiter shell environment",
                     "may not use a job container or services",
                     lambda injected_container=injected_container: validate_phase23_timeout_profile(
                         candidate_ci, injected_container, candidate_namespace))
         injected_services = _replace_job_block_value(
-            candidate_preview, job_id, "    timeout-minutes: 85",
-            "    timeout-minutes: 85\n    services:\n      override:\n        image: ubuntu:22.04\n        env:\n          BASH_ENV: .github/scripts/override.sh")
+            candidate_preview, job_id, "    timeout-minutes: 90",
+            "    timeout-minutes: 90\n    services:\n      override:\n        image: ubuntu:22.04\n        env:\n          BASH_ENV: .github/scripts/override.sh")
         rejected_as(f"job service in {job_id} adds an unreviewed service environment",
                     "may not use a job container or services",
                     lambda injected_services=injected_services: validate_phase23_timeout_profile(
                         candidate_ci, injected_services, candidate_namespace))
         stale_wait = _replace_job_block_value(
-            candidate_preview, job_id, "--deadline-seconds 4500", "--deadline-seconds 3900")
+            candidate_preview, job_id, "--deadline-seconds 4800", "--deadline-seconds 3900")
         rejected(f"stale {job_id} 65-minute exact-head wait", lambda stale_wait=stale_wait: validate_phase23_timeout_profile(candidate_ci, stale_wait, candidate_namespace))
         comment_only_wait = _replace_job_block_value(
-            candidate_preview, job_id, "--deadline-seconds 4500",
-            '--deadline-seconds "$WAIT_SECONDS" # --deadline-seconds 4500')
-        rejected(f"comment-only 75-minute deadline in stale {job_id} waiter",
+            candidate_preview, job_id, "--deadline-seconds 4800",
+            '--deadline-seconds "$WAIT_SECONDS" # --deadline-seconds 4800')
+        rejected(f"comment-only 80-minute deadline in stale {job_id} waiter",
                  lambda comment_only_wait=comment_only_wait: validate_phase23_timeout_profile(
                      candidate_ci, comment_only_wait, candidate_namespace))
         current_waiter = _folded_waiter_run(candidate_preview, job_id, preview_tree["jobs"][job_id])
@@ -1974,14 +2001,14 @@ def _self_test(root: Path, revision: str) -> int:
                  lambda injected_step_env=injected_step_env: validate_phase23_timeout_profile(
                      candidate_ci, injected_step_env, candidate_namespace))
         injected_job_env = _replace_job_block_value(
-            candidate_preview, job_id, "    timeout-minutes: 85",
-            "    timeout-minutes: 85\n    env:\n      BASH_ENV: .github/scripts/override.sh")
+            candidate_preview, job_id, "    timeout-minutes: 90",
+            "    timeout-minutes: 90\n    env:\n      BASH_ENV: .github/scripts/override.sh")
         rejected(f"injected BASH_ENV in {job_id} job environment",
                  lambda injected_job_env=injected_job_env: validate_phase23_timeout_profile(
                      candidate_ci, injected_job_env, candidate_namespace))
         job_shell_override = _replace_job_block_value(
-            candidate_preview, job_id, "    timeout-minutes: 85",
-            "    timeout-minutes: 85\n    defaults:\n      run:\n        shell: sh")
+            candidate_preview, job_id, "    timeout-minutes: 90",
+            "    timeout-minutes: 90\n    defaults:\n      run:\n        shell: sh")
         rejected(f"overridden shell in {job_id} run defaults",
                  lambda job_shell_override=job_shell_override: validate_phase23_timeout_profile(
                      candidate_ci, job_shell_override, candidate_namespace))
@@ -2003,7 +2030,7 @@ def _self_test(root: Path, revision: str) -> int:
                     lambda preceding_env_file_writer=preceding_env_file_writer: validate_phase23_timeout_profile(
                         candidate_ci, preceding_env_file_writer, candidate_namespace))
         stale_cap = _replace_job_block_value(
-            candidate_preview, job_id, "    timeout-minutes: 85", "    timeout-minutes: 75")
+            candidate_preview, job_id, "    timeout-minutes: 90", "    timeout-minutes: 75")
         rejected(f"stale {job_id} 75-minute job cap", lambda stale_cap=stale_cap: validate_phase23_timeout_profile(candidate_ci, stale_cap, candidate_namespace))
     root_env = "  PREVIEW_RETENTION_DAYS: 14\n"
     if candidate_preview.count(root_env) != 1:
@@ -2045,6 +2072,10 @@ def _self_test(root: Path, revision: str) -> int:
         else:
             reject("native-macos 40-minute ledger row was accepted against the 50-minute workflow")
         stale_ledger_rows = (
+            ("release.yml:candidate-fuzz", 137),
+            ("preview.yml:installed-package-smoke-linux-x64", 85),
+            ("preview.yml:installed-package-smoke-macos-arm64", 85),
+            ("preview.yml:player-package-smoke-macos", 85),
             ("ci.yml:linux-sanitizers-tests", 55),
             ("ci.yml:native-windows", 60),
             ("release.yml:candidate-fuzz", 112),
@@ -2088,7 +2119,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 580:
+    if controls != 594:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 

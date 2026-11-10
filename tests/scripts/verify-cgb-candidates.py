@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import copy
+import contextlib
 import hashlib
 import io
 import json
@@ -1911,6 +1912,35 @@ def _stop_checker_worker_before_temp_cleanup() -> None:
         raise Reject("candidate-subprocess-stop-failed")
 
 
+@contextlib.contextmanager
+def _checker_worker_temp_directory(prefix: str):
+    with tempfile.TemporaryDirectory(prefix=prefix) as temporary:
+        try:
+            yield Path(temporary)
+        finally:
+            _stop_checker_worker_before_temp_cleanup()
+
+
+def _checker_worker_cleanup_exception_control() -> int:
+    process = None
+    temporary_path = None
+    try:
+        with _checker_worker_temp_directory("gbb-candidate-cleanup-exception-") as root:
+            temporary_path = root
+            process, _responses = _checker_worker(root)
+            raise RuntimeError("expected synthetic failure")
+    except RuntimeError as error:
+        if str(error) != "expected synthetic failure":
+            raise
+    else:
+        raise Reject("candidate-self-test-failed", "synthetic cleanup exception was not raised")
+    if process is None or process.poll() is None:
+        raise Reject("candidate-self-test-failed", "exception cleanup left the worker alive")
+    if temporary_path is None or temporary_path.exists():
+        raise Reject("candidate-self-test-failed", "exception cleanup did not remove the temporary directory")
+    return 1
+
+
 def _checker_worker_cleanup_controls() -> int:
     global _stop_checker_worker
     process = _CHECKER_WORKER
@@ -1931,7 +1961,7 @@ def _checker_worker_cleanup_controls() -> int:
     _stop_checker_worker_before_temp_cleanup()
     if process.poll() is None:
         raise Reject("candidate-self-test-failed", "worker remained live after cleanup")
-    return 1
+    return 1 + _checker_worker_cleanup_exception_control()
 
 
 def _checker_worker(root: Path) -> tuple[subprocess.Popen, queue.Queue[bytes | None]]:
@@ -3207,30 +3237,26 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
             if native.returncode != 0 or "cgb-observations status=pass" not in native_output:
                 detail = native_output.strip().replace("\n", " ")[-384:]
                 raise Reject("candidate-native-build-qualification-failed", detail)
-    try:
-        with tempfile.TemporaryDirectory(prefix="gbb-candidate-contract-") as temporary:
-            root = Path(temporary)
-            project_revision = _prepare_temp_repo(source_root, root)
-            fixture = _write_synthetic_admission_fixture(root)
-            (root / "tests/data/cgb-candidates").mkdir(parents=True, exist_ok=True)
-            primary_ref, primary_no_go_commit, primary_reference_controls = _no_go_order_controls(root)
+    with _checker_worker_temp_directory("gbb-candidate-contract-") as root:
+        project_revision = _prepare_temp_repo(source_root, root)
+        fixture = _write_synthetic_admission_fixture(root)
+        (root / "tests/data/cgb-candidates").mkdir(parents=True, exist_ok=True)
+        primary_ref, primary_no_go_commit, primary_reference_controls = _no_go_order_controls(root)
 
-            unit_test = run_process(
-                [sys.executable, "-I", str(source_root / "tests/scripts/test_cgb_candidate_order.py")],
-                source_root,
-            )
-            if unit_test.returncode != 0:
-                raise Reject("candidate-self-test-failed", "candidate contract assertions failed")
+        unit_test = run_process(
+            [sys.executable, "-I", str(source_root / "tests/scripts/test_cgb_candidate_order.py")],
+            source_root,
+        )
+        if unit_test.returncode != 0:
+            raise Reject("candidate-self-test-failed", "candidate contract assertions failed")
 
-            controls = 8 + primary_reference_controls
-            if controls_only:
-                controls += _admission_controls(root, project_revision, fixture, primary_ref)
-            else:
-                # Keep a known no-go fallback reference valid in the synthetic history.
-                _ = primary_no_go_commit
-            controls += _checker_worker_cleanup_controls()
-    finally:
-        _stop_checker_worker_before_temp_cleanup()
+        controls = 8 + primary_reference_controls
+        if controls_only:
+            controls += _admission_controls(root, project_revision, fixture, primary_ref)
+        else:
+            # Keep a known no-go fallback reference valid in the synthetic history.
+            _ = primary_no_go_commit
+        controls += _checker_worker_cleanup_controls()
     if controls_only:
         print(f"PASS: candidate contract controls positives=6 negative_controls={controls} synthetic_only=true")
     else:

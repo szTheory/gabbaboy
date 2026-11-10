@@ -20,6 +20,8 @@ progress:
 
 # Project State
 
+**Recovery 2026-11-10:** Continue in the isolated Phase 23 checkout on `phase23-d163-two-slot`. The owner approved D-170 (80-minute reader windows, 90-minute preview caps, 142-minute release-reader cap; at most +20 configured runner-minutes). D-169 cleanup/polling fixes and D-170 are being qualified. The old Codex task ended with a generic Bad Request and is not running. Exact-source reviews and local gates precede the single existing hosted attempt. Stop after Phase 23.
+
 ## Project Reference
 
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
