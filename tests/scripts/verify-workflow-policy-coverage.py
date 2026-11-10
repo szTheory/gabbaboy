@@ -39,6 +39,7 @@ GROUPS = {
 DOC_SHARD_TESTS = {f"phase23_docs_controls_shard_{shard:02d}" for shard in range(1, 200)}
 DOC_CONTROL_TESTS = {"v02_adoption_docs_controls", *DOC_SHARD_TESTS}
 PHASE23_RESERVED_TESTS = {
+    "phase23_review_evidence_controls",
     "host_exit_crash_storm",
     "fixture_product_core_controls",
     "fixture_admission_controls",
@@ -2138,7 +2139,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 598:
+    if controls != 599:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 

@@ -5169,6 +5169,7 @@ set_tests_properties(
   PROPERTIES LABELS "v02;planning")
 set_tests_properties(
   v02_support_ledger_controls release_disclosure_controls release_version_v04_controls support_claims_v04_controls
+  phase23_review_evidence_controls
   PROPERTIES PROCESSORS 4)
 add_test(NAME adoption_claim_boundaries_controls
   COMMAND "${Python3_EXECUTABLE}" -I "${PROJECT_SOURCE_DIR}/tests/scripts/verify-v02-adoption.py"
