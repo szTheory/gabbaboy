@@ -27,6 +27,8 @@ Requirements remain Pending: FIXT-01 Pending, RIGHTS-01 Pending, DIAG-01 Pending
 [Complete evidence and scope: v0.4.0 support ledger](docs/support/v0.4.0.md).
 
 
+Packages remain limited to Linux x64, macOS arm64 and Windows x64 core archives, with the optional SDL3 player on macOS arm64. See the [release guide](docs/release.md) for the product matrix and inspected macOS artifact limits; broader OS compatibility remains untested.
+
 ### State, host and performance limits
 
 - Save states load only in the exact GabbaBoy release that wrote them. Battery saves remain the cross-version persistence path.
