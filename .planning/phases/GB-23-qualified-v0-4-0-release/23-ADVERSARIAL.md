@@ -1,15 +1,32 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** 5eefa412e679afe6044e3a80f93a73d269ec0c9d
+**Reviewed implementation:** 7b2ecaf6adcb62590295045d997b451f943ec21f
+
 **Role:** adversarial
-**Reviewer:** reservation-adversarial-20261110
+
+**Reviewer:** balanced-adversarial-20261111
+
 **Independence:** independent source review; no implementation edits or commits.
 
 ## Result
 
-ACCEPT for the reviewed implementation. No correctness or security finding remains open. ADV-01 through ADV-34 retain their historical identities, dispositions, fix commits and verification references in the evidence object below. ADV-35 records the previously reported D-169 worker-cleanup defect, independently rechecked as fixed at the prior reviewed source. All 35 historical records and their provenance are preserved unchanged.
+**ACCEPT for the reviewed implementation.** I found no new correctness or security issue in D-176 or the exact lifecycle snapshot integration. All 35 structured historical findings, including their identities, dispositions, fix commits, rationale, and verification references, are preserved exactly from qualification 88102b338a70503e345c821a098b3beece623235.
 
-This adversarial re-review covers D-175 on top of implementation b312148d23993a210e3adbc943882d923eab8f36. Earlier sections preserve the recovery review of D-168 through D-174, including D-172 from 10fee4515c9db0e8b259e089ef2ec41f0453b811, D-173 from b50f0c10e0794591a212edbfd083f10084805532 and D-174 from 33a1e7faf0c4126a4840e3c1c55ee9d1589d2593. I inspected the immutable 5eefa revision and verified the reviewed source files match its Git objects. Full local qualification, live required checks, and hosted/release qualification remain separate gates; this report does not establish them.
+This is a source review and targeted-harness assessment. The new final full/focused local qualification and any new hosted attempt remain unperformed; the previous hosted attempt at 88102b failed on Linux after two control timeouts and the existing 60-minute job cap. No retry, merge, tag, or publication is established or authorized by this report.
+
+## D-176 independent source review
+
+The implementation delta from qualification 88102b is confined to the bounded self-test harness, its immutable workflow-coverage model, the removal of one duplicate Linux pre-build self-test, and the lifecycle checker’s exact adoption-source pin. The adoption production parser, claim matcher, and generator are unchanged. AST comparison against 88102b confirms that the only existing adoption/checker functions changed are `run_self_test_docs`, `run_self_test_release_notes`, and support-ledger `_self_test_disclosure`; added functions provide the two case schedulers and their validators. No product output, release authority, fixture authority, source inventory, test identity, job cap, CTest timeout, reader window, or four-worker global setting changed.
+
+The notes harness retains the same 70 case identities: 21 positive and 49 negative cases. Its one-off ignored manifest records an exact match to the 88102b baseline for case IDs, outcomes, intended diagnostics, and payload digests; the checked implementation bytes match the immutable 75797dd6 blob. The schedule stores only assigned cases in a sparse map, applies stable ordinal modulo assignment, rejects duplicate, missing, unknown, or misplaced identities, and confirms the executed IDs exactly match the shard selection. I directly exercised the schedule at 200 and 10^100 shard counts; both produced a complete 70-case unique assignment without allocation proportional to the shard count, and missing/duplicate schedule inputs were refused. The targeted phase evidence records the 70 fresh note CLI calls, unchanged standalone result contract, and docs shards 0/20/21/199 passing. The existing `child_result` docs positive/negative modulo assignment and shard inventory remain intact. Unsharded mode still selects the complete note case list and returns the existing negative-control count.
+
+The disclosure harness preserves the original serial generator/adoption CLI check, then runs the same five named adoption CLI cases with at most two workers. Each case receives a private copy of one prepared read-only baseline and a fresh production CLI process with its existing 45-second bound. The exact five-name schedule is checked before case workspaces are created; missing and duplicate schedules fail. The worker collector materializes every future result, records exceptions, exits the executor before temporary-directory cleanup, and propagates errors before checking expected success or intended negative diagnostics. The four original positives and 20 original controls remain, with two added schedule controls. Recorded targeted evidence is 14.46 seconds against the unchanged 60-second CTest limit.
+
+Removing the redundant Linux pre-build ledger self-test does not remove its contract from full CTest: `v02_support_ledger_controls` remains in the expected full inventory. The immutable workflow coverage now inspects its configured CTest wrapper and requires the exact support-ledger checker with `--self-test`, exit code zero, and the original positive-plus-five-negative marker. Its causal controls reject a wrong checker, missing mode, weakened exit code, and weakened marker. The configured checker, mode, and marker remain tied to the actual CTest command. The workflow change updates the disclosure text only; the Linux job cap and historical p50 citation values are unchanged.
+
+The lifecycle change in 7b2ecaf6 changes only `RECOVERY_ADOPTION_PIN_SHA` to 75797dd6. The lifecycle still compares the immutable pinned Git blob to the current adoption checker bytes, and separately compares those checked bytes to the live file. The historical source and claims pins are unchanged. Recorded recovery evidence shows the old pin refuses the updated checker and the new exact pin passes; it does not authorize a descendant or arbitrary checker bytes.
+
+I inspected the exact 7b2ecaf6 Git objects. Its only functional change relative to 75797dd6 is the lifecycle pin; the other changed paths are handoff/evidence records. I did not run a full suite or hosted workflow. The prior-review sections below are retained as historical context at their stated revisions; they do not replace current full/focused qualification or the separate hosted gate.
 
 ## D-168 bounded execution and preserved controls
 
@@ -110,11 +127,11 @@ The parent owns full local qualification and hosted evidence. At 10fee4515 the p
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-5eefa412-20261110-reservation",
+  "report_id": "gbb-phase23-adversarial-7b2ecaf6-20261111-balanced",
   "role": "adversarial",
-  "reviewer_id": "reservation-adversarial-20261110",
+  "reviewer_id": "balanced-adversarial-20261111",
   "independent": true,
-  "reviewed_sha": "5eefa412e679afe6044e3a80f93a73d269ec0c9d",
+  "reviewed_sha": "7b2ecaf6adcb62590295045d997b451f943ec21f",
   "findings": [
     {
       "id": "ADV-01",

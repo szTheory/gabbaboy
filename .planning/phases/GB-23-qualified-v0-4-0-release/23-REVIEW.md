@@ -1,13 +1,13 @@
 # Phase 23 Independent Release / Consumer Review
 
-**Reviewed implementation:** 5eefa412e679afe6044e3a80f93a73d269ec0c9d
-**Review delta:** b312148d23993a210e3adbc943882d923eab8f36 through 5eefa412e679afe6044e3a80f93a73d269ec0c9d, with earlier Phase 23 review findings retained
+**Reviewed implementation:** 7b2ecaf6adcb62590295045d997b451f943ec21f
+**Review delta:** 88102b338a70503e345c821a098b3beece623235 through 7b2ecaf6adcb62590295045d997b451f943ec21f, with earlier Phase 23 review findings retained
 **Role:** release-consumer
-**Reviewer:** reservation-release-20261110
+**Reviewer:** balanced-release-20261111
 
 ## Scope and conclusion
 
-At exact implementation `5eefa412e679afe6044e3a80f93a73d269ec0c9d`, I independently reviewed the incremental D-175 release/consumer delta from `b312148d23993a210e3adbc943882d923eab8f36`. It reserves four CTest slots for the existing `phase23_review_evidence_controls` test and adds the corresponding immutable coverage-check reservation and three-slot negative. This changes no release workflow, package, consumer, or disclosure behavior. ACCEPT for this incremental release/consumer review: no new blocker or warning was proven.
+At exact implementation `7b2ecaf6adcb62590295045d997b451f943ec21f`, I independently reviewed the immutable D-176 delta from `88102b338a70503e345c821a098b3beece623235`. The change balances unchanged release-note CLI cases over existing docs shards, runs five independent disclosure CLI cases in a two-worker pool after the serial baseline, removes one duplicate Linux preflight while strengthening the full-suite CTest contract, and advances only the lifecycle recovery adoption-source pin to exact committed bytes. The existing per-call, CTest, and job limits and release/consumer authority remain unchanged. ACCEPT for this bounded release/consumer review: no new correctness, security, or release blocker was proven. This review does not qualify a new full local run or hosted CI; the 881 attempt remains failed evidence, and no retry is authorized here.
 
 The prior review at `b312148d23993a210e3adbc943882d923eab8f36` covered the D-168 harness changes, D-169 worker lifecycle and release-reader correction, D-170 complete CI dependency window, D-171 fixture trigger reduction, D-172 extension of immutable blob caching into the isolated archive CLI worker, D-173 overlap of the unchanged lifecycle baseline sequence with independent controls inside the existing worker bound, and D-174 integration of the exact reviewed archive-harness snapshot into Phase 22's preservation guard. Its reader budgets matched the owner-approved values, worker cleanup preceded synthetic-directory removal even on exceptions, and immutable policy controls rejected the superseded budgets and lost fixture triggers. The cache retained only successful bounded immutable reads while fresh CLI namespaces and mutable product checks remained active. Lifecycle scenarios owned their mutable state, and baseline/control exceptions still prevented success. The preservation guard accepted only historical bytes or the specifically reviewed archive snapshot; every other preserved path remained baseline-exact. The existing release provenance, version-window, installed-consumer, product, and notice implementations had no source changes since the prior reviewed baseline. RC-01 through RC-23 retain their identities, fixes, and historical verification; RC-24 records the corrected release-reader dependency-window defect. Full final local and hosted qualification are separate pending gates, not established by either review.
 
@@ -131,15 +131,29 @@ The exact `b312148d23993a210e3adbc943882d923eab8f36` to `5eefa412e679afe6044e3a8
 
 The immutable workflow-policy checker adds this test to `PHASE23_RESERVED_TESTS`, which feeds the processor-reservation validator. The validator requires one CTest registration, an inventory entry, and exactly four slots for this non-doc control. Its self-test fixture now includes the reservation with four slots; the generic reservation mutation changes it to three and calls the same validator, producing one additional causal negative and changing the expected control total from 598 to 599. A cheap source-bound probe compared the immutable b312 and 5eef blobs and confirmed the inventory/property membership, validator rule, synthetic fixture, three-slot mutation, and count change. The parent reports that fresh exact-source configure/build and registration checks passed; the review-evidence controls completed in 34.47 seconds under the unchanged 60-second limit, both workflow-policy coverage checks passed, and the 599-control immutable self-test passed. I did not duplicate those checks or the expensive full suite. No new release/consumer correctness or security finding was found.
 
+## D-176 exact-source release-consumer review
+
+I reviewed the complete immutable source delta from `88102b338a70503e345c821a098b3beece623235` to `7b2ecaf6adcb62590295045d997b451f943ec21f`, including the actual parent commits that implement the D-176 preparation and bind its lifecycle source snapshot.
+
+`verify-v02-adoption.py` keeps the same 21 positive and 49 negative release-note cases, with stable IDs and unchanged payloads and expected diagnostics. `release_notes_case_schedule()` stores only buckets containing assigned cases, so its work and memory scale with the 70-case inventory rather than the configured shard count. The validator requires every intended ID exactly once in its ordinal modulo bucket; the self-test rejects a missing, duplicate, or misplaced case. Each selected case still writes its own payload and invokes a fresh production `--release-notes` CLI process, then the runner checks that the executed IDs match the selected IDs. With no shard argument, the original full case set runs; the standalone release-note route still runs that same set. The one-off manifest comparison against the 881 baseline checks exact IDs, payloads, and diagnostics without adding a version-pinned production hash. The parent supplied targeted evidence that docs shards 0, 20, 21, and 199 and the standalone 70-case route passed.
+
+`verify-support-ledger.py` retains the initial adoption CLI in its serial generator check. The next five named actual CLI cases run through `run_disclosure_adoption_cases()` with `max_workers=2`; each receives its own copy of the same checked baseline and a fresh isolated Python CLI with the existing 45-second per-call deadline. The parent imports immutable path metadata before starting threads. Every worker result and exception is collected before the thread pool and temporary workspace close, then all expected return codes and rejection diagnostics are checked. The four original positive outcomes and 20 original controls remain, with two schedule negatives added. The parent reports that the configured disclosure CTest passed in 14.46 seconds and retained the original outcome counts.
+
+The Linux workflow removes only its duplicate pre-build support-ledger self-test. The full CTest registration still runs the real `verify-support-ledger.py --self-test`; the immutable coverage checker now requires the exact script, self-test mode, zero exit expectation, and complete output marker. Its causal controls reject a wrong checker, missing mode, weakened expected exit, and weakened marker. The parent reports the 603-control workflow-policy self-test and configured policy checks passed. The timeout ledger changes only its explanation of the Linux job body: its 60-minute cap and historical citation fields are unchanged. No CI job cap, per-test timeout, reader budget, workflow publication authority, package/product path, or release/consumer contract changed.
+
+The lifecycle change advances only `RECOVERY_ADOPTION_PIN_SHA` to `75797dd6de40491b7345a304d49c1920b73e6ffb`, the exact source commit containing the new adoption self-test. The lifecycle checker still compares the requested revision's adoption checker bytes with the immutable pin and separately with the current checkout bytes. The original historical recovery pin and all other recovery assertions remain intact. The parent reports that the stale-pin negative refused the old pin and the new pin control and lifecycle CTest passed.
+
+These are bounded source-review conclusions with owner-supplied focused-check evidence. I did not run a CPU-heavy suite or hosted workflow. The new source's full local and hosted qualification remain unproven; the failed 881 attempt is not converted to a pass, and this review does not authorize another hosted attempt. The existing historical RC-01 through RC-24 structured records and their provenance values below are unchanged from 881.
+
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-5eefa412-20261110-reservation",
+  "report_id": "gb-23-release-consumer-7b2ecaf6-20261111-balanced-release",
   "role": "release-consumer",
-  "reviewer_id": "reservation-release-20261110",
+  "reviewer_id": "balanced-release-20261111",
   "independent": true,
-  "reviewed_sha": "5eefa412e679afe6044e3a80f93a73d269ec0c9d",
+  "reviewed_sha": "7b2ecaf6adcb62590295045d997b451f943ec21f",
   "findings": [
     {
       "id": "RC-01",
