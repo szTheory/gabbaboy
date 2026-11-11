@@ -495,10 +495,10 @@ jobs:
           retention-days: 7
 
   linux-sanitizers-tests:
-    # The ASan inventory runs apart from the bounded fuzz campaign, split by the complementary '^acceptance_'
-    # filter so each shard stays inside its measured 65-minute bound and the whole ci run stays inside the preview
-    # waiters' and D-169 release-reader budgets. Each shard checks exactly its slice of tests/expected-tests.txt; together the
-    # slices are the whole inventory (LESSONS GB-CI-004, GB-CI-010).
+    # The ASan inventory runs apart from the bounded fuzz campaign, split by complementary '^acceptance_'
+    # filters. Each shard checks its exact slice of tests/expected-tests.txt; together the slices are the whole
+    # inventory (LESSONS GB-CI-004, GB-CI-010). D-177 gives this shard a 75-minute cap and CI readers an
+    # 85-minute wait for the configured dependency path; the acceptance shard retains its own cap.
     name: linux-asan-ubsan-tests
     runs-on: ubuntu-24.04
     timeout-minutes: 75
