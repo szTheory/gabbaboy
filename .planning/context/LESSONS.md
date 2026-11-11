@@ -1190,4 +1190,14 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Applies when:** A shared control sweep dominates one shard, independent end-to-end cases repeat serially, or a setup command has an equivalent or stronger required full-suite counterpart. Prove that equivalence before deleting work; timing alone is not coverage.
 - **Verification:** Direct docs shards, the complete standalone notes route, the configured disclosure CTest, and the new coverage guard's positive/causal negatives pass. Exact source review and final full qualification remain pending. Original-versus-new note manifests and diagnostic timings are retained in ignored build evidence.
 - **Source:** Phase 23 D-176 and `23-EVIDENCE.md`.
-- **Status:** Targeted local checks passed; hosted qualification remains held. CTest COST hints did not actually front-load the observed sanitizer consumers, so their presence is not proof of execution order. Background automation preference is retained in durable instructions.
+- **Status:** Implemented and reviewed; all native Linux/macOS/Windows cases passed at76e32ae1, including the original docs/disclosure deadlines. Qualification remains held by two other job caps. CTest COST hints did not actually front-load the observed sanitizer consumers, so their presence is not proof of execution order. Background automation preference is retained in durable instructions.
+
+
+### GB-CI-028 / 2026-11-11 / Match the configured test environment before comparing deadlines
+
+- **Cause and evidence:** A D-177 direct release-policy self-test passed under shell-selected Python3.9.6 but its approximate log duration exceeded the180-second CTest ceiling. CMake had configured Python3.14. A prior lifecycle diagnostic also used the older shell interpreter and failed a version-dependent helper call. Neither result established the configured CTest outcome.
+- **Remedy:** Resolve the interpreter from the configured cache and use its isolated CLI; prepend that interpreter’s binary directory when scripts launch Python children. Record the interpreter, source and environment with each receipt. Keep direct checks on a different interpreter as separately labeled source evidence. This rule is now part of WORKFLOW.md.
+- **Applies when:** Local shells, SDKs or developer tools provide a different Python from CMake/CTest, particularly for subprocess-heavy harnesses and deadline diagnosis.
+- **Verification:** The D-177 direct check’s actual interpreter was identified without changing any source/test deadline. Final qualification will use the configured interpreter and matching PATH; no faster-run or CTest-pass claim is inferred from the mismatch.
+- **Source:** D-177 source-check logs and23-EVIDENCE.md; WORKFLOW.md CI/CD efficiency.
+- **Status:** Environment drift identified and durable instruction added; exact configured qualification pending.

@@ -6,10 +6,10 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: "Plan 23-04 T3: D-176 targeted checks pass; immutable pin integration passed; source reviews and final local qualification pending. No hosted retry authorized."
-last_updated: "2026-11-11T01:13:08.147545+00:00"
-last_activity: "Linux hosted qualification failed; measured local control balancing, disclosure overlap and duplicate ledger removal are prepared. Targeted checks pass; final qualification and a new hosted-attempt decision remain."
-state_head: "88102b338a70503e345c821a098b3beece623235"
+stopped_at: "Plan23-04 T2/T3: D-177 source integration ready for immutable selection, targeted check and three independent reviews; one hosted attempt remains unstarted."
+last_updated: "2026-11-11T04:32:04.976974+00:00"
+last_activity: "D-176 fixes pass hosted native Linux/macOS/Windows; full qualification blocked by two job caps. Combined unapplied proposal ready; no retry authorized."
+state_head: "76e32ae12d7717ce00e6360e1c787f1ba84ba944"
 progress:
   total_phases: 4
   completed_phases: 3
@@ -20,14 +20,14 @@ progress:
 
 # Project State
 
-**Recovery:** The approved hosted attempt at `88102b33` failed on Linux docs/disclosure deadlines and the job cap. Every other required producer passed. D-176 prepares measured test-harness scheduling changes and removes a duplicate ledger preflight while preserving its stronger full-suite check. Targeted controls pass; immutable snapshot integration passed; independent reviews and final local qualification remain. No new hosted attempt is authorized. Stop after Phase 23.
+**Recovery:** D-176 fixes pass the hosted native Linux/macOS/Windows suites. The one newly approved attempt finished without qualification: minimum-CMake50-minute cap interrupted1923/1942 and sanitizer65-minute cap interrupted1841/1853; no completed case failed, but31 results remain unavailable. All other required producer lanes and fixture reproduction pass; previews failed downstream. The concrete combined window proposal is unapplied. Wait for the owner’s new scope/cost decision; do not retry, merge or publish.
 
 ## Project Reference
 
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Plan 23-04 T3 — finish D-176 exact-source review/local qualification after the passing snapshot integration, then present the concrete candidate for the required new hosted-attempt decision. PR #146 stays unmerged.
+**Current focus:** D-177 workflows/policy snapshot56ff25b6 and coverage guards are integrated. Scoped red/green profile and ledger probes pass under the configured Python3.14 binary, with all original controls retained. Select the final implementation, run its immutable620-control self-test, obtain three independent source reviews and qualify once at the final report head before the one approved hosted attempt. No user action is needed; stop after Phase23.
 
 ## Current Position
 
@@ -45,7 +45,7 @@ Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assess
 
 The complete local run at `88102b33` passed, but its single approved hosted attempt did not qualify. Linux had two control deadlines and a 60-minute job cancellation; all other required producers passed. The failed stream and job snapshots remain in ignored build and [23-EVIDENCE.md](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md).
 
-D-176 balances the existing release-note cases over existing docs shards, overlaps independent disclosure CLI cases in private workspaces with two workers, and removes only a duplicate ledger preflight. The replacement CTest command/exit/marker is guarded. Targeted controls pass. The exact adoption snapshot is integrated without weakening either byte comparison. Commit the complete implementation, reissue the three source reports and complete final full/focused local qualification. Then obtain the required new hosted-attempt decision; this correction does not renew the used allowance.
+D-176 exact-source reviews/preflight/local reconciliation passed, including diagnosed bounded retests. The owner approved one fresh hosted attempt; it is now spent. Every native platform passed, with Linux’s previously failing docs/disclosure controls within original deadlines. Two other inventories reached job caps before all results existed. Detailed terminal logs and31 unavailable identities/counts remain in23-EVIDENCE.md and ignored build. The complete four-file budget proposal is prepared and git apply --check passed without changing source. Owner acts next; qualification remains held.
 
 **Next stage:** Continue **`$gsd-execute-phase 23`** at Plan 23-04 T3. Do not push/retry/merge before the source gates and a new hosted-attempt decision. If qualification later passes, execute 23-07, 23-05, 23-06 and 23-08, retaining the separate concrete publication decision. Stop after Phase 23; the following owner-controlled stage is the v0.4 milestone audit, not Phase 24.
 
@@ -94,7 +94,7 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 ## Session Continuity
 
 **Last session:** 2026-11-11T01:04:43.785579+00:00
-**Stopped at:** Plan 23-04 T3 D-176 local integration; targeted checks pass, immutable snapshot/reviews/final local qualification pending. No user action is needed for this authorized preparation; a new hosted-attempt decision follows only after it is concrete.
+**Stopped at:** Final local CTest is running at the frozen qualification source. Unified session61915, CTest PID62621, process receipt and log in ignored build. No user action is needed during this authorized run.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
