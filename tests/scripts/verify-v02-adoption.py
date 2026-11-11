@@ -11,25 +11,33 @@ self-tests run the real command line against isolated mutated copies.
 from __future__ import annotations
 
 import argparse
+from array import array
+from bisect import bisect_right
 from fractions import Fraction
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import shutil
+import string
 import subprocess
 import sys
 import tempfile
 from typing import Callable
+import unicodedata
+from html import unescape
 
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = Path(__file__).resolve()
 CLAIMS_SCRIPT = SCRIPT.parent / "verify-cgb-corpus-claims.py"
+SUPPORT_LEDGER_SCRIPT = SCRIPT.parent / "verify-support-ledger.py"
 MAX_DOCUMENT_BYTES = 1_048_576
 MAX_SOURCE_BYTES = 1_048_576
 MAX_NOTES_BYTES = 262_144
+HTML_COMMENT_SENTINEL = "\ufdd0"
 
 GAME_GUIDE = "docs/game-acceptance.md"
 README = "README.md"
@@ -44,6 +52,12 @@ NOTICES = "THIRD_PARTY_NOTICES.md"
 HEADER = "include/gabbaboy/gabbaboy.h"
 
 PERF_ATTRIBUTION = "tests/baseline/perf-attribution-v1.json"
+RAW_HTML_CONSTRUCT = re.compile(
+    r"(?<!\\)(?:\\\\)*(?:"
+    r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|"
+    r"<![A-Z][\s\S]*?(?:>|$)|<\?[A-Za-z][\s\S]*?(?:\?>|$)|"
+    r"<!\[CDATA\[|<(?:script|pre|style)(?=[ \t\r\n>]|$))",
+    re.DOTALL | re.IGNORECASE)
 
 
 def tree_identity(root: Path) -> tuple[str, str]:
@@ -58,6 +72,11 @@ def tree_identity(root: Path) -> tuple[str, str]:
         names = sorted(entry.name for entry in (root / "docs/support").iterdir())
     except (OSError, ValueError) as error:
         raise SystemExit(f"verify-v02-adoption fail: version-unreadable:{error}")
+    return identity_from_sources(cmake, manifest, names)
+
+
+def identity_from_sources(cmake: str, manifest: object, names: list[str]) -> tuple[str, str]:
+    """Select the version and newest matching support ledger from one source identity."""
     match = re.search(r"^project\(\s*\w+\s+VERSION\s+(\d+)\.(\d+)\.(\d+)[\s)]", cmake, re.M)
     if not match:
         raise SystemExit("verify-v02-adoption fail: version-missing:CMakeLists.txt")
@@ -75,6 +94,43 @@ def tree_identity(root: Path) -> tuple[str, str]:
     if not candidates:
         raise SystemExit(f"verify-v02-adoption fail: support-ledger-missing:{version}")
     return version, "docs/support/" + max(candidates)[1]
+
+
+def git_environment() -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.update({"GIT_NO_LAZY_FETCH": "1", "GIT_NO_REPLACE_OBJECTS": "1",
+                        "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0"})
+    return environment
+
+
+def identity_at_revision(repo: Path, rev: str) -> tuple[str, str]:
+    """Derive release identity from Git objects at the judged revision, never the live checkout."""
+    if re.fullmatch(r"[0-9a-f]{40}", rev) is None:
+        raise ContractError("release-notes-revision-invalid")
+    git_env = git_environment()
+    commit = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{rev}^{{commit}}"],
+                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, check=False, timeout=10, env=git_env)
+    if commit.returncode != 0:
+        raise ContractError("release-notes-revision-invalid")
+    try:
+        cmake = subprocess.check_output(["git", "-C", str(repo), "show", f"{rev}:CMakeLists.txt"],
+                                        stderr=subprocess.DEVNULL, timeout=10,
+                                        env=git_env).decode("utf-8", "strict")
+        manifest = json.loads(subprocess.check_output(
+            ["git", "-C", str(repo), "show", f"{rev}:.release-please-manifest.json"],
+            stderr=subprocess.DEVNULL, timeout=10, env=git_env).decode("utf-8", "strict"))
+        names_raw = subprocess.check_output(["git", "-C", str(repo), "ls-tree", "--name-only",
+                                             f"{rev}:docs/support"],
+                                            stderr=subprocess.DEVNULL, timeout=10,
+                                            env=git_env).decode("utf-8", "strict")
+    except (OSError, UnicodeError, subprocess.SubprocessError, ValueError) as error:
+        raise ContractError("release-notes-revision-input-unavailable") from error
+    names = [name for name in names_raw.splitlines() if name]
+    try:
+        return identity_from_sources(cmake, manifest, names)
+    except SystemExit as error:
+        raise ContractError("release-notes-revision-identity-invalid") from error
 
 
 RELEASE_VERSION, LEDGER = tree_identity(DEFAULT_ROOT)
@@ -112,6 +168,208 @@ UNSUPPORTED_GAME_CLAIM = re.compile(
     r"has\s+(?:passed|qualified|verified|evidence))\b",
     re.IGNORECASE,
 )
+
+
+# Frozen from Unicode 18.0 DerivedCoreProperties.txt, which defines this property.
+DEFAULT_IGNORABLE_CODEPOINT_RANGES_UCD_18_0 = (
+    (0x00AD, 0x00AD), (0x034F, 0x034F), (0x061C, 0x061C),
+    (0x115F, 0x1160), (0x17B4, 0x17B5), (0x180B, 0x180D),
+    (0x180E, 0x180E), (0x180F, 0x180F), (0x200B, 0x200F),
+    (0x202A, 0x202E), (0x2060, 0x206F), (0x3164, 0x3164),
+    (0xFE00, 0xFE0F), (0xFEFF, 0xFEFF), (0xFFA0, 0xFFA0),
+    (0xFFF0, 0xFFF8), (0x1BCA0, 0x1BCA3), (0x1D173, 0x1D17A),
+    (0xE0000, 0xE0FFF),
+)
+DEFAULT_IGNORABLE_CODEPOINT_STARTS_UCD_18_0 = tuple(
+    start for start, _ in DEFAULT_IGNORABLE_CODEPOINT_RANGES_UCD_18_0
+)
+DEFAULT_IGNORABLE_CLAIM_SEPARATORS = (
+    ("combining-grapheme-joiner", "\u034f"),
+    ("hangul-filler", "\u3164"),
+    ("variation-selector-16", "\ufe0f"),
+    ("reserved-default-ignorable", "\u2065"),
+)
+COMMONMARK_REFERENCED_GAME_CLAIMS = (
+    ("hex-zero-width-space", "CGB&#x200b; game passes all acceptance checks."),
+    ("decimal-zero-width-space", "CGB&#8203; game passes all acceptance checks."),
+    ("named-zero-width-space", "CGB&ZeroWidthSpace; game passes all acceptance checks."),
+    ("hex-combining-grapheme-joiner", "CGB&#x34f; game passes all acceptance checks."),
+    ("hex-visible-space", "CGB&#x20; game passes all acceptance checks."),
+    ("encoded-cgb-letter", "&#67;GB game passes all acceptance checks."),
+)
+COMMONMARK_CHARACTER_REFERENCE = re.compile(
+    r"&(?:#[0-9]{1,7}|#[xX][0-9A-Fa-f]{1,6}|[A-Za-z][A-Za-z0-9]*);"
+)
+# Match odd runs of backslashes immediately before a CommonMark line ending.
+COMMONMARK_HARD_LINE_BREAK = re.compile(r"(?<!\\)(?:\\\\)*\\(?=\r\n|\r|\n)")
+COMMONMARK_HARD_BREAK_GAME_CLAIMS = (
+    ("backslash-lf", "CGB\\\ngame passes all acceptance checks."),
+    ("backslash-cr", "CGB\\\rgame passes all acceptance checks."),
+    ("backslash-crlf", "CGB\\\r\ngame passes all acceptance checks."),
+    ("backslash-lf-encoded-space", "CGB\\\n&#x20;game passes all acceptance checks."),
+    ("soft-break-lf-encoded-space", "CGB\n&#x20;game passes all acceptance checks."),
+)
+COMMONMARK_EMPHASIS_GAME_CLAIMS = (
+    ("strong-star", "**CGB** game passes all acceptance checks."),
+    ("intraword-star", "C*G*B game passes all acceptance checks."),
+    ("strong-underscore", "__CGB__ game passes all acceptance checks."),
+    ("unicode-symbol-strong-underscore", "😀__CGB__ game passes all acceptance checks."),
+    ("unicode-symbol-rule-of-three", "😀**CGB* game passes all acceptance checks."),
+    ("inline-link-label", "C[GB](https://example.invalid) game passes all acceptance checks."),
+)
+COMMONMARK_REFERENCE_LINK_GAME_CLAIMS = (
+    ("shortcut", "C[GB] game passes all acceptance checks.\n\n"
+     "[GB]: https://example.invalid"),
+    ("full", "C[GB][target] game passes all acceptance checks.\n\n"
+     "[target]: https://example.invalid"),
+    ("collapsed", "C[GB][] game passes all acceptance checks.\n\n"
+     "[GB]: https://example.invalid"),
+)
+DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM = (
+    "a* " * 512 + "CGB game passes all acceptance checks.")
+DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE = (
+    "a* " * 512 + "CGB test-ROM results remain software-model evidence only.")
+DENSE_NESTED_REFERENCE_BRACKETS_PREFIX = (
+    "[" * 512 + "]" * 512 + "\n\n[dense-control]: /target\n\n")
+DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM = (
+    DENSE_NESTED_REFERENCE_BRACKETS_PREFIX
+    + "CGB game passes all acceptance checks.")
+DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE = (
+    DENSE_NESTED_REFERENCE_BRACKETS_PREFIX
+    + "CGB test-ROM results remain software-model evidence only.")
+
+
+def is_default_ignorable_codepoint(codepoint: int) -> bool:
+    """Check the frozen Unicode 18.0 Default_Ignorable_Code_Point ranges."""
+    index = bisect_right(DEFAULT_IGNORABLE_CODEPOINT_STARTS_UCD_18_0, codepoint) - 1
+    return (index >= 0
+            and codepoint <= DEFAULT_IGNORABLE_CODEPOINT_RANGES_UCD_18_0[index][1])
+
+
+def is_invisible_claim_separator(char: str) -> bool:
+    return (unicodedata.category(char) == "Cf"
+            or is_default_ignorable_codepoint(ord(char)))
+
+
+def decode_commonmark_character_references(text: str) -> str:
+    """Decode valid CommonMark references in prose before claim matching."""
+    return COMMONMARK_CHARACTER_REFERENCE.sub(
+        lambda match: unescape(match.group(0)), text)
+
+
+def normalize_commonmark_emphasis(text: str) -> str:
+    """Remove only paired CommonMark emphasis delimiters from visible matcher text."""
+    runs: list[dict[str, int | str | bool]] = []
+
+    def punctuation(char: str) -> bool:
+        return (char in string.punctuation
+                or unicodedata.category(char).startswith(("P", "S")))
+
+    def escaped(position: int) -> bool:
+        backslashes = 0
+        cursor = position - 1
+        while cursor >= 0 and text[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        return backslashes % 2 == 1
+
+    cursor = 0
+    while cursor < len(text):
+        marker = text[cursor]
+        if marker not in "*_" or escaped(cursor):
+            cursor += 1
+            continue
+        end = cursor + 1
+        while end < len(text) and text[end] == marker:
+            end += 1
+        before = text[cursor - 1] if cursor else "\n"
+        after = text[end] if end < len(text) else "\n"
+        before_space = before.isspace()
+        after_space = after.isspace()
+        before_punctuation = punctuation(before)
+        after_punctuation = punctuation(after)
+        left_flanking = (not after_space
+                         and (not after_punctuation or before_space or before_punctuation))
+        right_flanking = (not before_space
+                          and (not before_punctuation or after_space or after_punctuation))
+        if marker == "_":
+            can_open = left_flanking and (not right_flanking or before_punctuation)
+            can_close = right_flanking and (not left_flanking or after_punctuation)
+        else:
+            can_open = left_flanking
+            can_close = right_flanking
+        runs.append({"marker": marker, "start": cursor, "end": end,
+                     "length": end - cursor, "remaining": end - cursor,
+                     "can_open": can_open, "can_close": can_close})
+        cursor = end
+
+    opener_buckets: dict[str, list[list[int]]] = {
+        "*": [[] for _ in range(6)],
+        "_": [[] for _ in range(6)],
+    }
+
+    def bucket_index(run: dict[str, int | str | bool]) -> int:
+        return (3 if run["can_close"] else 0) + int(run["length"]) % 3
+
+    removed = bytearray(len(text))
+    for close_index, closer in enumerate(runs):
+        marker = str(closer["marker"])
+        closing_count = int(closer["remaining"])
+        closer_modulo = int(closer["length"]) % 3
+        closer_can_open = bool(closer["can_open"])
+        if closer["can_close"]:
+            while closing_count:
+                candidate_index = -1
+                for opener_can_close in (False, True):
+                    for opener_modulo in range(3):
+                        if ((opener_can_close or closer_can_open)
+                                and (opener_modulo + closer_modulo) % 3 == 0
+                                and (opener_modulo != 0 or closer_modulo != 0)):
+                            continue
+                        bucket = opener_buckets[marker][
+                            (3 if opener_can_close else 0) + opener_modulo]
+                        while (bucket and
+                               int(runs[bucket[-1]]["remaining"]) == 0):
+                            bucket.pop()
+                        if bucket and bucket[-1] > candidate_index:
+                            candidate_index = bucket[-1]
+                if candidate_index < 0:
+                    break
+
+                opener = runs[candidate_index]
+                opening_count = int(opener["remaining"])
+                paired = min(opening_count, closing_count)
+                opener_start = int(opener["end"]) - opening_count
+                closer_start = int(closer["start"]) + (
+                    int(closer["length"]) - closing_count)
+                for position in range(opener_start, opener_start + paired):
+                    removed[position] = 1
+                for position in range(closer_start, closer_start + paired):
+                    removed[position] = 1
+                opener["remaining"] = opening_count - paired
+                closing_count -= paired
+                closer["remaining"] = closing_count
+                if int(opener["remaining"]) == 0:
+                    opener_buckets[marker][bucket_index(opener)].pop()
+
+        if closer_can_open and int(closer["remaining"]) > 0:
+            opener_buckets[marker][bucket_index(closer)].append(close_index)
+    return "".join(char for position, char in enumerate(text) if not removed[position])
+
+
+def unsupported_game_claim_match(text: str) -> re.Match[str] | None:
+    """Match visible claims after scoped CommonMark rendering and invisible-char normalization."""
+    text = mask_markdown_nonrendered(text, render_link_labels=True)
+    text = COMMONMARK_HARD_LINE_BREAK.sub(" ", text)
+    text = decode_commonmark_character_references(text)
+    text = normalize_commonmark_emphasis(text)
+    claim_text = "".join(
+        char for char in text
+        if not is_invisible_claim_separator(char)
+    )
+    return UNSUPPORTED_GAME_CLAIM.search(claim_text)
+
+
 # A signing or notarization claim is allowed only in its negated form.
 FALSE_SIGNING_CLAIM = re.compile(
     r"(?:(?<!un)(?<!not )signed\s+and\s+notarized|"
@@ -205,6 +463,7 @@ REBOUND_ATTRIBUTION = re.compile(r"\bRebound\b")
 
 STATE_VERSION_SENTENCE = "Save states load only in the exact GabbaBoy release that wrote them."
 HOST_POSIX_SENTENCE = "Host mode is POSIX-only; Windows refuses `--save-dir`."
+HOST_POSIX_VISIBLE = "Host mode is POSIX-only; Windows refuses"
 PERF_HEAD_LIMITATION = (
     "The Ir attribution figure was measured at @HEAD@ on main before the release commit; "
     "the release-binding Ir check is the perf-gate receipt verified at the tagged source."
@@ -336,6 +595,42 @@ REQUIRED: dict[str, tuple[tuple[str, str], ...]] = {
          "perceptual-output-limit-missing"),
         ("this page makes no publication claim for the version in this tree",
          "publication-limit-missing"),
+        ("The last qualified release is v0.3.0. Phase 23 prepares v0.4.0 through the existing release-please path.",
+         "v04-preparation-scope-missing"),
+        ("generated `docs/support/v0.4.0.md` ledger, and rendered release notes must all identify exactly v0.4.0",
+         "v04-version-agreement-missing"),
+        ("The release-notes preface and support ledger share the validated immutable `tests/data/support-claims-v0.4.json` profile",
+         "v04-shared-copy-missing"),
+        ("Potion Panic stopped before a source identity was returned: its creator-linked Codeberg source could not be reached, and exact component grants plus repository/public-CI scope remain unestablished",
+         "v04-potion-panic-outcome-missing"),
+        ("µCity 1.3 stopped at the required `source/engine/hardware.inc` component, which has no identified grant or notice establishing repository/public-CI scope",
+         "v04-ucity-outcome-missing"),
+        ("Neither candidate was built or run; no CGB game was admitted. These source/rights-scope outcomes do not establish a license prohibition",
+         "v04-game-admission-boundary-missing"),
+        ("The CGB-CPU-E native-mode RGB555/PCM result is original-harness-only; its digests establish repeatability only",
+         "v04-harness-boundary-missing"),
+        ("Phase 22 is a synthetic composition tracer and metadata-only assessment: 513 named entries, seven unresolved real-fixture gates, zero real fixtures admitted, and zero real fixtures executed",
+         "v04-diagnostic-accounting-missing"),
+        ("FIXT-01, RIGHTS-01, DIAG-01, DIAG-02, and REL-01 remain Pending until their separate release evidence is accepted",
+         "v04-pending-status-missing"),
+        ("The established product matrix remains Linux x64, macOS arm64, and Windows x64 core archives, plus the macOS arm64 player",
+         "v04-product-matrix-missing"),
+        ("No Linux or Windows packaged-player game smoke is claimed; the player is macOS arm64 only",
+         "v04-player-platform-limit-missing"),
+        ("macOS 15.0 is the minimum deployment target and the build used the macOS 15.5 SDK",
+         "v04-macos-deployment-caveat-missing"),
+        ("Save states load only in the exact GabbaBoy release that wrote them. Host mode is POSIX-only, and Windows refuses `--save-dir`",
+         "v04-host-state-compatibility-missing"),
+        ("The deterministic instruction-count gate and native realtime floor remain blocking; paired wall-clock timing is advisory and cannot approve a release",
+         "v04-performance-boundary-missing"),
+        ("H → R1 → W → R2 → nightly → pre-tag gate",
+         "v04-operator-sequence-missing"),
+        ("A note or body regeneration, moved tag, or changed source invalidates the window and keeps the release on hold",
+         "v04-window-recovery-hold-missing"),
+        ("After tagging, the existing trusted release path must still build, attach, download, and verify the real core and player archive bytes, installed consumers, notices, and fixture exclusion before the draft can be published",
+         "v04-downloaded-byte-gate-missing"),
+        ("If v0.4.0 notes omit a required disclosure, keep the draft unpublished",
+         "v04-recovery-hold-missing"),
     ),
     UNRELEASED: (
         ("Reconciled into v0.3.0: the save-state and host-contract entries are scoped claims",
@@ -366,6 +661,20 @@ NOTICE_REQUIRED = (
      "product-package-distinction-missing"),
     ("Controlled game and diagnostic bytes remain repository-test inputs and are excluded from binary products.",
      "product-package-distinction-missing"),
+    ("per-asset rights rest on single-author history plus the repository-wide zlib licence, not a per-asset upstream grant",
+     "libbet-rights-disclosure-missing"),
+    ("Mooneye mbc2/mbc5 derivative test ROMs (15) | Mooneye Test Suite revision `31510e12eea6286d36eea060a6adde755e1067aa` (Gekkio), MIT; headless-report derivatives with a zero-filled font replacement (see `fixtures/mooneye-mbc/FONT-LICENSE.txt`); WLA-DX is a GPL-2.0-or-later build tool that is not bundled or linked; ROM digests are a local rebuild until the hosted match in Plan 08-07; repository test fixtures only, not installed or packaged",
+     "mooneye-mbc-rights-disclosure-missing"),
+    ("MagenTests out-of-bounds SRAM ROMs (3) | MagenTests release 0.5.0 at pinned commit `3f9c090f16e5a721db776febb9ba7d773e1c819c` (alloncm), MIT; build-time `hardware.inc` (gbdev, commit `21ef22d`) is CC0-1.0; hardware-derived, author-attested; repository test fixtures only, not installed or packaged",
+     "magentests-rights-disclosure-missing"),
+    ("AGE CGB speed-switch ROMs | AGE test ROMs by Christoph Sprenger, MIT (Copyright (c) 2021); the Cellphone Font by domsson is CC0; `hardware.inc` is an equates-only CC0 copy with no code bytes; author-attested hardware, repository test fixtures only, not installed or packaged",
+     "age-rights-disclosure-missing"),
+    ("rtc3test MBC3 real-time-clock ROM and `tests.md` | rtc3test release v004 at pinned commit `80ae792bf1b3c3387929b912e6df001af3511e24` (aaaaaa123456789), Unlicense; build-time RGBDS v0.4.2 only; hardware-derived, author-attested; repository test fixture only, not installed or packaged",
+     "rtc3test-rights-disclosure-missing"),
+    ("Mooneye DMG and CGB test ROMs (3 and 9) | Mooneye Test Suite revision `31510e12eea6286d36eea060a6adde755e1067aa` (Gekkio), MIT; headless-report derivatives with a zero-filled font replacement (see `FONT-LICENSE.txt` in each directory); WLA-DX is a GPL-2.0-or-later build tool that is not bundled or linked; repository test fixtures only, not installed or packaged",
+     "mooneye-dmg-cgb-rights-disclosure-missing"),
+    ("SameSuite CGB DMA and APU test ROMs (4 and 70) | SameSuite revision `f15645fb049a47ea235f6d2c9a033e72d8087901` (Lior Halphon), X11 licence; the build-time `hardware.inc` is CC0-1.0 and `hexdigits.2bpp` is covered by the repository X11 licence; RGBDS 1.0.1 is build-time only; repository test fixtures only, not installed or packaged",
+     "samesuite-rights-missing"),
     ("X11", "samesuite-rights-missing"),
     ("MIT License in [`LICENSE`](LICENSE)", "root-license-missing"),
     ("not installed or packaged", "fixture-package-exclusion-missing"),
@@ -378,10 +687,6 @@ NOTICE_ROW = re.compile(
 NOTICE_INLINE_DIGEST = re.compile(
     r"`(?P<path>fixtures/[A-Za-z0-9_./-]+)`: `(?P<digest>[0-9a-f]{64})`"
 )
-LEDGER_LINK = re.compile(r"\]\([^)\s]*docs/support/v" + re.escape(LEDGER_VERSION) + r"\.md[^)]*\)")
-VERSION_TOKEN = re.compile(r"(?<![\w.])v?" + re.escape(RELEASE_VERSION) + r"(?![\w.])")
-
-
 class ContractError(Exception):
     """A named failure in the adoption contract."""
 
@@ -426,19 +731,934 @@ def read_document(root: Path, relative: str) -> str:
     return read_bounded(root, relative, DOCUMENT_LIMITS.get(relative, MAX_DOCUMENT_BYTES))
 
 
-def prose(text: str) -> str:
-    """Whitespace-normalized text without HTML comments or fenced code."""
-    text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
-    text = re.sub(r"^(```|~~~).*?^\1[^\n]*$", " ", text,
-                  flags=re.DOTALL | re.MULTILINE)
-    return " ".join(text.split())
+def prose(text: str, scope: str = "markdown", *, collapse: bool = True,
+          render_link_labels: bool = False) -> str:
+    """Whitespace-normalized body prose without comments or non-rendered Markdown."""
+    text = mask_fenced_code_blocks(text)
+    text = mask_indented_code_blocks(text)
+    label_source = text
+    text, _comment_positions = protect_html_comments(text)
+    text = mask_markdown_nonrendered(
+        text, label_source=label_source, render_link_labels=render_link_labels)
+    text = text.replace(HTML_COMMENT_SENTINEL, " ")
+    visible = mask_inline_code_spans(text)
+    require(RAW_HTML_CONSTRUCT.search(visible) is None, f"{scope}-raw-html-unsupported")
+    require("\t" not in visible, f"{scope}-tab-unsupported")
+    return " ".join(text.split()) if collapse else text
 
+
+def protect_html_comments(text: str) -> tuple[str, bytearray]:
+    """Keep comments opaque to Markdown parsing without joining their neighbors."""
+    chars = list(text)
+    comment_positions = bytearray(len(text))
+    search_from = 0
+    while True:
+        start = text.find("<!--", search_from)
+        if start < 0:
+            break
+        closing = text.find("-->", start + 4)
+        end = len(text) if closing < 0 else closing + 3
+        line_start = start
+        first_line = True
+        while line_start < end:
+            segment_start = start if first_line else line_start
+            line_end = text.find("\n", segment_start, end)
+            segment_end = end if line_end < 0 else line_end + 1
+            for position in range(segment_start, segment_end):
+                comment_positions[position] = 1
+                chars[position] = text[position] if text[position] in "\r\n" else " "
+            if segment_start < end and text[segment_start] not in "\r\n":
+                chars[segment_start] = HTML_COMMENT_SENTINEL
+            if line_end < 0:
+                break
+            line_start = line_end + 1
+            first_line = False
+        search_from = end
+    return "".join(chars), comment_positions
+
+
+def mask_markdown_nonrendered(text: str, *, label_source: str | None = None,
+                              render_link_labels: bool = False) -> str:
+    """Mask link titles, image markup and reference definitions while preserving link labels."""
+    if label_source is None:
+        label_source = text
+    require(len(label_source) == len(text), "markdown-label-source-length-mismatch")
+    chars = list(text)
+    label_chars = list(label_source)
+    source_chars = list(mask_inline_code_spans(text))
+    rendered_links: list[tuple[int, int, int, int]] = []
+
+    def blank(start: int, end: int) -> None:
+        for offset in range(start, end):
+            if chars[offset] not in ("\n", "\r"):
+                chars[offset] = " "
+                source_chars[offset] = " "
+
+    escaped_positions = bytearray(len(source_chars))
+    bracket_ends = array("i", [-1]) * len(source_chars)
+
+    def escaped(position: int) -> bool:
+        return escaped_positions[position] == 1
+
+    def ascii_control(char: str) -> bool:
+        codepoint = ord(char)
+        return codepoint < 0x20 or codepoint == 0x7F
+
+    def closing_bracket(opening: int) -> int | None:
+        end = bracket_ends[opening]
+        return None if end < 0 else end
+
+    def skip_inline_whitespace(cursor: int) -> int | None:
+        line_endings = 0
+        while cursor < len(source_chars):
+            char = source_chars[cursor]
+            if char in " \t":
+                cursor += 1
+            elif char == "\r":
+                line_endings += 1
+                cursor += 2 if cursor + 1 < len(source_chars) and source_chars[cursor + 1] == "\n" else 1
+            elif char == "\n":
+                line_endings += 1
+                cursor += 1
+            else:
+                break
+            if line_endings > 1:
+                return None
+        return cursor
+
+    def has_blank_line(start: int, end: int) -> bool:
+        cursor = start
+        while cursor < end:
+            if source_chars[cursor] not in "\r\n":
+                cursor += 1
+                continue
+            cursor += 2 if (source_chars[cursor] == "\r" and cursor + 1 < end
+                            and source_chars[cursor + 1] == "\n") else 1
+            while cursor < end and source_chars[cursor] in " \t":
+                cursor += 1
+            if cursor < end and source_chars[cursor] in "\r\n":
+                return True
+        return False
+
+    def inline_link(opening: int) -> tuple[int, tuple[int, int] | None] | None:
+        cursor = skip_inline_whitespace(opening + 1)
+        if cursor is None:
+            return None
+        if cursor >= len(source_chars):
+            return None
+        if source_chars[cursor] == "<":
+            cursor += 1
+            while cursor < len(source_chars):
+                char = source_chars[cursor]
+                if char == "\\":
+                    if (cursor + 1 >= len(source_chars)
+                            or source_chars[cursor + 1] not in string.punctuation):
+                        return None
+                    cursor += 2
+                elif char == ">":
+                    cursor += 1
+                    break
+                elif char.isspace() or char == "<" or ascii_control(char):
+                    return None
+                else:
+                    cursor += 1
+            else:
+                return None
+        else:
+            depth = 0
+            while cursor < len(source_chars):
+                char = source_chars[cursor]
+                if ascii_control(char) and char not in "\t\r\n":
+                    return None
+                if char == "\\":
+                    if (cursor + 1 >= len(source_chars)
+                            or source_chars[cursor + 1] not in string.punctuation):
+                        return None
+                    cursor += 2
+                    continue
+                if char == "(":
+                    depth += 1
+                    if depth > 32:
+                        return None
+                elif char == ")":
+                    if depth == 0:
+                        return cursor + 1, None
+                    depth -= 1
+                elif char.isspace():
+                    if depth == 0:
+                        break
+                    return None
+                elif char in "<>":
+                    return None
+                cursor += 1
+
+        separator_start = cursor
+        cursor = skip_inline_whitespace(cursor)
+        if cursor is None:
+            return None
+        if cursor >= len(source_chars):
+            return None
+        if source_chars[cursor] == ")":
+            return cursor + 1, None
+        if cursor == separator_start:
+            return None
+        if source_chars[cursor] in ('"', "'"):
+            quote = source_chars[cursor]
+            title_start = cursor + 1
+            cursor = title_start
+            while cursor < len(source_chars):
+                if source_chars[cursor] == "\\":
+                    if (cursor + 1 >= len(source_chars)
+                            or source_chars[cursor + 1] not in string.punctuation):
+                        return None
+                    cursor += 2
+                elif source_chars[cursor] == quote:
+                    title_end = cursor
+                    cursor += 1
+                    break
+                else:
+                    cursor += 1
+            else:
+                return None
+            title = (title_start, title_end)
+        elif source_chars[cursor] == "(":
+            title_start = cursor + 1
+            cursor = title_start
+            while cursor < len(source_chars):
+                char = source_chars[cursor]
+                if char == "\\":
+                    if (cursor + 1 >= len(source_chars)
+                            or source_chars[cursor + 1] not in string.punctuation):
+                        return None
+                    cursor += 2
+                elif char == "(":
+                    return None
+                elif char == ")":
+                    break
+                else:
+                    cursor += 1
+            if cursor >= len(source_chars):
+                return None
+            title_end = cursor
+            cursor += 1
+            title = (title_start, title_end)
+        else:
+            return None
+        if has_blank_line(title[0], title[1]):
+            return None
+        cursor = skip_inline_whitespace(cursor)
+        if cursor is None:
+            return None
+        if cursor >= len(source_chars) or source_chars[cursor] != ")":
+            return None
+        return cursor + 1, title
+
+    # Reference definitions are metadata, not body copy, even when no link uses them.
+    reference_labels: set[str] = set()
+
+    def normalize_reference_label(value: str) -> str:
+        return re.sub(r"[ \t\r\n]+", " ", value.strip(" \t\r\n")).casefold()
+
+    def container_content_start(
+            line: str) -> tuple[int, int, tuple[int, ...], int] | None:
+        cursor = 0
+        visual_column = 0
+        quote_depth = 0
+        list_content_columns: list[int] = []
+        while cursor < len(line):
+            marker_column = visual_column
+            while cursor < len(line) and line[cursor] in " \t":
+                if line[cursor] == " ":
+                    visual_column += 1
+                else:
+                    visual_column += 4 - visual_column % 4
+                cursor += 1
+                if visual_column - marker_column > 3:
+                    return None
+            if cursor < len(line) and line[cursor] == ">":
+                quote_depth += 1
+                cursor += 1
+                visual_column += 1
+                if cursor < len(line) and line[cursor] in " \t":
+                    if line[cursor] == " ":
+                        visual_column += 1
+                    else:
+                        visual_column += 4 - visual_column % 4
+                    cursor += 1
+                continue
+
+            marker_end = cursor
+            if cursor < len(line) and line[cursor] in "-+*":
+                marker_end += 1
+            else:
+                digits_start = cursor
+                while (marker_end < len(line) and line[marker_end] in "0123456789"
+                       and marker_end - digits_start < 10):
+                    marker_end += 1
+                if (marker_end - digits_start > 9 or marker_end == digits_start
+                        or marker_end >= len(line) or line[marker_end] not in ".)"):
+                    marker_end = cursor
+                else:
+                    marker_end += 1
+            if marker_end > cursor:
+                marker_width = marker_end - cursor
+                candidate_cursor = marker_end
+                candidate_column = visual_column + marker_width
+                whitespace_width = 0
+                while candidate_cursor < len(line) and line[candidate_cursor] in " \t":
+                    next_column = (candidate_column + 1 if line[candidate_cursor] == " " else
+                                   candidate_column + 4 - candidate_column % 4)
+                    if next_column - (visual_column + marker_width) > 4:
+                        break
+                    whitespace_width = next_column - (visual_column + marker_width)
+                    candidate_column = next_column
+                    candidate_cursor += 1
+                if 1 <= whitespace_width <= 4:
+                    cursor = candidate_cursor
+                    visual_column = candidate_column
+                    list_content_columns.append(visual_column)
+                    continue
+            return cursor, quote_depth, tuple(list_content_columns), visual_column
+        return cursor, quote_depth, tuple(list_content_columns), visual_column
+
+    def line_content_end(line: str) -> int:
+        end = len(line)
+        while end > 0 and line[end - 1] in "\r\n":
+            end -= 1
+        return end
+
+    def reference_definition_label(
+            line: str, raw_line: str) -> tuple[str, int, tuple[int, tuple[int, ...]]] | None:
+        end = line_content_end(line)
+        prefix = container_content_start(line)
+        if prefix is None:
+            return None
+        cursor, quote_depth, list_content_columns, _visual_column = prefix
+        if cursor >= end or line[cursor] != "[":
+            return None
+        start = cursor + 1
+        cursor = start
+        while cursor < end and cursor - start <= 999:
+            char = line[cursor]
+            if ascii_control(char):
+                return None
+            if char == "\\":
+                if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                    return None
+                cursor += 2
+            elif char == "[":
+                return None
+            elif char == "]":
+                if cursor <= start or cursor + 1 >= end or line[cursor + 1] != ":":
+                    return None
+                label = raw_line[start:cursor]
+                if not label.strip(" \t\r\n"):
+                    return None
+                cursor += 2
+                break
+            elif char in "\r\n":
+                return None
+            else:
+                cursor += 1
+        else:
+            return None
+
+        return label, cursor, (quote_depth, list_content_columns)
+
+    def reference_destination(line: str, cursor: int, end: int) -> int | None:
+        if line[cursor] == "<":
+            cursor += 1
+            while cursor < end:
+                char = line[cursor]
+                if ascii_control(char):
+                    return None
+                if char == "\\":
+                    if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                        return None
+                    cursor += 2
+                elif char == ">":
+                    cursor += 1
+                    break
+                elif char.isspace() or char == "<":
+                    return None
+                else:
+                    cursor += 1
+            else:
+                return None
+        else:
+            destination_start = cursor
+            depth = 0
+            while cursor < end and not line[cursor].isspace():
+                char = line[cursor]
+                if ascii_control(char):
+                    return None
+                if char == "\\":
+                    if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                        return None
+                    cursor += 2
+                elif char == "(":
+                    depth += 1
+                    if depth > 32:
+                        return None
+                    cursor += 1
+                elif char == ")":
+                    if depth == 0:
+                        return None
+                    depth -= 1
+                    cursor += 1
+                elif char in "<>":
+                    return None
+                else:
+                    cursor += 1
+            if cursor == destination_start or depth != 0:
+                return None
+        return cursor
+
+    source = "".join(source_chars)
+    line_spans: list[tuple[str, int, int]] = []
+    offset = 0
+    for line in source.splitlines(keepends=True):
+        line_spans.append((line, offset, offset + len(line)))
+        offset += len(line)
+
+    def reference_title_context_matches(
+            expected: tuple[int, tuple[int, ...]],
+            actual: tuple[int, int, tuple[int, ...], int]) -> bool:
+        _content_cursor, quote_depth, list_content_columns, content_column = actual
+        expected_quote_depth, expected_list_columns = expected
+        if quote_depth != expected_quote_depth or list_content_columns:
+            return False
+        if expected_list_columns:
+            list_content_column = expected_list_columns[-1]
+            return list_content_column <= content_column <= list_content_column + 3
+        return True
+
+    def reference_title_extent(
+            line_index: int, cursor: int,
+            expected_context: tuple[int, tuple[int, ...]]) -> tuple[int, int] | None:
+        if cursor >= line_content_end(line_spans[line_index][0]):
+            return None
+        delimiter = line_spans[line_index][0][cursor]
+        if delimiter not in ('"', "'", "("):
+            return None
+        cursor += 1
+        while line_index < len(line_spans):
+            line = line_spans[line_index][0]
+            end = line_content_end(line)
+            while cursor < end:
+                char = line[cursor]
+                if char == "\\":
+                    if cursor + 1 >= end or line[cursor + 1] not in string.punctuation:
+                        return None
+                    cursor += 2
+                elif (char == ")" if delimiter == "(" else char == delimiter):
+                    if any(rest not in " \t" for rest in line[cursor + 1:end]):
+                        return None
+                    return line_index, cursor + 1
+                elif delimiter == "(" and char == "(":
+                    return None
+                else:
+                    cursor += 1
+            line_index += 1
+            if line_index >= len(line_spans):
+                return None
+            prefix = container_content_start(line_spans[line_index][0])
+            if prefix is None or not reference_title_context_matches(expected_context, prefix):
+                return None
+            cursor = prefix[0]
+            if cursor >= line_content_end(line_spans[line_index][0]):
+                return None
+        return None
+
+    def reference_title_after_destination(
+            line_index: int, destination_end: int,
+            expected_context: tuple[int, tuple[int, ...]]) -> tuple[int, int] | None:
+        line = line_spans[line_index][0]
+        cursor = destination_end
+        end = line_content_end(line)
+        separator_start = cursor
+        while cursor < end and line[cursor] in " \t":
+            cursor += 1
+        if cursor < end:
+            if cursor == separator_start:
+                return None
+            return reference_title_extent(line_index, cursor, expected_context)
+        next_index = line_index + 1
+        if next_index >= len(line_spans):
+            return None
+        prefix = container_content_start(line_spans[next_index][0])
+        if prefix is None or not reference_title_context_matches(expected_context, prefix):
+            return None
+        cursor = prefix[0]
+        if cursor >= line_content_end(line_spans[next_index][0]):
+            return None
+        return reference_title_extent(next_index, cursor, expected_context)
+
+    label_lines = label_source.splitlines(keepends=True)
+    require(len(label_lines) == len(line_spans), "markdown-label-source-lines-mismatch")
+    for index, (line, start, end) in enumerate(line_spans):
+        parsed = reference_definition_label(line, label_lines[index])
+        if parsed is None:
+            continue
+        label, cursor, container_context = parsed
+        destination_line = index
+        destination_source = line
+        destination_source_end = line_content_end(line)
+        while cursor < destination_source_end and destination_source[cursor] in " \t":
+            cursor += 1
+        if cursor >= destination_source_end:
+            destination_line += 1
+            if destination_line >= len(line_spans):
+                continue
+            prefix = container_content_start(line_spans[destination_line][0])
+            if prefix is None or not reference_title_context_matches(container_context, prefix):
+                continue
+            cursor = prefix[0]
+            destination_source = line_spans[destination_line][0]
+            destination_source_end = line_content_end(destination_source)
+            while cursor < destination_source_end and destination_source[cursor] in " \t":
+                cursor += 1
+        if cursor >= destination_source_end:
+            continue
+        destination_end = reference_destination(destination_source, cursor, destination_source_end)
+        if destination_end is None:
+            continue
+        title_extent = reference_title_after_destination(
+            destination_line, destination_end, container_context)
+        if title_extent is None:
+            tail = destination_source[destination_end:destination_source_end]
+            if any(char not in " \t" for char in tail):
+                continue
+            final_end = line_spans[destination_line][2]
+        else:
+            title_line, _title_end = title_extent
+            final_end = line_spans[title_line][2]
+        reference_labels.add(normalize_reference_label(label))
+        blank(start, final_end)
+
+    def angle_autolink_end(opening: int) -> int | None:
+        if source_chars[opening] != "<":
+            return None
+        cursor = opening + 1
+        while cursor < len(source_chars):
+            char = source_chars[cursor]
+            if char == ">":
+                inner = "".join(source_chars[opening + 1:cursor])
+                scheme, separator, _target = inner.partition(":")
+                if (separator and re.fullmatch(r"[A-Za-z][A-Za-z0-9.+-]{1,31}", scheme)
+                        and all(not char.isspace() and not ascii_control(char)
+                                and char not in "<>" for char in inner)):
+                    return cursor + 1
+                return None
+            if char.isspace() or ascii_control(char) or char == "<":
+                return None
+            cursor += 1
+        return None
+
+    openings = array("I")
+    backslashes = 0
+    position = 0
+    while position < len(source_chars):
+        char = source_chars[position]
+        if char == "\\":
+            backslashes += 1
+            position += 1
+            continue
+        is_escaped = backslashes % 2 == 1
+        escaped_positions[position] = is_escaped
+        backslashes = 0
+        if is_escaped:
+            position += 1
+            continue
+        if char == "<":
+            autolink_end = angle_autolink_end(position)
+            if autolink_end is not None:
+                position = autolink_end
+                continue
+        if char == "[":
+            openings.append(position)
+        elif char == "]" and openings:
+            bracket_ends[openings.pop()] = position
+        position += 1
+
+    # A reference label cannot contain an unescaped bracket and is limited to
+    # 999 characters. Reject impossible candidates in constant time before
+    # copying or normalizing their text. This prevents nested bracket input
+    # from making each outer label rescan the remaining document.
+    paired_opening_prefix = array("I", [0]) * (len(source_chars) + 1)
+    for position, char in enumerate(source_chars):
+        paired_opening_prefix[position + 1] = (
+            paired_opening_prefix[position]
+            + int(char == "[" and bracket_ends[position] >= 0))
+
+    def normalized_reference_label_span(start: int, end: int) -> str | None:
+        if (start >= end or end - start > 999
+                or paired_opening_prefix[end] != paired_opening_prefix[start]):
+            return None
+        return normalize_reference_label("".join(label_chars[start:end]))
+
+    # Mask image alt text before link labels so images nested in links cannot
+    # contribute prose through their alt attribute.
+    cursor = 0
+    while cursor < len(source_chars):
+        if (source_chars[cursor] != "!" or cursor + 1 >= len(source_chars)
+                or source_chars[cursor + 1] != "[" or escaped(cursor)):
+            cursor += 1
+            continue
+        opening = cursor + 1
+        close = closing_bracket(opening)
+        if close is None:
+            cursor += 1
+            continue
+        following = close + 1
+        if following < len(source_chars) and source_chars[following] == "(":
+            parsed = inline_link(following)
+            require(parsed is not None, "markdown-inline-link-malformed")
+            end, _title = parsed
+            blank(opening + 1, close)
+            blank(following, end)
+            cursor = end
+            continue
+        elif following < len(source_chars) and source_chars[following] == "[":
+            reference_close = closing_bracket(following)
+            if reference_close is not None:
+                target_span = ((opening + 1, close)
+                               if reference_close == following + 1 else
+                               (following + 1, reference_close))
+                target_label = normalized_reference_label_span(*target_span)
+                if target_label is not None and target_label in reference_labels:
+                    blank(opening + 1, close)
+                    blank(following, reference_close + 1)
+                    cursor = reference_close + 1
+                    continue
+        else:
+            image_label = normalized_reference_label_span(opening + 1, close)
+            if image_label is not None and image_label in reference_labels:
+                blank(opening + 1, close)
+        cursor += 1
+
+    cursor = 0
+    while cursor < len(source_chars):
+        if source_chars[cursor] != "[" or escaped(cursor):
+            cursor += 1
+            continue
+        close = closing_bracket(cursor)
+        if close is None:
+            cursor += 1
+            continue
+        following = close + 1
+        if following < len(source_chars) and source_chars[following] == "(":
+            parsed = inline_link(following)
+            require(parsed is not None, "markdown-inline-link-malformed")
+            end, title = parsed
+            if title is not None:
+                blank(title[0], title[1])
+            if render_link_labels:
+                rendered_links.append((cursor, end, cursor + 1, close))
+                blank(cursor, cursor + 1)
+                blank(close, close + 1)
+                blank(following, end)
+            cursor = end
+            continue
+        elif following < len(source_chars) and source_chars[following] == "[":
+            reference_close = closing_bracket(following)
+            if reference_close is not None:
+                target_span = ((cursor + 1, close)
+                               if reference_close == following + 1 else
+                               (following + 1, reference_close))
+                target_label = normalized_reference_label_span(*target_span)
+                if target_label is not None and target_label in reference_labels:
+                    if render_link_labels:
+                        rendered_links.append((cursor, reference_close + 1,
+                                               cursor + 1, close))
+                        blank(cursor, cursor + 1)
+                        blank(close, close + 1)
+                        blank(following, reference_close + 1)
+                    else:
+                        blank(following, reference_close + 1)
+                    cursor = reference_close + 1
+                    continue
+        else:
+            shortcut_label = normalized_reference_label_span(cursor + 1, close)
+            if shortcut_label is not None and shortcut_label in reference_labels:
+                if render_link_labels:
+                    rendered_links.append((cursor, close + 1, cursor + 1, close))
+                    blank(cursor, cursor + 1)
+                    blank(close, close + 1)
+                cursor = close + 1
+                continue
+        cursor += 1
+
+    if render_link_labels and rendered_links:
+        rendered: list[str] = []
+        cursor = 0
+        for start, end, label_start, label_end in rendered_links:
+            rendered.append("".join(chars[cursor:start]))
+            rendered.append("".join(chars[label_start:label_end]))
+            cursor = end
+        rendered.append("".join(chars[cursor:]))
+        return "".join(rendered)
+    return "".join(chars)
+
+
+def mask_fenced_code_blocks(text: str) -> str:
+    """Mask CommonMark fenced blocks, including blockquote containers."""
+    output: list[str] = []
+    tick = chr(96)
+    fence_char: str | None = None
+    fence_length = 0
+    fence_containers: list[tuple[str, int]] = []
+    comment_open = False
+
+    def next_comment_state(content: str, is_open: bool, start: int = 0) -> bool:
+        if not is_open:
+            cursor = start
+            spaces = 0
+            while cursor < len(content) and content[cursor] == " " and spaces < 4:
+                cursor += 1
+                spaces += 1
+            if spaces > 3 or not content.startswith("<!--", cursor):
+                return False
+            cursor += 4
+        else:
+            cursor = 0
+        closing = content.find("-->", cursor)
+        return closing < 0
+
+    def parse_containers(content: str) -> tuple[list[tuple[str, int]], int]:
+        containers: list[tuple[str, int]] = []
+        list_marker = re.compile(r"([-+*]|[0-9]{1,9}[.)])([ ]{1,4})")
+        position = 0
+        while True:
+            start = position
+            spaces = 0
+            while position < len(content) and content[position] == " " and spaces < 4:
+                position += 1
+                spaces += 1
+            if spaces > 3:
+                return containers, start
+            if position < len(content) and content[position] == ">":
+                containers.append(("quote", 0))
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+                continue
+            marker = list_marker.match(content, position)
+            if marker is not None:
+                containers.append(("list", spaces + len(marker.group(1)) + len(marker.group(2))))
+                position += len(marker.group(0))
+                continue
+            return containers, start
+
+    def strip_containers(content: str, containers: list[tuple[str, int]]) -> tuple[bool, int]:
+        position = 0
+        for kind, indent in containers:
+            if kind == "quote":
+                start = position
+                spaces = 0
+                while position < len(content) and content[position] == " " and spaces < 4:
+                    position += 1
+                    spaces += 1
+                if spaces > 3 or position >= len(content) or content[position] != ">":
+                    return False, start
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+            else:
+                remainder = position
+                while remainder < len(content) and content[remainder] in " \t":
+                    remainder += 1
+                if remainder == len(content):
+                    return True, remainder
+                spaces = 0
+                while position + spaces < len(content) and content[position + spaces] == " ":
+                    spaces += 1
+                if spaces < indent:
+                    return False, position
+                position += indent
+        return True, position
+
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        if fence_char is not None:
+            matched, position = strip_containers(content, fence_containers)
+            if matched:
+                candidate = content[position:]
+                closing = re.match(r"^ {0,3}([" + re.escape(tick) + r"~]+)[ \t]*$", candidate)
+                closes = (closing is not None and closing.group(1)[0] == fence_char
+                          and len(closing.group(1)) >= fence_length
+                          and all(char == fence_char for char in closing.group(1)))
+                output.append(" " * len(content) + ending)
+                if closes:
+                    fence_char = None
+                    fence_length = 0
+                    fence_containers = []
+                continue
+            fence_char = None
+            fence_length = 0
+            fence_containers = []
+
+        if comment_open:
+            output.append(line)
+            comment_open = next_comment_state(content, True)
+            continue
+
+        containers, position = parse_containers(content)
+        candidate = content[position:]
+        opening = re.match(r"^ {0,3}(" + re.escape(tick) + r"{3,}|~{3,})(.*)$", candidate)
+        if opening and not (opening.group(1)[0] == tick and tick in opening.group(2)):
+            fence_char = opening.group(1)[0]
+            fence_length = len(opening.group(1))
+            fence_containers = containers
+            output.append(" " * len(content) + ending)
+        else:
+            output.append(line)
+            comment_open = next_comment_state(content, False, position)
+    return "".join(output)
+
+
+def mask_indented_code_blocks(text: str) -> str:
+    """Mask indented code after blockquote and list container markers."""
+    output: list[str] = []
+    list_marker = re.compile(r"([-+*]|[0-9]{1,9}[.)])([ ]+)")
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        position = 0
+        while position < len(content):
+            start = position
+            spaces = 0
+            while position < len(content) and content[position] == " " and spaces < 4:
+                position += 1
+                spaces += 1
+            if spaces > 3:
+                position = start
+                break
+            if position < len(content) and content[position] == ">":
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+                continue
+            marker = list_marker.match(content, position)
+            if marker is not None:
+                marker_spaces = len(marker.group(2))
+                position += len(marker.group(1)) + (1 if marker_spaces > 4 else marker_spaces)
+                continue
+            position = start
+            break
+        candidate = content[position:]
+        if candidate.startswith("    ") or candidate.startswith("\t"):
+            output.append(" " * len(content) + ending)
+        else:
+            output.append(line)
+    return "".join(output)
+
+
+def mask_inline_code_spans(text: str) -> str:
+    """Mask CommonMark backtick spans, including multiline spans, without moving offsets."""
+    chars = list(text)
+    for opening, end, _content in inline_code_spans(text):
+        for offset in range(opening, end):
+            if chars[offset] not in ("\n", "\r"):
+                chars[offset] = " "
+    return "".join(chars)
+
+
+def inline_code_spans(text: str) -> list[tuple[int, int, str]]:
+    """Return the same bounded CommonMark backtick spans masked by mask_inline_code_spans."""
+    tick = chr(96)
+    runs: list[tuple[int, int, int, bool]] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text[index] != tick:
+            index += 1
+            continue
+        opening = index
+        while index < length and text[index] == tick:
+            index += 1
+        delimiter = index - opening
+        backslashes = 0
+        cursor = opening - 1
+        while cursor >= 0 and text[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        runs.append((opening, index, delimiter, backslashes % 2 == 1))
+
+    next_same: list[int | None] = [None] * len(runs)
+    next_by_length: dict[int, int] = {}
+    for run_index in range(len(runs) - 1, -1, -1):
+        delimiter = runs[run_index][2]
+        next_same[run_index] = next_by_length.get(delimiter)
+        next_by_length[delimiter] = run_index
+
+    spans: list[tuple[int, int, str]] = []
+    run_index = 0
+    while run_index < len(runs):
+        opening, content_start, _, escaped = runs[run_index]
+        closing_index = next_same[run_index]
+        if escaped or closing_index is None:
+            run_index += 1
+            continue
+        closing_start = runs[closing_index][0]
+        end = runs[closing_index][1]
+        spans.append((opening, end, text[content_start:closing_start]))
+        run_index = closing_index + 1
+        while run_index < len(runs) and runs[run_index][0] < end:
+            run_index += 1
+    return spans
+
+
+def normalized_code_span(content: str) -> str:
+    content = content.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
+    if content.startswith(" ") and content.endswith(" ") and content.strip():
+        return content[1:-1]
+    return content
+
+
+def visible_phrase_source(text: str, phrase: str) -> str:
+    """Mask inline code except exact code tokens explicitly required inside a visible phrase."""
+    required_tokens = {
+        normalized_code_span(content)
+        for _opening, _end, content in inline_code_spans(phrase)
+    }
+    if not required_tokens:
+        return mask_inline_code_spans(text)
+
+    pieces: list[str] = []
+    cursor = 0
+    for opening, end, content in inline_code_spans(text):
+        pieces.append(text[cursor:opening])
+        token = normalized_code_span(content)
+        if token in required_tokens:
+            pieces.append(token)
+        else:
+            pieces.append("".join("\n" if char == "\n" else "\r" if char == "\r" else " "
+                                  for char in text[opening:end]))
+        cursor = end
+    pieces.append(text[cursor:])
+    return "".join(pieces)
+
+
+def visible_phrase_text(phrase: str) -> str:
+    """Render expected inline-code tokens as their visible text for prose matching."""
+    pieces: list[str] = []
+    cursor = 0
+    for opening, end, content in inline_code_spans(phrase):
+        pieces.append(phrase[cursor:opening])
+        pieces.append(normalized_code_span(content))
+        cursor = end
+    pieces.append(phrase[cursor:])
+    return "".join(pieces)
 
 def comment_free(text: str) -> str:
-    return re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
+    return re.sub(r"<!--.*?(?:-->|\Z)", " ", text, flags=re.DOTALL)
 
 
 _CLAIMS_MODULE = None
+_SUPPORT_LEDGER_MODULE = None
+_V04_PROFILE_CACHE: dict[tuple[str, str], dict] = {}
 
 
 def claims_module():
@@ -458,6 +1678,30 @@ def claims_module():
     return _CLAIMS_MODULE
 
 
+def support_ledger_module():
+    """Load the source-bound support-profile validator and release-copy renderer."""
+    global _SUPPORT_LEDGER_MODULE
+    if _SUPPORT_LEDGER_MODULE is None:
+        try:
+            spec = importlib.util.spec_from_file_location("verify_support_ledger", SUPPORT_LEDGER_SCRIPT)
+            require(spec is not None and spec.loader is not None,
+                    "support-ledger-validator-unavailable")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        except (OSError, SyntaxError) as error:
+            raise ContractError("support-ledger-validator-unavailable") from error
+        _SUPPORT_LEDGER_MODULE = module
+    return _SUPPORT_LEDGER_MODULE
+
+
+def v04_profile(repo: Path, rev: str) -> dict:
+    """Reuse a profile only within this process, keyed by its immutable Git revision."""
+    key = (str(repo.resolve(strict=True)), rev)
+    if key not in _V04_PROFILE_CACHE:
+        _V04_PROFILE_CACHE[key] = support_ledger_module().load_claims_version(repo, rev, "0.4.0")
+    return _V04_PROFILE_CACHE[key]
+
+
 def unnegated(pattern: re.Pattern[str], text: str) -> bool:
     """True when a match is not directly negated ("no ..." / "not ...")."""
     for match in pattern.finditer(text):
@@ -467,8 +1711,9 @@ def unnegated(pattern: re.Pattern[str], text: str) -> bool:
     return False
 
 
-def check_unqualified(relative: str, text: str) -> int:
+def check_unqualified(relative: str, text: str, *, game_claim_text: str | None = None) -> int:
     """Reject qualification claims that no shipped evidence supports."""
+    text = mask_inline_code_spans(text)
     claims = claims_module()
     require(not unnegated(claims.UNQUALIFIED_CLAIM, text),
             f"unqualified-hardware-or-game-claim:{relative}")
@@ -482,11 +1727,15 @@ def check_unqualified(relative: str, text: str) -> int:
         (FALSE_FUZZ_CLAIM, "false-fuzz-campaign-claim"),
     )
     for pattern, reason in checks:
-        require(pattern.search(text) is None, f"{reason}:{relative}")
+        matched = (unsupported_game_claim_match(
+            text if game_claim_text is None else game_claim_text)
+                   if pattern is UNSUPPORTED_GAME_CLAIM else pattern.search(text))
+        require(matched is None, f"{reason}:{relative}")
     return len(checks) + 1
 
 
 def check_claim_boundaries(relative: str, text: str) -> int:
+    text = mask_inline_code_spans(text)
     for pattern, reason in CLAIM_BOUNDARY_RULES:
         require(not unnegated(pattern, text), f"{reason}:{relative}")
     for (pattern, reason), twin in zip(CLAIM_BOUNDARY_RULES, CLAIM_BOUNDARY_TWINS):
@@ -498,30 +1747,37 @@ def check_claim_boundaries(relative: str, text: str) -> int:
 def check_phrases(relative: str, text: str,
                   required: tuple[tuple[str, str], ...]) -> int:
     for phrase, reason in required:
-        require(phrase in text, f"{reason}:{relative}")
+        evidence = visible_phrase_source(text, phrase)
+        expected = flexible(visible_phrase_text(phrase))
+        require(expected.search(evidence) is not None, f"{reason}:{relative}")
     return len(required)
 
 
 def check_game(root: Path) -> int:
-    text = prose(read_document(root, GAME_GUIDE))
+    raw = read_document(root, GAME_GUIDE)
+    visible_text = prose(raw, collapse=False)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, collapse=False, render_link_labels=True))
+    text = " ".join(visible_text.split())
+    disclosure_text = mask_inline_code_spans(text)
     checks = 0
 
-    require(ABSENCE_STATEMENT in text,
+    require(ABSENCE_STATEMENT in disclosure_text,
             f"absence-statement-missing:{GAME_GUIDE}")
     checks += 1
-    require(UNSUPPORTED_GAME_CLAIM.search(text) is None,
+    require(unsupported_game_claim_match(game_claim_text) is None,
             f"unsupported-cgb-game-qualification:{GAME_GUIDE}")
     checks += 1
 
     evidence = (
-        ("cc2966e1643d480d0780fb6cc5b9ef53d5ef6898", "candidate-source-missing"),
+        ("`cc2966e1643d480d0780fb6cc5b9ef53d5ef6898`", "candidate-source-missing"),
         ("RGBDS v1.0.4", "rgbds-1.0.4-result-missing"),
-        ("2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645",
+        ("`2f6f13c6ec984313656c07b08d97dfcd3a471c7d3901d3ff486e5814bb503645`",
          "rgbds-1.0.1-archive-digest-missing"),
         ("494 assembler errors", "rgbds-1.0.1-build-failure-missing"),
         ("No output ROM or ROM digest was produced", "candidate-output-absence-missing"),
         ("asset rights remain unresolved", "candidate-rights-limit-missing"),
-        ("195765b8ca3b0fb7d37b7b92d0242d6c7e01ec71f27f93e565fa081e449cbb92",
+        ("`195765b8ca3b0fb7d37b7b92d0242d6c7e01ec71f27f93e565fa081e449cbb92`",
          "historical-candidate-digest-missing"),
         ("unverified historical metadata", "historical-candidate-status-missing"),
         ("Libbet and the Magic Floor v0.08 remains the DMG game acceptance",
@@ -531,19 +1787,21 @@ def check_game(root: Path) -> int:
          "perceptual-output-limit-missing"),
         ("[CGB corpus contract](cgb-corpus.md)", "cgb-corpus-evidence-link-missing"),
     )
-    for expected, reason in evidence:
-        require(expected in text, f"{reason}:{GAME_GUIDE}")
-        checks += 1
-    return checks
+    return checks + check_phrases(GAME_GUIDE, text, evidence)
 
 
 def check_readme(root: Path) -> int:
-    text = prose(read_document(root, README))
+    raw = read_document(root, README)
+    visible_text = prose(raw, collapse=False)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, collapse=False, render_link_labels=True))
+    text = " ".join(visible_text.split())
+    disclosure_text = mask_inline_code_spans(text)
     checks = 0
-    require(ABSENCE_STATEMENT in text,
+    require(ABSENCE_STATEMENT in disclosure_text,
             f"absence-statement-missing:{README}")
     checks += 1
-    require(UNSUPPORTED_GAME_CLAIM.search(text) is None,
+    require(unsupported_game_claim_match(game_claim_text) is None,
             f"unsupported-cgb-game-qualification:{README}")
     checks += 1
     evidence = (
@@ -557,9 +1815,9 @@ def check_readme(root: Path) -> int:
          "game-evidence-link-missing"),
     )
     for expected, reason in evidence:
-        require(expected in text, f"{reason}:{README}")
+        require(expected in disclosure_text, f"{reason}:{README}")
         checks += 1
-    return checks + check_claim_boundaries(README, text)
+    return checks + check_claim_boundaries(README, disclosure_text)
 
 
 def header_symbols(root: Path) -> set[str]:
@@ -591,16 +1849,24 @@ def check_symbols(root: Path) -> int:
 
 
 def check_surface(root: Path, relative: str) -> int:
-    text = prose(read_document(root, relative))
+    raw = read_document(root, relative)
+    visible_text = prose(raw, collapse=False)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, collapse=False, render_link_labels=True))
+    text = " ".join(visible_text.split())
+    disclosure_text = mask_inline_code_spans(text)
     checks = check_phrases(relative, text, REQUIRED[relative])
-    checks += check_unqualified(relative, text)
+    checks += check_unqualified(relative, disclosure_text, game_claim_text=game_claim_text)
     if relative == UNRELEASED:
-        require(PENDING_V030_SECTION.search(text) is None,
+        require(PENDING_V030_SECTION.search(disclosure_text) is None,
                 f"unreleased-pending-stale:{relative}")
         checks += 1
     if relative == RELEASE:
-        require(not unnegated(FALSE_RETRY_TAMPER_CLAIM, text),
+        require(not unnegated(FALSE_RETRY_TAMPER_CLAIM, disclosure_text),
                 f"retry-tamper-overclaim:{relative}")
+        checks += 1
+        require(publication_claim_pattern("0.4.0").search(disclosure_text) is None,
+                f"false-publication-claim:{relative}")
         checks += 1
     if relative == PREVIEW:
         checks += check_claim_boundaries(relative, text)
@@ -630,36 +1896,101 @@ def sha256_file(path: Path) -> str:
 
 
 def fixture_directories(root: Path) -> list[str]:
-    base = root / "fixtures"
+    root_path = root.resolve(strict=True)
     try:
+        base = (root_path / "fixtures").resolve(strict=True)
+        try:
+            base.relative_to(root_path)
+        except ValueError as error:
+            raise ContractError("fixture-inventory-outside-root") from error
+        if not base.is_dir():
+            raise ContractError("fixture-inventory-unavailable")
         names = sorted(path.name for path in base.iterdir()
                        if (path / "manifest.json").is_file())
-    except OSError as error:
+    except ContractError:
+        raise
+    except (OSError, RuntimeError, ValueError) as error:
         raise ContractError("fixture-inventory-unavailable") from error
     require(names, "fixture-inventory-empty")
+    for name in names:
+        confined_source_file(root_path, f"fixtures/{name}/manifest.json",
+                             "fixture-inventory-outside-root",
+                             "fixture-inventory-unavailable")
     return names
+
+
+def safe_relative_parts(relative: str, reason: str) -> list[str]:
+    parts = relative.split("/")
+    if (not parts or any(part in {"", ".", ".."} for part in parts) or
+            Path(relative).is_absolute() or "\\" in relative):
+        raise ContractError(f"{reason}:{relative}")
+    return parts
+
+
+def confined_source_file(root: Path, relative: str, outside_reason: str,
+                         missing_reason: str) -> Path:
+    parts = safe_relative_parts(relative, outside_reason)
+    root_path = root.resolve(strict=True)
+    try:
+        target = root_path.joinpath(*parts).resolve(strict=True)
+    except FileNotFoundError as error:
+        raise ContractError(f"{missing_reason}:{relative}") from error
+    except (OSError, RuntimeError) as error:
+        raise ContractError(f"{outside_reason}:{relative}") from error
+    try:
+        target.relative_to(root_path)
+    except ValueError as error:
+        raise ContractError(f"{outside_reason}:{relative}") from error
+    if not target.is_file():
+        raise ContractError(f"{missing_reason}:{relative}")
+    return target
+
+
+def confined_copy_destination(root: Path, relative: str) -> Path:
+    parts = safe_relative_parts(relative, "self-test-copy-path-outside-root")
+    root_path = root.resolve(strict=True)
+    try:
+        destination = root_path.joinpath(*parts).resolve(strict=False)
+        destination.relative_to(root_path)
+    except (OSError, RuntimeError, ValueError) as error:
+        raise ContractError(f"self-test-copy-path-outside-root:{relative}") from error
+    return destination
+
+
+def notice_fixture_path(root: Path, relative: str) -> Path:
+    parts = safe_relative_parts(relative, "notice-path-outside-root")
+    if len(parts) < 2 or parts[0] != "fixtures":
+        raise ContractError(f"notice-path-outside-root:{relative}")
+    return confined_source_file(root, relative, "notice-path-outside-root",
+                                "notice-path-missing")
 
 
 def check_notices(root: Path) -> int:
     raw = read_document(root, NOTICES)
     text = prose(raw)
+    notice_text = prose(raw, collapse=False)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, collapse=False, render_link_labels=True))
     checks = check_phrases(NOTICES, text, NOTICE_REQUIRED)
-    require(REBOUND_ATTRIBUTION.search(raw) is None,
+    require(REBOUND_ATTRIBUTION.search(mask_inline_code_spans(raw)) is None,
             f"rebound-attribution-present:{NOTICES}")
     checks += 1
-    checks += check_unqualified(NOTICES, text)
+    checks += check_unqualified(NOTICES, text, game_claim_text=game_claim_text)
 
     rows = {match["name"]: (match["manifest"], match["notice"])
-            for match in NOTICE_ROW.finditer(comment_free(raw))}
+            for match in visible_notice_matches(NOTICE_ROW, notice_text)}
     actual = fixture_directories(root)
     for name in actual:
         require(name in rows, f"notice-fixture-missing:{name}")
         manifest, notice = rows[name]
-        directory = root / "fixtures" / name
-        require(sha256_file(directory / "manifest.json") == manifest,
+        manifest_path = confined_source_file(
+            root, f"fixtures/{name}/manifest.json", "notice-path-outside-root",
+            f"notice-fixture-missing:{name}")
+        require(sha256_file(manifest_path) == manifest,
                 f"notice-digest-stale:{name}:manifest")
-        license_path = directory / "LICENSE.txt"
-        require(license_path.is_file(), f"notice-license-file-missing:{name}")
+        license_path = confined_source_file(
+            root, f"fixtures/{name}/LICENSE.txt", "notice-path-outside-root",
+            f"notice-license-file-missing:{name}")
         require(sha256_file(license_path) == notice,
                 f"notice-digest-stale:{name}:notice")
         checks += 3
@@ -667,20 +1998,39 @@ def check_notices(root: Path) -> int:
         require(name in actual, f"notice-fixture-unknown:{name}")
         checks += 1
     # The prose table digests are bound to bytes too, not only the digest table.
-    for match in NOTICE_INLINE_DIGEST.finditer(comment_free(raw)):
-        target = root / match["path"]
-        require(target.is_file(), f"notice-path-missing:{match['path']}")
+    for match in visible_notice_matches(NOTICE_INLINE_DIGEST, notice_text):
+        target = notice_fixture_path(root, match["path"])
         require(sha256_file(target) == match["digest"],
                 f"notice-digest-stale:{match['path']}")
         checks += 1
     return checks
 
 
-def perf_disclosure_percent(root: Path) -> str:
+def visible_notice_matches(pattern: re.Pattern[str], text: str) -> list[re.Match[str]]:
+    """Find notice rows and digests outside code spans, comments, and code blocks."""
+    spans = inline_code_spans(text)
+    return [match for match in pattern.finditer(text)
+            if not any(opening <= match.start() and match.end() <= end
+                       for opening, end, _content in spans)]
+
+
+def perf_disclosure_bytes(root: Path, repo: Path | None = None, rev: str | None = None) -> bytes:
+    if rev is not None:
+        require(repo is not None, "release-notes-repository-missing")
+        return immutable_blob(repo, rev, PERF_ATTRIBUTION)
+    try:
+        raw = (root / PERF_ATTRIBUTION).read_bytes()
+    except OSError as error:
+        raise ContractError("perf-attribution-receipt-unreadable") from error
+    require(len(raw) <= 4 * MAX_DOCUMENT_BYTES, "perf-attribution-receipt-unreadable")
+    return raw
+
+
+def perf_disclosure_percent(root: Path, repo: Path | None = None, rev: str | None = None) -> str:
     """The head-versus-v0.2.0 instruction-count increase to disclose, one decimal: the maximum ratio over the
     three attribution ROMs and every repeat in the committed receipt (D-30, D-13)."""
     try:
-        receipt = json.loads(read_bounded(root, PERF_ATTRIBUTION, 4 * MAX_DOCUMENT_BYTES))
+        receipt = json.loads(perf_disclosure_bytes(root, repo, rev))
         by_revision = {row["revision"]: row["ir"] for row in receipt["measurements"]}
         base, head = by_revision[receipt["selection"]["v020"]], by_revision[receipt["selection"]["head"]]
         ratios = [Fraction(h, b) for rom in head for b, h in zip(base[rom], head[rom])]
@@ -690,9 +2040,9 @@ def perf_disclosure_percent(root: Path) -> str:
     return f"{float((max(ratios) - 1) * 100):.1f}"
 
 
-def perf_disclosure_head(root: Path) -> str:
+def perf_disclosure_head(root: Path, repo: Path | None = None, rev: str | None = None) -> str:
     try:
-        receipt = json.loads(read_bounded(root, PERF_ATTRIBUTION, 4 * MAX_DOCUMENT_BYTES))
+        receipt = json.loads(perf_disclosure_bytes(root, repo, rev))
         head = receipt["selection"]["head"]
     except (ContractError, KeyError, TypeError, ValueError) as error:
         raise ContractError("perf-attribution-receipt-unreadable") from error
@@ -701,7 +2051,244 @@ def perf_disclosure_head(root: Path) -> str:
     return head
 
 
-def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None = None) -> int:
+def ledger_link_pattern(ledger: str) -> re.Pattern[str]:
+    version = Path(ledger).name.removeprefix("v").removesuffix(".md")
+    canonical = f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger}"
+    destination = r"(?:" + re.escape(ledger) + r"|" + re.escape(canonical) + r")"
+    return re.compile(r"(?<![!\\])\[[^\]\n]*\]\(\s*" + destination + r"\s*\)")
+
+
+def has_markdown_ledger_link(text: str, ledger: str, version: str) -> bool:
+    """Find a real Markdown link with an exact supported ledger destination."""
+    canonical = f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger}"
+    allowed = {ledger, canonical}
+
+    escaped_chars = bytearray(len(text))
+    bracket_ends = array("i", [-1]) * len(text)
+    openings = array("I")
+    backslashes = 0
+    for index, char in enumerate(text):
+        if char == "\\":
+            backslashes += 1
+            continue
+        escaped_chars[index] = backslashes % 2 == 1
+        backslashes = 0
+        if escaped_chars[index]:
+            continue
+        if char == "[":
+            openings.append(index)
+        elif char == "]" and openings:
+            bracket_ends[openings.pop()] = index
+
+    def link_end(closing_bracket: int) -> tuple[str, int] | None:
+        position = closing_bracket + 2
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position >= len(text):
+            return None
+
+        if text[position] == "<":
+            destination_start = position + 1
+            position += 1
+            while position < len(text):
+                if text[position] == "\\":
+                    position += 2
+                    continue
+                if text[position] == ">":
+                    break
+                position += 1
+            if position >= len(text):
+                return None
+            destination = text[destination_start:position]
+            position += 1
+        else:
+            destination_start = position
+            nested = 0
+            while position < len(text):
+                char = text[position]
+                if char == "\\":
+                    position += 2
+                    continue
+                if char == "(":
+                    nested += 1
+                elif char == ")":
+                    if nested == 0:
+                        break
+                    nested -= 1
+                elif char.isspace() and nested == 0:
+                    break
+                position += 1
+            destination = text[destination_start:position]
+
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position < len(text) and text[position] != ")":
+            quote = text[position]
+            if quote not in "\"'(":
+                return None
+            closing = ")" if quote == "(" else quote
+            title_depth = 1 if quote == "(" else 0
+            position += 1
+            while position < len(text):
+                char = text[position]
+                if char == "\\":
+                    position += 2
+                    continue
+                if quote == "(" and char == "(":
+                    title_depth += 1
+                elif char == closing:
+                    if quote != "(" or title_depth == 1:
+                        break
+                    title_depth -= 1
+                position += 1
+            if position >= len(text):
+                return None
+            position += 1
+            while position < len(text) and text[position].isspace():
+                position += 1
+        if position >= len(text) or text[position] != ")":
+            return None
+        return destination, position + 1
+
+    position = 0
+    while position < len(text):
+        if text[position] != "[" or escaped_chars[position]:
+            position += 1
+            continue
+        closing_bracket = bracket_ends[position]
+        if closing_bracket < 0:
+            position += 1
+            continue
+        if closing_bracket + 1 >= len(text) or text[closing_bracket + 1] != "(":
+            position += 1
+            continue
+        image = position > 0 and text[position - 1] == "!" and not escaped_chars[position - 1]
+        parsed = link_end(closing_bracket)
+        if parsed is None:
+            return False
+        destination, end = parsed
+        if re.search(r"\n[ \t]*\n", text[position:end]):
+            return False
+        if not image and destination in allowed:
+            return True
+        position = end
+    return False
+
+
+def canonical_ledger_url(version: str) -> str:
+    return f"https://github.com/szTheory/gabbaboy/blob/v{version}/docs/support/v{version}.md"
+
+
+def check_v04_release_notes(text: str, raw: str, repo: Path, rev: str,
+                            ledger: str, link_text: str) -> int:
+    require(not re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", raw),
+            "release-notes-terminal-control-present")
+    support = support_ledger_module()
+    claims = v04_profile(repo, rev)
+    rendered = support.render_release_notes_preface_v04(claims)
+    checks = 0
+    if ledger != "docs/support/v0.4.0.md":
+        require(False, "release-notes-ledger-version-mismatch")
+    require(has_markdown_ledger_link(link_text, ledger, "0.4.0"),
+            "release-notes-ledger-version-mismatch")
+    checks += 1
+    require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
+    checks += 1
+    non_claim_reasons = (
+        "release-notes-candidate-build-run-status-missing",
+        "release-notes-cgb-admission-status-missing",
+        "release-notes-license-prohibition-limit-missing",
+    )
+    for statement, reason in zip(claims["non_claims"], non_claim_reasons, strict=True):
+        require(prose(statement) in text, reason)
+        checks += 1
+
+    outcomes = claims["candidate_outcomes"]
+    known_reasons = [prose(row["reason"]) for row in outcomes]
+    for row in outcomes:
+        name = prose(row["name"])
+        reason = prose(row["reason"])
+        require(name in text, f"release-notes-candidate-name-missing:{row['candidate_id']}")
+        line = prose(f"- **{row['name']}:** {row['reason']}")
+        if line not in text:
+            swapped = any(prose(f"- **{row['name']}:** {other}") in text
+                          for other in (item for item in known_reasons if item != reason))
+            if swapped:
+                require(False, f"release-notes-candidate-reason-mismatch:{row['candidate_id']}")
+            require(False, f"release-notes-candidate-source-reason-missing:{row['candidate_id']}")
+        checks += 1
+
+    harness = claims["harness"]
+    harness_statement = prose(
+        f"**Harness-only result:** {harness['model']} native-mode {', '.join(harness['observations'])} "
+        f"results are {harness['result']}. {harness['interpretation']} This does not establish "
+        f"{', '.join(harness['not_claimed'])}."
+    )
+    require(harness_statement in text, "release-notes-harness-game-conflation")
+    checks += 1
+
+    counts = claims["diagnostics"]["expected_counts"]
+    diagnostic_statement = prose(
+        "**Diagnostics:** Phase 22 is a synthetic composition tracer and metadata-only assessment: "
+        f"{counts['named_entries']} named entries, {counts['unresolved_gates']} unresolved real-fixture gates, "
+        f"{counts['real_fixtures_admitted']} real fixtures admitted, and "
+        f"{counts['real_fixtures_executed']} real fixtures executed."
+    )
+    require(diagnostic_statement in text, "release-notes-diagnostic-count-mismatch")
+    checks += 1
+    pending = ", ".join(f"{row['id']} {row['status']}" for row in claims["requirements"]["statuses"])
+    require(prose(f"Requirements remain Pending: {pending}.") in text,
+            "release-notes-requirement-status-promoted")
+    checks += 1
+    completion = r"(?:complete(?:d)?|accepted|passed|fulfilled|closed|verified|resolved)"
+    for row in claims["requirements"]["statuses"]:
+        identifier = re.escape(row["id"])
+        direct = re.compile(
+            rf"\b{identifier}\b\s*(?:(?:is|are|was|were|has been|have been|now)\s+|[:=]\s*)?"
+            rf"{completion}\b", re.IGNORECASE)
+        reversed_status = re.compile(
+            rf"\b{completion}\b\s*(?:status\s+(?:for|of)\s+)?{identifier}\b", re.IGNORECASE)
+        require(direct.search(text) is None and reversed_status.search(text) is None,
+                "release-notes-requirement-status-promoted")
+        checks += 1
+    for limitation in claims["limitations"]:
+        require(prose(limitation) in text, "release-notes-support-limits-missing")
+        checks += 1
+
+    require(prose(rendered) in text, "release-notes-managed-preface-missing")
+    checks += 1
+
+    false_positive_claims = (
+        (re.compile(r"\b(?:Potion Panic|µCity\s+1\.3)\b.{0,100}\b(?:was|were|has been|have been)\s+(?:built|run|executed|admitted)\b", re.I),
+         "release-notes-candidate-claim-promoted"),
+        (re.compile(r"\bCGB\s+game\b.{0,50}\b(?:was|has been)?\s*admitted\b", re.I),
+         "release-notes-cgb-admission-promoted"),
+        (re.compile(r"\bCGB\s+game-level\s+evidence\s+(?:exists?|was\s+observed|has\s+been\s+established)\b", re.I),
+         "release-notes-cgb-evidence-promoted"),
+        (re.compile(r"\b(?:sha-?256|digest|hash)\b.{0,80}\b(?:proves?|establishes?|confirms?)\b.{0,60}\b(?:fixture\s+)?admission\b|\b(?:fixture\s+)?admission\b.{0,60}\b(?:sha-?256|digest|hash)\b", re.I),
+         "release-notes-digest-as-admission"),
+        (re.compile(r"\bCGB-CPU-E\b.{0,100}\b(?:qualifies?|proves?|establishes?)\b.{0,50}\b(?:game|compatibility|physical)\b", re.I),
+         "release-notes-harness-claim-promoted"),
+        (re.compile(r"\bphysical\s+(?:DMG-CPU-B|CGB-CPU-E)\s+(?:hardware\s+)?(?:behavior|results?)\s+(?:is|are)\s+(?:qualified|verified|established)\b", re.I),
+         "release-notes-hardware-claim-promoted"),
+        (re.compile(r"\bCGB\s+mode[- ]3\s+timing\s+(?:is|has been)\s+(?:qualified|verified|established)\b", re.I),
+         "release-notes-timing-claim-promoted"),
+        (re.compile(r"\b(?:general|broad)\s+(?:CGB\s+)?game\s+compatibility\s+(?:is|has been)\s+(?:qualified|verified|established|complete)\b", re.I),
+         "release-notes-compatibility-claim-promoted"),
+        (re.compile(r"\b(?:\d+\s+)?(?:diagnostic|metadata)\s+(?:micro)?tests?\b.{0,100}\b(?:were|was|are|is|have\s+been|has\s+been)?\s*(?:executed|run|performed|passed|succeeded)\b", re.I),
+         "release-notes-metadata-as-diagnostic"),
+        (re.compile(r"\b(?:both\s+)?candidates?\b.{0,60}\blicen[cs]es\b.{0,80}\b(?:prohibit|forbid|ban|disallow|restrict)\w*\b.{0,100}\b(?:repository|public[- ]CI|redistribut\w*|use)\b", re.I),
+         "release-notes-license-prohibition-unsupported"),
+    )
+    for pattern, reason in false_positive_claims:
+        require(not unnegated(pattern, text), reason)
+        checks += 1
+    checks += 1
+    return checks
+
+
+def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None = None,
+                        repo: Path = DEFAULT_ROOT, version_override: str | None = None) -> int:
     try:
         resolved = path.resolve(strict=True)
         if resolved.stat().st_size > MAX_NOTES_BYTES:
@@ -711,33 +2298,48 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         raise
     except (OSError, UnicodeError) as error:
         raise ContractError("release-notes-unavailable") from error
-    text = prose(raw)
+    visible = prose(raw, "release-notes", collapse=False)
+    link_text = mask_inline_code_spans(visible)
+    game_claim_text = mask_inline_code_spans(
+        prose(raw, "release-notes", collapse=False, render_link_labels=True))
+    text = " ".join(link_text.split())
     require(text, "release-notes-empty")
-    checks = 0
-    require(VERSION_TOKEN.search(text) is not None,
-            f"release-notes-version-missing:{RELEASE_VERSION}")
-    checks += 1
-    require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
-    checks += 1
+    if rev is not None:
+        subject_version, subject_ledger = identity_at_revision(repo, rev)
+    else:
+        subject_version, subject_ledger = tree_identity(root)
+    version = version_override or subject_version
+    ledger = ("docs/support/v" + version + ".md") if version_override is not None else subject_ledger
+    require(re.fullmatch(r"\d+\.\d+\.\d+", version) is not None,
+            "release-notes-version-invalid")
+    version_token = re.compile(r"(?<![\w.])v?" + re.escape(version) + r"(?![\w.])")
+    require(version_token.search(text) is not None,
+            f"release-notes-version-missing:{version}")
+    checks = 1
+    if version == "0.4.0":
+        require(re.fullmatch(r"[0-9a-f]{40}", rev or "") is not None,
+                "release-notes-revision-required")
+        checks += check_v04_release_notes(text, raw, repo, rev, ledger, link_text)
+    else:
+        require(ABSENCE_SENTENCE in text, "release-notes-absence-missing")
+        checks += 1
+        require(has_markdown_ledger_link(link_text, ledger, version),
+                "release-notes-ledger-link-missing")
+        checks += 1
     require(STATE_VERSION_SENTENCE in text, "release-notes-state-version-missing")
     checks += 1
-    require(HOST_POSIX_SENTENCE in text, "release-notes-host-posix-missing")
-    checks += 1
-    require(LEDGER_LINK.search(comment_free(raw)) is not None,
-            "release-notes-ledger-link-missing")
+    require(HOST_POSIX_SENTENCE in raw and HOST_POSIX_VISIBLE in text,
+            "release-notes-host-posix-missing")
     checks += 1
     require(re.search(r"unsigned and not notarized", text, re.IGNORECASE) is not None,
             "release-notes-unsigned-limit-missing")
     checks += 1
-    percent = perf_disclosure_percent(root)
-    head = perf_disclosure_head(root)
+    percent = perf_disclosure_percent(root, repo if rev is not None else None, rev)
+    head = perf_disclosure_head(root, repo if rev is not None else None, rev)
     short_head = head[:12]
     if rev is not None:
         require(re.fullmatch(r"[0-9a-f]{40}", rev) is not None,
                 "release-notes-revision-invalid")
-        commit = subprocess.run(["git", "-C", str(DEFAULT_ROOT), "cat-file", "-e", f"{rev}^{{commit}}"],
-                                capture_output=True, check=False)
-        require(commit.returncode == 0, "release-notes-revision-invalid")
     limitation_required = rev is None or head != rev
     require(re.search(r"(?<![\d.])\+" + re.escape(percent) + r"%", text) is not None and PERF_ATTRIBUTION in text,
             f"release-notes-perf-disclosure-missing:+{percent}%:{PERF_ATTRIBUTION}")
@@ -754,7 +2356,8 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
     elif limitation_marker in text:
         require(limitation in text, "release-notes-perf-head-mismatch")
         checks += 1
-    require(FALSE_PUBLICATION_CLAIM.search(text) is None,
+    publication_claim = publication_claim_pattern(version)
+    require(publication_claim.search(text) is None,
             "release-notes-false-publication-claim")
     checks += 1
     checks += check_claim_boundaries("release-notes", text)
@@ -763,8 +2366,12 @@ def check_release_notes(path: Path, root: Path = DEFAULT_ROOT, rev: str | None =
         (UNSUPPORTED_GAME_CLAIM, "unsupported-cgb-game-qualification"),
         (FALSE_SIGNING_CLAIM, "false-signing-or-notarization-claim"),
         (FALSE_FUZZ_CLAIM, "false-fuzz-campaign-claim"),
+        (FALSE_PLATFORM_CLAIM, "false-platform-guarantee"),
+        (FALSE_PERCEPTUAL_CLAIM, "false-perceptual-claim"),
     ):
-        require(pattern.search(text) is None, f"release-notes-{reason}")
+        matched = (unsupported_game_claim_match(game_claim_text)
+                   if pattern is UNSUPPORTED_GAME_CLAIM else pattern.search(text))
+        require(matched is None, f"release-notes-{reason}")
         checks += 1
     require(not unnegated(claims.UNQUALIFIED_CLAIM, text),
             "release-notes-unqualified-hardware-or-game-claim")
@@ -792,7 +2399,7 @@ def run_cli(arguments: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def expect_pass(arguments: list[str]) -> None:
+def expect_pass(arguments: list[str]) -> int:
     result = run_cli(arguments)
     require(result.returncode == 0,
             "self-test-positive-check-failed:" + result.stderr.strip())
@@ -802,7 +2409,9 @@ def expect_pass(arguments: list[str]) -> None:
         raise ContractError("self-test-positive-summary-invalid") from error
     require(summary.get("positive_success") is True,
             "self-test-positive-summary-missing")
-    require(summary.get("checks", 0) > 0, "self-test-positive-checks-empty")
+    checks = summary.get("checks", 0)
+    require(type(checks) is int and checks > 0, "self-test-positive-checks-empty")
+    return checks
 
 
 def expect_reject(arguments: list[str], reason: str) -> None:
@@ -812,12 +2421,188 @@ def expect_reject(arguments: list[str], reason: str) -> None:
             f"negative-control-wrong-reason:{reason}:{result.stderr.strip()}")
 
 
+DOCS_SELF_TEST_SHARD: tuple[int, int] | None = None
+DOCS_SELF_TEST_STATS = {
+    "positive_calls": 0,
+    "negative_calls": 0,
+    "positive": 0,
+    "negative": 0,
+    "positive_checks": 0,
+}
+
+RELEASE_NOTES_SAFE_POSITIVE_CASE_IDS = (
+    "safe-encoded-visible-space",
+    "safe-code-default-ignorable-claim",
+    "safe-hard-break-evidence",
+    "safe-code-hard-break-claim",
+    "safe-intraword-underscores",
+    "safe-escaped-emphasis",
+    "safe-unicode-symbol-strong-claim",
+    "safe-unicode-symbol-emphasis-claim",
+    "safe-game-claim-in-link-destination",
+    "safe-inline-code-game-claim",
+    "safe-fenced-code-game-claim",
+    "safe-unresolved-reference-game-claim",
+    "safe-escaped-bracket-game-claim",
+    "safe-unresolved-reference-destination",
+    "safe-unresolved-reference-title",
+    "safe-inline-code-reference-claim",
+    "safe-fenced-reference-claim",
+    "safe-dense-unmatched-emphasis",
+)
+RELEASE_NOTES_NEGATIVE_CASE_IDS = (
+    "wrong-version",
+    "missing-absence",
+    "missing-state-version",
+    "missing-host-posix",
+    "comment-only-absence",
+    "missing-ledger-link",
+    "missing-unsigned-limit",
+    "stale-perf-percentage",
+    "missing-perf-receipt-path",
+    "wrong-perf-head",
+    "missing-perf-head-limitation",
+    "wrong-perf-head-limitation",
+    "comment-only-perf-disclosure",
+    "contrary-game-claim",
+    "zero-width-space-game-claim",
+    "word-joiner-game-claim",
+    "zero-width-non-joiner-game-claim",
+    "false-signing-claim",
+    "false-publication-claim",
+    "cross-version-state-claim",
+    "durability-claim",
+    "windows-host-claim",
+    "unscoped-state-claim",
+    "default-ignorable-combining-grapheme-joiner-game-claim",
+    "default-ignorable-hangul-filler-game-claim",
+    "default-ignorable-variation-selector-16-game-claim",
+    "default-ignorable-reserved-default-ignorable-game-claim",
+    "commonmark-reference-hex-zero-width-space-game-claim",
+    "commonmark-reference-decimal-zero-width-space-game-claim",
+    "commonmark-reference-named-zero-width-space-game-claim",
+    "commonmark-reference-hex-combining-grapheme-joiner-game-claim",
+    "commonmark-reference-hex-visible-space-game-claim",
+    "commonmark-reference-encoded-cgb-letter-game-claim",
+    "commonmark-hard-break-backslash-lf-game-claim",
+    "commonmark-hard-break-backslash-cr-game-claim",
+    "commonmark-hard-break-backslash-crlf-game-claim",
+    "commonmark-hard-break-backslash-lf-encoded-space-game-claim",
+    "commonmark-hard-break-soft-break-lf-encoded-space-game-claim",
+    "commonmark-emphasis-strong-star-game-claim",
+    "commonmark-emphasis-intraword-star-game-claim",
+    "commonmark-emphasis-strong-underscore-game-claim",
+    "commonmark-emphasis-unicode-symbol-strong-underscore-game-claim",
+    "commonmark-emphasis-unicode-symbol-rule-of-three-game-claim",
+    "commonmark-emphasis-inline-link-label-game-claim",
+    "commonmark-ref-link-shortcut-game-claim",
+    "commonmark-ref-link-full-game-claim",
+    "commonmark-ref-link-collapsed-game-claim",
+    "dense-unmatched-emphasis-game-claim",
+    "dense-nested-reference-brackets-game-claim",
+)
+RELEASE_NOTES_EXPECTED_CASE_IDS = (
+    "valid-baseline-initial",
+    *RELEASE_NOTES_SAFE_POSITIVE_CASE_IDS,
+    "safe-dense-nested-reference-brackets",
+    *RELEASE_NOTES_NEGATIVE_CASE_IDS,
+    "valid-baseline-final",
+)
+def release_notes_case_schedule(case_ids: tuple[str, ...], shard_count: int
+                                ) -> dict[int, tuple[str, ...]]:
+    assigned: dict[int, list[str]] = {}
+    for index, case_id in enumerate(case_ids):
+        assigned.setdefault(index % shard_count, []).append(case_id)
+    return {shard: tuple(selected) for shard, selected in assigned.items()}
+
+
+def validate_release_notes_case_schedule(
+        case_ids: tuple[str, ...], schedule: dict[int, tuple[str, ...]],
+        shard_count: int) -> None:
+    require(all(type(shard) is int and 0 <= shard < shard_count
+                for shard in schedule),
+            "release-notes-case-schedule-shard-domain")
+    if len(set(case_ids)) != len(case_ids):
+        raise ContractError("release-notes-case-schedule-case-id-duplicate")
+    ordinal_by_id = {case_id: index for index, case_id in enumerate(case_ids)}
+    seen: set[str] = set()
+    for shard, selected in schedule.items():
+        for case_id in selected:
+            require(case_id in ordinal_by_id,
+                    "release-notes-case-schedule-unknown-case")
+            require(case_id not in seen,
+                    "release-notes-case-schedule-duplicate")
+            require(ordinal_by_id[case_id] % shard_count == shard,
+                    "release-notes-case-schedule-wrong-shard")
+            seen.add(case_id)
+    require(seen == set(case_ids), "release-notes-case-schedule-missing")
+    expected_shards = {index % shard_count for index in range(len(case_ids))}
+    require(set(schedule) == expected_shards,
+            "release-notes-case-schedule-shard-domain")
+
+
+def require_release_notes_schedule_rejected(
+        case_ids: tuple[str, ...], schedule: dict[int, tuple[str, ...]],
+        shard_count: int, expected_reason: str, control_name: str) -> None:
+    try:
+        validate_release_notes_case_schedule(case_ids, schedule, shard_count)
+    except ContractError as error:
+        require(str(error) == expected_reason,
+                f"release-notes-case-schedule-control-wrong-reason:{control_name}:{error}")
+    else:
+        raise ContractError(
+            f"release-notes-case-schedule-control-accepted:{control_name}:{expected_reason}")
+
+
+def self_test_release_notes_case_schedule(case_ids: tuple[str, ...],
+                                         shard_count: int) -> dict[int, tuple[str, ...]]:
+    schedule = release_notes_case_schedule(case_ids, shard_count)
+    validate_release_notes_case_schedule(case_ids, schedule, shard_count)
+
+    # These synthetic negatives prove that the accounting gate catches the
+    # concrete missing, duplicate, and misplaced-case failures the schedule
+    # protects against. They do not invoke or replace a production CLI check.
+    missing = dict(schedule)
+    missing[0] = missing[0][:-1]
+    require_release_notes_schedule_rejected(
+        case_ids, missing, shard_count,
+        "release-notes-case-schedule-missing", "missing-case")
+
+    duplicate = dict(schedule)
+    duplicate[0] = duplicate[0] + (duplicate[0][0],)
+    require_release_notes_schedule_rejected(
+        case_ids, duplicate, shard_count,
+        "release-notes-case-schedule-duplicate", "duplicate-case")
+
+    misplaced = dict(schedule)
+    first = misplaced[0][0]
+    misplaced[0] = misplaced[0][1:]
+    misplaced[1] = (first,) + misplaced.get(1, ())
+    require_release_notes_schedule_rejected(
+        case_ids, misplaced, shard_count,
+        "release-notes-case-schedule-wrong-shard", "misplaced-case")
+    return schedule
+
+
 def child_result(root: Path, mode: str, reason: str | None = None) -> None:
+    if DOCS_SELF_TEST_SHARD is not None:
+        shard, shard_count = DOCS_SELF_TEST_SHARD
+        kind = "positive" if reason is None else "negative"
+        call_index_key = kind + "_calls"
+        call_index = DOCS_SELF_TEST_STATS[call_index_key]
+        DOCS_SELF_TEST_STATS[call_index_key] += 1
+        if call_index % shard_count != shard:
+            return
     arguments = ["--check", mode, "--root", str(root)]
     if reason is None:
-        expect_pass(arguments)
+        checks = expect_pass(arguments)
+        if DOCS_SELF_TEST_SHARD is not None:
+            DOCS_SELF_TEST_STATS["positive"] += 1
+            DOCS_SELF_TEST_STATS["positive_checks"] = checks
     else:
         expect_reject(arguments, reason)
+        if DOCS_SELF_TEST_SHARD is not None:
+            DOCS_SELF_TEST_STATS["negative"] += 1
 
 
 def run_self_test_game(root: Path) -> tuple[int, int]:
@@ -848,16 +2633,21 @@ def run_self_test_game(root: Path) -> tuple[int, int]:
 
 def copy_inputs(root: Path, target: Path) -> None:
     """Copy exactly the bytes the docs checker reads into an isolated root."""
+    target.mkdir(parents=True, exist_ok=True)
     relatives = set(PUBLIC_SURFACES) | {HEADER} | set(INTERNAL_SYMBOLS.values())
     for name in fixture_directories(root):
         relatives.add(f"fixtures/{name}/manifest.json")
         relatives.add(f"fixtures/{name}/LICENSE.txt")
-    for match in NOTICE_INLINE_DIGEST.finditer(read_document(root, NOTICES)):
+    notice_text = prose(read_document(root, NOTICES), collapse=False)
+    for match in visible_notice_matches(NOTICE_INLINE_DIGEST, notice_text):
+        notice_fixture_path(root, match["path"])
         relatives.add(match["path"])
     for relative in sorted(relatives):
-        source = root / relative
-        destination = target / relative
+        source = confined_source_file(root, relative, "self-test-input-outside-root",
+                                      "self-test-input-missing")
+        destination = confined_copy_destination(target, relative)
         destination.parent.mkdir(parents=True, exist_ok=True)
+        destination = confined_copy_destination(target, relative)
         shutil.copyfile(source, destination)
 
 
@@ -871,7 +2661,7 @@ GabbaBoy v@VERSION@ adds the selected CGB-CPU-E software model beside DMG-CPU-B.
 - No CGB game-level evidence exists. The CGB test-ROM corpus is software-model
   evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY.
 - The macOS player archive is unsigned and not notarized.
-- Support scope and known limits: [support ledger](https://example.invalid/@LEDGER@).
+- Support scope and known limits: [support ledger](@LEDGER_LINK@).
 - Instruction count: +@PERCENT@% versus v0.2.0 (receipt: tests/baseline/perf-attribution-v1.json; measured at @HEAD@).
 - @PERF_HEAD_LIMITATION@
 """
@@ -882,104 +2672,547 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
     percent = perf_disclosure_percent(root)
     head = perf_disclosure_head(root)
     VALID_RELEASE_NOTES = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
-                           .replace("@LEDGER@", LEDGER).replace("@PERCENT@", percent)
+                           .replace("@LEDGER_LINK@", canonical_ledger_url(RELEASE_VERSION))
+                           .replace("@PERCENT@", percent)
                            .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
                            .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
                            .replace("@HEAD@", head[:12])
                            .replace("@PERF_HEAD_LIMITATION@",
                                     PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
-    with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-notes-") as temp:
+    mutations = (
+        ("wrong-version", (RELEASE_VERSION, "0.1.0"),
+         "release-notes-version-missing"),
+        ("missing-absence", (ABSENCE_SENTENCE, ""),
+         "release-notes-absence-missing"),
+        ("missing-state-version", (STATE_VERSION_SENTENCE, ""),
+         "release-notes-state-version-missing"),
+        ("missing-host-posix", (HOST_POSIX_SENTENCE, ""),
+         "release-notes-host-posix-missing"),
+        ("comment-only-absence",
+         (ABSENCE_SENTENCE, f"<!-- {ABSENCE_SENTENCE} -->"),
+         "release-notes-absence-missing"),
+        ("missing-ledger-link",
+         (f"({canonical_ledger_url(RELEASE_VERSION)})",
+          "(https://github.com/szTheory/gabbaboy/blob/v0.1.0/docs/support/v0.1.0.md)"),
+         "release-notes-ledger-link-missing"),
+        ("missing-unsigned-limit", ("unsigned and not notarized", "ready"),
+         "release-notes-unsigned-limit-missing"),
+        ("stale-perf-percentage", (f"+{percent}%", "+8.3%"),
+         "release-notes-perf-disclosure-missing"),
+        ("missing-perf-receipt-path", (PERF_ATTRIBUTION, "the receipt"),
+         "release-notes-perf-disclosure-missing"),
+        ("wrong-perf-head", (f"measured at {head[:12]}", "measured at 711f4fd"),
+         "release-notes-perf-head-mismatch"),
+        ("missing-perf-head-limitation",
+         (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]), ""),
+         "release-notes-perf-head-limitation-missing"),
+        ("wrong-perf-head-limitation",
+         (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]),
+          PERF_HEAD_LIMITATION.replace("@HEAD@", "711f4fd")),
+         "release-notes-perf-head-limitation-missing"),
+        ("comment-only-perf-disclosure",
+         (f"- Instruction count: +{percent}% versus v0.2.0 (receipt: {PERF_ATTRIBUTION}; measured at {head[:12]}).",
+          f"<!-- Instruction count: +{percent}% ({PERF_ATTRIBUTION}) -->"),
+         "release-notes-perf-disclosure-missing"),
+        ("contrary-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification"),
+        ("zero-width-space-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification"),
+        ("word-joiner-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification"),
+        ("zero-width-non-joiner-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification"),
+        ("false-signing-claim", None,
+         "release-notes-false-signing-or-notarization-claim"),
+        ("false-publication-claim", None,
+         "release-notes-false-publication-claim"),
+        ("cross-version-state-claim", None,
+         "false-cross-version-state-claim:release-notes"),
+        ("durability-claim", None,
+         "false-durability-claim:release-notes"),
+        ("windows-host-claim", None,
+         "false-windows-host-claim:release-notes"),
+        ("unscoped-state-claim", None,
+         "unscoped-state-claim:release-notes"),
+    )
+    mutations += tuple(
+        (f"default-ignorable-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in DEFAULT_IGNORABLE_CLAIM_SEPARATORS
+    )
+    mutations += tuple(
+        (f"commonmark-reference-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in COMMONMARK_REFERENCED_GAME_CLAIMS
+    )
+    mutations += tuple(
+        (f"commonmark-hard-break-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in COMMONMARK_HARD_BREAK_GAME_CLAIMS
+    )
+    mutations += tuple(
+        (f"commonmark-emphasis-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in COMMONMARK_EMPHASIS_GAME_CLAIMS
+    )
+    mutations += tuple(
+        (f"commonmark-ref-link-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS
+    )
+    mutations += (("dense-unmatched-emphasis-game-claim", None,
+                   "release-notes-unsupported-cgb-game-qualification"),)
+    mutations += (("dense-nested-reference-brackets-game-claim", None,
+                   "release-notes-unsupported-cgb-game-qualification"),)
+
+    safe_positive_cases = (
+        ("safe-encoded-visible-space",
+         "\nCGB&#x20; test-ROM results remain software-model evidence only.\n"),
+        ("safe-code-default-ignorable-claim",
+         "\n`CGB&#x200b; game passes all acceptance checks.`\n"),
+        ("safe-hard-break-evidence",
+         "\nCGB\\\ntest-ROM results remain software-model evidence only.\n"),
+        ("safe-code-hard-break-claim",
+         "\n`CGB\\\ngame passes all acceptance checks.`\n"),
+        ("safe-intraword-underscores",
+         "\nC_G_B game passes all acceptance checks.\n"),
+        ("safe-escaped-emphasis",
+         "\nC\\*G\\*B game passes all acceptance checks.\n"),
+        ("safe-unicode-symbol-strong-claim",
+         "\n😀__CGB__ test-ROM results remain software-model evidence only.\n"),
+        ("safe-unicode-symbol-emphasis-claim",
+         "\n😀**CGB** test-ROM results remain software-model evidence only.\n"),
+        ("safe-game-claim-in-link-destination",
+         "\n[details](<https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>)\n"),
+        ("safe-inline-code-game-claim",
+         "\n`CGB game passes all acceptance checks.`\n"),
+        ("safe-fenced-code-game-claim",
+         "\n```text\nCGB game passes all acceptance checks.\n```\n"),
+        ("safe-unresolved-reference-game-claim",
+         "\nC[GB] game passes all acceptance checks.\n"),
+        ("safe-escaped-bracket-game-claim",
+         "\nC\\[GB\\] game passes all acceptance checks.\n"),
+        ("safe-unresolved-reference-destination",
+         "\n[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>\n"),
+        ("safe-unresolved-reference-title",
+         "\n[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\"\n"),
+        ("safe-inline-code-reference-claim",
+         "\n`C[GB] game passes all acceptance checks.`\n"),
+        ("safe-fenced-reference-claim",
+         "\n```text\nC[GB] game passes all acceptance checks.\n```\n"),
+        ("safe-dense-unmatched-emphasis",
+         "\n" + DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE + "\n"),
+    )
+    require(tuple(case_id for case_id, _ in safe_positive_cases)
+            == RELEASE_NOTES_SAFE_POSITIVE_CASE_IDS,
+            "release-notes-safe-case-inventory-invalid")
+    require(tuple(name for name, _edit, _reason in mutations)
+            == RELEASE_NOTES_NEGATIVE_CASE_IDS,
+            "release-notes-negative-case-inventory-invalid")
+
+    note_cases: list[tuple[str, str, str | None, str]] = [
+        ("valid-baseline-initial", "positive", None, VALID_RELEASE_NOTES)
+    ]
+    note_cases.extend(
+        (case_id, "positive", None, VALID_RELEASE_NOTES + suffix)
+        for case_id, suffix in safe_positive_cases
+    )
+    note_cases.append((
+        "safe-dense-nested-reference-brackets", "positive", None,
+        VALID_RELEASE_NOTES + "\n" + DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE + "\n"))
+
+    for name, edit, reason in mutations:
+        if name == "contrary-game-claim":
+            changed = VALID_RELEASE_NOTES + "\nCGB game passes acceptance.\n"
+        elif name in ("zero-width-space-game-claim", "word-joiner-game-claim",
+                      "zero-width-non-joiner-game-claim"):
+            separator = {
+                "zero-width-space-game-claim": "\u200b",
+                "word-joiner-game-claim": "\u2060",
+                "zero-width-non-joiner-game-claim": "\u200c",
+            }[name]
+            changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
+        elif name.startswith("default-ignorable-"):
+            separator_name = name.removeprefix("default-ignorable-").removesuffix(
+                "-game-claim")
+            separator = dict(DEFAULT_IGNORABLE_CLAIM_SEPARATORS)[separator_name]
+            changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
+        elif name.startswith("commonmark-reference-"):
+            claim_name = name.removeprefix("commonmark-reference-").removesuffix(
+                "-game-claim")
+            claim = dict(COMMONMARK_REFERENCED_GAME_CLAIMS)[claim_name]
+            changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+        elif name.startswith("commonmark-hard-break-"):
+            claim_name = name.removeprefix("commonmark-hard-break-").removesuffix(
+                "-game-claim")
+            claim = dict(COMMONMARK_HARD_BREAK_GAME_CLAIMS)[claim_name]
+            changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+        elif name.startswith("commonmark-emphasis-"):
+            claim_name = name.removeprefix("commonmark-emphasis-").removesuffix(
+                "-game-claim")
+            claim = dict(COMMONMARK_EMPHASIS_GAME_CLAIMS)[claim_name]
+            changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+        elif name.startswith("commonmark-ref-link-"):
+            claim_name = name.removeprefix("commonmark-ref-link-").removesuffix(
+                "-game-claim")
+            claim = dict(COMMONMARK_REFERENCE_LINK_GAME_CLAIMS)[claim_name]
+            changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+        elif name == "dense-unmatched-emphasis-game-claim":
+            changed = VALID_RELEASE_NOTES + "\n" + DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM + "\n"
+        elif name == "dense-nested-reference-brackets-game-claim":
+            changed = (VALID_RELEASE_NOTES + "\n"
+                       + DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM + "\n")
+        elif name == "false-signing-claim":
+            changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
+        elif name == "false-publication-claim":
+            changed = VALID_RELEASE_NOTES + f"\n{RELEASE_VERSION} has been released.\n"
+        elif name == "cross-version-state-claim":
+            changed = VALID_RELEASE_NOTES + "\nSave states load across GabbaBoy versions.\n"
+        elif name == "durability-claim":
+            changed = VALID_RELEASE_NOTES + "\nSaves are power-loss safe.\n"
+        elif name == "windows-host-claim":
+            changed = VALID_RELEASE_NOTES + "\nHost mode runs on Windows.\n"
+        elif name == "unscoped-state-claim":
+            changed = VALID_RELEASE_NOTES + "\nGabbaBoy supports save states on every platform.\n"
+        else:
+            require(edit is not None, f"self-test-mutation-edit-missing:{name}")
+            changed = VALID_RELEASE_NOTES.replace(edit[0], edit[1])
+        require(changed != VALID_RELEASE_NOTES,
+                f"self-test-mutation-no-op:{name}")
+        note_cases.append((name, "negative", reason, changed))
+    note_cases.append(("valid-baseline-final", "positive", None, VALID_RELEASE_NOTES))
+
+    case_ids = tuple(case_id for case_id, _kind, _reason, _content in note_cases)
+    require(case_ids == RELEASE_NOTES_EXPECTED_CASE_IDS,
+            "release-notes-case-inventory-invalid")
+    require(len(set(case_ids)) == len(case_ids),
+            "release-notes-case-id-duplicate")
+
+    if DOCS_SELF_TEST_SHARD is None:
+        expected_selected = case_ids
+    else:
+        shard, shard_count = DOCS_SELF_TEST_SHARD
+        schedule = self_test_release_notes_case_schedule(case_ids, shard_count)
+        expected_selected = schedule.get(shard, ())
+    selected_ids = set(expected_selected)
+    selected_cases = tuple(
+        case for case in note_cases if case[0] in selected_ids
+    )
+    require(tuple(case[0] for case in selected_cases) == expected_selected,
+            "release-notes-case-shard-selection-invalid")
+
+    executed_case_ids: list[str] = []
+    if selected_cases:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-notes-") as temp:
+            notes = Path(temp) / "release-notes.md"
+            for case_id, kind, reason, content in selected_cases:
+                write_lf(notes, content)
+                cli_args = ["--release-notes", str(notes), "--root", str(root)]
+                if rev is not None:
+                    cli_args.extend(("--rev", rev))
+                if kind == "positive":
+                    expect_pass(cli_args)
+                else:
+                    require(reason is not None,
+                            f"release-notes-negative-reason-missing:{case_id}")
+                    expect_reject(cli_args, reason)
+                executed_case_ids.append(case_id)
+    require(tuple(executed_case_ids) == expected_selected,
+            "release-notes-case-shard-execution-mismatch")
+
+    if DOCS_SELF_TEST_SHARD is None:
+        return len(mutations), len(mutations)
+    selected_negative_controls = sum(kind == "negative" for _case_id, kind, _reason, _content
+                                     in selected_cases)
+    return selected_negative_controls, selected_negative_controls
+
+
+def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int]:
+    """Prove that the existing release-notes gate rejects an omitted v0.4 fact."""
+    global RAW_HTML_CONSTRUCT
+    rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
+                                  stderr=subprocess.DEVNULL, text=True).strip()
+    support = support_ledger_module()
+    profile = v04_profile(root, rev)
+    percent = perf_disclosure_percent(root, root, rev)
+    head = perf_disclosure_head(root, root, rev)
+    base = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", "0.4.0")
+            .replace("@LEDGER_LINK@", canonical_ledger_url("0.4.0"))
+            .replace("@PERCENT@", percent)
+            .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
+            .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
+            .replace("@HEAD@", head[:12])
+            .replace("@PERF_HEAD_LIMITATION@",
+                     PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
+    valid = base
+    valid += "\n" + support.render_release_notes_preface_v04(profile)
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-v04-notes-") as temp:
         notes = Path(temp) / "release-notes.md"
-        write_lf(notes, VALID_RELEASE_NOTES)
-        cli_args = ["--release-notes", str(notes), "--root", str(root)]
-        if rev is not None:
-            cli_args.extend(("--rev", rev))
-        expect_pass(cli_args)
-        mutations = (
-            ("wrong-version", (RELEASE_VERSION, "0.1.0"),
-             "release-notes-version-missing"),
-            ("missing-absence", (ABSENCE_SENTENCE, ""),
-             "release-notes-absence-missing"),
-            ("missing-state-version", (STATE_VERSION_SENTENCE, ""),
-             "release-notes-state-version-missing"),
-            ("missing-host-posix", (HOST_POSIX_SENTENCE, ""),
-             "release-notes-host-posix-missing"),
-            ("comment-only-absence",
-             (ABSENCE_SENTENCE, f"<!-- {ABSENCE_SENTENCE} -->"),
-             "release-notes-absence-missing"),
-            ("missing-ledger-link",
-             (f"(https://example.invalid/{LEDGER})",
-              "(https://example.invalid/docs/support/v0.1.0.md)"),
-             "release-notes-ledger-link-missing"),
-            ("missing-unsigned-limit", ("unsigned and not notarized", "ready"),
-             "release-notes-unsigned-limit-missing"),
-            ("stale-perf-percentage", (f"+{percent}%", "+8.3%"),
-             "release-notes-perf-disclosure-missing"),
-            ("missing-perf-receipt-path", (PERF_ATTRIBUTION, "the receipt"),
-             "release-notes-perf-disclosure-missing"),
-            ("wrong-perf-head", (f"measured at {head[:12]}", "measured at 711f4fd"),
-             "release-notes-perf-head-mismatch"),
-            ("missing-perf-head-limitation",
-             (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]), ""),
-             "release-notes-perf-head-limitation-missing"),
-            ("wrong-perf-head-limitation",
-             (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]),
-              PERF_HEAD_LIMITATION.replace("@HEAD@", "711f4fd")),
-             "release-notes-perf-head-limitation-missing"),
-            ("comment-only-perf-disclosure",
-             (f"- Instruction count: +{percent}% versus v0.2.0 (receipt: {PERF_ATTRIBUTION}; measured at {head[:12]}).",
-              f"<!-- Instruction count: +{percent}% ({PERF_ATTRIBUTION}) -->"),
-             "release-notes-perf-disclosure-missing"),
-            ("contrary-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification"),
-            ("false-signing-claim", None,
-             "release-notes-false-signing-or-notarization-claim"),
-            ("false-publication-claim", None,
-             "release-notes-false-publication-claim"),
-            ("cross-version-state-claim", None,
-             "false-cross-version-state-claim:release-notes"),
-            ("durability-claim", None,
-             "false-durability-claim:release-notes"),
-            ("windows-host-claim", None,
-             "false-windows-host-claim:release-notes"),
-            ("unscoped-state-claim", None,
-             "unscoped-state-claim:release-notes"),
-        )
-        for name, edit, reason in mutations:
-            if name == "contrary-game-claim":
-                changed = VALID_RELEASE_NOTES + "\nCGB game passes acceptance.\n"
-            elif name == "false-signing-claim":
-                changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
-            elif name == "false-publication-claim":
-                changed = VALID_RELEASE_NOTES + f"\n{RELEASE_VERSION} has been released.\n"
-            elif name == "cross-version-state-claim":
-                changed = VALID_RELEASE_NOTES + "\nSave states load across GabbaBoy versions.\n"
-            elif name == "durability-claim":
-                changed = VALID_RELEASE_NOTES + "\nSaves are power-loss safe.\n"
-            elif name == "windows-host-claim":
-                changed = VALID_RELEASE_NOTES + "\nHost mode runs on Windows.\n"
-            elif name == "unscoped-state-claim":
-                changed = VALID_RELEASE_NOTES + "\nGabbaBoy supports save states on every platform.\n"
-            else:
-                changed = VALID_RELEASE_NOTES.replace(edit[0], edit[1])
-            require(changed != VALID_RELEASE_NOTES,
-                    f"self-test-mutation-no-op:{name}")
+        controls = 0
+        def accepts(value: str) -> None:
+            write_lf(notes, value)
+            try:
+                checks = check_release_notes(notes, root, rev, root, "0.4.0")
+            except ContractError as error:
+                raise ContractError(f"release-notes-v04-positive-refused:{error}") from error
+            require(checks > 0, "release-notes-v04-positive-checks-empty")
+
+        def reject(name: str, changed: str, reason: str) -> None:
+            nonlocal controls
+            require(changed != valid, f"self-test-mutation-no-op:{name}")
+            accepts(valid)
             write_lf(notes, changed)
-            cli_args = ["--release-notes", str(notes), "--root", str(root)]
-            if rev is not None:
-                cli_args.extend(("--rev", rev))
-            expect_reject(cli_args, reason)
-        write_lf(notes, VALID_RELEASE_NOTES)
-        cli_args = ["--release-notes", str(notes), "--root", str(root)]
-        if rev is not None:
-            cli_args.extend(("--rev", rev))
-        expect_pass(cli_args)
-    return len(mutations), len(mutations)
+            try:
+                check_release_notes(notes, root, rev, root, "0.4.0")
+            except ContractError as error:
+                require(reason in str(error),
+                        f"release-notes-v04-control-wrong-reason:{name}:{error}")
+            else:
+                raise ContractError(f"negative-control-not-rejected:{name}:{reason}")
+            controls += 1
+
+        def replace_ledger_targets(destination: str) -> str:
+            pattern = ledger_link_pattern("docs/support/v0.4.0.md")
+            return pattern.sub(
+                lambda match: match.group(0).split("](", 1)[0] + f"]({destination})",
+                valid,
+            )
+
+        def replace_ledger_construct(replacement: str) -> str:
+            pattern = ledger_link_pattern("docs/support/v0.4.0.md")
+            return pattern.sub(lambda _match: replacement, valid)
+
+        def image_ledger_links() -> str:
+            pattern = ledger_link_pattern("docs/support/v0.4.0.md")
+            return pattern.sub(lambda match: "!" + match.group(0), valid)
+
+        incomplete_html_openers = (
+            ("script-newline", "<script\n"),
+            ("script-space-newline", "<script \n"),
+            ("pre-newline", "<pre\n"),
+            ("pre-space-newline", "<pre \n"),
+            ("style-newline", "<style\n"),
+            ("style-space-newline", "<style \n"),
+            ("script-mixed-case", "<ScRiPt\n"),
+            ("doctype-html", "<!DOCTYPE html\n"),
+            ("xml-processing-instruction", '<?xml version="1.0"\n'),
+        )
+
+        accepts(valid)
+        accepts(valid + "\n```html\n<div hidden>sample</div>\n\t[ledger](docs/support/v0.4.0.md)\n```\n")
+        accepts(valid + "\n<!-- <script\n -->\n\n```html\n<pre \n```\n\n    <style\n\n`<!DOCTYPE html` `<?xml version=\"1.0\"`\n")
+        accepts(valid + "\n\\<script\n<scripture\n")
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-release-revision-identity-") as temp:
+            other_tree = Path(temp)
+            cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+            cmake = cmake.replace(f"VERSION {RELEASE_VERSION} LANGUAGES", "VERSION 0.4.0 LANGUAGES", 1)
+            (other_tree / "CMakeLists.txt").write_text(cmake, encoding="utf-8")
+            manifest = json.loads((root / ".release-please-manifest.json").read_text(encoding="utf-8"))
+            manifest["."] = "0.4.0"
+            (other_tree / ".release-please-manifest.json").write_text(
+                json.dumps(manifest) + "\n", encoding="utf-8")
+            (other_tree / "docs/support").mkdir(parents=True)
+            (other_tree / "docs/support/v0.4.0.md").touch()
+            legacy_notes = other_tree / "legacy-release-notes.md"
+            legacy_base = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
+                           .replace("@LEDGER_LINK@", canonical_ledger_url(RELEASE_VERSION))
+                           .replace("@PERCENT@", percent)
+                           .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
+                           .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
+                           .replace("@HEAD@", head[:12])
+                           .replace("@PERF_HEAD_LIMITATION@",
+                                    PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
+            write_lf(legacy_notes, legacy_base)
+            require(check_release_notes(legacy_notes, other_tree, rev, root) > 0,
+                    "release-notes-revision-identity-not-pinned")
+        potion, ucity = profile["candidate_outcomes"]
+        p_line = f"- **{potion['name']}:** {potion['reason']}"
+        u_line = f"- **{ucity['name']}:** {ucity['reason']}"
+        p_swapped = p_line.replace(potion["reason"], ucity["reason"])
+        u_swapped = u_line.replace(ucity["reason"], potion["reason"])
+        reject("candidate-reason-omission", valid.replace(p_line, f"- **{potion['name']}:** source review stopped."),
+               "release-notes-candidate-source-reason-missing")
+        reject("candidate-reasons-swapped", valid.replace(p_line, p_swapped).replace(u_line, u_swapped),
+               "release-notes-candidate-reason-mismatch")
+        reject("candidate-built-after-negative",
+               valid + "\nPotion Panic was built and run after the source review.\n",
+               "release-notes-candidate-claim-promoted")
+        reject("game-admitted-after-negative",
+               valid + "\nOne CGB game was admitted after the Phase 21 review.\n",
+               "release-notes-cgb-admission-promoted")
+        reject("game-evidence-after-negative",
+               valid + "\nCGB game-level evidence exists for this release.\n",
+               "release-notes-cgb-evidence-promoted")
+        reject("candidate-status-omission",
+               valid.replace(profile["non_claims"][0], "Candidate build and run status is unstated."),
+               "release-notes-candidate-build-run-status-missing")
+        reject("game-admission-omission",
+               valid.replace(profile["non_claims"][1], "Game admission status is unstated."),
+               "release-notes-cgb-admission-status-missing")
+        reject("harness-game-conflation", valid + "\nCGB-CPU-E qualifies game progress.\n",
+               "release-notes-harness-claim-promoted")
+        reject("diagnostic-count-mismatch", valid.replace("513 named entries", "512 named entries"),
+               "release-notes-diagnostic-count-mismatch")
+        reject("pending-status-promoted", valid.replace("DIAG-01 Pending", "DIAG-01 Complete"),
+               "release-notes-requirement-status-promoted")
+        reject("contradictory-pending-status",
+               valid + "\nDIAG-01 is complete.\n",
+               "release-notes-requirement-status-promoted")
+        reject("metadata-presented-as-diagnostic-results",
+               valid + "\nAll 513 diagnostic microtests were executed and passed.\n",
+               "release-notes-metadata-as-diagnostic")
+        reject("rights-scope-presented-as-license-prohibition",
+               valid + "\nBoth candidates' licenses prohibit repository and public-CI use.\n",
+               "release-notes-license-prohibition-unsupported")
+        reject("missing-hardware-limit",
+               valid.replace(profile["limitations"][0], "Physical hardware status is unstated."),
+               "release-notes-support-limits-missing")
+        reject("html-comment-hides-reason", valid.replace(p_line, f"<!-- {p_line} -->"),
+               "release-notes-candidate-name-missing")
+        reject("unclosed-html-comment-hides-following-clauses",
+               valid.replace(p_line, f"<!--\n{p_line}"),
+               "release-notes-candidate-build-run-status-missing")
+        marker = chr(96) * 3
+        quoted_fence = f"> {marker}text\n> {p_line}\n> {marker}"
+        reject("blockquote-fenced-code-hides-reason", valid.replace(p_line, quoted_fence),
+               "release-notes-candidate-name-missing")
+        list_fence = f"- code:\n  {marker}text\n  {p_line}\n  {marker}"
+        reject("list-fenced-code-hides-reason", valid.replace(p_line, list_fence),
+               "release-notes-candidate-name-missing")
+        same_line_list_fence = f"- {marker}text\n  {p_line}\n  {marker}"
+        reject("same-line-list-fence-hides-reason",
+               valid.replace(p_line, same_line_list_fence),
+               "release-notes-candidate-name-missing")
+        list_quote_fence = f"- > {marker}text\n  > {p_line}\n  > {marker}"
+        reject("list-blockquote-fence-hides-reason",
+               valid.replace(p_line, list_quote_fence),
+               "release-notes-candidate-name-missing")
+        quote_list_fence = f"> - {marker}text\n>   {p_line}\n>   {marker}"
+        reject("blockquote-list-fence-hides-reason",
+               valid.replace(p_line, quote_list_fence),
+               "release-notes-candidate-name-missing")
+        reject("blockquote-indented-code-hides-reason",
+               valid.replace(p_line, ">     " + p_line),
+               "release-notes-candidate-name-missing")
+        reject("blockquote-list-indented-code-hides-reason",
+               valid.replace(p_line, "> -     " + p_line),
+               "release-notes-candidate-name-missing")
+        reject("list-blockquote-indented-code-hides-reason",
+               valid.replace(p_line, "- >     " + p_line),
+               "release-notes-candidate-name-missing")
+        reject("fenced-code-hides-reason", valid.replace(p_line, f"```text\n{p_line}\n```"),
+               "release-notes-candidate-name-missing")
+        tick = chr(96)
+        reject("inline-code-hides-reason", valid.replace(p_line, f"{tick}{p_line}{tick}"),
+               "release-notes-candidate-name-missing")
+        reject("inline-code-hides-host-limit", valid.replace(
+            HOST_POSIX_SENTENCE, f"{tick}{HOST_POSIX_SENTENCE}{tick}"),
+            "release-notes-host-posix-missing")
+        indented = "\n".join(("    " + line if line else "") for line in valid.splitlines())
+        reject("indented-code-hides-entire-preface", indented, "release-notes-empty")
+        inline = "\n".join((f"{tick}{line}{tick}" if line else "") for line in valid.splitlines())
+        reject("inline-code-hides-entire-preface", inline,
+               "release-notes-version-missing:0.4.0")
+        image_link = image_ledger_links()
+        require(image_link != valid, "release-notes-self-test-link-anchor-missing")
+        reject("image-is-not-a-ledger-link", image_link, "release-notes-ledger-version-mismatch")
+        external_link = replace_ledger_targets("https://evil.invalid/?next=docs/support/v0.4.0.md")
+        require(external_link != valid, "release-notes-self-test-external-link-anchor-missing")
+        reject("external-query-is-not-a-ledger-link", external_link,
+               "release-notes-ledger-version-mismatch")
+        title_link = replace_ledger_targets("https://evil.invalid/ \"docs/support/v0.4.0.md\"")
+        reject("ledger-path-in-link-title-is-not-a-link", title_link,
+               "release-notes-ledger-version-mismatch")
+        nested_title_link = replace_ledger_construct(
+            '[outer](https://evil.invalid/ "[ledger](docs/support/v0.4.0.md)")')
+        reject("nested-ledger-link-in-external-title-is-not-a-link", nested_title_link,
+               "release-notes-ledger-version-mismatch")
+        whitespace_link = replace_ledger_construct("[ledger] (docs/support/v0.4.0.md)")
+        reject("whitespace-before-link-destination-is-not-a-link", whitespace_link,
+               "release-notes-ledger-version-mismatch")
+        newline_link = replace_ledger_construct("[ledger]\n(docs/support/v0.4.0.md)")
+        reject("newline-before-link-destination-is-not-a-link", newline_link,
+               "release-notes-ledger-version-mismatch")
+        blank_label_link = replace_ledger_construct("[ledger\n\n](docs/support/v0.4.0.md)")
+        reject("blank-line-in-link-label-is-not-a-link", blank_label_link,
+               "release-notes-ledger-version-mismatch")
+        blank_title_link = replace_ledger_construct(
+            "[ledger](docs/support/v0.4.0.md\n\n\"title\")")
+        reject("blank-line-in-link-title-is-not-a-link", blank_title_link,
+               "markdown-inline-link-malformed")
+        unmatched_brackets = replace_ledger_construct("[" * 5000)
+        reject("unmatched-brackets-do-not-create-a-link", unmatched_brackets,
+               "release-notes-ledger-version-mismatch")
+        tab_indented_link = replace_ledger_construct("-\t    [ledger](docs/support/v0.4.0.md)")
+        reject("tab-indented-list-code-is-not-a-ledger-link", tab_indented_link,
+               "release-notes-tab-unsupported")
+        reject("raw-html-pre-rejected",
+               replace_ledger_construct("<pre>[ledger](docs/support/v0.4.0.md)</pre>"),
+               "release-notes-raw-html-unsupported")
+        reject("hidden-html-div-rejected",
+               replace_ledger_construct('<div hidden>[ledger](docs/support/v0.4.0.md)</div>'),
+               "release-notes-raw-html-unsupported")
+        reject("hidden-html-link-attribute-rejected",
+               replace_ledger_construct(
+                   '<span hidden title="[ledger](docs/support/v0.4.0.md)">notes</span>'),
+               "release-notes-raw-html-unsupported")
+        reject("html-declaration-rejected",
+               replace_ledger_construct('<!DOCTYPE html>[ledger](docs/support/v0.4.0.md)'),
+               "release-notes-raw-html-unsupported")
+        reject("html-processing-instruction-rejected",
+               replace_ledger_construct('<?xml version="1.0"?>[ledger](docs/support/v0.4.0.md)'),
+               "release-notes-raw-html-unsupported")
+        reject("html-cdata-rejected",
+               replace_ledger_construct('<![CDATA[[ledger](docs/support/v0.4.0.md)]]>'),
+               "release-notes-raw-html-unsupported")
+        legacy_reproducer = "<script\n" + valid
+        legacy_raw_html_construct = re.compile(
+            r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|<![A-Z][^>]*>|"
+            r"<\?[A-Za-z][^>]*\?>|<!\[CDATA\[", re.DOTALL | re.IGNORECASE)
+        current_raw_html_construct = RAW_HTML_CONSTRUCT
+        try:
+            RAW_HTML_CONSTRUCT = legacy_raw_html_construct
+            write_lf(notes, legacy_reproducer)
+            try:
+                require(check_release_notes(notes, root, rev, root, "0.4.0") > 0,
+                        "legacy-incomplete-html-raw-html-causal-checks-empty")
+            except ContractError as error:
+                raise ContractError(f"legacy-incomplete-html-raw-html-causal-reproducer-rejected:{error}") from error
+        finally:
+            RAW_HTML_CONSTRUCT = current_raw_html_construct
+        for opener_name, opener in incomplete_html_openers:
+            reject(f"incomplete-{opener_name}-hides-release-notes", opener + valid,
+                   "release-notes-raw-html-unsupported")
+            reject(f"incomplete-{opener_name}-hides-ledger-link",
+                   replace_ledger_construct(opener + "[ledger](docs/support/v0.4.0.md)"),
+                   "release-notes-raw-html-unsupported")
+        malformed_link = replace_ledger_targets("not a valid destination docs/support/v0.4.0.md")
+        reject("malformed-destination-is-not-a-ledger-link", malformed_link,
+               "markdown-inline-link-malformed")
+        reject("terminal-control-hides-reason", valid.replace("Potion Panic", "Potion \x1b[2KPanic", 1),
+               "release-notes-terminal-control-present")
+        reject("wrong-version-ledger-link", valid.replace(
+            "docs/support/v0.4.0.md", "docs/support/v0.3.0.md"),
+               "release-notes-ledger-version-mismatch")
+        reject("digest-does-not-prove-admission", valid +
+               "\nThe SHA-256 digest proves fixture admission.\n",
+               "release-notes-digest-as-admission")
+        reject("signed-artifact-promotion", valid + "\nRelease artifacts are signed.\n",
+               "release-notes-false-signing-or-notarization-claim")
+        reject("notarized-artifact-promotion", valid + "\nRelease artifacts are notarized.\n",
+               "release-notes-false-signing-or-notarization-claim")
+        reject("false-publication-claim", valid + "\nv0.4.0 has been published.\n",
+               "release-notes-false-publication-claim")
+        reject("all-platform-promotion", valid + "\nGabbaBoy supports all platforms.\n",
+               "release-notes-false-platform-guarantee")
+        reject("perceptual-qualification", valid + "\nPerceptual audio is verified.\n",
+               "release-notes-false-perceptual-claim")
+        return 2, controls
 
 
 def immutable_blob(repo: Path, rev: str, relative: str) -> bytes:
     result = subprocess.run(["git", "-C", str(repo), "show", f"{rev}:{relative}"],
-                            capture_output=True, check=False)
+                            capture_output=True, check=False, env=git_environment())
     require(result.returncode == 0, f"revision-input-missing:{relative}")
     require(len(result.stdout) <= MAX_DOCUMENT_BYTES * 4,
             f"revision-input-too-large:{relative}")
@@ -990,7 +3223,7 @@ def run_self_test_claim_boundaries(repo: Path, rev: str) -> tuple[int, int]:
     require(re.fullmatch(r"[0-9a-f]{40}", rev) is not None,
             "revision-invalid:full-commit-id-required")
     resolved = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{rev}^{{commit}}"],
-                              capture_output=True, check=False)
+                              capture_output=True, check=False, env=git_environment())
     require(resolved.returncode == 0, "revision-invalid:commit-not-found")
     # Bind the version and ledger identity used for generated release notes to the same commit.
     with tempfile.TemporaryDirectory(prefix="gabbaboy-claims-rev-") as temp:
@@ -1002,7 +3235,7 @@ def run_self_test_claim_boundaries(repo: Path, rev: str) -> tuple[int, int]:
             target.write_bytes(immutable_blob(repo, rev, relative))
         listing = subprocess.run(
             ["git", "-C", str(repo), "ls-tree", "--name-only", f"{rev}:docs/support"],
-            capture_output=True, check=False, text=True)
+            capture_output=True, check=False, text=True, env=git_environment())
         require(listing.returncode == 0, "revision-support-ledger-list-unavailable")
         names = [line for line in listing.stdout.splitlines() if line]
         require(names, "revision-support-ledger-list-empty")
@@ -1070,14 +3303,728 @@ def comment_all(text: str, old: str, name: str) -> str:
 
 
 def run_self_test_docs(root: Path) -> tuple[int, int]:
+    quote_prefix_probe = "> " * 256 + "plain body text\n"
+    require(mask_markdown_nonrendered(quote_prefix_probe) == quote_prefix_probe,
+            "markdown-container-prefix-control-failed")
     originals = {relative: read_document(root, relative)
                  for relative in PUBLIC_SURFACES}
     rejected = 0
     rejected_reasons: list[str] = []
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-docs-") as temp:
-        test_root = Path(temp)
+        test_root = Path(temp).resolve(strict=True)
         copy_inputs(root, test_root)
         child_result(test_root, "docs")
+
+        notice_path = test_root / NOTICES
+        notice_original = read_document(test_root, NOTICES)
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-docs-outside-") as outside:
+            outside_root = Path(outside).resolve(strict=True)
+            outside_file = outside_root / "digest.txt"
+            write_lf(outside_file, "safe external digest input\n")
+            escaped_path = "fixtures/" + os.path.relpath(
+                outside_file, test_root / "fixtures").replace(os.sep, "/")
+            require(NOTICE_INLINE_DIGEST.fullmatch(
+                f"`{escaped_path}`: `{sha256_file(outside_file)}`") is not None,
+                "notice-path-traversal-control-invalid")
+            write_lf(notice_path, notice_original +
+                     f"\n`{escaped_path}`: `{sha256_file(outside_file)}`\n")
+            child_result(test_root, "docs", "notice-path-outside-root")
+            rejected += 1
+            rejected_reasons.append("notice-path-outside-root")
+            link_path = test_root / "fixtures" / "phase23-notice-path-link.txt"
+            require(not link_path.exists() and not link_path.is_symlink(),
+                    "notice-symlink-control-destination-exists")
+            link_path.symlink_to(outside_file)
+            write_lf(notice_path, notice_original +
+                     f"\n`fixtures/{link_path.name}`: `{sha256_file(outside_file)}`\n")
+            child_result(test_root, "docs", "notice-path-outside-root")
+            rejected += 1
+            rejected_reasons.append("notice-path-outside-root")
+            link_path.unlink()
+        write_lf(notice_path, notice_original)
+
+        readme_path = test_root / README
+        readme_original = originals[README]
+        write_lf(readme_path, readme_original +
+                 "\n```html\n<div hidden>example</div>\n\t[ledger](docs/support/v0.4.0.md)\n```\n")
+        child_result(test_root, "docs")
+        write_lf(readme_path, readme_original)
+
+        masked_incomplete_openers = (
+            "\n<!-- <script\n -->\n\n"
+            "```html\n<pre \n```\n\n"
+            "    <style\n    [ledger](docs/support/v0.4.0.md)\n\n"
+            "`<!DOCTYPE html` `<?xml version=\"1.0\"`\n"
+        )
+        write_lf(readme_path, readme_original + masked_incomplete_openers)
+        child_result(test_root, "docs")
+        write_lf(readme_path, readme_original)
+
+        incomplete_html_openers = (
+            ("script-newline", "<script\n"),
+            ("script-space-newline", "<script \n"),
+            ("pre-newline", "<pre\n"),
+            ("pre-space-newline", "<pre \n"),
+            ("style-newline", "<style\n"),
+            ("style-space-newline", "<style \n"),
+            ("script-mixed-case", "<ScRiPt\n"),
+            ("doctype-html", "<!DOCTYPE html\n"),
+            ("xml-processing-instruction", '<?xml version="1.0"\n'),
+        )
+        for opener_name, opener in incomplete_html_openers:
+            child_result(test_root, "docs")
+            incomplete_disclosure = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+                opener + "Physical CGB-E remains UNKNOWN/POLICY",
+                f"incomplete-html-{opener_name}-hides-hardware-disclosure")
+            write_lf(readme_path, incomplete_disclosure)
+            child_result(test_root, "docs", "markdown-raw-html-unsupported")
+            rejected_reasons.append(f"incomplete-html-{opener_name}-hides-hardware-disclosure")
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        inline_code_disclosure = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "`Physical CGB-E remains UNKNOWN/POLICY`", "inline-code-hides-hardware-disclosure")
+        write_lf(readme_path, inline_code_disclosure)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        for name, definition in (
+            ("blockquote-reference-title-hides-hardware-disclosure",
+             "> [Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
+            ("list-reference-title-hides-hardware-disclosure",
+             "- [Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
+            ("ordered-list-reference-title-hides-hardware-disclosure",
+             "1. [Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
+        ):
+            child_result(test_root, "docs")
+            changed = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = changed.rstrip() + "\n\n" + definition + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+            rejected_reasons.append("physical-cgb-limit-missing")
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        explicit_image_reference_disclosures = (
+            ("full-image-reference-hides-hardware-disclosure",
+             "![Physical CGB-E remains UNKNOWN/POLICY][disclosure]\n\n"
+             "[disclosure]: assets/info.png"),
+            ("collapsed-image-reference-hides-hardware-disclosure",
+             "![Physical CGB-E remains UNKNOWN/POLICY][]\n\n"
+             "[Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png"),
+        )
+        for name, definition in explicit_image_reference_disclosures:
+            child_result(test_root, "docs")
+            changed = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = changed.rstrip() + "\n\n" + definition + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        for name, definition in (
+            ("multiline-reference-title-hides-hardware-disclosure",
+             '[unused-physical]: https://example.invalid\n  "Physical CGB-E remains UNKNOWN/POLICY"'),
+            ("blockquote-multiline-reference-title-hides-hardware-disclosure",
+             '> [unused-physical]: https://example.invalid\n>   "Physical CGB-E remains UNKNOWN/POLICY"'),
+            ("list-multiline-reference-title-hides-hardware-disclosure",
+             '- [unused-physical]: https://example.invalid\n  "Physical CGB-E remains UNKNOWN/POLICY"'),
+        ):
+            child_result(test_root, "docs")
+            changed = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = changed.rstrip() + "\n\n" + definition + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+            rejected_reasons.append("physical-cgb-limit-missing")
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        malformed_link_prefix = "[x](" * 2048
+        malformed_link_document = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "",
+            "unclosed-link-prefix-hides-hardware-disclosure")
+        malformed_link_document = (
+            malformed_link_prefix + "\n" + malformed_link_document
+            + "\nPhysical CGB-E remains UNKNOWN/POLICY\n")
+        write_lf(readme_path, malformed_link_document)
+        child_result(test_root, "docs", "markdown-inline-link-malformed")
+        rejected_reasons.append("markdown-inline-link-malformed")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        for name, extra in (
+            ("malformed-link-cannot-hide-game-claim",
+             "[x](unfinished\nCGB game passes all acceptance checks."),
+            ("malformed-link-cannot-hide-raw-html",
+             "[x](unfinished\n<div hidden>Physical CGB-E remains UNKNOWN/POLICY</div>"),
+            ("nested-parentheses-inline-title-cannot-hide-game-claim",
+             "[ordinary](/url (CGB game passes all acceptance checks. (inner)))"),
+            ("nested-parentheses-image-title-cannot-hide-game-claim",
+             "![CGB game passes all acceptance checks.](/url (outer (inner) title))"),
+            ("nested-parentheses-inline-title-cannot-hide-raw-html",
+             "[ordinary](/url (</span><div hidden>text</div> (inner)))"),
+            ("inline-title-without-destination-separator-cannot-hide-game-claim",
+             '[ordinary](<url>"CGB game passes all acceptance checks.")'),
+            ("nul-inline-bare-destination-cannot-hide-game-claim",
+             '[ordinary](/url\x00 "CGB game passes all acceptance checks.")'),
+            ("nul-inline-angle-destination-cannot-hide-game-claim",
+             '[ordinary](<url\x00> "CGB game passes all acceptance checks.")'),
+            ("inline-title-with-blank-line-cannot-hide-game-claim",
+             '[ordinary](/url "title starts here\n\nCGB game passes all acceptance checks.")'),
+        ):
+            child_result(test_root, "docs")
+            changed = readme_original + "\n" + extra + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", "markdown-inline-link-malformed")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        invalid_reference_claims = (
+            ("invalid-reference-destination-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: invalid destination with spaces"),
+            ("empty-reference-destination-hides-game-claim",
+             "[CGB game passes all acceptance checks.]:"),
+            ("unterminated-reference-title-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: /url "unterminated'),
+            ("invalid-reference-destination-escape-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: /url\\q"),
+            ("invalid-reference-title-escape-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: /url "bad\\q"'),
+            ("over-nested-reference-destination-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: " + "(" * 33 + "target" + ")" * 33),
+            ("nested-reference-title-hides-game-claim",
+             "[CGB game passes all acceptance checks.]: /url (outer (inner) title)"),
+            ("blank-line-reference-title-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: /url "title\n\ncontinues"'),
+            ("reference-title-without-destination-separator-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: '
+             '<https://example.invalid/>"title"'),
+            ("nul-reference-destination-hides-game-claim",
+             '[CGB game passes all acceptance checks.]: /url\x00 "title"'),
+            ("invalid-reference-image-hides-game-claim",
+             "![CGB game passes all acceptance checks.]\n\n"
+             "[CGB game passes all acceptance checks.]: invalid destination with spaces"),
+        )
+        for name, extra in invalid_reference_claims:
+            child_result(test_root, "docs")
+            changed = readme_original + "\n" + extra + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"unsupported-cgb-game-qualification:{README}")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        mismatched_reference_titles = (
+            ("root-reference-definition-blockquote-title",
+             '[unused]: /url\n> "CGB game passes all acceptance checks."'),
+            ("root-reference-definition-list-title",
+             '[unused]: /url\n- "CGB game passes all acceptance checks."'),
+            ("blockquote-reference-definition-list-title",
+             '> [unused]: /url\n- "CGB game passes all acceptance checks."'),
+            ("list-reference-definition-blockquote-title",
+             '- [unused]: /url\n> "CGB game passes all acceptance checks."'),
+            ("arabic-indic-prefix-is-not-an-ordered-list-marker",
+             '١. [CGB game passes all acceptance checks.]: /url'),
+            ("superscript-prefix-is-not-an-ordered-list-marker",
+             '¹. [CGB game passes all acceptance checks.]: /url'),
+            ("nbsp-reference-label-does-not-match-shortcut-image",
+             '![CGB game passes all acceptance checks.]\n\n'
+             '[CGB\u00a0game passes all acceptance checks.]: /url'),
+            ("thin-space-reference-label-does-not-match-shortcut-image",
+             '![CGB game passes all acceptance checks.]\n\n'
+             '[CGB\u2009game passes all acceptance checks.]: /url'),
+            ("escaped-punctuation-reference-label-does-not-match-shortcut-image",
+             '![CGB game passes all acceptance checks.]\n\n'
+             '[CGB game passes all acceptance checks\\.]: /url'),
+            ("unresolved-full-image-reference-cannot-hide-game-claim",
+             '![CGB game passes all acceptance checks.][missing-label]'),
+            ("unresolved-collapsed-image-reference-cannot-hide-game-claim",
+             '![CGB game passes all acceptance checks.][]'),
+            ("invalid-explicit-image-reference-cannot-hide-game-claim",
+             '![CGB game passes all acceptance checks.][other]\n\n'
+             '[other]: invalid destination with spaces'),
+            ("unresolved-link-label-cannot-hide-game-claim",
+             '[ordinary][CGB game passes all acceptance checks.]'),
+        )
+        for name, extra in mismatched_reference_titles:
+            child_result(test_root, "docs")
+            changed = readme_original + "\n" + extra + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"unsupported-cgb-game-qualification:{README}")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        def readme_parser_control(name: str, extra: str,
+                                  reason: str | None = None,
+                                  *, remove_hardware_disclosure: bool = False) -> None:
+            nonlocal rejected
+            child_result(test_root, "docs")
+            base = readme_original
+            if remove_hardware_disclosure:
+                base = replace_all(
+                    base, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = base.rstrip() + "\n\n" + extra + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", reason)
+            if reason is not None:
+                rejected_reasons.append(name)
+                rejected += 1
+            write_lf(readme_path, readme_original)
+
+        for name, reference in (
+            ("whitespace-reference-label-cannot-hide-game-claim", "[ ]"),
+        ):
+            readme_parser_control(
+                name,
+                "![CGB game passes all acceptance checks.]" + reference + "\n\n"
+                "[CGB game passes all acceptance checks.]: /url",
+                f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "tab-reference-label-cannot-hide-game-claim",
+            "![CGB game passes all acceptance checks.][\t]\n\n"
+            "[CGB game passes all acceptance checks.]: /url",
+            "markdown-tab-unsupported")
+
+        readme_parser_control(
+            "empty-reference-label-remains-collapsed-image-syntax",
+            "![CGB game passes all acceptance checks.][]\n\n"
+            "[CGB game passes all acceptance checks.]: /url")
+
+        readme_parser_control(
+            "tab-list-marker-cannot-hide-reference-title-game-claim",
+            '> -\t[unused]: /url\n>  "CGB game passes all acceptance checks."',
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "tab-expanded-list-continuation-at-column-four-masks-reference-title",
+            '> -\t[unused]: /url\n>   "CGB game passes all acceptance checks."')
+
+        readme_parser_control(
+            "commented-explicit-reference-label-cannot-hide-game-claim",
+            "![ordinary][CGB<!-- gap --> game passes all acceptance checks.]\n\n"
+            "[CGB game passes all acceptance checks.]: /url",
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "commented-shortcut-image-label-cannot-hide-game-claim",
+            "![CGB<!-- gap --> game passes all acceptance checks.]\n\n"
+            "[CGB game passes all acceptance checks.]: /url",
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "matching-comments-in-reference-labels-still-resolve",
+            "![ordinary][CGB<!-- gap --> game passes all acceptance checks.]\n\n"
+            "[CGB<!-- gap --> game passes all acceptance checks.]: /url")
+        readme_parser_control(
+            "different-comment-payloads-cannot-match-reference-labels",
+            "![CGB<!-- alt --> game passes all acceptance checks.]\n\n"
+            "[CGB<!-- def --> game passes all acceptance checks.]: /url",
+            f"unsupported-cgb-game-qualification:{README}")
+
+        readme_parser_control(
+            "comment-prefix-cannot-create-fence-hiding-game-claim",
+            "<!-- -->```markdown\nCGB game passes all acceptance checks.",
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "standalone-comment-before-real-fence-still-masks-game-claim",
+            "<!-- note -->\n\n```markdown\n"
+            "CGB game passes all acceptance checks.\n```")
+
+        readme_parser_control(
+            "autolink-close-bracket-cannot-hide-hardware-disclosure",
+            '[<https://example.invalid/]>](https://example.invalid/ '
+            '"Physical CGB-E remains UNKNOWN/POLICY")',
+            f"physical-cgb-limit-missing:{README}",
+            remove_hardware_disclosure=True)
+        readme_parser_control(
+            "autolink-close-bracket-title-remains-nonrendered",
+            '[<https://example.invalid/]>](https://example.invalid/ '
+            '"<script>not prose</script>")')
+
+        invisible_format_separators = (
+            ("zero-width-space-game-claim-cannot-pass", "\u200b"),
+            ("word-joiner-game-claim-cannot-pass", "\u2060"),
+            ("zero-width-non-joiner-game-claim-cannot-pass", "\u200c"),
+        )
+        for name, separator in invisible_format_separators:
+            readme_parser_control(
+                name, "CGB" + separator + " game passes all acceptance checks.",
+                f"unsupported-cgb-game-qualification:{README}")
+        for name, separator in DEFAULT_IGNORABLE_CLAIM_SEPARATORS:
+            readme_parser_control(
+                "default-ignorable-" + name + "-game-claim-cannot-pass",
+                "CGB" + separator + " game passes all acceptance checks.",
+                f"unsupported-cgb-game-qualification:{README}")
+        for name, claim in COMMONMARK_REFERENCED_GAME_CLAIMS:
+            readme_parser_control(
+                "commonmark-reference-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{README}")
+        for name, claim in COMMONMARK_HARD_BREAK_GAME_CLAIMS:
+            readme_parser_control(
+                "commonmark-hard-break-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{README}")
+        for name, claim in COMMONMARK_EMPHASIS_GAME_CLAIMS:
+            readme_parser_control(
+                "commonmark-emphasis-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{README}")
+        for name, claim in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS:
+            readme_parser_control(
+                "commonmark-reference-link-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "invisible-format-safe-game-evidence-prose-remains-valid",
+            "CGB\u200b test-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "default-ignorable-safe-game-evidence-prose-remains-valid",
+            "CGB\u034f test-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "commonmark-visible-reference-safe-evidence-prose-remains-valid",
+            "CGB&#x20; test-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "commonmark-unicode-symbol-emphasis-safe-evidence-prose-remains-valid",
+            "😀__CGB__ test-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "commonmark-reference-claim-in-code-span-remains-masked",
+            "`CGB&#x200b; game passes all acceptance checks.`")
+        readme_parser_control(
+            "commonmark-hard-break-safe-game-evidence-prose-remains-valid",
+            "CGB\\\ntest-ROM results remain software-model evidence only.")
+        readme_parser_control(
+            "commonmark-hard-break-claim-in-code-span-remains-masked",
+            "`CGB\\\ngame passes all acceptance checks.`")
+        readme_parser_control(
+            "commonmark-hard-break-claim-in-fenced-code-remains-masked",
+            "```\nCGB\\\ngame passes all acceptance checks.\n```")
+        for name, safe_prose in (
+                ("underscore-intraword-remains-visible", "C_G_B game passes all acceptance checks."),
+                ("escaped-asterisks-remain-visible", r"C\*G\*B game passes all acceptance checks."),
+                ("link-destination-claim-is-not-visible",
+                 "[details](<https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>)"),
+                ("claim-in-inline-code-remains-masked",
+                 "`CGB game passes all acceptance checks.`"),
+                ("claim-in-fenced-code-remains-masked",
+                 "```text\nCGB game passes all acceptance checks.\n```")):
+            readme_parser_control("commonmark-emphasis-" + name, safe_prose)
+        for name, safe_prose in (
+                ("unresolved-shortcut-label-remains-visible",
+                 "C[GB] game passes all acceptance checks."),
+                ("escaped-shortcut-label-remains-visible",
+                 r"C\[GB\] game passes all acceptance checks."),
+                ("reference-destination-claim-is-not-visible",
+                 "[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>"),
+                ("reference-title-claim-is-not-visible",
+                 "[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\""),
+                ("reference-link-claim-in-inline-code-remains-masked",
+                 "`C[GB] game passes all acceptance checks.`"),
+                ("reference-link-claim-in-fenced-code-remains-masked",
+                 "```text\nC[GB] game passes all acceptance checks.\n```")):
+            readme_parser_control("commonmark-reference-link-" + name, safe_prose)
+        readme_parser_control(
+            "dense-unmatched-emphasis-game-claim-cannot-pass",
+            DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM,
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "dense-unmatched-emphasis-safe-game-evidence-remains-valid",
+            DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE)
+        readme_parser_control(
+            "dense-nested-reference-brackets-game-claim-cannot-pass",
+            DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM,
+            f"unsupported-cgb-game-qualification:{README}")
+        readme_parser_control(
+            "dense-nested-reference-brackets-safe-game-evidence-remains-valid",
+            DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE)
+
+        multiline_reference_titles = (
+            ("inline-multiline-reference-title-hides-hardware-disclosure",
+             '[unused]: /url "title continues\n  Physical CGB-E remains UNKNOWN/POLICY"'),
+            ("next-line-multiline-reference-title-hides-hardware-disclosure",
+             '[unused]: /url\n  "title starts here\n  Physical CGB-E remains UNKNOWN/POLICY"'),
+            ("next-line-reference-destination-and-title-hide-hardware-disclosure",
+             '[unused]:\n  /url "Physical CGB-E remains UNKNOWN/POLICY"'),
+        )
+        for name, definition in multiline_reference_titles:
+            child_result(test_root, "docs")
+            changed = replace_all(
+                readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "", name)
+            changed = changed.rstrip() + "\n\n" + definition + "\n"
+            write_lf(readme_path, changed)
+            child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+            rejected_reasons.append(name)
+            rejected += 1
+            write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        shortcut_image_alt_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "![Physical CGB-E remains UNKNOWN/POLICY]",
+            "shortcut-image-alt-hides-hardware-disclosure")
+        shortcut_image_alt_only = shortcut_image_alt_only.rstrip() + (
+            "\n\n[Physical CGB-E remains UNKNOWN/POLICY]: assets/info.png\n")
+        write_lf(readme_path, shortcut_image_alt_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        escaped_parenthesized_title_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "",
+            "escaped-parentheses-in-reference-title-hides-hardware-disclosure")
+        escaped_parenthesized_title_only = escaped_parenthesized_title_only.rstrip() + (
+            "\n\n[unused-escaped-title]: https://example.invalid/ "
+            "(escaped \\(title\\) Physical CGB-E remains UNKNOWN/POLICY)\n")
+        write_lf(readme_path, escaped_parenthesized_title_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        nested_image_alt_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "[![Physical CGB-E remains UNKNOWN/POLICY](assets/info.png)]"
+            "(https://example.invalid/)",
+            "nested-image-alt-hides-hardware-disclosure")
+        write_lf(readme_path, nested_image_alt_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        for name, relative, phrase, reason in (
+            ("inline-code-hides-game-absence", GAME_GUIDE, ABSENCE_SENTENCE,
+             f"absence-statement-missing:{GAME_GUIDE}"),
+            ("inline-code-hides-release-limit", RELEASE, "unsigned and not notarized",
+             f"unsigned-limit-missing:{RELEASE}"),
+            ("inline-code-hides-release-evidence-name", RELEASE,
+             "The `v02-*` evidence names are the evidence-schema family",
+             f"evidence-name-note-missing:{RELEASE}"),
+            ("inline-code-hides-release-rights-reason", RELEASE,
+             "µCity 1.3 stopped at the required `source/engine/hardware.inc` component, which has no identified grant or notice establishing repository/public-CI scope",
+             f"v04-ucity-outcome-missing:{RELEASE}"),
+        ):
+            child_result(test_root, "docs")
+            original = originals[relative]
+            delimiter = "``" if "`" in phrase else "`"
+            inline_code_disclosure = replace_all(
+                original, phrase, f"{delimiter}{phrase}{delimiter}", name)
+            target = test_root / relative
+            write_lf(target, inline_code_disclosure)
+            child_result(test_root, "docs", reason)
+            rejected_reasons.append(reason.split(":", 1)[0])
+            rejected += 1
+            write_lf(target, original)
+
+        link_title_controls = (
+            ("link-title-hides-hardware-disclosure", README,
+             "Physical CGB-E remains UNKNOWN/POLICY",
+             f"physical-cgb-limit-missing:{README}"),
+            ("link-title-hides-game-absence", GAME_GUIDE, ABSENCE_SENTENCE,
+             f"absence-statement-missing:{GAME_GUIDE}"),
+            ("link-title-hides-release-limit", RELEASE, "unsigned and not notarized",
+             f"unsigned-limit-missing:{RELEASE}"),
+            ("multiline-link-title-hides-hardware-disclosure", README,
+             "Physical CGB-E remains UNKNOWN/POLICY",
+             f"physical-cgb-limit-missing:{README}"),
+        )
+        for name, relative, phrase, reason in link_title_controls:
+            child_result(test_root, "docs")
+            original = originals[relative]
+            changed = replace_all(
+                original, phrase,
+                (f'[details](https://example.invalid/ "title continues\n{phrase}")'
+                 if "multiline" in name else
+                 f'[details](https://example.invalid/ "{phrase}")'), name)
+            target = test_root / relative
+            write_lf(target, changed)
+            child_result(test_root, "docs", reason)
+            rejected_reasons.append(reason.split(":", 1)[0])
+            rejected += 1
+            write_lf(target, original)
+
+        child_result(test_root, "docs")
+        escaped_inline_title_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "",
+            "escaped-parentheses-in-inline-title-hides-hardware-disclosure")
+        escaped_inline_title_only = escaped_inline_title_only.rstrip() + (
+            "\n\n[details](/url (escaped \\(title\\) "
+            "Physical CGB-E remains UNKNOWN/POLICY))\n")
+        write_lf(readme_path, escaped_inline_title_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        readme_title_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY", "",
+            "unused-reference-title-hides-hardware-disclosure")
+        readme_title_only = readme_title_only.rstrip() + (
+            '\n\n[unused-release-disclosure]: https://example.invalid/ '
+            '"Physical CGB-E remains UNKNOWN/POLICY"\n')
+        write_lf(readme_path, readme_title_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        child_result(test_root, "docs")
+        image_alt_only = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "![Physical CGB-E remains UNKNOWN/POLICY](assets/info.png)",
+            "image-alt-hides-hardware-disclosure")
+        write_lf(readme_path, image_alt_only)
+        child_result(test_root, "docs", f"physical-cgb-limit-missing:{README}")
+        rejected_reasons.append("physical-cgb-limit-missing")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+
+        notice_original = originals[NOTICES]
+        notice_path = test_root / NOTICES
+
+        def notice_parser_control(name: str, extra: str,
+                                  reason: str | None = None) -> None:
+            nonlocal rejected
+            child_result(test_root, "docs")
+            changed = notice_original.rstrip() + "\n\n" + extra + "\n"
+            write_lf(notice_path, changed)
+            child_result(test_root, "docs", reason)
+            if reason is not None:
+                rejected_reasons.append(name)
+                rejected += 1
+            write_lf(notice_path, notice_original)
+
+        notice_parser_control(
+            "notice-hard-break-safe-game-evidence-prose-remains-valid",
+            "CGB\\\ntest-ROM results remain software-model evidence only.")
+        notice_parser_control(
+            "notice-hard-break-claim-in-code-span-remains-masked",
+            "`CGB\\\ngame passes all acceptance checks.`")
+        notice_parser_control(
+            "notice-hard-break-game-claim-cannot-pass",
+            "CGB\\\ngame passes all acceptance checks.",
+            f"unsupported-cgb-game-qualification:{NOTICES}")
+        notice_parser_control(
+            "notice-hard-break-encoded-space-game-claim-cannot-pass",
+            "CGB\\\n&#x20;game passes all acceptance checks.",
+            f"unsupported-cgb-game-qualification:{NOTICES}")
+        for name, claim in COMMONMARK_EMPHASIS_GAME_CLAIMS:
+            notice_parser_control(
+                "notice-commonmark-emphasis-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{NOTICES}")
+        notice_parser_control(
+            "notice-commonmark-unicode-symbol-emphasis-safe-evidence-prose-remains-valid",
+            "😀__CGB__ test-ROM results remain software-model evidence only.")
+        for name, claim in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS:
+            notice_parser_control(
+                "notice-commonmark-reference-link-" + name + "-game-claim-cannot-pass",
+                claim, f"unsupported-cgb-game-qualification:{NOTICES}")
+        for name, safe_prose in (
+                ("underscore-intraword-remains-visible", "C_G_B game passes all acceptance checks."),
+                ("escaped-asterisks-remain-visible", r"C\*G\*B game passes all acceptance checks."),
+                ("link-destination-claim-is-not-visible",
+                 "[details](<https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>)"),
+                ("claim-in-inline-code-remains-masked", "`CGB game passes all acceptance checks.`"),
+                ("claim-in-fenced-code-remains-masked",
+                 "```text\nCGB game passes all acceptance checks.\n```")):
+            notice_parser_control("notice-commonmark-emphasis-" + name, safe_prose)
+        for name, safe_prose in (
+                ("unresolved-shortcut-label-remains-visible", "C[GB] game passes all acceptance checks."),
+                ("escaped-shortcut-label-remains-visible", r"C\[GB\] game passes all acceptance checks."),
+                ("reference-destination-claim-is-not-visible",
+                 "[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>"),
+                ("reference-title-claim-is-not-visible",
+                 "[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\""),
+                ("reference-link-claim-in-inline-code-remains-masked",
+                 "`C[GB] game passes all acceptance checks.`"),
+                ("reference-link-claim-in-fenced-code-remains-masked",
+                 "```text\nC[GB] game passes all acceptance checks.\n```")):
+            notice_parser_control("notice-commonmark-reference-link-" + name, safe_prose)
+        notice_parser_control(
+            "notice-dense-unmatched-emphasis-game-claim-cannot-pass",
+            DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM,
+            f"unsupported-cgb-game-qualification:{NOTICES}")
+        notice_parser_control(
+            "notice-dense-unmatched-emphasis-safe-game-evidence-remains-valid",
+            DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE)
+        notice_parser_control(
+            "notice-dense-nested-reference-brackets-game-claim-cannot-pass",
+            DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM,
+            f"unsupported-cgb-game-qualification:{NOTICES}")
+        notice_parser_control(
+            "notice-dense-nested-reference-brackets-safe-game-evidence-remains-valid",
+            DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE)
+
+        hidden_notice_rows = (
+            ("libbet", "Libbet and the Magic Floor v0.08 test fixture",
+             "libbet-rights-disclosure-missing"),
+            ("mooneye-mbc", "Mooneye mbc2/mbc5 derivative test ROMs (15)",
+             "mooneye-mbc-rights-disclosure-missing"),
+            ("magentests", "MagenTests out-of-bounds SRAM ROMs (3)",
+             "magentests-rights-disclosure-missing"),
+            ("age", "AGE CGB speed-switch ROMs", "age-rights-disclosure-missing"),
+            ("rtc3test", "rtc3test MBC3 real-time-clock ROM and `tests.md`",
+             "rtc3test-rights-disclosure-missing"),
+            ("mooneye-dmg-cgb", "Mooneye DMG and CGB test ROMs (3 and 9)",
+             "mooneye-dmg-cgb-rights-disclosure-missing"),
+            ("samesuite", "SameSuite CGB DMA and APU test ROMs (4 and 70)",
+             "samesuite-rights-missing"),
+        )
+        for name, label, reason in hidden_notice_rows:
+            child_result(test_root, "docs")
+            row = next((line for line in notice_original.splitlines()
+                        if line.startswith(f"| {label} |")), None)
+            require(row is not None,
+                    f"self-test-mutation-target-missing:inline-code-hides-{name}-notice-row")
+            changed = notice_original.replace(row, f"```markdown\n{row}\n```", 1)
+            require(changed != notice_original,
+                    f"self-test-mutation-no-op:inline-code-hides-{name}-notice-row")
+            write_lf(notice_path, changed)
+            child_result(test_root, "docs", reason)
+            rejected_reasons.append(reason.split(":", 1)[0])
+            rejected += 1
+            write_lf(notice_path, notice_original)
+
+        hidden_disclosure = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "<div hidden>Physical CGB-E remains UNKNOWN/POLICY</div>", "hidden-html-disclosure")
+        write_lf(readme_path, hidden_disclosure)
+        child_result(test_root, "docs", "markdown-raw-html-unsupported")
+        rejected_reasons.append("markdown-raw-html-unsupported")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+        hidden_details = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "<details><summary>More</summary>Physical CGB-E remains UNKNOWN/POLICY</details>",
+            "details-html-disclosure")
+        write_lf(readme_path, hidden_details)
+        child_result(test_root, "docs", "markdown-raw-html-unsupported")
+        rejected_reasons.append("markdown-raw-html-unsupported")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+        declared_html = replace_all(
+            readme_original, "Physical CGB-E remains UNKNOWN/POLICY",
+            "<!DOCTYPE html>Physical CGB-E remains UNKNOWN/POLICY", "declared-html-disclosure")
+        write_lf(readme_path, declared_html)
+        child_result(test_root, "docs", "markdown-raw-html-unsupported")
+        rejected_reasons.append("markdown-raw-html-unsupported")
+        rejected += 1
+        write_lf(readme_path, readme_original)
+        tabbed_link = readme_original + "\n-\t    [ledger](docs/support/v0.4.0.md)\n"
+        write_lf(readme_path, tabbed_link)
+        child_result(test_root, "docs", "markdown-tab-unsupported")
+        rejected_reasons.append("markdown-tab-unsupported")
+        rejected += 1
+        write_lf(readme_path, readme_original)
 
         component_notice = test_root / "fixtures/visible-demo/LICENSE.txt"
         component_notice_bytes = component_notice.read_bytes()
@@ -1170,6 +4117,82 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
             ("missing-pretag-gate-guidance", RELEASE,
              drop("`version-pr-gate` is not a required check", "pretag-gate"),
              f"pre-tag-gate-enforcement-missing:{RELEASE}"),
+            ("false-v04-publication-claim", RELEASE,
+             append("v0.4.0 has been published."),
+             f"false-publication-claim:{RELEASE}"),
+            ("missing-v04-preparation-scope", RELEASE,
+             drop("The last qualified release is v0.3.0. Phase 23 prepares v0.4.0 through the existing release-please path",
+                  "preparation-scope"),
+             f"v04-preparation-scope-missing:{RELEASE}"),
+            ("missing-v04-version-agreement", RELEASE,
+             drop("generated `docs/support/v0.4.0.md` ledger, and rendered release notes must all identify exactly v0.4.0",
+                  "version-agreement"),
+             f"v04-version-agreement-missing:{RELEASE}"),
+            ("missing-v04-shared-profile", RELEASE,
+             drop("The release-notes preface and support ledger share the validated immutable "
+                  "`tests/data/support-claims-v0.4.json` profile", "shared-profile"),
+             f"v04-shared-copy-missing:{RELEASE}"),
+            ("missing-v04-potion-panic-reason", RELEASE,
+             drop("Potion Panic stopped before a source identity was returned: its creator-linked Codeberg source could not be reached, "
+                  "and exact component grants plus repository/public-CI scope remain unestablished", "potion-panic"),
+             f"v04-potion-panic-outcome-missing:{RELEASE}"),
+            ("missing-v04-ucity-reason", RELEASE,
+             drop("µCity 1.3 stopped at the required `source/engine/hardware.inc` component, which has no identified grant "
+                  "or notice establishing repository/public-CI scope", "ucity"),
+             f"v04-ucity-outcome-missing:{RELEASE}"),
+            ("missing-v04-game-boundary", RELEASE,
+             drop("Neither candidate was built or run; no CGB game was admitted. These source/rights-scope outcomes "
+                  "do not establish a license prohibition", "game-boundary"),
+             f"v04-game-admission-boundary-missing:{RELEASE}"),
+            ("missing-v04-harness-boundary", RELEASE,
+             drop("The CGB-CPU-E native-mode RGB555/PCM result is original-harness-only; its digests establish repeatability only",
+                  "harness-boundary"),
+             f"v04-harness-boundary-missing:{RELEASE}"),
+            ("missing-v04-diagnostic-accounting", RELEASE,
+             drop("Phase 22 is a synthetic composition tracer and metadata-only assessment: 513 named entries, seven "
+                  "unresolved real-fixture gates, zero real fixtures admitted, and zero real fixtures executed",
+                  "diagnostic-accounting"),
+             f"v04-diagnostic-accounting-missing:{RELEASE}"),
+            ("missing-v04-pending-status", RELEASE,
+             drop("FIXT-01, RIGHTS-01, DIAG-01, DIAG-02, and REL-01 remain Pending until their separate release evidence is accepted",
+                  "pending-status"),
+             f"v04-pending-status-missing:{RELEASE}"),
+            ("missing-v04-platform-matrix", RELEASE,
+             drop("The established product matrix remains Linux x64, macOS arm64, and Windows x64 core archives, "
+                  "plus the macOS arm64 player", "product-matrix"),
+             f"v04-product-matrix-missing:{RELEASE}"),
+            ("missing-v04-player-platform-limit", RELEASE,
+             drop("No Linux or Windows packaged-player game smoke is claimed; the player is macOS arm64 only",
+                  "player-platform-limit"),
+             f"v04-player-platform-limit-missing:{RELEASE}"),
+            ("missing-v04-macos-deployment-caveat", RELEASE,
+             drop("macOS 15.0 is the minimum deployment target and the build used the macOS 15.5 SDK",
+                  "macos-deployment-caveat"),
+             f"v04-macos-deployment-caveat-missing:{RELEASE}"),
+            ("missing-v04-host-state-boundary", RELEASE,
+             drop("Save states load only in the exact GabbaBoy release that wrote them. Host mode is POSIX-only, "
+                  "and Windows refuses `--save-dir`", "host-state"),
+             f"v04-host-state-compatibility-missing:{RELEASE}"),
+            ("missing-v04-deterministic-performance-boundary", RELEASE,
+             drop("The deterministic instruction-count gate and native realtime floor remain blocking; "
+                  "paired wall-clock timing is advisory and cannot approve a release", "deterministic-performance"),
+             f"v04-performance-boundary-missing:{RELEASE}"),
+            ("missing-v04-operator-sequence", RELEASE,
+             drop("H → R1 → W → R2 → nightly → pre-tag gate", "operator-sequence"),
+             f"v04-operator-sequence-missing:{RELEASE}"),
+            ("missing-v04-window-recovery-hold", RELEASE,
+             drop("A note or body regeneration, moved tag, or changed source invalidates the window and keeps the release on hold",
+                  "window-recovery"),
+             f"v04-window-recovery-hold-missing:{RELEASE}"),
+            ("missing-v04-downloaded-byte-gate", RELEASE,
+             drop("After tagging, the existing trusted release path must still build, attach, download, and verify the real "
+                  "core and player archive bytes, installed consumers, notices, and fixture exclusion before the draft can be published",
+                  "downloaded-byte-gate"),
+             f"v04-downloaded-byte-gate-missing:{RELEASE}"),
+            ("missing-v04-specific-recovery-hold", RELEASE,
+             drop("If v0.4.0 notes omit a required disclosure, keep the draft unpublished",
+                  "v04-recovery-hold"),
+             f"v04-recovery-hold-missing:{RELEASE}"),
             ("retry-tamper-overclaim", RELEASE,
              append("The retry check provides tamper detection for attached assets."),
              f"retry-tamper-overclaim:{RELEASE}"),
@@ -1308,25 +4331,101 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
         write_lf(header, header_text)
         rejected += 1
         child_result(test_root, "docs")
-    controls = len(mutations) + 5
+
+        copy_path_controls = 0
+        if DOCS_SELF_TEST_SHARD is None or DOCS_SELF_TEST_SHARD[0] == 0:
+            source_copy = test_root / "copy-source"
+            copy_inputs(root, source_copy)
+            source_copy = source_copy.resolve(strict=True)
+            outside_source = test_root / (Path(temp).name + "-copy-source.txt")
+            write_lf(outside_source, "safe copied notice input\n")
+            escaped_path = "fixtures/" + os.path.relpath(
+                outside_source, source_copy / "fixtures").replace(os.sep, "/")
+            source_notice = source_copy / NOTICES
+            source_notice_text = read_document(source_copy, NOTICES)
+            write_lf(source_notice, source_notice_text +
+                     f"\n`{escaped_path}`: `{sha256_file(outside_source)}`\n")
+            escaped_destination = (test_root / escaped_path).resolve(strict=False)
+            require(not escaped_destination.exists(),
+                    "notice-copy-traversal-control-destination-exists")
+            copied_outside_root = False
+            try:
+                copy_inputs(source_copy, test_root)
+                copied_outside_root = escaped_destination.is_file()
+            except ContractError as error:
+                require("notice-path-outside-root" in str(error),
+                        "notice-copy-traversal-control-wrong-rejection")
+                copy_path_controls += 1
+            finally:
+                escaped_destination.unlink(missing_ok=True)
+            require(not copied_outside_root,
+                    "notice-copy-path-escaped-isolated-root")
+
+            with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-copy-target-") as outside_target:
+                outside_target_root = Path(outside_target).resolve(strict=True)
+                symlink_target = test_root / "copy-symlink-target"
+                symlink_target.mkdir()
+                (symlink_target / "fixtures").symlink_to(
+                    outside_target_root, target_is_directory=True)
+                escaped_target_write = False
+                try:
+                    copy_inputs(root, symlink_target)
+                    escaped_target_write = any(outside_target_root.rglob("*"))
+                except ContractError as error:
+                    require("self-test-copy-path-outside-root" in str(error),
+                            "notice-copy-symlink-control-wrong-rejection")
+                    copy_path_controls += 1
+                require(not escaped_target_write,
+                        "notice-copy-target-symlink-escaped-isolated-root")
+    # The fixed docs/notice inventory includes the D-153 through D-155 negatives.
+    controls = len(mutations) + 128 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
     notes_controls, notes_rejected = run_self_test_release_notes()
-    print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
-    return controls + notes_controls, rejected + notes_rejected
+    if DOCS_SELF_TEST_SHARD is None:
+        print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
+    else:
+        shard, shard_count = DOCS_SELF_TEST_SHARD
+        selected = DOCS_SELF_TEST_STATS["positive"] + DOCS_SELF_TEST_STATS["negative"]
+        print(f"adoption-doc-controls shard={shard}/{shard_count} selected={selected}")
+    return (controls + notes_controls + copy_path_controls,
+            rejected + notes_rejected + copy_path_controls)
 
 
 def main() -> int:
+    global DOCS_SELF_TEST_SHARD, DOCS_SELF_TEST_STATS
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", choices=("game", "docs"))
     group.add_argument("--self-test", choices=("game", "docs"))
     group.add_argument("--release-notes", type=Path, metavar="PATH")
+    group.add_argument("--self-test-release-notes-v04", action="store_true")
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--repo", type=Path, default=DEFAULT_ROOT)
     parser.add_argument("--rev", help="full immutable commit id for claim-boundary evidence")
+    parser.add_argument("--shard", nargs=2, type=int, metavar=("INDEX", "COUNT"),
+                        help="run one deterministic slice of the docs self-test CLI checks")
     group.add_argument("--self-test-claim-boundaries", action="store_true")
     args = parser.parse_args()
+    if args.shard is not None:
+        if args.self_test != "docs":
+            parser.error("--shard is valid only with --self-test docs")
+        shard, shard_count = args.shard
+        if shard < 0 or shard_count < 2 or shard >= shard_count:
+            parser.error("--shard requires 0 <= INDEX < COUNT and COUNT >= 2")
+        DOCS_SELF_TEST_SHARD = (shard, shard_count)
+        DOCS_SELF_TEST_STATS = {
+            "positive_calls": 0,
+            "negative_calls": 0,
+            "positive": 0,
+            "negative": 0,
+            "positive_checks": 0,
+        }
     try:
+        if args.self_test_release_notes_v04:
+            positives, controls = run_self_test_release_notes_v04(args.repo.resolve(strict=True))
+            require(positives > 0 and controls > 0, "release-notes-v04-self-test-empty")
+            print(f"release-notes-v04 controls pass positives={positives} controls={controls}")
+            return 0
         if args.self_test_claim_boundaries:
             require(args.rev is not None, "revision-required")
             positives, controls = run_self_test_claim_boundaries(
@@ -1337,10 +4436,13 @@ def main() -> int:
                   f"controls={controls} rev={args.rev}")
             return 0
         if args.release_notes is not None:
-            checks = check_release_notes(args.release_notes, args.root.resolve(strict=True), args.rev)
+            root = args.root.resolve(strict=True)
+            repo = args.repo.resolve(strict=True)
+            checks = check_release_notes(args.release_notes, root, args.rev, repo)
+            target_version = identity_at_revision(repo, args.rev)[0] if args.rev is not None else tree_identity(root)[0]
             print(json.dumps({
                 "mode": "release-notes",
-                "target": RELEASE_VERSION,
+                "target": target_version,
                 "checks": checks,
                 "negative_controls": 0,
                 "rejected_controls": 0,
@@ -1364,18 +4466,43 @@ def main() -> int:
             checks = check_game(root)
             negative_controls, rejected_controls = run_self_test_game(root)
         else:
-            checks = check_docs(root)
+            checks = 0 if DOCS_SELF_TEST_SHARD is not None else check_docs(root)
             negative_controls, rejected_controls = run_self_test_docs(root)
+            if DOCS_SELF_TEST_SHARD is not None:
+                shard, shard_count = DOCS_SELF_TEST_SHARD
+                positive_calls = DOCS_SELF_TEST_STATS["positive_calls"]
+                negative_calls = DOCS_SELF_TEST_STATS["negative_calls"]
+                expected_positive = (
+                    0 if shard >= positive_calls
+                    else 1 + (positive_calls - 1 - shard) // shard_count
+                )
+                expected_negative = (
+                    0 if shard >= negative_calls
+                    else 1 + (negative_calls - 1 - shard) // shard_count
+                )
+                positive = DOCS_SELF_TEST_STATS["positive"]
+                negative = DOCS_SELF_TEST_STATS["negative"]
+                require(expected_positive > 0 and expected_negative > 0
+                        and positive == expected_positive and negative == expected_negative,
+                        "docs-self-test-shard-coverage-invalid")
+                checks = DOCS_SELF_TEST_STATS["positive_checks"]
+                require(checks > 0, "docs-self-test-shard-positive-check-missing")
+                negative_controls = negative
+                rejected_controls = negative
         require(negative_controls > 0 and negative_controls == rejected_controls,
                 "self-test-control-inventory-invalid")
-        print(json.dumps({
+        summary = {
             "mode": "self-test",
             "target": args.self_test,
             "checks": checks,
             "negative_controls": negative_controls,
             "rejected_controls": rejected_controls,
             "positive_success": True,
-        }, sort_keys=True))
+        }
+        if DOCS_SELF_TEST_SHARD is not None:
+            shard, shard_count = DOCS_SELF_TEST_SHARD
+            summary["shard"] = f"{shard}/{shard_count}"
+        print(json.dumps(summary, sort_keys=True))
         return 0
     except (ContractError, OSError, ValueError) as error:
         print("verify-v02-adoption fail: " + str(error), file=sys.stderr)

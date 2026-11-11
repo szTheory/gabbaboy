@@ -424,8 +424,8 @@ if(NOT WIN32)
 
   # ---- HOST-02 / D-17: real signals sent to real runner processes (POSIX-only: Windows has no SIGTERM and
   # host mode is refused there, D-05). Each row sends exactly one signal and keeps the base 60 s TIMEOUT;
-  # PROCESSORS 2 keeps hosted ctest (4-wide) from starving the rows' watchdogs. No row uses elapsed time as
-  # evidence (IN-07): the term row's proof is the --frames replay of the signalled .sav.
+  # PROCESSORS 2 keeps hosted ctest (4-wide) from starving the rows' watchdogs. No row uses elapsed
+  # time as evidence (IN-07): the term row's proof is the --frames replay of the signalled .sav.
   set(GBB_HOST_SIGNALS_HARNESS "${PROJECT_SOURCE_DIR}/tests/scripts/test_host_signals.py")
 
   # gbb_add_host_signal_test(name scenario [PROCESSORS2]): one python3 -I scenario against the real runner.
@@ -450,6 +450,8 @@ if(NOT WIN32)
   gbb_add_host_signal_test(host_exit_core_stop core-stop)
   gbb_add_host_signal_test(host_exit_refusal refusal)
   gbb_add_host_signal_test(host_exit_crash_storm crash-storm PROCESSORS2)
+  # D-160 reserves every CTest slot for this process storm after measured full-suite contention.
+  set_tests_properties(host_exit_crash_storm PROPERTIES PROCESSORS 4)
 
   # ---- D-13/D-15 below the process: dispositions, the exit table and the stop before the first frame ----
   # test_host_run needs sigaction, sigprocmask, dup2 and mkdtemp, so (B-3) it exists only on POSIX. It links

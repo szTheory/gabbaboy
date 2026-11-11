@@ -97,6 +97,10 @@ jobs:
             echo "Missing or malformed release-please tag/source output." >&2
             exit 1
           }
+          [[ "$RELEASE_TAG" == "v0.4.0" ]] || {
+            echo "This qualified release path accepts only the requested v0.4.0 tag." >&2
+            exit 1
+          }
           if [[ "$RETRY" == true ]]; then
             [[ "$INPUT_RELEASE_ID" =~ ^[0-9]+$ ]] || { echo "Retry requires an existing draft release ID." >&2; exit 1; }
           else
@@ -138,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           git show "${GITHUB_SHA}:tests/scripts/verify-version-window.py" > "$RUNNER_TEMP/verify-version-window.py"
-          python3 -I "$RUNNER_TEMP/verify-version-window.py" --check-tracked --rev "$SOURCE_SHA" --require-active --repo .
+          python3 -I "$RUNNER_TEMP/verify-version-window.py" --check-tracked --rev "$SOURCE_SHA" --require-active --repo . --expect-version 0.4.0
       - name: Require final release notes to satisfy the v0.2 adoption contract
         env:
           RELEASE_NOTES_FILE: ${{ steps.identity.outputs.release_notes_file }}
@@ -1150,9 +1154,10 @@ jobs:
     needs: [release, candidate]
     if: ${{ always() && needs.candidate.result == 'success' }}
     runs-on: ubuntu-24.04
-    # Worst case 3000 (poll deadline) + 60 (request timeout) + 30 (interval) + 2700 (hosted poll) + 900
-    # (margin for checkout, run download, artifact upload, verifier startup and final-iteration overshoot) = 6690 s <= 6720 s.
-    timeout-minutes: 112
+    # Required CI can take 85 minutes (5-minute changes job, 75-minute sanitizer inventory, 5-minute aggregator); needs below provide no guaranteed head start.
+    # Worst case 5100 (poll deadline) + 60 (request timeout) + 30 (interval) + 2700 (hosted poll) + 900
+    # (margin for checkout, run download, artifact upload, verifier startup and final-iteration overshoot) = 8790 s <= 8820 s.
+    timeout-minutes: 147
     permissions:
       actions: read
       contents: read
@@ -1160,9 +1165,9 @@ jobs:
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
-      CI_RUN_WAIT_ATTEMPTS: 90
+      CI_RUN_WAIT_ATTEMPTS: 170
       CI_RUN_WAIT_SECONDS: 30
-      CI_RUN_WAIT_DEADLINE_SECONDS: 3000
+      CI_RUN_WAIT_DEADLINE_SECONDS: 5100
       CI_RUN_REQUEST_TIMEOUT_SECONDS: 60
       HOSTED_POLL_SECONDS: 2700
     steps:

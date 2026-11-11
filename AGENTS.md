@@ -15,6 +15,7 @@
 - At every pause or handoff, state in chat what is happening, the concrete blocker and consequence, your recommended next step, and exactly who acts next. Explicitly say when waiting for the user versus continuing work.
 - Summarize every risk or decision in plain language before asking; make linked documents optional detail. When the user has no strong preference, recommend a concrete path. An uninformed or indifferent response is not risk acceptance.
 - Prefer the least disruptive evidence-supported remedy. For stuck project tests, inspect attributable processes and consider targeted cleanup first; recommend a whole-machine restart only when its necessity and impact are established.
+- Launch automated apps and tests in the background by default so the user can keep working on the shared computer. Use foreground only when the specific check genuinely requires it, explain that need before activation, and bound the foreground interval. Diagnose background failures within existing limits; a timeout alone is not a reason to take focus. Apply this preference across projects and future sessions.
 
 - For lightweight delegated work in Codex, prefer GPT-6 Luna (`gpt-6-luna`) with extra-high (`xhigh`) reasoning effort for cost efficiency. Delegate only when authorized; reserve stronger-model synthesis or review for consequential tradeoffs.
 

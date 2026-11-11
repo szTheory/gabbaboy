@@ -23,6 +23,7 @@ hosted evidence; the required checks on the exact head, not this script, authent
 from __future__ import annotations
 
 import argparse
+from array import array
 import copy
 import hashlib
 import json
@@ -47,11 +48,19 @@ VERSION = re.compile(r"\d+\.\d+\.\d+")
 REQUIRED_MANAGED_INPUTS = (
     "tests/data/release-disclosure.json",
     "tests/data/support-claims-v0.3.json",
+    "tests/data/support-claims-v0.4.json",
     "tests/scripts/verify-support-ledger.py",
+    "tests/scripts/verify-v02-adoption.py",
     "release-please-config.json",
+    "tests/data/cgb-candidates/potion-panic.json",
+    "tests/data/cgb-candidates/ucity-1.3.json",
+    "tests/external/diagnostic-assessment.json",
+    "tests/external/gbmicrotest-inventory.json",
+    "tests/baseline/state-goldens-v1.json",
+    "tests/data/state-compatibility.json",
 )
 # Regenerated outputs of the version PR (the ledger path is derived from the version).
-REQUIRED_GENERATED_FILES = ("CHANGELOG.md", ".release-please-manifest.json")
+REQUIRED_GENERATED_FILES = ("CMakeLists.txt", "CHANGELOG.md", ".release-please-manifest.json")
 
 TOP_KEYS = {"schema_version", "kind", "state", "release_version", "intended", "managed_inputs", "generated",
             "review", "rehearsal"}
@@ -222,11 +231,18 @@ def validate_record_shape(record: dict) -> str:
     for path in REQUIRED_MANAGED_INPUTS:
         if path not in inputs:
             reject("window-input-missing", f"managed_inputs omits the generator input {path}")
+    unclassified_inputs = sorted(set(inputs) - set(REQUIRED_MANAGED_INPUTS))
+    if unclassified_inputs:
+        reject("window-record-invalid", f"managed_inputs has unclassified input {unclassified_inputs[0]}")
     generated = exact_keys(record["generated"], {"files", "pr_body_sha256"}, "generated")
     files = digest_map(generated["files"], "generated.files")
-    for path in (*REQUIRED_GENERATED_FILES, f"docs/support/v{record['release_version']}.md"):
+    expected_generated = {*REQUIRED_GENERATED_FILES, f"docs/support/v{record['release_version']}.md"}
+    for path in sorted(expected_generated):
         if path not in files:
             reject("window-generated-missing", f"generated.files omits {path}")
+    unclassified_generated = sorted(set(files) - expected_generated)
+    if unclassified_generated:
+        reject("window-record-invalid", f"generated.files has unclassified output {unclassified_generated[0]}")
     if type(generated["pr_body_sha256"]) is not str or SHA256.fullmatch(generated["pr_body_sha256"]) is None:
         reject("window-record-invalid", "generated.pr_body_sha256 is not SHA-256")
     review = exact_keys(record["review"], {"head", "pull_request", "ci_run_id"}, "review")
@@ -255,12 +271,381 @@ def tree_version(repo: Path, commit: str) -> str:
     return listed
 
 
+def validate_version_outputs(repo: Path, commit: str, expected_version: str) -> None:
+    """Check exact generated identity and its first public changelog section at an immutable revision."""
+    actual_version = tree_version(repo, commit)
+    if actual_version != expected_version:
+        reject("window-version-mismatch", f"the requested version is {expected_version}, but the tree is {actual_version}")
+
+    ledger_path = f"docs/support/v{expected_version}.md"
+    ledger = git_blob(repo, commit, ledger_path)
+    expected_heading = f"# GabbaBoy v{expected_version} support ledger".encode("utf-8")
+    if ledger is None or not ledger.splitlines() or ledger.splitlines()[0] != expected_heading:
+        reject("window-version-output-mismatch", f"{ledger_path} is absent or has the wrong version heading")
+
+    changelog = git_blob(repo, commit, "CHANGELOG.md")
+    if changelog is None:
+        reject("window-version-output-mismatch", "CHANGELOG.md is absent")
+    try:
+        text = changelog.decode("utf-8")
+    except UnicodeDecodeError:
+        reject("window-version-output-mismatch", "CHANGELOG.md is not UTF-8")
+    visible = visible_markdown(text)
+    sections = list(re.finditer(r"(?m)^## \[(\d+\.\d+\.\d+)\](?:\([^\r\n]*\))?[^\r\n]*$", visible))
+    if not sections or sections[0].group(1) != expected_version:
+        found = sections[0].group(1) if sections else "none"
+        reject("window-version-output-mismatch", f"the first changelog release section is {found}, expected {expected_version}")
+    first = sections[0]
+    end = sections[1].start() if len(sections) > 1 else len(visible)
+    judged_changelog = visible[:end]
+    section = visible[first.end():end]
+    if "\t" in judged_changelog:
+        reject("window-version-output-mismatch", "the first changelog release section contains a tab")
+    if RAW_HTML_CONSTRUCT.search(judged_changelog) is not None:
+        reject("window-version-output-mismatch", "the first changelog release section contains raw HTML")
+    if not has_markdown_ledger_link(section, ledger_path, expected_version):
+        reject("window-version-output-mismatch", f"the {expected_version} changelog section does not link {ledger_path}")
+
+
+RAW_HTML_CONSTRUCT = re.compile(
+    r"(?<!\\)(?:\\\\)*(?:"
+    r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|"
+    r"<![A-Z][\s\S]*?(?:>|$)|<\?[A-Za-z][\s\S]*?(?:\?>|$)|"
+    r"<!\[CDATA\[|<(?:script|pre|style)(?=[ \t\r\n>]|$))",
+    re.DOTALL | re.IGNORECASE)
+
+
+def has_markdown_ledger_link(text: str, ledger_path: str, version: str) -> bool:
+    """Find a real Markdown link with an exact supported ledger destination."""
+    canonical = f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger_path}"
+    allowed = {ledger_path, canonical}
+
+    escaped_chars = bytearray(len(text))
+    bracket_ends = array("i", [-1]) * len(text)
+    openings = array("I")
+    backslashes = 0
+    for index, char in enumerate(text):
+        if char == "\\":
+            backslashes += 1
+            continue
+        escaped_chars[index] = backslashes % 2 == 1
+        backslashes = 0
+        if escaped_chars[index]:
+            continue
+        if char == "[":
+            openings.append(index)
+        elif char == "]" and openings:
+            bracket_ends[openings.pop()] = index
+
+    def link_end(closing_bracket: int) -> tuple[str, int] | None:
+        position = closing_bracket + 2
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position >= len(text):
+            return None
+
+        if text[position] == "<":
+            destination_start = position + 1
+            position += 1
+            while position < len(text):
+                if text[position] == "\\":
+                    position += 2
+                    continue
+                if text[position] == ">":
+                    break
+                position += 1
+            if position >= len(text):
+                return None
+            destination = text[destination_start:position]
+            position += 1
+        else:
+            destination_start = position
+            nested = 0
+            while position < len(text):
+                char = text[position]
+                if char == "\\":
+                    position += 2
+                    continue
+                if char == "(":
+                    nested += 1
+                elif char == ")":
+                    if nested == 0:
+                        break
+                    nested -= 1
+                elif char.isspace() and nested == 0:
+                    break
+                position += 1
+            destination = text[destination_start:position]
+
+        while position < len(text) and text[position].isspace():
+            position += 1
+        if position < len(text) and text[position] != ")":
+            quote = text[position]
+            if quote not in "\"'(":
+                return None
+            closing = ")" if quote == "(" else quote
+            title_depth = 1 if quote == "(" else 0
+            position += 1
+            while position < len(text):
+                char = text[position]
+                if char == "\\":
+                    position += 2
+                    continue
+                if quote == "(" and char == "(":
+                    title_depth += 1
+                elif char == closing:
+                    if quote != "(" or title_depth == 1:
+                        break
+                    title_depth -= 1
+                position += 1
+            if position >= len(text):
+                return None
+            position += 1
+            while position < len(text) and text[position].isspace():
+                position += 1
+        if position >= len(text) or text[position] != ")":
+            return None
+        return destination, position + 1
+
+    position = 0
+    while position < len(text):
+        if text[position] != "[" or escaped_chars[position]:
+            position += 1
+            continue
+        closing_bracket = bracket_ends[position]
+        if closing_bracket < 0:
+            position += 1
+            continue
+        if closing_bracket + 1 >= len(text) or text[closing_bracket + 1] != "(":
+            position += 1
+            continue
+        image = position > 0 and text[position - 1] == "!" and not escaped_chars[position - 1]
+        parsed = link_end(closing_bracket)
+        if parsed is None:
+            return False
+        destination, end = parsed
+        if re.search(r"\n[ \t]*\n", text[position:end]):
+            return False
+        if not image and destination in allowed:
+            return True
+        position = end
+    return False
+
+
+def visible_markdown(text: str) -> str:
+    """Mask comments, code blocks, and inline code while preserving source offsets."""
+    def mask(match: re.Match[str]) -> str:
+        return "".join("\n" if char == "\n" else "\r" if char == "\r" else " "
+                       for char in match.group(0))
+
+    text = re.sub(r"<!--.*?(?:-->|\Z)", mask, text, flags=re.DOTALL)
+    text = mask_fenced_code_blocks(text)
+    text = mask_indented_code_blocks(text)
+    return mask_inline_code_spans(text)
+
+
+def mask_fenced_code_blocks(text: str) -> str:
+    """Mask CommonMark fenced blocks, including blockquote containers."""
+    output: list[str] = []
+    tick = chr(96)
+    fence_char: str | None = None
+    fence_length = 0
+    fence_containers: list[tuple[str, int]] = []
+
+    def parse_containers(content: str) -> tuple[list[tuple[str, int]], int]:
+        containers: list[tuple[str, int]] = []
+        list_marker = re.compile(r"([-+*]|\d{1,9}[.)])([ ]{1,4})")
+        position = 0
+        while True:
+            start = position
+            spaces = 0
+            while position < len(content) and content[position] == " " and spaces < 4:
+                position += 1
+                spaces += 1
+            if spaces > 3:
+                return containers, start
+            if position < len(content) and content[position] == ">":
+                containers.append(("quote", 0))
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+                continue
+            marker = list_marker.match(content, position)
+            if marker is not None:
+                containers.append(("list", spaces + len(marker.group(1)) + len(marker.group(2))))
+                position += len(marker.group(0))
+                continue
+            return containers, start
+
+    def strip_containers(content: str, containers: list[tuple[str, int]]) -> tuple[bool, int]:
+        position = 0
+        for kind, indent in containers:
+            if kind == "quote":
+                start = position
+                spaces = 0
+                while position < len(content) and content[position] == " " and spaces < 4:
+                    position += 1
+                    spaces += 1
+                if spaces > 3 or position >= len(content) or content[position] != ">":
+                    return False, start
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+            else:
+                remainder = position
+                while remainder < len(content) and content[remainder] in " \t":
+                    remainder += 1
+                if remainder == len(content):
+                    return True, remainder
+                spaces = 0
+                while position + spaces < len(content) and content[position + spaces] == " ":
+                    spaces += 1
+                if spaces < indent:
+                    return False, position
+                position += indent
+        return True, position
+
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        if fence_char is not None:
+            matched, position = strip_containers(content, fence_containers)
+            if matched:
+                candidate = content[position:]
+                closing = re.match(r"^ {0,3}([" + re.escape(tick) + r"~]+)[ \t]*$", candidate)
+                closes = (closing is not None and closing.group(1)[0] == fence_char
+                          and len(closing.group(1)) >= fence_length
+                          and all(char == fence_char for char in closing.group(1)))
+                output.append(" " * len(content) + ending)
+                if closes:
+                    fence_char = None
+                    fence_length = 0
+                    fence_containers = []
+                continue
+            fence_char = None
+            fence_length = 0
+            fence_containers = []
+
+        containers, position = parse_containers(content)
+        candidate = content[position:]
+        opening = re.match(r"^ {0,3}(" + re.escape(tick) + r"{3,}|~{3,})(.*)$", candidate)
+        if opening and not (opening.group(1)[0] == tick and tick in opening.group(2)):
+            fence_char = opening.group(1)[0]
+            fence_length = len(opening.group(1))
+            fence_containers = containers
+            output.append(" " * len(content) + ending)
+        else:
+            output.append(line)
+    return "".join(output)
+
+
+def mask_indented_code_blocks(text: str) -> str:
+    """Mask indented code after blockquote and list container markers."""
+    output: list[str] = []
+    list_marker = re.compile(r"([-+*]|\d{1,9}[.)])([ ]+)")
+    for line in text.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content):]
+        position = 0
+        while position < len(content):
+            start = position
+            spaces = 0
+            while position < len(content) and content[position] == " " and spaces < 4:
+                position += 1
+                spaces += 1
+            if spaces > 3:
+                position = start
+                break
+            if position < len(content) and content[position] == ">":
+                position += 1
+                if position < len(content) and content[position] in " \t":
+                    position += 1
+                continue
+            marker = list_marker.match(content, position)
+            if marker is not None:
+                marker_spaces = len(marker.group(2))
+                position += len(marker.group(1)) + (1 if marker_spaces > 4 else marker_spaces)
+                continue
+            position = start
+            break
+        candidate = content[position:]
+        if candidate.startswith("    ") or candidate.startswith("\t"):
+            output.append(" " * len(content) + ending)
+        else:
+            output.append(line)
+    return "".join(output)
+
+
+def mask_inline_code_spans(text: str) -> str:
+    """Mask CommonMark backtick spans, including multiline spans, without moving offsets."""
+    tick = chr(96)
+    chars = list(text)
+    runs: list[tuple[int, int, int, bool]] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text[index] != tick:
+            index += 1
+            continue
+        opening = index
+        while index < length and text[index] == tick:
+            index += 1
+        delimiter = index - opening
+        backslashes = 0
+        cursor = opening - 1
+        while cursor >= 0 and text[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        runs.append((opening, index, delimiter, backslashes % 2 == 1))
+
+    next_same: list[int | None] = [None] * len(runs)
+    next_by_length: dict[int, int] = {}
+    for run_index in range(len(runs) - 1, -1, -1):
+        delimiter = runs[run_index][2]
+        next_same[run_index] = next_by_length.get(delimiter)
+        next_by_length[delimiter] = run_index
+
+    run_index = 0
+    while run_index < len(runs):
+        opening, _, _, escaped = runs[run_index]
+        closing_index = next_same[run_index]
+        if escaped or closing_index is None:
+            run_index += 1
+            continue
+        end = runs[closing_index][1]
+        for offset in range(opening, end):
+            if chars[offset] not in ("\n", "\r"):
+                chars[offset] = " "
+        run_index = closing_index + 1
+        while run_index < len(runs) and runs[run_index][0] < end:
+            run_index += 1
+    return "".join(chars)
+
+def check_release_notes(repo: Path, rev: str, release_notes: Path) -> None:
+    """Delegate supplied notes to the established immutable release-notes judge."""
+    script = ROOT / "tests/scripts/verify-v02-adoption.py"
+    try:
+        result = subprocess.run(
+            [sys.executable, "-I", str(script), "--release-notes", str(release_notes),
+             "--root", str(repo), "--repo", str(repo), "--rev", rev],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, check=False, timeout=90,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        reject("window-release-notes-invalid", f"the existing release-notes judge could not complete: {error}")
+    if result.returncode != 0:
+        detail = (result.stdout + result.stderr).strip().splitlines()
+        reject("window-release-notes-invalid", detail[-1] if detail else "the existing release-notes judge rejected the notes")
+
+
 def classify(path: str) -> str:
-    if path.startswith(("src/", "include/", "fixtures/")) or path == "CMakeLists.txt":
+    if path in REQUIRED_GENERATED_FILES or path.startswith("docs/support/"):
+        return "release-output"
+    if path.startswith(("src/", "include/", "fixtures/")):
         return "source"
-    if path == "CHANGELOG.md" or path.startswith("docs/support/") or path == "docs/release.md":
+    if path == "docs/release.md":
         return "release-note"
-    if path in REQUIRED_MANAGED_INPUTS or path == ".release-please-manifest.json":
+    if path in REQUIRED_MANAGED_INPUTS:
         return "generator-input"
     if path.startswith(".github/"):
         return "workflow"
@@ -281,7 +666,8 @@ def is_ancestor(repo: Path, older: str, newer: str) -> bool:
                      lambda: git(repo, "merge-base", "--is-ancestor", older, newer, check=False).returncode == 0)
 
 
-def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes | None) -> str:
+def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes | None,
+                 expected_version: str | None = None) -> str:
     """Judge the record committed at rev. Returns a one-line verdict or raises WindowError."""
     rev = resolve_commit(repo, rev, "--rev")
     base = resolve_commit(repo, base, "--base")
@@ -291,9 +677,13 @@ def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes 
         reject("window-record-missing", f"{record_path} is not in the tree at {rev[:12]}")
     record = parse_record(raw)
     if validate_record_shape(record) == "inactive":
+        if expected_version is not None:
+            reject("window-record-inactive", "an explicit expected-version window requires an active record")
         return f"version-window inactive pass rev={rev[:12]} (normal development; no frozen content)"
 
     version = record["release_version"]
+    if expected_version is not None and version != expected_version:
+        reject("window-version-mismatch", f"the active record names {version}, expected {expected_version}")
     intended = record["intended"]
     head = intended["head"]
     # The reviewed identity is one exact head: review and rehearsal must name it, the rehearsal ref its version.
@@ -314,6 +704,8 @@ def check_window(repo: Path, rev: str, base: str, record_path: str, body: bytes 
         reject("window-stale-head", f"{head[:12]} -> {rev[:12]} changed {len(changes)} path(s) after review: {shown}")
     if tree_version(repo, rev) != version:
         reject("window-version-mismatch", f"the tree at {rev[:12]} is not version {version}")
+    if expected_version is not None:
+        validate_version_outputs(repo, rev, expected_version)
     for path, expected in sorted(record["managed_inputs"].items()):
         blob = git_blob(repo, rev, path)
         if blob is None or digest(blob) != expected:
@@ -377,7 +769,8 @@ def read_body(path: Path | None) -> bytes | None:
         reject("window-body-unreadable", str(error))
 
 
-def check_tracked(repo: Path, rev: str | None = None, require_active: bool = False) -> str:
+def check_tracked(repo: Path, rev: str | None = None, require_active: bool = False,
+                  expected_version: str | None = None) -> str:
     """Contract: the tracked record is well-formed and the production constants resolve in the tree."""
     if rev is None:
         head = git(repo, "rev-parse", "--verify", "HEAD^{commit}").stdout.decode("ascii").strip()
@@ -391,9 +784,17 @@ def check_tracked(repo: Path, rev: str | None = None, require_active: bool = Fal
     state = validate_record_shape(record)
     if state == "inactive" and require_active:
         reject("window-record-inactive", f"{RECORD_PATH} is inactive at revision {head[:12]}")
-    if state == "active" and tree_version(repo, head) != record["release_version"]:
+    version = tree_version(repo, head)
+    if expected_version is not None and version != expected_version:
+        reject("window-version-mismatch", f"the requested version is {expected_version}, but the tree at {head[:12]} is {version}")
+    if state == "active" and version != record["release_version"]:
         reject("window-version-mismatch", f"the active record's version {record['release_version']} differs from the tree at {head[:12]}")
-    for path in (*REQUIRED_MANAGED_INPUTS, *REQUIRED_GENERATED_FILES):
+    if expected_version is not None and state == "active" and record["release_version"] != expected_version:
+        reject("window-version-mismatch", f"the active record names {record['release_version']}, expected {expected_version}")
+    if expected_version is not None:
+        validate_version_outputs(repo, head, expected_version)
+    required_paths = (*REQUIRED_MANAGED_INPUTS, *REQUIRED_GENERATED_FILES, f"docs/support/v{version}.md")
+    for path in required_paths:
         if git_blob(repo, head, path) is None:
             reject("window-input-missing", f"the window requires {path}, which is not in the tree")
     return f"version-window contract pass state={state} rev={head[:12]} inputs={len(REQUIRED_MANAGED_INPUTS)}"
@@ -439,33 +840,31 @@ class Fixture:
         return self.run("rev-parse", "HEAD")
 
 
-def build_fixture(directory: Path) -> tuple[Fixture, str, str, bytes]:
+def build_fixture(directory: Path, main_version: str = "0.2.1",
+                  release_version: str = "0.2.2") -> tuple[Fixture, str, str, bytes]:
     """Returns (fixture, main base commit, reviewed version-PR head, reviewed PR body)."""
     fx = Fixture(directory)
-    fx.write("CMakeLists.txt", "project(GabbaBoy VERSION 0.2.1 LANGUAGES C) # x-release-please-version\n")
-    fx.write(".release-please-manifest.json", '{\n  ".": "0.2.1"\n}\n')
-    fx.write("CHANGELOG.md", "# Changelog\n")
-    fx.write("release-please-config.json", '{"release-type": "simple"}\n')
-    fx.write("tests/data/release-disclosure.json", '{"schema_version": 1}\n')
-    fx.write("tests/data/support-claims-v0.3.json", '{"schema_version": 1, "kind": "scoped-support-claims"}\n')
-    fx.write("tests/scripts/verify-support-ledger.py", "# stand-in generator\n")
-    fx.write("docs/support/v0.2.1.md", "# v0.2.1 ledger\n")
+    fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {main_version} LANGUAGES C) # x-release-please-version\n")
+    fx.write(".release-please-manifest.json", json.dumps({".": main_version}, indent=2) + "\n")
+    fx.write("CHANGELOG.md", f"# Changelog\n\n## [{main_version}]\n\n- Support: [ledger](docs/support/v{main_version}.md).\n")
+    for path in REQUIRED_MANAGED_INPUTS:
+        fx.write(path, f"fixture input: {path}\n")
+    fx.write("docs/support/v" + main_version + ".md", f"# GabbaBoy v{main_version} support ledger\n")
     fx.write("src/core/gabbaboy.c", "int core(void) { return 0; }\n")
     fx.write(RECORD_PATH, render_record(inactive_record()))
     base = fx.commit("main", "CMakeLists.txt", ".release-please-manifest.json", "CHANGELOG.md",
-                     "release-please-config.json", "tests/data/release-disclosure.json",
-                     "tests/data/support-claims-v0.3.json",
-                     "tests/scripts/verify-support-ledger.py", "docs/support/v0.2.1.md",
+                     *REQUIRED_MANAGED_INPUTS, "docs/support/v" + main_version + ".md",
                      "src/core/gabbaboy.c", RECORD_PATH)
     fx.run("checkout", "-q", "-b", "release-please--branches--main")
     # The version PR: release-please bumps the version and changelog; the ledger is regenerated.
-    fx.write("CMakeLists.txt", "project(GabbaBoy VERSION 0.2.2 LANGUAGES C) # x-release-please-version\n")
-    fx.write(".release-please-manifest.json", '{\n  ".": "0.2.2"\n}\n')
-    fx.write("CHANGELOG.md", "# Changelog\n\n## 0.2.2\n\n- generated entry\n")
-    fx.write("docs/support/v0.2.2.md", "# v0.2.2 ledger\n")
+    fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {release_version} LANGUAGES C) # x-release-please-version\n")
+    fx.write(".release-please-manifest.json", json.dumps({".": release_version}, indent=2) + "\n")
+    fx.write("CHANGELOG.md", f"# Changelog\n\n## [{release_version}]\n\n- Support: [ledger](docs/support/v{release_version}.md).\n- generated entry\n")
+    fx.write("docs/support/v" + release_version + ".md",
+             f"# GabbaBoy v{release_version} support ledger\n")
     head = fx.commit("version pr", "CMakeLists.txt", ".release-please-manifest.json", "CHANGELOG.md",
-                     "docs/support/v0.2.2.md")
-    return fx, base, head, b"## 0.2.2\n\n- generated entry\n"
+                     "docs/support/v" + release_version + ".md")
+    return fx, base, head, f"## {release_version}\n\n- generated entry\n".encode("utf-8")
 
 
 def inactive_record() -> dict:
@@ -569,18 +968,41 @@ def self_test() -> tuple[int, int]:
         source_edit = fx.commit("source edit", "src/core/gabbaboy.c")
         rejected("source-change-after-review", lambda: check(source_edit, base), "window-stale-head",
                  "source:src/core/gabbaboy.c")
+        for path in REQUIRED_GENERATED_FILES:
+            fx.reset(frozen)
+            original = git_blob(repo, head, path)
+            if original is None:
+                raise AssertionError(f"fixture omitted generated output {path}")
+            fx.write(path, original + b"\nregenerated\n")
+            output_edit = fx.commit("generated output edit", path)
+            rejected("generated-output-change-after-review-" + Path(path).name,
+                     lambda output_edit=output_edit: check(output_edit, base), "window-stale-head",
+                     f"release-output:{path}")
         fx.reset(frozen)
-        fx.write("CHANGELOG.md", "# Changelog\n\n## 0.2.2\n\n- hand edit\n")
-        note_edit = fx.commit("release note edit", "CHANGELOG.md")
-        rejected("release-note-change-after-review", lambda: check(note_edit, base), "window-stale-head",
-                 "release-note:CHANGELOG.md")
+        fx.write("docs/support/v0.2.2.md", "# v0.2.2 ledger, hand edited\n")
+        ledger_edit = fx.commit("release ledger edit", "docs/support/v0.2.2.md")
+        rejected("release-ledger-change-after-review", lambda: check(ledger_edit, base), "window-stale-head",
+                 "release-output:docs/support/v0.2.2.md")
         fx.reset(frozen)
-        fx.write("tests/data/release-disclosure.json", '{"schema_version": 1, "edited": true}\n')
-        input_edit = fx.commit("generator input edit", "tests/data/release-disclosure.json")
-        rejected("generator-input-change-after-review", lambda: check(input_edit, base), "window-stale-head",
-                 "generator-input:tests/data/release-disclosure.json")
+        fx.write("CMakeLists.txt", "project(GabbaBoy VERSION 0.2.3 LANGUAGES C) # x-release-please-version\n")
+        cmake_version_edit = fx.commit("generated CMake version edit", "CMakeLists.txt")
+        rejected("generated-cmake-version-change-after-review", lambda: check(cmake_version_edit, base),
+                 "window-stale-head", "release-output:CMakeLists.txt")
+        for path in REQUIRED_MANAGED_INPUTS:
+            fx.reset(frozen)
+            original = git_blob(repo, head, path)
+            if original is None:
+                raise AssertionError(f"fixture omitted managed input {path}")
+            fx.write(path, original + b"\nchanged\n")
+            input_edit = fx.commit("generator input edit", path)
+            rejected("generator-input-change-after-review-" + Path(path).name,
+                     lambda input_edit=input_edit: check(input_edit, base), "window-stale-head",
+                     f"generator-input:{path}")
 
         # Mismatch after regeneration: the head and base are re-recorded but a digest is not recomputed.
+        fx.reset(frozen)
+        fx.write("tests/data/release-disclosure.json", b"edited disclosure input\n")
+        input_edit = fx.commit("generator input edit", "tests/data/release-disclosure.json")
         partial = copy.deepcopy(freeze(input_edit, base, body))
         partial["managed_inputs"]["tests/data/release-disclosure.json"] = reviewed["managed_inputs"][
             "tests/data/release-disclosure.json"]
@@ -608,6 +1030,24 @@ def self_test() -> tuple[int, int]:
         def with_record(record: dict) -> str:
             return commit_record(record)
 
+        # The v0.4 claim profile must remain an individually required input, even when its
+        # current bytes and the generated ledger digest are otherwise internally consistent.
+        profile_path = "tests/data/support-claims-v0.4.json"
+        profile_blob = git_blob(repo, head, profile_path)
+        if profile_blob is None:
+            raise AssertionError("fixture omitted the v0.4 claim profile")
+        profile_bound = copy.deepcopy(reviewed)
+        profile_bound["managed_inputs"].setdefault(profile_path, digest(profile_blob))
+        fx.reset(frozen)
+        bound_profile = frozen if profile_bound == reviewed else with_record(profile_bound)
+        accepted("v04-profile-explicitly-bound", lambda: check(bound_profile, base))
+        profile_omitted = copy.deepcopy(profile_bound)
+        del profile_omitted["managed_inputs"][profile_path]
+        fx.reset(bound_profile)
+        rejected("v04-profile-omitted", lambda: check(with_record(profile_omitted), base),
+                 "window-input-missing", profile_path)
+        fx.reset(frozen)
+
         review_stale = with_record({**reviewed, "review": {**reviewed["review"], "head": base}})
         rejected("review-for-another-head", lambda: check(review_stale, base), "window-review-stale")
         fx.reset(frozen)
@@ -617,11 +1057,11 @@ def self_test() -> tuple[int, int]:
         rehearsal_ref = with_record({**reviewed, "rehearsal": {**reviewed["rehearsal"], "ref": "rehearsal/v0.2.9"}})
         rejected("rehearsal-for-another-version", lambda: check(rehearsal_ref, base), "window-rehearsal-stale")
         fx.reset(frozen)
+        wrong_version_files = dict(reviewed["generated"]["files"])
+        wrong_version_files.pop("docs/support/v0.2.2.md")
+        wrong_version_files["docs/support/v0.2.9.md"] = reviewed["generated"]["files"]["docs/support/v0.2.2.md"]
         wrong_version = with_record({**reviewed, "release_version": "0.2.9",
-                                     "generated": {**reviewed["generated"], "files": {
-                                         **reviewed["generated"]["files"],
-                                         "docs/support/v0.2.9.md": reviewed["generated"]["files"][
-                                             "docs/support/v0.2.2.md"]}},
+                                     "generated": {**reviewed["generated"], "files": wrong_version_files},
                                      "rehearsal": {**reviewed["rehearsal"], "ref": "rehearsal/v0.2.9"}})
         rejected("record-for-another-version", lambda: check(wrong_version, base), "window-version-mismatch")
         fx.reset(frozen)
@@ -632,6 +1072,23 @@ def self_test() -> tuple[int, int]:
             rejected("generator-input-omitted-" + Path(omitted_input).name,
                      lambda: check(with_record(dropped_input), base), "window-input-missing",
                      omitted_input)
+        for omitted_output in (*REQUIRED_GENERATED_FILES, "docs/support/v0.2.2.md"):
+            fx.reset(frozen)
+            dropped_output = copy.deepcopy(reviewed)
+            del dropped_output["generated"]["files"][omitted_output]
+            rejected("generated-output-omitted-" + Path(omitted_output).name,
+                     lambda: check(with_record(dropped_output), base), "window-generated-missing",
+                     omitted_output)
+        fx.reset(frozen)
+        widened_inputs = copy.deepcopy(reviewed)
+        widened_inputs["managed_inputs"]["README.md"] = digest(b"not an allowed managed input")
+        rejected("unclassified-managed-input", lambda: check(with_record(widened_inputs), base),
+                 "window-record-invalid", "unclassified input README.md")
+        fx.reset(frozen)
+        widened_outputs = copy.deepcopy(reviewed)
+        widened_outputs["generated"]["files"]["README.md"] = digest(b"not an allowed generated output")
+        rejected("unclassified-generated-output", lambda: check(with_record(widened_outputs), base),
+                 "window-record-invalid", "unclassified output README.md")
         fx.reset(frozen)
         with_clock = {**reviewed, "expires_at": "2026-12-31T00:00:00Z"}
         rejected("clock-field-rejected", lambda: check(with_record(with_clock), base), "window-record-invalid",
@@ -673,6 +1130,11 @@ def self_test() -> tuple[int, int]:
         fx.run("rm", "-q", "release-please-config.json")
         fx.run("commit", "-q", "-m", "drop a managed input")
         rejected("tracked-contract-input-removed", lambda: check_tracked(repo), "window-input-missing")
+        fx.reset(base)
+        fx.run("rm", "-q", "docs/support/v0.2.1.md")
+        fx.run("commit", "-q", "-m", "drop the generated support ledger")
+        rejected("tracked-contract-ledger-removed", lambda: check_tracked(repo), "window-input-missing",
+                 "docs/support/v0.2.1.md")
 
         # The CLI reads the same objects: the exact process the workflow runs, over the frozen head.
         def cli(*arguments: str) -> subprocess.CompletedProcess:
@@ -707,6 +1169,271 @@ def self_test() -> tuple[int, int]:
     return positives, controls
 
 
+def self_test_version_v04() -> tuple[int, int]:
+    """Exercise exact v0.4.0 generated identity on committed disposable subjects."""
+    global RAW_HTML_CONSTRUCT
+    positives = 0
+    controls = 0
+
+    def accepted(name: str, result: subprocess.CompletedProcess) -> None:
+        nonlocal positives
+        if result.returncode != 0:
+            raise AssertionError(f"version-gate positive {name} was rejected: {result.stdout}{result.stderr}")
+        positives += 1
+
+    def rejected(name: str, result: subprocess.CompletedProcess, code: str) -> None:
+        nonlocal controls
+        if result.returncode != 1 or code not in result.stderr:
+            raise AssertionError(f"version-gate control {name} was accepted or misclassified: "
+                                 f"{result.stdout}{result.stderr}")
+        controls += 1
+
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-version-v04-") as temporary:
+        fx, base, head, body = build_fixture(Path(temporary), "0.3.0", "0.4.0")
+        repo = fx.repo
+        notes = Path(temporary) / "notes.md"
+        bad_notes = Path(temporary) / "bad-release-notes.md"
+
+        def cli(*arguments: str) -> subprocess.CompletedProcess:
+            return subprocess.run([sys.executable, "-I", str(Path(__file__).resolve()), "--repo", str(repo),
+                                   *arguments], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE, text=True, check=False, timeout=60)
+
+        def set_outputs(version: str, *, manifest_version: str | None = None,
+                        changelog_version: str | None = None, ledger_content_version: str | None = None,
+                        ledger_link_version: str | None = None, write_ledger: bool = True) -> None:
+            manifest_version = manifest_version or version
+            changelog_version = changelog_version or version
+            ledger_content_version = ledger_content_version or version
+            ledger_link_version = ledger_link_version or version
+            fx.write("CMakeLists.txt", f"project(GabbaBoy VERSION {version} LANGUAGES C) # x-release-please-version\n")
+            fx.write(".release-please-manifest.json", json.dumps({".": manifest_version}, indent=2) + "\n")
+            fx.write("CHANGELOG.md", f"# Changelog\n\n## [{changelog_version}]\n\n"
+                     f"- Support: [ledger](docs/support/v{ledger_link_version}.md).\n- generated entry\n")
+            if write_ledger:
+                fx.write("docs/support/v" + version + ".md",
+                         f"# GabbaBoy v{ledger_content_version} support ledger\n")
+            else:
+                (repo / ("docs/support/v" + version + ".md")).unlink(missing_ok=True)
+
+        accepted("inactive-development-record", cli("--check-tracked", "--rev", base))
+        accepted("inactive-0.3.0-version-assertion",
+                 cli("--check-tracked", "--rev", base, "--expect-version", "0.3.0"))
+        rejected("malformed-expected-version",
+                 cli("--check-tracked", "--rev", base, "--expect-version", "0.4"),
+                 "window-expect-version-invalid")
+        accepted("generated-0.4.0-output",
+                 cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
+
+        notes.write_bytes(body)
+        rejected("inactive-record-cannot-open-expected-window",
+                 cli("--rev", base, "--base", base, "--check", RECORD_PATH,
+                     "--body", str(notes), "--expect-version", "0.3.0"),
+                 "window-record-inactive")
+
+        record = draft_record(repo, head, base, body, 41, 1001, 2002)
+        fx.write(RECORD_PATH, render_record(record))
+        active = fx.commit("freeze exact 0.4.0 output", RECORD_PATH)
+        accepted("active-0.4.0-window",
+                 cli("--rev", active, "--base", base, "--check", RECORD_PATH,
+                     "--body", str(notes), "--expect-version", "0.4.0"))
+        rejected("expected-version-does-not-match-active-record",
+                 cli("--rev", active, "--base", base, "--check", RECORD_PATH,
+                     "--body", str(notes), "--expect-version", "0.3.0"),
+                 "window-version-mismatch")
+
+        # Exact version gating rejects common release-please outcomes even when all generated
+        # files agree internally and the development window record remains inactive.
+        for version in ("0.3.0", "0.3.1", "0.4.1"):
+            fx.reset(head)
+            set_outputs(version)
+            wrong = fx.commit("version output " + version, "CMakeLists.txt",
+                              ".release-please-manifest.json", "CHANGELOG.md",
+                              "docs/support/v" + version + ".md")
+            rejected("wrong-generated-version-" + version,
+                     cli("--check-tracked", "--rev", wrong, "--expect-version", "0.4.0"),
+                     "window-version-mismatch")
+
+        fx.reset(head)
+        set_outputs("0.4.0", manifest_version="0.3.0")
+        mixed_manifest = fx.commit("mixed CMake and manifest versions", "CMakeLists.txt",
+                                   ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("mixed-cmake-manifest", cli("--check-tracked", "--rev", mixed_manifest,
+                                               "--expect-version", "0.4.0"), "window-version-mismatch")
+
+        fx.reset(head)
+        set_outputs("0.4.0", ledger_content_version="0.3.0")
+        wrong_ledger = fx.commit("wrong version ledger content", "CMakeLists.txt",
+                                 ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("wrong-ledger-content", cli("--check-tracked", "--rev", wrong_ledger,
+                                               "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        fx.reset(head)
+        set_outputs("0.4.0", write_ledger=False)
+        missing_ledger = fx.commit("missing versioned ledger", "CMakeLists.txt",
+                                   ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("missing-versioned-ledger", cli("--check-tracked", "--rev", missing_ledger,
+                                                  "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        fx.reset(head)
+        set_outputs("0.4.0", changelog_version="0.3.1")
+        wrong_changelog = fx.commit("wrong changelog version", "CMakeLists.txt",
+                                    ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("wrong-changelog-section", cli("--check-tracked", "--rev", wrong_changelog,
+                                                  "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        fx.reset(head)
+        set_outputs("0.4.0", ledger_link_version="0.3.0")
+        wrong_ledger_link = fx.commit("wrong versioned changelog ledger link", "CMakeLists.txt",
+                                      ".release-please-manifest.json", "CHANGELOG.md", "docs/support/v0.4.0.md")
+        rejected("wrong-changelog-ledger-link", cli("--check-tracked", "--rev", wrong_ledger_link,
+                                                     "--expect-version", "0.4.0"), "window-version-output-mismatch")
+
+        changelog_section = "# Changelog\n\n## [0.4.0]\n\n"
+        ledger_link = "- Support: [ledger](docs/support/v0.4.0.md)."
+        canonical_ledger_link = ("- Support: [ledger](https://github.com/szTheory/gabbaboy/blob/v0.4.0/"
+                                "docs/support/v0.4.0.md).")
+        tick = chr(96)
+
+        fx.reset(head)
+        fx.write("CHANGELOG.md", changelog_section + canonical_ledger_link + "\n")
+        canonical_link_head = fx.commit("use canonical versioned support ledger link", "CHANGELOG.md")
+        accepted("canonical-versioned-ledger-link",
+                 cli("--check-tracked", "--rev", canonical_link_head, "--expect-version", "0.4.0"))
+
+        for hiding, content in (
+            ("comment", f"<!-- {ledger_link} -->"),
+            ("fenced-code", f"```markdown\n{ledger_link}\n```"),
+            ("indented-code", "    " + ledger_link),
+            ("blockquote-indented-code", ">     " + ledger_link),
+            ("blockquote-list-indented-code", "> -     " + ledger_link),
+            ("list-blockquote-indented-code", "- >     " + ledger_link),
+            ("list-tab-indented-code", "-\t    " + ledger_link),
+            ("list-space-tab-indented-code", "- \t    " + ledger_link),
+            ("blockquote-tab-indented-code", ">\t    " + ledger_link),
+            ("nested-list-tab-indented-code", "> - Item\n>   \t" + ledger_link),
+            ("blockquote-fenced-code", "> ~~~markdown\n> " + ledger_link + "\n> ~~~"),
+            ("list-fenced-code", f"- code:\n  {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
+            ("list-item-fenced-code", f"- {tick * 3}markdown\n  {ledger_link}\n  {tick * 3}"),
+            ("list-item-tilde-fenced-code", f"- ~~~markdown\n  {ledger_link}\n  ~~~"),
+            ("list-then-blockquote-fence",
+             f"- > {tick * 3}markdown\n  > {ledger_link}\n  > {tick * 3}"),
+            ("blockquote-then-list-fence",
+             f"> - {tick * 3}markdown\n>   {ledger_link}\n>   {tick * 3}"),
+            ("unclosed-comment", f"<!--\n{ledger_link}"),
+            ("inline-code-span", tick + ledger_link + tick),
+            ("multiline-inline-code-span", tick + "\n" + ledger_link + "\n" + tick),
+            ("image-is-not-a-ledger-link", "![ledger](docs/support/v0.4.0.md)"),
+            ("external-query-is-not-a-ledger-link",
+             "[ledger](https://evil.invalid/?next=docs/support/v0.4.0.md)"),
+            ("external-title-is-not-a-ledger-link",
+             "[ledger](https://evil.invalid/ \"docs/support/v0.4.0.md\")"),
+            ("nested-ledger-link-in-external-title-is-not-a-ledger-link",
+             "[outer](https://evil.invalid/ \"[ledger](docs/support/v0.4.0.md)\")"),
+            ("whitespace-before-link-destination-is-not-a-ledger-link",
+             "[ledger] (docs/support/v0.4.0.md)"),
+            ("newline-before-link-destination-is-not-a-ledger-link",
+             "[ledger]\n(docs/support/v0.4.0.md)"),
+            ("blank-line-before-link-destination-is-not-a-ledger-link",
+             "[ledger]\n\n(docs/support/v0.4.0.md)"),
+            ("blank-line-in-link-title-is-not-a-ledger-link",
+             "[ledger](docs/support/v0.4.0.md\n\n\"ledger\")"),
+            ("html-pre-is-not-a-ledger-link",
+             "<pre>\n" + ledger_link + "\n</pre>"),
+            ("hidden-html-div-is-not-a-ledger-link",
+             '<div style="display:none">' + ledger_link + "</div>"),
+            ("hidden-html-attribute-is-not-a-ledger-link",
+             '<span hidden title="[ledger](docs/support/v0.4.0.md)">release note</span>'),
+            ("html-declaration-is-not-a-ledger-link",
+             "<!DOCTYPE html>\n" + ledger_link),
+            ("html-processing-instruction-is-not-a-ledger-link",
+             '<?xml version="1.0"?>\n' + ledger_link),
+            ("html-cdata-is-not-a-ledger-link",
+             "<![CDATA[\n" + ledger_link + "\n]]>"),
+            ("unmatched-brackets-do-not-create-a-ledger-link", "[" * 5000),
+            ("malformed-destination-is-not-a-ledger-link",
+             "[ledger](not a valid destination docs/support/v0.4.0.md)"),
+        ):
+            accepted("visible-ledger-link-counterpart-" + hiding,
+                     cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
+            fx.reset(head)
+            fx.write("CHANGELOG.md", changelog_section + content + "\n")
+            hidden_link = fx.commit("hide the changelog ledger link in " + hiding, "CHANGELOG.md")
+            rejected("hidden-changelog-ledger-link-" + hiding,
+                     cli("--check-tracked", "--rev", hidden_link, "--expect-version", "0.4.0"),
+                     "window-version-output-mismatch")
+
+        fx.reset(head)
+        fx.write("CHANGELOG.md", "# Changelog\n\n<div hidden>\n\n## [0.4.0]\n\n" + ledger_link + "\n")
+        hidden_heading = fx.commit("hide the first changelog heading in HTML", "CHANGELOG.md")
+        rejected("html-before-changelog-heading",
+                 cli("--check-tracked", "--rev", hidden_heading, "--expect-version", "0.4.0"),
+                 "window-version-output-mismatch")
+
+        incomplete_html_openers = (
+            ("script-newline", "<script\n"),
+            ("script-space-newline", "<script \n"),
+            ("pre-newline", "<pre\n"),
+            ("pre-space-newline", "<pre \n"),
+            ("style-newline", "<style\n"),
+            ("style-space-newline", "<style \n"),
+            ("script-mixed-case", "<ScRiPt\n"),
+            ("doctype-html", "<!DOCTYPE html\n"),
+            ("xml-processing-instruction", '<?xml version="1.0"\n'),
+        )
+        for opener_name, opener in incomplete_html_openers:
+            for placement in ("before-heading", "inside-section"):
+                fx.reset(head)
+                accepted(f"incomplete-{opener_name}-{placement}-visible-counterpart",
+                         cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
+                if placement == "before-heading":
+                    changelog = "# Changelog\n\n" + opener + "## [0.4.0]\n\n" + ledger_link + "\n"
+                else:
+                    changelog = changelog_section + opener + ledger_link + "\n"
+                fx.write("CHANGELOG.md", changelog)
+                hidden_link = fx.commit(
+                    f"hide changelog ledger link with {opener_name} {placement}", "CHANGELOG.md")
+                result = cli("--check-tracked", "--rev", hidden_link, "--expect-version", "0.4.0")
+                rejected(f"incomplete-{opener_name}-{placement}-hides-ledger-link", result,
+                         "window-version-output-mismatch")
+
+                if opener_name == "script-newline" and placement == "inside-section":
+                    legacy_matcher = re.compile(
+                        r"</?[A-Za-z][A-Za-z0-9:-]*(?:\s[^<>]*)?\s*/?>|<![A-Z][^>]*>|"
+                        r"<\?[A-Za-z][^>]*\?>|<!\[CDATA\[", re.DOTALL | re.IGNORECASE)
+                    current_matcher = RAW_HTML_CONSTRUCT
+                    try:
+                        RAW_HTML_CONSTRUCT = legacy_matcher
+                        validate_version_outputs(repo, hidden_link, "0.4.0")
+                    except WindowError as error:
+                        raise AssertionError(
+                            "legacy raw-HTML matcher rejected the hidden-link causal fixture: " + str(error)) from error
+                    finally:
+                        RAW_HTML_CONSTRUCT = current_matcher
+                    positives += 1
+
+        # Masking still allows harmless examples when the actual relative ledger link stays visible.
+        for masking, example in (
+            ("comment", "<!-- <script\n -->"),
+            ("fenced-code", "```html\n<pre \n```") ,
+            ("indented-code", "    <style\n"),
+            ("inline-code", "`<!DOCTYPE html` `<?xml version=\"1.0\"`") ,
+        ):
+            fx.reset(head)
+            changelog = changelog_section + example + "\n" + ledger_link + "\n"
+            fx.write("CHANGELOG.md", changelog)
+            masked_head = fx.commit("mask incomplete raw-HTML example in " + masking, "CHANGELOG.md")
+            accepted("masked-incomplete-opener-" + masking,
+                     cli("--check-tracked", "--rev", masked_head, "--expect-version", "0.4.0"))
+
+        bad_notes.write_text("v0.3.0 notes with a historical ledger link\n", encoding="utf-8")
+        rejected("wrong-release-notes-version",
+                 cli("--rev", active, "--base", base, "--check", RECORD_PATH, "--body", str(notes),
+                     "--release-notes", str(bad_notes), "--expect-version", "0.4.0"),
+                 "window-release-notes-invalid")
+    return positives, controls
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rev", help="resolved 40-hex commit whose tree and record are judged")
@@ -719,16 +1446,29 @@ def main() -> int:
     parser.add_argument("--rehearsal-run-id", type=int)
     parser.add_argument("--check-tracked", action="store_true")
     parser.add_argument("--require-active", action="store_true")
+    parser.add_argument("--expect-version", help="require the judged CMake, manifest and generated outputs to match X.Y.Z")
+    parser.add_argument("--release-notes", type=Path, help="also judge supplied release notes with the existing adoption validator")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--self-test-version-v04", action="store_true")
     parser.add_argument("--repo", type=Path, default=ROOT, help="repository to read (default: this checkout)")
     args = parser.parse_args()
     try:
+        if args.expect_version is not None and VERSION.fullmatch(args.expect_version) is None:
+            reject("window-expect-version-invalid", "expected X.Y.Z")
+        if args.expect_version is not None and not (args.check or args.check_tracked):
+            parser.error("--expect-version requires --check or --check-tracked")
+        if args.release_notes is not None and not (args.check and args.expect_version is not None):
+            parser.error("--release-notes requires --check and --expect-version")
         if args.self_test:
             positives, controls = self_test()
             print(f"version-window controls pass positives={positives} controls={controls}")
             return 0
+        if args.self_test_version_v04:
+            positives, controls = self_test_version_v04()
+            print(f"release-version-v04 controls pass positives={positives} controls={controls}")
+            return 0
         if args.check_tracked:
-            print(check_tracked(args.repo, args.rev, args.require_active))
+            print(check_tracked(args.repo, args.rev, args.require_active, args.expect_version))
             return 0
         if args.require_active:
             parser.error("--require-active requires --check-tracked")
@@ -742,7 +1482,12 @@ def main() -> int:
         if args.check:
             if not (args.rev and args.base):
                 parser.error("--check requires --rev and --base")
-            print(check_window(args.repo, args.rev, args.base, args.check, read_body(args.body)))
+            resolved_rev = resolve_commit(args.repo, args.rev, "--rev")
+            verdict = check_window(args.repo, resolved_rev, args.base, args.check, read_body(args.body),
+                                   args.expect_version)
+            if args.release_notes is not None:
+                check_release_notes(args.repo, resolved_rev, args.release_notes)
+            print(verdict)
             return 0
         parser.error("supply --check, --digest, --check-tracked or --self-test")
     except WindowError as error:

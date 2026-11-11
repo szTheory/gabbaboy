@@ -62,9 +62,9 @@ SOURCES = "tests/data/release-api/SOURCES.md"
 RECOVERY_ADOPTION = "tests/scripts/verify-v02-adoption.py"
 RECOVERY_CLAIMS = "tests/scripts/verify-cgb-corpus-claims.py"
 RECOVERY_RELEASE_DOC = "docs/release.md"
-# The historical recovery source remains RECOVERY_SOURCE_SHA. Its adoption checker gained the
-# reviewed Phase 20 product-notice distinction, so pin that production checker separately.
-RECOVERY_ADOPTION_PIN_SHA = "802555ac42264561d6b3f6fbad233d9aac6db0a9"
+# The historical v0.3 recovery source remains RECOVERY_SOURCE_SHA. Pin the reviewed production
+# checker separately so the original tagged notes are exercised by the exact current checker.
+RECOVERY_ADOPTION_PIN_SHA = "75797dd6de40491b7345a304d49c1920b73e6ffb"
 PLATFORM_PRODUCT_ARCHIVES = (
     "gabbaboy-core-macos-arm64.tar.gz",
     "gabbaboy-preview-macos-arm64.tar.gz",
@@ -907,7 +907,7 @@ def _expect_adoption_pass(notes: bytes, label: str, source: str, root: Path) -> 
     except json.JSONDecodeError as error:
         raise Reject("recovery-adoption", f"production adoption checker output for {label} is not JSON") from error
     if summary.get("mode") != "release-notes" or summary.get("target") != "0.3.0" \
-            or summary.get("positive_success") is not True or summary.get("checks") != 22:
+            or summary.get("positive_success") is not True or summary.get("checks") != 24:
         raise Reject("recovery-adoption", f"production adoption checker positive for {label} is incomplete")
     return summary["checks"]
 
@@ -1446,7 +1446,7 @@ def self_test_post_tag_recovery(rev: str) -> tuple[int, int, str, str]:
         raise Reject("recovery-controls", "published-asset schema self-test failed: "
                      + (publisher_result.stderr.strip() or publisher_result.stdout.strip())[-500:])
 
-    if controls < 26 or positives < 5 or adoption_checks != 89:
+    if controls < 26 or positives < 5 or adoption_checks != 97:
         raise Reject("recovery-controls", "recovery controls lack the required negative and production-adoption positives")
     return controls, positives, original_hash, repaired_hash
 
@@ -3758,10 +3758,14 @@ def controls(rev: str, files: dict[str, bytes], capture: dict, base: Path) -> tu
         results.append("the lab refuses a permissive replacement of a production gate")
     else:
         raise Reject("control-accepted", "lab integrity accepted a replaced production gate")
-    positives += positive_baselines(ctx)
     with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+        # Baselines use private scenarios and frozen stage snapshots. Give their
+        # existing serial sequence one pool slot so it can overlap independent
+        # controls without increasing the established worker ceiling.
+        baseline = pool.submit(positive_baselines, ctx)
         futures = [pool.submit(fn, ctx) for fn in (*TASK1_CONTROLS, *task2_controls(ctx), *task3_controls(ctx))]
         futures.append(pool.submit(control_transport, template))
+        positives += baseline.result()
         for future in futures:
             outcome = future.result()
             results.extend(outcome if isinstance(outcome, list) else [outcome])

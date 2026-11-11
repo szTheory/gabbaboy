@@ -25,6 +25,8 @@ Usage:
 Failures print `REJECT <code>: <reason>` on stderr and exit 1.
 """
 import argparse
+import atexit
+import contextlib
 import gzip
 import hashlib
 import importlib.util
@@ -32,12 +34,14 @@ import io
 import json
 import os
 import pathlib
+import queue
 import re
 import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import zipfile
 import zlib
 import shutil
@@ -705,8 +709,104 @@ def _private_baseline_repo(scratch, checker):
     return repo
 
 
+# The self-test has two processes. Each owns at most 8 MiB of immutable blobs,
+# keeping combined retained blob data within the existing 16 MiB limit.
+SELF_TEST_BLOB_CACHE_BYTES = 8 << 20
+SELF_TEST_BLOB_CACHE_ENTRY_BYTES = 1 << 20
+
+
+def _cache_self_test_blobs(checker, cache):
+    original_blob = checker.blob
+
+    def cached_blob(root, revision, path):
+        # Never retain symbolic refs or mutable worktree results. Include checker
+        # bytes so changing a supplied checker cannot inherit its predecessor's cache.
+        if not isinstance(revision, str) or SHA1_RE.fullmatch(revision) is None:
+            return original_blob(root, revision, path)
+        key = (hashlib.sha256(pathlib.Path(checker.__file__).read_bytes()).digest(),
+               str(pathlib.Path(root).resolve()), revision, path)
+        if key in cache["entries"]:
+            cache["hits"] += 1
+            return cache["entries"][key]
+        data = original_blob(root, revision, path)
+        if len(data) <= SELF_TEST_BLOB_CACHE_ENTRY_BYTES and cache["bytes"] + len(data) <= SELF_TEST_BLOB_CACHE_BYTES:
+            cache["entries"][key] = data
+            cache["bytes"] += len(data)
+        return data
+
+    checker.blob = cached_blob
+
+
+def _cache_self_test_cli_blobs(namespace, cache):
+    original_loader = namespace["_shared_policy_checker"]
+    wrapped = set()
+
+    def load_checker(checker_path=None):
+        checker = original_loader(checker_path)
+        if id(checker) not in wrapped:
+            _cache_self_test_blobs(checker, cache)
+            wrapped.add(id(checker))
+        return checker
+
+    namespace["_shared_policy_checker"] = load_checker
+
+
+def _self_test_blob_cache_controls(scratch):
+    from types import SimpleNamespace
+
+    checker_path = scratch / "cache-checker.py"
+    checker_path.write_text("original checker\n", encoding="utf-8")
+    calls = []
+    payload = b"original blob"
+
+    def original_blob(root, revision, path):
+        calls.append((str(root), revision, path))
+        return payload
+
+    checker = SimpleNamespace(__file__=str(checker_path), blob=original_blob)
+    cache = {"entries": {}, "bytes": 0, "hits": 0}
+    _cache_self_test_blobs(checker, cache)
+    revision = "a" * 40
+    first = checker.blob(scratch, revision, "fixture")
+    payload = b"replacement"
+    if checker.blob(scratch, revision, "fixture") != first or len(calls) != 1:
+        raise SystemExit("self-test immutable blob cache did not reuse the exact immutable identity")
+    for root, rev, path in ((scratch / "other", revision, "fixture"),
+                            (scratch, "b" * 40, "fixture"), (scratch, revision, "other")):
+        if checker.blob(root, rev, path) != payload:
+            raise SystemExit("self-test immutable blob cache crossed a root/revision/path boundary")
+    checker_path.write_text("changed checker\n", encoding="utf-8")
+    if checker.blob(scratch, revision, "fixture") != payload:
+        raise SystemExit("self-test immutable blob cache reused bytes across checker source changes")
+    checker.blob(scratch, "HEAD", "fixture")
+    payload = b"moved symbolic ref"
+    if checker.blob(scratch, "HEAD", "fixture") != payload:
+        raise SystemExit("self-test immutable blob cache retained a mutable revision")
+    cache["entries"].clear()
+    cache["bytes"] = 0
+    payload = b"x" * SELF_TEST_BLOB_CACHE_ENTRY_BYTES
+    for index in range(SELF_TEST_BLOB_CACHE_BYTES // len(payload)):
+        checker.blob(scratch, revision, f"entry-{index}")
+    if cache["bytes"] != SELF_TEST_BLOB_CACHE_BYTES:
+        raise SystemExit("self-test immutable blob cache rejected its exact aggregate bound")
+    before = len(calls)
+    checker.blob(scratch, revision, "over-budget")
+    checker.blob(scratch, revision, "over-budget")
+    if cache["bytes"] != SELF_TEST_BLOB_CACHE_BYTES or len(calls) != before + 2:
+        raise SystemExit("self-test immutable blob cache retained data above its aggregate bound")
+    cache["entries"].clear()
+    cache["bytes"] = 0
+    payload += b"x"
+    checker.blob(scratch, revision, "oversized-entry")
+    if cache["entries"] or cache["bytes"]:
+        raise SystemExit("self-test immutable blob cache retained an oversized entry")
+    print("PASS: immutable blob cache identity isolation and resource boundaries")
+
+
 def _synthetic_core_product(scratch):
     checker = _load_product_policy_module()
+    blob_cache = {"entries": {}, "bytes": 0, "hits": 0}
+    _cache_self_test_blobs(checker, blob_cache)
     repo = _private_baseline_repo(scratch, checker)
     rules, _policy_bytes = checker._product_rules(repo)
     source_contract = checker._product_source_expectations(repo, rules, "core")
@@ -723,6 +823,8 @@ def _synthetic_core_product(scratch):
     inventory = checker.check_product_entries(entries, "core", repo)
     forbidden_source = "fixtures/mooneye-cgb/boot_regs-cgb.gb"
     forbidden_bytes = checker.blob(repo, checker.BASELINE_COMMIT, forbidden_source)
+    if blob_cache["hits"] == 0:
+        raise Reject("source-archive-self-test-failed", "immutable Git blob cache was not reused")
     return checker, repo, product, inventory, forbidden_bytes, rules, source_contract
 
 
@@ -861,9 +963,217 @@ def private_git(*args, cwd, input_bytes=None):
     return result.stdout
 
 
+MAX_SELF_TEST_CLI_SECONDS = 90
+MAX_SELF_TEST_CLI_OUTPUT = 1_048_576
+
+_SOURCE_ARCHIVE_WORKER_SOURCE = r'''import contextlib, io, json, runpy, sys, traceback
+
+blob_cache = {"entries": {}, "bytes": 0, "hits": 0}
+
+class OutputLimit(Exception):
+    pass
+
+class LimitedOutput(io.StringIO):
+    def __init__(self, limit):
+        super().__init__()
+        self.limit = limit
+        self.size = 0
+
+    def write(self, value):
+        size = len(value.encode("utf-8", "replace"))
+        if size > self.limit - self.size:
+            raise OutputLimit
+        self.size += size
+        return super().write(value)
+
+def invoke(request):
+    stdout = LimitedOutput(request["output_limit"])
+    stderr = LimitedOutput(request["output_limit"])
+    exit_code = 1
+    output_limit = False
+    hits_before = blob_cache["hits"]
+    try:
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            namespace = runpy.run_path(request["script"], run_name="gabbaboy_source_archive_cli")
+            if "_cache_self_test_cli_blobs" in namespace:
+                namespace["_cache_self_test_cli_blobs"](namespace["main"].__globals__, blob_cache)
+            try:
+                exit_code = namespace["main"](request["args"])
+            except SystemExit as error:
+                exit_code = error.code if isinstance(error.code, int) else (0 if error.code is None else 1)
+    except OutputLimit:
+        output_limit = True
+    except BaseException:
+        try:
+            stderr.write(traceback.format_exc())
+        except OutputLimit:
+            output_limit = True
+    if not isinstance(exit_code, int):
+        exit_code = 0 if exit_code is None else 1
+    return {"exit_code": exit_code, "stdout": stdout.getvalue(), "stderr": stderr.getvalue(),
+            "output_limit": output_limit, "blob_cache_hits": blob_cache["hits"] - hits_before,
+            "blob_cache_bytes": blob_cache["bytes"]}
+
+for line in sys.stdin.buffer:
+    try:
+        request = json.loads(line)
+        response = invoke(request)
+    except BaseException:
+        response = {"exit_code": 1, "stdout": "", "stderr": traceback.format_exc(),
+                    "output_limit": False, "blob_cache_hits": 0, "blob_cache_bytes": blob_cache["bytes"]}
+    sys.stdout.write(json.dumps(response, ensure_ascii=True, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+'''
+
+_SOURCE_ARCHIVE_WORKER = None
+_SOURCE_ARCHIVE_WORKER_RESPONSES = None
+_SOURCE_ARCHIVE_WORKER_READER = None
+_SOURCE_ARCHIVE_WORKER_STARTS = 0
+_SOURCE_ARCHIVE_WORKER_CALLS = 0
+_SOURCE_ARCHIVE_WORKER_CACHE_HITS = 0
+
+
+def _read_source_archive_worker(stream, responses):
+    try:
+        for line in iter(stream.readline, b""):
+            responses.put(line)
+    finally:
+        responses.put(None)
+
+
+def _stop_source_archive_worker():
+    global _SOURCE_ARCHIVE_WORKER, _SOURCE_ARCHIVE_WORKER_RESPONSES, _SOURCE_ARCHIVE_WORKER_READER
+    process = _SOURCE_ARCHIVE_WORKER
+    if process is None:
+        _SOURCE_ARCHIVE_WORKER_RESPONSES = None
+        _SOURCE_ARCHIVE_WORKER_READER = None
+        return
+    if process.poll() is None:
+        try:
+            process.terminate()
+        except OSError:
+            if process.poll() is None:
+                raise Reject("source-archive-self-test-failed", "could not stop the isolated CLI worker") from None
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+                process.wait(timeout=2)
+            except (OSError, subprocess.TimeoutExpired):
+                if process.poll() is None:
+                    raise Reject("source-archive-self-test-failed", "could not kill the isolated CLI worker") from None
+    if process.poll() is None:
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker remained alive")
+    _SOURCE_ARCHIVE_WORKER = None
+    _SOURCE_ARCHIVE_WORKER_RESPONSES = None
+    _SOURCE_ARCHIVE_WORKER_READER = None
+    for stream in (process.stdin, process.stdout):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+
+def _source_archive_worker():
+    global _SOURCE_ARCHIVE_WORKER, _SOURCE_ARCHIVE_WORKER_RESPONSES
+    global _SOURCE_ARCHIVE_WORKER_READER, _SOURCE_ARCHIVE_WORKER_STARTS
+    if _SOURCE_ARCHIVE_WORKER is None:
+        try:
+            _SOURCE_ARCHIVE_WORKER = subprocess.Popen(
+                [sys.executable, "-I", "-c", _SOURCE_ARCHIVE_WORKER_SOURCE],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            )
+        except OSError as error:
+            raise Reject("source-archive-self-test-failed", f"isolated CLI worker unavailable: {error.strerror}") from None
+        _SOURCE_ARCHIVE_WORKER_RESPONSES = queue.Queue()
+        _SOURCE_ARCHIVE_WORKER_READER = threading.Thread(
+            target=_read_source_archive_worker,
+            args=(_SOURCE_ARCHIVE_WORKER.stdout, _SOURCE_ARCHIVE_WORKER_RESPONSES), daemon=True,
+        )
+        _SOURCE_ARCHIVE_WORKER_READER.start()
+        _SOURCE_ARCHIVE_WORKER_STARTS += 1
+        atexit.register(_stop_source_archive_worker)
+    return _SOURCE_ARCHIVE_WORKER, _SOURCE_ARCHIVE_WORKER_RESPONSES
+
+
+def _invoke_cli(script, args, timeout=MAX_SELF_TEST_CLI_SECONDS):
+    global _SOURCE_ARCHIVE_WORKER_CALLS, _SOURCE_ARCHIVE_WORKER_CACHE_HITS
+    process, responses = _source_archive_worker()
+    _SOURCE_ARCHIVE_WORKER_CALLS += 1
+    request = {"script": str(pathlib.Path(script).resolve()), "args": list(args),
+               "output_limit": MAX_SELF_TEST_CLI_OUTPUT}
+    try:
+        process.stdin.write((json.dumps(request, ensure_ascii=True, separators=(",", ":")) + "\n").encode())
+        process.stdin.flush()
+    except (AttributeError, BrokenPipeError, OSError):
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker input failed") from None
+    try:
+        line = responses.get(timeout=timeout)
+    except queue.Empty:
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-cli-timeout", pathlib.Path(script).name) from None
+    if line is None:
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker output ended")
+    try:
+        response = json.loads(line)
+        code = response["exit_code"]
+        stdout = response["stdout"]
+        stderr = response["stderr"]
+        output_limit = response["output_limit"]
+        cache_hits = response["blob_cache_hits"]
+        cache_bytes = response["blob_cache_bytes"]
+    except (KeyError, TypeError, ValueError, UnicodeError):
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker response was malformed") from None
+    if type(code) is not int or not isinstance(stdout, str) or not isinstance(stderr, str) or type(output_limit) is not bool:
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker response had invalid fields")
+    if (type(cache_hits) is not int or cache_hits < 0 or type(cache_bytes) is not int
+            or not 0 <= cache_bytes <= SELF_TEST_BLOB_CACHE_BYTES):
+        _stop_source_archive_worker()
+        raise Reject("source-archive-self-test-failed", "isolated CLI worker cache exceeded its bound")
+    _SOURCE_ARCHIVE_WORKER_CACHE_HITS += cache_hits
+    if output_limit:
+        raise Reject("source-archive-self-test-cli-output-limit", pathlib.Path(script).name)
+    return code, stderr, stdout
+
+
+def _source_archive_worker_controls(script, scratch):
+    noisy = scratch / "source-archive-worker-noisy.py"
+    noisy.write_text("def main(argv):\n    print('x' * 1048577)\n    return 0\n", encoding="utf-8")
+    try:
+        _invoke_cli(noisy, (), timeout=2)
+    except Reject as error:
+        if error.code != "source-archive-self-test-cli-output-limit":
+            raise SystemExit(f"self-test CLI output cap rejected for the wrong reason: {error}") from None
+    else:
+        raise SystemExit("self-test CLI output cap accepted a stream over 1 MiB")
+
+    code, _stderr, stdout = _invoke_cli(script, ("--help",), timeout=5)
+    if code != 0 or "--archive" not in stdout:
+        raise SystemExit("self-test CLI worker was not reusable after output overflow")
+
+    slow = scratch / "source-archive-worker-slow.py"
+    slow.write_text("import time\ndef main(argv):\n    time.sleep(0.5)\n    return 0\n", encoding="utf-8")
+    try:
+        _invoke_cli(slow, (), timeout=0.1)
+    except Reject as error:
+        if error.code != "source-archive-self-test-cli-timeout":
+            raise SystemExit(f"self-test CLI timeout rejected for the wrong reason: {error}") from None
+    else:
+        raise SystemExit("self-test CLI worker exceeded its hard timeout")
+    code, _stderr, stdout = _invoke_cli(script, ("--help",), timeout=5)
+    if code != 0 or "--archive" not in stdout:
+        raise SystemExit("self-test CLI worker was not reusable after timeout")
+    return 2
+
+
 def run_cli(script, *args):
-    result = subprocess.run([sys.executable, "-I", str(script), *args], capture_output=True, text=True, check=False)
-    return result.returncode, result.stderr, result.stdout
+    return _invoke_cli(script, args)
 
 
 # --------------------------------------------------------------------------- notice attribute scope
@@ -926,10 +1236,16 @@ def notice_digest_problems(root, table):
 
 
 def self_test():
+    global _SOURCE_ARCHIVE_WORKER_STARTS, _SOURCE_ARCHIVE_WORKER_CALLS, _SOURCE_ARCHIVE_WORKER_CACHE_HITS
+    _SOURCE_ARCHIVE_WORKER_STARTS = 0
+    _SOURCE_ARCHIVE_WORKER_CALLS = 0
+    _SOURCE_ARCHIVE_WORKER_CACHE_HITS = 0
     script = pathlib.Path(__file__).resolve()
     positives = negatives = 0
     with tempfile.TemporaryDirectory(prefix="gabbaboy-source-archive-") as scratch_name:
         scratch = pathlib.Path(scratch_name)
+        _self_test_blob_cache_controls(scratch)
+        negatives += _source_archive_worker_controls(script, scratch)
         sha = "a" * 40
         tag = "v0.0.1"
 
@@ -1328,7 +1644,8 @@ def self_test():
                 expect_product(f"product-known-forbidden-{directory}-{disguise}",
                                {**good_product, path: forbidden_product_bytes}, "product-fixture-leak")
 
-        policy_rules, _ = product_checker._product_rules(product_repo)
+        # Reuse the rules already read from this immutable private baseline.
+        policy_rules = product_rules
         fixture_records = [(source, record) for source, record in policy_rules["files"].items()
                            if source.startswith("fixtures/") and record["destinations"].get("core")]
         for index, (source, record) in enumerate(fixture_records):
@@ -1590,6 +1907,11 @@ def self_test():
             print("skipped: real-repository-tag (no git checkout)")
     if positives == 0 or negatives == 0:
         raise SystemExit("self-test selected no positive or no negative cases")
+    if _SOURCE_ARCHIVE_WORKER_CALLS <= _SOURCE_ARCHIVE_WORKER_STARTS:
+        raise SystemExit("self-test CLI worker did not serve multiple isolated invocations")
+    if _SOURCE_ARCHIVE_WORKER_CACHE_HITS == 0:
+        raise SystemExit("self-test CLI worker did not reuse immutable Git blobs")
+    _stop_source_archive_worker()
     print(f"PASS: source archive checker accepted {positives} cases and rejected {negatives} negative controls")
 
 

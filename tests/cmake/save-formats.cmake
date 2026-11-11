@@ -123,7 +123,7 @@ if(NOT WIN32)
       "-DGBB_EXPECT_REGEX=save-formats self-test pass controls=[0-9]+"
       -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=15
       -P "${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake")
-  set_tests_properties(save_format_controls PROPERTIES TIMEOUT 60)
+  set_tests_properties(save_format_controls PROPERTIES TIMEOUT 60 PROCESSORS 4)
 endif()
 
 add_test(NAME host_contract_controls

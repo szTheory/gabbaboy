@@ -1136,3 +1136,68 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Verification:** The exact-head PR CI, fixture, installed-consumer, and player-package checks all passed at `e0845db5`; both event-level `ci` and fixture-reproduction runs were green. For PR #141, the job log confirms the canceled push aggregate rejected `NATIVE_LINUX: cancelled` while the same-SHA PR aggregate passed; the PR was blocked until that duplicate context is replaced with successful evidence. Compare completed run records for the same head SHA and confirm the required current-head PR contexts remain present and successful after any separately approved workflow change.
 - **Source:** Phase 21 PR #140, push run `41554953994`, pull-request run `41554959166`; fixture-reproduction runs `41554954013` and `41554959121`.
 - **Status:** Follow-up recorded; no CI workflow changed in Phase 21.
+
+### GB-CI-023 / 2026-11-04 / Shard exhaustive documentation controls under their per-test timeout
+
+- **Cause and evidence:** The Phase 23 docs self-test passed when run directly but exceeded the 180-second CTest bound. Each accepted or mutated case launches the production CLI, which reparses the complete public-document set and support ledger. The first phase-wide run also encountered sandbox denials in unrelated controls that create temporary Git worktrees.
+- **Remedy:** Keep the unsharded self-test behavior, distribute its existing CLI cases deterministically over registered CTest shards, assert each shard's selected-call coverage plus positive and negative cases, and run the shared release-note sweep once across the complete shard set. Keep every shard in the expected-test inventory and under an explicit D-069 budget row.
+- **Applies when:** A mutation-heavy CLI harness repeatedly parses large shared inputs and the test budget is per-test rather than per-suite.
+- **Verification:** Configure/build and the base-aware timeout-budget checker passed; the complete 32-shard docs set and all paired T2 gates passed in a 50/50 focused CTest selection. The full Phase 23 qualification suite remains required after the source-bound reports are reissued.
+- **Source:** `tests/scripts/verify-v02-adoption.py`, `tests/CMakeLists.txt`, `tests/expected-tests.txt`, `tests/ci/test-budget-allowlist`, and Phase 23 T2 rescope.
+- **Status:** Harness correction implemented and focused-gate verified; final exact-source reviews remain pending. No docs control was removed.
+
+### GB-CI-022 / 2026-11-04 / Use CMake-supported regex syntax in CTest output contracts
+
+- **Cause and evidence:** The Phase 23 review-evidence checker returned success and its direct gate passed, but the registered CTest rejected its success line because the expected regex used `{12}`. A minimal CMake probe did not match `[0-9a-f]{12}` and did match `[0-9a-f]+`; CMake's regex engine does not support that counted-repeat form.
+- **Remedy:** Keep success output checks to regex features supported by CMake, and update the review-evidence registration self-test alongside the CTest expectation so both validate the same pattern.
+- **Applies when:** CMake-based CTests match CLI output with `if(output MATCHES ...)`; do not assume Python/PCRE counted-repeat syntax works in CMake.
+- **Verification:** The direct immutable report gate passed at the evidence commit; the failing CTest's exit code was zero and only the output matcher failed. The corrected registered contract and self-test will be re-run against the reissued exact-source reports.
+- **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-review-evidence.py`, and Phase 23 CTest evidence for the review-evidence gate.
+- **Status:** Fix implemented; exact-source CTest re-verification pending.
+
+### GB-CI-024 / 2026-11-08 / Deduplicate overlapping CTest policy fixtures
+
+- **Cause and evidence:** While adding exact PROCESSORS coverage for workflow-policy CI and rehearsal groups, both names entered `PHASE23_RESERVED_TESTS`, even though the synthetic self-test already creates them from `POLICY_TEST_NAMES`. The production inventory check passed, but the self-test rejected duplicate registrations and the `workflow_policy_coverage_controls` CTest failed.
+- **Remedy:** Keep overlapping names in the reservation set for property verification and negative mutations, but exclude existing policy test names from the generic reserved-test fixture loop.
+- **Applies when:** A CTest checker synthesizes policy-group entries and additional reservation entries from separate sets that may overlap.
+- **Verification:** The corrected self-test reports 128 controls, including one three-slot rejection per reservation; the exact configured inventory reports 540 controls across six groups, and both coverage CTests pass. Exact-source phase review is reissued after the checker fix commit.
+- **Source:** `tests/scripts/verify-workflow-policy-coverage.py`; Phase 23 T2 D-161.
+- **Status:** Corrected; exact-source review pending.
+
+### GB-CI-025 / 2026-11-09 / Reserve docs shards that stall only under suite load
+
+- **Cause and evidence:** The four-worker Phase 23 local suite timed out twelve docs shards without assertion output. All twelve passed sequentially on the same build, and shard 181 also passed directly. CTest cleanup printed `/bin/ps: Operation not permitted`; no test processes remained after the run was stopped.
+- **Remedy:** Reserve all four CTest slots for the twelve measured shards. Require exact inventory, `PROCESSORS 4`, and existing `v02` labels, with a three-slot negative and wrong-label negative for each. Preserve commands and all timeouts.
+- **Applies when:** Exact docs controls pass in isolation but hang during a four-worker suite without reporting a checker assertion failure.
+- **Verification:** At `b677a36e`, the 160-control self-test, 540-control inventory check, 14 focused CTests, and all twelve affected-shard CTests passed. The full local suite must still be rerun after the reviewed source is final.
+- **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-workflow-policy-coverage.py`, and Phase 23 T2 D-162.
+- **Status:** Implemented and focused-gate verified; final full-suite result pending.
+
+### GB-CI-026 / 2026-11-09 / Reserve the full generated docs-shard inventory
+
+- **Cause and evidence:** After the twelve D-162 shards were reserved, a different set of sixteen docs shards timed out in the 224-test focused run under four-worker load. Every one passed sequentially on the same build; the prior timeout set did too. The affected shard set changes between parallel runs.
+- **Remedy:** Reserve four CTest slots for all 200 docs controls, including the unnumbered shard-0 registration. Keep the global four-worker limit and each shard's existing command, `v02` label, assertions, and 90-second timeout. Generate exact inventory, processor, and label checks plus one three-slot and one wrong-label negative per entry.
+- **Applies when:** A deterministic generated test inventory shows shifting, isolation-only timeouts across its members under bounded parallel execution.
+- **Verification:** The new checker self-test passes 526 controls. The sixteen newly affected shards passed 16/16 sequentially; the exact CMake registration, full focused selection, and full suite remain to be rerun on the final reviewed source.
+- **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-workflow-policy-coverage.py`, and Phase 23 T2 D-163.
+- **Status:** Implemented; exact-source configure, review, and suite gates pending.
+
+
+### GB-CI-027 / 2026-11-11 / Balance retained control work and remove proven duplicate setup
+
+- **Cause and evidence:** The Linux qualification stream timed out docs shard 0 and release disclosure, then exhausted its job window. Shard 0 held all 70 release-note cases. Disclosure's six fresh CLI calls dominated its local profile; copying the checked inputs did not. Linux also ran the same ledger self-test before the build and again in the full inventory. Other required platforms/configurations passed.
+- **Remedy:** Keep case identities, payloads, intended diagnostics and fresh CLI processes. Distribute note cases over the existing shard identities with sparse exact-once accounting; preserve standalone/unsharded semantics. Overlap independent disclosure cases with two workers and private workspaces inside the existing reservation, draining results before cleanup. Remove only the duplicate ledger preflight and guard its full-suite replacement's exact command, exit and marker. Keep all limits and unique release-gate setup.
+- **Applies when:** A shared control sweep dominates one shard, independent end-to-end cases repeat serially, or a setup command has an equivalent or stronger required full-suite counterpart. Prove that equivalence before deleting work; timing alone is not coverage.
+- **Verification:** Direct docs shards, the complete standalone notes route, the configured disclosure CTest, and the new coverage guard's positive/causal negatives pass. Exact source review and final full qualification remain pending. Original-versus-new note manifests and diagnostic timings are retained in ignored build evidence.
+- **Source:** Phase 23 D-176 and `23-EVIDENCE.md`.
+- **Status:** Implemented and reviewed; all native Linux/macOS/Windows cases passed at76e32ae1, including the original docs/disclosure deadlines. Qualification remains held by two other job caps. CTest COST hints did not actually front-load the observed sanitizer consumers, so their presence is not proof of execution order. Background automation preference is retained in durable instructions.
+
+
+### GB-CI-028 / 2026-11-11 / Match the configured test environment before comparing deadlines
+
+- **Cause and evidence:** A D-177 direct release-policy self-test passed under shell-selected Python3.9.6 but its approximate log duration exceeded the180-second CTest ceiling. CMake had configured Python3.14. A prior lifecycle diagnostic also used the older shell interpreter and failed a version-dependent helper call. Neither result established the configured CTest outcome.
+- **Remedy:** Resolve the interpreter from the configured cache and use its isolated CLI; prepend that interpreter’s binary directory when scripts launch Python children. Record the interpreter, source and environment with each receipt. Keep direct checks on a different interpreter as separately labeled source evidence. This rule is now part of WORKFLOW.md.
+- **Applies when:** Local shells, SDKs or developer tools provide a different Python from CMake/CTest, particularly for subprocess-heavy harnesses and deadline diagnosis.
+- **Verification:** The D-177 direct check’s actual interpreter was identified without changing any source/test deadline. Final qualification will use the configured interpreter and matching PATH; no faster-run or CTest-pass claim is inferred from the mismatch.
+- **Source:** D-177 source-check logs and23-EVIDENCE.md; WORKFLOW.md CI/CD efficiency.
+- **Status:** Environment drift identified and durable instruction added; exact configured qualification pending.

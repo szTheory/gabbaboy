@@ -7,11 +7,13 @@ import ast
 import copy
 import hashlib
 import json
+import ntpath
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 if not __debug__ or sys.flags.optimize:
@@ -20,10 +22,15 @@ if not __debug__ or sys.flags.optimize:
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
+SUPPORT_LEDGER_CONTROL_MARKER = (
+    "support ledger static self-test passed: positive=1 rejected_controls=5 "
+    "controls=changed-covered-input,missing-covered-input,added-case-inventory,"
+    "removed-case-inventory,unparseable-ledger"
+)
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
-REVIEWED_POLICY_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
-REVIEWED_POLICY_SHA256 = "17e9204c8b625bbc4c30fd2b3b10056708c5af102d4ca395ec84ff06ca5e35b4"
+REVIEWED_POLICY_COMMIT = "56ff25b6a9a9cad4bb19e4a367e3f7c937975a88"
+REVIEWED_POLICY_SHA256 = "77d78361fd8005d61c9cb605549293ec6869cc40b4cfb5cc92a4d20c60fcf568"
 REVIEWED_ARCHIVE_HELPER_COMMIT = "37de7e8a9afee6b2b8a263e543279704cbfc1d56"
 REVIEWED_ARCHIVE_HELPER_SHA256 = "54fcfd4869ca2f3d085cfac690804858b42c37d73e7032ff6912a4e972123ce5"
 GROUPS = {
@@ -34,6 +41,41 @@ GROUPS = {
     "ledger": "workflow_policy_group_ledger",
     "helpers": "workflow_policy_group_helpers",
 }
+DOC_SHARD_TESTS = {f"phase23_docs_controls_shard_{shard:02d}" for shard in range(1, 200)}
+DOC_CONTROL_TESTS = {"v02_adoption_docs_controls", *DOC_SHARD_TESTS}
+PHASE23_RESERVED_TESTS = {
+    "phase23_review_evidence_controls",
+    "host_exit_crash_storm",
+    "fixture_product_core_controls",
+    "fixture_admission_controls",
+    "v02_consumer_controls_c",
+    "v02_consumer_controls_cpp",
+    "acceptance_dense_input_controls",
+    "workflow_policy_group_ci",
+    "workflow_policy_group_rehearsal",
+    "phase21_fixture_admission_controls",
+    "fixture_product_player_controls",
+    "preview_package_smoke",
+    "release_disclosure_controls",
+    "release_version_v04_controls",
+    "save_format_controls",
+    "support_claims_v04_controls",
+    "v02_fuzz_controls",
+    "v02_support_ledger_controls",
+    "v03_dispositions_controls",
+}
+PHASE23_RESERVED_TESTS.update(DOC_CONTROL_TESTS)
+SANITIZER_SCHEDULE_COST_TESTS = {"v02_consumer_controls_c", "v02_consumer_controls_cpp"}
+PROCESSOR_RESERVED_TESTS = {GROUPS["release_jobs"], *PHASE23_RESERVED_TESTS}
+EXPECTED_RESERVED_LABELS = {
+    "fixture_product_core_controls": ["v02"],
+    "fixture_product_player_controls": ["v02"],
+    "fixture_admission_controls": ["v02"],
+    "v02_consumer_controls_c": ["v02"],
+    "v02_consumer_controls_cpp": ["v02"],
+}
+EXPECTED_RESERVED_LABELS.update({name: ["v02"] for name in DOC_CONTROL_TESTS})
+POSIX_ONLY_RESERVED_TESTS = {"host_exit_crash_storm", "save_format_controls"}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
                           "rehearsal": "rehearsal", "ledger": "ledger", "helpers": "helpers"}
 GROUP_BY_WORKFLOW = {
@@ -48,6 +90,12 @@ EXPECTED_TEST_NAMES = set(GROUPS.values()) | {"workflow_policy_coverage", "workf
 POLICY_TEST_NAMES = EXPECTED_TEST_NAMES | {"workflow_policy_check"}
 ALL_PLATFORMS = ("posix", "windows")
 POSIX_ONLY = ("posix",)
+PREVIEW_BUDGET_JOBS = (
+    "installed-package-smoke-linux-x64",
+    "installed-package-smoke-macos-arm64",
+    "player-package-smoke-macos",
+)
+PREVIEW_HOST_RUNNERS = {"installed-package-smoke-linux-x64": "ubuntu-22.04"}
 ADDED_POLICY_FUNCTIONS = {
     "_policy_control_id", "_record_policy_completion", "_mark_policy_control", "run_policy_self_test",
     "_fixture_step", "_fixture_call", "_fixture_call_exact", "_fixture_step_event", "check_fixture_admission_workflows",
@@ -72,9 +120,12 @@ INSTRUMENTED_POLICY_FUNCTIONS = {
     "_ledger_git_object_controls", "_ledger_disclosure_scratch_controls", "_ledger_release_object_scratch_controls",
     "verify_cited_stub_controls", "rehearsal_bash_resolver_controls", "rehearsal_tag_guard_controls", "self_test",
 }
-# These existing functions changed in the exact reviewed snapshot above. Their full source
-# bytes are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
-REVIEWED_CHANGED_POLICY_FUNCTIONS = {"_copy_fixture", "main", "self_test"}
+# These existing functions changed in their exact reviewed snapshots. Their full source bytes
+# are pinned by REVIEWED_POLICY_SHA256; skip only their historical baseline AST diff.
+REVIEWED_CHANGED_POLICY_FUNCTIONS = {
+    "_check_ci_planning_lane", "_copy_fixture", "_ledger_mutations", "_mutations",
+    "check_version_window", "check_version_pr_gate", "main", "self_test",
+}
 ADDED_MUTATION_CONTROLS = (
     ("P20 isolated Linux product verifier is removed", "release.yml", "fixture-product-trust"),
     ("P20 Linux stage gate prefixes an untrusted PATH assignment", "release.yml", "fixture-product-stage"),
@@ -97,6 +148,7 @@ ADDED_MUTATION_CONTROLS = (
     ("P20 Linux stage gate repeats the repository root option", "release.yml", "fixture-product-stage"),
     ("P20 Linux stage gate appends a second product tree", "release.yml", "fixture-product-stage"),
     ("downloaded product archive controls", "release.yml", "fixture-product-trust"),
+    ("ci push trigger runs on every branch", "ci.yml", "workflow-trigger"),
 )
 
 
@@ -162,6 +214,228 @@ def git_text(root: Path, revision: str, path: str) -> bytes:
     if result.returncode != 0:
         reject(f"immutable candidate source is unavailable: {revision}:{path}")
     return result.stdout
+
+
+def _workflow_job_block_text(workflow: str, job_id: str) -> str | None:
+    """Extract a top-level job block without executing the workflow being checked."""
+    match = re.search(rf"(?m)^  {re.escape(job_id)}:\s*$", workflow)
+    if match is None:
+        return None
+    next_job = re.search(r"(?m)^  [A-Za-z0-9_-]+:\s*$", workflow[match.end():])
+    end = match.end() + next_job.start() if next_job else len(workflow)
+    return workflow[match.start():end]
+
+
+def _replace_job_block_value(workflow: str, job_id: str, old: str, new: str) -> str:
+    block = _workflow_job_block_text(workflow, job_id)
+    if block is None or block.count(old) != 1:
+        reject(f"cannot create the {job_id} timeout-policy negative control")
+    changed = block.replace(old, new, 1)
+    return workflow.replace(block, changed, 1)
+
+
+def _parse_workflow_text(text: str, name: str, policy_namespace: dict) -> dict:
+    """Use the pinned workflow reader for both candidate YAML and injected controls."""
+    reader_type = policy_namespace.get("_Reader")
+    if reader_type is None:
+        reject("pinned workflow reader is unavailable")
+    reader = reader_type(text, name)
+    tree = reader.mapping(0)
+    if reader.peek() is not None:
+        reject(f"{name}: content remains after parsing the workflow")
+    jobs = tree.get("jobs")
+    if not isinstance(jobs, dict) or not jobs:
+        reject(f"{name}: parsed workflow is missing its jobs mapping")
+    return tree
+
+
+def _folded_waiter_run(preview_workflow: str, job_id: str, job: dict) -> str:
+    """Read the active folded YAML scalar so shell parsing sees GitHub's actual joined command."""
+    block = _workflow_job_block_text(preview_workflow, job_id)
+    if block is None:
+        reject(f"preview timeout policy is missing job {job_id}")
+    lines = block.splitlines()
+    raw_runs = []
+    index = 0
+    while index < len(lines):
+        if lines[index] != "        run: >-":
+            index += 1
+            continue
+        index += 1
+        scalar_lines = []
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() and len(line) - len(line.lstrip(" ")) <= 8:
+                break
+            if line.strip():
+                if len(line) - len(line.lstrip(" ")) != 10:
+                    reject(f"preview job {job_id} has unsupported exact-head command indentation")
+                scalar_lines.append(line[10:])
+            elif scalar_lines:
+                reject(f"preview job {job_id} exact-head command contains a folded-scalar blank line")
+            index += 1
+        scalar = "\n".join(scalar_lines)
+        if ".github/scripts/wait-exact-head-ci.py" in scalar:
+            raw_runs.append(scalar)
+    parsed_runs = [step.get("run", "") for step in job.get("steps", [])
+                   if ".github/scripts/wait-exact-head-ci.py" in step.get("run", "")]
+    if len(raw_runs) != 1 or len(parsed_runs) != 1 or raw_runs[0] != parsed_runs[0]:
+        reject(f"preview job {job_id} must expose one parsed folded exact-head waiter command")
+    return " ".join(parsed_runs[0].splitlines())
+
+
+def _replace_folded_waiter_run(workflow: str, job_id: str, replacement: str) -> str:
+    """Replace only the exact folded waiter scalar for a shell-policy negative control."""
+    block = _workflow_job_block_text(workflow, job_id)
+    if block is None:
+        reject(f"preview timeout policy is missing job {job_id}")
+    lines = block.splitlines()
+    matches = []
+    index = 0
+    while index < len(lines):
+        if lines[index] != "        run: >-":
+            index += 1
+            continue
+        start = index + 1
+        index += 1
+        scalar_lines = []
+        while index < len(lines):
+            line = lines[index]
+            if line.strip() and len(line) - len(line.lstrip(" ")) <= 8:
+                break
+            if line.strip():
+                if len(line) - len(line.lstrip(" ")) != 10:
+                    reject(f"preview job {job_id} has unsupported exact-head command indentation")
+                scalar_lines.append(line[10:])
+            elif scalar_lines:
+                reject(f"preview job {job_id} exact-head command contains a folded-scalar blank line")
+            index += 1
+        if ".github/scripts/wait-exact-head-ci.py" in " ".join(scalar_lines):
+            matches.append((start, index))
+    if len(matches) != 1:
+        reject(f"preview job {job_id} does not have one folded waiter scalar to mutate")
+    start, end = matches[0]
+    lines[start:end] = [f"          {replacement}"]
+    changed = "\n".join(lines)
+    return workflow.replace(block, changed, 1)
+
+
+def _preview_wait_deadlines(job: dict, job_id: str, preview_workflow: str,
+                            preview_tree: dict, policy_namespace: dict) -> list[str]:
+    shell_events = policy_namespace.get("shell_events")
+    if shell_events is None:
+        reject("pinned shell parser is unavailable")
+    if preview_tree.get("env") != {"PREVIEW_RETENTION_DAYS": "14"} or "defaults" in preview_tree:
+        reject("preview workflow may not override the waiter environment or run defaults")
+    if job.get("env") or "defaults" in job:
+        reject(f"preview job {job_id} may not override the waiter environment or run defaults")
+    if job_id in PREVIEW_HOST_RUNNERS and job.get("runs-on") != PREVIEW_HOST_RUNNERS[job_id]:
+        reject(f"preview job {job_id} must run on {PREVIEW_HOST_RUNNERS[job_id]}")
+    if "container" in job or "services" in job:
+        reject(f"preview job {job_id} may not use a job container or services")
+    if job.get("if") or job.get("continue-on-error", "false") not in (False, "false", ""):
+        reject(f"preview job {job_id} must remain enabled and fail closed")
+    steps = job.get("steps", [])
+    waiter_positions = [(index, step) for index, step in enumerate(steps)
+                        if ".github/scripts/wait-exact-head-ci.py" in step.get("run", "")]
+    if len(waiter_positions) != 1:
+        reject(f"preview job {job_id} must expose exactly one waiter step")
+    waiter_index, step = waiter_positions[0]
+    checkout_name = (
+        "Check out exact pull request head" if job_id == "player-package-smoke-macos"
+        else "Check out tested source revision"
+    )
+    checkout = {
+        "name": checkout_name,
+        "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+        "with": {
+            "ref": "${{ github.event.pull_request.head.sha }}",
+            "fetch-depth": "0",
+            "persist-credentials": "false",
+        },
+    }
+    if (waiter_index != 1 or steps[0] != checkout
+            or "if" in steps[0] or steps[0].get("continue-on-error", "false") not in (False, "false", "")):
+        reject(f"preview job {job_id} waiter must immediately follow the pinned trusted checkout")
+    expected_name = ("Find the exact successful player build run" if job_id == "player-package-smoke-macos"
+                     else "Verify matching successful required CI run")
+    expected_step_env = {
+        "GH_TOKEN": "${{ github.token }}",
+        "EXPECTED_SHA": "${{ github.event.pull_request.head.sha }}",
+    }
+    if (step.get("name") != expected_name or step.get("env") != expected_step_env
+            or (step.get("id") != "candidate" if job_id == "player-package-smoke-macos" else "id" in step)
+            or "if" in step or step.get("shell") not in (None, "bash") or "working-directory" in step
+            or step.get("continue-on-error", "false") not in (False, "false", "")):
+        reject(f"preview job {job_id} waiter step must stay unconditional, trusted, and fail closed")
+    try:
+        events = shell_events(_folded_waiter_run(preview_workflow, job_id, job))
+    except Exception as error:
+        reject(f"preview job {job_id} has an unreadable shell command: {error}")
+    if len(events) != 1:
+        reject(f"preview job {job_id} must contain only one shell command for its exact-head waiter")
+    event = events[0]
+    if (event.frames or event.assigns or event.connector is not None or event.guard
+            or event.words[:2] != ["python3", ".github/scripts/wait-exact-head-ci.py"]):
+        reject(f"preview job {job_id} exact-head waiter must be a standalone unconditional command")
+    expected = [
+        "python3", ".github/scripts/wait-exact-head-ci.py",
+        "--sha", "$EXPECTED_SHA", "--repo", "$GITHUB_REPOSITORY",
+        "--require", "required-native",
+    ]
+    if job_id == "player-package-smoke-macos":
+        expected.extend(["--require", "macos-player-package", "--planning-skippable", "macos-player-package"])
+    expected.extend(["--deadline-seconds", "5100"])
+    if job_id == "player-package-smoke-macos":
+        expected.extend(["--github-output", "$GITHUB_OUTPUT", "--attempt-job", "macos-player-package"])
+    if event.words != expected:
+        reject(f"preview job {job_id} exact-head waiter arguments differ from the required literal command")
+    return ["5100"]
+
+
+def validate_fixture_repro_triggers(workflow: str, policy_namespace: dict) -> None:
+    tree = _parse_workflow_text(workflow, "fixture-repro.yml", policy_namespace)
+    if tree.get("on") != {"pull_request": "", "push": {"branches": ["main"]}, "workflow_dispatch": ""}:
+        reject("fixture reproduction must run for every PR, main push, and manual dispatch without duplicate branch pushes")
+
+
+def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
+                                     policy_namespace: dict,
+                                     release_workflow: str | None = None) -> None:
+    """Bind Phase 23's reviewed CI, preview and release-consumer timeout budgets."""
+    ci_tree = _parse_workflow_text(ci_workflow, "ci.yml", policy_namespace)
+    preview_tree = _parse_workflow_text(preview_workflow, "preview.yml", policy_namespace)
+    floor = ci_tree.get("jobs", {}).get("cmake-floor-3-25-3")
+    if floor is None or floor.get("timeout-minutes") != "60":
+        reject("minimum-CMake floor must retain the owner-approved 60-minute cap")
+    sanitizer_tests = ci_tree.get("jobs", {}).get("linux-sanitizers-tests")
+    if sanitizer_tests is None or sanitizer_tests.get("timeout-minutes") != "75":
+        reject("linux-sanitizers-tests timeout must retain the approved 75-minute cap")
+    windows = ci_tree.get("jobs", {}).get("native-windows")
+    if windows is None or windows.get("timeout-minutes") != "70":
+        reject("native-windows timeout must be the owner-approved 70 minutes")
+    for job_id in PREVIEW_BUDGET_JOBS:
+        job = preview_tree.get("jobs", {}).get(job_id)
+        if job is None:
+            reject(f"preview timeout policy is missing job {job_id}")
+        if job.get("timeout-minutes") != "95":
+            reject(f"preview job {job_id} must retain a 95-minute cap for the 85-minute exact-head wait")
+        if _preview_wait_deadlines(job, job_id, preview_workflow, preview_tree, policy_namespace) != ["5100"]:
+            reject(f"preview job {job_id} must wait 5,100 seconds for the exact-head CI result")
+    if release_workflow is not None:
+        release_tree = _parse_workflow_text(release_workflow, "release.yml", policy_namespace)
+        candidate_fuzz = release_tree.get("jobs", {}).get("candidate-fuzz")
+        if candidate_fuzz is None:
+            reject("release candidate-fuzz job is missing from the Phase 23 timeout profile")
+        if candidate_fuzz.get("timeout-minutes") != "147":
+            reject("release candidate-fuzz must retain the approved 147-minute cap")
+        fuzz_env = candidate_fuzz.get("env")
+        if not isinstance(fuzz_env, dict) or str(fuzz_env.get("CI_RUN_WAIT_ATTEMPTS")) != "170":
+            reject("release candidate-fuzz must allow 170 polling attempts")
+        if str(fuzz_env.get("CI_RUN_WAIT_SECONDS")) != "30":
+            reject("release candidate-fuzz must retain its 30-second polling interval")
+        if str(fuzz_env.get("CI_RUN_WAIT_DEADLINE_SECONDS")) != "5100":
+            reject("release candidate-fuzz must wait 5,100 seconds for exact-source CI")
 
 
 def resolve_commit(root: Path, revision: str) -> str:
@@ -797,6 +1071,13 @@ def _same_path(left: str | Path, right: str | Path) -> bool:
     return os.path.normcase(str(Path(left).resolve())) == os.path.normcase(str(Path(right).resolve()))
 
 
+def _same_environment_path(left: str, right: str | Path, platform: str) -> bool:
+    if platform == "windows":
+        return ntpath.normcase(ntpath.normpath(left.replace("/", "\\"))) == ntpath.normcase(
+            ntpath.normpath(str(right).replace("/", "\\")))
+    return _same_path(left, right)
+
+
 def _cmake_cache(build_dir: Path) -> dict[str, str]:
     cache_path = build_dir / "CMakeCache.txt"
     try:
@@ -899,6 +1180,36 @@ def _expected_timeout(name: str, sanitizer_enabled: bool) -> int:
     return base * (3 if sanitizer_enabled else 1)
 
 
+def _expected_v02_environment(build_dir: Path, sanitizer_enabled: bool) -> list[str]:
+    environment = [f"GBB_TEST_BUILD_DIR={build_dir}"]
+    if sanitizer_enabled:
+        environment.append("GBB_SANITIZER_LINK_OPTIONS=-fsanitize=address,undefined")
+    return environment
+
+
+def _same_environment(actual: object, expected: list[str], build_dir: Path, platform: str) -> bool:
+    if not isinstance(actual, list) or not all(isinstance(item, str) for item in actual):
+        return False
+
+    def entries(values: list[str]) -> dict[str, str] | None:
+        result: dict[str, str] = {}
+        for item in values:
+            name, separator, value = item.partition("=")
+            if not separator or name in result:
+                return None
+            result[name] = value
+        return result
+
+    actual_entries = entries(actual)
+    expected_entries = entries(expected)
+    if actual_entries is None or expected_entries is None or actual_entries.keys() != expected_entries.keys():
+        return False
+    if not _same_environment_path(actual_entries["GBB_TEST_BUILD_DIR"], build_dir, platform):
+        return False
+    return all(actual_entries[name] == value for name, value in expected_entries.items()
+               if name != "GBB_TEST_BUILD_DIR")
+
+
 def validate_cmake_registration(ci_lanes: str) -> None:
     calls = re.findall(r"(?im)^\s*gbb_add_ci_lane_test\s*\(\s*([A-Za-z0-9_]+)", ci_lanes)
     policy_calls = [name for name in calls if name.startswith("workflow_policy_")]
@@ -908,12 +1219,16 @@ def validate_cmake_registration(ci_lanes: str) -> None:
 
 def validate_registration(root: Path, expected_tests: list[str], ctest_tests: list[dict], ci_lanes: str,
                           *, build_dir: Path, candidate: str, sanitizer_enabled: bool,
-                          cmake_executable: str, python_executable: str) -> None:
+                          cmake_executable: str, python_executable: str, platform: str) -> None:
+    if platform not in ALL_PLATFORMS:
+        reject(f"unsupported CTest inventory platform: {platform}")
     if len(expected_tests) != len(set(expected_tests)):
         reject("tests/expected-tests.txt contains duplicate test names")
     inventory = set(expected_tests)
     if not POLICY_TEST_NAMES <= inventory:
         reject("tests/expected-tests.txt is missing a workflow-policy group, coverage test, or production check")
+    if not PROCESSOR_RESERVED_TESTS <= inventory:
+        reject("tests/expected-tests.txt is missing a CTest slot-reserved control")
     if any(name.startswith("workflow_policy_") and name not in POLICY_TEST_NAMES for name in inventory):
         reject("tests/expected-tests.txt contains an unexpected workflow-policy registration")
 
@@ -922,19 +1237,38 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         name = test.get("name")
         if isinstance(name, str):
             actual_by_name.setdefault(name, []).append(test)
+    if platform == "windows" and POSIX_ONLY_RESERVED_TESTS.intersection(actual_by_name):
+        reject("Windows CTest inventory includes a POSIX-only slot reservation")
+    active_reserved_tests = PROCESSOR_RESERVED_TESTS
+    if platform == "windows":
+        active_reserved_tests = PROCESSOR_RESERVED_TESTS - POSIX_ONLY_RESERVED_TESTS
     actual_policy_names = {name for name in actual_by_name if name.startswith("workflow_policy_")}
     if actual_policy_names != POLICY_TEST_NAMES:
         reject("configured CTest workflow-policy names contain an omission or unexpected group")
     for name in POLICY_TEST_NAMES:
         if len(actual_by_name.get(name, [])) != 1:
             reject(f"CTest must register {name} exactly once")
+    for name in active_reserved_tests:
+        if len(actual_by_name.get(name, [])) != 1:
+            reject(f"CTest must register slot-reserved control {name} exactly once")
+        properties = _test_properties(actual_by_name[name][0])
+        expected_processors = 2 if name in DOC_CONTROL_TESTS else 4
+        if properties.get("PROCESSORS") != expected_processors:
+            reject(f"CTest {name} must reserve exactly {expected_processors} native test slots")
+        if name in SANITIZER_SCHEDULE_COST_TESTS:
+            expected_cost = 1800 if sanitizer_enabled else 600
+            cost = properties.get("COST")
+            if isinstance(cost, bool) or not isinstance(cost, (int, float)) or cost != expected_cost:
+                reject(f"CTest {name} must schedule at its exact {expected_cost}-second build-mode cost")
+        if name in EXPECTED_RESERVED_LABELS and properties.get("LABELS") != EXPECTED_RESERVED_LABELS[name]:
+            reject(f"CTest {name} must retain its exact existing labels")
 
     completion_paths: set[str] = set()
     for name in sorted(POLICY_TEST_NAMES):
         test = actual_by_name[name][0]
         properties = _test_properties(test)
         expected_properties = {"TIMEOUT", "WORKING_DIRECTORY"}
-        if name == GROUPS["release_jobs"]:
+        if name in active_reserved_tests:
             expected_properties.add("PROCESSORS")
         if set(properties) != expected_properties:
             reject(f"CTest {name} has an unexpected property that can change execution or qualification")
@@ -1022,6 +1356,37 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
         if definitions != expected_definitions:
             reject(f"CTest {name} wrapper definitions differ from the exact exit-plus-marker contract")
 
+    support_ledger = actual_by_name["v02_support_ledger_controls"][0]
+    support_properties = _test_properties(support_ledger)
+    if set(support_properties) != {"TIMEOUT", "WORKING_DIRECTORY", "PROCESSORS", "ENVIRONMENT", "LABELS"}:
+        reject("CTest v02_support_ledger_controls has an unexpected property that can change execution or qualification")
+    expected_support_timeout = 120 * (3 if sanitizer_enabled else 1)
+    if support_properties.get("TIMEOUT") != expected_support_timeout:
+        reject(f"CTest v02_support_ledger_controls must retain its {expected_support_timeout}-second timeout")
+    if not _same_path(str(support_properties.get("WORKING_DIRECTORY", "")), build_dir / "tests"):
+        reject("CTest v02_support_ledger_controls has an unexpected working directory")
+    if support_properties.get("PROCESSORS") != 4:
+        reject("CTest v02_support_ledger_controls must reserve all four native test slots")
+    if not _same_environment(support_properties.get("ENVIRONMENT"),
+                             _expected_v02_environment(build_dir, sanitizer_enabled), build_dir, platform):
+        reject("CTest v02_support_ledger_controls has an unexpected environment")
+    if support_properties.get("LABELS") != ["planning", "v02"]:
+        reject("CTest v02_support_ledger_controls must retain its planning and v02 labels")
+
+    definitions = _parse_wrapper_definitions(support_ledger, root, cmake_executable)
+    cli_values, cli_booleans = _parse_python_cli(
+        definitions.get("GBB_CMD", "").split(";"), python_executable,
+        root / "tests/scripts/verify-support-ledger.py", set(), {"--self-test"},
+    )
+    if cli_values or cli_booleans != {"--self-test"}:
+        reject("CTest support ledger must invoke its exact self-test")
+    if definitions != {
+        "GBB_CMD": definitions["GBB_CMD"],
+        "GBB_EXPECT_CODE": "0",
+        "GBB_EXPECT_REGEX": SUPPORT_LEDGER_CONTROL_MARKER,
+    }:
+        reject("CTest support ledger exit-plus-marker contract differs from the full self-test")
+
     validate_cmake_registration(ci_lanes)
 
 
@@ -1034,7 +1399,7 @@ def _self_test(root: Path, revision: str) -> int:
     build_dir = root / "build/phase19-policy-coverage-fixture"
     cmake_executable = shutil.which("cmake") or "cmake"
     python_executable = sys.executable
-    expected_tests = sorted(POLICY_TEST_NAMES)
+    expected_tests = sorted(POLICY_TEST_NAMES | PROCESSOR_RESERVED_TESTS)
     ci_lanes = "\n".join(f"gbb_add_ci_lane_test({name} 0 marker 60 \"\")" for name in expected_tests)
     controls = 0
 
@@ -1043,6 +1408,17 @@ def _self_test(root: Path, revision: str) -> int:
         try:
             operation()
         except CoverageError:
+            controls += 1
+        else:
+            reject(f"negative control {label} was accepted")
+
+    def rejected_as(label: str, expected_message: str, operation) -> None:
+        nonlocal controls
+        try:
+            operation()
+        except CoverageError as error:
+            if expected_message not in str(error):
+                reject(f"negative control {label} rejected for the wrong reason: {error}")
             controls += 1
         else:
             reject(f"negative control {label} was accepted")
@@ -1101,8 +1477,17 @@ def _self_test(root: Path, revision: str) -> int:
             {"name": "TIMEOUT", "value": timeout},
             {"name": "WORKING_DIRECTORY", "value": str(build_dir / "tests")},
         ]
-        if name == GROUPS["release_jobs"]:
-            properties.append({"name": "PROCESSORS", "value": 4})
+        if name in PROCESSOR_RESERVED_TESTS:
+            properties.append({"name": "PROCESSORS", "value": 2 if name in DOC_CONTROL_TESTS else 4})
+        if name in SANITIZER_SCHEDULE_COST_TESTS:
+            properties.append({"name": "COST", "value": 600})
+        if name in EXPECTED_RESERVED_LABELS:
+            properties.append({"name": "LABELS", "value": EXPECTED_RESERVED_LABELS[name]})
+        if name == "v02_support_ledger_controls":
+            properties.extend((
+                {"name": "ENVIRONMENT", "value": _expected_v02_environment(build_dir, False)},
+                {"name": "LABELS", "value": ["planning", "v02"]},
+            ))
         return {
             "name": name,
             "command": command,
@@ -1134,6 +1519,12 @@ def _self_test(root: Path, revision: str) -> int:
         command.extend(("--completed-file", str(completion)))
         tests.append(test_entry(name, command,
                                 marker, 180, completion))
+    tests.append(test_entry(
+        "v02_support_ledger_controls",
+        [python_executable, "-I", str(root / "tests/scripts/verify-support-ledger.py"), "--self-test"],
+        SUPPORT_LEDGER_CONTROL_MARKER, 120))
+    for name in sorted(PHASE23_RESERVED_TESTS - POLICY_TEST_NAMES - {"v02_support_ledger_controls"}):
+        tests.append(test_entry(name, [], "", 60))
     coverage_script = root / "tests/scripts/verify-workflow-policy-coverage.py"
     tests.extend((
         test_entry("workflow_policy_coverage",
@@ -1149,17 +1540,39 @@ def _self_test(root: Path, revision: str) -> int:
     ))
 
     def validate(tests_to_check: list[dict] = tests, names: list[str] = expected_tests, *, sanitizer: bool = False,
-                 lanes: str = ci_lanes) -> None:
+                 lanes: str = ci_lanes, platform: str = "posix") -> None:
         validate_registration(root, names, tests_to_check, lanes, build_dir=build_dir, candidate=candidate,
                               sanitizer_enabled=sanitizer, cmake_executable=cmake_executable,
-                              python_executable=python_executable)
+                              python_executable=python_executable, platform=platform)
 
     validate()
+    windows_tests = [test for test in tests if test["name"] not in POSIX_ONLY_RESERVED_TESTS]
+    validate(windows_tests, platform="windows")
+    windows_path_variant = copy.deepcopy(windows_tests)
+    windows_environment = _test_properties(
+        next(test for test in windows_path_variant if test["name"] == "v02_support_ledger_controls"))
+    windows_environment["ENVIRONMENT"][0] = (
+        "GBB_TEST_BUILD_DIR=" + str(build_dir).replace("/", "\\").upper()
+    )
+    validate(windows_path_variant, platform="windows")
+    windows_missing_reservation = [test for test in windows_tests
+                                  if test["name"] != "phase23_docs_controls_shard_183"]
+    rejected("missing Windows slot-reserved CTest registration",
+             lambda: validate(windows_missing_reservation, platform="windows"))
+    windows_with_posix_reservation = [*windows_tests, test_entry("save_format_controls", [], "", 60)]
+    rejected("Windows registers a POSIX-only slot reservation",
+             lambda: validate(windows_with_posix_reservation, platform="windows"))
     scaled = copy.deepcopy(tests)
     for test in scaled:
         for prop in test["properties"]:
             if prop["name"] == "TIMEOUT":
                 prop["value"] *= 3
+            elif prop["name"] == "COST" and test["name"] in SANITIZER_SCHEDULE_COST_TESTS:
+                prop["value"] *= 3
+    support_ledger_scaled = next(test for test in scaled if test["name"] == "v02_support_ledger_controls")
+    next(prop for prop in support_ledger_scaled["properties"] if prop["name"] == "ENVIRONMENT")["value"] = (
+        _expected_v02_environment(build_dir, True)
+    )
     validate(scaled, sanitizer=True)
 
     reordered = copy.deepcopy(tests)
@@ -1183,8 +1596,12 @@ def _self_test(root: Path, revision: str) -> int:
 
     # Inventory omissions, stale rows, and duplicate or unexpected CTest registrations.
     rejected("missing expected inventory row", lambda: validate(tests, [name for name in expected_tests if name != GROUPS["ledger"]]))
+    rejected("missing slot-reserved expected inventory row",
+             lambda: validate(tests, [name for name in expected_tests if name != "v02_support_ledger_controls"]))
     rejected("missing configured CTest registration",
              lambda: validate([test for test in tests if test["name"] != GROUPS["ledger"]]))
+    rejected("missing slot-reserved CTest registration",
+             lambda: validate([test for test in tests if test["name"] != "v02_support_ledger_controls"]))
     rejected("missing CMake declaration",
              lambda: validate_cmake_registration(ci_lanes.replace(
                  f"gbb_add_ci_lane_test({GROUPS['ledger']}", "# removed\ngbb_add_ci_lane_test(omitted_group")))
@@ -1201,6 +1618,24 @@ def _self_test(root: Path, revision: str) -> int:
         target = next(test for test in test_list if test["name"] == GROUPS["release_jobs"])
         next(prop for prop in target["properties"] if prop["name"] == "PROCESSORS")["value"] = value
 
+    def set_support_processors(test_list: list[dict], value: int) -> None:
+        target = next(test for test in test_list if test["name"] == "v02_support_ledger_controls")
+        next(prop for prop in target["properties"] if prop["name"] == "PROCESSORS")["value"] = value
+
+    def set_test_property(test_list: list[dict], test_name: str, property_name: str, value: object) -> None:
+        target = next(test for test in test_list if test["name"] == test_name)
+        next(prop for prop in target["properties"] if prop["name"] == property_name)["value"] = value
+
+    def set_support_timeout(test_list: list[dict], value: int) -> None:
+        set_test_property(test_list, "v02_support_ledger_controls", "TIMEOUT", value)
+
+    mutant = copy.deepcopy(tests)
+    set_test_property(mutant, "v02_consumer_controls_c", "COST", 601)
+    rejected("incorrect native consumer schedule cost", lambda: validate(mutant))
+    mutant = copy.deepcopy(scaled)
+    set_test_property(mutant, "v02_consumer_controls_cpp", "COST", 600)
+    rejected("unscaled sanitizer consumer schedule cost", lambda: validate(mutant, sanitizer=True))
+
     mutant = copy.deepcopy(tests)
     set_timeout(mutant, 540)
     rejected("incorrectly scaled native timeout", lambda: validate(mutant))
@@ -1210,6 +1645,37 @@ def _self_test(root: Path, revision: str) -> int:
     mutant = copy.deepcopy(tests)
     set_policy_processors(mutant, 3)
     rejected("unreserved release policy processors", lambda: validate(mutant))
+    mutant = copy.deepcopy(tests)
+    set_support_processors(mutant, 3)
+    rejected("unreserved support ledger control processors", lambda: validate(mutant))
+    for name in sorted(PHASE23_RESERVED_TESTS - {"v02_support_ledger_controls"}):
+        mutant = copy.deepcopy(tests)
+        wrong_processors = 4 if name in DOC_CONTROL_TESTS else 3
+        set_test_property(mutant, name, "PROCESSORS", wrong_processors)
+        rejected(f"incorrect {name} processor reservation", lambda mutant=mutant: validate(mutant))
+    for name in sorted(EXPECTED_RESERVED_LABELS):
+        mutant = copy.deepcopy(tests)
+        set_test_property(mutant, name, "LABELS", ["unexpected"])
+        rejected(f"changed {name} labels", lambda mutant=mutant: validate(mutant))
+    mutant = copy.deepcopy(tests)
+    set_support_timeout(mutant, 119)
+    rejected("support ledger timeout below the native bound", lambda: validate(mutant))
+    scaled_mutant = copy.deepcopy(scaled)
+    set_support_timeout(scaled_mutant, 120)
+    rejected("unscaled sanitizer support ledger timeout",
+             lambda: validate(scaled_mutant, sanitizer=True))
+    mutant = copy.deepcopy(tests)
+    set_test_property(mutant, "v02_support_ledger_controls", "LABELS", ["v02"])
+    rejected("missing support ledger planning label", lambda: validate(mutant))
+    mutant = copy.deepcopy(tests)
+    set_test_property(mutant, "v02_support_ledger_controls", "ENVIRONMENT",
+                      ["GBB_TEST_BUILD_DIR=" + str(build_dir), "GBB_UNEXPECTED=1"])
+    rejected("unexpected support ledger environment", lambda: validate(mutant))
+    windows_wrong_path = copy.deepcopy(windows_tests)
+    set_test_property(windows_wrong_path, "v02_support_ledger_controls", "ENVIRONMENT",
+                      ["GBB_TEST_BUILD_DIR=" + str(build_dir) + "/wrong"])
+    rejected("wrong Windows support ledger build directory",
+             lambda: validate(windows_wrong_path, platform="windows"))
 
     def named_test(test_list: list[dict], name: str) -> dict:
         return next(test for test in test_list if test["name"] == name)
@@ -1238,6 +1704,19 @@ def _self_test(root: Path, revision: str) -> int:
 
     ci_name = GROUPS["ci"]
     completion = build_dir / "workflow-policy-ci.json"
+
+    # The full-suite control replaces the duplicate Linux preflight only while
+    # its real checker, self-test mode and exit-plus-marker contract stay intact.
+    support_name = "v02_support_ledger_controls"
+    rejected_as("support ledger wrong checker", "exact checker script", lambda: validate_mutated(
+        lambda test_list: change_cli(named_test(test_list, support_name),
+            [python_executable, "-I", str(coverage_script), "--self-test"])))
+    rejected_as("support ledger omitted self-test", "support ledger must invoke its exact self-test", lambda: validate_mutated(
+        lambda test_list: change_cli(named_test(test_list, support_name),
+            [python_executable, "-I", str(root / "tests/scripts/verify-support-ledger.py")])))
+    for field, value in (("GBB_EXPECT_CODE", "7"), ("GBB_EXPECT_REGEX", "passed")):
+        rejected_as(f"support ledger weakened {field}", "support ledger exit-plus-marker contract", lambda field=field, value=value: validate_mutated(
+            lambda test_list: replace_definition(named_test(test_list, support_name), field, value)))
 
     # These are positive spelling variants for the already identity-validated completion
     # destination. On Windows, the second case exercises CMake's forward-slash paths against
@@ -1447,6 +1926,269 @@ def _self_test(root: Path, revision: str) -> int:
 
     candidate_namespace = {"__name__": "candidate_workflow_policy", "__file__": str(root / POLICY_PATH)}
     exec(compile(candidate_source, POLICY_PATH, "exec"), candidate_namespace)
+    workflow_listing = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", candidate, "--", ".github/workflows"],
+        cwd=root, capture_output=True, text=True, check=False, timeout=15,
+    )
+    if workflow_listing.returncode != 0:
+        reject(f"candidate workflow inventory is unavailable: {workflow_listing.stderr.strip()}")
+    candidate_workflows = [path for path in workflow_listing.stdout.splitlines()
+                           if path.startswith(".github/workflows/") and path.endswith(".yml")]
+    if ".github/workflows/ci.yml" not in candidate_workflows:
+        reject("candidate workflow inventory is missing ci.yml")
+    required_workflows = {".github/workflows/ci.yml", ".github/workflows/preview.yml",
+                          ".github/workflows/release.yml"}
+    if not required_workflows.issubset(candidate_workflows):
+        reject("candidate workflow inventory is missing ci.yml, preview.yml or release.yml")
+    candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
+    candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
+    candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
+    validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
+    candidate_fixture = git_text(root, candidate, ".github/workflows/fixture-repro.yml").decode("utf-8")
+    validate_fixture_repro_triggers(candidate_fixture, candidate_namespace)
+    preview_tree = _parse_workflow_text(candidate_preview, "preview.yml", candidate_namespace)
+    controls += 1
+    for label, old, new in (
+        ("unrestricted duplicate push", "  push:\n    branches: [main]\n", "  push:\n"),
+        ("missing PR coverage", "  pull_request:\n", ""),
+        ("missing manual recovery", "  workflow_dispatch:\n", ""),
+        ("wrong push branch", "    branches: [main]\n", "    branches: [other]\n"),
+    ):
+        if candidate_fixture.count(old) != 1:
+            reject(f"fixture trigger negative anchor is ambiguous: {label}")
+        mutant = candidate_fixture.replace(old, new, 1)
+        rejected_as(label, "fixture reproduction must run",
+                    lambda mutant=mutant: validate_fixture_repro_triggers(mutant, candidate_namespace))
+    # Reject the immediately preceding approved limits as well as older stale limits below.
+    for old, stale, reason in (
+        ("CI_RUN_WAIT_ATTEMPTS: 170", "CI_RUN_WAIT_ATTEMPTS: 150", "must allow 170 polling attempts"),
+        ("CI_RUN_WAIT_DEADLINE_SECONDS: 5100", "CI_RUN_WAIT_DEADLINE_SECONDS: 4500", "must wait 5,100 seconds"),
+        ("    timeout-minutes: 147", "    timeout-minutes: 137", "must retain the approved 147-minute cap"),
+    ):
+        mutant = _replace_job_block_value(candidate_release, "candidate-fuzz", old, stale)
+        rejected_as(f"D-169 release budget {stale}", reason,
+                    lambda mutant=mutant: validate_phase23_timeout_profile(
+                        candidate_ci, candidate_preview, candidate_namespace, mutant))
+    for old, stale, reason in (
+        ("CI_RUN_WAIT_ATTEMPTS: 170", "CI_RUN_WAIT_ATTEMPTS: 160", "must allow 170 polling attempts"),
+        ("CI_RUN_WAIT_DEADLINE_SECONDS: 5100", "CI_RUN_WAIT_DEADLINE_SECONDS: 4800", "must wait 5,100 seconds"),
+        ("    timeout-minutes: 147", "    timeout-minutes: 142", "must retain the approved 147-minute cap"),
+    ):
+        mutant = _replace_job_block_value(candidate_release, "candidate-fuzz", old, stale)
+        rejected_as(f"D-177 release budget {stale}", reason,
+                    lambda mutant=mutant: validate_phase23_timeout_profile(
+                        candidate_ci, candidate_preview, candidate_namespace, mutant))
+    for job_id in PREVIEW_BUDGET_JOBS:
+        for old, stale in (("--deadline-seconds 5100", "--deadline-seconds 4500"),
+                           ("    timeout-minutes: 95", "    timeout-minutes: 85")):
+            mutant = _replace_job_block_value(candidate_preview, job_id, old, stale)
+            rejected(f"D-165 preview budget {job_id} {stale}",
+                     lambda mutant=mutant: validate_phase23_timeout_profile(
+                         candidate_ci, mutant, candidate_namespace))
+        for old, stale, reason in (
+            ("--deadline-seconds 5100", "--deadline-seconds 4800",
+             "exact-head waiter arguments differ from the required literal command"),
+            ("    timeout-minutes: 95", "    timeout-minutes: 90", "must retain a 95-minute cap"),
+        ):
+            mutant = _replace_job_block_value(candidate_preview, job_id, old, stale)
+            rejected_as(f"D-177 preview budget {job_id} {stale}", reason,
+                        lambda mutant=mutant: validate_phase23_timeout_profile(
+                            candidate_ci, mutant, candidate_namespace))
+    stale_floor_cap = _replace_job_block_value(
+        candidate_ci, "cmake-floor-3-25-3", "    timeout-minutes: 60", "    timeout-minutes: 50")
+    rejected_as("D-177 stale 50-minute minimum-CMake floor cap",
+                "minimum-CMake floor must retain the owner-approved 60-minute cap",
+                lambda: validate_phase23_timeout_profile(
+                    stale_floor_cap, candidate_preview, candidate_namespace))
+    stale_windows = _replace_job_block_value(
+        candidate_ci, "native-windows", "    timeout-minutes: 70", "    timeout-minutes: 60")
+    rejected("stale native-Windows 60-minute cap", lambda: validate_phase23_timeout_profile(stale_windows, candidate_preview, candidate_namespace))
+    stale_sanitizer_tests = _replace_job_block_value(
+        candidate_ci, "linux-sanitizers-tests", "    timeout-minutes: 75", "    timeout-minutes: 55")
+    rejected("stale sanitizer test inventory 55-minute cap",
+             lambda: validate_phase23_timeout_profile(stale_sanitizer_tests, candidate_preview, candidate_namespace))
+    stale_sanitizer_d177 = _replace_job_block_value(
+        candidate_ci, "linux-sanitizers-tests", "    timeout-minutes: 75", "    timeout-minutes: 65")
+    rejected_as("D-177 stale 65-minute sanitizer test inventory cap",
+                "linux-sanitizers-tests timeout must retain the approved 75-minute cap",
+                lambda: validate_phase23_timeout_profile(
+                    stale_sanitizer_d177, candidate_preview, candidate_namespace))
+    stale_fuzz_attempts = _replace_job_block_value(
+        candidate_release, "candidate-fuzz", "CI_RUN_WAIT_ATTEMPTS: 170",
+        "CI_RUN_WAIT_ATTEMPTS: 90")
+    rejected_as("stale 45-minute candidate-fuzz attempt ceiling", "must allow 170 polling attempts",
+                lambda: validate_phase23_timeout_profile(
+                    candidate_ci, candidate_preview, candidate_namespace, stale_fuzz_attempts))
+    stale_fuzz_wait = _replace_job_block_value(
+        candidate_release, "candidate-fuzz", "CI_RUN_WAIT_DEADLINE_SECONDS: 5100",
+        "CI_RUN_WAIT_DEADLINE_SECONDS: 3000")
+    rejected_as("stale 50-minute candidate-fuzz wait", "must wait 5,100 seconds",
+                lambda: validate_phase23_timeout_profile(
+                    candidate_ci, candidate_preview, candidate_namespace, stale_fuzz_wait))
+    stale_fuzz_cap = _replace_job_block_value(
+        candidate_release, "candidate-fuzz", "    timeout-minutes: 147", "    timeout-minutes: 112")
+    rejected_as("stale 112-minute candidate-fuzz cap", "must retain the approved 147-minute cap",
+                lambda: validate_phase23_timeout_profile(
+                    candidate_ci, candidate_preview, candidate_namespace, stale_fuzz_cap))
+    unpinned_linux_runner = _replace_job_block_value(
+        candidate_preview, "installed-package-smoke-linux-x64",
+        "    runs-on: ubuntu-22.04", "    runs-on: ubuntu-latest")
+    rejected_as("unpinned Linux preview runner", "must run on ubuntu-22.04",
+                lambda: validate_phase23_timeout_profile(
+                    candidate_ci, unpinned_linux_runner, candidate_namespace))
+    for job_id in PREVIEW_BUDGET_JOBS:
+        injected_container = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 95",
+            "    timeout-minutes: 95\n    container:\n      image: ubuntu:22.04\n      env:\n        BASH_ENV: .github/scripts/override.sh")
+        rejected_as(f"job container in {job_id} overrides waiter shell environment",
+                    "may not use a job container or services",
+                    lambda injected_container=injected_container: validate_phase23_timeout_profile(
+                        candidate_ci, injected_container, candidate_namespace))
+        injected_services = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 95",
+            "    timeout-minutes: 95\n    services:\n      override:\n        image: ubuntu:22.04\n        env:\n          BASH_ENV: .github/scripts/override.sh")
+        rejected_as(f"job service in {job_id} adds an unreviewed service environment",
+                    "may not use a job container or services",
+                    lambda injected_services=injected_services: validate_phase23_timeout_profile(
+                        candidate_ci, injected_services, candidate_namespace))
+        stale_wait = _replace_job_block_value(
+            candidate_preview, job_id, "--deadline-seconds 5100", "--deadline-seconds 3900")
+        rejected(f"stale {job_id} 65-minute exact-head wait", lambda stale_wait=stale_wait: validate_phase23_timeout_profile(candidate_ci, stale_wait, candidate_namespace))
+        comment_only_wait = _replace_job_block_value(
+            candidate_preview, job_id, "--deadline-seconds 5100",
+            '--deadline-seconds "$WAIT_SECONDS" # --deadline-seconds 4800')
+        rejected(f"comment-only 80-minute deadline in stale {job_id} waiter",
+                 lambda comment_only_wait=comment_only_wait: validate_phase23_timeout_profile(
+                     candidate_ci, comment_only_wait, candidate_namespace))
+        current_waiter = _folded_waiter_run(candidate_preview, job_id, preview_tree["jobs"][job_id])
+        dead_branch_waiter = _replace_folded_waiter_run(
+            candidate_preview, job_id, f"if false; then {current_waiter}; fi; true")
+        rejected(f"unreachable {job_id} exact-head waiter decoy",
+                 lambda dead_branch_waiter=dead_branch_waiter: validate_phase23_timeout_profile(
+                     candidate_ci, dead_branch_waiter, candidate_namespace))
+        shadowed_waiter = _replace_folded_waiter_run(
+            candidate_preview, job_id,
+            f'python3() {{ command python3 "$@" --deadline-seconds 3900; }}; {current_waiter}')
+        rejected(f"shadowed {job_id} Python waiter with appended stale deadline",
+                 lambda shadowed_waiter=shadowed_waiter: validate_phase23_timeout_profile(
+                     candidate_ci, shadowed_waiter, candidate_namespace))
+        disabled_waiter = _replace_job_block_value(
+            candidate_preview, job_id, "        run: >-", "        if: false\n        run: >-")
+        rejected(f"disabled {job_id} exact-head waiter step",
+                 lambda disabled_waiter=disabled_waiter: validate_phase23_timeout_profile(
+                     candidate_ci, disabled_waiter, candidate_namespace))
+        waiter_env = (
+            "        env:\n"
+            "          GH_TOKEN: ${{ github.token }}\n"
+            "          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}"
+        )
+        injected_step_env = _replace_job_block_value(
+            candidate_preview, job_id, waiter_env,
+            waiter_env + "\n          BASH_ENV: .github/scripts/override.sh")
+        rejected(f"injected BASH_ENV in {job_id} waiter step",
+                 lambda injected_step_env=injected_step_env: validate_phase23_timeout_profile(
+                     candidate_ci, injected_step_env, candidate_namespace))
+        injected_job_env = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 95",
+            "    timeout-minutes: 95\n    env:\n      BASH_ENV: .github/scripts/override.sh")
+        rejected(f"injected BASH_ENV in {job_id} job environment",
+                 lambda injected_job_env=injected_job_env: validate_phase23_timeout_profile(
+                     candidate_ci, injected_job_env, candidate_namespace))
+        job_shell_override = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 95",
+            "    timeout-minutes: 95\n    defaults:\n      run:\n        shell: sh")
+        rejected(f"overridden shell in {job_id} run defaults",
+                 lambda job_shell_override=job_shell_override: validate_phase23_timeout_profile(
+                     candidate_ci, job_shell_override, candidate_namespace))
+        waiter_name = ("Find the exact successful player build run" if job_id == "player-package-smoke-macos"
+                       else "Verify matching successful required CI run")
+        waiter_step = f"      - name: {waiter_name}\n"
+        env_file_writer = (
+            "      - name: Poison waiter shell environment\n"
+            "        run: |\n"
+            "          cat > \"$RUNNER_TEMP/override.sh\" <<'EOF'\n"
+            "          python3() { command python3 \"$@\" --deadline-seconds 3900; }\n"
+            "          EOF\n"
+            "          echo \"BASH_ENV=$RUNNER_TEMP/override.sh\" >> \"$GITHUB_ENV\"\n"
+        )
+        preceding_env_file_writer = _replace_job_block_value(
+            candidate_preview, job_id, waiter_step, env_file_writer + waiter_step)
+        rejected_as(f"prior {job_id} step writes BASH_ENV through GITHUB_ENV",
+                    "must immediately follow the pinned trusted checkout",
+                    lambda preceding_env_file_writer=preceding_env_file_writer: validate_phase23_timeout_profile(
+                        candidate_ci, preceding_env_file_writer, candidate_namespace))
+        stale_cap = _replace_job_block_value(
+            candidate_preview, job_id, "    timeout-minutes: 95", "    timeout-minutes: 75")
+        rejected(f"stale {job_id} 75-minute job cap", lambda stale_cap=stale_cap: validate_phase23_timeout_profile(candidate_ci, stale_cap, candidate_namespace))
+    root_env = "  PREVIEW_RETENTION_DAYS: 14\n"
+    if candidate_preview.count(root_env) != 1:
+        reject("cannot create the preview workflow BASH_ENV negative control")
+    injected_root_env = candidate_preview.replace(
+        root_env, root_env + "  BASH_ENV: .github/scripts/override.sh\n", 1)
+    rejected("injected workflow-level BASH_ENV", lambda: validate_phase23_timeout_profile(
+        candidate_ci, injected_root_env, candidate_namespace))
+    root_shell_override = candidate_preview.replace(
+        root_env, root_env + "defaults:\n  run:\n    shell: sh\n", 1)
+    rejected("overridden preview workflow run shell", lambda: validate_phase23_timeout_profile(
+        candidate_ci, root_shell_override, candidate_namespace))
+    macos_block = candidate_namespace["_workflow_job_block"](
+        candidate_ci, "native-macos")
+    if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 50\s*$", macos_block):
+        reject("native-macos timeout must be the owner-approved 50 minutes")
+    with tempfile.TemporaryDirectory(prefix="gbb-macos-timeout-ledger.") as directory:
+        timeout_fixture = Path(directory)
+        for relative in candidate_workflows:
+            destination = timeout_fixture / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(git_text(root, candidate, relative))
+        (timeout_fixture / ".github/ci-timeouts.json").write_bytes(
+            git_text(root, candidate, ".github/ci-timeouts.json"))
+        (timeout_fixture / "CMakeLists.txt").write_bytes(
+            git_text(root, candidate, "CMakeLists.txt"))
+        candidate_namespace["check_timeout_ledger"](timeout_fixture, git_root=root)
+        controls += 1
+        ledger_path = timeout_fixture / ".github/ci-timeouts.json"
+        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        ledger["ci.yml:native-macos"]["timeout_minutes"] = 40
+        ledger_path.write_text(json.dumps(ledger, indent=1) + "\n", encoding="utf-8")
+        try:
+            candidate_namespace["check_timeout_ledger"](timeout_fixture, git_root=root)
+        except candidate_namespace["Reject"] as error:
+            if error.code != "timeout-ledger-stale":
+                reject(f"native-macos timeout mismatch refused for the wrong reason: {error}")
+            controls += 1
+        else:
+            reject("native-macos 40-minute ledger row was accepted against the 50-minute workflow")
+        stale_ledger_rows = (
+            ("release.yml:candidate-fuzz", 137),
+            ("preview.yml:installed-package-smoke-linux-x64", 85),
+            ("preview.yml:installed-package-smoke-macos-arm64", 85),
+            ("preview.yml:player-package-smoke-macos", 85),
+            ("ci.yml:linux-sanitizers-tests", 55),
+            ("ci.yml:native-windows", 60),
+            ("release.yml:candidate-fuzz", 112),
+            ("preview.yml:installed-package-smoke-linux-x64", 75),
+            ("preview.yml:installed-package-smoke-macos-arm64", 75),
+            ("preview.yml:player-package-smoke-macos", 75),
+            ("ci.yml:cmake-floor-3-25-3", 50),
+            ("ci.yml:linux-sanitizers-tests", 65),
+            ("preview.yml:installed-package-smoke-linux-x64", 90),
+            ("preview.yml:installed-package-smoke-macos-arm64", 90),
+            ("preview.yml:player-package-smoke-macos", 90),
+            ("release.yml:candidate-fuzz", 142),
+        )
+        for key, stale_timeout in stale_ledger_rows:
+            fresh_ledger = json.loads(git_text(root, candidate, ".github/ci-timeouts.json").decode("utf-8"))
+            fresh_ledger[key]["timeout_minutes"] = stale_timeout
+            ledger_path.write_text(json.dumps(fresh_ledger, indent=1) + "\n", encoding="utf-8")
+            try:
+                candidate_namespace["check_timeout_ledger"](timeout_fixture, git_root=root)
+            except candidate_namespace["Reject"] as error:
+                if error.code != "timeout-ledger-stale":
+                    reject(f"stale timeout row {key} refused for the wrong reason: {error}")
+                controls += 1
+            else:
+                reject(f"stale timeout row {key} was accepted")
     recorder = candidate_namespace.get("_record_policy_completion")
     if not callable(recorder):
         reject("candidate checker is missing its runtime completion-ID validator")
@@ -1471,7 +2213,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 94:
+    if controls != 620:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
@@ -1487,6 +2229,13 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     validate_manifest(manifest, expected)
     verify_source_identity(root, git_text(root, candidate, POLICY_PATH))
     verify_archive_helper_identity(root, git_text(root, candidate, ARCHIVE_HELPER_PATH))
+    candidate_namespace = load_baseline_namespace(reviewed_policy_source(root))
+    candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
+    candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
+    candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
+    validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
+    candidate_fixture = git_text(root, candidate, ".github/workflows/fixture-repro.yml").decode("utf-8")
+    validate_fixture_repro_triggers(candidate_fixture, candidate_namespace)
     expected_tests = git_text(root, candidate, "tests/expected-tests.txt").decode("utf-8").splitlines()
     result = subprocess.run(["ctest", "--test-dir", str(build_dir), "--show-only=json-v1"], cwd=root,
                             capture_output=True, text=True, check=False, timeout=30)
@@ -1503,10 +2252,11 @@ def _check(root: Path, build_dir: Path, revision: str) -> None:
     if not cmake_executable or not python_executable:
         reject("configured CMake/Python executable paths are missing from CMakeCache.txt")
     sanitizer_enabled = _truthy_cmake(cache.get("GABBABOY_ENABLE_SANITIZERS", "OFF"))
+    platform = "windows" if os.name == "nt" else "posix"
     validate_registration(root, expected_tests, ctest_tests, ci_lanes, build_dir=build_dir,
                           candidate=candidate, sanitizer_enabled=sanitizer_enabled,
-                          cmake_executable=cmake_executable, python_executable=python_executable)
-    platform = "windows" if os.name == "nt" else "posix"
+                          cmake_executable=cmake_executable, python_executable=python_executable,
+                          platform=platform)
     controls = sum(1 for row in manifest["controls"] if platform in row["platforms"])
     print(f"PASS: workflow policy coverage controls={controls} groups={len(GROUPS)} platform={platform}")
 

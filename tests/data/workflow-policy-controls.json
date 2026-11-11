@@ -1276,6 +1276,15 @@
       ]
     },
     {
+      "group": "ci",
+      "id": "mutation-0f8aa2adb4122adfd6e6",
+      "kind": "mutation",
+      "platforms": [
+        "posix",
+        "windows"
+      ]
+    },
+    {
       "group": "release_support",
       "id": "mutation-10f1f17fc9813b883820",
       "kind": "mutation",

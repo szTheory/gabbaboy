@@ -4,6 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -69,9 +70,9 @@ jobs:
 
   native-linux:
     name: native-linux-x64
-    # Timeout ledger (D-20): p50 11.07 min in main run 40159200194; 31 keeps a margin over ceil(2 x p50) for slow hosted days.
+    # Timeout ledger (D-20): p50 11.07 min in main run 40159200194. PR #146 stopped at 31 min with 1134/1942 tests; 60 lets the full measured suite finish.
     runs-on: ubuntu-22.04
-    timeout-minutes: 31
+    timeout-minutes: 60
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
@@ -91,8 +92,8 @@ jobs:
       - name: Self-test CTest platform inventory filter
         shell: bash
         run: bash .github/scripts/verify-test-inventory.sh --self-test
-      - name: Self-test the release support-ledger binding
-        run: python3 tests/scripts/verify-support-ledger.py --self-test
+      # The full CTest inventory runs this same ledger self-test with an exact
+      # exit-plus-marker contract; do not repeat it before the build.
       # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
       # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
       - name: Resolve immutable state pin base
@@ -224,9 +225,9 @@ jobs:
 
   native-macos:
     name: native-macos-arm64
-    # Timeout ledger (D-20): p50 17.80 min in main run 40156247875, so ceil(2 x p50) = 36; 40 keeps a margin.
+    # Timeout ledger (D-20): p50 17.80 min in main run 40156247875, so ceil(2 x p50) = 36. Phase 23 run 42679813590 reached the old 40-minute cap at 1928/1942 tests; owner-approved D-164 raises this cap to 50 for completion without treating that run as a timing sample.
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 50
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
@@ -313,9 +314,9 @@ jobs:
 
   native-windows:
     name: native-windows-x64
-    # Timeout ledger (D-20): p50 18.59 min in main run 40163270595; planning-time samples reached 23 min, so 50 covers ceil(2 x 23) = 46.
+    # Timeout ledger (D-20): historical p50 18.59 min in main run 40163270595. PR #146 run 42718334209 reached the 60-minute cap at 1799/1804 tests without an assertion failure; owner-approved D-165 raises this job to 70 minutes. Historical p50 is unchanged.
     runs-on: windows-2022
-    timeout-minutes: 50
+    timeout-minutes: 70
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
@@ -494,13 +495,13 @@ jobs:
           retention-days: 7
 
   linux-sanitizers-tests:
-    # The ASan inventory runs apart from the bounded fuzz campaign, split by the complementary '^acceptance_'
-    # filter so each shard stays inside the original 45-minute bound and the whole ci run stays inside the preview
-    # and release waiters' budgets. Each shard checks exactly its slice of tests/expected-tests.txt; together the
-    # slices are the whole inventory (LESSONS GB-CI-004, GB-CI-010).
+    # The ASan inventory runs apart from the bounded fuzz campaign, split by complementary '^acceptance_'
+    # filters. Each shard checks its exact slice of tests/expected-tests.txt; together the slices are the whole
+    # inventory (LESSONS GB-CI-004, GB-CI-010). D-177 gives this shard a 75-minute cap and CI readers an
+    # 85-minute wait for the configured dependency path; the acceptance shard retains its own cap.
     name: linux-asan-ubsan-tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 75
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
@@ -567,11 +568,11 @@ jobs:
   cmake-floor-3-25-3:
     name: cmake-floor-3.25.3
     runs-on: ubuntu-22.04
-    timeout-minutes: 40
+    timeout-minutes: 60
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
-      # Serially the floor suite took 20-40 of these 40 minutes (LESSONS GB-CI-010); every ctest call runs 4 at once.
+      # Preserve the full floor suite and four-worker schedule; the 50-minute run stopped at 1923/1942 without a test failure.
       CTEST_PARALLEL_LEVEL: 4
     steps:
       - name: Check out source

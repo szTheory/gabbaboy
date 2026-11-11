@@ -9,11 +9,14 @@ acceptance path and is validated from its bound receipt.
 from __future__ import annotations
 
 import argparse
+import atexit
 import copy
+import contextlib
 import hashlib
 import io
 import json
 import os
+import queue
 import re
 import shutil
 import shlex
@@ -1803,10 +1806,226 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_bytes((json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8"))
 
 
+_CHECKER_WORKER_SOURCE = r'''import contextlib, io, json, runpy, sys, traceback
+
+class OutputLimit(Exception):
+    pass
+
+class LimitedOutput(io.StringIO):
+    def __init__(self, limit):
+        super().__init__()
+        self.limit = limit
+        self.size = 0
+
+    def write(self, value):
+        size = len(value.encode("utf-8", "replace"))
+        if size > self.limit - self.size:
+            raise OutputLimit
+        self.size += size
+        return super().write(value)
+
+def invoke(request):
+    stdout = LimitedOutput(request["output_limit"])
+    stderr = LimitedOutput(request["output_limit"])
+    exit_code = 1
+    output_limit = False
+    try:
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            namespace = runpy.run_path(request["script"], run_name="gbb_candidate_checker_cli")
+            try:
+                exit_code = namespace["main"](request["args"])
+            except SystemExit as error:
+                exit_code = error.code if isinstance(error.code, int) else (0 if error.code is None else 1)
+    except OutputLimit:
+        output_limit = True
+    except BaseException:
+        try:
+            stderr.write(traceback.format_exc())
+        except OutputLimit:
+            output_limit = True
+    return {"exit_code": exit_code, "stdout": stdout.getvalue(), "stderr": stderr.getvalue(),
+            "output_limit": output_limit}
+
+for line in sys.stdin.buffer:
+    try:
+        request = json.loads(line)
+        response = invoke(request)
+    except BaseException:
+        response = {"exit_code": 1, "stdout": "", "stderr": traceback.format_exc(),
+                    "output_limit": False}
+    sys.stdout.write(json.dumps(response, ensure_ascii=True, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+'''
+
+_CHECKER_WORKER: subprocess.Popen | None = None
+_CHECKER_WORKER_RESPONSES: queue.Queue[bytes | None] | None = None
+_CHECKER_WORKER_READER: threading.Thread | None = None
+
+
+def _read_checker_worker(stream: Any, responses: queue.Queue[bytes | None]) -> None:
+    try:
+        for line in iter(stream.readline, b""):
+            responses.put(line)
+    finally:
+        responses.put(None)
+
+
+def _stop_checker_worker() -> None:
+    global _CHECKER_WORKER, _CHECKER_WORKER_RESPONSES, _CHECKER_WORKER_READER
+    process = _CHECKER_WORKER
+    if process is None:
+        _CHECKER_WORKER_RESPONSES = None
+        _CHECKER_WORKER_READER = None
+        return
+    if process.poll() is None:
+        try:
+            process.terminate()
+        except OSError:
+            if process.poll() is None:
+                raise Reject("candidate-subprocess-stop-failed") from None
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+                process.wait(timeout=2)
+            except (OSError, subprocess.TimeoutExpired):
+                if process.poll() is None:
+                    raise Reject("candidate-subprocess-stop-failed") from None
+    if process.poll() is None:
+        raise Reject("candidate-subprocess-stop-failed")
+    _CHECKER_WORKER = None
+    _CHECKER_WORKER_RESPONSES = None
+    _CHECKER_WORKER_READER = None
+    for stream in (process.stdin, process.stdout):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+
+
+def _stop_checker_worker_before_temp_cleanup() -> None:
+    process = _CHECKER_WORKER
+    _stop_checker_worker()
+    if process is not None and process.poll() is None:
+        raise Reject("candidate-subprocess-stop-failed")
+
+
+@contextlib.contextmanager
+def _checker_worker_temp_directory(prefix: str):
+    with tempfile.TemporaryDirectory(prefix=prefix) as temporary:
+        try:
+            yield Path(temporary)
+        finally:
+            _stop_checker_worker_before_temp_cleanup()
+
+
+def _checker_worker_cleanup_exception_control() -> int:
+    process = None
+    temporary_path = None
+    try:
+        with _checker_worker_temp_directory("gbb-candidate-cleanup-exception-") as root:
+            temporary_path = root
+            process, _responses = _checker_worker(root)
+            raise RuntimeError("expected synthetic failure")
+    except RuntimeError as error:
+        if str(error) != "expected synthetic failure":
+            raise
+    else:
+        raise Reject("candidate-self-test-failed", "synthetic cleanup exception was not raised")
+    if process is None or process.poll() is None:
+        raise Reject("candidate-self-test-failed", "exception cleanup left the worker alive")
+    if temporary_path is None or temporary_path.exists():
+        raise Reject("candidate-self-test-failed", "exception cleanup did not remove the temporary directory")
+    return 1
+
+
+def _checker_worker_cleanup_controls() -> int:
+    global _stop_checker_worker
+    process = _CHECKER_WORKER
+    if process is None or process.poll() is not None:
+        raise Reject("candidate-self-test-failed", "worker cleanup control needs a live worker")
+    stop_worker = _stop_checker_worker
+    try:
+        _stop_checker_worker = lambda: None
+        try:
+            _stop_checker_worker_before_temp_cleanup()
+        except Reject as error:
+            if error.code != "candidate-subprocess-stop-failed":
+                raise
+        else:
+            raise Reject("candidate-self-test-failed", "worker cleanup guard accepted a live worker")
+    finally:
+        _stop_checker_worker = stop_worker
+    _stop_checker_worker_before_temp_cleanup()
+    if process.poll() is None:
+        raise Reject("candidate-self-test-failed", "worker remained live after cleanup")
+    return 1 + _checker_worker_cleanup_exception_control()
+
+
+def _checker_worker(root: Path) -> tuple[subprocess.Popen, queue.Queue[bytes | None]]:
+    global _CHECKER_WORKER, _CHECKER_WORKER_RESPONSES, _CHECKER_WORKER_READER
+    if _CHECKER_WORKER is None:
+        script = Path(__file__).resolve()
+        try:
+            _CHECKER_WORKER = subprocess.Popen(
+                [sys.executable, "-I", "-c", _CHECKER_WORKER_SOURCE], cwd=root,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            )
+        except OSError as error:
+            raise Reject("candidate-subprocess-unavailable", f"{script.name}: {error.strerror}") from None
+        _CHECKER_WORKER_RESPONSES = queue.Queue()
+        _CHECKER_WORKER_READER = threading.Thread(
+            target=_read_checker_worker, args=(_CHECKER_WORKER.stdout, _CHECKER_WORKER_RESPONSES), daemon=True,
+        )
+        _CHECKER_WORKER_READER.start()
+        atexit.register(_stop_checker_worker)
+    assert _CHECKER_WORKER is not None and _CHECKER_WORKER_RESPONSES is not None
+    return _CHECKER_WORKER, _CHECKER_WORKER_RESPONSES
+
+
+def _run_checker_cli(root: Path, script: Path, args: tuple[str, ...]) -> subprocess.CompletedProcess[bytes]:
+    process, responses = _checker_worker(root)
+    request = {"script": str(script), "args": list(args), "output_limit": MAX_SUBPROCESS_OUTPUT}
+    try:
+        assert process.stdin is not None
+        process.stdin.write((json.dumps(request, ensure_ascii=True, separators=(",", ":")) + "\n").encode("utf-8"))
+        process.stdin.flush()
+    except (BrokenPipeError, OSError):
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-output-read-failed", script.name) from None
+    try:
+        line = responses.get(timeout=MAX_SUBPROCESS_SECONDS)
+    except queue.Empty:
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-timeout", script.name) from None
+    if line is None:
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-output-read-failed", script.name)
+    try:
+        response = json.loads(line)
+        exit_code = response["exit_code"]
+        stdout = response["stdout"].encode("utf-8", errors="replace")
+        stderr = response["stderr"].encode("utf-8", errors="replace")
+        output_limit = response["output_limit"]
+    except (KeyError, TypeError, ValueError, UnicodeError):
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-output-read-failed", script.name) from None
+    if type(exit_code) is not int or type(output_limit) is not bool:
+        _stop_checker_worker()
+        raise Reject("candidate-subprocess-output-read-failed", script.name)
+    if output_limit:
+        raise Reject("candidate-subprocess-output-limit", script.name)
+    return subprocess.CompletedProcess([sys.executable, "-I", str(script), *args], exit_code, stdout, stderr)
+
+
 def run_checker(root: Path, *args: str, expect_code: int = 0,
                 expect_text: str = "") -> str:
     script = root / "tests/scripts/verify-cgb-candidates.py"
-    result = run_process([sys.executable, "-I", str(script), *args], root, timeout=MAX_SUBPROCESS_SECONDS)
+    # Reuse one isolated interpreter, but load the real CLI into a fresh namespace per case.
+    # The worker is forcibly terminated at the original 30-second bound and caps each output stream.
+    result = _run_checker_cli(root, script, args)
     output = (result.stdout + result.stderr).decode("utf-8", errors="replace")
     if result.returncode != expect_code:
         detail = output.strip().replace("\n", " ")[-512:]
@@ -3018,8 +3237,7 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
             if native.returncode != 0 or "cgb-observations status=pass" not in native_output:
                 detail = native_output.strip().replace("\n", " ")[-384:]
                 raise Reject("candidate-native-build-qualification-failed", detail)
-    with tempfile.TemporaryDirectory(prefix="gbb-candidate-contract-") as temporary:
-        root = Path(temporary)
+    with _checker_worker_temp_directory("gbb-candidate-contract-") as root:
         project_revision = _prepare_temp_repo(source_root, root)
         fixture = _write_synthetic_admission_fixture(root)
         (root / "tests/data/cgb-candidates").mkdir(parents=True, exist_ok=True)
@@ -3038,6 +3256,7 @@ def self_test(source_root: Path, selected_revision: str | None, controls_only: b
         else:
             # Keep a known no-go fallback reference valid in the synthetic history.
             _ = primary_no_go_commit
+        controls += _checker_worker_cleanup_controls()
     if controls_only:
         print(f"PASS: candidate contract controls positives=6 negative_controls={controls} synthetic_only=true")
     else:
