@@ -251,6 +251,44 @@ def _parse_workflow_text(text: str, name: str, policy_namespace: dict) -> dict:
     return tree
 
 
+def validate_rehearsal_ctest_workers(workflow: str, policy_namespace: dict) -> None:
+    """Bind both rehearsal full streams to four workers and their complete CTest argv."""
+    import shlex
+
+    tree = _parse_workflow_text(workflow, "release-rehearsal.yml", policy_namespace)
+    specs = (("corpus", "Run the full CTest stream once", "${RUN_NONCE}"),
+             ("aggregate", "Corpus receipt and support sidecar", "$nonce"))
+    for job_id, step_name, nonce in specs:
+        job = tree.get("jobs", {}).get(job_id)
+        if not isinstance(job, dict):
+            reject(f"release rehearsal {job_id} job is missing")
+        matches = [step for step in job.get("steps", []) if isinstance(step, dict)
+                   and step.get("name") == step_name]
+        if len(matches) != 1:
+            reject(f"release rehearsal {job_id} needs exactly one full CTest step")
+        step = matches[0]
+        env = step.get("env")
+        if not isinstance(env, dict) or env.get("CTEST_PARALLEL_LEVEL") != "4":
+            reject(f"release rehearsal {job_id} full CTest step must set CTEST_PARALLEL_LEVEL: 4")
+        command = step.get("run", "")
+        if not isinstance(command, str):
+            reject(f"release rehearsal {job_id} must retain the exact complete CTest command")
+        # These full streams receive the worker level only from their fixed step environment.
+        # A shell export/unset would otherwise leave the same CTest argv but change its scheduler.
+        if "CTEST_PARALLEL_LEVEL" in command:
+            reject(f"release rehearsal {job_id} must leave its worker setting in the step environment")
+        try:
+            commands = [shlex.split(line.strip()) for line in command.splitlines()
+                        if line.strip().startswith("ctest ")]
+        except ValueError:
+            reject(f"release rehearsal {job_id} must retain the exact complete CTest command")
+        expected = ["ctest", "--test-dir", "build", "-T", "Test", "--no-compress-output",
+                    "--test-output-size-passed", "16777216", "--output-on-failure",
+                    "--no-tests=error", "--output-junit", f"cgb-corpus-ctest-{nonce}.xml"]
+        if commands != [expected]:
+            reject(f"release rehearsal {job_id} must retain the exact complete CTest command")
+
+
 def _folded_waiter_run(preview_workflow: str, job_id: str, job: dict) -> str:
     """Read the active folded YAML scalar so shell parsing sees GitHub's actual joined command."""
     block = _workflow_job_block_text(preview_workflow, job_id)
@@ -1948,6 +1986,47 @@ def _self_test(root: Path, revision: str) -> int:
     validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
     candidate_fixture = git_text(root, candidate, ".github/workflows/fixture-repro.yml").decode("utf-8")
     validate_fixture_repro_triggers(candidate_fixture, candidate_namespace)
+    candidate_rehearsal = git_text(root, candidate, ".github/workflows/release-rehearsal.yml").decode("utf-8")
+    validate_rehearsal_ctest_workers(candidate_rehearsal, candidate_namespace)
+    parallel_anchor = "          CTEST_PARALLEL_LEVEL: 4\n"
+    for job_id, nonce in (("corpus", "${RUN_NONCE}"), ("aggregate", "$nonce")):
+        job_block = _workflow_job_block_text(candidate_rehearsal, job_id)
+        if job_block.count(parallel_anchor) != 1:
+            reject(f"cannot create the rehearsal {job_id} worker negative controls")
+        for label, replacement in (("missing", ""),
+                                   ("serial", "          CTEST_PARALLEL_LEVEL: 1\n")):
+            mutant = candidate_rehearsal.replace(job_block,
+                                                 job_block.replace(parallel_anchor, replacement, 1), 1)
+            rejected_as(f"{label} rehearsal {job_id} CTest worker setting",
+                        f"release rehearsal {job_id} full CTest step must set CTEST_PARALLEL_LEVEL: 4",
+                        lambda mutant=mutant: validate_rehearsal_ctest_workers(mutant, candidate_namespace))
+        command = ('ctest --test-dir build -T Test --no-compress-output --test-output-size-passed '
+                   '16777216 --output-on-failure --no-tests=error --output-junit '
+                   f'"cgb-corpus-ctest-{nonce}.xml"')
+        if job_block.count(command) != 1:
+            reject(f"cannot create the rehearsal {job_id} command negative controls")
+        for label, option in (("long serial override", " --parallel 1"),
+                              ("short serial override", " -j1"),
+                              ("filtered stream", " -R acceptance_.*")):
+            mutant = candidate_rehearsal.replace(job_block,
+                                                 job_block.replace(command, command + option, 1), 1)
+            rejected_as(f"rehearsal {job_id} {label}",
+                        f"release rehearsal {job_id} must retain the exact complete CTest command",
+                        lambda mutant=mutant: validate_rehearsal_ctest_workers(mutant, candidate_namespace))
+        for label, assignment in (("exported serial worker", "export CTEST_PARALLEL_LEVEL=1"),
+                                   ("unset worker setting", "unset CTEST_PARALLEL_LEVEL")):
+            if job_id == "corpus":
+                anchor = "        run: " + command + "\n"
+                replacement = "        run: |\n          " + assignment + "\n          " + command + "\n"
+            else:
+                anchor = "          " + command + "\n"
+                replacement = "          " + assignment + "\n" + anchor
+            if job_block.count(anchor) != 1:
+                reject(f"cannot create the rehearsal {job_id} environment override negative control")
+            mutant = candidate_rehearsal.replace(job_block, job_block.replace(anchor, replacement, 1), 1)
+            rejected_as(f"rehearsal {job_id} {label}",
+                        f"release rehearsal {job_id} must leave its worker setting in the step environment",
+                        lambda mutant=mutant: validate_rehearsal_ctest_workers(mutant, candidate_namespace))
     preview_tree = _parse_workflow_text(candidate_preview, "preview.yml", candidate_namespace)
     controls += 1
     for label, old, new in (
@@ -2215,7 +2294,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 622:
+    if controls != 636:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
