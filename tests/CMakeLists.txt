@@ -1462,6 +1462,22 @@ gbb_add_v02_contract(v02_game_claims 60
 gbb_add_v02_contract(v02_game_claims_controls 60
   [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "target": "game"]=]
   verify-v02-adoption.py --self-test game)
+# Phase 17 pre-codec state gate. Capture one immutable source revision before registering
+# the docs and release-note controls that consume it.
+execute_process(
+  COMMAND git rev-parse HEAD
+  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  RESULT_VARIABLE GBB_STATE_REV_RESULT
+  OUTPUT_VARIABLE GBB_STATE_SOURCE_REV
+  ERROR_VARIABLE GBB_STATE_REV_ERROR
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(LENGTH "${GBB_STATE_SOURCE_REV}" GBB_STATE_SOURCE_REV_LENGTH)
+if(NOT GBB_STATE_REV_RESULT EQUAL 0 OR NOT GBB_STATE_SOURCE_REV_LENGTH EQUAL 40 OR
+   NOT GBB_STATE_SOURCE_REV MATCHES "^[0-9a-f]+$")
+  set(GBB_STATE_SOURCE_REV "unknown")
+  message(STATUS
+    "State evidence CTests remain registered with an unresolved revision and will fail closed when invoked")
+endif()
 gbb_add_v02_contract(v02_adoption_docs 60
   [=["checks": [1-9][0-9]*, "mode": "check".*"positive_success": true.*"target": "docs"]=]
   verify-v02-adoption.py --check docs)
@@ -1475,7 +1491,8 @@ set(gbb_docs_control_shard_count 200)
 math(EXPR gbb_docs_control_shard_max "${gbb_docs_control_shard_count} - 1")
 gbb_add_v02_contract(v02_adoption_docs_controls 90
   [=["mode": "self-test", "negative_controls": [1-9][0-9]*, "positive_success": true, "rejected_controls": [1-9][0-9]*, "shard": "0/200", "target": "docs"]=]
-  verify-v02-adoption.py --self-test docs --shard 0 ${gbb_docs_control_shard_count})
+  verify-v02-adoption.py --self-test docs --shard 0 ${gbb_docs_control_shard_count}
+  --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 foreach(gbb_docs_control_shard RANGE 1 ${gbb_docs_control_shard_max})
   if(gbb_docs_control_shard LESS 10)
     set(gbb_docs_control_shard_suffix "0${gbb_docs_control_shard}")
@@ -1486,7 +1503,8 @@ foreach(gbb_docs_control_shard RANGE 1 ${gbb_docs_control_shard_max})
     "\"mode\": \"self-test\", \"negative_controls\": [1-9][0-9]*, \"positive_success\": true, \"rejected_controls\": [1-9][0-9]*, \"shard\": \"${gbb_docs_control_shard}/${gbb_docs_control_shard_count}\", \"target\": \"docs\"")
   gbb_add_v02_contract(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} 90
     "${gbb_docs_control_shard_regex}"
-    verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} ${gbb_docs_control_shard_count})
+    verify-v02-adoption.py --self-test docs --shard ${gbb_docs_control_shard} ${gbb_docs_control_shard_count}
+    --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
   set_tests_properties(phase23_docs_controls_shard_${gbb_docs_control_shard_suffix} PROPERTIES PROCESSORS 2)
 endforeach()
 # Four-worker runs produced stalls in different docs shards when they competed without reservations,
@@ -1534,8 +1552,15 @@ unset(GBB_LEDGER_MIN)
 # bytes, exact generator fixed points and accepted by the adoption verifier; the controls reject input omission, a
 # rewritten historical value, unbound sources, a handwritten-success bypass and rewriting a tagged ledger (both read
 # the v0.2.0/v0.2.1/v0.3.0 tags the full-suite jobs fetch).
+if(PROJECT_VERSION STREQUAL "0.3.0")
+  set(gbb_release_disclosure_expected_ledgers 3)
+elseif(PROJECT_VERSION STREQUAL "0.4.0")
+  set(gbb_release_disclosure_expected_ledgers 4)
+else()
+  message(FATAL_ERROR "release-disclosure generator count needs an exact expectation for project version ${PROJECT_VERSION}")
+endif()
 gbb_add_ledger_contract(release_disclosure_generator
-  [=[release-disclosure generator pass ledgers=3 tagged=2]=]
+  "release-disclosure generator pass ledgers=${gbb_release_disclosure_expected_ledgers} tagged=2"
   --check-disclosure)
 set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=20)
 gbb_add_ledger_contract(release_disclosure_controls
@@ -1546,7 +1571,7 @@ unset(GBB_LEDGER_MIN)
 # source-bound candidate reason, even when the old disclosure checks still pass.
 gbb_add_v02_contract(release_notes_v04_controls 90
   [=[release-notes-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
-  verify-v02-adoption.py --self-test-release-notes-v04 --repo "${PROJECT_SOURCE_DIR}")
+  verify-v02-adoption.py --self-test-release-notes-v04 --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 # Phase 17 RM-028 / D-19 (17-08): the version-PR content window. The contract test checks the tracked record is a
 # well-formed inactive (or statically valid active) record and that every generator input the window digests exists in
 # the tree; the controls run the checker over disposable repositories (body overwrite, stale head/input, a changed
@@ -5103,22 +5128,6 @@ endforeach()
 # before the inventory check and before the sanitizer timeout scaling below.
 include("${PROJECT_SOURCE_DIR}/tests/cmake/areas.cmake")
 
-# Phase 17 pre-codec state gate. The source revision is captured at configure time
-# and every checker reads it with git show; it never falls back to the live tree.
-execute_process(
-  COMMAND git rev-parse HEAD
-  WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-  RESULT_VARIABLE GBB_STATE_REV_RESULT
-  OUTPUT_VARIABLE GBB_STATE_SOURCE_REV
-  ERROR_VARIABLE GBB_STATE_REV_ERROR
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-string(LENGTH "${GBB_STATE_SOURCE_REV}" GBB_STATE_SOURCE_REV_LENGTH)
-if(NOT GBB_STATE_REV_RESULT EQUAL 0 OR NOT GBB_STATE_SOURCE_REV_LENGTH EQUAL 40 OR
-   NOT GBB_STATE_SOURCE_REV MATCHES "^[0-9a-f]+$")
-  set(GBB_STATE_SOURCE_REV "unknown")
-  message(STATUS
-    "State evidence CTests remain registered with an unresolved revision and will fail closed when invoked")
-endif()
 # Phase 23 D-07/D-08: committed independent review reports bind the implementation source and
 # the qualification comparison permits only the fixed report/evidence allowlist. Register after
 # the configure-time immutable source revision is resolved above.

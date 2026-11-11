@@ -2508,6 +2508,14 @@ RELEASE_NOTES_EXPECTED_CASE_IDS = (
     *RELEASE_NOTES_NEGATIVE_CASE_IDS,
     "valid-baseline-final",
 )
+CLAIM_BOUNDARY_RELEASE_NOTE_CASE_IDS = (
+    "valid-baseline-initial",
+    "cross-version-state-claim",
+    "durability-claim",
+    "windows-host-claim",
+    "unscoped-state-claim",
+    "valid-baseline-final",
+)
 def release_notes_case_schedule(case_ids: tuple[str, ...], shard_count: int
                                 ) -> dict[int, tuple[str, ...]]:
     assigned: dict[int, list[str]] = {}
@@ -2667,20 +2675,65 @@ GabbaBoy v@VERSION@ adds the selected CGB-CPU-E software model beside DMG-CPU-B.
 """
 
 
+def release_notes_self_test_fixture(root: Path, repo: Path, rev: str | None,
+                                    version: str, ledger: str) -> str:
+    """Build a positive note fixture from the identity the CLI will judge."""
+    percent = perf_disclosure_percent(root, repo if rev is not None else None, rev)
+    head = perf_disclosure_head(root, repo if rev is not None else None, rev)
+    template = VALID_RELEASE_NOTES_TEMPLATE
+    if version == "0.4.0":
+        require(ledger == "docs/support/v0.4.0.md",
+                "release-notes-v04-fixture-ledger-identity-mismatch")
+        # These clauses are managed by the v0.4 profile. Keep only one rendered
+        # copy so omission mutants cannot pass through a duplicate in the base.
+        managed_template_clauses = (
+            "GabbaBoy v@VERSION@ adds the selected CGB-CPU-E software model beside DMG-CPU-B.\n\n",
+            ("- No CGB game-level evidence exists. The CGB test-ROM corpus is software-model\n"
+             "  evidence, not game acceptance. Physical CGB-E remains UNKNOWN/POLICY.\n"),
+            "- The macOS player archive is unsigned and not notarized.\n",
+            "- Support scope and known limits: [support ledger](@LEDGER_LINK@).\n",
+        )
+        for clause in managed_template_clauses:
+            require(clause in template, "release-notes-v04-fixture-template-drift")
+            template = template.replace(clause, "", 1)
+
+    fixture = (template.replace("@VERSION@", version)
+               .replace("@LEDGER_LINK@",
+                        f"https://github.com/szTheory/gabbaboy/blob/v{version}/{ledger}")
+               .replace("@PERCENT@", percent)
+               .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
+               .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
+               .replace("@HEAD@", head[:12])
+               .replace("@PERF_HEAD_LIMITATION@",
+                        PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
+    if version == "0.4.0":
+        require(re.fullmatch(r"[0-9a-f]{40}", rev or "") is not None,
+                "release-notes-revision-required")
+        profile = v04_profile(repo, rev)
+        fixture += "\n" + support_ledger_module().render_release_notes_preface_v04(profile)
+    return fixture
+
+
 def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
-                                rev: str | None = None) -> tuple[int, int]:
-    percent = perf_disclosure_percent(root)
-    head = perf_disclosure_head(root)
-    VALID_RELEASE_NOTES = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
-                           .replace("@LEDGER_LINK@", canonical_ledger_url(RELEASE_VERSION))
-                           .replace("@PERCENT@", percent)
-                           .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
-                           .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
-                           .replace("@HEAD@", head[:12])
-                           .replace("@PERF_HEAD_LIMITATION@",
-                                    PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
+                                rev: str | None = None,
+                                repo: Path = DEFAULT_ROOT,
+                                selected_case_ids: tuple[str, ...] | None = None
+                                ) -> tuple[int, int]:
+    if rev is not None:
+        version, ledger = identity_at_revision(repo, rev)
+    else:
+        version, ledger = tree_identity(root)
+    require(version != "0.4.0" or re.fullmatch(r"[0-9a-f]{40}", rev or "") is not None,
+            "revision-required")
+    percent = perf_disclosure_percent(root, repo if rev is not None else None, rev)
+    head = perf_disclosure_head(root, repo if rev is not None else None, rev)
+    VALID_RELEASE_NOTES = release_notes_self_test_fixture(root, repo, rev, version, ledger)
+    missing_ledger_reason = ("release-notes-ledger-version-mismatch" if version == "0.4.0"
+                             else "release-notes-ledger-link-missing")
+    missing_unsigned_reason = ("release-notes-support-limits-missing" if version == "0.4.0"
+                               else "release-notes-unsigned-limit-missing")
     mutations = (
-        ("wrong-version", (RELEASE_VERSION, "0.1.0"),
+        ("wrong-version", (version, "0.1.0"),
          "release-notes-version-missing"),
         ("missing-absence", (ABSENCE_SENTENCE, ""),
          "release-notes-absence-missing"),
@@ -2691,12 +2744,9 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
         ("comment-only-absence",
          (ABSENCE_SENTENCE, f"<!-- {ABSENCE_SENTENCE} -->"),
          "release-notes-absence-missing"),
-        ("missing-ledger-link",
-         (f"({canonical_ledger_url(RELEASE_VERSION)})",
-          "(https://github.com/szTheory/gabbaboy/blob/v0.1.0/docs/support/v0.1.0.md)"),
-         "release-notes-ledger-link-missing"),
+        ("missing-ledger-link", None, missing_ledger_reason),
         ("missing-unsigned-limit", ("unsigned and not notarized", "ready"),
-         "release-notes-unsigned-limit-missing"),
+         missing_unsigned_reason),
         ("stale-perf-percentage", (f"+{percent}%", "+8.3%"),
          "release-notes-perf-disclosure-missing"),
         ("missing-perf-receipt-path", (PERF_ATTRIBUTION, "the receipt"),
@@ -2865,7 +2915,7 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
         elif name == "false-signing-claim":
             changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
         elif name == "false-publication-claim":
-            changed = VALID_RELEASE_NOTES + f"\n{RELEASE_VERSION} has been released.\n"
+            changed = VALID_RELEASE_NOTES + f"\n{version} has been released.\n"
         elif name == "cross-version-state-claim":
             changed = VALID_RELEASE_NOTES + "\nSave states load across GabbaBoy versions.\n"
         elif name == "durability-claim":
@@ -2874,6 +2924,12 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
             changed = VALID_RELEASE_NOTES + "\nHost mode runs on Windows.\n"
         elif name == "unscoped-state-claim":
             changed = VALID_RELEASE_NOTES + "\nGabbaBoy supports save states on every platform.\n"
+        elif name == "missing-ledger-link":
+            pattern = ledger_link_pattern(ledger)
+            changed = pattern.sub(
+                lambda match: match.group(0).split("](", 1)[0] + "](https://evil.invalid/)",
+                VALID_RELEASE_NOTES,
+            )
         else:
             require(edit is not None, f"self-test-mutation-edit-missing:{name}")
             changed = VALID_RELEASE_NOTES.replace(edit[0], edit[1])
@@ -2888,7 +2944,24 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
     require(len(set(case_ids)) == len(case_ids),
             "release-notes-case-id-duplicate")
 
-    if DOCS_SELF_TEST_SHARD is None:
+    if selected_case_ids is not None:
+        require(DOCS_SELF_TEST_SHARD is None,
+                "release-notes-case-selection-shard-conflict")
+        require(type(selected_case_ids) is tuple,
+                "release-notes-case-selection-invalid")
+        require(bool(selected_case_ids), "release-notes-case-selection-empty")
+        require(all(type(case_id) is str for case_id in selected_case_ids),
+                "release-notes-case-selection-invalid-id")
+        require(len(set(selected_case_ids)) == len(selected_case_ids),
+                "release-notes-case-selection-duplicate")
+        unknown_case_ids = set(selected_case_ids) - set(case_ids)
+        require(not unknown_case_ids,
+                "release-notes-case-selection-unknown:" + ",".join(sorted(unknown_case_ids)))
+        selected_id_set = set(selected_case_ids)
+        expected_selected = tuple(case_id for case_id in case_ids if case_id in selected_id_set)
+        require(expected_selected == selected_case_ids,
+                "release-notes-case-selection-not-canonical")
+    elif DOCS_SELF_TEST_SHARD is None:
         expected_selected = case_ids
     else:
         shard, shard_count = DOCS_SELF_TEST_SHARD
@@ -2907,7 +2980,8 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
             notes = Path(temp) / "release-notes.md"
             for case_id, kind, reason, content in selected_cases:
                 write_lf(notes, content)
-                cli_args = ["--release-notes", str(notes), "--root", str(root)]
+                cli_args = ["--release-notes", str(notes), "--root", str(root),
+                            "--repo", str(repo)]
                 if rev is not None:
                     cli_args.extend(("--rev", rev))
                 if kind == "positive":
@@ -2921,34 +2995,30 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
             "release-notes-case-shard-execution-mismatch")
 
     if DOCS_SELF_TEST_SHARD is None:
-        return len(mutations), len(mutations)
+        selected_negative_controls = sum(kind == "negative" for _case_id, kind, _reason, _content
+                                         in selected_cases)
+        return selected_negative_controls, selected_negative_controls
     selected_negative_controls = sum(kind == "negative" for _case_id, kind, _reason, _content
                                      in selected_cases)
     return selected_negative_controls, selected_negative_controls
 
 
-def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int]:
+def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT,
+                                    rev: str | None = None) -> tuple[int, int]:
     """Prove that the existing release-notes gate rejects an omitted v0.4 fact."""
     global RAW_HTML_CONSTRUCT
-    rev = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root,
-                                  stderr=subprocess.DEVNULL, text=True).strip()
-    support = support_ledger_module()
+    require(re.fullmatch(r"[0-9a-f]{40}", rev or "") is not None,
+            "revision-required")
+    version, ledger = identity_at_revision(root, rev)
+    require((version, ledger) == ("0.4.0", "docs/support/v0.4.0.md"),
+            "release-notes-v04-revision-identity-mismatch")
     profile = v04_profile(root, rev)
-    percent = perf_disclosure_percent(root, root, rev)
-    head = perf_disclosure_head(root, root, rev)
-    base = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", "0.4.0")
-            .replace("@LEDGER_LINK@", canonical_ledger_url("0.4.0"))
-            .replace("@PERCENT@", percent)
-            .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
-            .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
-            .replace("@HEAD@", head[:12])
-            .replace("@PERF_HEAD_LIMITATION@",
-                     PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
-    valid = base
-    valid += "\n" + support.render_release_notes_preface_v04(profile)
+    valid = release_notes_self_test_fixture(root, root, rev, version, ledger)
     with tempfile.TemporaryDirectory(prefix="gabbaboy-v04-notes-") as temp:
         notes = Path(temp) / "release-notes.md"
         controls = 0
+        positives = 2
+
         def accepts(value: str) -> None:
             write_lf(notes, value)
             try:
@@ -3004,27 +3074,62 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
         accepts(valid + "\n\\<script\n<scripture\n")
         with tempfile.TemporaryDirectory(prefix="gabbaboy-release-revision-identity-") as temp:
             other_tree = Path(temp)
-            cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
-            cmake = cmake.replace(f"VERSION {RELEASE_VERSION} LANGUAGES", "VERSION 0.4.0 LANGUAGES", 1)
+            other_version = "0.5.0"
+            cmake = immutable_blob(root, rev, "CMakeLists.txt").decode("utf-8", "strict")
+            cmake = cmake.replace("VERSION 0.4.0 LANGUAGES", f"VERSION {other_version} LANGUAGES", 1)
             (other_tree / "CMakeLists.txt").write_text(cmake, encoding="utf-8")
-            manifest = json.loads((root / ".release-please-manifest.json").read_text(encoding="utf-8"))
-            manifest["."] = "0.4.0"
+            manifest = json.loads(immutable_blob(root, rev, ".release-please-manifest.json"))
+            manifest["."] = other_version
             (other_tree / ".release-please-manifest.json").write_text(
                 json.dumps(manifest) + "\n", encoding="utf-8")
-            (other_tree / "docs/support").mkdir(parents=True)
-            (other_tree / "docs/support/v0.4.0.md").touch()
-            legacy_notes = other_tree / "legacy-release-notes.md"
-            legacy_base = (VALID_RELEASE_NOTES_TEMPLATE.replace("@VERSION@", RELEASE_VERSION)
-                           .replace("@LEDGER_LINK@", canonical_ledger_url(RELEASE_VERSION))
-                           .replace("@PERCENT@", percent)
-                           .replace("@STATE_VERSION_SENTENCE@", STATE_VERSION_SENTENCE)
-                           .replace("@HOST_POSIX_SENTENCE@", HOST_POSIX_SENTENCE)
-                           .replace("@HEAD@", head[:12])
-                           .replace("@PERF_HEAD_LIMITATION@",
-                                    PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
-            write_lf(legacy_notes, legacy_base)
-            require(check_release_notes(legacy_notes, other_tree, rev, root) > 0,
+            support_dir = other_tree / "docs/support"
+            support_dir.mkdir(parents=True)
+            (support_dir / f"v{other_version}.md").touch()
+            write_lf(notes, valid)
+            require(check_release_notes(notes, other_tree, rev, root) > 0,
                     "release-notes-revision-identity-not-pinned")
+            try:
+                check_release_notes(notes, other_tree, None, other_tree)
+            except ContractError as error:
+                require(f"release-notes-version-missing:{other_version}" in str(error),
+                        f"release-notes-revision-identity-control-wrong-reason:{error}")
+                controls += 1
+            else:
+                raise ContractError("release-notes-revision-identity-control-accepted")
+
+        # The source-bound v0.4 positive must still require an explicit revision.
+        write_lf(notes, valid)
+        try:
+            check_release_notes(notes, root, None, root)
+        except ContractError as error:
+            require("release-notes-revision-required" in str(error),
+                    f"release-notes-v04-missing-revision-wrong-reason:{error}")
+            controls += 1
+        else:
+            raise ContractError("release-notes-v04-missing-revision-accepted")
+
+        # Keep the historical v0.3 release-note format passing against its own
+        # tagged identity, while proving the same body is refused at v0.4.
+        tag = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify",
+                              "refs/tags/v0.3.0^{commit}"], capture_output=True,
+                             check=False, text=True, env=git_environment())
+        require(tag.returncode == 0, "release-notes-v03-tag-unavailable")
+        historical_rev = tag.stdout.strip()
+        historical_version, historical_ledger = identity_at_revision(root, historical_rev)
+        require((historical_version, historical_ledger) == ("0.3.0", "docs/support/v0.3.0.md"),
+                "release-notes-v03-revision-identity-mismatch")
+        historical = release_notes_self_test_fixture(
+            root, root, historical_rev, historical_version, historical_ledger)
+        write_lf(notes, historical)
+        historical_args = ["--release-notes", str(notes), "--root", str(root),
+                           "--repo", str(root), "--rev", historical_rev]
+        expect_pass(historical_args)
+        positives += 1
+        expect_reject(
+            ["--release-notes", str(notes), "--root", str(root),
+             "--repo", str(root), "--rev", rev],
+            "release-notes-version-missing:0.4.0")
+        controls += 1
         potion, ucity = profile["candidate_outcomes"]
         p_line = f"- **{potion['name']}:** {potion['reason']}"
         u_line = f"- **{ucity['name']}:** {ucity['reason']}"
@@ -3071,7 +3176,7 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                "release-notes-candidate-name-missing")
         reject("unclosed-html-comment-hides-following-clauses",
                valid.replace(p_line, f"<!--\n{p_line}"),
-               "release-notes-candidate-build-run-status-missing")
+               "release-notes-ledger-version-mismatch")
         marker = chr(96) * 3
         quoted_fence = f"> {marker}text\n> {p_line}\n> {marker}"
         reject("blockquote-fenced-code-hides-reason", valid.replace(p_line, quoted_fence),
@@ -3207,7 +3312,7 @@ def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int
                "release-notes-false-platform-guarantee")
         reject("perceptual-qualification", valid + "\nPerceptual audio is verified.\n",
                "release-notes-false-perceptual-claim")
-        return 2, controls
+        return positives, controls
 
 
 def immutable_blob(repo: Path, rev: str, relative: str) -> bytes:
@@ -3242,7 +3347,7 @@ def run_self_test_claim_boundaries(repo: Path, rev: str) -> tuple[int, int]:
         for name in names:
             (snapshot / "docs/support" / name).touch()
         pinned_identity = tree_identity(snapshot)
-        require(pinned_identity == (RELEASE_VERSION, LEDGER),
+        require(pinned_identity == identity_at_revision(repo, rev),
                 "revision-tree-identity-mismatch")
 
         receipt = immutable_blob(repo, rev, PERF_ATTRIBUTION)
@@ -3273,7 +3378,8 @@ def run_self_test_claim_boundaries(repo: Path, rev: str) -> tuple[int, int]:
                 rejected += 1
             else:
                 raise ContractError(f"claim-boundary-control-accepted:{reason}:{relative}")
-        notes_controls, notes_rejected = run_self_test_release_notes(snapshot, rev)
+        notes_controls, notes_rejected = run_self_test_release_notes(
+            snapshot, rev, repo, CLAIM_BOUNDARY_RELEASE_NOTE_CASE_IDS)
         require(notes_controls == notes_rejected,
                 "release-notes-control-count-mismatch")
         positives = positive + notes_controls
@@ -3302,7 +3408,8 @@ def comment_all(text: str, old: str, name: str) -> str:
     return pattern.sub(lambda match: f"<!-- {match.group(0)} -->", text)
 
 
-def run_self_test_docs(root: Path) -> tuple[int, int]:
+def run_self_test_docs(root: Path, rev: str | None = None,
+                       repo: Path = DEFAULT_ROOT) -> tuple[int, int]:
     quote_prefix_probe = "> " * 256 + "plain body text\n"
     require(mask_markdown_nonrendered(quote_prefix_probe) == quote_prefix_probe,
             "markdown-container-prefix-control-failed")
@@ -4380,7 +4487,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
     # The fixed docs/notice inventory includes the D-153 through D-155 negatives.
     controls = len(mutations) + 128 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
-    notes_controls, notes_rejected = run_self_test_release_notes()
+    notes_controls, notes_rejected = run_self_test_release_notes(root, rev, repo)
     if DOCS_SELF_TEST_SHARD is None:
         print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
     else:
@@ -4422,7 +4529,9 @@ def main() -> int:
         }
     try:
         if args.self_test_release_notes_v04:
-            positives, controls = run_self_test_release_notes_v04(args.repo.resolve(strict=True))
+            require(args.rev is not None, "revision-required")
+            positives, controls = run_self_test_release_notes_v04(
+                args.repo.resolve(strict=True), args.rev)
             require(positives > 0 and controls > 0, "release-notes-v04-self-test-empty")
             print(f"release-notes-v04 controls pass positives={positives} controls={controls}")
             return 0
@@ -4467,7 +4576,8 @@ def main() -> int:
             negative_controls, rejected_controls = run_self_test_game(root)
         else:
             checks = 0 if DOCS_SELF_TEST_SHARD is not None else check_docs(root)
-            negative_controls, rejected_controls = run_self_test_docs(root)
+            negative_controls, rejected_controls = run_self_test_docs(
+                root, args.rev, args.repo.resolve(strict=True))
             if DOCS_SELF_TEST_SHARD is not None:
                 shard, shard_count = DOCS_SELF_TEST_SHARD
                 positive_calls = DOCS_SELF_TEST_STATS["positive_calls"]
