@@ -6,8 +6,8 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: "Plan 23-04 T3: D-176 targeted checks pass; immutable pin integration, source reviews and final local qualification pending. No hosted retry authorized."
-last_updated: "2026-11-11T01:04:43.785579+00:00"
+stopped_at: "Plan 23-04 T3: D-176 targeted checks pass; immutable pin integration passed; source reviews and final local qualification pending. No hosted retry authorized."
+last_updated: "2026-11-11T01:13:08.147545+00:00"
 last_activity: "Linux hosted qualification failed; measured local control balancing, disclosure overlap and duplicate ledger removal are prepared. Targeted checks pass; final qualification and a new hosted-attempt decision remain."
 state_head: "88102b338a70503e345c821a098b3beece623235"
 progress:
@@ -20,14 +20,14 @@ progress:
 
 # Project State
 
-**Recovery:** The approved hosted attempt at `88102b33` failed on Linux docs/disclosure deadlines and the job cap. Every other required producer passed. D-176 prepares measured test-harness scheduling changes and removes a duplicate ledger preflight while preserving its stronger full-suite check. Targeted controls pass; immutable snapshot integration, independent reviews and final local qualification remain. No new hosted attempt is authorized. Stop after Phase 23.
+**Recovery:** The approved hosted attempt at `88102b33` failed on Linux docs/disclosure deadlines and the job cap. Every other required producer passed. D-176 prepares measured test-harness scheduling changes and removes a duplicate ledger preflight while preserving its stronger full-suite check. Targeted controls pass; immutable snapshot integration passed; independent reviews and final local qualification remain. No new hosted attempt is authorized. Stop after Phase 23.
 
 ## Project Reference
 
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Plan 23-04 T3 — finish D-176 snapshot integration and exact-source review/local qualification, then present the concrete candidate for the required new hosted-attempt decision. PR #146 stays unmerged.
+**Current focus:** Plan 23-04 T3 — finish D-176 exact-source review/local qualification after the passing snapshot integration, then present the concrete candidate for the required new hosted-attempt decision. PR #146 stays unmerged.
 
 ## Current Position
 
@@ -45,7 +45,7 @@ Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assess
 
 The complete local run at `88102b33` passed, but its single approved hosted attempt did not qualify. Linux had two control deadlines and a 60-minute job cancellation; all other required producers passed. The failed stream and job snapshots remain in ignored build and [23-EVIDENCE.md](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md).
 
-D-176 balances the existing release-note cases over existing docs shards, overlaps independent disclosure CLI cases in private workspaces with two workers, and removes only a duplicate ledger preflight. The replacement CTest command/exit/marker is guarded. Targeted controls pass. Integrate the exact adoption snapshot without weakening either byte comparison, commit the complete implementation, reissue the three source reports and complete final full/focused local qualification. Then obtain the required new hosted-attempt decision; this correction does not renew the used allowance.
+D-176 balances the existing release-note cases over existing docs shards, overlaps independent disclosure CLI cases in private workspaces with two workers, and removes only a duplicate ledger preflight. The replacement CTest command/exit/marker is guarded. Targeted controls pass. The exact adoption snapshot is integrated without weakening either byte comparison. Commit the complete implementation, reissue the three source reports and complete final full/focused local qualification. Then obtain the required new hosted-attempt decision; this correction does not renew the used allowance.
 
 **Next stage:** Continue **`$gsd-execute-phase 23`** at Plan 23-04 T3. Do not push/retry/merge before the source gates and a new hosted-attempt decision. If qualification later passes, execute 23-07, 23-05, 23-06 and 23-08, retaining the separate concrete publication decision. Stop after Phase 23; the following owner-controlled stage is the v0.4 milestone audit, not Phase 24.
 
