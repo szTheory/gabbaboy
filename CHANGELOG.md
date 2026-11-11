@@ -27,6 +27,12 @@ Requirements remain Pending: FIXT-01 Pending, RIGHTS-01 Pending, DIAG-01 Pending
 [Complete evidence and scope: v0.4.0 support ledger](docs/support/v0.4.0.md).
 
 
+### State, host and performance limits
+
+- Save states load only in the exact GabbaBoy release that wrote them. Battery saves remain the cross-version persistence path.
+- Host mode is POSIX-only; Windows refuses `--save-dir`.
+- Instruction count: +9.6% versus v0.2.0 (receipt: tests/baseline/perf-attribution-v1.json; measured at f80bdf54c6c7).
+- The Ir attribution figure was measured at f80bdf54c6c7 on main before the release commit; the release-binding Ir check is the perf-gate receipt verified at the tagged source.
 
 ### Features
 
