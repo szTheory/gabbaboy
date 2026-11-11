@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import collections
 import copy
+import concurrent.futures
 import hashlib
 import importlib.util
 import json
@@ -4260,6 +4261,77 @@ def prepare_adoption_workspace(root: pathlib.Path, workspace: pathlib.Path) -> N
         sys.modules.pop(spec.name, None)
 
 
+DISCLOSURE_ADOPTION_CASE_EXPECTATIONS = (
+    ("later-generated-positive", True, None),
+    ("altered-historical-value-adoption", False, "historical-performance-disclosure-missing"),
+    ("omitted-disclosure-adoption", False, "historical-performance-disclosure-missing"),
+    ("handwritten-prose-edit", True, None),
+    ("handwritten-disclosure-relocated", True, None),
+)
+
+
+def validate_disclosure_adoption_schedule(cases: list[tuple[str, bytes]]) -> None:
+    """Require every named disclosure CLI control exactly once before any workspace is created."""
+    names = [name for name, _ in cases]
+    expected_names = [name for name, _, _ in DISCLOSURE_ADOPTION_CASE_EXPECTATIONS]
+    if len(names) != len(set(names)):
+        fail("disclosure adoption schedule contains duplicate cases")
+    if set(names) != set(expected_names):
+        missing = sorted(set(expected_names) - set(names))
+        extra = sorted(set(names) - set(expected_names))
+        fail(f"disclosure adoption schedule differs from its named inventory: missing={missing}, extra={extra}")
+
+
+def run_disclosure_adoption_cases(root: pathlib.Path, baseline_workspace: pathlib.Path,
+                                  cases: list[tuple[str, bytes]]) -> dict[str, subprocess.CompletedProcess]:
+    """Run the exact named disclosure CLI controls in separate copies of one checked baseline."""
+    validate_disclosure_adoption_schedule(cases)
+    names = [name for name, _ in cases]
+
+    # Import once on the caller thread. Workers only use this immutable path and launch separate CLI processes;
+    # they never race through _load_adoption_module's shared sys.modules name.
+    spec, adoption = _load_adoption_module(root)
+    try:
+        script = root / "tests/scripts/verify-v02-adoption.py"
+        ledger_rel = adoption.LEDGER
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-disclosure-adoption-cases-") as temp:
+            temporary = pathlib.Path(temp)
+
+            def invoke(case: tuple[str, bytes]) -> tuple[str, subprocess.CompletedProcess]:
+                name, ledger_raw = case
+                scratch = temporary / name
+                shutil.copytree(baseline_workspace, scratch)
+                target = scratch / ledger_rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(ledger_raw)
+                result = subprocess.run(
+                    [sys.executable, "-I", str(script), "--check", "docs", "--root", str(scratch)],
+                    cwd=root, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                    check=False, timeout=45)
+                return name, result
+
+            def collect(case: tuple[str, bytes]):
+                try:
+                    return invoke(case), None
+                except Exception as error:
+                    return None, error
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+                collected = list(pool.map(collect, cases))
+
+        errors = [error for _, error in collected if error is not None]
+        if errors:
+            raise errors[0]
+        rows = [row for row, _ in collected if row is not None]
+
+        result_names = [name for name, _ in rows]
+        if result_names != names:
+            fail("disclosure adoption schedule did not return every named case in inventory order")
+        return dict(rows)
+    finally:
+        sys.modules.pop(spec.name, None)
+
+
 def require_tagged(root: pathlib.Path, ledger_rel: str, tag: str, raw: bytes) -> None:
     blob = immutable_git_file(root, tag_commit(root, tag), ledger_rel, MAX_LEDGER_BYTES)
     if blob != raw:
@@ -4328,8 +4400,7 @@ def _self_test_disclosure(root: pathlib.Path, adoption_workspace: pathlib.Path) 
         fail("the current interpretation is not scoped to ledgers after the tagged version")
     if current.count(historical_block) != 1:
         fail("a later ledger lost or duplicated the historical block")
-    run_adoption_over_ledger(ledger_rel, current.encode("utf-8"), root, adoption_workspace)
-    positives += 1
+    current_raw = current.encode("utf-8")
 
     def expect_rejected(name: str, action, reason: str) -> None:
         nonlocal controls
@@ -4389,31 +4460,56 @@ def _self_test_disclosure(root: pathlib.Path, adoption_workspace: pathlib.Path) 
     altered_ledger = render_v2_ledger(data, altered).encode("utf-8")
     expect_rejected("altered-historical-value",
                     lambda: require_tagged(root, ledger_rel, "v0.2.1", altered_ledger), "tagged-ledger-changed")
-    expect_rejected("altered-historical-value-adoption",
-                    lambda: run_adoption_over_ledger(ledger_rel, altered_ledger, root, adoption_workspace),
-                    "historical-performance-disclosure-missing")
 
     # Omission: a ledger regenerated without the block fails adoption; the fixed point also fails.
     omitted = text.replace(historical_block + "\n\n", "", 1).encode("utf-8")
     if omitted == raw:
         fail("the omission control did not remove the block")
-    expect_rejected("omitted-disclosure-adoption",
-                    lambda: run_adoption_over_ledger(ledger_rel, omitted, root, adoption_workspace),
-                    "historical-performance-disclosure-missing")
     expect_rejected("omitted-disclosure-not-generated",
                     lambda: require_generated(omitted, ledger_rel, "0.2.1", disclosure), "ledger-not-generated")
 
     # Handwritten-success bypass: every required phrase is present, so adoption passes, but the bytes are not
     # generator output and the fixed point rejects them.
     reworded = text.replace("## Reconciled prior scope entries", "## Reconciled earlier scope entries", 1).encode("utf-8")
-    run_adoption_over_ledger(ledger_rel, reworded, root, adoption_workspace)
     expect_rejected("handwritten-prose-edit",
                     lambda: require_generated(reworded, ledger_rel, "0.2.1", disclosure), "ledger-not-generated")
     relocated = text.replace(historical_block + "\n\n", "", 1) + "\n" + historical_block + "\n"
-    run_adoption_over_ledger(ledger_rel, relocated.encode("utf-8"), root, adoption_workspace)
     expect_rejected("handwritten-disclosure-relocated",
                     lambda: require_generated(relocated.encode("utf-8"), ledger_rel, "0.2.1", disclosure),
                     "ledger-not-generated")
+
+    # These five independent CLI controls each get a private copy of the same checked baseline. The generated
+    # bytes above are prepared serially; only the fresh production CLI processes overlap.
+    adoption_cases = [
+        ("later-generated-positive", current_raw),
+        ("altered-historical-value-adoption", altered_ledger),
+        ("omitted-disclosure-adoption", omitted),
+        ("handwritten-prose-edit", reworded),
+        ("handwritten-disclosure-relocated", relocated.encode("utf-8")),
+    ]
+    validate_disclosure_adoption_schedule(adoption_cases)
+    expect_rejected("adoption-schedule-missing-case",
+                    lambda: validate_disclosure_adoption_schedule(adoption_cases[:-1]),
+                    "handwritten-disclosure-relocated")
+    expect_rejected("adoption-schedule-duplicate-case",
+                    lambda: validate_disclosure_adoption_schedule(adoption_cases + [adoption_cases[0]]),
+                    "duplicate cases")
+    adoption_results = run_disclosure_adoption_cases(root, adoption_workspace, adoption_cases)
+
+    def check_adoption_result(name: str) -> None:
+        result = adoption_results[name]
+        if result.returncode != 0:
+            fail(f"REJECT adoption-rejected: {ledger_rel}: " + (result.stderr.strip() or result.stdout.strip()))
+
+    for name, accepted, reason in DISCLOSURE_ADOPTION_CASE_EXPECTATIONS:
+        if accepted:
+            check_adoption_result(name)
+            if name == "later-generated-positive":
+                positives += 1
+        else:
+            if reason is None:
+                fail(f"disclosure adoption case {name} has no expected rejection diagnostic")
+            expect_rejected(name, lambda name=name: check_adoption_result(name), reason)
 
     # Tagged bytes: a tracked tagged ledger that differs from its tag blob in a single byte is rejected.
     flipped = bytearray(raw)

@@ -1181,3 +1181,13 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Verification:** The new checker self-test passes 526 controls. The sixteen newly affected shards passed 16/16 sequentially; the exact CMake registration, full focused selection, and full suite remain to be rerun on the final reviewed source.
 - **Source:** `tests/CMakeLists.txt`, `tests/scripts/verify-workflow-policy-coverage.py`, and Phase 23 T2 D-163.
 - **Status:** Implemented; exact-source configure, review, and suite gates pending.
+
+
+### GB-CI-027 / 2026-11-11 / Balance retained control work and remove proven duplicate setup
+
+- **Cause and evidence:** The Linux qualification stream timed out docs shard 0 and release disclosure, then exhausted its job window. Shard 0 held all 70 release-note cases. Disclosure's six fresh CLI calls dominated its local profile; copying the checked inputs did not. Linux also ran the same ledger self-test before the build and again in the full inventory. Other required platforms/configurations passed.
+- **Remedy:** Keep case identities, payloads, intended diagnostics and fresh CLI processes. Distribute note cases over the existing shard identities with sparse exact-once accounting; preserve standalone/unsharded semantics. Overlap independent disclosure cases with two workers and private workspaces inside the existing reservation, draining results before cleanup. Remove only the duplicate ledger preflight and guard its full-suite replacement's exact command, exit and marker. Keep all limits and unique release-gate setup.
+- **Applies when:** A shared control sweep dominates one shard, independent end-to-end cases repeat serially, or a setup command has an equivalent or stronger required full-suite counterpart. Prove that equivalence before deleting work; timing alone is not coverage.
+- **Verification:** Direct docs shards, the complete standalone notes route, the configured disclosure CTest, and the new coverage guard's positive/causal negatives pass. Exact source review and final full qualification remain pending. Original-versus-new note manifests and diagnostic timings are retained in ignored build evidence.
+- **Source:** Phase 23 D-176 and `23-EVIDENCE.md`.
+- **Status:** Targeted local checks passed; hosted qualification remains held. CTest COST hints did not actually front-load the observed sanitizer consumers, so their presence is not proof of execution order. Background automation preference is retained in durable instructions.

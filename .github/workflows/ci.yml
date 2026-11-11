@@ -92,8 +92,8 @@ jobs:
       - name: Self-test CTest platform inventory filter
         shell: bash
         run: bash .github/scripts/verify-test-inventory.sh --self-test
-      - name: Self-test the release support-ledger binding
-        run: python3 tests/scripts/verify-support-ledger.py --self-test
+      # The full CTest inventory runs this same ledger self-test with an exact
+      # exit-plus-marker contract; do not repeat it before the build.
       # The push parent, or the merge base with origin/main when that parent is all zeros (a new branch) or no
       # fetched ref reaches it any more (a rebase or force-push), as budget_base does. The policy pins this body.
       - name: Resolve immutable state pin base

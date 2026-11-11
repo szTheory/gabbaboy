@@ -2430,6 +2430,159 @@ DOCS_SELF_TEST_STATS = {
     "positive_checks": 0,
 }
 
+RELEASE_NOTES_SAFE_POSITIVE_CASE_IDS = (
+    "safe-encoded-visible-space",
+    "safe-code-default-ignorable-claim",
+    "safe-hard-break-evidence",
+    "safe-code-hard-break-claim",
+    "safe-intraword-underscores",
+    "safe-escaped-emphasis",
+    "safe-unicode-symbol-strong-claim",
+    "safe-unicode-symbol-emphasis-claim",
+    "safe-game-claim-in-link-destination",
+    "safe-inline-code-game-claim",
+    "safe-fenced-code-game-claim",
+    "safe-unresolved-reference-game-claim",
+    "safe-escaped-bracket-game-claim",
+    "safe-unresolved-reference-destination",
+    "safe-unresolved-reference-title",
+    "safe-inline-code-reference-claim",
+    "safe-fenced-reference-claim",
+    "safe-dense-unmatched-emphasis",
+)
+RELEASE_NOTES_NEGATIVE_CASE_IDS = (
+    "wrong-version",
+    "missing-absence",
+    "missing-state-version",
+    "missing-host-posix",
+    "comment-only-absence",
+    "missing-ledger-link",
+    "missing-unsigned-limit",
+    "stale-perf-percentage",
+    "missing-perf-receipt-path",
+    "wrong-perf-head",
+    "missing-perf-head-limitation",
+    "wrong-perf-head-limitation",
+    "comment-only-perf-disclosure",
+    "contrary-game-claim",
+    "zero-width-space-game-claim",
+    "word-joiner-game-claim",
+    "zero-width-non-joiner-game-claim",
+    "false-signing-claim",
+    "false-publication-claim",
+    "cross-version-state-claim",
+    "durability-claim",
+    "windows-host-claim",
+    "unscoped-state-claim",
+    "default-ignorable-combining-grapheme-joiner-game-claim",
+    "default-ignorable-hangul-filler-game-claim",
+    "default-ignorable-variation-selector-16-game-claim",
+    "default-ignorable-reserved-default-ignorable-game-claim",
+    "commonmark-reference-hex-zero-width-space-game-claim",
+    "commonmark-reference-decimal-zero-width-space-game-claim",
+    "commonmark-reference-named-zero-width-space-game-claim",
+    "commonmark-reference-hex-combining-grapheme-joiner-game-claim",
+    "commonmark-reference-hex-visible-space-game-claim",
+    "commonmark-reference-encoded-cgb-letter-game-claim",
+    "commonmark-hard-break-backslash-lf-game-claim",
+    "commonmark-hard-break-backslash-cr-game-claim",
+    "commonmark-hard-break-backslash-crlf-game-claim",
+    "commonmark-hard-break-backslash-lf-encoded-space-game-claim",
+    "commonmark-hard-break-soft-break-lf-encoded-space-game-claim",
+    "commonmark-emphasis-strong-star-game-claim",
+    "commonmark-emphasis-intraword-star-game-claim",
+    "commonmark-emphasis-strong-underscore-game-claim",
+    "commonmark-emphasis-unicode-symbol-strong-underscore-game-claim",
+    "commonmark-emphasis-unicode-symbol-rule-of-three-game-claim",
+    "commonmark-emphasis-inline-link-label-game-claim",
+    "commonmark-ref-link-shortcut-game-claim",
+    "commonmark-ref-link-full-game-claim",
+    "commonmark-ref-link-collapsed-game-claim",
+    "dense-unmatched-emphasis-game-claim",
+    "dense-nested-reference-brackets-game-claim",
+)
+RELEASE_NOTES_EXPECTED_CASE_IDS = (
+    "valid-baseline-initial",
+    *RELEASE_NOTES_SAFE_POSITIVE_CASE_IDS,
+    "safe-dense-nested-reference-brackets",
+    *RELEASE_NOTES_NEGATIVE_CASE_IDS,
+    "valid-baseline-final",
+)
+def release_notes_case_schedule(case_ids: tuple[str, ...], shard_count: int
+                                ) -> dict[int, tuple[str, ...]]:
+    assigned: dict[int, list[str]] = {}
+    for index, case_id in enumerate(case_ids):
+        assigned.setdefault(index % shard_count, []).append(case_id)
+    return {shard: tuple(selected) for shard, selected in assigned.items()}
+
+
+def validate_release_notes_case_schedule(
+        case_ids: tuple[str, ...], schedule: dict[int, tuple[str, ...]],
+        shard_count: int) -> None:
+    require(all(type(shard) is int and 0 <= shard < shard_count
+                for shard in schedule),
+            "release-notes-case-schedule-shard-domain")
+    if len(set(case_ids)) != len(case_ids):
+        raise ContractError("release-notes-case-schedule-case-id-duplicate")
+    ordinal_by_id = {case_id: index for index, case_id in enumerate(case_ids)}
+    seen: set[str] = set()
+    for shard, selected in schedule.items():
+        for case_id in selected:
+            require(case_id in ordinal_by_id,
+                    "release-notes-case-schedule-unknown-case")
+            require(case_id not in seen,
+                    "release-notes-case-schedule-duplicate")
+            require(ordinal_by_id[case_id] % shard_count == shard,
+                    "release-notes-case-schedule-wrong-shard")
+            seen.add(case_id)
+    require(seen == set(case_ids), "release-notes-case-schedule-missing")
+    expected_shards = {index % shard_count for index in range(len(case_ids))}
+    require(set(schedule) == expected_shards,
+            "release-notes-case-schedule-shard-domain")
+
+
+def require_release_notes_schedule_rejected(
+        case_ids: tuple[str, ...], schedule: dict[int, tuple[str, ...]],
+        shard_count: int, expected_reason: str, control_name: str) -> None:
+    try:
+        validate_release_notes_case_schedule(case_ids, schedule, shard_count)
+    except ContractError as error:
+        require(str(error) == expected_reason,
+                f"release-notes-case-schedule-control-wrong-reason:{control_name}:{error}")
+    else:
+        raise ContractError(
+            f"release-notes-case-schedule-control-accepted:{control_name}:{expected_reason}")
+
+
+def self_test_release_notes_case_schedule(case_ids: tuple[str, ...],
+                                         shard_count: int) -> dict[int, tuple[str, ...]]:
+    schedule = release_notes_case_schedule(case_ids, shard_count)
+    validate_release_notes_case_schedule(case_ids, schedule, shard_count)
+
+    # These synthetic negatives prove that the accounting gate catches the
+    # concrete missing, duplicate, and misplaced-case failures the schedule
+    # protects against. They do not invoke or replace a production CLI check.
+    missing = dict(schedule)
+    missing[0] = missing[0][:-1]
+    require_release_notes_schedule_rejected(
+        case_ids, missing, shard_count,
+        "release-notes-case-schedule-missing", "missing-case")
+
+    duplicate = dict(schedule)
+    duplicate[0] = duplicate[0] + (duplicate[0][0],)
+    require_release_notes_schedule_rejected(
+        case_ids, duplicate, shard_count,
+        "release-notes-case-schedule-duplicate", "duplicate-case")
+
+    misplaced = dict(schedule)
+    first = misplaced[0][0]
+    misplaced[0] = misplaced[0][1:]
+    misplaced[1] = (first,) + misplaced.get(1, ())
+    require_release_notes_schedule_rejected(
+        case_ids, misplaced, shard_count,
+        "release-notes-case-schedule-wrong-shard", "misplaced-case")
+    return schedule
+
 
 def child_result(root: Path, mode: str, reason: str | None = None) -> None:
     if DOCS_SELF_TEST_SHARD is not None:
@@ -2526,191 +2679,252 @@ def run_self_test_release_notes(root: Path = DEFAULT_ROOT,
                            .replace("@HEAD@", head[:12])
                            .replace("@PERF_HEAD_LIMITATION@",
                                     PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12])))
-    with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-notes-") as temp:
-        notes = Path(temp) / "release-notes.md"
-        write_lf(notes, VALID_RELEASE_NOTES)
-        cli_args = ["--release-notes", str(notes), "--root", str(root)]
-        if rev is not None:
-            cli_args.extend(("--rev", rev))
-        expect_pass(cli_args)
-        mutations = (
-            ("wrong-version", (RELEASE_VERSION, "0.1.0"),
-             "release-notes-version-missing"),
-            ("missing-absence", (ABSENCE_SENTENCE, ""),
-             "release-notes-absence-missing"),
-            ("missing-state-version", (STATE_VERSION_SENTENCE, ""),
-             "release-notes-state-version-missing"),
-            ("missing-host-posix", (HOST_POSIX_SENTENCE, ""),
-             "release-notes-host-posix-missing"),
-            ("comment-only-absence",
-             (ABSENCE_SENTENCE, f"<!-- {ABSENCE_SENTENCE} -->"),
-             "release-notes-absence-missing"),
-            ("missing-ledger-link",
-             (f"({canonical_ledger_url(RELEASE_VERSION)})",
-              "(https://github.com/szTheory/gabbaboy/blob/v0.1.0/docs/support/v0.1.0.md)"),
-             "release-notes-ledger-link-missing"),
-            ("missing-unsigned-limit", ("unsigned and not notarized", "ready"),
-             "release-notes-unsigned-limit-missing"),
-            ("stale-perf-percentage", (f"+{percent}%", "+8.3%"),
-             "release-notes-perf-disclosure-missing"),
-            ("missing-perf-receipt-path", (PERF_ATTRIBUTION, "the receipt"),
-             "release-notes-perf-disclosure-missing"),
-            ("wrong-perf-head", (f"measured at {head[:12]}", "measured at 711f4fd"),
-             "release-notes-perf-head-mismatch"),
-            ("missing-perf-head-limitation",
-             (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]), ""),
-             "release-notes-perf-head-limitation-missing"),
-            ("wrong-perf-head-limitation",
-             (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]),
-              PERF_HEAD_LIMITATION.replace("@HEAD@", "711f4fd")),
-             "release-notes-perf-head-limitation-missing"),
-            ("comment-only-perf-disclosure",
-             (f"- Instruction count: +{percent}% versus v0.2.0 (receipt: {PERF_ATTRIBUTION}; measured at {head[:12]}).",
-              f"<!-- Instruction count: +{percent}% ({PERF_ATTRIBUTION}) -->"),
-             "release-notes-perf-disclosure-missing"),
-            ("contrary-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification"),
-            ("zero-width-space-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification"),
-            ("word-joiner-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification"),
-            ("zero-width-non-joiner-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification"),
-            ("false-signing-claim", None,
-             "release-notes-false-signing-or-notarization-claim"),
-            ("false-publication-claim", None,
-             "release-notes-false-publication-claim"),
-            ("cross-version-state-claim", None,
-             "false-cross-version-state-claim:release-notes"),
-            ("durability-claim", None,
-             "false-durability-claim:release-notes"),
-            ("windows-host-claim", None,
-             "false-windows-host-claim:release-notes"),
-            ("unscoped-state-claim", None,
-             "unscoped-state-claim:release-notes"),
-        )
-        mutations += tuple(
-            (f"default-ignorable-{name}-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification")
-            for name, _ in DEFAULT_IGNORABLE_CLAIM_SEPARATORS
-        )
-        mutations += tuple(
-            (f"commonmark-reference-{name}-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification")
-            for name, _ in COMMONMARK_REFERENCED_GAME_CLAIMS
-        )
-        mutations += tuple(
-            (f"commonmark-hard-break-{name}-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification")
-            for name, _ in COMMONMARK_HARD_BREAK_GAME_CLAIMS
-        )
-        mutations += tuple(
-            (f"commonmark-emphasis-{name}-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification")
-            for name, _ in COMMONMARK_EMPHASIS_GAME_CLAIMS
-        )
-        mutations += tuple(
-            (f"commonmark-ref-link-{name}-game-claim", None,
-             "release-notes-unsupported-cgb-game-qualification")
-            for name, _ in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS
-        )
-        mutations += (("dense-unmatched-emphasis-game-claim", None,
-                       "release-notes-unsupported-cgb-game-qualification"),)
-        mutations += (("dense-nested-reference-brackets-game-claim", None,
-                       "release-notes-unsupported-cgb-game-qualification"),)
-        for safe_suffix in (
-                "\nCGB&#x20; test-ROM results remain software-model evidence only.\n",
-                "\n`CGB&#x200b; game passes all acceptance checks.`\n",
-                "\nCGB\\\ntest-ROM results remain software-model evidence only.\n",
-                "\n`CGB\\\ngame passes all acceptance checks.`\n",
-                "\nC_G_B game passes all acceptance checks.\n",
-                "\nC\\*G\\*B game passes all acceptance checks.\n",
-                "\n😀__CGB__ test-ROM results remain software-model evidence only.\n",
-                "\n😀**CGB** test-ROM results remain software-model evidence only.\n",
-                "\n[details](<https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>)\n",
-                "\n`CGB game passes all acceptance checks.`\n",
-                "\n```text\nCGB game passes all acceptance checks.\n```\n",
-                "\nC[GB] game passes all acceptance checks.\n",
-                "\nC\\[GB\\] game passes all acceptance checks.\n",
-                "\n[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>\n",
-                "\n[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\"\n",
-                "\n`C[GB] game passes all acceptance checks.`\n",
-                "\n```text\nC[GB] game passes all acceptance checks.\n```\n",
-                "\n" + DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE + "\n"):
-            write_lf(notes, VALID_RELEASE_NOTES + safe_suffix)
-            expect_pass(cli_args)
-        write_lf(notes, VALID_RELEASE_NOTES + "\n" +
-                 DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE + "\n")
-        expect_pass(cli_args)
-        write_lf(notes, VALID_RELEASE_NOTES)
-        for name, edit, reason in mutations:
-            if name == "contrary-game-claim":
-                changed = VALID_RELEASE_NOTES + "\nCGB game passes acceptance.\n"
-            elif name in ("zero-width-space-game-claim", "word-joiner-game-claim",
-                          "zero-width-non-joiner-game-claim"):
-                separator = {
-                    "zero-width-space-game-claim": "\u200b",
-                    "word-joiner-game-claim": "\u2060",
-                    "zero-width-non-joiner-game-claim": "\u200c",
-                }[name]
-                changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
-            elif name.startswith("default-ignorable-"):
-                separator_name = name.removeprefix("default-ignorable-").removesuffix(
-                    "-game-claim")
-                separator = dict(DEFAULT_IGNORABLE_CLAIM_SEPARATORS)[separator_name]
-                changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
-            elif name.startswith("commonmark-reference-"):
-                claim_name = name.removeprefix("commonmark-reference-").removesuffix(
-                    "-game-claim")
-                claim = dict(COMMONMARK_REFERENCED_GAME_CLAIMS)[claim_name]
-                changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
-            elif name.startswith("commonmark-hard-break-"):
-                claim_name = name.removeprefix("commonmark-hard-break-").removesuffix(
-                    "-game-claim")
-                claim = dict(COMMONMARK_HARD_BREAK_GAME_CLAIMS)[claim_name]
-                changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
-            elif name.startswith("commonmark-emphasis-"):
-                claim_name = name.removeprefix("commonmark-emphasis-").removesuffix(
-                    "-game-claim")
-                claim = dict(COMMONMARK_EMPHASIS_GAME_CLAIMS)[claim_name]
-                changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
-            elif name.startswith("commonmark-ref-link-"):
-                claim_name = name.removeprefix("commonmark-ref-link-").removesuffix(
-                    "-game-claim")
-                claim = dict(COMMONMARK_REFERENCE_LINK_GAME_CLAIMS)[claim_name]
-                changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
-            elif name == "dense-unmatched-emphasis-game-claim":
-                changed = VALID_RELEASE_NOTES + "\n" + DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM + "\n"
-            elif name == "dense-nested-reference-brackets-game-claim":
-                changed = (VALID_RELEASE_NOTES + "\n"
-                           + DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM + "\n")
-            elif name == "false-signing-claim":
-                changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
-            elif name == "false-publication-claim":
-                changed = VALID_RELEASE_NOTES + f"\n{RELEASE_VERSION} has been released.\n"
-            elif name == "cross-version-state-claim":
-                changed = VALID_RELEASE_NOTES + "\nSave states load across GabbaBoy versions.\n"
-            elif name == "durability-claim":
-                changed = VALID_RELEASE_NOTES + "\nSaves are power-loss safe.\n"
-            elif name == "windows-host-claim":
-                changed = VALID_RELEASE_NOTES + "\nHost mode runs on Windows.\n"
-            elif name == "unscoped-state-claim":
-                changed = VALID_RELEASE_NOTES + "\nGabbaBoy supports save states on every platform.\n"
-            else:
-                changed = VALID_RELEASE_NOTES.replace(edit[0], edit[1])
-            require(changed != VALID_RELEASE_NOTES,
-                    f"self-test-mutation-no-op:{name}")
-            write_lf(notes, changed)
-            cli_args = ["--release-notes", str(notes), "--root", str(root)]
-            if rev is not None:
-                cli_args.extend(("--rev", rev))
-            expect_reject(cli_args, reason)
-        write_lf(notes, VALID_RELEASE_NOTES)
-        cli_args = ["--release-notes", str(notes), "--root", str(root)]
-        if rev is not None:
-            cli_args.extend(("--rev", rev))
-        expect_pass(cli_args)
-    return len(mutations), len(mutations)
+    mutations = (
+        ("wrong-version", (RELEASE_VERSION, "0.1.0"),
+         "release-notes-version-missing"),
+        ("missing-absence", (ABSENCE_SENTENCE, ""),
+         "release-notes-absence-missing"),
+        ("missing-state-version", (STATE_VERSION_SENTENCE, ""),
+         "release-notes-state-version-missing"),
+        ("missing-host-posix", (HOST_POSIX_SENTENCE, ""),
+         "release-notes-host-posix-missing"),
+        ("comment-only-absence",
+         (ABSENCE_SENTENCE, f"<!-- {ABSENCE_SENTENCE} -->"),
+         "release-notes-absence-missing"),
+        ("missing-ledger-link",
+         (f"({canonical_ledger_url(RELEASE_VERSION)})",
+          "(https://github.com/szTheory/gabbaboy/blob/v0.1.0/docs/support/v0.1.0.md)"),
+         "release-notes-ledger-link-missing"),
+        ("missing-unsigned-limit", ("unsigned and not notarized", "ready"),
+         "release-notes-unsigned-limit-missing"),
+        ("stale-perf-percentage", (f"+{percent}%", "+8.3%"),
+         "release-notes-perf-disclosure-missing"),
+        ("missing-perf-receipt-path", (PERF_ATTRIBUTION, "the receipt"),
+         "release-notes-perf-disclosure-missing"),
+        ("wrong-perf-head", (f"measured at {head[:12]}", "measured at 711f4fd"),
+         "release-notes-perf-head-mismatch"),
+        ("missing-perf-head-limitation",
+         (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]), ""),
+         "release-notes-perf-head-limitation-missing"),
+        ("wrong-perf-head-limitation",
+         (PERF_HEAD_LIMITATION.replace("@HEAD@", head[:12]),
+          PERF_HEAD_LIMITATION.replace("@HEAD@", "711f4fd")),
+         "release-notes-perf-head-limitation-missing"),
+        ("comment-only-perf-disclosure",
+         (f"- Instruction count: +{percent}% versus v0.2.0 (receipt: {PERF_ATTRIBUTION}; measured at {head[:12]}).",
+          f"<!-- Instruction count: +{percent}% ({PERF_ATTRIBUTION}) -->"),
+         "release-notes-perf-disclosure-missing"),
+        ("contrary-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification"),
+        ("zero-width-space-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification"),
+        ("word-joiner-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification"),
+        ("zero-width-non-joiner-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification"),
+        ("false-signing-claim", None,
+         "release-notes-false-signing-or-notarization-claim"),
+        ("false-publication-claim", None,
+         "release-notes-false-publication-claim"),
+        ("cross-version-state-claim", None,
+         "false-cross-version-state-claim:release-notes"),
+        ("durability-claim", None,
+         "false-durability-claim:release-notes"),
+        ("windows-host-claim", None,
+         "false-windows-host-claim:release-notes"),
+        ("unscoped-state-claim", None,
+         "unscoped-state-claim:release-notes"),
+    )
+    mutations += tuple(
+        (f"default-ignorable-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in DEFAULT_IGNORABLE_CLAIM_SEPARATORS
+    )
+    mutations += tuple(
+        (f"commonmark-reference-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in COMMONMARK_REFERENCED_GAME_CLAIMS
+    )
+    mutations += tuple(
+        (f"commonmark-hard-break-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in COMMONMARK_HARD_BREAK_GAME_CLAIMS
+    )
+    mutations += tuple(
+        (f"commonmark-emphasis-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in COMMONMARK_EMPHASIS_GAME_CLAIMS
+    )
+    mutations += tuple(
+        (f"commonmark-ref-link-{name}-game-claim", None,
+         "release-notes-unsupported-cgb-game-qualification")
+        for name, _ in COMMONMARK_REFERENCE_LINK_GAME_CLAIMS
+    )
+    mutations += (("dense-unmatched-emphasis-game-claim", None,
+                   "release-notes-unsupported-cgb-game-qualification"),)
+    mutations += (("dense-nested-reference-brackets-game-claim", None,
+                   "release-notes-unsupported-cgb-game-qualification"),)
+
+    safe_positive_cases = (
+        ("safe-encoded-visible-space",
+         "\nCGB&#x20; test-ROM results remain software-model evidence only.\n"),
+        ("safe-code-default-ignorable-claim",
+         "\n`CGB&#x200b; game passes all acceptance checks.`\n"),
+        ("safe-hard-break-evidence",
+         "\nCGB\\\ntest-ROM results remain software-model evidence only.\n"),
+        ("safe-code-hard-break-claim",
+         "\n`CGB\\\ngame passes all acceptance checks.`\n"),
+        ("safe-intraword-underscores",
+         "\nC_G_B game passes all acceptance checks.\n"),
+        ("safe-escaped-emphasis",
+         "\nC\\*G\\*B game passes all acceptance checks.\n"),
+        ("safe-unicode-symbol-strong-claim",
+         "\n😀__CGB__ test-ROM results remain software-model evidence only.\n"),
+        ("safe-unicode-symbol-emphasis-claim",
+         "\n😀**CGB** test-ROM results remain software-model evidence only.\n"),
+        ("safe-game-claim-in-link-destination",
+         "\n[details](<https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>)\n"),
+        ("safe-inline-code-game-claim",
+         "\n`CGB game passes all acceptance checks.`\n"),
+        ("safe-fenced-code-game-claim",
+         "\n```text\nCGB game passes all acceptance checks.\n```\n"),
+        ("safe-unresolved-reference-game-claim",
+         "\nC[GB] game passes all acceptance checks.\n"),
+        ("safe-escaped-bracket-game-claim",
+         "\nC\\[GB\\] game passes all acceptance checks.\n"),
+        ("safe-unresolved-reference-destination",
+         "\n[details][claim]\n\n[claim]: <https://example.invalid/CGB%20game%20passes%20all%20acceptance%20checks>\n"),
+        ("safe-unresolved-reference-title",
+         "\n[details][claim]\n\n[claim]: https://example.invalid \"CGB game passes all acceptance checks.\"\n"),
+        ("safe-inline-code-reference-claim",
+         "\n`C[GB] game passes all acceptance checks.`\n"),
+        ("safe-fenced-reference-claim",
+         "\n```text\nC[GB] game passes all acceptance checks.\n```\n"),
+        ("safe-dense-unmatched-emphasis",
+         "\n" + DENSE_UNMATCHED_EMPHASIS_SAFE_PROSE + "\n"),
+    )
+    require(tuple(case_id for case_id, _ in safe_positive_cases)
+            == RELEASE_NOTES_SAFE_POSITIVE_CASE_IDS,
+            "release-notes-safe-case-inventory-invalid")
+    require(tuple(name for name, _edit, _reason in mutations)
+            == RELEASE_NOTES_NEGATIVE_CASE_IDS,
+            "release-notes-negative-case-inventory-invalid")
+
+    note_cases: list[tuple[str, str, str | None, str]] = [
+        ("valid-baseline-initial", "positive", None, VALID_RELEASE_NOTES)
+    ]
+    note_cases.extend(
+        (case_id, "positive", None, VALID_RELEASE_NOTES + suffix)
+        for case_id, suffix in safe_positive_cases
+    )
+    note_cases.append((
+        "safe-dense-nested-reference-brackets", "positive", None,
+        VALID_RELEASE_NOTES + "\n" + DENSE_NESTED_REFERENCE_BRACKETS_SAFE_PROSE + "\n"))
+
+    for name, edit, reason in mutations:
+        if name == "contrary-game-claim":
+            changed = VALID_RELEASE_NOTES + "\nCGB game passes acceptance.\n"
+        elif name in ("zero-width-space-game-claim", "word-joiner-game-claim",
+                      "zero-width-non-joiner-game-claim"):
+            separator = {
+                "zero-width-space-game-claim": "\u200b",
+                "word-joiner-game-claim": "\u2060",
+                "zero-width-non-joiner-game-claim": "\u200c",
+            }[name]
+            changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
+        elif name.startswith("default-ignorable-"):
+            separator_name = name.removeprefix("default-ignorable-").removesuffix(
+                "-game-claim")
+            separator = dict(DEFAULT_IGNORABLE_CLAIM_SEPARATORS)[separator_name]
+            changed = VALID_RELEASE_NOTES + "\nCGB" + separator + " game passes acceptance.\n"
+        elif name.startswith("commonmark-reference-"):
+            claim_name = name.removeprefix("commonmark-reference-").removesuffix(
+                "-game-claim")
+            claim = dict(COMMONMARK_REFERENCED_GAME_CLAIMS)[claim_name]
+            changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+        elif name.startswith("commonmark-hard-break-"):
+            claim_name = name.removeprefix("commonmark-hard-break-").removesuffix(
+                "-game-claim")
+            claim = dict(COMMONMARK_HARD_BREAK_GAME_CLAIMS)[claim_name]
+            changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+        elif name.startswith("commonmark-emphasis-"):
+            claim_name = name.removeprefix("commonmark-emphasis-").removesuffix(
+                "-game-claim")
+            claim = dict(COMMONMARK_EMPHASIS_GAME_CLAIMS)[claim_name]
+            changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+        elif name.startswith("commonmark-ref-link-"):
+            claim_name = name.removeprefix("commonmark-ref-link-").removesuffix(
+                "-game-claim")
+            claim = dict(COMMONMARK_REFERENCE_LINK_GAME_CLAIMS)[claim_name]
+            changed = VALID_RELEASE_NOTES + "\n" + claim + "\n"
+        elif name == "dense-unmatched-emphasis-game-claim":
+            changed = VALID_RELEASE_NOTES + "\n" + DENSE_UNMATCHED_EMPHASIS_GAME_CLAIM + "\n"
+        elif name == "dense-nested-reference-brackets-game-claim":
+            changed = (VALID_RELEASE_NOTES + "\n"
+                       + DENSE_NESTED_REFERENCE_BRACKETS_GAME_CLAIM + "\n")
+        elif name == "false-signing-claim":
+            changed = VALID_RELEASE_NOTES + "\nThe player is signed and notarized.\n"
+        elif name == "false-publication-claim":
+            changed = VALID_RELEASE_NOTES + f"\n{RELEASE_VERSION} has been released.\n"
+        elif name == "cross-version-state-claim":
+            changed = VALID_RELEASE_NOTES + "\nSave states load across GabbaBoy versions.\n"
+        elif name == "durability-claim":
+            changed = VALID_RELEASE_NOTES + "\nSaves are power-loss safe.\n"
+        elif name == "windows-host-claim":
+            changed = VALID_RELEASE_NOTES + "\nHost mode runs on Windows.\n"
+        elif name == "unscoped-state-claim":
+            changed = VALID_RELEASE_NOTES + "\nGabbaBoy supports save states on every platform.\n"
+        else:
+            require(edit is not None, f"self-test-mutation-edit-missing:{name}")
+            changed = VALID_RELEASE_NOTES.replace(edit[0], edit[1])
+        require(changed != VALID_RELEASE_NOTES,
+                f"self-test-mutation-no-op:{name}")
+        note_cases.append((name, "negative", reason, changed))
+    note_cases.append(("valid-baseline-final", "positive", None, VALID_RELEASE_NOTES))
+
+    case_ids = tuple(case_id for case_id, _kind, _reason, _content in note_cases)
+    require(case_ids == RELEASE_NOTES_EXPECTED_CASE_IDS,
+            "release-notes-case-inventory-invalid")
+    require(len(set(case_ids)) == len(case_ids),
+            "release-notes-case-id-duplicate")
+
+    if DOCS_SELF_TEST_SHARD is None:
+        expected_selected = case_ids
+    else:
+        shard, shard_count = DOCS_SELF_TEST_SHARD
+        schedule = self_test_release_notes_case_schedule(case_ids, shard_count)
+        expected_selected = schedule.get(shard, ())
+    selected_ids = set(expected_selected)
+    selected_cases = tuple(
+        case for case in note_cases if case[0] in selected_ids
+    )
+    require(tuple(case[0] for case in selected_cases) == expected_selected,
+            "release-notes-case-shard-selection-invalid")
+
+    executed_case_ids: list[str] = []
+    if selected_cases:
+        with tempfile.TemporaryDirectory(prefix="gabbaboy-v02-notes-") as temp:
+            notes = Path(temp) / "release-notes.md"
+            for case_id, kind, reason, content in selected_cases:
+                write_lf(notes, content)
+                cli_args = ["--release-notes", str(notes), "--root", str(root)]
+                if rev is not None:
+                    cli_args.extend(("--rev", rev))
+                if kind == "positive":
+                    expect_pass(cli_args)
+                else:
+                    require(reason is not None,
+                            f"release-notes-negative-reason-missing:{case_id}")
+                    expect_reject(cli_args, reason)
+                executed_case_ids.append(case_id)
+    require(tuple(executed_case_ids) == expected_selected,
+            "release-notes-case-shard-execution-mismatch")
+
+    if DOCS_SELF_TEST_SHARD is None:
+        return len(mutations), len(mutations)
+    selected_negative_controls = sum(kind == "negative" for _case_id, kind, _reason, _content
+                                     in selected_cases)
+    return selected_negative_controls, selected_negative_controls
 
 
 def run_self_test_release_notes_v04(root: Path = DEFAULT_ROOT) -> tuple[int, int]:
@@ -4166,13 +4380,7 @@ def run_self_test_docs(root: Path) -> tuple[int, int]:
     # The fixed docs/notice inventory includes the D-153 through D-155 negatives.
     controls = len(mutations) + 128 + len(incomplete_html_openers)
     require(rejected == controls, "self-test-control-count-mismatch")
-    if DOCS_SELF_TEST_SHARD is None or DOCS_SELF_TEST_SHARD[0] == 0:
-        notes_controls, notes_rejected = run_self_test_release_notes()
-    else:
-        # The complete shard set includes this once with shard 0; repeating it in
-        # every shard would multiply unrelated release-note work without adding coverage.
-        notes_controls = 0
-        notes_rejected = 0
+    notes_controls, notes_rejected = run_self_test_release_notes()
     if DOCS_SELF_TEST_SHARD is None:
         print("adoption-doc-controls rejected=" + ",".join(sorted(set(rejected_reasons))))
     else:

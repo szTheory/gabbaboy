@@ -1,35 +1,32 @@
 {
   "version": "1.0",
-  "timestamp": "2026-11-10T20:01:29Z",
+  "timestamp": "2026-11-11T01:04:43.785579+00:00",
   "phase": "23",
   "phase_name": "Qualified v0.4.0 Release",
   "phase_dir": ".planning/phases/GB-23-qualified-v0-4-0-release",
   "status": "executing",
-  "completed_stage": "Plan 23-04 T3 D-169 worker cleanup, release reader budget, and source-archive harness corrections are implemented in the working tree under owner approval; exact-source re-reviews and local gates remain",
+  "completed_stage": "D-176 targeted local checks pass: balanced note shards/full standalone notes, disclosure CTest, coverage guard603 and production workflow policy. Immutable snapshot integration, three source reviews and final local qualification remain.",
   "blockers": [
-    "The one D-165 exact-head attempt at 0916cb465211a97b09bf970971f113861adb7141 failed: Linux had a 60-second release_disclosure_controls timeout; Windows had 60-second phase21_fixture_admission_controls and release_disclosure_controls timeouts plus a 90-second v02_source_archive_controls timeout; the Linux ASan inventory hit its 55-minute cap at 1,819/1,853 while v02_consumer_controls_c was running. Native macOS passed 1,942/1,942; CMake floor, other sanitizer lanes, performance, player, and fixture reproduction passed. All three preview jobs failed downstream of required CI. Full evidence is in 23-EVIDENCE.md and 23-VALIDATION.md.",
-    "D-169 corrects the worker lifecycle before the synthetic directory exits and raises only release.yml:candidate-fuzz to a 4,500-second wait and 137-minute job cap, with source-bound stale-value controls and timeout-ledger disclosure. Exact-source re-reviews remain pending.",
-    "The optimized source-archive control now passes 17 positive cases and 94 negatives; its CTest passed in 72.71 seconds under the unchanged 90-second ceiling. Focused/full qualification and the exact-source report gate are not complete.",
-    "D-168 permits one exact-head attempt only after all reviews and local gates pass. No hosted attempt has started; do not merge, tag, or publish before required checks pass.",
-    "After T3, plans 23-07, 23-05, 23-06, and 23-08 remain in scope and must execute in dependency order. Stop after Phase 23; do not start Phase 24."
+    "PR146 remains unmerged. Native Linux docs90.02s/disclosure60.07s timeouts plus60min job cap; source remains88102b33. No further hosted attempt is authorized.",
+    "Read-only diagnosis/profiling of the failing controls and Linux execution path is active. Prepare a concrete bounded remedy within authorized scope; obtain a new decision before any hosted retry. New correctness/security findings require owner rescope."
   ],
   "async_jobs": [
     {
       "workflow": "ci",
-      "run_id": 42854792963,
+      "run_id": 42924124706,
       "status": "cancelled"
     },
     {
       "workflow": "fixture-repro",
-      "run_id": 42854793507,
+      "run_id": 42924124648,
       "status": "success"
     },
     {
       "workflow": "preview-package-smoke",
-      "run_id": 42854792759,
+      "run_id": 42924124663,
       "status": "failure"
     }
   ],
-  "next_action": "Commit D-169, reissue the three exact-source reviews, pass the immutable report/workflow/test-budget/focused/full local gates, then use the one authorized exact-head CI/fixture/preview attempt. Stop after Phase 23.",
-  "context_notes": "Continue only in /private/tmp/gabbaboy-phase23.t6o3vA on phase23-d163-two-slot. Owner approved D-169. The D-167 guard remains intact; D-169 stops the worker before temp cleanup and extends only the release candidate-fuzz wait/cap. The source-archive CTest passes under 90 seconds with its assertions and controls preserved. No D-169 hosted attempt, merge, tag, publication, or Phase 24 work is eligible yet."
+  "next_action": "Continue $gsd-execute-phase 23 at Plan23-04 T3. Commit the tested self-test bytes, advance only lifecycle RECOVERY_ADOPTION_PIN_SHA preserving both comparisons, complete exact-source reviews and final full/focused local qualification. Then present a concrete new hosted-attempt decision. No push/retry/merge now.",
+  "context_notes": "Remote PR146 remains88102b33 after the failed single attempt. Local D-176 working changes are not yet qualified. All producer/test/reader ceilings remain unchanged; background automation preference persisted."
 }

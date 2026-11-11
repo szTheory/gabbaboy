@@ -6,10 +6,10 @@ current_phase: 23
 current_phase_name: Qualified v0.4.0 Release
 current_plan: 4
 status: executing
-stopped_at: "Plan 23-04 T3 D-169 corrections are implemented in the working tree after owner approval. Commit the exact candidate, reissue reviews, and complete local gates before the one authorized hosted attempt; stop after Phase 23."
-last_updated: "2026-11-10T20:01:29Z"
-last_activity: "2026-11-10: Owner approved D-169. Worker cleanup now runs before synthetic-directory removal; candidate-fuzz waits 4,500 seconds with a 137-minute cap and paired policy/ledger controls; source-archive CLI calls reuse a bounded worker. Direct source-archive self-test passed 17/94, and its CTest passed in 72.71 seconds under the unchanged 90-second ceiling. Production workflow policy and candidate-checker self-test passed. Exact-source report reissue and remaining local gates are pending; no hosted attempt started."
-state_head: "3c0489d722728c23f2369a0dced49c996b9ac9dc"
+stopped_at: "Plan 23-04 T3: D-176 targeted checks pass; immutable pin integration, source reviews and final local qualification pending. No hosted retry authorized."
+last_updated: "2026-11-11T01:04:43.785579+00:00"
+last_activity: "Linux hosted qualification failed; measured local control balancing, disclosure overlap and duplicate ledger removal are prepared. Targeted checks pass; final qualification and a new hosted-attempt decision remain."
+state_head: "88102b338a70503e345c821a098b3beece623235"
 progress:
   total_phases: 4
   completed_phases: 3
@@ -20,14 +20,14 @@ progress:
 
 # Project State
 
-**Recovery 2026-11-10:** Continue in the isolated Phase 23 checkout on `phase23-d163-two-slot`. The owner approved D-170 (80-minute reader windows, 90-minute preview caps, 142-minute release-reader cap; at most +20 configured runner-minutes). D-169 cleanup/polling fixes and D-170 are being qualified. The old Codex task ended with a generic Bad Request and is not running. Exact-source reviews and local gates precede the single existing hosted attempt. Stop after Phase 23.
+**Recovery:** The approved hosted attempt at `88102b33` failed on Linux docs/disclosure deadlines and the job cap. Every other required producer passed. D-176 prepares measured test-harness scheduling changes and removes a duplicate ledger preflight while preserving its stronger full-suite check. Targeted controls pass; immutable snapshot integration, independent reviews and final local qualification remain. No new hosted attempt is authorized. Stop after Phase 23.
 
 ## Project Reference
 
 See: [PROJECT.md](PROJECT.md), updated 2026-11-03.
 
 **Core value:** Run Game Boy software faithfully through a deterministic, understandable core that frontends can embed without surprises.
-**Current focus:** Plan 23-04 T3 continues under owner-approved D-169. The CGB worker is stopped before temporary-directory cleanup; `candidate-fuzz` now has the approved 75-minute wait and 137-minute cap with source-bound workflow and ledger controls. The source-archive self-test reuses its actual CLI in an isolated, bounded worker and passes its unchanged 90-second CTest ceiling. Commit this exact candidate, reissue the three reviews, then complete report, workflow/budget, focused, and full local gates. No hosted attempt has started; stop after Phase 23.
+**Current focus:** Plan 23-04 T3 — finish D-176 snapshot integration and exact-source review/local qualification, then present the concrete candidate for the required new hosted-attempt decision. PR #146 stays unmerged.
 
 ## Current Position
 
@@ -37,15 +37,17 @@ Phase: GB-23 (Qualified v0.4.0 Release) — EXECUTING
 Phase 20 plans: 20-01 through 20-09 have summaries; all nine are complete under the approved cap.
 Phase 21 plans: eight plans across six dependency waves are complete. Verification passed 5/5 roadmap criteria; the owner-approved phase-scoped override leaves FIXT-01 Pending because neither candidate cleared its source/rights gate.
 Status: Executing Phase 23
-Last activity: 2026-11-10: Owner approved D-169 after exact-source reviews found the worker cleanup and release-reader budget issues. Implemented the bounded worker lifecycle and candidate-fuzz wait/cap with paired controls. Direct and CTest source-archive checks pass; exact-source review and remaining local gates are pending. Stop after Phase 23.
+Last activity: Measured D-176 local corrections have passing targeted checks; exact-source qualification is pending. No hosted retry has started.
 
 Completed stage: **Phase 22 — Synthetic Composition and Diagnostic Gate Assessment**. All five plans are complete. The final configured local suite passed 1,732/1,732; PR #142's exact head passed required CI, fixture reproduction, package artifact checks, independent reviews, branch protection, and merge-tree equality before merge as `ca2f0be6`. The phase remains metadata-only: seven real-fixture gates are unresolved, no real fixture was admitted or executed, DIAG-01, DIAG-02, and RIGHTS-01 remain Pending, and no license prohibition is inferred. A post-merge Windows push run exposed `phase22_evidence_controls` timing out at its existing 60-second bound under parallel load; PR #143 serializes this test without changing its timeout or assertions and merged as `4eee5b51` after exact-head checks passed. Its post-merge main CI, fixture-reproduction, and release-please runs all passed. PR #144 recorded the handoff and passed its protected checks and post-merge planning CI; the fixture-reproduction and release-please runs passed too. Local main was merged with remote main without rewriting the three local v0.4 commits, and the resulting tree matched origin at `d18db4c5`. The final ignored cleanup record is `build/phase22/repository-cleanup-evidence.json`.
 
 ## Phase 23 Execution Handoff
 
-D-165 attempt `0916cb46` failed with the three existing CTest timeouts and sanitizer inventory cap; details are in [23-EVIDENCE.md](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md#d-165-exact-head-hosted-qualification-at-0916cb46). D-169 corrections are implemented in the working tree under owner approval: worker cleanup before temp-directory removal, a 4,500-second candidate-fuzz wait and 137-minute job cap, and a faster source-archive control under its unchanged 90-second ceiling. Commit this candidate, reissue all three exact-source reviews, then complete the report/workflow/budget/focused/full local gates. No D-169 hosted attempt has started.
+The complete local run at `88102b33` passed, but its single approved hosted attempt did not qualify. Linux had two control deadlines and a 60-minute job cancellation; all other required producers passed. The failed stream and job snapshots remain in ignored build and [23-EVIDENCE.md](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md).
 
-**Next stage:** Plan 23-04 T3 — commit D-169, reissue exact-source reviews, pass the immutable report gate and workflow, timeout-ledger, focused, and full local checks, then use the one authorized exact-head CI/fixture/preview attempt. If it passes, execute plans 23-07, 23-05, 23-06, and 23-08 in dependency order. Stop after Phase 23 and do not start Phase 24.
+D-176 balances the existing release-note cases over existing docs shards, overlaps independent disclosure CLI cases in private workspaces with two workers, and removes only a duplicate ledger preflight. The replacement CTest command/exit/marker is guarded. Targeted controls pass. Integrate the exact adoption snapshot without weakening either byte comparison, commit the complete implementation, reissue the three source reports and complete final full/focused local qualification. Then obtain the required new hosted-attempt decision; this correction does not renew the used allowance.
+
+**Next stage:** Continue **`$gsd-execute-phase 23`** at Plan 23-04 T3. Do not push/retry/merge before the source gates and a new hosted-attempt decision. If qualification later passes, execute 23-07, 23-05, 23-06 and 23-08, retaining the separate concrete publication decision. Stop after Phase 23; the following owner-controlled stage is the v0.4 milestone audit, not Phase 24.
 
 ## Performance Metrics
 
@@ -91,13 +93,13 @@ Known verification overrides: 1 newly acknowledged, 1 carried forward. The runti
 
 ## Session Continuity
 
-**Last session:** 2026-11-10T20:01:29Z
-**Stopped at:** Plan 23-04 T3 recovery under D-169. Implementation changes are in the working tree; exact-source review and remaining local gates precede the single authorized hosted attempt. No hosted run started.
+**Last session:** 2026-11-11T01:04:43.785579+00:00
+**Stopped at:** Plan 23-04 T3 D-176 local integration; targeted checks pass, immutable snapshot/reviews/final local qualification pending. No user action is needed for this authorized preparation; a new hosted-attempt decision follows only after it is concrete.
 **Resume file:** .planning/phases/GB-23-qualified-v0-4-0-release/.continue-here.md
 
 ## Operator Next Steps
 
-Continue Plan 23-04 T3 under D-169: preserve the CGB worker's 30-second deadline and 1 MiB stream caps; preserve all CTest assertions/inventory and the source-archive 90-second ceiling; preserve all unrelated CI budgets. Reissue reviews and pass every local gate before using the one authorized hosted attempt. If qualification passes, complete only the remaining Phase 23 plans and stop before Phase 24.
+Continue the authorized D-176 preparation in the active checkout with `$gsd-execute-phase 23`. Finish immutable integration, source reviews and one final local qualification. Preserve the failed hosted evidence and the used single-attempt limit. Do not start another hosted attempt or advance beyond Phase 23.
 
 ## Decisions
 
@@ -146,4 +148,4 @@ Continue Plan 23-04 T3 under D-169: preserve the CGB worker's 30-second deadline
 ### Blockers
 
 - No active Phase 22 blocker. The seven evidence gates still block real fixture admission, but D-141 scoped the completed phase to synthetic composition, metadata assessment, and explicit no-go controls. Do not fetch, build, run, or admit real diagnostic fixtures without a new owner-approved scope.
-- Plan 23-04 T3 recovery is active under owner-approved D-168. Implement only the three measured harness reductions, sanitizer scheduling-cost correction, and approved sanitizer cap; re-review exact source and pass the report, workflow, focused, and full-suite gates before the one hosted attempt. REL-01 and publication remain Pending.
+- Plan 23-04 T3 hosted qualification failed on Linux. D-176 targeted local checks pass, but immutable integration, source reviews, full qualification and a new hosted-attempt decision remain. REL-01 and publication remain Pending.

@@ -22,6 +22,11 @@ if not __debug__ or sys.flags.optimize:
 ROOT = Path(__file__).resolve().parents[2]
 BASELINE_COMMIT = "70d3e42225c14e636876aad6697672ec08d861b3"
 POLICY_PATH = ".github/scripts/verify-workflow-policy.py"
+SUPPORT_LEDGER_CONTROL_MARKER = (
+    "support ledger static self-test passed: positive=1 rejected_controls=5 "
+    "controls=changed-covered-input,missing-covered-input,added-case-inventory,"
+    "removed-case-inventory,unparseable-ledger"
+)
 ARCHIVE_HELPER_PATH = ".github/scripts/safe_extract_package.py"
 POLICY_SHA256 = "c5aa1d60a2391e7126e714bcf101292dc86c75ddd1cd6167aea55cdb8b629083"
 REVIEWED_POLICY_COMMIT = "03fb184930754aa845308ea714869cc3c2deef0c"
@@ -1365,6 +1370,20 @@ def validate_registration(root: Path, expected_tests: list[str], ctest_tests: li
     if support_properties.get("LABELS") != ["planning", "v02"]:
         reject("CTest v02_support_ledger_controls must retain its planning and v02 labels")
 
+    definitions = _parse_wrapper_definitions(support_ledger, root, cmake_executable)
+    cli_values, cli_booleans = _parse_python_cli(
+        definitions.get("GBB_CMD", "").split(";"), python_executable,
+        root / "tests/scripts/verify-support-ledger.py", set(), {"--self-test"},
+    )
+    if cli_values or cli_booleans != {"--self-test"}:
+        reject("CTest support ledger must invoke its exact self-test")
+    if definitions != {
+        "GBB_CMD": definitions["GBB_CMD"],
+        "GBB_EXPECT_CODE": "0",
+        "GBB_EXPECT_REGEX": SUPPORT_LEDGER_CONTROL_MARKER,
+    }:
+        reject("CTest support ledger exit-plus-marker contract differs from the full self-test")
+
     validate_cmake_registration(ci_lanes)
 
 
@@ -1497,7 +1516,10 @@ def _self_test(root: Path, revision: str) -> int:
         command.extend(("--completed-file", str(completion)))
         tests.append(test_entry(name, command,
                                 marker, 180, completion))
-    tests.append(test_entry("v02_support_ledger_controls", [], "", 120))
+    tests.append(test_entry(
+        "v02_support_ledger_controls",
+        [python_executable, "-I", str(root / "tests/scripts/verify-support-ledger.py"), "--self-test"],
+        SUPPORT_LEDGER_CONTROL_MARKER, 120))
     for name in sorted(PHASE23_RESERVED_TESTS - POLICY_TEST_NAMES - {"v02_support_ledger_controls"}):
         tests.append(test_entry(name, [], "", 60))
     coverage_script = root / "tests/scripts/verify-workflow-policy-coverage.py"
@@ -1679,6 +1701,19 @@ def _self_test(root: Path, revision: str) -> int:
 
     ci_name = GROUPS["ci"]
     completion = build_dir / "workflow-policy-ci.json"
+
+    # The full-suite control replaces the duplicate Linux preflight only while
+    # its real checker, self-test mode and exit-plus-marker contract stay intact.
+    support_name = "v02_support_ledger_controls"
+    rejected_as("support ledger wrong checker", "exact checker script", lambda: validate_mutated(
+        lambda test_list: change_cli(named_test(test_list, support_name),
+            [python_executable, "-I", str(coverage_script), "--self-test"])))
+    rejected_as("support ledger omitted self-test", "support ledger must invoke its exact self-test", lambda: validate_mutated(
+        lambda test_list: change_cli(named_test(test_list, support_name),
+            [python_executable, "-I", str(root / "tests/scripts/verify-support-ledger.py")])))
+    for field, value in (("GBB_EXPECT_CODE", "7"), ("GBB_EXPECT_REGEX", "passed")):
+        rejected_as(f"support ledger weakened {field}", "support ledger exit-plus-marker contract", lambda field=field, value=value: validate_mutated(
+            lambda test_list: replace_definition(named_test(test_list, support_name), field, value)))
 
     # These are positive spelling variants for the already identity-validated completion
     # destination. On Windows, the second case exercises CMake's forward-slash paths against
@@ -2139,7 +2174,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 599:
+    if controls != 603:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
