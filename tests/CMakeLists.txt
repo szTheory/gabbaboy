@@ -5152,9 +5152,9 @@ gbb_add_ledger_contract(support_claims
 gbb_add_ledger_contract(support_claims_v04
   [=[support-claims-v04 pass candidates=2 harness=CGB-CPU-E mode=cgb-native diagnostics=513/7/0/0 inherited-claims=9 rev=[0-9a-f]+]=]
   --check-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
-set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=24)
+set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=21)
 gbb_add_ledger_contract(support_claims_v04_controls
-  [=[support-claims-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]* phase-links=4 default-versions=0\.3\.0,0\.4\.0]=]
+  [=[support-claims-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
   --self-test-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
 unset(GBB_LEDGER_MIN)
 gbb_add_ledger_contract(release_notes_v04
@@ -5162,7 +5162,7 @@ gbb_add_ledger_contract(release_notes_v04
   --render-release-notes-preface --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}"
   --repo "${PROJECT_SOURCE_DIR}" --output "${PROJECT_BINARY_DIR}/release-notes-v0.4.0-preface.md")
 gbb_add_ledger_contract(support_ledger_v04_tracer
-  [=[support-ledger-v04 tracer pass version=0\.4\.0 candidates=2]=]
+  [=[support-ledger-v04 tracer pass version=0\.4\.0 candidates=2 positives=[1-9][0-9]* controls=[1-9][0-9]* phase-links=4 default-versions=0\.3\.0,0\.4\.0 link-controls=4]=]
   --self-test-tracer --rev "${GBB_STATE_SOURCE_REV}")
 set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=16)
 gbb_add_ledger_contract(support_claims_controls

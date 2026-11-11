@@ -3996,25 +3996,11 @@ def self_test_claims(root: pathlib.Path, rev: str, version: str = "0.3.0") -> tu
 
 
 def self_test_claims_v04(root: pathlib.Path, rev: str) -> tuple[int, int]:
-    from io import StringIO
     from unittest import mock
 
     claims = load_claims_version(root, rev, "0.4.0")
     positives = 1
     controls = 0
-    legacy_rev = tag_commit(root, "v0.3.0")
-    default_subjects = (
-        (legacy_rev, f"support-claims pass claims=9 non_claims=10 rev={legacy_rev}\n"),
-        (rev, f"support-claims-v04 pass candidates=2 harness=CGB-CPU-E mode=cgb-native "
-              f"diagnostics=513/7/0/0 inherited-claims=9 rev={rev} non_claims=3\n"),
-    )
-    for subject_rev, expected in default_subjects:
-        captured = StringIO()
-        with mock.patch("sys.stdout", captured), mock.patch.dict(globals(), {"ROOT": root}):
-            status = main(["--check-claims", "--rev", subject_rev])
-        if status != 0 or captured.getvalue() != expected:
-            fail("v0.4 controls default claims selection changed exact version marker or scope")
-        positives += 1
     disclosure = load_disclosure(root)
     historical_raw = immutable_git_file(root, rev, "docs/support/v0.3.0.md", MAX_LEDGER_BYTES)
     if historical_raw != tagged_file(root, "v0.3.0", "docs/support/v0.3.0.md", MAX_LEDGER_BYTES):
@@ -4031,66 +4017,15 @@ def self_test_claims_v04(root: pathlib.Path, rev: str) -> tuple[int, int]:
     if any(text.encode("utf-8") not in generated for text in
            (claims["candidate_outcomes"][0]["reason"], claims["candidate_outcomes"][1]["reason"])):
         fail("v0.4.0 generated candidate summary omitted a source-bound no-go reason")
-    phase_link_specs = (
-        (claims["harness"]["evidence_revision"], claims["harness"]["verification_path"]),
-        (claims["harness"]["evidence_revision"], claims["harness"]["uat_path"]),
-        (claims["diagnostics"]["evidence_revision"], claims["diagnostics"]["evidence_path"]),
-        (claims["diagnostics"]["evidence_revision"], claims["diagnostics"]["uat_path"]),
-    )
-    phase_link_urls = []
-    for evidence_revision, evidence_path in phase_link_specs:
-        url = f"https://github.com/szTheory/gabbaboy/blob/{evidence_revision}/{evidence_path}"
-        phase_link_urls.append((url, evidence_revision, evidence_path))
-        positives += 1
+    positives += 1
 
-    def require_exact_phase_link_counts(raw: bytes) -> None:
-        for expected_url, _, _ in phase_link_urls:
-            marker = f"]({expected_url})".encode("utf-8")
-            if raw.count(marker) != 1:
-                fail("REJECT v04-source-link-count: each pinned Phase 21/22 link must occur exactly once")
-
-    require_exact_phase_link_counts(generated)
-
-    def reject_rendered_link(name: str, altered: bytes) -> None:
-        nonlocal controls
-        if altered == generated:
-            fail(f"v0.4 source-link control {name} did not alter generated output")
-        try:
-            require_generated(altered, f"v0.4 source-link mutant {name}", "0.4.0", disclosure, root, rev)
-        except ValueError as error:
-            if "ledger-not-generated" not in str(error):
-                fail(f"v0.4 source-link control {name} was rejected for the wrong reason: {error}")
-        else:
-            fail(f"v0.4 source-link control {name} was accepted")
-        controls += 1
-
-    url, evidence_revision, evidence_path = phase_link_urls[0]
-    wrong_url = url.replace(evidence_revision, "0" * 40, 1)
-    reject_rendered_link("wrong-revision",
-                         generated.replace(url.encode("utf-8"), wrong_url.encode("utf-8"), 1))
-    reject_rendered_link("relative-target",
-                         generated.replace(url.encode("utf-8"), evidence_path.encode("utf-8"), 1))
-    extra_path = ".planning" + "/phases/GB-99-unpinned/record.md"
-    extra_link = f"\n[Unpinned extra source record]({extra_path})\n".encode("utf-8")
-    reject_rendered_link("extra-phase-link", generated + extra_link)
-
-    duplicate_url = phase_link_urls[0][0]
-    duplicate_link = f"\n[Duplicate pinned source record]({duplicate_url})\n".encode("utf-8")
-    duplicate_output = generated + duplicate_link
-    try:
-        require_exact_phase_link_counts(duplicate_output)
-    except ValueError as error:
-        if "v04-source-link-count" not in str(error):
-            fail(f"v0.4 duplicate-link control was rejected for the wrong reason: {error}")
-    else:
-        fail("v0.4 duplicate-link control accepted a fifth copy of a pinned URL")
-    reject_rendered_link("duplicate-phase-link", duplicate_output)
+    # Every mutation below starts from the same immutable positive fixture. Validate that
+    # counterpart once; each distinct mutant still reaches the production validator below.
+    validate_claims_v04(copy.deepcopy(claims), root, rev)
     positives += 1
 
     def reject_claim(name: str, mutate, reason: str) -> None:
-        nonlocal controls, positives
-        validate_claims_v04(copy.deepcopy(claims), root, rev)
-        positives += 1
+        nonlocal controls
         altered = copy.deepcopy(claims)
         mutate(altered)
         try:
@@ -4253,7 +4188,93 @@ def _v04_tracer_prepare_version_subject(cmake_raw: str, manifest_raw: bytes) -> 
     return cmake_v04, manifest_v04
 
 
-def self_test_v04_tracer(root: pathlib.Path, rev: str) -> tuple[int, int]:
+def self_test_v04_output_controls(root: pathlib.Path, rev: str, base_data: dict) -> tuple[int, int, dict[str, object]]:
+    """Keep new output/default-route controls out of the historical claims workload."""
+    from io import StringIO
+    from unittest import mock
+
+    claims = load_claims_version(root, rev, "0.4.0")
+    positives = 1
+    controls = 0
+    legacy_rev = tag_commit(root, "v0.3.0")
+    default_subjects = (
+        ("0.3.0", legacy_rev, f"support-claims pass claims=9 non_claims=10 rev={legacy_rev}\n"),
+        ("0.4.0", rev, f"support-claims-v04 pass candidates=2 harness=CGB-CPU-E mode=cgb-native "
+              f"diagnostics=513/7/0/0 inherited-claims=9 rev={rev} non_claims=3\n"),
+    )
+    default_versions = []
+    for subject_version, subject_rev, expected in default_subjects:
+        captured = StringIO()
+        with mock.patch("sys.stdout", captured), mock.patch.dict(globals(), {"ROOT": root}):
+            status = main(["--check-claims", "--rev", subject_rev])
+        if status != 0 or captured.getvalue() != expected:
+            fail("v0.4 controls default claims selection changed exact version marker or scope")
+        default_versions.append(subject_version)
+        positives += 1
+    disclosure = load_disclosure(root)
+    generated = render_v04_ledger(copy.deepcopy(base_data), disclosure, claims, root, rev).encode("utf-8")
+    phase_link_specs = (
+        (claims["harness"]["evidence_revision"], claims["harness"]["verification_path"]),
+        (claims["harness"]["evidence_revision"], claims["harness"]["uat_path"]),
+        (claims["diagnostics"]["evidence_revision"], claims["diagnostics"]["evidence_path"]),
+        (claims["diagnostics"]["evidence_revision"], claims["diagnostics"]["uat_path"]),
+    )
+    phase_link_urls = []
+    for evidence_revision, evidence_path in phase_link_specs:
+        url = f"https://github.com/szTheory/gabbaboy/blob/{evidence_revision}/{evidence_path}"
+        phase_link_urls.append((url, evidence_revision, evidence_path))
+        positives += 1
+
+    def require_exact_phase_link_counts(raw: bytes) -> None:
+        for expected_url, _, _ in phase_link_urls:
+            marker = f"]({expected_url})".encode("utf-8")
+            if raw.count(marker) != 1:
+                fail("REJECT v04-source-link-count: each pinned Phase 21/22 link must occur exactly once")
+
+    require_exact_phase_link_counts(generated)
+
+    def reject_rendered_link(name: str, altered: bytes) -> None:
+        nonlocal controls
+        if altered == generated:
+            fail(f"v0.4 source-link control {name} did not alter generated output")
+        try:
+            require_generated(altered, f"v0.4 source-link mutant {name}", "0.4.0", disclosure, root, rev)
+        except ValueError as error:
+            if "ledger-not-generated" not in str(error):
+                fail(f"v0.4 source-link control {name} was rejected for the wrong reason: {error}")
+        else:
+            fail(f"v0.4 source-link control {name} was accepted")
+        controls += 1
+
+    url, evidence_revision, evidence_path = phase_link_urls[0]
+    wrong_url = url.replace(evidence_revision, "0" * 40, 1)
+    reject_rendered_link("wrong-revision",
+                         generated.replace(url.encode("utf-8"), wrong_url.encode("utf-8"), 1))
+    reject_rendered_link("relative-target",
+                         generated.replace(url.encode("utf-8"), evidence_path.encode("utf-8"), 1))
+    extra_path = ".planning" + "/phases/GB-99-unpinned/record.md"
+    extra_link = f"\n[Unpinned extra source record]({extra_path})\n".encode("utf-8")
+    reject_rendered_link("extra-phase-link", generated + extra_link)
+
+    duplicate_url = phase_link_urls[0][0]
+    duplicate_link = f"\n[Duplicate pinned source record]({duplicate_url})\n".encode("utf-8")
+    duplicate_output = generated + duplicate_link
+    try:
+        require_exact_phase_link_counts(duplicate_output)
+    except ValueError as error:
+        if "v04-source-link-count" not in str(error):
+            fail(f"v0.4 duplicate-link control was rejected for the wrong reason: {error}")
+    else:
+        fail("v0.4 duplicate-link control accepted a fifth copy of a pinned URL")
+    reject_rendered_link("duplicate-phase-link", duplicate_output)
+    if positives != 7 or controls != 4 or default_versions != ["0.3.0", "0.4.0"]:
+        fail("v0.4 output controls did not execute every link mutant and default version")
+    return positives, controls, {"phase_links": len(phase_link_urls),
+                                 "default_versions": ",".join(default_versions),
+                                 "link_controls": controls}
+
+
+def self_test_v04_tracer(root: pathlib.Path, rev: str) -> tuple[int, int, dict[str, object]]:
     """Run --write-current on 0.3→0.4 and already-0.4 committed subjects."""
     from unittest import mock
 
@@ -4394,7 +4415,10 @@ def self_test_v04_tracer(root: pathlib.Path, rev: str) -> tuple[int, int]:
         # transitions above cover both accepted source-version inputs before this 0.4.0 subject run.
         run_subject_fixture("0.4.0", pathlib.Path(temporary) / "repo-0.4.0")
         positives += 1
-    return positives, controls
+    output_positives, output_controls, output_coverage = self_test_v04_output_controls(root, rev, base_data)
+    positives += output_positives
+    controls += output_controls
+    return positives, controls, output_coverage
 
 
 def check_claims(root: pathlib.Path, rev: str, version: str | None = None) -> tuple[int, int]:
@@ -4882,15 +4906,17 @@ def main(argv: list[str] | None = None) -> int:
             version = args.claims_version or _claims_tree_version(ROOT, args.rev)
             positives, controls = self_test_claims(ROOT, args.rev, version)
             if version == "0.4.0":
-                print(f"support-claims-v04 controls pass positives={positives} controls={controls} phase-links=4 default-versions=0.3.0,0.4.0")
+                print(f"support-claims-v04 controls pass positives={positives} controls={controls}")
                 return 0
             print(f"support-claims controls pass positives={positives} controls={controls}")
             return 0
         if args.self_test_tracer:
             if args.rev is None:
                 parser.error("--self-test-tracer requires --rev FULL_SHA")
-            positives, controls = self_test_v04_tracer(ROOT, args.rev)
-            print(f"support-ledger-v04 tracer pass version=0.4.0 candidates=2 positives={positives} controls={controls}")
+            positives, controls, output_coverage = self_test_v04_tracer(ROOT, args.rev)
+            print(f"support-ledger-v04 tracer pass version=0.4.0 candidates=2 positives={positives} controls={controls} "
+                  f"phase-links={output_coverage['phase_links']} default-versions={output_coverage['default_versions']} "
+                  f"link-controls={output_coverage['link_controls']}")
             return 0
         if args.write_current:
             if not args.receipt:
