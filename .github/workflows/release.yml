@@ -1154,10 +1154,10 @@ jobs:
     needs: [release, candidate]
     if: ${{ always() && needs.candidate.result == 'success' }}
     runs-on: ubuntu-24.04
-    # D-170: required CI can take 80 minutes (5-minute changes job, 70-minute Windows lane, 5-minute aggregator); needs below provide no guaranteed head start.
-    # Worst case 4800 (poll deadline) + 60 (request timeout) + 30 (interval) + 2700 (hosted poll) + 900
-    # (margin for checkout, run download, artifact upload, verifier startup and final-iteration overshoot) = 8490 s <= 8520 s.
-    timeout-minutes: 142
+    # Required CI can take 85 minutes (5-minute changes job, 75-minute sanitizer inventory, 5-minute aggregator); needs below provide no guaranteed head start.
+    # Worst case 5100 (poll deadline) + 60 (request timeout) + 30 (interval) + 2700 (hosted poll) + 900
+    # (margin for checkout, run download, artifact upload, verifier startup and final-iteration overshoot) = 8790 s <= 8820 s.
+    timeout-minutes: 147
     permissions:
       actions: read
       contents: read
@@ -1165,9 +1165,9 @@ jobs:
       GH_REPO: ${{ github.repository }}
       RELEASE_TAG: ${{ inputs.retry && inputs.tag_name || needs.release.outputs.tag_name }}
       SOURCE_SHA: ${{ inputs.retry && inputs.source_sha || needs.release.outputs.sha }}
-      CI_RUN_WAIT_ATTEMPTS: 160
+      CI_RUN_WAIT_ATTEMPTS: 170
       CI_RUN_WAIT_SECONDS: 30
-      CI_RUN_WAIT_DEADLINE_SECONDS: 4800
+      CI_RUN_WAIT_DEADLINE_SECONDS: 5100
       CI_RUN_REQUEST_TIMEOUT_SECONDS: 60
       HOSTED_POLL_SECONDS: 2700
     steps:
