@@ -1,32 +1,30 @@
 # Phase 23 Adversarial Review
 
-**Reviewed implementation:** 7b2ecaf6adcb62590295045d997b451f943ec21f
+**Reviewed implementation:** 96505505594612bec77f811acb7d0084cccffb94
 
 **Role:** adversarial
 
-**Reviewer:** balanced-adversarial-20261111
+**Reviewer:** codex-adversarial-d177-96505505
 
 **Independence:** independent source review; no implementation edits or commits.
 
 ## Result
 
-**ACCEPT for the reviewed implementation.** I found no new correctness or security issue in D-176 or the exact lifecycle snapshot integration. All 35 structured historical findings, including their identities, dispositions, fix commits, rationale, and verification references, are preserved exactly from qualification 88102b338a70503e345c821a098b3beece623235.
+**ACCEPT for the reviewed implementation.** I found no new correctness or security issue in the owner-approved D-177 window correction. All 35 historical finding objects and their provenance values are preserved exactly from qualification `76e32ae12d7717ce00e6360e1c787f1ba84ba944`.
 
-This is a source review and targeted-harness assessment. The new final full/focused local qualification and any new hosted attempt remain unperformed; the previous hosted attempt at 88102b failed on Linux after two control timeouts and the existing 60-minute job cap. No retry, merge, tag, or publication is established or authorized by this report.
+This review covers the source delta through `96505505`, including the comment correction from `72b5db1`. It does not establish full or focused final local qualification, hosted CI, merge, release, or publication. The configured final-head 620-control rerun and remaining local qualification are still owned by the parent; the one D-177 hosted attempt has not started. An earlier direct Python 3.9 `release_jobs` self-test duration of about 206 seconds is not a configured CTest result.
 
-## D-176 independent source review
+## D-177 independent source review
 
-The implementation delta from qualification 88102b is confined to the bounded self-test harness, its immutable workflow-coverage model, the removal of one duplicate Linux pre-build self-test, and the lifecycle checker’s exact adoption-source pin. The adoption production parser, claim matcher, and generator are unchanged. AST comparison against 88102b confirms that the only existing adoption/checker functions changed are `run_self_test_docs`, `run_self_test_release_notes`, and support-ledger `_self_test_disclosure`; added functions provide the two case schedulers and their validators. No product output, release authority, fixture authority, source inventory, test identity, job cap, CTest timeout, reader window, or four-worker global setting changed.
+I inspected the exact `76e32ae1..96505505` source delta. The workflow changes are confined to the approved budget fields and their explanatory text: the minimum-CMake floor cap is 60 minutes, the sanitizer inventory cap is 75 minutes, all four exact-CI readers wait 5,100 seconds, three preview caps are 95 minutes, and candidate-fuzz is capped at 147 minutes with 170 polling attempts. The 30-second interval, 60-second request limit, 2,700-second hosted poll, and 900-second release margin are unchanged. The configured dependency path is 5 + 75 + 5 = 85 minutes; candidate-fuzz's 5,100 + 60 + 30 + 2,700 + 900 = 8,790 seconds fits its 8,820-second cap. The additional configured budget is 40 runner-minutes per full attempt.
 
-The notes harness retains the same 70 case identities: 21 positive and 49 negative cases. Its one-off ignored manifest records an exact match to the 88102b baseline for case IDs, outcomes, intended diagnostics, and payload digests; the checked implementation bytes match the immutable 75797dd6 blob. The schedule stores only assigned cases in a sparse map, applies stable ordinal modulo assignment, rejects duplicate, missing, unknown, or misplaced identities, and confirms the executed IDs exactly match the shard selection. I directly exercised the schedule at 200 and 10^100 shard counts; both produced a complete 70-case unique assignment without allocation proportional to the shard count, and missing/duplicate schedule inputs were refused. The targeted phase evidence records the 70 fresh note CLI calls, unchanged standalone result contract, and docs shards 0/20/21/199 passing. The existing `child_result` docs positive/negative modulo assignment and shard inventory remain intact. Unsharded mode still selects the complete note case list and returns the existing negative-control count.
+The timeout ledger changes only those six cap values and their disclosures. `cited_run_id`, `cited_sha`, `p50_minutes`, sample counts, and provisional flags remain unchanged. Other producer caps remain intact, including Windows 70, macOS 50, and native Linux 60. No production-test identities, fixture cases, execution assertions, CTest ceilings, platform membership, four-slot reservation, `PROCESSORS` setting, or required producer/consumer/fixture/release authority changed. The coverage checker adds only the approved D-177 stale-value controls described below. The final comment correction accurately describes the 75-minute sanitizer inventory cap and 85-minute reader window.
 
-The disclosure harness preserves the original serial generator/adoption CLI check, then runs the same five named adoption CLI cases with at most two workers. Each case receives a private copy of one prepared read-only baseline and a fresh production CLI process with its existing 45-second bound. The exact five-name schedule is checked before case workspaces are created; missing and duplicate schedules fail. The worker collector materializes every future result, records exceptions, exits the executor before temporary-directory cleanup, and propagates errors before checking expected success or intended negative diagnostics. The four original positives and 20 original controls remain, with two added schedule controls. Recorded targeted evidence is 14.46 seconds against the unchanged 60-second CTest limit.
+The workflow-policy production checker changes only the three existing candidate-fuzz mutation-anchor literals for the new cap, attempt count, and deadline. At the pinned D-177 snapshot `56ff25b6a9a9cad4bb19e4a367e3f7c937975a88`, the policy blob digest is `77d78361fd8005d61c9cb605549293ec6869cc40b4cfb5cc92a4d20c60fcf568`; restoring those three anchors reproduces the prior production source bytes. The coverage checker still requires exact snapshot bytes and the historical AST guard. There is no descendant or alternate-source pin acceptance.
 
-Removing the redundant Linux pre-build ledger self-test does not remove its contract from full CTest: `v02_support_ledger_controls` remains in the expected full inventory. The immutable workflow coverage now inspects its configured CTest wrapper and requires the exact support-ledger checker with `--self-test`, exit code zero, and the original positive-plus-five-negative marker. Its causal controls reject a wrong checker, missing mode, weakened exit code, and weakened marker. The configured checker, mode, and marker remain tied to the actual CTest command. The workflow change updates the disclosure text only; the Linux job cap and historical p50 citation values are unchanged.
+At the immutable workflow source, the coverage checker requires floor 60, sanitizer 75, preview waits 5,100/caps 95, and candidate-fuzz 5,100/170/30/cap 147. Its YAML reader rejects duplicate keys; absent fields/jobs fail their required-value checks. Preview waiters retain exact checkout, argv, environment, fail-closed job/step, runner, and shell protections. Existing production policy controls still pin both macOS preview runners, while the coverage profile checks the Linux runner and rejects containers/services, command shadows, injected environments, dead branches, and stale wait values. The coverage self-test retains previous historical negatives and adds 17 causal current-old controls (11 profile and six ledger rows), raising its expected total from 603 to 620. The configured-Python targeted probes at `72b5db1` rejected all 11 previous profile values and all six prior ledger values; they are useful affected-check evidence, not the final full/focused qualification result.
 
-The lifecycle change in 7b2ecaf6 changes only `RECOVERY_ADOPTION_PIN_SHA` to 75797dd6. The lifecycle still compares the immutable pinned Git blob to the current adoption checker bytes, and separately compares those checked bytes to the live file. The historical source and claims pins are unchanged. Recorded recovery evidence shows the old pin refuses the updated checker and the new exact pin passes; it does not authorize a descendant or arbitrary checker bytes.
-
-I inspected the exact 7b2ecaf6 Git objects. Its only functional change relative to 75797dd6 is the lifecycle pin; the other changed paths are handoff/evidence records. I did not run a full suite or hosted workflow. The prior-review sections below are retained as historical context at their stated revisions; they do not replace current full/focused qualification or the separate hosted gate.
+No release-reader, preview, fixture, test-coverage, or source-pin bypass was found in this delta. The Phase 23 local full/focused qualification and exact-head hosted attempt remain separate required gates; this ACCEPT is only the independent source-review role.
 
 ## D-168 bounded execution and preserved controls
 
@@ -127,11 +125,11 @@ The parent owns full local qualification and hosted evidence. At 10fee4515 the p
 ```json
 {
   "schema_version": 1,
-  "report_id": "gbb-phase23-adversarial-7b2ecaf6-20261111-balanced",
+  "report_id": "gbb-phase23-adversarial-96505505-20261111-codex",
   "role": "adversarial",
-  "reviewer_id": "balanced-adversarial-20261111",
+  "reviewer_id": "codex-adversarial-d177-96505505",
   "independent": true,
-  "reviewed_sha": "7b2ecaf6adcb62590295045d997b451f943ec21f",
+  "reviewed_sha": "96505505594612bec77f811acb7d0084cccffb94",
   "findings": [
     {
       "id": "ADV-01",

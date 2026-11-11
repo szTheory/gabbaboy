@@ -2,11 +2,11 @@
 
 ## Scope and conclusion
 
-I reviewed the exact committed implementation `7b2ecaf6adcb62590295045d997b451f943ec21f` against baseline `88102b338a70503e345c821a098b3beece623235` and the owner-approved D-176 scope. The delta is limited to test and CI controls: sparse release-note case accounting, bounded overlap of five independent disclosure CLI cases, an immutable guard for the full-suite support-ledger CTest contract after removing its duplicate Linux preflight, and an exact lifecycle adoption-self-test snapshot pin. I found no change to production parser, claim, generator, package, fixture, or publication behavior.
+I reviewed exact implementation `96505505594612bec77f811acb7d0084cccffb94` against baseline `76e32ae12d7717ce00e6360e1c787f1ba84ba944` and owner-approved D-177. The source delta adjusts only CI time windows and their policy controls: the minimum-CMake job is 60 minutes, the sanitizer inventory is 75, all four exact-CI readers wait 5,100 seconds, three preview caps are 95 minutes, and candidate-fuzz is 147 minutes with 170 polls. The affected timeout-ledger rows disclose those changes while retaining cited run, SHA, sample, and p50 evidence.
 
-The code preserves all 70 release-note CLI cases and standalone return semantics, the disclosure positives and refusal controls, four global CTest slots and existing test deadlines. The pin allows only the exact checked adoption bytes; historical source and claim pins remain fixed. Targeted D-176 results and the failed hosted-attempt boundary are recorded in [23-EVIDENCE.md](23-EVIDENCE.md#d-176-targeted-local-preparation). Full local qualification remains pending, and no new hosted attempt is authorized.
+The workflow diffs preserve job permissions, dependencies, test commands and inventories, per-test limits, four-worker scheduling, fixture/release gates, and all unrelated producer caps. The coverage checker enforces the exact new values and adds causal rejections for the previous values; its total is 620 controls. The pinned policy snapshot is byte-exact: restoring the three old mutation literals reproduces the previous snapshot. The release-reader bound is 8,790 seconds within its 8,820-second cap; the maximum added configured budget is 40 runner-minutes. Full local and hosted qualification remain separate pending gates.
 
-**ACCEPT.** I found no new correctness or security issue. All 21 historical structured findings and their provenance are preserved exactly. SEC-23-09 remains open, low, category `other`, and non-blocking; the plan-approved package-install risk remains limited to the unchanged no-dependency scope.
+**ACCEPT.** I found no new correctness or security issue in this source delta. All 21 historical structured findings and their provenance are preserved exactly. SEC-23-09 remains open, low, category `other`, and non-blocking; the plan-approved package-install risk remains limited to the unchanged no-dependency scope.
 
 ## Input, path and source boundaries
 
@@ -244,11 +244,11 @@ The earlier D-167 exact-source review accepted `950c78b0bac936992403511a3cfa41f7
 ```json
 {
   "schema_version": 1,
-  "report_id": "phase23-security-balanced-20261111-7b2ecaf6",
+  "report_id": "phase23-security-d177-20261110-96505505",
   "role": "security",
-  "reviewer_id": "balanced-security-20261111",
+  "reviewer_id": "independent-security-d177-96505505",
   "independent": true,
-  "reviewed_sha": "7b2ecaf6adcb62590295045d997b451f943ec21f",
+  "reviewed_sha": "96505505594612bec77f811acb7d0084cccffb94",
   "findings": [
     {
       "id": "SEC-23-01",
@@ -487,12 +487,12 @@ The prior D-174 review accepted `b312148d23993a210e3adbc943882d923eab8f36`: only
 
 The earlier review accepted `5eefa412e679afe6044e3a80f93a73d269ec0c9d` against `b312148d23993a210e3adbc943882d923eab8f36`. D-175 only reserved four CTest slots for `phase23_review_evidence_controls`, mirrored that membership, and raised its coverage-control total from 598 to 599. Command, assertions, labels, 60-second ceiling, inventory, four-worker cap, and merge authority stayed fixed. The timeout was load-dependent; isolated runs passed in 35.98 and 22.71 seconds. No new issue was recorded.
 
-## D-176 exact-source security delta review
+## D-177 exact-source security delta review
 
-I reviewed exact source `7b2ecaf6adcb62590295045d997b451f943ec21f` against `88102b338a70503e345c821a098b3beece623235`. In `tests/scripts/verify-v02-adoption.py:2433-2584,2670-2927,4412-4492`, the release-note controls now carry a fixed 70-case identity inventory. Assignment and validation iterate those cases and allocate only nonempty modulo buckets; their work and storage do not scale with the supplied shard count. The CLI rejects shard counts below two or indexes outside the count. The gate checks unique, complete, correctly assigned identities, then verifies selected cases equal the actual executed identities. The unsharded route still runs all cases with its prior return semantics. The diff changes only self-test functions, not production parsing or claim matching.
+I reviewed final implementation `96505505594612bec77f811acb7d0084cccffb94` against `76e32ae12d7717ce00e6360e1c787f1ba84ba944`. In `.github/workflows/ci.yml`, only the floor and sanitizer job caps change from 50 to 60 and 65 to 75 minutes; the full inventories, commands and four-worker schedule remain. The final comment-only amendment after `72b5db1b` clarifies the sanitizer shard split, 75-minute cap and 85-minute reader window; no executable workflow content changed in that amendment.
 
-In `tests/scripts/verify-support-ledger.py:4264-4319,4481-4512`, the initial generator CLI remains serial. The five follow-on cases use at most two workers, each with a distinct copy of the same checked baseline and a fresh isolated 45-second production CLI process. The shared adoption module is loaded on the caller thread only. `pool.map` is fully collected; worker exceptions are retained and raised before temporary-directory cleanup. Exact named-case accounting rejects missing and duplicate cases, and every positive/refusal result is still asserted. The original disclosure CLI process count and four positives/twenty controls remain, with two schedule controls added.
+In `.github/workflows/preview.yml`, each exact-head deadline changes from 4,800 to 5,100 seconds and each job cap from 90 to 95 minutes. The Linux runner pin, checkout immediately before the isolated waiter, literal arguments, closed job/step environment, dependencies and package checks are unchanged. `.github/workflows/release.yml` changes candidate-fuzz to 5,100 seconds, 170 attempts and 147 minutes; its 30-second interval, 60-second API timeout, hosted poll, release source/tag binding, permissions and trust boundary remain. The ledger changes only the four reader caps and two measured producer caps, preserving historical timing citations and documenting each changed body.
 
-The Linux workflow (`.github/workflows/ci.yml:88-99`) removes only the duplicate pre-build support-ledger self-test. The existing full-suite CTest (`tests/CMakeLists.txt:1499-1502`) still invokes `verify-support-ledger.py --self-test`; its exact command, successful exit, and full output marker are now checked from configured CTest metadata, with causal negatives for wrong checker, missing mode, weakened exit, and weakened marker. CTest inventory, four-slot reservation, timeout, and release authority are unchanged. In the lifecycle checker (`tests/scripts/verify-release-lifecycle.py:67,1072-1081`), only `RECOVERY_ADOPTION_PIN_SHA` advances to exact commit `75797dd6de40491b7345a304d49c1920b73e6ffb`; both candidate-to-pin and worktree-to-candidate byte comparisons remain, as do historical source and claim pins.
+`tests/scripts/verify-workflow-policy-coverage.py` binds the floor, sanitizer, preview and release values and adds 11 old-value workflow negatives plus six old-value ledger negatives. Existing permission, environment-injection, checkout, waiter-order, runner, runner-cap, inventory and policy controls remain in place. The checker pin advances to commit `56ff25b6a9a9cad4bb19e4a367e3f7c937975a88` with SHA-256 `77d78361fd8005d61c9cb605549293ec6869cc40b4cfb5cc92a4d20c60fcf568`; its only source changes are the three mutation literals for the new release-reader values. Restoring those literals reproduces the earlier pinned blob exactly. This does not broaden the snapshot allowance.
 
-The retained targeted evidence at [23-EVIDENCE.md](23-EVIDENCE.md#d-176-targeted-local-preparation) records the 70-call standalone run and note shards 0/20/21/199, disclosure CTest pass in 14.46 seconds with its original 4 positives/20 controls plus two schedule controls, 603 workflow-coverage controls, and the old-pin refusal followed by exact-pin recovery-control pass. These affected-control results do not qualify the full suite or hosted release. No new correctness/security finding was found; all 21 prior structured records remain unchanged. SEC-23-09 remains open, low, and non-blocking. No hosted attempt, publication operation, or real-fixture activity was performed or authorized.
+The release-reader worst case is 5,100 + 60 + 30 + 2,700 + 900 = 8,790 seconds, within the 8,820-second cap. The maximum configured increase is 40 runner-minutes across a full attempt. The changed workflow values and causal controls are source evidence; I did not run the full suite or hosted qualification. No new correctness or security finding is recorded.

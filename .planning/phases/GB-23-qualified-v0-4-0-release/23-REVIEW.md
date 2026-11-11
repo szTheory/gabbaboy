@@ -131,7 +131,7 @@ The exact `b312148d23993a210e3adbc943882d923eab8f36` to `5eefa412e679afe6044e3a8
 
 The immutable workflow-policy checker adds this test to `PHASE23_RESERVED_TESTS`, which feeds the processor-reservation validator. The validator requires one CTest registration, an inventory entry, and exactly four slots for this non-doc control. Its self-test fixture now includes the reservation with four slots; the generic reservation mutation changes it to three and calls the same validator, producing one additional causal negative and changing the expected control total from 598 to 599. A cheap source-bound probe compared the immutable b312 and 5eef blobs and confirmed the inventory/property membership, validator rule, synthetic fixture, three-slot mutation, and count change. The parent reports that fresh exact-source configure/build and registration checks passed; the review-evidence controls completed in 34.47 seconds under the unchanged 60-second limit, both workflow-policy coverage checks passed, and the 599-control immutable self-test passed. I did not duplicate those checks or the expensive full suite. No new release/consumer correctness or security finding was found.
 
-## D-176 exact-source release-consumer review
+## D-176 historical exact-source release-consumer review
 
 I reviewed the complete immutable source delta from `88102b338a70503e345c821a098b3beece623235` to `7b2ecaf6adcb62590295045d997b451f943ec21f`, including the actual parent commits that implement the D-176 preparation and bind its lifecycle source snapshot.
 
@@ -145,15 +145,28 @@ The lifecycle change advances only `RECOVERY_ADOPTION_PIN_SHA` to `75797dd6de404
 
 These are bounded source-review conclusions with owner-supplied focused-check evidence. I did not run a CPU-heavy suite or hosted workflow. The new source's full local and hosted qualification remain unproven; the failed 881 attempt is not converted to a pass, and this review does not authorize another hosted attempt. The existing historical RC-01 through RC-24 structured records and their provenance values below are unchanged from 881.
 
+
+
+## D-177 exact-source release-consumer review
+
+I reviewed implementation `96505505594612bec77f811acb7d0084cccffb94` against qualification baseline `76e32ae12d7717ce00e6360e1c787f1ba84ba944`. The implementation delta changes only the approved CI windows and their source-bound policy controls. In the workflows and timeout ledger, the CMake floor cap moves from 50 to 60 minutes, the sanitizer inventory from 65 to 75, the three preview readers from 80 to 85 minutes with 95-minute caps, and the release fuzz reader to 170 polling attempts, an 85-minute deadline, and a 147-minute cap. The workflow-policy source changes only three self-test mutation-anchor literals; its coverage checker pins the reviewed policy blob at `56ff25b6a9a9cad4bb19e4a367e3f7c937975a88` with SHA-256 `77d78361fd8005d61c9cb605549293ec6869cc40b4cfb5cc92a4d20c60fcf568`.
+
+The waiter budgets cover the observed dependency graph. `required-native` waits for the sanitizer inventory and aggregates the CI lanes, so the longest approved path is 5 minutes for `changes`, 75 for sanitizer inventory, and 5 for the aggregator: 85 minutes. Each preview waiter passes literal `--deadline-seconds 5100`, and each job cap is 95 minutes. The release reader uses the same 5,100-second wait, a 60-second request ceiling, 30-second polling interval, 2,700-second hosted receipt poll, and 900-second setup/download/verification margin. Their stated worst case is 8,790 seconds, within the 8,820-second 147-minute cap. Deadlines still fail closed; checkout and preflight consume the preview cap's nominal ten-minute margin.
+
+The changed timeout-ledger rows retain their cited run IDs, source SHAs, p50 values, and sample counts. The disclosures describe the new cap/path and failure behavior. Source diff inspection confirms that CI still runs the full floor and sanitizer inventories with four CTest workers; no test, assertion, per-test ceiling, producer other than the two approved caps, or global four-worker schedule changed. Windows remains 70 minutes, native macOS 50, and native Linux 60. The preview package checks, release tag/source binding, artifact receipt validation, publication permissions, fixture exclusions, and required release gates are unchanged; the only preview command change is its exact-head wait deadline, and the release reader's judge commands remain intact.
+
+The coverage checker enforces the current floor/sanitizer/preview/release values and rejects the previous D-176, D-170, and older timeout values. Its original stale-value checks remain, with 11 current-old profile cases and six old-ledger cases added; the self-test expects 620 controls. The immutable policy snapshot pin and baseline AST comparison remain in place. The retained 620-control self-test receipt binds to the pre-comment implementation `72b5db1b0a5f30017ba8404bffc564466af33bb3`. Its configured Python 3.14 probe used the same binary as CMake, and the snapshot proof reports that restoring the three changed anchor literals reproduces the prior policy bytes. The final source delta from `72b5db1b0a5f30017ba8404bffc564466af33bb3` to `96505505594612bec77f811acb7d0084cccffb94` changes only four comment lines in the sanitizer inventory job: it removes the stale 65-minute description and documents the approved 75-minute shard cap and 85-minute reader path. Workflow commands, test inventory, timeout values, and policy code are unchanged by that correction.
+
+ACCEPT for this release-consumer source review at `96505505594612bec77f811acb7d0084cccffb94`: the approved timing extension is complete across producer caps, all four readers, and the ledger, with the existing release and installed-consumer gates intact. The local configured qualification and the one owner-approved hosted attempt remain pending; this review is not evidence that either has passed. No new release/consumer correctness or security finding was proven. RC-01 through RC-24 and every historical finding object and provenance value below are retained unchanged.
 <!-- gbb-review-evidence:start -->
 ```json
 {
   "schema_version": 1,
-  "report_id": "gb-23-release-consumer-7b2ecaf6-20261111-balanced-release",
+  "report_id": "gb-23-release-consumer-72b5db1b-20261110-d177",
   "role": "release-consumer",
-  "reviewer_id": "balanced-release-20261111",
+  "reviewer_id": "release-consumer-d177-20261110",
   "independent": true,
-  "reviewed_sha": "7b2ecaf6adcb62590295045d997b451f943ec21f",
+  "reviewed_sha": "96505505594612bec77f811acb7d0084cccffb94",
   "findings": [
     {
       "id": "RC-01",
