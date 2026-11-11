@@ -57,12 +57,14 @@ PHASE23_RESERVED_TESTS = {
     "fixture_product_player_controls",
     "preview_package_smoke",
     "release_disclosure_controls",
+    "release_lifecycle_replay",
     "release_version_v04_controls",
     "save_format_controls",
     "support_claims_v04_controls",
     "v02_fuzz_controls",
     "v02_support_ledger_controls",
     "v03_dispositions_controls",
+    "v03_readback_controls",
 }
 PHASE23_RESERVED_TESTS.update(DOC_CONTROL_TESTS)
 SANITIZER_SCHEDULE_COST_TESTS = {"v02_consumer_controls_c", "v02_consumer_controls_cpp"}
@@ -75,7 +77,7 @@ EXPECTED_RESERVED_LABELS = {
     "v02_consumer_controls_cpp": ["v02"],
 }
 EXPECTED_RESERVED_LABELS.update({name: ["v02"] for name in DOC_CONTROL_TESTS})
-POSIX_ONLY_RESERVED_TESTS = {"host_exit_crash_storm", "save_format_controls"}
+POSIX_ONLY_RESERVED_TESTS = {"host_exit_crash_storm", "save_format_controls", "release_lifecycle_replay"}
 GROUP_COMPLETION_FILES = {"ci": "ci", "release_jobs": "release-jobs", "release_support": "release-support",
                           "rehearsal": "rehearsal", "ledger": "ledger", "helpers": "helpers"}
 GROUP_BY_WORKFLOW = {
@@ -2213,7 +2215,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 620:
+    if controls != 622:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 

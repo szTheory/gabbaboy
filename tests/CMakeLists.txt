@@ -1694,6 +1694,7 @@ add_test(NAME v03_readback_controls
     -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=120
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(v03_readback_controls PROPERTIES TIMEOUT 60 LABELS planning)
+set_tests_properties(v03_readback_controls PROPERTIES PROCESSORS 4)
 # The v0.2 checker asserts owner_accepted=0 for the archived 15.1-17 record only. Pointed at the new record it must reject on its plan
 # id, which proves that expectation is scoped and is never asserted on the v0.3 record (verify-closeout-dispositions.py is unedited).
 add_test(NAME closeout_dispositions_scope_v03
@@ -3005,7 +3006,7 @@ add_test(NAME no_phase_paths_controls
     "-DGBB_CMD=${Python3_EXECUTABLE};-I;${GBB_NO_PHASE_PATHS_CHECKER};--self-test"
     -DGBB_EXPECT_CODE=0
     "-DGBB_EXPECT_REGEX=no-phase-paths self-test pass controls=[0-9]+"
-    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=14
+    -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=16
     -P ${PROJECT_SOURCE_DIR}/tests/expect_exit.cmake)
 set_tests_properties(no_phase_paths_controls PROPERTIES TIMEOUT 60 LABELS "planning")
 # The tree check: every tracked text file outside the planning tree, with a floor on the files scanned.
@@ -5147,13 +5148,15 @@ gbb_add_v02_contract(phase23_release_workflow_controls 30
   verify-v04-release-policy.py --self-test --rev "${GBB_STATE_SOURCE_REV}" --repo "${PROJECT_SOURCE_DIR}")
 gbb_add_ledger_contract(support_claims
   [=[support-claims pass claims=9 non_claims=10 rev=[0-9a-f]+]=]
-  --check-claims --rev "${GBB_STATE_SOURCE_REV}")
+  --check-claims --claims-version 0.3.0 --rev "${GBB_STATE_SOURCE_REV}")
 gbb_add_ledger_contract(support_claims_v04
   [=[support-claims-v04 pass candidates=2 harness=CGB-CPU-E mode=cgb-native diagnostics=513/7/0/0 inherited-claims=9 rev=[0-9a-f]+]=]
   --check-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
+set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=24)
 gbb_add_ledger_contract(support_claims_v04_controls
-  [=[support-claims-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
+  [=[support-claims-v04 controls pass positives=[1-9][0-9]* controls=[1-9][0-9]* phase-links=4 default-versions=0\.3\.0,0\.4\.0]=]
   --self-test-claims --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}")
+unset(GBB_LEDGER_MIN)
 gbb_add_ledger_contract(release_notes_v04
   [=[release-notes-preface pass version=0.4.0 candidates=2 diagnostics=513/7/0/0 ledger=docs/support/v0.4.0.md rev=[0-9a-f]+]=]
   --render-release-notes-preface --claims-version 0.4.0 --rev "${GBB_STATE_SOURCE_REV}"
@@ -5164,7 +5167,7 @@ gbb_add_ledger_contract(support_ledger_v04_tracer
 set(GBB_LEDGER_MIN -DGBB_EXPECT_MIN_KEY=controls -DGBB_EXPECT_MIN_VALUE=16)
 gbb_add_ledger_contract(support_claims_controls
   [=[support-claims controls pass positives=[1-9][0-9]* controls=[1-9][0-9]*]=]
-  --self-test-claims --rev "${GBB_STATE_SOURCE_REV}")
+  --self-test-claims --claims-version 0.3.0 --rev "${GBB_STATE_SOURCE_REV}")
 unset(GBB_LEDGER_MIN)
 # These immutable ledger/review contracts read version-bound planning evidence. Preserve their v0.2
 # grouping and include them in the unbuilt planning lane. The v0.4 note generator's only build-tree
@@ -5784,6 +5787,7 @@ if(NOT WIN32)
     set_tests_properties(${gbb_lifecycle_name} PROPERTIES TIMEOUT 60 LABELS "v02")
     list(APPEND gbb_release_shell_tests "${gbb_lifecycle_name}")
   endforeach()
+  set_tests_properties(release_lifecycle_replay PROPERTIES PROCESSORS 4)
   # Keep each post-tag semantic family independently runnable at the existing fixed budget.
   # The immutable manifest checker proves exact registration and execution across all six groups.
   set(gbb_post_tag_groups trust capture_source draft_assets recovery_sums consumer publication)

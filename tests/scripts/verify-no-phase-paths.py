@@ -51,6 +51,8 @@ ALLOWLIST = (
      "six fixed report paths plus four disposable committed-fixture paths, never live-tree path traversal"),
     ("tests/data/support-claims-v0.4.json", 4,
      "version-bound Phase 21/22 verification, UAT, and evidence paths read at pinned historical commits, not from the live planning tree"),
+    ("docs/support/v0.4.0.md", 4,
+     "four generated immutable Phase 21/22 GitHub blob links from pinned evidence revisions, not live-tree reads"),
     ("tests/scripts/state_boundary.py", 1,
      "PHASES_AT_REV constant: Phase 17 boundary facts listed with git inside one named commit (--rev), a point-in-time path (D-06, 17-11)"),
     ("tests/scripts/verify-closeout-dispositions.py", 1,
@@ -59,7 +61,7 @@ ALLOWLIST = (
      "temp-fixture layout strings built inside a throwaway repository, not reads of the live tree"),
     ("tests/data/closeout-scan-14-uat-review.md", 6,
      "byte copy of the archived 14-UAT-REVIEW.md seed for verify-closeout-scan.py, D-08"),
-    ("tests/scripts/verify-no-phase-paths.py", 13,
+    ("tests/scripts/verify-no-phase-paths.py", 14,
      "the lint's own spelling patterns and self-test fixture text"),
 )
 
@@ -250,6 +252,31 @@ def self_test() -> int:
     expect_rejected("boundary path over-max", "REJECT over-max", over_pinned_boundary,
                     allowlist=((boundary_file, 1, "point-in-time boundary path"),),
                     must_scan=(boundary_file,))
+    controls += 1
+
+    phase_root = ".planning/phases"
+    phase_link_rows = (
+        ("Phase 21 verification", "bef2cfbdbdd0fc9b2d78631586827e29e0241b3b",
+         "/GB-21-cgb-game-progress-and-scene-regressions/21-VERIFICATION.md"),
+        ("Phase 21 UAT evidence", "bef2cfbdbdd0fc9b2d78631586827e29e0241b3b",
+         "/GB-21-cgb-game-progress-and-scene-regressions/21-UAT-EVIDENCE.md"),
+        ("Phase 22 evidence", "d18db4c56d2a79e6138df37a9d16e3d346a86e13",
+         "/GB-22-composition-and-microtest-evidence/22-EVIDENCE.md"),
+        ("Phase 22 UAT", "d18db4c56d2a79e6138df37a9d16e3d346a86e13",
+         "/GB-22-composition-and-microtest-evidence/22-UAT.md"),
+    )
+    output_name = "docs/support/v0.4.0.md"
+    output_allowlist = ((output_name, 4, "four immutable historical output links"),)
+    four_links = "\n".join(
+        f"[{label}](https://github.com/szTheory/gabbaboy/blob/{revision}/{phase_root}{suffix})"
+        for label, revision, suffix in phase_link_rows
+    ) + "\n"
+    expect_accepted("four immutable Phase 21/22 output links",
+                    {output_name: four_links}, allowlist=output_allowlist)
+    controls += 1
+    fifth_link = four_links.splitlines()[0] + "\n"
+    expect_rejected("fifth duplicate immutable output link", "REJECT over-max",
+                    {output_name: four_links + fifth_link}, allowlist=output_allowlist)
     controls += 1
 
     leak = "OLD = '.planning/phases/GB-07'\n"

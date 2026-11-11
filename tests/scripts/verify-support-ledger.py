@@ -1207,8 +1207,8 @@ def harness_paragraphs_v04(claims: dict) -> list[str]:
         f"{harness['interpretation']} The observed RGB555 frame and PCM digests do not establish admitted-game "
         f"progress, rendering accuracy, perceptual video or audio quality, physical CGB-CPU-E behavior, mode-3 timing, "
         f"or general compatibility.",
-        f"Source-bound records: [Phase 21 verification]({harness['verification_path']}) at `{harness['evidence_revision']}` "
-        f"(blob `{harness['verification_blob_oid']}`); [Phase 21 UAT evidence]({harness['uat_path']}) "
+        f"Source-bound records: [Phase 21 verification](https://github.com/szTheory/gabbaboy/blob/{harness['evidence_revision']}/{harness['verification_path']}) at `{harness['evidence_revision']}` "
+        f"(blob `{harness['verification_blob_oid']}`); [Phase 21 UAT evidence](https://github.com/szTheory/gabbaboy/blob/{harness['evidence_revision']}/{harness['uat_path']}) "
         f"(blob `{harness['uat_blob_oid']}`).",
         "",
     ]
@@ -1226,8 +1226,8 @@ def diagnostic_paragraphs_v04(claims: dict) -> list[str]:
         "No real diagnostic payload, upstream build, runner invocation, hardware result, or per-case execution was "
         "observed. Inventory Git blob identities and sizes do not establish ROM SHA-256 values, redistribution rights, "
         "reproducible builds, model applicability, or diagnostic results.",
-        f"Source-bound records: [Phase 22 evidence]({diagnostic['evidence_path']}) at `{diagnostic['evidence_revision']}` "
-        f"(blob `{diagnostic['evidence_blob_oid']}`); [Phase 22 UAT]({diagnostic['uat_path']}) "
+        f"Source-bound records: [Phase 22 evidence](https://github.com/szTheory/gabbaboy/blob/{diagnostic['evidence_revision']}/{diagnostic['evidence_path']}) at `{diagnostic['evidence_revision']}` "
+        f"(blob `{diagnostic['evidence_blob_oid']}`); [Phase 22 UAT](https://github.com/szTheory/gabbaboy/blob/{diagnostic['evidence_revision']}/{diagnostic['uat_path']}) "
         f"(blob `{diagnostic['uat_blob_oid']}`); assessment `{diagnostic['assessment_path']}` "
         f"(blob `{diagnostic['assessment_blob_oid']}`); inventory `{diagnostic['inventory_path']}` "
         f"(blob `{diagnostic['inventory_blob_oid']}`).",
@@ -3996,11 +3996,25 @@ def self_test_claims(root: pathlib.Path, rev: str, version: str = "0.3.0") -> tu
 
 
 def self_test_claims_v04(root: pathlib.Path, rev: str) -> tuple[int, int]:
+    from io import StringIO
     from unittest import mock
 
     claims = load_claims_version(root, rev, "0.4.0")
     positives = 1
     controls = 0
+    legacy_rev = tag_commit(root, "v0.3.0")
+    default_subjects = (
+        (legacy_rev, f"support-claims pass claims=9 non_claims=10 rev={legacy_rev}\n"),
+        (rev, f"support-claims-v04 pass candidates=2 harness=CGB-CPU-E mode=cgb-native "
+              f"diagnostics=513/7/0/0 inherited-claims=9 rev={rev} non_claims=3\n"),
+    )
+    for subject_rev, expected in default_subjects:
+        captured = StringIO()
+        with mock.patch("sys.stdout", captured), mock.patch.dict(globals(), {"ROOT": root}):
+            status = main(["--check-claims", "--rev", subject_rev])
+        if status != 0 or captured.getvalue() != expected:
+            fail("v0.4 controls default claims selection changed exact version marker or scope")
+        positives += 1
     disclosure = load_disclosure(root)
     historical_raw = immutable_git_file(root, rev, "docs/support/v0.3.0.md", MAX_LEDGER_BYTES)
     if historical_raw != tagged_file(root, "v0.3.0", "docs/support/v0.3.0.md", MAX_LEDGER_BYTES):
@@ -4017,6 +4031,60 @@ def self_test_claims_v04(root: pathlib.Path, rev: str) -> tuple[int, int]:
     if any(text.encode("utf-8") not in generated for text in
            (claims["candidate_outcomes"][0]["reason"], claims["candidate_outcomes"][1]["reason"])):
         fail("v0.4.0 generated candidate summary omitted a source-bound no-go reason")
+    phase_link_specs = (
+        (claims["harness"]["evidence_revision"], claims["harness"]["verification_path"]),
+        (claims["harness"]["evidence_revision"], claims["harness"]["uat_path"]),
+        (claims["diagnostics"]["evidence_revision"], claims["diagnostics"]["evidence_path"]),
+        (claims["diagnostics"]["evidence_revision"], claims["diagnostics"]["uat_path"]),
+    )
+    phase_link_urls = []
+    for evidence_revision, evidence_path in phase_link_specs:
+        url = f"https://github.com/szTheory/gabbaboy/blob/{evidence_revision}/{evidence_path}"
+        phase_link_urls.append((url, evidence_revision, evidence_path))
+        positives += 1
+
+    def require_exact_phase_link_counts(raw: bytes) -> None:
+        for expected_url, _, _ in phase_link_urls:
+            marker = f"]({expected_url})".encode("utf-8")
+            if raw.count(marker) != 1:
+                fail("REJECT v04-source-link-count: each pinned Phase 21/22 link must occur exactly once")
+
+    require_exact_phase_link_counts(generated)
+
+    def reject_rendered_link(name: str, altered: bytes) -> None:
+        nonlocal controls
+        if altered == generated:
+            fail(f"v0.4 source-link control {name} did not alter generated output")
+        try:
+            require_generated(altered, f"v0.4 source-link mutant {name}", "0.4.0", disclosure, root, rev)
+        except ValueError as error:
+            if "ledger-not-generated" not in str(error):
+                fail(f"v0.4 source-link control {name} was rejected for the wrong reason: {error}")
+        else:
+            fail(f"v0.4 source-link control {name} was accepted")
+        controls += 1
+
+    url, evidence_revision, evidence_path = phase_link_urls[0]
+    wrong_url = url.replace(evidence_revision, "0" * 40, 1)
+    reject_rendered_link("wrong-revision",
+                         generated.replace(url.encode("utf-8"), wrong_url.encode("utf-8"), 1))
+    reject_rendered_link("relative-target",
+                         generated.replace(url.encode("utf-8"), evidence_path.encode("utf-8"), 1))
+    extra_path = ".planning" + "/phases/GB-99-unpinned/record.md"
+    extra_link = f"\n[Unpinned extra source record]({extra_path})\n".encode("utf-8")
+    reject_rendered_link("extra-phase-link", generated + extra_link)
+
+    duplicate_url = phase_link_urls[0][0]
+    duplicate_link = f"\n[Duplicate pinned source record]({duplicate_url})\n".encode("utf-8")
+    duplicate_output = generated + duplicate_link
+    try:
+        require_exact_phase_link_counts(duplicate_output)
+    except ValueError as error:
+        if "v04-source-link-count" not in str(error):
+            fail(f"v0.4 duplicate-link control was rejected for the wrong reason: {error}")
+    else:
+        fail("v0.4 duplicate-link control accepted a fifth copy of a pinned URL")
+    reject_rendered_link("duplicate-phase-link", duplicate_output)
     positives += 1
 
     def reject_claim(name: str, mutate, reason: str) -> None:
@@ -4814,7 +4882,7 @@ def main(argv: list[str] | None = None) -> int:
             version = args.claims_version or _claims_tree_version(ROOT, args.rev)
             positives, controls = self_test_claims(ROOT, args.rev, version)
             if version == "0.4.0":
-                print(f"support-claims-v04 controls pass positives={positives} controls={controls}")
+                print(f"support-claims-v04 controls pass positives={positives} controls={controls} phase-links=4 default-versions=0.3.0,0.4.0")
                 return 0
             print(f"support-claims controls pass positives={positives} controls={controls}")
             return 0
