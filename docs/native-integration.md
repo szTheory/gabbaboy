@@ -392,7 +392,7 @@ of that kind creates no `.sav` file.
 
 ## Support and upgrade
 
-The tracked [versioned support ledger](support/v0.3.0.md) describes the
+The tracked [versioned support ledger](support/v0.4.0.md) describes the
 bootless DMG-CPU-B and CGB-CPU-E models, cartridge and save matrix, corpus
 evidence, exclusions, and known limits. The tagged release publishes a separate
 `support-ledger.json` attachment binding the exact source SHA to the

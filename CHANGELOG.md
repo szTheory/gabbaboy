@@ -2,6 +2,31 @@
 
 ## [0.4.0](https://github.com/szTheory/gabbaboy/compare/v0.3.0...v0.4.0) (2026-11-11)
 
+## v0.4.0 support and limitations
+
+No CGB game-level evidence exists.
+
+**Candidate outcomes:**
+- **Potion Panic:** The creator-linked Codeberg source could not be reached before a ref or commit identity was returned; exact component grants and repository/public-CI scope remain unestablished.
+- **µCity 1.3:** The required source/engine/hardware.inc component has no identified grant or notice establishing repository/public-CI scope.
+Neither candidate was built or run. No CGB game was admitted. These source/rights-scope no-go outcomes do not establish a license prohibition.
+
+**Harness-only result:** CGB-CPU-E native-mode RGB555, PCM results are original-harness-only. RGB555/PCM digests establish repeatability only. This does not establish admitted-game progress, rendering accuracy, perceptual video or audio quality, physical CGB-CPU-E behavior, mode-3 timing, general compatibility.
+
+**Diagnostics:** Phase 22 is a synthetic composition tracer and metadata-only assessment: 513 named entries, 7 unresolved real-fixture gates, 0 real fixtures admitted, and 0 real fixtures executed.
+Requirements remain Pending: FIXT-01 Pending, RIGHTS-01 Pending, DIAG-01 Pending, DIAG-02 Pending, REL-01 Pending.
+
+**Limits:**
+- Physical DMG-CPU-B or CGB-CPU-E hardware behavior is not qualified.
+- RGB555/PCM repeatability does not establish rendering accuracy or perceptual video/audio quality.
+- CGB mode-3 timing is not qualified.
+- No Linux or Windows packaged-player game smoke is claimed; inherited platform support remains limited to the pinned v0.3 claim rows.
+- General game compatibility is not claimed.
+- Release artifacts are unsigned and not notarized; checksums and source binding are not code signing or notarization.
+
+[Complete evidence and scope: v0.4.0 support ledger](docs/support/v0.4.0.md).
+
+
 
 ### Features
 
