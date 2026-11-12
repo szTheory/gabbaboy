@@ -1222,9 +1222,6 @@ def self_test_version_v04() -> tuple[int, int]:
         rejected("malformed-expected-version",
                  cli("--check-tracked", "--rev", base, "--expect-version", "0.4"),
                  "window-expect-version-invalid")
-        accepted("generated-0.4.0-output",
-                 cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
-
         notes.write_bytes(body)
         rejected("inactive-record-cannot-open-expected-window",
                  cli("--rev", base, "--base", base, "--check", RECORD_PATH,
@@ -1354,11 +1351,14 @@ def self_test_version_v04() -> tuple[int, int]:
             ("malformed-destination-is-not-a-ledger-link",
              "[ledger](not a valid destination docs/support/v0.4.0.md)"),
         ):
-            accepted("visible-ledger-link-counterpart-" + hiding,
-                     cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
             fx.reset(head)
             fx.write("CHANGELOG.md", changelog_section + content + "\n")
             hidden_link = fx.commit("hide the changelog ledger link in " + hiding, "CHANGELOG.md")
+            if hiding == "comment":
+                # Reuse this immutable baseline for every masking control, after
+                # checkout diverges so honoring --rev is still exercised directly.
+                accepted("generated-0.4.0-output",
+                         cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
             rejected("hidden-changelog-ledger-link-" + hiding,
                      cli("--check-tracked", "--rev", hidden_link, "--expect-version", "0.4.0"),
                      "window-version-output-mismatch")
@@ -1384,8 +1384,6 @@ def self_test_version_v04() -> tuple[int, int]:
         for opener_name, opener in incomplete_html_openers:
             for placement in ("before-heading", "inside-section"):
                 fx.reset(head)
-                accepted(f"incomplete-{opener_name}-{placement}-visible-counterpart",
-                         cli("--check-tracked", "--rev", head, "--expect-version", "0.4.0"))
                 if placement == "before-heading":
                     changelog = "# Changelog\n\n" + opener + "## [0.4.0]\n\n" + ledger_link + "\n"
                 else:
