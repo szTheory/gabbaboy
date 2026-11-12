@@ -319,7 +319,7 @@
   "p50_minutes": "0.34",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The job body changed after the cited sample; changed this job's body after the cited run."
+  "disclosure": "After successful old-receipt checks and fresh downloaded-byte smokes, verify a temporary current-smoke copy; preserve the historical public receipt and all package bytes. Change only smoke.runner in that local copy. Keep every existing gate and the 35-minute cap; historical timing/citation are unchanged. The job body changed after the cited run."
  },
  "release.yml:candidate-corpus": {
   "timeout_minutes": 60,

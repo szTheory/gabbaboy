@@ -575,9 +575,17 @@ jobs:
           notice_sha = hashlib.sha256(pathlib.Path("build/downloaded/gabbaboy-notices.txt").read_bytes()).hexdigest()
           if receipt.get("release_notes_sha256") != notes_sha or receipt.get("notice_sha256") != notice_sha:
               raise SystemExit("Stored receipt does not match the current release notes and notice bytes.")
+          # Preserve the historical public receipt; attest only this already-passed download smoke locally.
+          fresh_receipt = {**receipt, "smoke": {**receipt["smoke"], "runner": os.environ["smoke_runner"]}}
+          pathlib.Path("build/downloaded/candidate-receipt.json").write_text(json.dumps(fresh_receipt, indent=2) + "\n")
           PY
+            bash tests/scripts/verify-release-candidate.sh --verify \
+              build/downloaded/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \
+              "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \
+              build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \
+              build/downloaded/build-receipt.json
             "$RUNNER_TEMP/verify-release-gates.sh" --check-runner-evidence \
-              build/existing/candidate-receipt.json build/downloaded/build-receipt.json \
+              build/downloaded/candidate-receipt.json build/downloaded/build-receipt.json \
               "$RELEASE_TAG" "$SOURCE_SHA" "$smoke_runner"
           else
           python3 - <<'PY'

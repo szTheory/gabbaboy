@@ -2095,6 +2095,207 @@ def _self_test(root: Path, revision: str) -> int:
         rejected_as("release recovery " + label, "release recovery " + family,
                     lambda mutant=mutant: validate_release_recovery_profile(mutant))
 
+    # Existing Linux draft receipts attest a prior runner. Keep that public
+    # receipt immutable while validating a private copy against this runner.
+    reuse_source = "900650557e2e79954d8974c8e43fa57b635ece5e"
+    reuse_baseline = _parse_workflow_text(
+        git_text(root, reuse_source, ".github/workflows/release.yml").decode("utf-8"),
+        "release.yml", candidate_namespace)
+    reuse_name = "Write or revalidate downloaded-byte candidate receipt"
+    reuse_job_id = "candidate"
+    reuse_baseline_job = reuse_baseline["jobs"][reuse_job_id]
+    reuse_index, reuse_step = recovery_step(reuse_baseline_job, reuse_name, "Linux")
+    old_runner_evidence = (
+        '  "$RUNNER_TEMP/verify-release-gates.sh" --check-runner-evidence \\\n'
+        '    build/existing/candidate-receipt.json build/downloaded/build-receipt.json \\\n'
+        '    "$RELEASE_TAG" "$SOURCE_SHA" "$smoke_runner"')
+    current_runner_evidence = old_runner_evidence.replace(
+        "build/existing/candidate-receipt.json", "build/downloaded/candidate-receipt.json", 1)
+    fresh_verify = (
+        "  bash tests/scripts/verify-release-candidate.sh --verify \\\n"
+        "    build/downloaded/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \\\n"
+        '    "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \\\n'
+        "    build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \\\n"
+        "    build/downloaded/build-receipt.json\n")
+    stamp_lines = (
+        '# Preserve the historical public receipt; attest only this already-passed download smoke locally.\n'
+        'fresh_receipt = {**receipt, "smoke": {**receipt["smoke"], "runner": os.environ["smoke_runner"]}}\n'
+        'pathlib.Path("build/downloaded/candidate-receipt.json").write_text(json.dumps(fresh_receipt, indent=2) + "\\n")')
+    corrected_reuse_run = reuse_step["run"]
+    notes_check = (
+        'if receipt.get("release_notes_sha256") != notes_sha or receipt.get("notice_sha256") != notice_sha:\n'
+        '    raise SystemExit("Stored receipt does not match the current release notes and notice bytes.")')
+    if corrected_reuse_run.count(notes_check) != 1 or corrected_reuse_run.count(old_runner_evidence) != 1:
+        reject("release recovery Linux cannot locate immutable-G receipt checks for the local runner stamp")
+    corrected_reuse_run = corrected_reuse_run.replace(notes_check, notes_check + "\n" + stamp_lines, 1)
+    corrected_reuse_run = corrected_reuse_run.replace(
+        old_runner_evidence, fresh_verify + current_runner_evidence, 1)
+    corrected_reuse_job = copy.deepcopy(reuse_baseline_job)
+    corrected_reuse_job["steps"][reuse_index]["run"] = corrected_reuse_run
+
+    def validate_linux_receipt_reuse_profile(tree: dict) -> None:
+        for field in ("env", "defaults"):
+            if tree.get(field) != reuse_baseline.get(field):
+                reject(f"release recovery Linux workflow must not override {field}")
+        job = tree.get("jobs", {}).get(reuse_job_id)
+        if not isinstance(job, dict):
+            reject("release recovery Linux candidate job is missing")
+        for field in ("env", "defaults"):
+            if job.get(field) != reuse_baseline_job.get(field):
+                reject(f"release recovery Linux job must not override {field}")
+        if job != corrected_reuse_job:
+            reject("release recovery Linux candidate job must match immutable G plus the local receipt runner stamp")
+
+    local_reuse_tree = _parse_workflow_text(candidate_release, "release.yml", candidate_namespace)
+    validate_linux_receipt_reuse_profile(local_reuse_tree)
+    controls += 1
+
+    reuse_mutants = []
+
+    def reuse_mutant(label: str, edit) -> None:
+        mutant = copy.deepcopy(local_reuse_tree)
+        edit(mutant)
+        reuse_mutants.append((label, mutant))
+
+    def edit_reuse_run(tree: dict, old: str, new: str) -> None:
+        _index, step = recovery_step(tree["jobs"][reuse_job_id], reuse_name, "Linux")
+        if step["run"].count(old) != 1:
+            reject("release recovery Linux cannot create a receipt runner negative control")
+        step["run"] = step["run"].replace(old, new, 1)
+
+    smoke_name = "Smoke relocated C/C++ consumers from the downloaded bytes"
+    reuse_mutant("skipped downloaded C/C++ smoke", lambda t: recovery_step(
+        t["jobs"][reuse_job_id], smoke_name, "Linux")[1].update({"if": "false"}))
+    def move_smoke_after_receipt(tree: dict) -> None:
+        job_steps = tree["jobs"][reuse_job_id]["steps"]
+        smoke_step_index, _step = recovery_step(tree["jobs"][reuse_job_id], smoke_name, "Linux")
+        smoke_step = job_steps.pop(smoke_step_index)
+        receipt_step_index, _receipt_step = recovery_step(
+            tree["jobs"][reuse_job_id], reuse_name, "Linux")
+        job_steps.insert(receipt_step_index + 1, smoke_step)
+    reuse_mutant("reordered downloaded C/C++ smoke", move_smoke_after_receipt)
+    reuse_mutant("error-tolerant downloaded C/C++ smoke", lambda t: recovery_step(
+        t["jobs"][reuse_job_id], smoke_name, "Linux")[1].update({"continue-on-error": True}))
+    reuse_mutant("skipped fresh full verifier", lambda t: edit_reuse_run(t, fresh_verify, ""))
+    reuse_mutant("reordered fresh verifier and runner check", lambda t: edit_reuse_run(
+        t, fresh_verify + current_runner_evidence, current_runner_evidence + "\n" + fresh_verify.rstrip()))
+    reuse_mutant("error-tolerant fresh full verifier", lambda t: edit_reuse_run(
+        t, fresh_verify, fresh_verify.rstrip() + " || true\n"))
+    old_receipt_verifier = (
+        "  bash tests/scripts/verify-release-candidate.sh --verify \\\n"
+        "    build/existing/candidate-receipt.json build/downloaded/gabbaboy-core-linux-x64.tar.gz \\\n"
+        '    "$RELEASE_VERSION" "$RELEASE_TAG" "$SOURCE_SHA" "$RELEASE_ID" \\\n'
+        "    build/downloaded/gabbaboy-notices.txt build/downloaded/source-receipt.json \\\n"
+        "    build/downloaded/build-receipt.json\n")
+    reuse_mutant("removed old receipt verifier", lambda t: edit_reuse_run(t, old_receipt_verifier, ""))
+    reuse_mutant("removed old source receipt input", lambda t: edit_reuse_run(
+        t, old_receipt_verifier,
+        old_receipt_verifier.replace("build/downloaded/source-receipt.json \\\n", "", 1)))
+    reuse_mutant("removed old build receipt input", lambda t: edit_reuse_run(
+        t, old_receipt_verifier,
+        old_receipt_verifier.replace("build/downloaded/source-receipt.json \\\n    build/downloaded/build-receipt.json",
+                                     "build/downloaded/source-receipt.json", 1)))
+    reuse_mutant("weakened exact-head PR proof", lambda t: edit_reuse_run(
+        t, 'if proof.get("head_sha") != os.environ["PR_HEAD_SHA"] or proof.get("merge_commit_sha") != os.environ["PR_MERGE_SHA"]:',
+        'if False:'))
+    reuse_mutant("removed notes and notice checks", lambda t: edit_reuse_run(
+        t, notes_check, "pass"))
+    reuse_mutant("stamp from receipt claimed runner", lambda t: edit_reuse_run(
+        t, '"runner": os.environ["smoke_runner"]', '"runner": receipt["smoke"]["runner"]'))
+    reuse_mutant("change an unrelated receipt field", lambda t: edit_reuse_run(
+        t, 'fresh_receipt = {**receipt, "smoke": {**receipt["smoke"], "runner": os.environ["smoke_runner"]}}',
+        'fresh_receipt = {**receipt, "source_sha": "changed", "smoke": {**receipt["smoke"], "runner": os.environ["smoke_runner"]}}'))
+    reuse_mutant("rewrite public receipt", lambda t: edit_reuse_run(
+        t, 'pathlib.Path("build/downloaded/candidate-receipt.json").write_text',
+        'pathlib.Path("build/existing/candidate-receipt.json").write_text'))
+    reuse_mutant("omitted current runner evidence", lambda t: edit_reuse_run(t, current_runner_evidence, ""))
+    reuse_mutant("current runner check uses public receipt", lambda t: edit_reuse_run(
+        t, current_runner_evidence,
+        current_runner_evidence.replace("build/downloaded/candidate-receipt.json", "build/existing/candidate-receipt.json", 1)))
+    reuse_mutant("changed upload guard", lambda t: recovery_step(
+        t["jobs"][reuse_job_id], "Attach the downloaded-byte candidate receipt to the draft", "Linux")[1].update(
+            {"if": "always()"}))
+    reuse_mutant("workflow environment override", lambda t: t.setdefault("env", {}).update(GBB_RUNNER_OVERRIDE="1"))
+    reuse_mutant("workflow shell override", lambda t: t.setdefault("defaults", {}).update(run={"shell": "sh"}))
+    reuse_mutant("candidate job environment override", lambda t:
+                 t["jobs"][reuse_job_id].setdefault("env", {}).update(GBB_RUNNER_OVERRIDE="1"))
+    for label, mutant in reuse_mutants:
+        rejected_as("release recovery Linux " + label, "release recovery Linux",
+                    lambda mutant=mutant: validate_linux_receipt_reuse_profile(mutant))
+
+    # Run only the real inline receipt stamp with synthetic files and PR proof.
+    # The candidate/full runner CLIs are exercised by the surrounding release controls.
+    _reuse_index, local_reuse_step = recovery_step(
+        local_reuse_tree["jobs"][reuse_job_id], reuse_name, "Linux")
+    reuse_run = local_reuse_step["run"]
+    python_marker = 'python3 - build/existing/candidate-receipt.json "$RELEASE_NOTES_FILE" <<\'PY\'\n'
+    python_start = reuse_run.find(python_marker)
+    python_end = reuse_run.find("\nPY\n", python_start + len(python_marker)) if python_start >= 0 else -1
+    if python_start < 0 or python_end < 0:
+        reject("release recovery Linux inline receipt stamp is unavailable")
+    stamp_script = reuse_run[python_start + len(python_marker):python_end]
+    if stamp_lines.split("\n", 1)[1] not in stamp_script:
+        reject("release recovery Linux inline stamp does not use current measured runner evidence")
+    with tempfile.TemporaryDirectory(prefix="gbb-linux-receipt-stamp.") as directory:
+        checkout = Path(directory)
+        (checkout / "build/existing").mkdir(parents=True)
+        (checkout / "build/downloaded").mkdir(parents=True)
+        public_receipt = checkout / "build/existing/candidate-receipt.json"
+        fresh_receipt = checkout / "build/downloaded/candidate-receipt.json"
+        notes_path = checkout / "release-notes.txt"
+        notice_path = checkout / "build/downloaded/gabbaboy-notices.txt"
+        notes_bytes = b"synthetic release notes for runner-stamp coverage\n"
+        notice_bytes = b"synthetic redistributable notices\n"
+        notes_path.write_bytes(notes_bytes)
+        notice_path.write_bytes(notice_bytes)
+        old_runner = "Linux old-vm kernel 1"
+        measured_runner = "Linux current-vm kernel 2"
+        pr_head = "synthetic-current-pr-head"
+        pr_merge = "synthetic-current-pr-merge"
+        original_receipt = {
+            "smoke": {"runner": old_runner},
+            "release_notes_sha256": hashlib.sha256(notes_bytes).hexdigest(),
+            "notice_sha256": hashlib.sha256(notice_bytes).hexdigest(),
+            "prior_pr_proof": {"head_sha": pr_head, "merge_commit_sha": pr_merge},
+            "unchanged": {"nested": True},
+        }
+        original_bytes = (json.dumps(original_receipt, indent=2) + "\n").encode("utf-8")
+        public_receipt.write_bytes(original_bytes)
+
+        def run_stamp(*, head: str = pr_head, notes: Path = notes_path):
+            return subprocess.run(
+                [sys.executable, "-I", "-c", stamp_script, str(public_receipt), str(notes)],
+                cwd=checkout,
+                env={**os.environ, "PR_HEAD_SHA": head, "PR_MERGE_SHA": pr_merge, "smoke_runner": measured_runner},
+                capture_output=True, text=True, check=False, timeout=5)
+
+        stamped = run_stamp()
+        if stamped.returncode != 0:
+            reject(f"release recovery Linux inline receipt stamp failed: {stamped.stderr.strip()}")
+        if public_receipt.read_bytes() != original_bytes:
+            reject("release recovery Linux inline receipt stamp changed the public receipt")
+        stamped_receipt = json.loads(fresh_receipt.read_text(encoding="utf-8"))
+        expected_fresh_receipt = copy.deepcopy(original_receipt)
+        expected_fresh_receipt["smoke"]["runner"] = measured_runner
+        if stamped_receipt != expected_fresh_receipt or stamped_receipt == original_receipt:
+            reject("release recovery Linux inline receipt copy changed fields beyond the current smoke runner")
+        controls += 1
+
+        fresh_receipt.unlink()
+        bad_pr = run_stamp(head="different-pr-head")
+        if (bad_pr.returncode == 0 or "different exact-head PR evidence" not in bad_pr.stderr
+                or fresh_receipt.exists() or public_receipt.read_bytes() != original_bytes):
+            reject("release recovery Linux inline receipt stamp accepted different PR evidence")
+        controls += 1
+
+        wrong_notes = checkout / "wrong-release-notes.txt"
+        wrong_notes.write_bytes(b"different release notes\n")
+        bad_notes = run_stamp(notes=wrong_notes)
+        if (bad_notes.returncode == 0 or "current release notes and notice bytes" not in bad_notes.stderr
+                or fresh_receipt.exists() or public_receipt.read_bytes() != original_bytes):
+            reject("release recovery Linux inline receipt stamp accepted mismatched release notes")
+        controls += 1
+
     # Exercise Git's real checkout conversion with a tiny private index, not
     # another full clone or test stream. No user's global Git config is touched.
     import importlib.util
@@ -2506,8 +2707,9 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    # Preserve the 640 original cases plus 26 profile and four real-Git byte controls.
-    if controls != 670:
+    # Preserve the 640 original cases plus both recovery profiles, the receipt
+    # runner regression controls, and four real-Git byte controls.
+    if controls != 694:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
