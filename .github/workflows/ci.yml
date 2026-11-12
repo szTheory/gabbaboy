@@ -226,8 +226,10 @@ jobs:
   native-macos:
     name: native-macos-arm64
     # Timeout ledger (D-20): p50 17.80 min in main run 40156247875, so ceil(2 x p50) = 36. Phase 23 run 42679813590 reached the old 40-minute cap at 1928/1942 tests; owner-approved D-164 raises this cap to 50 for completion without treating that run as a timing sample.
+    # Qualification run 43090469563 attempt 2 stopped at 50 minutes after 1940/1942 passing tests.
+    # The 55-minute outer budget adds bounded headroom; all test deadlines remain unchanged.
     runs-on: macos-15
-    timeout-minutes: 50
+    timeout-minutes: 55
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:
@@ -314,9 +316,9 @@ jobs:
 
   native-windows:
     name: native-windows-x64
-    # Timeout ledger (D-20): historical p50 18.59 min in main run 40163270595. PR #146 run 42718334209 reached the 60-minute cap at 1799/1804 tests without an assertion failure; owner-approved D-165 raises this job to 70 minutes. Historical p50 is unchanged.
+    # Two 70-minute Windows runs completed 1803/1804 and 1802/1804 tests; every completed case passed. Matched W/H medians were 1.5-1.625x. Proposal: raise only this job timeout to 75 minutes; inventory and four-worker scheduling stay unchanged. Historical p50 is unchanged.
     runs-on: windows-2022
-    timeout-minutes: 70
+    timeout-minutes: 75
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:

@@ -441,3 +441,9 @@ Release 0.3.0 keeps the format and behavior tokens at 1 while advancing the
 exact release token from 0.2.1. Its state loads therefore require a state file
 written by that exact release; battery saves remain the cross-version
 persistence path.
+
+Release 0.4.0 also keeps the format and behavior tokens at 1 and advances only
+the exact serialized release token from 0.3.0. Its native-state pins apply to
+that exact release: a state written by 0.3.0 is refused by 0.4.0, and a state
+written by 0.4.0 is refused by 0.3.0. Battery saves remain the cross-version
+persistence path.

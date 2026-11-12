@@ -1,5 +1,119 @@
 # Changelog
 
+## [0.4.0](https://github.com/szTheory/gabbaboy/compare/v0.3.0...v0.4.0) (2026-11-11)
+
+## v0.4.0 support and limitations
+
+No CGB game-level evidence exists.
+
+**Candidate outcomes:**
+- **Potion Panic:** The creator-linked Codeberg source could not be reached before a ref or commit identity was returned; exact component grants and repository/public-CI scope remain unestablished.
+- **µCity 1.3:** The required source/engine/hardware.inc component has no identified grant or notice establishing repository/public-CI scope.
+Neither candidate was built or run. No CGB game was admitted. These source/rights-scope no-go outcomes do not establish a license prohibition.
+
+**Harness-only result:** CGB-CPU-E native-mode RGB555, PCM results are original-harness-only. RGB555/PCM digests establish repeatability only. This does not establish admitted-game progress, rendering accuracy, perceptual video or audio quality, physical CGB-CPU-E behavior, mode-3 timing, general compatibility.
+
+**Diagnostics:** Phase 22 is a synthetic composition tracer and metadata-only assessment: 513 named entries, 7 unresolved real-fixture gates, 0 real fixtures admitted, and 0 real fixtures executed.
+Requirements remain Pending: FIXT-01 Pending, RIGHTS-01 Pending, DIAG-01 Pending, DIAG-02 Pending, REL-01 Pending.
+
+**Limits:**
+- Physical DMG-CPU-B or CGB-CPU-E hardware behavior is not qualified.
+- RGB555/PCM repeatability does not establish rendering accuracy or perceptual video/audio quality.
+- CGB mode-3 timing is not qualified.
+- No Linux or Windows packaged-player game smoke is claimed; inherited platform support remains limited to the pinned v0.3 claim rows.
+- General game compatibility is not claimed.
+- Release artifacts are unsigned and not notarized; checksums and source binding are not code signing or notarization.
+
+[Complete evidence and scope: v0.4.0 support ledger](docs/support/v0.4.0.md).
+
+
+Packages remain limited to Linux x64, macOS arm64 and Windows x64 core archives, with the optional SDL3 player on macOS arm64. See the [release guide](docs/release.md) for the product matrix and inspected macOS artifact limits; broader OS compatibility remains untested.
+
+### State, host and performance limits
+
+- Save states load only in the exact GabbaBoy release that wrote them. Battery saves remain the cross-version persistence path.
+- Host mode is POSIX-only; Windows refuses `--save-dir`.
+- Instruction count: +9.6% versus v0.2.0 (receipt: tests/baseline/perf-attribution-v1.json; measured at f80bdf54c6c7).
+- The Ir attribution figure was measured at f80bdf54c6c7 on main before the release commit; the release-binding Ir check is the perf-gate receipt verified at the tagged source.
+
+### Features
+
+* **23-01:** compose complete v0.4 evidence summary ([6d46f19](https://github.com/szTheory/gabbaboy/commit/6d46f1965eb440db0102d824f44ecdf38bad893d))
+* **23-01:** render source-bound v0.4 candidate outcomes ([fc2e274](https://github.com/szTheory/gabbaboy/commit/fc2e274839dac47f3ec26107a3635119fb02b6bb))
+* **GB-23-02:** generate and verify v0.4 release notes ([ba15a8e](https://github.com/szTheory/gabbaboy/commit/ba15a8e01c0cf715df0105681333c9f227e83bec))
+* **GB-23-03:** bind v0.4 release content inputs ([484edb5](https://github.com/szTheory/gabbaboy/commit/484edb5bed39f679ecc4a641fe61b4566ba36bcb))
+* **GB-23-03:** gate exact requested release version ([d530bd8](https://github.com/szTheory/gabbaboy/commit/d530bd88dcdad3f318e63a4aae1932854c7676fe))
+
+
+### Bug Fixes
+
+* **23-01:** pin synthetic tracer acceptance evidence ([b1d5397](https://github.com/szTheory/gabbaboy/commit/b1d53972b1fac07a45e559acbce65861df0448ca))
+* **23-01:** render guarded digest limit wording ([004aac8](https://github.com/szTheory/gabbaboy/commit/004aac8474d3022b2f0e3b53e4f22b1ea0e52e9d))
+* **23-04:** bind ledger links and Markdown visibility ([9a19397](https://github.com/szTheory/gabbaboy/commit/9a193975fb32ae69bd09be2cf847e3271d078733))
+* **23-04:** close release and Markdown review gaps ([9e09eef](https://github.com/szTheory/gabbaboy/commit/9e09eef8b379ca8d329cb13bf354058661296daa))
+* **23-04:** close release review findings ([1b7a01f](https://github.com/szTheory/gabbaboy/commit/1b7a01f30bd0b3c9330c3e633e4f60319e7b6712))
+* **23-04:** extend bounded CI completion windows ([56ff25b](https://github.com/szTheory/gabbaboy/commit/56ff25b6a9a9cad4bb19e4a367e3f7c937975a88))
+* **23-04:** mask fences in nested Markdown containers ([46f5ce4](https://github.com/szTheory/gabbaboy/commit/46f5ce4a515daa65bb9850a28a1ee4be9b9b8c5a))
+* **23-04:** reject ambiguous Markdown evidence syntax ([276f317](https://github.com/szTheory/gabbaboy/commit/276f317d199cdd3246e9a90ce72a1f3a1235af1c))
+* **23-04:** validate ledger links outside nested Markdown and HTML ([a5b3881](https://github.com/szTheory/gabbaboy/commit/a5b38811792843edded94746c0ff6b07d0a6137d))
+* **23:** resolve research gates and split milestone closeout ([baf9bfa](https://github.com/szTheory/gabbaboy/commit/baf9bfa6ff54c49d0ee8cd3225b7ab4d6b42a70b))
+* align Phase 23 readers with complete CI path ([03fb184](https://github.com/szTheory/gabbaboy/commit/03fb184930754aa845308ea714869cc3c2deef0c))
+* anchor phase 23 budgets to shared decision ([7c6f01a](https://github.com/szTheory/gabbaboy/commit/7c6f01ad5ecf3b6736bf694324acc1671d9e20cc))
+* bind preview wait gates to active shell steps ([e5a2f71](https://github.com/szTheory/gabbaboy/commit/e5a2f71dbf2ed27912d0ba810d434e95b9fc8c4c))
+* bind preview waiter execution environment ([950c78b](https://github.com/szTheory/gabbaboy/commit/950c78b0bac936992403511a3cfa41f7cb1069c6))
+* bound Markdown visibility parsing ([2b00cdc](https://github.com/szTheory/gabbaboy/commit/2b00cdcdcffa32bd3a2670823e1c18cca0fb3893))
+* **ci:** avoid duplicate CMake floor suite ([6983b0f](https://github.com/szTheory/gabbaboy/commit/6983b0f9909b20d19d0d668393cd967c86763da7))
+* close Markdown disclosure parser bypasses ([3d27596](https://github.com/szTheory/gabbaboy/commit/3d27596b341877d9a19cb82409e178f9eae0d1e9))
+* complete phase 23 D-169 qualification corrections ([3af81d6](https://github.com/szTheory/gabbaboy/commit/3af81d66d1503f6ae4766d6a411f7604e5d4bd1d))
+* confine phase 23 notice self-test paths ([9166ab6](https://github.com/szTheory/gabbaboy/commit/9166ab60d25c6d246761b4aa33a0ceb35dd83f5c))
+* decode rendered references in game claims ([fc0ba4f](https://github.com/szTheory/gabbaboy/commit/fc0ba4ff9626e06e04d8800800561b51414166bf))
+* enforce visible Libbet rights notice ([8d4f5c5](https://github.com/szTheory/gabbaboy/commit/8d4f5c5f595da5f5749f267b0bc792b918257a0b))
+* fail closed on malformed Markdown titles ([9d9cd8f](https://github.com/szTheory/gabbaboy/commit/9d9cd8fc9d31d3b76b93d96993b4a337b3213396))
+* **GB-23-04:** keep inline code from proving README disclosures ([7cdaf2b](https://github.com/szTheory/gabbaboy/commit/7cdaf2bdcf2cf2d2746672f5b8550c420f05d00b))
+* **GB-23-04:** mask inline code from disclosure proof ([85fac8c](https://github.com/szTheory/gabbaboy/commit/85fac8cac928adf7d09969b46e08ee1ed9a61767))
+* **GB-23-04:** match CTest success expression exactly ([0e72754](https://github.com/szTheory/gabbaboy/commit/0e72754a74c9b0b205feea6ef99d8b62bb2643b0))
+* **GB-23-04:** require disclosures outside inline code spans ([c4ed9ee](https://github.com/szTheory/gabbaboy/commit/c4ed9eed86871db9f9dc225565a85a55ab0a8036))
+* **GB-23-09:** reject incomplete raw HTML in changelog ([a63f1dc](https://github.com/szTheory/gabbaboy/commit/a63f1dc67654613e105ac1071b7445f21adea0bc))
+* **GB-23-09:** reject incomplete raw HTML in release proof ([6369b05](https://github.com/szTheory/gabbaboy/commit/6369b05141b7b06001408b83056352053cf5e0bf))
+* inspect parsed preview wait deadlines ([07bdf08](https://github.com/szTheory/gabbaboy/commit/07bdf08d17d253abe8d1f2ac63c6bfdf16bf40b1))
+* mask shortcut reference images from prose ([2d7b0a7](https://github.com/szTheory/gabbaboy/commit/2d7b0a703d2d5fb90db8220ae055c31fda69a77f))
+* match game claims across CommonMark hard breaks ([402de24](https://github.com/szTheory/gabbaboy/commit/402de242cc0ea44aad321189aaa8f2d3e12006a3))
+* normalize Windows CTest environment paths ([b7d8693](https://github.com/szTheory/gabbaboy/commit/b7d86939c25fca93dc928c494b9834513e5c1bc5))
+* normalize Windows planning-label paths ([b75ecb9](https://github.com/szTheory/gabbaboy/commit/b75ecb97d8ab11cda5dcb3cc94a87363e60f0cae))
+* pass visible notice prose to game claims ([e26757f](https://github.com/szTheory/gabbaboy/commit/e26757fafc818a92ddf7ca45f1a409658a5a5bdd))
+* **phase-23:** align planning lane inventory ([d3a4ef2](https://github.com/szTheory/gabbaboy/commit/d3a4ef2067d7416ecb141921e8428bd23608b41b))
+* **phase-23:** align qualification controls and gap reserve ([8829b39](https://github.com/szTheory/gabbaboy/commit/8829b394400856a8f2bd3bb31dfb49b3c64e33bf))
+* **phase-23:** bind planning exceptions to exact tools ([a297499](https://github.com/szTheory/gabbaboy/commit/a29749946483de124a17a6caa71f4da6b5973654))
+* **phase-23:** bound emphasis delimiter matching ([6876fab](https://github.com/szTheory/gabbaboy/commit/6876fab06bf746fdaab67beaa4d52a6b1c70ac06))
+* **phase-23:** bound Markdown claim parsing ([4c9c54f](https://github.com/szTheory/gabbaboy/commit/4c9c54f8b5a33e758624c997f107d1ffdd7c94a0))
+* **phase-23:** label controls after registration ([ca437de](https://github.com/szTheory/gabbaboy/commit/ca437de84c6c4b0aec730c038f4c445699b5c90a))
+* **phase-23:** label support ledger controls ([53b0bcf](https://github.com/szTheory/gabbaboy/commit/53b0bcfd75d82705ac6aade7c1f20b142848acdb))
+* **phase-23:** normalize visible CGB game claims ([e017078](https://github.com/szTheory/gabbaboy/commit/e017078b72e78b38fb596faced3af3e35c2ca0ce))
+* **phase-23:** pin planning exception to source revision ([1f97d44](https://github.com/szTheory/gabbaboy/commit/1f97d44fd7d43c1edc88588f404de9b9322d33fb))
+* **phase-23:** render reference-link claims safely ([b798781](https://github.com/szTheory/gabbaboy/commit/b798781105b8f6f803e85aa2ad766d2b2fdbec22))
+* **phase-23:** shard adoption docs self-test controls ([1a7558d](https://github.com/szTheory/gabbaboy/commit/1a7558d9749538a894e23a9cf965210d57bb77dd))
+* **phase-23:** use CMake-compatible review regex ([de66945](https://github.com/szTheory/gabbaboy/commit/de66945db318d7aeb7acdb13a0bd0203fed1bd31))
+* pin phase 23 workflow policy coverage ([ecdde9d](https://github.com/szTheory/gabbaboy/commit/ecdde9d5f63500dd0ad32d9e101f47e29ded0eb2))
+* preserve candidate checker worker bounds ([3c0489d](https://github.com/szTheory/gabbaboy/commit/3c0489d722728c23f2369a0dced49c996b9ac9dc))
+* protect preview waiter from prior step env ([170b7eb](https://github.com/szTheory/gabbaboy/commit/170b7eb2ba24ea166376ddf2088ce3d731fddc37))
+* qualify phase 23 CI within measured bounds ([0137035](https://github.com/szTheory/gabbaboy/commit/013703528fcba6bce371887d5e6dec757e103ecf))
+* rebind phase 23 recovery and budget controls ([bd5ab99](https://github.com/szTheory/gabbaboy/commit/bd5ab993a3f09307e6a5ef31185f554740a0787b))
+* reject control characters in Markdown destinations ([8389b5a](https://github.com/szTheory/gabbaboy/commit/8389b5abe4111e6e673dd633b5fc35dcbed9e33e))
+* reject default-ignorable game-claim separators ([a6bc0a8](https://github.com/szTheory/gabbaboy/commit/a6bc0a824bce55de57422e2b6b73b94ed0f841d1))
+* reject invisible game-claim separators ([742bf1b](https://github.com/szTheory/gabbaboy/commit/742bf1bb5dd3a6e71ab93dbdb420bca2ec94d16a))
+* reject malformed disclosure Markdown safely ([3083aa7](https://github.com/szTheory/gabbaboy/commit/3083aa7184719108c6b8ae4cdca22986329bfea7))
+* require visible Markdown disclosure text ([d6ebc69](https://github.com/szTheory/gabbaboy/commit/d6ebc6963e9af0ca5574e7a07e7536b487ea79e7))
+* require visible third-party fixture rights ([05a9023](https://github.com/szTheory/gabbaboy/commit/05a9023bc38d487eca5de8502de4b0708165f0e8))
+* validate Markdown reference definitions ([8e77d4d](https://github.com/szTheory/gabbaboy/commit/8e77d4d845ddfe1779c571c59151cbe5bfe254a8))
+* validate Markdown reference matching ([d98b4af](https://github.com/szTheory/gabbaboy/commit/d98b4af34627dbd0d6a18d2edc2a1e93f3b3e91c))
+
+
+### Performance Improvements
+
+* overlap lifecycle baselines within the existing worker pool ([33a1e7f](https://github.com/szTheory/gabbaboy/commit/33a1e7faf0c4126a4840e3c1c55ee9d1589d2593))
+* reduce Phase 23 control harness repetition ([8a6e153](https://github.com/szTheory/gabbaboy/commit/8a6e1536d29a2bfa8d53236d4e2eba2766bb1342))
+* reuse immutable blobs across source archive CLI cases ([b50f0c1](https://github.com/szTheory/gabbaboy/commit/b50f0c10e0794591a212edbfd083f10084805532))
+
 ## [0.3.0](https://github.com/szTheory/gabbaboy/compare/v0.2.1...v0.3.0) (2026-10-30)
 
 GabbaBoy v0.3.0 adds the selected CGB-CPU-E software model beside DMG-CPU-B.

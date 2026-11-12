@@ -3,291 +3,291 @@
 # expires is a project minor (the row fails once the project version reaches it). ref must resolve in the base commit's
 # LESSONS.md heading, DECISIONS.md table id or a phase plan file. Raising a ceiling or adding a row without a ref fails the ratchet.
 # Seeded from a fresh ctest json-v1 scan; a test with no TIMEOUT is never allowlisted (the default-budget sweep gives it 60 s).
-accept_event_limit_link_control	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-accept_event_limit_link_violation	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_core_mutant	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_dense_input_controls	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_dense_script_delivered	400	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_lib_libbet_replay	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_libbet	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_libbet-no-input	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_libbet-no-input_raw	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_libbet-select	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_libbet-select_raw	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_libbet_drop_start	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_libbet_observe	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_sgb_tolerance	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_stall_diagnosis_replay_1	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_stall_diagnosis_replay_2	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_suite	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_suite_declared_exclusion	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_suite_undeclared_exclusion	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-acceptance_unexpected_pass	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_sensitivity_m21	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_sensitivity_m27	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_sensitivity_m28	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_sensitivity_m6	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_spsw_ch2_lc_delay_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_spsw_div_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_spsw_interrupts_cgbE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_spsw_mode0_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_spsw_stop_prefetch_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_spsw_tima_cgbBC	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_spsw_tima_cgbE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_stall_window	240	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_stat_mode_cgbE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_stat_mode_ds_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_stat_mode_sprites_dmgC_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_stat_mode_sprites_ds_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_stat_mode_window_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-age_stat_mode_window_ds_cgbBCE	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-cgb_adr_half_dot_static_assert_mutant	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-cgb_bench_ab_missing_elapsed	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-cgb_bench_ab_missing_field	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-cgb_bench_ab_selftest	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-cgb_bench_ab_wrong_digest	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-cgb_runner_profile_dmg_identity_acceptance	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-cgb_runner_profile_dmg_identity_mooneye	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-cgb_samesuite_apu_suite	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-cgb_speed_stall_static_assert_mutant	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-closeout_dispositions_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-fixture_admission_controls	90	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once the admission self-test fits within 60 s
-fixture_product_core_controls	120	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once configuration export and policy identity controls fit within 60 s
-fixture_product_player_controls	120	0.4	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once product notice and policy identity controls fit within 60 s
-core_linkage_controls	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-dmg_baseline	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-libbet_install_tree	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-mooneye_mbc_required_suite	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-phase23_docs_controls_shard_01	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_02	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_03	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_04	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_05	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_06	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_07	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_08	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_09	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_10	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_11	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_12	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_13	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_14	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_15	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_16	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_17	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_18	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_19	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_20	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_21	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_22	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_23	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_24	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_25	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_26	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_27	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_28	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_29	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_30	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_31	90	0.4	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_32	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_33	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_34	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_35	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_36	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_37	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_38	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_39	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_40	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_41	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_42	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_43	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_44	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_45	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_46	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_47	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_48	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_49	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_50	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_51	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_52	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_53	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_54	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_55	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_56	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_57	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_58	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_59	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_60	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_61	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_62	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_63	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_64	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_65	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_66	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_67	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_68	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_69	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_70	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_71	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_72	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_73	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_74	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_75	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_76	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_77	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_78	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_79	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_80	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_81	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_82	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_83	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_84	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_85	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_86	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_87	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_88	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_89	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_90	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_91	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_92	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_93	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_94	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_95	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_96	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_97	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_98	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_99	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_100	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_101	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_102	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_103	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_104	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_105	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_106	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_107	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_108	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_109	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_110	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_111	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_112	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_113	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_114	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_115	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_116	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_117	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_118	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_119	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_120	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_121	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_122	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_123	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_124	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_125	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_126	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_127	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_128	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_129	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_130	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_131	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_132	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_133	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_134	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_135	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_136	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_137	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_138	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_139	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_140	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_141	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_142	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_143	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_144	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_145	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_146	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_147	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_148	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_149	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_150	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_151	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_152	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_153	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_154	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_155	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_156	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_157	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_158	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_159	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_160	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_161	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_162	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_163	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_164	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_165	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_166	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_167	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_168	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_169	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_170	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_171	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_172	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_173	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_174	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_175	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_176	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_177	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_178	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_179	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_180	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_181	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_182	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_183	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_184	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_185	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_186	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_187	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_188	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_189	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_190	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_191	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_192	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_193	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_194	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_195	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_196	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_197	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_198	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-phase23_docs_controls_shard_199	90	0.4	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
-player_cgb_cli	240	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_hdma_smoke	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_hdma_smoke_no_transfer	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_model_auto_smoke	300	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_smoke	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_smoke_mutant_dmg_path	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_smoke_mutant_rb_swap	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_speed_smoke	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_speed_smoke_mutant_ppu_follows_cpu	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_cgb_speed_smoke_wrong_sha	120	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-player_session_script_no_input	300	0.4	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
-preview_package_smoke	180	0.4	16-04	Lower after measured Windows and macOS package builds stay comfortably under the 60 s default
-release_notes_v04_controls	90	0.4	D-069	Keep all causal release-note controls; lower to 60 s when the complete set has measured headroom.
-release_version_v04_controls	90	0.4	D-069	Keep all causal version-window controls; lower to 60 s when the complete set has measured headroom.
-rtc3test_basic	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-rtc3test_negative_control	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-rtc3test_range	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-rtc3test_subsecond	300	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
-uat_closure_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-uat_closure_optimize_refused	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_adoption_docs_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_consumer_controls_c	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_consumer_controls_cpp	600	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_delivery_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_fuzz_controls	180	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_performance_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_source_archive_controls	90	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-v02_support_ledger_controls	120	0.4	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
-workflow_policy_group_ci	180	0.4	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
-workflow_policy_group_helpers	180	0.4	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
-workflow_policy_group_ledger	180	0.4	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
-workflow_policy_group_release_jobs	180	0.4	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
-workflow_policy_group_release_support	180	0.4	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
-workflow_policy_group_rehearsal	180	0.4	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
+accept_event_limit_link_control	180	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+accept_event_limit_link_violation	180	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_core_mutant	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_dense_input_controls	600	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_dense_script_delivered	400	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_lib_libbet_replay	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet-no-input	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet-no-input_raw	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet-select	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet-select_raw	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet_drop_start	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_libbet_observe	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_sgb_tolerance	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_stall_diagnosis_replay_1	600	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_stall_diagnosis_replay_2	600	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_suite	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_suite_declared_exclusion	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_suite_undeclared_exclusion	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+acceptance_unexpected_pass	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_sensitivity_m21	240	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_sensitivity_m27	240	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_sensitivity_m28	240	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_sensitivity_m6	240	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_ch2_lc_delay_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_div_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_interrupts_cgbE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_mode0_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_stop_prefetch_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_tima_cgbBC	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_spsw_tima_cgbE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stall_window	240	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_cgbE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_ds_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_sprites_dmgC_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_sprites_ds_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_window_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+age_stat_mode_window_ds_cgbBCE	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+cgb_adr_half_dot_static_assert_mutant	180	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_bench_ab_missing_elapsed	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_bench_ab_missing_field	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_bench_ab_selftest	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_bench_ab_wrong_digest	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_runner_profile_dmg_identity_acceptance	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_runner_profile_dmg_identity_mooneye	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+cgb_samesuite_apu_suite	600	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+cgb_speed_stall_static_assert_mutant	180	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+closeout_dispositions_controls	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+fixture_admission_controls	90	0.5	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once the admission self-test fits within 60 s
+fixture_product_core_controls	120	0.5	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once configuration export and policy identity controls fit within 60 s
+fixture_product_player_controls	120	0.5	GB-CI-012	Lower when measured run is under half the ceiling; remove the row once product notice and policy identity controls fit within 60 s
+core_linkage_controls	180	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+dmg_baseline	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+libbet_install_tree	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+mooneye_mbc_required_suite	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+phase23_docs_controls_shard_01	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_02	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_03	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_04	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_05	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_06	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_07	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_08	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_09	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_10	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_11	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_12	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_13	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_14	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_15	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_16	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_17	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_18	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_19	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_20	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_21	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_22	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_23	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_24	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_25	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_26	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_27	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_28	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_29	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_30	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_31	90	0.5	D-069	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_32	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_33	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_34	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_35	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_36	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_37	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_38	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_39	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_40	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_41	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_42	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_43	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_44	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_45	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_46	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_47	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_48	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_49	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_50	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_51	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_52	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_53	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_54	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_55	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_56	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_57	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_58	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_59	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_60	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_61	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_62	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_63	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_64	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_65	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_66	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_67	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_68	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_69	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_70	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_71	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_72	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_73	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_74	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_75	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_76	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_77	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_78	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_79	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_80	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_81	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_82	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_83	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_84	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_85	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_86	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_87	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_88	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_89	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_90	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_91	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_92	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_93	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_94	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_95	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_96	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_97	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_98	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_99	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_100	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_101	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_102	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_103	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_104	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_105	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_106	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_107	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_108	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_109	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_110	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_111	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_112	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_113	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_114	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_115	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_116	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_117	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_118	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_119	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_120	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_121	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_122	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_123	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_124	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_125	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_126	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_127	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_128	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_129	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_130	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_131	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_132	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_133	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_134	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_135	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_136	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_137	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_138	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_139	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_140	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_141	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_142	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_143	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_144	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_145	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_146	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_147	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_148	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_149	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_150	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_151	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_152	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_153	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_154	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_155	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_156	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_157	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_158	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_159	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_160	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_161	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_162	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_163	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_164	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_165	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_166	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_167	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_168	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_169	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_170	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_171	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_172	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_173	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_174	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_175	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_176	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_177	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_178	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_179	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_180	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_181	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_182	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_183	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_184	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_185	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_186	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_187	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_188	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_189	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_190	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_191	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_192	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_193	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_194	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_195	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_196	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_197	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_198	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+phase23_docs_controls_shard_199	90	0.5	D-068	Keep every docs control covered; lower to 60 s only after each shard has measured headroom.
+player_cgb_cli	240	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_hdma_smoke	120	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_hdma_smoke_no_transfer	120	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_model_auto_smoke	300	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_smoke	120	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_smoke_mutant_dmg_path	120	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_smoke_mutant_rb_swap	120	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_speed_smoke	120	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_speed_smoke_mutant_ppu_follows_cpu	120	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_cgb_speed_smoke_wrong_sha	120	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+player_session_script_no_input	300	0.5	GB-CI-004	Lower when a measured player run is under half the ceiling; drop the row once the test fits 60 s
+preview_package_smoke	180	0.5	16-04	Lower after measured Windows and macOS package builds stay comfortably under the 60 s default
+release_notes_v04_controls	90	0.5	D-069	Keep all causal release-note controls; lower to 60 s when the complete set has measured headroom.
+release_version_v04_controls	90	0.5	D-069	Keep all causal version-window controls; lower to 60 s when the complete set has measured headroom.
+rtc3test_basic	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+rtc3test_negative_control	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+rtc3test_range	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+rtc3test_subsecond	300	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the replay is bounded or sharded to fit 60 s
+uat_closure_controls	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+uat_closure_optimize_refused	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_adoption_docs_controls	90	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_consumer_controls_c	600	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_consumer_controls_cpp	600	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_delivery_controls	90	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_fuzz_controls	180	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_performance_controls	90	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_source_archive_controls	90	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+v02_support_ledger_controls	120	0.5	GB-CI-004	Lower when a measured run is under half the ceiling; drop the row once the control fits 60 s
+workflow_policy_group_ci	180	0.5	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
+workflow_policy_group_helpers	180	0.5	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
+workflow_policy_group_ledger	180	0.5	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
+workflow_policy_group_release_jobs	180	0.5	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
+workflow_policy_group_release_support	180	0.5	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling
+workflow_policy_group_rehearsal	180	0.5	19-07	D-127 approves the semantic split; keep the 180 s ceiling unchanged and shrink only after a measured group run is under half that ceiling

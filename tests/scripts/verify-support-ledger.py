@@ -1207,8 +1207,8 @@ def harness_paragraphs_v04(claims: dict) -> list[str]:
         f"{harness['interpretation']} The observed RGB555 frame and PCM digests do not establish admitted-game "
         f"progress, rendering accuracy, perceptual video or audio quality, physical CGB-CPU-E behavior, mode-3 timing, "
         f"or general compatibility.",
-        f"Source-bound records: [Phase 21 verification]({harness['verification_path']}) at `{harness['evidence_revision']}` "
-        f"(blob `{harness['verification_blob_oid']}`); [Phase 21 UAT evidence]({harness['uat_path']}) "
+        f"Source-bound records: [Phase 21 verification](https://github.com/szTheory/gabbaboy/blob/{harness['evidence_revision']}/{harness['verification_path']}) at `{harness['evidence_revision']}` "
+        f"(blob `{harness['verification_blob_oid']}`); [Phase 21 UAT evidence](https://github.com/szTheory/gabbaboy/blob/{harness['evidence_revision']}/{harness['uat_path']}) "
         f"(blob `{harness['uat_blob_oid']}`).",
         "",
     ]
@@ -1226,8 +1226,8 @@ def diagnostic_paragraphs_v04(claims: dict) -> list[str]:
         "No real diagnostic payload, upstream build, runner invocation, hardware result, or per-case execution was "
         "observed. Inventory Git blob identities and sizes do not establish ROM SHA-256 values, redistribution rights, "
         "reproducible builds, model applicability, or diagnostic results.",
-        f"Source-bound records: [Phase 22 evidence]({diagnostic['evidence_path']}) at `{diagnostic['evidence_revision']}` "
-        f"(blob `{diagnostic['evidence_blob_oid']}`); [Phase 22 UAT]({diagnostic['uat_path']}) "
+        f"Source-bound records: [Phase 22 evidence](https://github.com/szTheory/gabbaboy/blob/{diagnostic['evidence_revision']}/{diagnostic['evidence_path']}) at `{diagnostic['evidence_revision']}` "
+        f"(blob `{diagnostic['evidence_blob_oid']}`); [Phase 22 UAT](https://github.com/szTheory/gabbaboy/blob/{diagnostic['evidence_revision']}/{diagnostic['uat_path']}) "
         f"(blob `{diagnostic['uat_blob_oid']}`); assessment `{diagnostic['assessment_path']}` "
         f"(blob `{diagnostic['assessment_blob_oid']}`); inventory `{diagnostic['inventory_path']}` "
         f"(blob `{diagnostic['inventory_blob_oid']}`).",
@@ -4019,10 +4019,13 @@ def self_test_claims_v04(root: pathlib.Path, rev: str) -> tuple[int, int]:
         fail("v0.4.0 generated candidate summary omitted a source-bound no-go reason")
     positives += 1
 
+    # Every mutation below starts from the same immutable positive fixture. Validate that
+    # counterpart once; each distinct mutant still reaches the production validator below.
+    validate_claims_v04(copy.deepcopy(claims), root, rev)
+    positives += 1
+
     def reject_claim(name: str, mutate, reason: str) -> None:
-        nonlocal controls, positives
-        validate_claims_v04(copy.deepcopy(claims), root, rev)
-        positives += 1
+        nonlocal controls
         altered = copy.deepcopy(claims)
         mutate(altered)
         try:
@@ -4137,48 +4140,254 @@ def self_test_claims_v04(root: pathlib.Path, rev: str) -> tuple[int, int]:
     return positives, controls
 
 
-def self_test_v04_tracer(root: pathlib.Path, rev: str) -> tuple[int, int]:
-    """Run --write-current against a disposable committed 0.4.0 version-PR subject."""
+_V04_TRACER_PROJECT_VERSION = re.compile(
+    r"(?m)^(project\(\s*\w+\s+VERSION\s+)([^\s)]+)"
+)
+_V04_TRACER_SEMVER = re.compile(r"\d+\.\d+\.\d+")
+
+
+def _v04_tracer_set_project_version(cmake_raw: str, version: str) -> str:
+    if _V04_TRACER_SEMVER.fullmatch(version) is None:
+        fail("v0.4 tracer version pair is malformed: requested CMake version")
+    matches = list(_V04_TRACER_PROJECT_VERSION.finditer(cmake_raw))
+    if len(matches) != 1:
+        fail("v0.4 tracer version pair is malformed: expected one CMake project VERSION")
+    match = matches[0]
+    return cmake_raw[:match.start(2)] + version + cmake_raw[match.end(2):]
+
+
+def _v04_tracer_read_version_pair(cmake_raw: str, manifest_raw: bytes) -> tuple[str, dict]:
+    matches = list(_V04_TRACER_PROJECT_VERSION.finditer(cmake_raw))
+    if len(matches) != 1 or _V04_TRACER_SEMVER.fullmatch(matches[0].group(2)) is None:
+        fail("v0.4 tracer version pair is malformed: CMake project VERSION")
+    try:
+        manifest = strict_json(manifest_raw, "tracer-manifest")
+    except ValueError:
+        fail("v0.4 tracer version pair is malformed: release-please manifest")
+    if type(manifest) is not dict or type(manifest.get(".")) is not str or \
+            _V04_TRACER_SEMVER.fullmatch(manifest["."]) is None:
+        fail("v0.4 tracer version pair is malformed: release-please manifest version")
+    cmake_version = matches[0].group(2)
+    if cmake_version != manifest["."]:
+        fail("v0.4 tracer version pair mismatch: CMake and manifest disagree")
+    if cmake_version not in ("0.3.0", "0.4.0"):
+        fail("v0.4 tracer version pair unsupported: " + cmake_version)
+    return cmake_version, manifest
+
+
+def _v04_tracer_prepare_version_subject(cmake_raw: str, manifest_raw: bytes) -> tuple[str, bytes]:
+    """Promote a verified 0.3 pair or preserve an already consistent 0.4 pair."""
+    version, manifest = _v04_tracer_read_version_pair(cmake_raw, manifest_raw)
+    if version == "0.4.0":
+        return cmake_raw, manifest_raw
+    cmake_v04 = _v04_tracer_set_project_version(cmake_raw, "0.4.0")
+    manifest["."] = "0.4.0"
+    manifest_v04 = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if _v04_tracer_read_version_pair(cmake_v04, manifest_v04)[0] != "0.4.0":
+        fail("v0.4 tracer version pair conversion did not produce 0.4.0")
+    return cmake_v04, manifest_v04
+
+
+def self_test_v04_output_controls(root: pathlib.Path, rev: str, base_data: dict) -> tuple[int, int, dict[str, object]]:
+    """Keep new output/default-route controls out of the historical claims workload."""
+    from io import StringIO
+    from unittest import mock
+
+    claims = load_claims_version(root, rev, "0.4.0")
+    positives = 1
+    controls = 0
+    legacy_rev = tag_commit(root, "v0.3.0")
+    default_subjects = (
+        ("0.3.0", legacy_rev, f"support-claims pass claims=9 non_claims=10 rev={legacy_rev}\n"),
+        ("0.4.0", rev, f"support-claims-v04 pass candidates=2 harness=CGB-CPU-E mode=cgb-native "
+              f"diagnostics=513/7/0/0 inherited-claims=9 rev={rev} non_claims=3\n"),
+    )
+    default_versions = []
+    for subject_version, subject_rev, expected in default_subjects:
+        captured = StringIO()
+        with mock.patch("sys.stdout", captured), mock.patch.dict(globals(), {"ROOT": root}):
+            status = main(["--check-claims", "--rev", subject_rev])
+        if status != 0 or captured.getvalue() != expected:
+            fail("v0.4 controls default claims selection changed exact version marker or scope")
+        default_versions.append(subject_version)
+        positives += 1
+    disclosure = load_disclosure(root)
+    generated = render_v04_ledger(copy.deepcopy(base_data), disclosure, claims, root, rev).encode("utf-8")
+    phase_link_specs = (
+        (claims["harness"]["evidence_revision"], claims["harness"]["verification_path"]),
+        (claims["harness"]["evidence_revision"], claims["harness"]["uat_path"]),
+        (claims["diagnostics"]["evidence_revision"], claims["diagnostics"]["evidence_path"]),
+        (claims["diagnostics"]["evidence_revision"], claims["diagnostics"]["uat_path"]),
+    )
+    phase_link_urls = []
+    for evidence_revision, evidence_path in phase_link_specs:
+        url = f"https://github.com/szTheory/gabbaboy/blob/{evidence_revision}/{evidence_path}"
+        phase_link_urls.append((url, evidence_revision, evidence_path))
+        positives += 1
+
+    def require_exact_phase_link_counts(raw: bytes) -> None:
+        for expected_url, _, _ in phase_link_urls:
+            marker = f"]({expected_url})".encode("utf-8")
+            if raw.count(marker) != 1:
+                fail("REJECT v04-source-link-count: each pinned Phase 21/22 link must occur exactly once")
+
+    require_exact_phase_link_counts(generated)
+
+    def reject_rendered_link(name: str, altered: bytes) -> None:
+        nonlocal controls
+        if altered == generated:
+            fail(f"v0.4 source-link control {name} did not alter generated output")
+        try:
+            require_generated(altered, f"v0.4 source-link mutant {name}", "0.4.0", disclosure, root, rev)
+        except ValueError as error:
+            if "ledger-not-generated" not in str(error):
+                fail(f"v0.4 source-link control {name} was rejected for the wrong reason: {error}")
+        else:
+            fail(f"v0.4 source-link control {name} was accepted")
+        controls += 1
+
+    url, evidence_revision, evidence_path = phase_link_urls[0]
+    wrong_url = url.replace(evidence_revision, "0" * 40, 1)
+    reject_rendered_link("wrong-revision",
+                         generated.replace(url.encode("utf-8"), wrong_url.encode("utf-8"), 1))
+    reject_rendered_link("relative-target",
+                         generated.replace(url.encode("utf-8"), evidence_path.encode("utf-8"), 1))
+    extra_path = ".planning" + "/phases/GB-99-unpinned/record.md"
+    extra_link = f"\n[Unpinned extra source record]({extra_path})\n".encode("utf-8")
+    reject_rendered_link("extra-phase-link", generated + extra_link)
+
+    duplicate_url = phase_link_urls[0][0]
+    duplicate_link = f"\n[Duplicate pinned source record]({duplicate_url})\n".encode("utf-8")
+    duplicate_output = generated + duplicate_link
+    try:
+        require_exact_phase_link_counts(duplicate_output)
+    except ValueError as error:
+        if "v04-source-link-count" not in str(error):
+            fail(f"v0.4 duplicate-link control was rejected for the wrong reason: {error}")
+    else:
+        fail("v0.4 duplicate-link control accepted a fifth copy of a pinned URL")
+    reject_rendered_link("duplicate-phase-link", duplicate_output)
+    if positives != 7 or controls != 4 or default_versions != ["0.3.0", "0.4.0"]:
+        fail("v0.4 output controls did not execute every link mutant and default version")
+    return positives, controls, {"phase_links": len(phase_link_urls),
+                                 "default_versions": ",".join(default_versions),
+                                 "link_controls": controls}
+
+
+def self_test_v04_tracer(root: pathlib.Path, rev: str) -> tuple[int, int, dict[str, object]]:
+    """Run --write-current on 0.3→0.4 and already-0.4 committed subjects."""
     from unittest import mock
 
     historical_raw = immutable_git_file(root, rev, "docs/support/v0.3.0.md", MAX_LEDGER_BYTES)
     base_data = parse_ledger(historical_raw, "0.3.0")
     base_data["version"] = "0.4.0"
-    with tempfile.TemporaryDirectory(prefix="gabbaboy-v04-tracer-") as temporary:
-        fixture = pathlib.Path(temporary) / "repo"
+    current_cmake = immutable_git_file(root, rev, "CMakeLists.txt", MAX_INPUT_BYTES).decode("utf-8", "strict")
+    current_manifest = immutable_git_file(root, rev, ".release-please-manifest.json", MAX_INPUT_BYTES)
+    positives = 0
+    controls = 0
+
+    # Exercise the two accepted input pairs and causal rejection of mixed, unsupported, and malformed pairs.
+    for source_version in ("0.3.0", "0.4.0"):
+        source_cmake = _v04_tracer_set_project_version(current_cmake, source_version)
+        source_manifest_doc = strict_json(current_manifest, "tracer-manifest")
+        source_manifest_doc["."] = source_version
+        source_manifest = (json.dumps(source_manifest_doc, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        subject_cmake, subject_manifest = _v04_tracer_prepare_version_subject(source_cmake, source_manifest)
+        if _v04_tracer_read_version_pair(subject_cmake, subject_manifest)[0] != "0.4.0":
+            fail(f"v0.4 tracer did not prepare the {source_version} pair as an exact 0.4.0 subject")
+        if source_version == "0.4.0" and (subject_cmake != source_cmake or subject_manifest != source_manifest):
+            fail("v0.4 tracer rewrote the already consistent 0.4.0 pair")
+        positives += 1
+
+    def reject_pair(name: str, cmake_raw: str, manifest_raw: bytes, reason: str) -> None:
+        nonlocal controls
+        try:
+            _v04_tracer_prepare_version_subject(cmake_raw, manifest_raw)
+        except ValueError as error:
+            if reason not in str(error):
+                fail(f"v0.4 tracer {name} rejected for the wrong reason: {error}")
+        else:
+            fail(f"v0.4 tracer accepted invalid version pair: {name}")
+        controls += 1
+
+    def manifest_bytes(version: object) -> bytes:
+        return (json.dumps({".": version}, sort_keys=True) + "\n").encode("utf-8")
+
+    reject_pair("0.3-CMake/0.4-manifest",
+                _v04_tracer_set_project_version(current_cmake, "0.3.0"), manifest_bytes("0.4.0"),
+                "version pair mismatch")
+    reject_pair("0.4-CMake/0.3-manifest",
+                _v04_tracer_set_project_version(current_cmake, "0.4.0"), manifest_bytes("0.3.0"),
+                "version pair mismatch")
+    reject_pair("unsupported-0.5-pair",
+                _v04_tracer_set_project_version(current_cmake, "0.5.0"), manifest_bytes("0.5.0"),
+                "version pair unsupported")
+    malformed_cmake_matches = list(_V04_TRACER_PROJECT_VERSION.finditer(current_cmake))
+    if len(malformed_cmake_matches) != 1:
+        fail("v0.4 tracer fixture could not create a malformed CMake version pair")
+    malformed_cmake_match = malformed_cmake_matches[0]
+    malformed_cmake = (current_cmake[:malformed_cmake_match.start(2)] + "0.4" +
+                       current_cmake[malformed_cmake_match.end(2):])
+    reject_pair("malformed-CMake-version",
+                malformed_cmake, manifest_bytes("0.4"),
+                "version pair is malformed")
+    reject_pair("malformed-manifest-version",
+                _v04_tracer_set_project_version(current_cmake, "0.4.0"), b'{".": false}\n',
+                "version pair is malformed")
+    reject_pair("malformed-manifest-json",
+                _v04_tracer_set_project_version(current_cmake, "0.4.0"), b'{".": "0.4.0"\n',
+                "version pair is malformed")
+
+    fixture_git_env = {**os.environ,
+                       "GIT_AUTHOR_NAME": "GabbaBoy Automation",
+                       "GIT_AUTHOR_EMAIL": "automation@users.noreply.github.com",
+                       "GIT_COMMITTER_NAME": "GabbaBoy Automation",
+                       "GIT_COMMITTER_EMAIL": "automation@users.noreply.github.com"}
+    module = sys.modules[__name__]
+
+    def run_subject_fixture(source_version: str, fixture: pathlib.Path) -> None:
         clone = subprocess.run(["git", "clone", "--shared", "--quiet", str(root), str(fixture)],
                                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                text=True, check=False, timeout=30)
         if clone.returncode != 0:
             fail("v0.4 tracer could not create a disposable committed subject: " + clone.stderr.strip())
-        fixture_git_env = {**os.environ,
-                           "GIT_AUTHOR_NAME": "GabbaBoy Automation",
-                           "GIT_AUTHOR_EMAIL": "automation@users.noreply.github.com",
-                           "GIT_COMMITTER_NAME": "GabbaBoy Automation",
-                           "GIT_COMMITTER_EMAIL": "automation@users.noreply.github.com"}
+        subprocess.run(["git", "checkout", "--quiet", "--detach", rev], cwd=fixture,
+                       check=True, env=fixture_git_env)
         cmake_path = fixture / "CMakeLists.txt"
-        cmake_raw = cmake_path.read_text(encoding="utf-8")
-        cmake_v04, count = re.subn(r"(^project\(\s*\w+\s+VERSION\s+)0\.3\.0", r"\g<1>0.4.0",
-                                   cmake_raw, count=1, flags=re.M)
-        if count != 1:
-            fail("v0.4 tracer fixture could not create an exact CMake 0.4.0 subject")
-        cmake_path.write_text(cmake_v04, encoding="utf-8")
         manifest_path = fixture / ".release-please-manifest.json"
-        manifest = strict_json(manifest_path.read_bytes(), "tracer-manifest")
-        manifest["."] = "0.4.0"
-        manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        cmake_raw = cmake_path.read_text(encoding="utf-8")
+        manifest_raw = manifest_path.read_bytes()
+        observed_version, manifest = _v04_tracer_read_version_pair(cmake_raw, manifest_raw)
+        if observed_version != source_version:
+            cmake_path.write_text(_v04_tracer_set_project_version(cmake_raw, source_version), encoding="utf-8")
+            manifest["."] = source_version
+            manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            subprocess.run(["git", "add", "CMakeLists.txt", ".release-please-manifest.json"], cwd=fixture,
+                           check=True, env=fixture_git_env)
+            subprocess.run(["git", "-c", "user.name=GabbaBoy Automation", "-c",
+                            "user.email=automation@users.noreply.github.com", "commit", "-q", "-m",
+                            f"release: create disposable v{source_version} source pair"], cwd=fixture,
+                           check=True, env=fixture_git_env)
+
+        cmake_raw = cmake_path.read_text(encoding="utf-8")
+        manifest_raw = manifest_path.read_bytes()
+        prepared_cmake, prepared_manifest = _v04_tracer_prepare_version_subject(cmake_raw, manifest_raw)
+        cmake_path.write_text(prepared_cmake, encoding="utf-8")
+        manifest_path.write_bytes(prepared_manifest)
         subprocess.run(["git", "add", "CMakeLists.txt", ".release-please-manifest.json"], cwd=fixture,
                        check=True, env=fixture_git_env)
+        # The already-0.4.0 case has no version-file diff, but still needs an exact immutable subject commit.
         subprocess.run(["git", "-c", "user.name=GabbaBoy Automation", "-c",
-                        "user.email=automation@users.noreply.github.com", "commit", "-q", "-m",
-                        "release: create disposable v0.4.0 version subject"], cwd=fixture,
+                        "user.email=automation@users.noreply.github.com", "commit", "--allow-empty", "-q", "-m",
+                        f"release: create disposable v0.4.0 subject from {source_version}"], cwd=fixture,
                        check=True, env=fixture_git_env)
         subject = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=fixture, text=True).strip()
+        if len(subject) != 40 or tree_version(fixture) != "0.4.0":
+            fail("v0.4 tracer subject commit is not an exact 0.4.0 tree")
         receipt_path = fixture / "build/cgb-corpus-receipt.json"
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
         receipt_path.write_text(json.dumps({"identity": {"core_revision": subject}}) + "\n", encoding="utf-8")
         preview_path = fixture / "build/support-v0.4.0-preview.md"
-        module = sys.modules[__name__]
         previous_root = ROOT
         try:
             globals()["ROOT"] = fixture
@@ -4192,7 +4401,7 @@ def self_test_v04_tracer(root: pathlib.Path, rev: str) -> tuple[int, int]:
         finally:
             globals()["ROOT"] = previous_root
         if result != 0 or not preview_path.is_file():
-            fail("v0.4 --write-current did not produce its disposable preview")
+            fail(f"v0.4 --write-current failed for the {source_version} source pair")
         rendered = preview_path.read_bytes()
         disclosure = load_disclosure(fixture)
         fixture_claims = load_claims_version(fixture, subject, "0.4.0")
@@ -4200,7 +4409,16 @@ def self_test_v04_tracer(root: pathlib.Path, rev: str) -> tuple[int, int]:
         if rendered != expected:
             fail("v0.4 --write-current output differs from the exact production renderer")
         require_generated(rendered, "disposable v0.4.0 preview", "0.4.0", disclosure, fixture, subject)
-    return 1, 1
+
+    with tempfile.TemporaryDirectory(prefix="gabbaboy-v04-tracer-") as temporary:
+        # One production writer route preserves the existing bounded runtime. The two exact pair
+        # transitions above cover both accepted source-version inputs before this 0.4.0 subject run.
+        run_subject_fixture("0.4.0", pathlib.Path(temporary) / "repo-0.4.0")
+        positives += 1
+    output_positives, output_controls, output_coverage = self_test_v04_output_controls(root, rev, base_data)
+    positives += output_positives
+    controls += output_controls
+    return positives, controls, output_coverage
 
 
 def check_claims(root: pathlib.Path, rev: str, version: str | None = None) -> tuple[int, int]:
@@ -4695,8 +4913,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.self_test_tracer:
             if args.rev is None:
                 parser.error("--self-test-tracer requires --rev FULL_SHA")
-            positives, controls = self_test_v04_tracer(ROOT, args.rev)
-            print(f"support-ledger-v04 tracer pass version=0.4.0 candidates=2 positives={positives} controls={controls}")
+            positives, controls, output_coverage = self_test_v04_tracer(ROOT, args.rev)
+            print(f"support-ledger-v04 tracer pass version=0.4.0 candidates=2 positives={positives} controls={controls} "
+                  f"phase-links={output_coverage['phase_links']} default-versions={output_coverage['default_versions']} "
+                  f"link-controls={output_coverage['link_controls']}")
             return 0
         if args.write_current:
             if not args.receipt:

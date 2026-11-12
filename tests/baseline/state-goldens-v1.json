@@ -8,7 +8,7 @@
       "mode": "DMG",
       "profile": "DMG-CPU-B",
       "rom_sha256": "a6d1cb7aaf9875cb0ad993277bf9444f5da7d18c08f0c40913758020d07d8f01",
-      "state_sha256": "132003b6f6f711b03b8782671a964d1fb8978e79b2e54f7da8bd0bf7be2db715",
+      "state_sha256": "87bbffa4bc903064bbbb6da7a220468ea2373fcbcfa1f62f8973052a1ad8a26a",
       "state_size": 189176
     },
     {
@@ -18,7 +18,7 @@
       "mode": "CGB-DMG-compatibility",
       "profile": "CGB-CPU-E",
       "rom_sha256": "c87524914199e887ecfb506e80fa90fcbcf46687206e3a0fc9039f3275fc0880",
-      "state_sha256": "91a1f815bf8e9c9c6494417495d47eb79733524c4e20befdc45bae5546b19abb",
+      "state_sha256": "000ceff7ffe75c07f74cce0921a6d08751650b5f5fefff222ee825a40c78136a",
       "state_size": 197368
     },
     {
@@ -28,14 +28,14 @@
       "mode": "CGB-native",
       "profile": "CGB-CPU-E",
       "rom_sha256": "cc255a699eab2027298709ea6aa438a6e57392c19f1b672513d291beaf56c22b",
-      "state_sha256": "966a19fc6a383c5d9d499ba3cf1e487ff9b0419354fe258fa4e8cc0a0dbff5fe",
+      "state_sha256": "dc021d5c15bed28690065b52a10e01d491460f6780ff882dcb6496cb21da023b",
       "state_size": 197368
     }
   ],
   "format_version": 1,
   "release": {
     "major": 0,
-    "minor": 3,
+    "minor": 4,
     "patch": 0
   },
   "schema": "state-goldens-v1"
