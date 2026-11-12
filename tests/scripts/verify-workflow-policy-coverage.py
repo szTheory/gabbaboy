@@ -1983,6 +1983,188 @@ def _self_test(root: Path, revision: str) -> int:
     candidate_ci = git_text(root, candidate, ".github/workflows/ci.yml").decode("utf-8")
     candidate_preview = git_text(root, candidate, ".github/workflows/preview.yml").decode("utf-8")
     candidate_release = git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8")
+    # Post-tag recovery profile: keep the generic production checker and every
+    # earlier control unchanged. Read the original tagged workflow as immutable data.
+    recovery_source = "3de1b0e427f37a202be4469dd818266f359c8b20"
+    recovery_baseline = _parse_workflow_text(
+        git_text(root, recovery_source, ".github/workflows/release.yml").decode("utf-8"),
+        "release.yml", candidate_namespace)
+    preserve_bytes_step = {
+        "name": "Preserve exact source bytes on Windows", "shell": "bash",
+        "run": "git config --global core.autocrlf false\ngit config --global core.eol lf",
+    }
+
+    def recovery_step(job: dict, name: str, family: str) -> tuple[int, dict]:
+        matches = [(index, step) for index, step in enumerate(job.get("steps", []))
+                   if isinstance(step, dict) and step.get("name") == name]
+        if len(matches) != 1:
+            reject(f"release recovery {family} needs exactly one {name} step")
+        return matches[0]
+
+    def validate_release_recovery_profile(tree: dict) -> None:
+        for field in ("env", "defaults"):
+            if tree.get(field) != recovery_baseline.get(field):
+                reject(f"release recovery workflow must not override {field}")
+        for job_id, family in (("candidate-windows", "Windows"), ("candidate-corpus", "corpus")):
+            job = tree.get("jobs", {}).get(job_id)
+            baseline_job = recovery_baseline["jobs"][job_id]
+            if not isinstance(job, dict):
+                reject(f"release recovery {family} job is missing")
+            for field in ("env", "defaults"):
+                if job.get(field) != baseline_job.get(field):
+                    reject(f"release recovery {family} must not override {field}")
+            if family == "Windows":
+                index, checkout = recovery_step(job, "Check out exact trusted tag source", family)
+                baseline_index, baseline_checkout = recovery_step(
+                    baseline_job, "Check out exact trusted tag source", family)
+                expected_prefix = baseline_job["steps"][:baseline_index] + [preserve_bytes_step]
+                if checkout != baseline_checkout or job["steps"][:index] != expected_prefix:
+                    reject("release recovery Windows must preserve exact Git bytes immediately before the pinned checkout")
+            else:
+                index, step = recovery_step(job, "Run the full CTest stream once", family)
+                baseline_index, baseline_step = recovery_step(
+                    baseline_job, "Run the full CTest stream once", family)
+                expected_step = copy.deepcopy(baseline_step)
+                expected_step["env"]["CTEST_PARALLEL_LEVEL"] = "4"
+                if step != expected_step or job["steps"][:index] != baseline_job["steps"][:baseline_index]:
+                    reject("release recovery corpus must retain the exact full stream, nonce and fixed four-worker step environment")
+
+    recovery_tree = _parse_workflow_text(candidate_release, "release.yml", candidate_namespace)
+    validate_release_recovery_profile(recovery_tree)
+    controls += 1
+    win_index, _ = recovery_step(recovery_tree["jobs"]["candidate-windows"],
+                                 "Check out exact trusted tag source", "Windows")
+    corpus_index, _ = recovery_step(recovery_tree["jobs"]["candidate-corpus"],
+                                    "Run the full CTest stream once", "corpus")
+    profile_mutants = []
+
+    def recovery_mutant(label: str, family: str, edit) -> None:
+        mutant = copy.deepcopy(recovery_tree)
+        edit(mutant)
+        profile_mutants.append((label, family, mutant))
+
+    recovery_mutant("missing byte-preservation step", "Windows",
+                     lambda t: t["jobs"]["candidate-windows"]["steps"].pop(win_index - 1))
+    recovery_mutant("byte-preservation after checkout", "Windows",
+                     lambda t: t["jobs"]["candidate-windows"]["steps"].insert(
+                         win_index, t["jobs"]["candidate-windows"]["steps"].pop(win_index - 1)))
+    for label, old, new in (
+            ("autocrlf true", "core.autocrlf false", "core.autocrlf true"),
+            ("autocrlf input", "core.autocrlf false", "core.autocrlf input"),
+            ("missing autocrlf", "git config --global core.autocrlf false\n", ""),
+            ("CRLF output", "core.eol lf", "core.eol crlf"),
+            ("missing eol", "\ngit config --global core.eol lf", ""),
+            ("early success", "git config", "exit 0\ngit config")):
+        recovery_mutant(label, "Windows", lambda t, old=old, new=new:
+                         t["jobs"]["candidate-windows"]["steps"][win_index - 1].update(
+                             run=preserve_bytes_step["run"].replace(old, new, 1)))
+    for field, value in (("if", "false"), ("continue-on-error", "true"),
+                         ("shell", "pwsh"), ("env", {"GIT_CONFIG_COUNT": "1"})):
+        recovery_mutant("byte-preservation " + field, "Windows", lambda t, field=field, value=value:
+                         t["jobs"]["candidate-windows"]["steps"][win_index - 1].update({field: value}))
+    recovery_mutant("checkout Git environment override", "Windows", lambda t:
+                     t["jobs"]["candidate-windows"]["steps"][win_index].update(env={"GIT_CONFIG_COUNT": "1"}))
+    recovery_mutant("job Git environment override", "Windows", lambda t:
+                     t["jobs"]["candidate-windows"]["env"].update(GIT_CONFIG_COUNT="1"))
+    for field, value in (("env", {"BASH_ENV": "override.sh"}),
+                         ("defaults", {"run": {"shell": "sh"}})):
+        recovery_mutant("workflow " + field, "workflow", lambda t, field=field, value=value:
+                         t.update({field: value}))
+    for label, value in (("missing workers", None), ("serial workers", "1"), ("eight workers", "8")):
+        def edit_workers(t, value=value):
+            env = t["jobs"]["candidate-corpus"]["steps"][corpus_index]["env"]
+            if value is None:
+                env.pop("CTEST_PARALLEL_LEVEL")
+            else:
+                env["CTEST_PARALLEL_LEVEL"] = value
+        recovery_mutant(label, "corpus", edit_workers)
+    for label, suffix in (("CLI serial override", " --parallel 1"), ("filtered stream", " -R one_case")):
+        recovery_mutant(label, "corpus", lambda t, suffix=suffix:
+                         t["jobs"]["candidate-corpus"]["steps"][corpus_index].update(
+                             run=t["jobs"]["candidate-corpus"]["steps"][corpus_index]["run"] + suffix))
+    recovery_mutant("disabled full stream", "corpus", lambda t:
+                     t["jobs"]["candidate-corpus"]["steps"][corpus_index].update({"if": "false"}))
+    recovery_mutant("full-stream shell environment override", "corpus", lambda t:
+                     t["jobs"]["candidate-corpus"]["steps"][corpus_index]["env"].update(BASH_ENV="override.sh"))
+    recovery_mutant("corpus job environment override", "corpus", lambda t:
+                     t["jobs"]["candidate-corpus"]["env"].update(CTEST_PARALLEL_LEVEL="1"))
+    recovery_mutant("prior corpus shell override", "corpus", lambda t:
+                     t["jobs"]["candidate-corpus"]["steps"].insert(
+                         corpus_index, {"name": "Override stream", "run": "echo BASH_ENV=override.sh >> $GITHUB_ENV"}))
+    for label, family, mutant in profile_mutants:
+        rejected_as("release recovery " + label, "release recovery " + family,
+                    lambda mutant=mutant: validate_release_recovery_profile(mutant))
+
+    # Exercise Git's real checkout conversion with a tiny private index, not
+    # another full clone or test stream. No user's global Git config is touched.
+    import importlib.util
+    import shlex
+    trusted_fixture = root / "tests/scripts/verify-fixture-admission.py"
+    fixture_source = git_text(root, recovery_source, "tests/scripts/verify-fixture-admission.py")
+    if trusted_fixture.read_bytes() != fixture_source:
+        reject("release recovery fixture checker differs from the tagged trusted snapshot")
+    spec = importlib.util.spec_from_file_location("release_recovery_fixture_probe", trusted_fixture)
+    if spec is None or spec.loader is None:
+        reject("release recovery fixture checker cannot be loaded")
+    fixture_checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fixture_checker)
+    policy_blob = git_text(root, recovery_source, "cmake/FixtureAdmissionPolicy.json")
+    fixture_checker._check_product_policy_identity(policy_blob)
+    with tempfile.TemporaryDirectory(prefix="gbb-release-byte-checkout.") as directory:
+        checkout = Path(directory)
+        isolated_env = os.environ.copy()
+        isolated_env["GIT_CONFIG_GLOBAL"] = str(checkout / "isolated.gitconfig")
+        isolated_env["GIT_CONFIG_NOSYSTEM"] = "1"
+        for name in ("GH_TOKEN", "GITHUB_TOKEN", "GH_DEBUG", "GIT_TRACE", "GIT_TRACE_CURL", "GIT_CURL_VERBOSE"):
+            isolated_env.pop(name, None)
+        def private_git(*arguments):
+            subprocess.run(["git", *arguments], cwd=checkout, env=isolated_env,
+                           capture_output=True, check=True, timeout=15)
+        private_git("init", "--quiet")
+        for line in preserve_bytes_step["run"].splitlines():
+            private_git(*shlex.split(line)[1:])
+        (checkout / ".gitattributes").write_bytes(git_text(root, recovery_source, ".gitattributes"))
+        policy_path = checkout / "cmake/FixtureAdmissionPolicy.json"
+        policy_path.parent.mkdir()
+        policy_path.write_bytes(policy_blob)
+        private_git("add", "--", ".gitattributes", "cmake/FixtureAdmissionPolicy.json")
+        private_git("config", "--global", "core.autocrlf", "true")
+        private_git("config", "--global", "core.eol", "crlf")
+        policy_path.unlink()
+        private_git("checkout-index", "--force", "--", "cmake/FixtureAdmissionPolicy.json")
+        converted = policy_path.read_bytes()
+        if json.loads(converted) != json.loads(policy_blob) or b"\r\n" not in converted:
+            reject("release recovery byte probe did not reproduce checkout-only CRLF conversion")
+        for label, payload in (("Windows default checkout", converted),):
+            try:
+                fixture_checker._check_product_policy_identity(payload)
+            except fixture_checker.Reject as error:
+                if error.code != "product-policy-identity":
+                    reject(f"release recovery {label} refused for the wrong reason")
+                controls += 1
+            else:
+                reject(f"release recovery {label} accepted converted policy bytes")
+        for line in preserve_bytes_step["run"].splitlines():
+            private_git(*shlex.split(line)[1:])
+        if policy_path.read_bytes() != converted:
+            reject("release recovery byte probe unexpectedly rewrote an existing worktree file")
+        controls += 1
+        policy_path.unlink()
+        private_git("checkout-index", "--force", "--", "cmake/FixtureAdmissionPolicy.json")
+        canonical = policy_path.read_bytes()
+        fixture_checker._check_product_policy_identity(canonical)
+        if canonical != policy_blob:
+            reject("release recovery canonical checkout differs from the immutable Git blob")
+        controls += 1
+        try:
+            fixture_checker._check_product_policy_identity(canonical + b"tampered")
+        except fixture_checker.Reject as error:
+            if error.code != "product-policy-identity":
+                reject("release recovery tampered policy refused for the wrong reason")
+            controls += 1
+        else:
+            reject("release recovery accepted a tampered policy")
+
     validate_phase23_timeout_profile(candidate_ci, candidate_preview, candidate_namespace, candidate_release)
     candidate_fixture = git_text(root, candidate, ".github/workflows/fixture-repro.yml").decode("utf-8")
     validate_fixture_repro_triggers(candidate_fixture, candidate_namespace)
