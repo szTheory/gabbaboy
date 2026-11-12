@@ -2160,7 +2160,8 @@ def _self_test(root: Path, revision: str) -> int:
     def edit_reuse_run(tree: dict, old: str, new: str) -> None:
         _index, step = recovery_step(tree["jobs"][reuse_job_id], reuse_name, "Linux")
         if step["run"].count(old) != 1:
-            reject("release recovery Linux cannot create a receipt runner negative control")
+            reject("release recovery Linux cannot create a receipt runner negative control "
+                   f"(matches={step['run'].count(old)}, anchor={old.splitlines()[0][:96]!r})")
         step["run"] = step["run"].replace(old, new, 1)
 
     smoke_name = "Smoke relocated C/C++ consumers from the downloaded bytes"
@@ -2201,13 +2202,14 @@ def _self_test(root: Path, revision: str) -> int:
     reuse_mutant("removed notes and notice checks", lambda t: edit_reuse_run(
         t, notes_check, "pass"))
     reuse_mutant("stamp from receipt claimed runner", lambda t: edit_reuse_run(
-        t, '"runner": os.environ["smoke_runner"]', '"runner": receipt["smoke"]["runner"]'))
+        t, stamp_lines.splitlines()[1], stamp_lines.splitlines()[1].replace(
+            'os.environ["smoke_runner"]', 'receipt["smoke"]["runner"]', 1)))
     reuse_mutant("change an unrelated receipt field", lambda t: edit_reuse_run(
         t, 'fresh_receipt = {**receipt, "smoke": {**receipt["smoke"], "runner": os.environ["smoke_runner"]}}',
         'fresh_receipt = {**receipt, "source_sha": "changed", "smoke": {**receipt["smoke"], "runner": os.environ["smoke_runner"]}}'))
     reuse_mutant("rewrite public receipt", lambda t: edit_reuse_run(
-        t, 'pathlib.Path("build/downloaded/candidate-receipt.json").write_text',
-        'pathlib.Path("build/existing/candidate-receipt.json").write_text'))
+        t, stamp_lines.splitlines()[2], stamp_lines.splitlines()[2].replace(
+            'build/downloaded/candidate-receipt.json', 'build/existing/candidate-receipt.json', 1)))
     reuse_mutant("omitted current runner evidence", lambda t: edit_reuse_run(t, current_runner_evidence, ""))
     reuse_mutant("current runner check uses public receipt", lambda t: edit_reuse_run(
         t, current_runner_evidence,
