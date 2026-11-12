@@ -1,11 +1,43 @@
 {
   "schema_version": 1,
   "kind": "release-version-window",
-  "state": "inactive",
-  "release_version": null,
-  "intended": null,
-  "managed_inputs": null,
-  "generated": null,
-  "review": null,
-  "rehearsal": null
+  "state": "active",
+  "release_version": "0.4.0",
+  "intended": {
+    "head": "ca2331f035eada1d3e87fec9c294b2e2d2fbe2a4",
+    "base": "6c3ffafb0976e5832863976b1bc1786c88c33753"
+  },
+  "managed_inputs": {
+    "release-please-config.json": "3c8306dbb75da6bf41f801e3e2c01495d3de069f2cedb079da3a6d7453c073d0",
+    "tests/baseline/state-goldens-v1.json": "23a65f0c841f3c043dc2c77382be28c6407572a09e3ffb969ebcf2e0ed922474",
+    "tests/data/cgb-candidates/potion-panic.json": "9a23c0c13dba57f7806b19501756f09616c6cbbebe1e4bcef04eb099bf8ca352",
+    "tests/data/cgb-candidates/ucity-1.3.json": "3f94c92daa1d6a4968424dbfaaaccd7554c01807197531c9a589d32c884595c3",
+    "tests/data/release-disclosure.json": "a0e89969b1254de467477190da16adf5b8dc725433df0d4ebbd75c5d6a954285",
+    "tests/data/state-compatibility.json": "1e01eb39aeaf11ea8b039b790b0703538bc904ce365cfd55393ce4b1539db24f",
+    "tests/data/support-claims-v0.3.json": "0815d8c04eea8dcac522311bd84d3202c2c91bad9dfe146905cc6df7d2051d0c",
+    "tests/data/support-claims-v0.4.json": "f0c7fb9c70547899880d54209b194fb4d3e0b332111d5bb1c3424db21cf50bc7",
+    "tests/external/diagnostic-assessment.json": "0775c95aeb6b39a6da50cfb5787c9caa4ad43fd7dfa2c274be1284ebe307d1be",
+    "tests/external/gbmicrotest-inventory.json": "7050d516d09e3e543a83e6c2c7ab8f66f69b470de4adc9fd3defd94d4e4d81da",
+    "tests/scripts/verify-support-ledger.py": "1a478bb0e88ced109a90b3faa2cb743df136c837074ed165004238fd4c214c10",
+    "tests/scripts/verify-v02-adoption.py": "37bf171536a22dfa64a63631ea99dd936766c200ceb7d10dcc7276b99818259f"
+  },
+  "generated": {
+    "files": {
+      ".release-please-manifest.json": "2a46cf8f775cc9e685f435858acac0e88fcc3059589f986793ba17a6030e3eef",
+      "CHANGELOG.md": "2fe60aca94ea7d933d150f282e1e0cb9938fa85f200bf883b7a2a4f8a3e4af06",
+      "CMakeLists.txt": "686edf11f38dc3d5987b2c8c94b682b84a4cc80e4547b431ba869e5dcf5cc4ac",
+      "docs/support/v0.4.0.md": "46783904ae080747aa9ae6d27f11b51bbc00213643744bf1b8b08f486f239f49"
+    },
+    "pr_body_sha256": "18858c55a14c987be90ae9a80ff46d36a7ca1ff09cb244f263cb55730148da05"
+  },
+  "review": {
+    "head": "ca2331f035eada1d3e87fec9c294b2e2d2fbe2a4",
+    "pull_request": 147,
+    "ci_run_id": 43147900270
+  },
+  "rehearsal": {
+    "head": "ca2331f035eada1d3e87fec9c294b2e2d2fbe2a4",
+    "ref": "rehearsal/v0.4.0",
+    "run_id": 43154903853
+  }
 }
