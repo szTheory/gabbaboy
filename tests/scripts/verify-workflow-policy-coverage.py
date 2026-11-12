@@ -452,8 +452,8 @@ def validate_phase23_timeout_profile(ci_workflow: str, preview_workflow: str,
     if sanitizer_tests is None or sanitizer_tests.get("timeout-minutes") != "75":
         reject("linux-sanitizers-tests timeout must retain the approved 75-minute cap")
     windows = ci_tree.get("jobs", {}).get("native-windows")
-    if windows is None or windows.get("timeout-minutes") != "70":
-        reject("native-windows timeout must be the owner-approved 70 minutes")
+    if windows is None or windows.get("timeout-minutes") != "75":
+        reject("native-windows timeout must match the configured 75 minutes")
     for job_id in PREVIEW_BUDGET_JOBS:
         job = preview_tree.get("jobs", {}).get(job_id)
         if job is None:
@@ -2082,8 +2082,14 @@ def _self_test(root: Path, revision: str) -> int:
                 lambda: validate_phase23_timeout_profile(
                     stale_floor_cap, candidate_preview, candidate_namespace))
     stale_windows = _replace_job_block_value(
-        candidate_ci, "native-windows", "    timeout-minutes: 70", "    timeout-minutes: 60")
+        candidate_ci, "native-windows", "    timeout-minutes: 75", "    timeout-minutes: 60")
     rejected("stale native-Windows 60-minute cap", lambda: validate_phase23_timeout_profile(stale_windows, candidate_preview, candidate_namespace))
+    stale_windows_70 = _replace_job_block_value(
+        candidate_ci, "native-windows", "    timeout-minutes: 75", "    timeout-minutes: 70")
+    rejected_as("stale native-Windows 70-minute cap",
+                "native-windows timeout must match the configured 75 minutes",
+                lambda: validate_phase23_timeout_profile(
+                    stale_windows_70, candidate_preview, candidate_namespace))
     stale_sanitizer_tests = _replace_job_block_value(
         candidate_ci, "linux-sanitizers-tests", "    timeout-minutes: 75", "    timeout-minutes: 55")
     rejected("stale sanitizer test inventory 55-minute cap",
@@ -2216,6 +2222,10 @@ def _self_test(root: Path, revision: str) -> int:
         candidate_ci, "native-macos")
     if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 55\s*$", macos_block):
         reject("native-macos timeout must match the configured 55 minutes")
+    windows_block = candidate_namespace["_workflow_job_block"](
+        candidate_ci, "native-windows")
+    if windows_block is None or not re.search(r"(?m)^    timeout-minutes: 75\s*$", windows_block):
+        reject("native-windows timeout must match the configured 75 minutes")
     with tempfile.TemporaryDirectory(prefix="gbb-macos-timeout-ledger.") as directory:
         timeout_fixture = Path(directory)
         for relative in candidate_workflows:
@@ -2266,6 +2276,7 @@ def _self_test(root: Path, revision: str) -> int:
             ("preview.yml:player-package-smoke-macos", 85),
             ("ci.yml:linux-sanitizers-tests", 55),
             ("ci.yml:native-windows", 60),
+            ("ci.yml:native-windows", 70),
             ("release.yml:candidate-fuzz", 112),
             ("preview.yml:installed-package-smoke-linux-x64", 75),
             ("preview.yml:installed-package-smoke-macos-arm64", 75),
@@ -2313,7 +2324,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 638:
+    if controls != 640:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
