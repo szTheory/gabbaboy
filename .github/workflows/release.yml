@@ -911,6 +911,11 @@ jobs:
           actual_id=$(jq --arg tag "$RELEASE_TAG" -r '.[] | select(.tag_name == $tag) | .id' <<<"$release_json")
           if [[ -n "$RELEASE_ID" ]]; then [[ "$actual_id" == "$RELEASE_ID" ]] || exit 1; fi
           echo "RELEASE_ID=$actual_id" >> "$GITHUB_ENV"
+      - name: Preserve exact source bytes on Windows
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       - name: Check out exact trusted tag source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -1115,6 +1120,7 @@ jobs:
         continue-on-error: true
         env:
           RUN_NONCE: ${{ steps.corpus_run.outputs.run_nonce }}
+          CTEST_PARALLEL_LEVEL: 4
         run: ctest --test-dir build -T Test --no-compress-output --test-output-size-passed 16777216 --output-on-failure --no-tests=error --output-junit "cgb-corpus-ctest-${RUN_NONCE}.xml"
       - name: Build the CGB receipt from this CTest output
         run: python3 -I tests/scripts/verify-cgb-corpus-report.py --from-ctest --build-dir build --receipt build/cgb-corpus-receipt.json

@@ -327,7 +327,8 @@
   "cited_sha": "08e7309aab699333d73f7ffeae58a5332133f242",
   "p50_minutes": "13.87",
   "samples": 1,
-  "provisional": false
+  "provisional": false,
+  "disclosure": "Use step-scoped CTEST_PARALLEL_LEVEL=4 for the same complete CTest command and nonce, matching the qualified rehearsal streams at the same release tree. Preserve all cases, child/test deadlines and the 60-minute outer cap. Historical p50/citation are unchanged; this scheduling alignment is not a serial-duration or speedup claim, and the job body changed after the cited run."
  },
  "release.yml:candidate-fuzz": {
   "timeout_minutes": 147,
@@ -372,7 +373,7 @@
   "p50_minutes": "0.74",
   "samples": 5,
   "provisional": false,
-  "disclosure": "The job body changed after the cited sample; changed this job's body after the cited run."
+  "disclosure": "v0.4.0 run43292806099 Windows131454325192 rejected CRLF policy bytes before upload. Preserve exact Git bytes before checkout, matching native Windows CI. Keep the 35-minute cap, historical p50/citation and package/fixture/consumer guards. The job body changed after the cited run."
  },
  "release.yml:publish-qualified-release": {
   "timeout_minutes": 20,
