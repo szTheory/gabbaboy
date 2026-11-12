@@ -2506,7 +2506,8 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 640:
+    # Preserve the 640 original cases plus 26 profile and four real-Git byte controls.
+    if controls != 670:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
