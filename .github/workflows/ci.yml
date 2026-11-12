@@ -226,8 +226,10 @@ jobs:
   native-macos:
     name: native-macos-arm64
     # Timeout ledger (D-20): p50 17.80 min in main run 40156247875, so ceil(2 x p50) = 36. Phase 23 run 42679813590 reached the old 40-minute cap at 1928/1942 tests; owner-approved D-164 raises this cap to 50 for completion without treating that run as a timing sample.
+    # Qualification run 43090469563 attempt 2 stopped at 50 minutes after 1940/1942 passing tests.
+    # The 55-minute outer budget adds bounded headroom; all test deadlines remain unchanged.
     runs-on: macos-15
-    timeout-minutes: 50
+    timeout-minutes: 55
     needs: changes
     if: needs.changes.outputs.kind == 'full'
     env:

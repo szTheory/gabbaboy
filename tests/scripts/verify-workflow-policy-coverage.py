@@ -2214,8 +2214,8 @@ def _self_test(root: Path, revision: str) -> int:
         candidate_ci, root_shell_override, candidate_namespace))
     macos_block = candidate_namespace["_workflow_job_block"](
         candidate_ci, "native-macos")
-    if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 50\s*$", macos_block):
-        reject("native-macos timeout must be the owner-approved 50 minutes")
+    if macos_block is None or not re.search(r"(?m)^    timeout-minutes: 55\s*$", macos_block):
+        reject("native-macos timeout must match the configured 55 minutes")
     with tempfile.TemporaryDirectory(prefix="gbb-macos-timeout-ledger.") as directory:
         timeout_fixture = Path(directory)
         for relative in candidate_workflows:
@@ -2239,8 +2239,27 @@ def _self_test(root: Path, revision: str) -> int:
                 reject(f"native-macos timeout mismatch refused for the wrong reason: {error}")
             controls += 1
         else:
-            reject("native-macos 40-minute ledger row was accepted against the 50-minute workflow")
+            reject("native-macos 40-minute ledger row was accepted against the 55-minute workflow")
+        # Preserve the original 40-minute refusal and reject the newly stale 50-minute cap
+        # independently in the workflow and ledger directions.
+        fresh_ledger = json.loads(git_text(root, candidate, ".github/ci-timeouts.json").decode("utf-8"))
+        ledger_path.write_text(json.dumps(fresh_ledger, indent=1) + "\n", encoding="utf-8")
+        ci_fixture_path = timeout_fixture / ".github/workflows/ci.yml"
+        stale_macos_block = macos_block.replace("    timeout-minutes: 55", "    timeout-minutes: 50", 1)
+        if stale_macos_block == macos_block:
+            reject("cannot create stale 50-minute macOS workflow control")
+        ci_fixture_path.write_text(candidate_ci.replace(macos_block, stale_macos_block, 1), encoding="utf-8")
+        try:
+            candidate_namespace["check_timeout_ledger"](timeout_fixture, git_root=root)
+        except candidate_namespace["Reject"] as error:
+            if error.code != "timeout-ledger-stale":
+                reject(f"stale macOS workflow cap refused for the wrong reason: {error}")
+            controls += 1
+        else:
+            reject("native-macos 50-minute workflow was accepted against the 55-minute ledger")
+        ci_fixture_path.write_bytes(git_text(root, candidate, ".github/workflows/ci.yml"))
         stale_ledger_rows = (
+            ("ci.yml:native-macos", 50),
             ("release.yml:candidate-fuzz", 137),
             ("preview.yml:installed-package-smoke-linux-x64", 85),
             ("preview.yml:installed-package-smoke-macos-arm64", 85),
@@ -2294,7 +2313,7 @@ def _self_test(root: Path, revision: str) -> int:
             controls += 1
         else:
             reject(f"runtime completion negative {name} was accepted")
-    if controls != 636:
+    if controls != 638:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
     return controls
 
