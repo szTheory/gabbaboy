@@ -2713,6 +2713,157 @@ def _self_test(root: Path, revision: str) -> int:
     # runner regression controls, and four real-Git byte controls.
     if controls != 694:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
+
+    # A recovery's verifier overlay must not dirty the source inspected by the
+    # player's existing checkout guard. Keep the exact required player command,
+    # but execute it from a separate, pristine worktree of the tagged source.
+    release_tree = _parse_workflow_text(
+        git_text(root, candidate, ".github/workflows/release.yml").decode("utf-8"),
+        "release.yml", candidate_namespace)
+    prepare_name = "Prepare pristine tagged source for downloaded player verification"
+    player_name = "Smoke the downloaded player archive from pristine tagged source"
+    core_name = "Smoke the downloaded player archive and relocated C/C++ consumers"
+    prepare_run = (
+        'set -euo pipefail\n'
+        'git worktree add --detach "$RUNNER_TEMP/release-player-source" "$SOURCE_SHA"\n'
+        'mkdir -p "$RUNNER_TEMP/release-player-source/build"\n'
+        'ln -s "$GITHUB_WORKSPACE/build/downloaded-player" '
+        '"$RUNNER_TEMP/release-player-source/build/downloaded-player"')
+    player_command = ('GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" '
+                      'bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player')
+    cleanup_command = 'git worktree remove "$RUNNER_TEMP/release-player-source"'
+
+    def pristine_player_wiring(tree):
+        job = tree["jobs"]["candidate-macos"]
+        for owner in (tree, job):
+            if owner.get("defaults", {}).get("run", {}).get("working-directory"):
+                reject("pristine player source: inherited working directory")
+            if any(key in owner.get("env", {}) for key in ("RUNNER_TEMP", "GITHUB_WORKSPACE")):
+                reject("pristine player source: source-root environment override")
+        steps = job["steps"]
+        selected = []
+        for name in (prepare_name, player_name, core_name):
+            matches = [step for step in steps if step.get("name") == name]
+            if len(matches) != 1:
+                reject("pristine player source: missing or duplicated step")
+            selected.append(matches[0])
+        prepare, player, core = selected
+        if [steps.index(step) for step in selected] != sorted(steps.index(step) for step in selected):
+            reject("pristine player source: step order")
+        for step in selected:
+            if step.get("if") or step.get("continue-on-error") or step.get("env"):
+                reject("pristine player source: conditional or overridden check")
+            if step.get("shell") != "bash":
+                reject("pristine player source: shell")
+        if prepare.get("working-directory") or core.get("working-directory"):
+            reject("pristine player source: original-checkout operations redirected")
+        if prepare.get("run", "").strip() != prepare_run:
+            reject("pristine player source: detached source or artifact link")
+        if player.get("working-directory") != "${{ runner.temp }}/release-player-source":
+            reject("pristine player source: player working directory")
+        if player.get("run", "").strip() != "set -euo pipefail\n" + player_command:
+            reject("pristine player source: player command")
+        if not core.get("run", "").startswith("set -euo pipefail\n" + cleanup_command + "\n"):
+            reject("pristine player source: cleanup boundary")
+        return prepare, player, core
+
+    prepare, player, core = pristine_player_wiring(release_tree)
+    wiring_mutants = (
+        ("missing worktree", prepare_name, "run", prepare_run.replace('git worktree add --detach', 'echo git worktree add --detach')),
+        ("wrong source", prepare_name, "run", prepare_run.replace('"$SOURCE_SHA"', '"$GITHUB_SHA"')),
+        ("missing link", prepare_name, "run", prepare_run.split('\nln -s')[0]),
+        ("wrong linked input", prepare_name, "run", prepare_run.replace('$GITHUB_WORKSPACE/build/downloaded-player', '$RUNNER_TEMP/other-player')),
+        ("original dirty checkout", player_name, "working-directory", "${{ github.workspace }}"),
+        ("echoed player", player_name, "run", "set -euo pipefail\necho " + player_command),
+        ("commented player", player_name, "run", "set -euo pipefail\n# " + player_command),
+        ("conditional player", player_name, "run", "set -euo pipefail\nif false; then\n" + player_command + "\nfi"),
+        ("swallowed failure", player_name, "run", "set -euo pipefail\n" + player_command + " || true"),
+        ("skipped player", player_name, "if", "false"),
+        ("redirected setup", prepare_name, "working-directory", "${{ runner.temp }}"),
+        ("wrong cleanup", core_name, "run", core["run"].replace(cleanup_command, 'git worktree remove "$GITHUB_WORKSPACE"', 1)),
+    )
+    for label, name, key, value in wiring_mutants:
+        mutant = copy.deepcopy(release_tree)
+        step = next(step for step in mutant["jobs"]["candidate-macos"]["steps"] if step.get("name") == name)
+        step[key] = value
+        rejected("pristine player " + label, lambda t=mutant: pristine_player_wiring(t))
+
+    if os.name != "nt":
+        # Exercise the actual historical source guard and actual preparation and
+        # cleanup commands. No player process, native build or network is needed.
+        tagged_sha = "3de1b0e427f37a202be4469dd818266f359c8b20"
+        guard_source = git_text(root, tagged_sha, "tests/scripts/verify-phase3-player.sh").decode("utf-8")
+        guard = re.search(r"(?ms)^verify_checkout\(\) \{\n.*?^\}", guard_source)
+        if guard is None:
+            reject("pristine player source: historical guard unavailable")
+        bash = candidate_namespace["_trusted_bash_executable"]()
+        probe = ('set -euo pipefail\nROOT_DIR="$1"\nEXPECTED_SOURCE_REVISION="$2"\n'
+                 'fail() { printf "ERROR: %s\\n" "$*" >&2; exit 1; }\n' + guard.group(0) +
+                 '\nverify_checkout\nprintf "source=%s state=%s\\n" "$SOURCE_REVISION" "$SOURCE_TREE_STATE"\n')
+        with tempfile.TemporaryDirectory(prefix="gbb-pristine-player-") as directory:
+            scratch = Path(directory)
+            tagged = scratch / "tagged"
+            temporary = scratch / "runner-temp"
+            temporary.mkdir()
+            clean = temporary / "release-player-source"
+            def git_run(*arguments):
+                subprocess.run(["git", "-C", str(root), *arguments], check=True,
+                               capture_output=True, timeout=15)
+            def guard_accept(path, revision=tagged_sha):
+                result = subprocess.run([bash, "-c", probe, "guard", str(path), revision],
+                                        capture_output=True, text=True, timeout=15)
+                if result.returncode != 0:
+                    reject(result.stderr.strip())
+                if "state=clean" not in result.stdout:
+                    reject("pristine player source: missing clean result")
+            git_run("worktree", "add", "--detach", str(tagged), tagged_sha)
+            try:
+                guard_accept(tagged)
+                artifact = tagged / "build/downloaded-player/archive-witness"
+                artifact.parent.mkdir(parents=True)
+                artifact.write_bytes(b"unchanged downloaded bytes")
+                final = temporary / "release-player-downloaded"
+                final.mkdir()
+                (final / "output-witness").write_bytes(b"verified output survives cleanup")
+                env = dict(os.environ, GITHUB_SHA=candidate, SOURCE_SHA=tagged_sha,
+                           GITHUB_WORKSPACE=str(tagged), RUNNER_TEMP=str(temporary))
+                overlay = next(step for step in release_tree["jobs"]["candidate-macos"]["steps"]
+                               if step.get("name") == "Overlay the trusted release-candidate verifiers from the workflow commit")
+                subprocess.run([bash, "-c", overlay["run"]], cwd=tagged, env=env,
+                               capture_output=True, check=True, timeout=15)
+                rejected_as("real dirty overlay", "source tree or index has changes", lambda: guard_accept(tagged))
+                overlay_bytes = (tagged / "tests/scripts/verify-release-candidate.sh").read_bytes()
+                subprocess.run([bash, "-c", prepare["run"]], cwd=tagged, env=env,
+                               capture_output=True, check=True, timeout=15)
+                guard_accept(clean)
+                rejected_as("wrong expected source", "does not match expected", lambda: guard_accept(clean, candidate))
+                changed = clean / "src/core/gabbaboy.c"
+                original = changed.read_bytes()
+                changed.write_bytes(original + b"\nmutated\n")
+                rejected_as("unknown core mutation", "source tree or index has changes", lambda: guard_accept(clean))
+                subprocess.run(["git", "-C", str(clean), "add", "src/core/gabbaboy.c"], check=True, timeout=15)
+                changed.write_bytes(original)
+                rejected_as("index mutation", "source tree or index has changes", lambda: guard_accept(clean))
+                subprocess.run(["git", "-C", str(clean), "restore", "--source", tagged_sha,
+                                "--staged", "--worktree", "src/core/gabbaboy.c"], check=True, timeout=15)
+                policy = clean / "cmake/FixtureAdmissionPolicy.json"
+                policy_bytes = policy.read_bytes()
+                policy.unlink()
+                rejected_as("missing policy", "source tree or index has changes", lambda: guard_accept(clean))
+                policy.write_bytes(policy_bytes)
+                guard_accept(clean)
+                if (clean / "build/downloaded-player/archive-witness").read_bytes() != artifact.read_bytes():
+                    reject("pristine player source: downloaded bytes not shared")
+                subprocess.run([bash, "-c", cleanup_command], cwd=tagged, env=env,
+                               capture_output=True, check=True, timeout=15)
+                if clean.exists() or artifact.read_bytes() != b"unchanged downloaded bytes" \
+                        or (final / "output-witness").read_bytes() != b"verified output survives cleanup" \
+                        or (tagged / "tests/scripts/verify-release-candidate.sh").read_bytes() != overlay_bytes:
+                    reject("pristine player source: cleanup changed another namespace")
+            finally:
+                for path in (clean, tagged):
+                    if path.exists():
+                        git_run("worktree", "remove", "--force", str(path))
     return controls
 
 

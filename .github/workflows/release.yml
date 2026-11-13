@@ -859,11 +859,24 @@ jobs:
           cp build/downloaded-player/gabbaboy-preview-macos-arm64-build-receipt.json build/downloaded-player/build-receipt.json
           mkdir -p build/downloaded-core build/consumer-work
           gh release download "$RELEASE_TAG" --repo "$GH_REPO" --pattern gabbaboy-core-macos-arm64.tar.gz --pattern gabbaboy-core-macos-arm64.tar.gz.sha256 --pattern gabbaboy-build-receipt-macos-arm64.json --dir build/downloaded-core
-      - name: Smoke the downloaded player archive and relocated C/C++ consumers
+      - name: Prepare pristine tagged source for downloaded player verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/release-player-source" "$SOURCE_SHA"
+          mkdir -p "$RUNNER_TEMP/release-player-source/build"
+          ln -s "$GITHUB_WORKSPACE/build/downloaded-player" "$RUNNER_TEMP/release-player-source/build/downloaded-player"
+      - name: Smoke the downloaded player archive from pristine tagged source
+        working-directory: ${{ runner.temp }}/release-player-source
         shell: bash
         run: |
           set -euo pipefail
           GBB_VERIFIED_OUTPUT_DIR="$RUNNER_TEMP/release-player-downloaded" bash tests/scripts/verify-phase3-player.sh --verify-package build/downloaded-player
+      - name: Smoke the downloaded player archive and relocated C/C++ consumers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree remove "$RUNNER_TEMP/release-player-source"
           git show "${GITHUB_SHA}:.github/scripts/verify-release-gates.sh" > "$RUNNER_TEMP/verify-release-gates.sh"
           bash "$RUNNER_TEMP/verify-release-gates.sh" --check-digest-sidecar \
             build/downloaded-core/gabbaboy-core-macos-arm64.tar.gz.sha256 \
