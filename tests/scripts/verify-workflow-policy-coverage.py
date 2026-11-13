@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 from pathlib import Path
 
@@ -206,8 +207,35 @@ def verify_reviewed_policy_identity(candidate: bytes, reviewed: bytes | None) ->
     reviewed_digest = hashlib.sha256(reviewed).hexdigest()
     if reviewed_digest != REVIEWED_POLICY_SHA256:
         reject(f"reviewed workflow-policy source identity has the wrong digest: {reviewed_digest}")
-    if candidate != reviewed:
-        reject("candidate workflow-policy source differs from the exact reviewed snapshot")
+    # Preserve the complete historical reviewed blob, allowing only the missing
+    # publisher option spelling and the player's existing archive wrapper. The
+    # extracted inner tree still reaches the unchanged product policy checker.
+    original = b'parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],'
+    corrected = b'parser.add_argument("--root", "--repo-root", type=Path, default=Path(__file__).resolve().parents[2],'
+    if reviewed.count(original) != 1:
+        reject("reviewed workflow-policy root argument is missing or ambiguous")
+    expected = reviewed.replace(original, corrected, 1)
+    old_product_root = (
+        b'        created = True\n'
+        b'        result = subprocess.run(\n'
+        b'            [sys.executable, "-I", str(checker), "--check-product-tree", str(destination),'
+    )
+    new_product_root = (
+        b'        created = True\n'
+        b'        product_root = destination\n'
+        b'        if layout == "player":\n'
+        b'            product_root = destination / "installed-prefix"\n'
+        b'            if (sorted(path.name for path in destination.iterdir()) != ["installed-prefix"]\n'
+        b'                    or not product_root.is_dir() or product_root.is_symlink()):\n'
+        b'                raise Reject("product-archive-player-prefix", "player archive must contain only its installed-prefix directory")\n'
+        b'        result = subprocess.run(\n'
+        b'            [sys.executable, "-I", str(checker), "--check-product-tree", str(product_root),'
+    )
+    if expected.count(old_product_root) != 1:
+        reject("reviewed workflow-policy product root is missing or ambiguous")
+    expected = expected.replace(old_product_root, new_product_root, 1)
+    if candidate != expected:
+        reject("candidate workflow-policy source differs from the exact reviewed publisher corrections")
 
 
 def git_text(root: Path, revision: str, path: str) -> bytes:
@@ -1865,6 +1893,77 @@ def _self_test(root: Path, revision: str) -> int:
     verify_source_identity(root, candidate_source)
     verify_archive_helper_identity(root, candidate_helper)
 
+    missing_alias = candidate_source.replace(b'"--root", "--repo-root", type=Path', b'"--root", type=Path', 1)
+    rejected("missing publisher root alias", lambda: verify_reviewed_policy_identity(missing_alias, reviewed))
+    for label, replacement in (
+        ("redirected publisher root alias", b'"--root", "--other-root", type=Path'),
+        ("extra publisher root alias", b'"--root", "--repo-root", "--other-root", type=Path'),
+        ("redirected publisher root destination", b'"--root", "--repo-root", dest="other_root", type=Path'),
+    ):
+        mutant = candidate_source.replace(b'"--root", "--repo-root", type=Path', replacement, 1)
+        if mutant == candidate_source:
+            reject(f"{label} fixture did not change the candidate")
+        rejected(label, lambda mutant=mutant: verify_reviewed_policy_identity(mutant, reviewed))
+    for label, original, replacement in (
+        ("player wrapper applied to core", b'if layout == "player":', b'if layout == "core":'),
+        ("player outer payload ignored", b'sorted(path.name for path in destination.iterdir()) != ["installed-prefix"]', b'False'),
+        ("player checker uses outer tree", b'"--check-product-tree", str(product_root)', b'"--check-product-tree", str(destination)'),
+    ):
+        mutant = candidate_source.replace(original, replacement, 1)
+        if mutant == candidate_source:
+            reject(f"{label} fixture did not change the candidate")
+        rejected(label, lambda mutant=mutant: verify_reviewed_policy_identity(mutant, reviewed))
+
+    # Run both actual CLI spellings with the same explicit trusted root. The
+    # deliberately missing archive must reach the unchanged archive validator,
+    # rather than fail parsing or choose another repository's fixture checker.
+    with tempfile.TemporaryDirectory(prefix="gbb-publisher-root-alias-") as directory:
+        scratch = Path(directory)
+        results = []
+        for flag in ("--root", "--repo-root"):
+            result = subprocess.run(
+                [python_executable, "-I", str(root / POLICY_PATH), "--check-product-archive",
+                 str(scratch / "missing.tar.gz"), "--expected-name", "missing.tar.gz",
+                 "--layout", "core", flag, str(root), "--destination", str(scratch / "extracted")],
+                capture_output=True, text=True, check=False, timeout=15)
+            if result.returncode != 1 or "REJECT product-archive-size:" not in result.stderr:
+                reject(f"publisher root alias {flag} did not reach the trusted archive validator: {result.stderr}")
+            if (scratch / "extracted").exists():
+                reject(f"publisher root alias {flag} left an extraction destination")
+            results.append((result.returncode, result.stdout, result.stderr))
+            wrong_root = subprocess.run(
+                [python_executable, "-I", str(root / POLICY_PATH), "--check-product-archive",
+                 str(scratch / "missing.tar.gz"), "--expected-name", "missing.tar.gz",
+                 "--layout", "core", flag, str(scratch / "wrong-root"),
+                 "--destination", str(scratch / "extracted")],
+                capture_output=True, text=True, check=False, timeout=15)
+            if wrong_root.returncode != 1 or "REJECT product-archive-trusted-checker:" not in wrong_root.stderr:
+                reject(f"publisher root alias {flag} ignored the explicit checker root: {wrong_root.stderr}")
+        if results[0] != results[1]:
+            reject("publisher root aliases selected different validation behavior")
+
+        # Use the real archive CLI and extraction boundary, including rejection
+        # of unchecked files outside the one supported player wrapper.
+        for label, members, diagnostic in (
+            ("wrapped player reaches inner policy", [("installed-prefix", True)], "product-path-missing"),
+            ("flat player rejected", [("bin", True)], "product-archive-player-prefix"),
+            ("player outer payload rejected", [("installed-prefix", True), ("outside", False)], "product-archive-player-prefix"),
+            ("player file wrapper rejected", [("installed-prefix", False)], "product-archive-player-prefix"),
+        ):
+            archive = scratch / "player.tar.gz"
+            with tarfile.open(archive, "w:gz") as bundle:
+                for name, directory in members:
+                    info = tarfile.TarInfo(name)
+                    info.type = tarfile.DIRTYPE if directory else tarfile.REGTYPE
+                    bundle.addfile(info)
+            result = subprocess.run(
+                [python_executable, "-I", str(root / POLICY_PATH), "--check-product-archive", str(archive),
+                 "--expected-name", archive.name, "--layout", "player", "--repo-root", str(root),
+                 "--destination", str(scratch / "extracted")],
+                capture_output=True, text=True, check=False, timeout=15)
+            if result.returncode != 1 or diagnostic not in result.stderr or (scratch / "extracted").exists():
+                reject(f"{label}: unexpected result or extraction residue: {result.stderr}")
+
     reviewed_helper = reviewed_archive_helper_source(root)
     changed_helper = candidate_helper.replace(
         b"request_size = min(size, self.max_request, remaining + 1)",
@@ -2711,7 +2810,8 @@ def _self_test(root: Path, revision: str) -> int:
             reject(f"runtime completion negative {name} was accepted")
     # Preserve the 640 original cases plus both recovery profiles, the receipt
     # runner regression controls, and four real-Git byte controls.
-    if controls != 694:
+    # Retain the original 694 refusals plus the seven publisher identity mutants.
+    if controls != 701:
         reject(f"workflow-policy coverage self-test has an unexpected negative-control count: {controls}")
 
     # A recovery's verifier overlay must not dirty the source inspected by the
