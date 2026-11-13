@@ -828,6 +828,52 @@ def _synthetic_core_product(scratch):
     return checker, repo, product, inventory, forbidden_bytes, rules, source_contract
 
 
+def _release_candidate_notice_path_controls(scratch, repo, product):
+    """Exercise the real wrapper from outside its judge checkout, without a native build."""
+    source_root = pathlib.Path(__file__).resolve().parents[2]
+    for relative in ("tests/scripts/verify-release-candidate.sh",
+                     "tests/scripts/verify-v02-source-archive.py",
+                     "tests/scripts/verify-fixture-admission.py", "cmake/VerifyReleaseReceipt.cmake"):
+        target = repo / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_root / relative, target)
+    downloaded = repo / "build/linux-product"
+    downloaded.mkdir(parents=True)
+    archive = downloaded / "gabbaboy-core-linux-x64.tar.gz"
+    archive.write_bytes(tar_bytes(product, None, root=None))
+    notice = downloaded / "gabbaboy-notices.txt"
+    notice.write_bytes((repo / "LICENSE").read_bytes())
+    wrapper = repo / "tests/scripts/verify-release-candidate.sh"
+    # Git Bash is the supported shell on Windows; avoid the unrelated WSL launcher.
+    if os.name == "nt":
+        git_exec = pathlib.Path(subprocess.run(["git", "--exec-path"], check=True,
+                                  capture_output=True, text=True).stdout.strip()).resolve()
+        bash = str(git_exec.parents[2] / "bin/bash.exe")
+    else:
+        bash = "bash"
+
+    def run(sidecar, expected):
+        result = subprocess.run(
+            [bash, wrapper.as_posix(), "--verify", "missing-candidate.json",
+             archive.relative_to(scratch).as_posix(), "0.4.0", "v0.4.0", "a" * 40, "test-release",
+             sidecar.as_posix(), "missing-source.json", "missing-build.json"],
+            cwd=scratch, capture_output=True, text=True, timeout=30)
+        output = result.stdout + result.stderr
+        if result.returncode == 0 or expected not in output:
+            raise SystemExit(f"release notice path control failed: expected {expected!r}; "
+                             f"exit={result.returncode}; output={output!r}")
+
+    # Reaching the unchanged receipt gate proves the real archive/notice policy passed.
+    receipt_rejection = "Source, build, or downloaded-byte receipt or candidate asset is missing"
+    run(notice.relative_to(scratch), receipt_rejection)
+    if os.name != "nt":
+        notice.unlink()
+        notice.symlink_to(repo / "LICENSE")
+        run(notice.relative_to(scratch), "product-notice-sidecar-invalid")
+        notice.unlink()
+    print("PASS: release wrapper caller-relative notice; missing receipts and symlinked notices refused")
+
+
 def check_product_notice_contract(content):
     try:
         text = content.decode("utf-8", "strict") if isinstance(content, bytes) else content
@@ -1535,6 +1581,7 @@ def self_test():
         # independent of mutable files in the checkout under test.
         product_checker, product_repo, good_product, good_inventory, forbidden_product_bytes, product_rules, source_contract = \
             _synthetic_core_product(scratch)
+        _release_candidate_notice_path_controls(scratch, product_repo, good_product)
 
         # A release retry must use the trusted workflow-commit checker even when the tagged
         # workspace sibling differs. Exercise the CLI with a deliberately unusable sibling.

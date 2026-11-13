@@ -153,8 +153,12 @@ if [[ "$MODE" == --verify || "$MODE" == --verify-final ]]; then
   fixture_checker="$ROOT_DIR/tests/scripts/verify-fixture-admission.py"
   [[ -f "$fixture_checker" ]] || fail 'trusted fixture admission checker is unavailable'
   fixture_checker_args=(--fixture-checker "$fixture_checker")
+  # Callers may run outside the judge checkout (the final publisher uses trusted/).
+  # Anchor the sidecar to their working directory before policy applies its repo root.
+  # Do not resolve links: the product policy must still reject a symlinked sidecar.
+  notice_file=$(python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$8")
   python3 -I "$SOURCE_ARCHIVE_CHECKER" --check-product-archive "$3" --repo-root "$ROOT_DIR" \
-    --notice-sidecar "$8" "${fixture_checker_args[@]}" || fail 'product archive or core notice sidecar failed exact policy'
+    --notice-sidecar "$notice_file" "${fixture_checker_args[@]}" || fail 'product archive or core notice sidecar failed exact policy'
   if [[ "$MODE" == --verify-final ]]; then
     bash "$ROOT_DIR/tests/scripts/verify-release-candidate.sh" --verify \
       "$2" "$3" "$4" "$5" "$6" "$7" "$8" "$9" "${10}" \
