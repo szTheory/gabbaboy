@@ -247,8 +247,14 @@ def check_product_archive(archive: Path, expected_name: str, layout: str,
     try:
         _extract_product_archive(archive, destination)
         created = True
+        product_root = destination
+        if layout == "player":
+            product_root = destination / "installed-prefix"
+            if (sorted(path.name for path in destination.iterdir()) != ["installed-prefix"]
+                    or not product_root.is_dir() or product_root.is_symlink()):
+                raise Reject("product-archive-player-prefix", "player archive must contain only its installed-prefix directory")
         result = subprocess.run(
-            [sys.executable, "-I", str(checker), "--check-product-tree", str(destination),
+            [sys.executable, "-I", str(checker), "--check-product-tree", str(product_root),
              "--layout", layout, "--repo-root", str(repo_root)],
             cwd=repo_root, capture_output=True, text=True, check=False, timeout=90,
         )
@@ -6532,7 +6538,7 @@ def main() -> int:
                         help="write completed stable control IDs after a successful --self-test")
     parser.add_argument("--build-dir", type=Path, default=None,
                         help="configured CMake build tree used by product archive controls")
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2],
+    parser.add_argument("--root", "--repo-root", type=Path, default=Path(__file__).resolve().parents[2],
                         help="tree whose .github/workflows files are judged as data")
     parser.add_argument("--git-root", type=Path, default=None,
                         help="git object database for citation checks (default: --root)")
