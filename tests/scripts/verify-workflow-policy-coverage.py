@@ -1942,14 +1942,36 @@ def _self_test(root: Path, revision: str) -> int:
         if results[0] != results[1]:
             reject("publisher root aliases selected different validation behavior")
 
-        # Use the real archive CLI and extraction boundary, including rejection
-        # of unchecked files outside the one supported player wrapper.
-        for label, members, diagnostic in (
-            ("wrapped player reaches inner policy", [("installed-prefix", True)], "product-path-missing"),
-            ("flat player rejected", [("bin", True)], "product-archive-player-prefix"),
-            ("player outer payload rejected", [("installed-prefix", True), ("outside", False)], "product-archive-player-prefix"),
-            ("player file wrapper rejected", [("installed-prefix", False)], "product-archive-player-prefix"),
+        # Exercise the real CLI and bounded extractor with an authored trusted
+        # checker that records the selected tree. This routing control needs no
+        # Git baseline scan; the existing product-policy controls judge content.
+        trusted_root = scratch / "trusted-root"
+        checker_root = trusted_root.resolve()
+        extraction_root = (scratch / "extracted").resolve()
+        witness_checker = trusted_root / "tests/scripts/verify-fixture-admission.py"
+        witness_checker.parent.mkdir(parents=True)
+        witness_path = scratch / "selected-player-tree.json"
+        witness_checker.write_text(
+            "import argparse, json, sys\nfrom pathlib import Path\n"
+            "parser = argparse.ArgumentParser()\n"
+            "parser.add_argument('--check-product-tree', required=True)\n"
+            "parser.add_argument('--layout', required=True)\n"
+            "parser.add_argument('--repo-root', required=True)\n"
+            "args = parser.parse_args()\n"
+            "tree = Path(args.check_product_tree)\n"
+            "record = {'tree': str(tree.resolve()), 'layout': args.layout,\n"
+            "          'repo_root': str(Path(args.repo_root).resolve()),\n"
+            "          'argv': sys.argv[1:], 'real_directory': tree.is_dir() and not tree.is_symlink(),\n"
+            "          'members': sorted(path.name for path in tree.iterdir())}\n"
+            f"Path({str(witness_path)!r}).write_text(json.dumps(record))\n"
+        )
+        for label, members, expected_exit, diagnostic in (
+            ("wrapped player selects inner tree", [("installed-prefix", True)], 0, ""),
+            ("flat player rejected", [("bin", True)], 1, "product-archive-player-prefix"),
+            ("player outer payload rejected", [("installed-prefix", True), ("outside", False)], 1, "product-archive-player-prefix"),
+            ("player file wrapper rejected", [("installed-prefix", False)], 1, "product-archive-player-prefix"),
         ):
+            witness_path.unlink(missing_ok=True)
             archive = scratch / "player.tar.gz"
             with tarfile.open(archive, "w:gz") as bundle:
                 for name, directory in members:
@@ -1958,11 +1980,21 @@ def _self_test(root: Path, revision: str) -> int:
                     bundle.addfile(info)
             result = subprocess.run(
                 [python_executable, "-I", str(root / POLICY_PATH), "--check-product-archive", str(archive),
-                 "--expected-name", archive.name, "--layout", "player", "--repo-root", str(root),
+                 "--expected-name", archive.name, "--layout", "player", "--repo-root", str(trusted_root),
                  "--destination", str(scratch / "extracted")],
                 capture_output=True, text=True, check=False, timeout=15)
-            if result.returncode != 1 or diagnostic not in result.stderr or (scratch / "extracted").exists():
+            if result.returncode != expected_exit or diagnostic not in result.stderr or (scratch / "extracted").exists():
                 reject(f"{label}: unexpected result or extraction residue: {result.stderr}")
+            if expected_exit == 0:
+                expected_witness = {"tree": str(extraction_root / "installed-prefix"),
+                                    "layout": "player", "repo_root": str(checker_root), "members": [],
+                                    "real_directory": True,
+                                    "argv": ["--check-product-tree", str(extraction_root / "installed-prefix"),
+                                             "--layout", "player", "--repo-root", str(checker_root)]}
+                if not witness_path.is_file() or json.loads(witness_path.read_text()) != expected_witness:
+                    reject("wrapped player did not select the exact inner tree and trusted checker root")
+            elif witness_path.exists():
+                reject(f"{label}: unqualified player tree reached the checker")
 
     reviewed_helper = reviewed_archive_helper_source(root)
     changed_helper = candidate_helper.replace(
