@@ -28,6 +28,10 @@ BASELINE = "f2542c8053db1e5183e0dd0e8702e77afbb2eb59"
 ARCHIVE_HARNESS_PATH = "tests/scripts/verify-v02-source-archive.py"
 ARCHIVE_HARNESS_PIN = "b50f0c10e0794591a212edbfd083f10084805532"
 ARCHIVE_HARNESS_SHA256 = "5a3083b6a7d32c0692672645564241a81d9be0b0939c9ee198afb951f43f183a"
+# The notice-path regression changes only the self-test harness. Preserve the
+# earlier reviewed bytes too: the permanent release tag still contains them.
+NOTICE_PATH_HARNESS_PIN = "5d386d9ddea41c8529a3dadc90b4855b703e383d"
+NOTICE_PATH_HARNESS_SHA256 = "046840fc3754e0c7d1c687534c04d796f15fe39ff8e8d5f2ee4cef9f3f8c657e"
 CHECKER = "tests/scripts/verify-diagnostic-admission.py"
 ASSESSMENT = "tests/external/diagnostic-assessment.json"
 INVENTORY = "tests/external/gbmicrotest-inventory.json"
@@ -854,6 +858,9 @@ def validate_preserved_path(path: str, raw: bytes | None, root: pathlib.Path) ->
         return
     if path == ARCHIVE_HARNESS_PATH and raw == reviewed_archive_harness(root):
         return
+    if path == ARCHIVE_HARNESS_PATH and raw == reviewed_archive_harness(
+            root, NOTICE_PATH_HARNESS_PIN, NOTICE_PATH_HARNESS_SHA256):
+        return
     raise Reject(f"source-package-boundary-changed:{path}")
 
 
@@ -1306,6 +1313,15 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
     reviewed = dict(preserved_baseline)
     reviewed[ARCHIVE_HARNESS_PATH] = reviewed_archive_harness(repo)
     validate_preserved(reviewed, repo)
+    notice_path_reviewed = dict(reviewed)
+    notice_path_reviewed[ARCHIVE_HARNESS_PATH] = reviewed_archive_harness(
+        repo, NOTICE_PATH_HARNESS_PIN, NOTICE_PATH_HARNESS_SHA256)
+    validate_preserved(notice_path_reviewed, repo)
+    notice_path_mutated = dict(notice_path_reviewed)
+    notice_path_mutated[ARCHIVE_HARNESS_PATH] += b"\nmutated\n"
+    expect_reject(lambda: validate_preserved(notice_path_mutated, repo),
+                  f"source-package-boundary-changed:{ARCHIVE_HARNESS_PATH}",
+                  "mutated-notice-path-harness")
     for path in PRESERVED:
         changed = dict(reviewed)
         changed[path] += b"\nmutated\n"
@@ -1320,6 +1336,12 @@ def self_test(snapshot: dict[str, bytes], controls: bool,
                   "source-package-review-pin-unavailable", "unavailable-harness-pin")
     expect_reject(lambda: reviewed_archive_harness(repo, digest="0" * 64),
                   "source-package-review-pin-digest-mismatch", "mismatched-harness-pin")
+    expect_reject(lambda: reviewed_archive_harness(
+        repo, revision="0" * 40, digest=NOTICE_PATH_HARNESS_SHA256),
+        "source-package-review-pin-unavailable", "unavailable-notice-path-harness-pin")
+    expect_reject(lambda: reviewed_archive_harness(
+        repo, revision=NOTICE_PATH_HARNESS_PIN, digest="0" * 64),
+        "source-package-review-pin-digest-mismatch", "mismatched-notice-path-harness-pin")
     boundary = minimal_boundary()
     value = dict(boundary)
     value[BOUNDARY_PATHS[-1]] = value[BOUNDARY_PATHS[-1]].replace(
