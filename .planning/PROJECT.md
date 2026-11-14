@@ -129,7 +129,7 @@ Run Game Boy software faithfully through a deterministic, understandable core th
 
 ### Active
 
-All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). v0.4 requirements and status are tracked in [REQUIREMENTS.md](REQUIREMENTS.md); Phase 23 release evidence (REL-01) remains pending.
+All v0.3 requirements are validated in the [requirements archive](milestones/v0.3-REQUIREMENTS.md). v0.4 requirements and status are tracked in [REQUIREMENTS.md](REQUIREMENTS.md); Phase 23 release evidence (REL-01) is complete against qualified v0.4.0 publication/readback; FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending.
 
 Ongoing project principles: dependency-light C API with explicit contracts; headless core independent of the player; reproducible tests, sanitizers, fuzzing, and baselines; tested artifacts through PR and release automation; source-linked decisions, current docs, and transferable lessons.
 

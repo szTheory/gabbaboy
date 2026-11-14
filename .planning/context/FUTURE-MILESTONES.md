@@ -1,14 +1,25 @@
 # Rolling product roadmap
 
-Reviewed: 2026-10-31 · Direction revision: 7 · Last completed milestone: **v0.3 Save States & Host Contract** (Phases 16–19); v0.4 roadmap is owner-approved.
+Reviewed: 2026-11-14 · Direction revision: 8 · Last completed milestone: **v0.3 Save States & Host Contract** (Phases 16–19); v0.4 release is qualified; milestone audit remains owner-controlled.
 
-This is revisable direction, not authorization to advance. [ROADMAP.md](../ROADMAP.md) is the execution contract and has detailed phases for the active milestone only. Planning milestone numbers are not package versions. The kickoff evidence is [research/v0.3/SUMMARY.md](../research/v0.3/SUMMARY.md); the boundary refresh is [MILESTONE-BOUNDARY-LESSONS.md](../research/v0.3/MILESTONE-BOUNDARY-LESSONS.md). v0.3.0 is published and v0.3 archived with owner-approved overrides and nonblocking deferrals. v0.4 Evidence Floor is now selected for planning; only its approved roadmap authorizes later phase work.
+This is revisable direction, not authorization to advance. [ROADMAP.md](../ROADMAP.md) is the execution contract and has detailed phases for the active milestone only. Planning milestone numbers are not package versions. The kickoff evidence is [research/v0.3/SUMMARY.md](../research/v0.3/SUMMARY.md); the boundary refresh is [MILESTONE-BOUNDARY-LESSONS.md](../research/v0.3/MILESTONE-BOUNDARY-LESSONS.md). v0.3.0 is published and v0.3 archived with owner-approved overrides and nonblocking deferrals. v0.4 Evidence Floor has delivered its scoped qualified release and explicit no-go evidence; its milestone audit is next, and no subsequent phase or milestone is authorized.
+
+
+## Phase 23 — qualified v0.4.0 direction boundary
+
+The observed v0.4.0 outcome is the qualified publication at permanent source 3de1b0e427f37a202be4469dd818266f359c8b20, judged by actual trusted control fbea1e2cc70f7c2ab9ea5820fa92ca18ddf997e8 and successful publisher 43526085579 attempt 1. [23-EVIDENCE.md](../phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md) records fresh public 22 readback, unchanged original 20 tuples/notes, exact source/receipt checks and actual consumers. This is delivered software evidence, not a milestone audit or new scheduling authority. The next owner-controlled command is /gsd-audit-milestone.
+
+FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. Potion Panic and µCity retain their exact source/component-rights no-go reasons; no license prohibition is inferred. Diagnostics remain 513 named cases, seven unresolved gates, zero newly admitted/executed real fixtures. RM-005's admitted-oracle prerequisite is still unmet: publication alone does not qualify PPU timing. Hardware, perception, general games, Linux player, Steam Deck and live Playstead remain unqualified; unsigned/not-notarized status and existing software-model scope stay explicit.
+
+The source-bound six-core/Playstead XFER scan in [LESSONS.md](LESSONS.md) corroborates current artifact/source/attempt and draft-ID safety. Playstead's separate archive/executable hashes and app-level wiring tests are a conditional future RM-020 input, not proof of GabbaBoy integration; RM-020 stays parked. No source was copied and no sibling test was run.
+
+Measured G5 Windows CTest 66.20 minutes and product-S corpus 42.65 minutes identify remaining critical waits. The already-qualified deterministic reductions remove duplicate version-window positives and irrelevant routing-baseline scans while preserving assertions and limits. Current CI pushes only main, so the old all-branch-push description in RM-025 is historical evidence, not a remedy to repeat. RM-025 remains parked with its existing trigger/disposition, and RM-032 remains proposed/opt-in; neither is reopened or promoted here. Batch restoration of known immutable refs and platform-appropriate public-byte checks are now recorded as a local readback/process lesson. No new cache, concurrency, dependency, publisher, phase or milestone is introduced.
 
 ## Horizons and planning depth
 
 | Horizon | Planning depth | Milestones |
 |---|---|---|
-| Immediate | Active milestone initialized; roadmap approved; Phase 20 not yet planned | committed v0.4 |
+| Immediate | Qualified v0.4.0 and Phase 23 closure; owner-controlled milestone audit next | delivered v0.4 scope; audit pending |
 | Near | Outcome, scope direction, acceptance direction, triggers | v0.4–v0.5 |
 | Mid | Outcome and promotion trigger | v0.6–v0.8 |
 | Long | Outcome and the evidence that would schedule it | v1.0 and later |
@@ -60,7 +71,7 @@ Ids `RM-NNN` are stable and never reused.
 
 | ID | Status | Milestone | Outcome | Promotion trigger | Alternative considered |
 |---|---|---|---|---|---|
-| RM-004 | committed | **v0.4 Evidence Floor** | <ul><li>The first CGB game-level evidence, or a re-justified absence.</li><li>A CGB RGB555-aware progress path in the existing acceptance harness, with a guest predicate and negative controls.</li><li>Font-substituted dmg/cgb-acid2 derivatives and gbmicrotest admission.</li><li>A scene-first, agent-owned feedback-to-regression loop.</li></ul> | Roadmap approved; delivery and exit evidence are tracked in active ROADMAP.md | Doing PPU timing first was rejected because the timing work needs these oracles in place first |
+| RM-004 | delivered | **v0.4 Evidence Floor — scoped outcome, audit pending** | <ul><li>CGB RGB555 progress/scene contracts delivered.</li><li>Both named game candidates have source/rights no-go records.</li><li>Diagnostics remain metadata-only: seven unresolved gates, zero new real admissions/executions.</li><li>Qualified v0.4.0 exposes these limits; four fixture/rights/diagnostic requirements remain Pending.</li></ul> | Owner-controlled milestone audit reconciles the approved scope; no new phase starts | PPU timing still requires admitted oracles; the unmet admission trigger is not made true by publication |
 | RM-032 | proposed | v0.4 | **Release-tooling candidates deferred by Phase 19:**<ul><li>GitHub immutable releases with `gh release verify` (enable only before a window opens).</li><li>An optional ruleset protecting `v*` tags.</li><li>SLSA build provenance (needs a new action; weigh it against copy-over-dependency).</li><li>Rename the `v02-*` evidence names to version-agnostic names (D-16).</li><li>`bump-minor-pre-major` in release-please-config.json (D-03).</li><li>Move the paired-timing baseline off v0.1.0.</li></ul> | v0.4 kickoff, before its release window | Doing them in v0.3.0 was rejected: each is an unrehearsed change to the publish path or to the evidence names (19-CONTEXT Deferred Ideas) |
 | RM-005 | proposed | **v0.5 DMG PPU Timing** | DMG raster effects render correctly within a declared corpus: pixel FIFO and fetcher, mode-3 length, Mealybug DMG, Mooneye `ppu/` | RM-004 oracles admitted. Perf stays within the RM-003 budget | Landing behind a profile flag, with the old renderer kept as a reference, is the fallback if over budget |
 | RM-009 | proposed | **Near-term libretro core candidate; milestone slot undecided** | A libretro adapter with globals confined to the adapter and states via STATE-01, followed by a real Steam Deck/RetroArch path check | The owner has concrete Steam Deck interest. Keep it out of v0.4; if the owner later schedules it earlier, explicitly trade away acid2/gbmicrotest admission and delay PPU-timing readiness. The v0.4 default is optional direct SSH/native exploration with no support claim | A desktop build or another emulator on the Deck does not qualify GabbaBoy there |
