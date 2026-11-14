@@ -1,9 +1,9 @@
 ---
 status: complete
 phase: GB-23-qualified-v0-4-0-release
-source: 23-01-SUMMARY.md, 23-02-SUMMARY.md, 23-03-SUMMARY.md, 23-04-SUMMARY.md, 23-05-SUMMARY.md, 23-06-SUMMARY.md, 23-07-SUMMARY.md, 23-09-SUMMARY.md
-started: 2026-11-14T00:36:32.177870+00:00
-updated: 2026-11-14T00:36:32.177870+00:00
+source: 23-01-SUMMARY.md, 23-02-SUMMARY.md, 23-03-SUMMARY.md, 23-04-SUMMARY.md, 23-05-SUMMARY.md, 23-06-SUMMARY.md, 23-07-SUMMARY.md, 23-08-SUMMARY.md, 23-09-SUMMARY.md
+started: 2026-11-14T00:56:49.600763+00:00
+updated: 2026-11-14T00:56:49.600763+00:00
 ---
 
 ## Automated Evidence
@@ -12,13 +12,17 @@ updated: 2026-11-14T00:36:32.177870+00:00
 
 The actual qualified v0.4.0 publication is release 443425157 at permanent source 3de1b0e427f37a202be4469dd818266f359c8b20. Trusted control fbea1e2cc70f7c2ab9ea5820fa92ca18ddf997e8 ran successful publisher 43526085579 attempt 1. [23-EVIDENCE.md](23-EVIDENCE.md) records the public source/run/receipt/artifact links, actual native full inventories, actual S corpus, notices, all 22 public byte identities, preserved original 20 and exact prepublish inventory. Actual native platform consumers bind those exact hashes; fresh public macOS consumers and installed-host continuation also pass. All four product positives and four licensed-game insertion refusals pass. Source archive and all six owner evidence families reconcile.
 
-This is Plan 23-06 release-evidence closure over the summaries that currently exist; it does not establish pending Plan 23-08 or final nine-plan acceptance. Final all-nine-summary, lesson/boundary and protected closeout evidence will be added only after those tasks execute.
+This final software closure includes exactly all nine completed Phase 23 summaries. Lesson and boundary facts are tied to their observed immutable commits; the normal protected planning closeout must pass its latest checks before merge and handoff.
 
 No historical receipt/source is relabeled or refreshed into new evidence. The three structured reports retain all 80 original findings at implementation 96505505594612bec77f811acb7d0084cccffb94; later accepted scoped reviews remain supplements. Four fixture/rights/diagnostic requirements remain Pending, with exact no-go and software-model/hardware/perception/timing/platform limits unchanged. No CGB game or real diagnostic fixture was newly admitted or executed, and no license ban is inferred.
 
 The unclassified REL-01 edge and two descriptor-less transparency prohibitions remain unresolved/flagged-unverified workflow classifications. The recorded one-way publication authority is not human UAT. Every covered software criterion has automated execution evidence and existing negative controls; no human checkpoint is manufactured. Initial local tag-restoration, foreign-platform linkage and private CLI setup failures remain recorded, with the final platform-appropriate checks and existing production validators passing.
 
-Plan 23-06 completion checks: the shared writer/default checker passes all 20 criteria from eight completed summaries with zero human checkpoints; its 21 weakened-copy controls pass. All six configured summary/closure CTests pass, including malformed-fixture repair and optimized-interpreter refusal. The final ninth summary and immutable boundary assertions remain Plan 23-08 work.
+Plan 23-06 completion checks: the shared writer/default checker passes all 20 criteria from eight completed summaries with zero human checkpoints; its 21 weakened-copy controls pass. All six configured summary/closure CTests pass, including malformed-fixture repair and optimized-interpreter refusal. Plan 23-08 now supplies the ninth completed summary, source-bound lessons and explicit owner route.
+
+## Final Plan 08 lesson and boundary evidence
+
+Lesson commit `293c9fa7743b10f130a99514d6fdf091c9d4761e` passes the existing immutable Phase 23 lesson/future section check and removed-evidence/XFER controls. The six-core/Playstead scan uses committed sources only; root verified 28 source blobs, without sibling execution. Actual live boundary triage at 2026-11-14T00:53:55.113Z found zero open issues/PRs, with main still G5, direct tag S and public 22 unchanged. The existing boundary assertion reads the observed commit containing all nine summaries, false auto flags and the Phase 23 /gsd-audit-milestone owner route; its actual full commit is bound immediately after that commit exists and checked before handoff. No docs commit is represented as shipped product S.
 
 ## Current Test
 
@@ -170,7 +174,23 @@ summary_file: 23-07-SUMMARY.md
 coverage_id: RELEASE-TOKEN-STATE-TRANSITION
 evidence: ["Compiled test_state_codec state_portable_pins emission at actual0.4 source; schema-only transformation and immutable-base comparison passed. State commitf0345477 binds main6c3ffafb, old goldenb5d9b340 and new golden97a54a14; independent continuation evidencef80bdf54 remains resolvable at that base.", "state_codec_matrix, state_semantic_bounds, state_portable_pins, state_pin_controls, state_pin_planning, state_refusal and state_refusal_controls all passed at78d1cd4c with base6c3ffafb in the22-case focused stream; standalone immutable planning check passed atf0345477. See23-EVIDENCE.md and retained state-transition receipts."]
 
-### 19. Release-note and README proof rejects incomplete raw-HTML openers while preserving renderer-built notes, visible disclosures and harmless masked examples.
+### 19. The observed release boundary has sanitized immutable-source transfer/CI lessons and current future direction without starting another milestone.
+expected: "The observed release boundary has sanitized immutable-source transfer/CI lessons and current future direction without starting another milestone."
+result: pass
+source: automated
+summary_file: 23-08-SUMMARY.md
+coverage_id: TRANSFER-AND-DIRECTION
+evidence: ["Immutable lesson commit 293c9fa7743b10f130a99514d6fdf091c9d4761e; Plan 08 T1 lesson/future reference check and missing-evidence/XFER mutation controls pass. Six documented sibling cores and Playstead were inspected at pinned committed sources, with 28 source blobs independently hash-checked and no sibling execution or mutation. See LESSONS.md Phase 23 and 23-EVIDENCE.md."]
+
+### 20. Exactly nine completed summaries enter generated software closure, and immutable phase/owner-route/auto-flag facts preserve the milestone boundary.
+expected: "Exactly nine completed summaries enter generated software closure, and immutable phase/owner-route/auto-flag facts preserve the milestone boundary."
+result: pass
+source: automated
+summary_file: 23-08-SUMMARY.md
+coverage_id: FINAL-PHASE-HANDOFF
+evidence: ["23-UAT-EVIDENCE.md and 23-EVIDENCE.md record the actual immutable boundary commit, existing exact-nine/owner-route/auto-flag assertion and enabled-auto/removed-route controls, shared closure writer/default/self-test, and final focused planning checks. Product S and publication control G5 are distinct from these documentation commits."]
+
+### 21. Release-note and README proof rejects incomplete raw-HTML openers while preserving renderer-built notes, visible disclosures and harmless masked examples.
 expected: "Release-note and README proof rejects incomplete raw-HTML openers while preserving renderer-built notes, visible disclosures and harmless masked examples."
 result: pass
 source: automated
@@ -178,7 +198,7 @@ summary_file: 23-09-SUMMARY.md
 coverage_id: RELEASE-NOTES-AND-DOCS-HTML-VISIBILITY
 evidence: ["At 532535ec the notes self-test failed on the intended accepted `<script` reproducer; at 6369b051 the notes self-test passed with 2 positives and 72 controls, and the docs self-test passed with 466 checks and 109 rejected controls.", "At a63f1dc6 the focused phase1 CTest selection passed 9/9, including release_notes_v04_controls and v02_adoption_docs_controls."]
 
-### 20. The immutable 0.4.0 changelog gate rejects each reproduced incomplete opener before the release heading and before its ledger link, while visible relative/canonical links and masked examples pass.
+### 22. The immutable 0.4.0 changelog gate rejects each reproduced incomplete opener before the release heading and before its ledger link, while visible relative/canonical links and masked examples pass.
 expected: "The immutable 0.4.0 changelog gate rejects each reproduced incomplete opener before the release heading and before its ledger link, while visible relative/canonical links and masked examples pass."
 result: pass
 source: automated
@@ -188,8 +208,8 @@ evidence: ["At 3fed435e the production-CLI self-test failed because `<script` be
 
 ## Summary
 
-total: 20
-passed: 20
+total: 22
+passed: 22
 issues: 0
 pending: 0
 skipped: 0

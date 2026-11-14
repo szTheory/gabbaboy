@@ -10,7 +10,7 @@ GabbaBoy is an original, portable C17 emulator core for Game Boy (DMG) and Game 
 
 The release states the justified absence of a newly admitted CGB game and real diagnostic fixture. FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. Existing DMG-CPU-B/CGB-CPU-E software-model and fixture/harness observations do not qualify hardware, perception, mode-3 timing, general game compatibility, Linux player, Steam Deck or live Playstead integration. Packages remain unsigned and not notarized. The source archive and fixture-free products retain their separate policies and notices.
 
-Phase 23 release reconciliation and its eight-summary automated closure pass; final nine-summary closure and milestone-boundary bookkeeping are being completed within the phase. The v0.4 milestone audit remains owner-controlled. The archived [v0.3 audit](milestones/v0.3-MILESTONE-AUDIT.md) and its [accepted closeout debt](milestones/v0.3-CLOSEOUT.md) retain their original scope and receipts.
+Phase 23 release reconciliation and final nine-summary automated closure pass. Its enclosing protected planning closeout remains the final merge gate before the owner-controlled milestone audit. The v0.4 milestone audit remains owner-controlled. The archived [v0.3 audit](milestones/v0.3-MILESTONE-AUDIT.md) and its [accepted closeout debt](milestones/v0.3-CLOSEOUT.md) retain their original scope and receipts.
 
 ## Current Milestone: v0.4 Evidence Floor
 
@@ -24,7 +24,7 @@ Phase 23 release reconciliation and its eight-summary automated closure pass; fi
 
 The root project license remains MIT. Full libretro work is deferred from v0.4; a direct Steam Deck development build over the owner's existing SSH workflow is exploratory only and does not establish Linux-player or Deck support. libfuturo informs future consumer-contract thinking but adds no dependency and does not freeze GabbaBoy's API or state format.
 
-Phases 20–22 are complete. Phase 22 closes at a metadata-only no-go assessment: no real diagnostic fixture was admitted or executed, seven real-fixture gates remain unresolved, and no license prohibition is inferred. GAME-01, GAME-02, and FEED-01 are complete; FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain pending. REL-01 is complete against actual qualified publication/readback and requirement reconciliation; final phase bookkeeping and owner handoff remain in progress.
+Phases 20–22 are complete. Phase 22 closes at a metadata-only no-go assessment: no real diagnostic fixture was admitted or executed, seven real-fixture gates remain unresolved, and no license prohibition is inferred. GAME-01, GAME-02, and FEED-01 are complete; FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain pending. REL-01 is complete against actual qualified publication/readback and requirement reconciliation; Phase 23 stops at the owner-controlled milestone-audit boundary.
 
 <details>
 <summary>Completed v0.3 scope and kickoff context</summary>

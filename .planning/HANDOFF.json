@@ -1,31 +1,26 @@
 {
   "phase": 23,
   "phase_title": "Qualified v0.4.0 Release",
-  "stage": "Plan 23-06 executing after qualified Plan05 publication/readback",
-  "completed_plans": [
-    "23-01",
-    "23-02",
-    "23-03",
-    "23-04",
-    "23-05",
-    "23-07",
-    "23-09"
-  ],
-  "remaining_plans": [
-    "23-06",
-    "23-08"
-  ],
-  "who_acts_next": "agent within existing Phase23 authorization",
-  "next_command": "/gsd-execute-phase 23",
-  "phase_boundary_next_owner_command": "/gsd-audit-milestone",
+  "stage": "Completed Phase 23 software evidence; enclosing protected planning closeout must pass before owner handoff",
+  "completed_plan_count": 9,
+  "next_stage": "v0.4 milestone audit",
+  "next_command": "/gsd-audit-milestone",
+  "who_acts_next": "owner after the agent finishes protected closeout",
   "auto_advance": false,
   "auto_chain_active": false,
   "release_url": "https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0",
   "release_source": "3de1b0e427f37a202be4469dd818266f359c8b20",
   "publication_control": "fbea1e2cc70f7c2ab9ea5820fa92ca18ddf997e8",
-  "release_run": 43526085579,
-  "release_attempt": 1,
+  "publisher_run": 43526085579,
+  "publisher_attempt": 1,
   "remaining_release_requests": 0,
-  "independent_readback": "pass",
-  "updated_at": "2026-11-14T00:23:37.617146+00:00"
+  "lesson_sha": "293c9fa7743b10f130a99514d6fdf091c9d4761e",
+  "independent_public_readback": "pass",
+  "pending_requirements": [
+    "FIXT-01",
+    "RIGHTS-01",
+    "DIAG-01",
+    "DIAG-02"
+  ],
+  "updated_at": "2026-11-14T00:56:47.595061+00:00"
 }
