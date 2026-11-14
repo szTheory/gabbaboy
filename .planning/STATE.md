@@ -5,17 +5,17 @@ milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
 current_plan: 1
-status: executing
-last_updated: "2026-11-14T03:47:07.183Z"
-state_head: 1d74b032d8106516b0fd22d6cd02ddaf916b2031
+status: verifying
+stopped_at: Completed 23.1-01-PLAN.md
+last_updated: "2026-11-14T04:53:38.208Z"
+state_head: f113096ba959ea97c7831d4d5bbb3e6f137cb642
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 32
-  completed_plans: 31
+  completed_plans: 32
   percent: 80
 last_activity: 2026-11-14
-stopped_at: "Phase 23.1 planning complete; awaiting execution. Next: /gsd-execute-phase 23.1."
 ---
 
 # Project State
@@ -24,11 +24,11 @@ stopped_at: "Phase 23.1 planning complete; awaiting execution. Next: /gsd-execut
 
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
-**Current Plan:** 1
-**Status:** Executing Phase 23.1
+**Current Plan:** 1 of 1
+**Status:** Phase complete — ready for verification
 **Progress:** [████████░░] 80%
 
-Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and **Phase 23.1 planning**. Phase 23.1 has one plan with three sequential tasks; execution is in progress. The historical Phase 22 report and checker reconciliation are committed; Task 3 is preparing the current handoff, automated SUMMARY coverage, and shared UAT closure. The audit remains [gaps_found](v0.4-MILESTONE-AUDIT.md): four requirements remain unsatisfied, and no milestone closure is claimed.
+Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and **Phase 23.1 execution**. The sole Phase 23.1 plan is complete; its historical Phase 22 report, current handoff, automated SUMMARY coverage, and generated UAT closure are committed and checked. The audit remains [gaps_found](v0.4-MILESTONE-AUDIT.md): FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending, and no milestone closure is claimed.
 
 ## Qualified Release
 
@@ -60,4 +60,21 @@ Phase 23.1 — Close v0.4 requirement and verification gaps — keeps the approv
 ### Roadmap Evolution
 
 - Phase 23.1 inserted after Phase 23: Close v0.4 requirement and verification gaps (URGENT)
-- Phase 23.1 planning after Phase 23 and the v0.4 audit: one gap-closure plan is ready. Next owner command: /gsd-execute-phase 23.1. (URGENT)
+- Phase 23.1 execution after Phase 23 and the v0.4 audit: its sole gap-closure plan is complete and the handoff preserves the open milestone. Next owner route, after verification: `/gsd-audit-milestone v0.4`. (URGENT)
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 23.1 P01 | about 57 min | 3 tasks | 9 files |
+
+## Decisions
+
+- [Phase 23.1]: D-193 permits only the exact active v0.4 phase set and cap allocation; all normal caps remain unchanged.
+- [Phase 23.1]: D-141's historical synthetic-plus-metadata scope is documented without satisfying FIXT-01, RIGHTS-01, DIAG-01, or DIAG-02.
+
+## Session
+
+**Last session:** 2026-11-14T04:53:37.992Z
+**Stopped at:** Completed 23.1-01-PLAN.md
+**Resume file:** None

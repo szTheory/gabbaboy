@@ -30,9 +30,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-execute-phase 23.1",
-    "label": "Execute Phase 23.1",
-    "reason": "Phase 23.1 is planned; execution has not started. Stop after this phase."
+    "command": "$gsd-progress --next",
+    "label": "Advance to the next step (verify)",
+    "reason": "Phase 5 of 5 · 80% · ready to verify"
   },
-  "updated_at": "2026-11-14T03:32:53.899Z"
+  "updated_at": "2026-11-14T04:53:19.322Z"
 }
