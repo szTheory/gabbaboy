@@ -375,6 +375,28 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
     return entries
 
 
+def frontmatter_mapping_pairs(text: str, key: str) -> list[tuple[str, str]] | None:
+    """Read a simple nested frontmatter map without erasing duplicate keys."""
+    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    if match is None:
+        return None
+    lines = match.group(1).splitlines()
+    start = next((index for index, line in enumerate(lines) if line.strip() == f"{key}:"), None)
+    if start is None:
+        return None
+    pairs: list[tuple[str, str]] = []
+    for line in lines[start + 1:]:
+        if not line.strip():
+            continue
+        if not line[0].isspace():
+            break
+        entry = re.fullmatch(r" {2}([A-Za-z0-9_-]+):[ \t]*(.*?)\s*", line)
+        if entry is None:
+            return None
+        pairs.append((entry.group(1), entry.group(2).strip().strip("\"'")))
+    return pairs
+
+
 def markdown_section(text: str, title: str) -> str:
     lines = text.splitlines()
     heading_pattern = re.compile(r"^#{1,4}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
@@ -392,6 +414,49 @@ def markdown_heading_count(text: str, title: str) -> int:
     """Count exact Markdown headings for a contract section, case-insensitively."""
     pattern = re.compile(r"^#{1,6}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
     return sum(bool(pattern.match(line)) for line in text.splitlines())
+
+
+def protected_setext_headings(text: str, titles: tuple[str, ...]) -> list[str]:
+    """Find protected plain-text Setext titles outside fenced and indented code."""
+    normalize = lambda value: " ".join(value.lower().split())
+    protected = {normalize(title): title for title in titles}
+    visible: list[str | None] = []
+    fence: tuple[str, int] | None = None
+    for line in text.replace("\r\n", "\n").splitlines():
+        if fence is not None:
+            marker, length = fence
+            visible.append(None)
+            if re.fullmatch(r" {0,3}" + re.escape(marker) + "{" + str(length) + r",}[ \t]*", line):
+                fence = None
+            continue
+        opening = re.match(r"^ {0,3}(`{3,}|~{3,})", line)
+        if opening:
+            marker = opening.group(1)
+            fence = (marker[0], len(marker))
+            visible.append(None)
+        elif line.startswith("\t") or re.match(r"^ {4,}", line):
+            visible.append(None)
+        else:
+            visible.append(line)
+
+    found: list[str] = []
+    for index, line in enumerate(visible):
+        if line is None or re.fullmatch(r" {0,3}(?:=+|-+)[ \t]*", line) is None:
+            continue
+        title_lines: list[str] = []
+        previous = index - 1
+        while previous >= 0:
+            candidate = visible[previous]
+            if (candidate is None or not candidate.strip()
+                    or re.match(r"^ {0,3}#", candidate)
+                    or re.fullmatch(r" {0,3}(?:=+|-+)[ \t]*", candidate)):
+                break
+            title_lines.insert(0, candidate.strip())
+            previous -= 1
+        protected_title = protected.get(normalize(" ".join(title_lines)))
+        if protected_title is not None:
+            found.append(protected_title)
+    return found
 
 
 def markdown_table_cells(line: str) -> list[str] | None:
@@ -515,6 +580,14 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
     expected_dispositions = {key: ("Pending", owner) for key, owner in V04_PENDING_OWNERS.items()}
     if actual_dispositions != expected_dispositions:
         errors.append("v04-report-requirements: four original requirements must remain Pending with their original owners")
+    requirement_pairs = frontmatter_mapping_pairs(report, "requirements")
+    expected_requirements = {key: "pending" for key in V04_PENDING_OWNERS}
+    if (requirement_pairs is None
+            or len(requirement_pairs) != len(expected_requirements)
+            or len({key for key, _ in requirement_pairs}) != len(requirement_pairs)
+            or dict(requirement_pairs) != expected_requirements
+            or set(dict(requirement_pairs)) != set(actual_dispositions)):
+        errors.append("v04-report-requirements: nested requirements must exactly match the four Pending dispositions")
 
     implementation_tree = git_run(repo, "show", "-s", "--format=%T", V04_IMPLEMENTATION_HEAD)
     if implementation_tree.returncode != 0 or implementation_tree.stdout.decode("ascii", errors="replace").strip() != V04_IMPLEMENTATION_TREE:
@@ -548,8 +621,12 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
         errors.append("v04-report-scope: report must identify the historical synthetic-plus-metadata reconstruction scope")
     if "482 protocol candidates remain blocked" not in " ".join(body.lower().split()):
         errors.append("v04-report-evidence: report must retain the blocked 482 protocol-candidate count")
-    for heading in ("Historical reconstruction scope", "Goal Achievement", "Exact game no-go facts",
-                    "Requirement truth and preserved limits"):
+    report_headings = ("Historical reconstruction scope", "Goal Achievement", "Exact game no-go facts",
+                       "Requirement truth and preserved limits")
+    setext_headings = protected_setext_headings(body, report_headings)
+    if setext_headings:
+        errors.append("v04-report-heading: protected report headings must use ATX syntax: " + ", ".join(setext_headings))
+    for heading in report_headings:
         if markdown_heading_count(body, heading) != 1:
             errors.append(f"v04-report-heading: {heading} must appear exactly once")
     goal = markdown_section(body, "Goal Achievement") or markdown_section(body, "Goal achievement")
@@ -633,6 +710,8 @@ def check_v04_handoff(repo: Path, rev: str, baseline_rev: str,
             ("STATE", state, "Owner Handoff"),
             ("PROJECT", project, "Current State"),
             ("continuation", continuation, "Owner Handoff")):
+        if protected_setext_headings(document, (heading,)):
+            errors.append(f"v04-handoff-heading: {document_name} {heading} must use ATX syntax")
         if markdown_heading_count(document, heading) != 1:
             errors.append(f"v04-handoff-heading: {document_name} {heading} heading must appear exactly once")
     state_fields, _ = frontmatter_fields(state)
@@ -1315,6 +1394,11 @@ executed: 0
 unresolved_gates:
 {gates}
 requirements_satisfied: []
+requirements:
+  FIXT-01: pending
+  RIGHTS-01: pending
+  DIAG-01: pending
+  DIAG-02: pending
 requirement_dispositions:
 {dispositions}
 ---
@@ -1377,6 +1461,16 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         ("gate list", report_content.replace(V04_UNRESOLVED_GATES[-1], "wrong_final_gate"), "v04-report-gates"),
         ("nested requirement status", report_content.replace("  RIGHTS-01: pending", "  RIGHTS-01: satisfied", 1),
          "v04-report-requirements"),
+        ("duplicate nested requirement ID", report_content.replace(
+            "  RIGHTS-01: pending", "  RIGHTS-01: pending\n  RIGHTS-01: satisfied", 1), "v04-report-requirements"),
+        ("missing nested requirement", report_content.replace("  DIAG-02: pending\n", "", 1),
+         "v04-report-requirements"),
+        ("extra nested requirement", report_content.replace(
+            "requirements:\n", "requirements:\n  EXTRA-01: pending\n", 1), "v04-report-requirements"),
+        ("malformed nested requirement", report_content.replace("  DIAG-02: pending", "    DIAG-02: pending", 1),
+         "v04-report-requirements"),
+        ("non-empty requirements satisfaction", report_content.replace(
+            "requirements_satisfied: []", "requirements_satisfied: [FIXT-01]", 1), "v04-report-field"),
         ("false requirement completion", report_content.replace("    status: Pending", "    status: Satisfied", 1), "v04-report-requirements"),
         ("weakened criterion 3", report_content.replace("DIAG-01, DIAG-02, and RIGHTS-01 Pending",
                                                           "diagnostic and rights requirements Pending", 1), "v04-report-criteria"),
@@ -1397,6 +1491,13 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         ("duplicate no-go heading", report_content.replace("## Requirement truth and preserved limits",
                                                               "## Exact game no-go facts ##\nDuplicate no-go heading.\n\n## Requirement truth and preserved limits", 1),
          "v04-report-heading"),
+        ("Setext report duplicate", report_content.replace("## Requirement truth and preserved limits",
+            "Exact game no-go facts\n---\nDuplicate no-go facts.\n\n## Requirement truth and preserved limits", 1),
+         "v04-report-heading"),
+        ("Setext report replacement", report_content.replace("## Exact game no-go facts",
+            "Exact game no-go facts\n===", 1), "v04-report-heading"),
+        ("multiline Setext report title", report_content.replace("## Goal Achievement",
+            "Historical reconstruction\nscope\n===\n\n## Goal Achievement", 1), "v04-report-heading"),
     ):
         mutated_rev = commit({report_path: mutated}, f"mutate report {label}")
         cli_check("report", mutated_rev, error_code)
@@ -1444,6 +1545,26 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
     handoff_files = {state_path: state_handoff, project_path: project_state, continuation_path: continuation}
     handoff_rev = commit(handoff_files, "reconcile current handoff")
     cli_check("handoff", handoff_rev)
+    setext_state_rev = commit({state_path: state_handoff + "\n   Owner Handoff\n   ---\nDuplicate state handoff.\n"},
+                              "add Setext STATE handoff duplicate")
+    cli_check("handoff", setext_state_rev, "v04-handoff-heading")
+    git("checkout", "-q", handoff_rev)
+    setext_project_rev = commit({project_path: project_state + "\nCurrent State\n===\nDuplicate project state.\n"},
+                                "add Setext PROJECT heading duplicate")
+    cli_check("handoff", setext_project_rev, "v04-handoff-heading")
+    git("checkout", "-q", handoff_rev)
+    setext_continuation_rev = commit({continuation_path: continuation + "\nOwner\nHandoff\n---\nDuplicate continuation handoff.\n"},
+                                     "add multiline Setext continuation duplicate")
+    cli_check("handoff", setext_continuation_rev, "v04-handoff-heading")
+    git("checkout", "-q", handoff_rev)
+    code_and_break_positive = state_handoff + (
+        "\n```text\nOwner Handoff\n---\n```\n\n"
+        "    Current State\n    ===\n\n"
+        "Unrelated descriptive text\n---\n"
+    )
+    code_positive_rev = commit({state_path: code_and_break_positive}, "keep code and thematic-break twins valid")
+    cli_check("handoff", code_positive_rev)
+    git("checkout", "-q", handoff_rev)
     missing_link_rev = commit({state_path: state_handoff.replace(f"]({phase22_link_state})", "](#missing-report)")},
                               "remove current report link")
     cli_check("handoff", missing_link_rev, "v04-handoff-link")
