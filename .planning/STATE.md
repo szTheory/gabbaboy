@@ -2,33 +2,33 @@
 gsd_state_version: "1.0"
 milestone: v0.4
 milestone_name: Evidence Floor
-current_phase: 23
-current_phase_name: Qualified v0.4.0 Release
-current_plan: 8
-status: complete
-last_updated: "2026-11-14T00:56:49.143Z"
-state_head: 293c9fa7743b10f130a99514d6fdf091c9d4761e
+current_phase: "23.1"
+current_phase_name: Close v0.4 requirement and verification gaps
+current_plan: Not started
+status: executing
+last_updated: "2026-11-14T03:32:53.785Z"
+state_head: c2f1279fd6c24bbb2264ed8789e154f8d053a6fe
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 31
+  total_plans: 32
   completed_plans: 31
-  percent: 100
-last_activity: Qualified v0.4.0 publication, public-byte reconciliation and final nine-plan software closure.
-stopped_at: Completed Phase 23 — Qualified v0.4.0 Release; stop before the owner-controlled milestone audit.
+  percent: 80
+last_activity: 2026-11-14
+stopped_at: "Phase 23.1 planning complete; awaiting execution. Next: /gsd-execute-phase 23.1."
 ---
 
 # Project State
 
 ## Current Position
 
-**Current Phase:** 23
-**Current Phase Name:** Qualified v0.4.0 Release
-**Current Plan:** 8 (final plan in the nine-plan dependency order)
-**Status:** Complete
-**Progress:** [██████████] 100%
+**Current Phase:** 23.1
+**Current Phase Name:** Close v0.4 requirement and verification gaps
+**Current Plan:** Not started
+**Status:** Ready to execute
+**Progress:** [████████░░] 80%
 
-Completed stage: **Phase 23 — Qualified v0.4.0 Release**. All nine plan summaries and automated software acceptance are present. The normal protected planning PR enclosing this record must pass its latest exact-head checks before merge; the agent finishes that authorized closeout, then yields. No next phase or milestone starts.
+Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and **Phase 23.1 planning**. Phase 23.1 has one plan with three sequential tasks; its execution has not started. The audit is [gaps_found](v0.4-MILESTONE-AUDIT.md): the GSD runtime accepted only Phase 23's verification at the audit boundary, and four requirements remain unsatisfied. No phase execution or milestone closure is started automatically.
 
 ## Qualified Release
 
@@ -44,8 +44,15 @@ The unclassified REL-01 edge and two descriptor-less transparency prohibitions r
 
 ## Owner Handoff
 
-The next owner-controlled stage is the **v0.4 milestone audit**. Exact command:
+The **v0.4 milestone audit is complete with gaps found**. Phase 20 and 21 verification reports are stale against covered source files, Phase 22 has no `22-VERIFICATION.md`, and FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending. See [audit report](v0.4-MILESTONE-AUDIT.md).
 
-`/gsd-audit-milestone`
+Phase 23.1 — Close v0.4 requirement and verification gaps — is planned as one gap-closure plan with three sequential tasks. Execution has not started. The exact next owner command is `/gsd-execute-phase 23.1`.
 
-After the enclosing protected closeout passes, the owner acts next when ready. The agent does not execute the audit or advance automatically. Reuse the qualified release and completed phase; do not restart implementation/publication. [Continuation](phases/GB-23-qualified-v0-4-0-release/.continue-here.md), [verification](phases/GB-23-qualified-v0-4-0-release/23-VERIFICATION.md), [roadmap](ROADMAP.md) and [project](PROJECT.md) retain the evidence and Pending limits.
+During execution, preserve the approved one-plan cap exception, use the normal phase-branch/PR and required remote-check workflow, and run only the plan's two focused local CTests. Do not run the stopped broad local suite or third lifecycle retest, retry publication, or change tags/assets/fixture rights. Both auto flags remain false; stop after Phase 23.1 and let the owner choose any later audit. [Continuation](phases/GB-23-qualified-v0-4-0-release/.continue-here.md), [Phase 23 verification](phases/GB-23-qualified-v0-4-0-release/23-VERIFICATION.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
+
+## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 23.1 inserted after Phase 23: Close v0.4 requirement and verification gaps (URGENT)
+- Phase 23.1 planning after Phase 23 and the v0.4 audit: one gap-closure plan is ready. Next owner command: /gsd-execute-phase 23.1. (URGENT)

@@ -5,7 +5,7 @@
 - ✅ **v0.1 Limited DMG Preview** — Phases 1–6 and 06.1, shipped 2026-10-10; [archive](milestones/v0.1-ROADMAP.md).
 - ✅ **v0.2 Color & Cartridge Breadth** — Phases 7–15 and 15.1, shipped 2026-10-24; [archive](milestones/v0.2-ROADMAP.md).
 - ✅ **v0.3 Save States & Host Contract** — Phases 16–19, 35 plans, shipped 2026-10-31; [archive](milestones/v0.3-ROADMAP.md).
-- 🚧 **v0.4 Evidence Floor** — Phases 20–23, roadmap owner-approved; Phase 20 is complete, with RIGHTS-01 still pending because no fixture was admitted.
+- ⚠️ **v0.4 Evidence Floor** — Phases 20–23 execution is complete; the 2026-11-14 audit found stale Phase 20/21 verification, missing Phase 22 verification, and four Pending requirements. Owner-inserted Phase 23.1 has one bounded reconciliation plan. See [audit](v0.4-MILESTONE-AUDIT.md); the milestone stays open.
 
 ## v0.4 — Evidence Floor
 
@@ -21,6 +21,7 @@ Numbering continues after completed Phase 19. Decimal phases are reserved for ex
 - [x] **Phase 21: CGB Game Progress and Scene Regressions** — The shared runner proves CGB progress and records the bounded game-candidate outcome. (completed 2026-11-02)
 - [x] **Phase 22: Synthetic Composition and Diagnostic Gate Assessment** — Preserve synthetic composition evidence and machine-check why the real diagnostic candidates remain unadmitted. Completed 2026-11-03; DIAG-01, DIAG-02, and RIGHTS-01 remain pending because all seven real-fixture gates remain unresolved.
 - [x] **Phase 23: Qualified v0.4.0 Release** — Published artifacts and support records carry only the evidence actually established. (completed 2026-11-13)
+- [ ] **Phase 23.1: Close v0.4 requirement and verification gaps**
 
 ## Phase Details
 
@@ -68,8 +69,8 @@ Use existing checks to assess CI headroom, current documentation, and carry-over
   3. Potion Panic's GB Compo 2025 demo is assessed first in one bounded admission/build/predicate plan. Only after its recorded no-go may one bounded µCity 1.3 preferred-ucity.gbc fallback plan run; each records exact source/build, digest, cartridge metadata, native CGB mode, and the Phase 20 rights decision. No third game search begins.
   4. An admitted game has a bound progress result with failing controls. If neither named candidate clears its gate, the evidence names each actual rights, build, predicate-feasibility, harness, or emulation blocker and the concrete harness result delivered; private play, test-ROM passes, and original fixtures are not presented as admitted game evidence.
   5. A concise title/scene/symptom report can be taken through agent-owned metadata recovery, reproduction, and fault classification without mandatory owner play. Any automated scene regression has an independently reasoned expectation and negative control; personal ROMs, saves, states, and captures stay private.
-**Plan cap**: 9
-**Plans**: All eight Phase 21 plan files remain complete; the active cap is 9 after one unused ordinary slot was reallocated to Phase 23's required gap reserve. No Phase 21 plan, scope, or evidence changed. Plan 21-08 remains the single completed gap-work plan; after CR-04/CR-05 closure it reopened within that same plan for CR-06 and completed with exact 24-input qualification and source-drift controls. No additional plan or gap round was added. PR #140 final head `507019f9` passed required exact-head CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`; Phase 22 proceeds under the separate owner-approved D-141 scope.
+**Plan cap**: 8
+**Plans**: All eight Phase 21 plan files remain complete; the active cap is 8 after its last unused ordinary slot was reallocated to the owner-approved Phase 23.1 reconciliation. Seven primary plans and the existing single gap plan fill this cap. No Phase 21 plan, scope, or evidence changed. Plan 21-08 remains the single completed gap-work plan; after CR-04/CR-05 closure it reopened within that same plan for CR-06 and completed with exact 24-input qualification and source-drift controls. No additional plan or gap round was added. PR #140 final head `507019f9` passed required exact-head CI, fixture reproduction, installed consumers, and player-package smoke, then squash-merged as `bef2cfbd`; Phase 22 proceeds under the separate owner-approved D-141 scope.
 
 Plans:
 **Wave 1**
@@ -129,7 +130,7 @@ The source coverage and dependency audit is [22-SOURCE-AUDIT.md](phases/GB-22-co
 
 ### Phase 23: Qualified v0.4.0 Release
 
-**Status**: Complete — all nine scheduled plans have source-bound summaries and automated software closure. Qualified v0.4.0 publication/readback closes REL-01, while FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. The enclosing normal protected planning closeout must satisfy latest exact-head checks before merge. Stop after Phase 23; the owner-controlled next stage is /gsd-audit-milestone.
+**Status**: Phase complete; milestone audit found gaps. All nine scheduled plans have source-bound summaries and automated software closure. Qualified v0.4.0 publication/readback closes REL-01, while FIXT-01, RIGHTS-01, DIAG-01 and DIAG-02 remain Pending. The v0.4 audit is [gaps_found](v0.4-MILESTONE-AUDIT.md). Phase 23.1 is planned as one bounded gap-closure plan and awaits execution; next owner command: `/gsd-execute-phase 23.1`. Stop after Phase 23.1, with the milestone still open.
 
 **Goal**: Users receive a qualified v0.4.0 release whose packages and support records accurately describe the established CGB game and diagnostic evidence.
 **Depends on**: Phase 22
@@ -173,6 +174,22 @@ Use the existing release path. RM-032 tooling is not an automatic work list; onl
 
 The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release/23-SOURCE-AUDIT.md), [research](phases/GB-23-qualified-v0-4-0-release/23-RESEARCH.md), and [execution contract](phases/GB-23-qualified-v0-4-0-release/23-EXECUTION-CONTRACT.md) preserve the evidence basis and execution limits. The spec-less probe's unclassified REL-01 edge and two descriptor-less transparency prohibitions remain explicitly flagged.
 
+### Phase 23.1: Close v0.4 requirement and verification gaps (INSERTED)
+
+**Goal:** Maintainers can inspect an accurate Phase 22 verification report reconstructed from immutable Phase 22 boundary evidence and a current handoff explaining why v0.4 stays open under the preserved limits.
+**Requirements**: []
+**Requirement disposition**: No new requirement assignments. FIXT-01 remains owned by Phase 21, RIGHTS-01 by Phase 20, and DIAG-01/DIAG-02 by Phase 22; all four remain Pending.
+**Depends on:** Phase 23
+**Success Criteria** (what must be TRUE):
+  1. The existing cap checker accepts only the owner-approved fifth-phase insertion 23.1 with caps 9/8/12/10/1 and the single gap plan, while rejecting other fifth phases, a sixth phase, excess caps, and consumption of a reserved gap slot by an ordinary plan.
+  2. `22-VERIFICATION.md` records the approved synthetic-plus-metadata Phase 22 result from immutable implementation and evidence boundaries, including 513 names, seven unresolved gates, admitted=0, executed=0, the exact no-go facts, and Pending original requirements. Historical Phase 20/21 reports and the milestone audit snapshot stay unchanged.
+  3. Current state, project summary, and the Phase 23.1 handoff link the new report only after it exists, preserve stale Phase 20/21 status and four Pending requirements, and receive machine-checked SUMMARY/UAT closure without claiming milestone completion.
+**Plan cap**: 1
+**Plans:** 1 plan; one execution wave, three sequential tasks. The sole plan uses `gap_closure: true` for cap accounting although this was a standard planning invocation. This is the owner-approved bounded report reconciliation in D-193; D-103's exact-final-head milestone suite remains a separate unfulfilled gate. No broad local suite, stopped lifecycle retest, release retry, tag/asset change, or fixture/rights action is authorized. Both automatic-advance flags stay false; stop after Phase 23.1.
+
+Plans:
+- [ ] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure.
+
 ## Requirement Coverage
 
 | Requirement | Owner phase |
@@ -190,7 +207,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 
 ## Progress
 
-**Execution order:** 20 → 21 → 22 → 23, with an owner pause after every phase.
+**Execution order:** 20 → 21 → 22 → 23 → 23.1, with an owner pause after every phase.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -198,10 +215,11 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
 | 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
 | 23. Qualified v0.4.0 Release | 9/9 | Complete    | 2026-11-13 |
+| 23.1. Close v0.4 requirement and verification gaps | 0/1 | Planned; bounded reconciliation, milestone stays open | — |
 
 ## Planning and Approval Boundary
 
-- At most four phases and 40 plans; at most 12 plans in any phase. Active caps are 9/10/12/9 for Phases 20/21/22/23 (40 combined), including each phase's reserved gap slots. Phase 21's cap was reduced from 12 to 10 after completion: its eight plan files leave two reserve slots, preserving honest slack while keeping the combined cap at 40. Phase 20's gap slot is already consumed by 20-04; the five rescope additions are ordinary plans. These are scope caps, not acceptance evidence; Phase 21–23 feature goals are unchanged.
+- At most four phases and 40 plans; at most 12 plans in any phase. The owner approved one exact exception for the active v0.4 phase set 20/21/22/23/23.1: Phase 23.1 is its sole fifth phase, limited to one `gap_closure: true` reconciliation plan. Active caps are 9/8/12/10/1 (40 combined), including each phase's reserved gap slot. Phase 21's unused ordinary slot funds Phase 23.1; its seven primary plans and one existing gap plan are unchanged. There are 39 actual plan files after planning Phase 23.1. All other fifth phases and a sixth phase remain forbidden; future milestones retain the normal four-phase rule. This exception grants no new fixture, rights, release, review-round, gap-round, or milestone-close authority. See D-193. Phase 20's gap slot is consumed by 20-04; its five rescope additions are ordinary plans. These are scope caps, not acceptance evidence.
 - Every deliverable has an automated check and a meaningful negative control. New reusable checkers live in tests/scripts/, use immutable commit facts where appropriate, and enter CTest when created. Automated UAT closure uses the existing shared closure tool; voluntary play is not a release gate.
 - Preserve the deterministic performance budget and existing state-continuation behavior. Prefer the existing API and local helpers; new dependencies require demonstrated value.
 - Both automatic-advance flags remain false. The owner approved the original Phase 20 roadmap on 2026-10-31; the single permitted security gap round became Plan 20-04. On 2026-11-01 the owner authorized an explicit Phase 20 rescope: trusted final macOS/Windows downloaded-byte checks, independent product-policy identity, exact repository-admission workflow matching, and attributable notice/export/dense-input/mutation-subject/timeout/planning-cap contract repairs. No fixture admission, legal/rights disposition change, accepted v0.3 debt repair, or sandbox-only Git-worktree code repair is authorized by this rescope.

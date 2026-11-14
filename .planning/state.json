@@ -21,13 +21,18 @@
     {
       "number": "23",
       "name": "Qualified v0.4.0 Release",
+      "status": "complete"
+    },
+    {
+      "number": "23.1",
+      "name": "Close v0.4 requirement and verification gaps",
       "status": "in_progress"
     }
   ],
   "next": {
-    "command": "$gsd-progress",
-    "label": "Show progress",
-    "reason": "Unsure of state — showing progress"
+    "command": "$gsd-execute-phase 23.1",
+    "label": "Execute Phase 23.1",
+    "reason": "Phase 23.1 is planned; execution has not started. Stop after this phase."
   },
-  "updated_at": "2026-11-04T12:49:20.186Z"
+  "updated_at": "2026-11-14T03:32:53.899Z"
 }
