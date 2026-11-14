@@ -185,7 +185,7 @@ The [source coverage and dependency audit](phases/GB-23-qualified-v0-4-0-release
   2. `22-VERIFICATION.md` records the approved synthetic-plus-metadata Phase 22 result from immutable implementation and evidence boundaries, including 513 names, seven unresolved gates, admitted=0, executed=0, the exact no-go facts, and Pending original requirements. Historical Phase 20/21 reports and the milestone audit snapshot stay unchanged.
   3. Current state, project summary, and the Phase 23.1 handoff link the new report only after it exists, preserve stale Phase 20/21 status and four Pending requirements, and receive machine-checked SUMMARY/UAT closure without claiming milestone completion.
 **Plan cap**: 1
-**Plans:** 1/1 plans executed; one execution wave, three sequential tasks. The sole plan uses `gap_closure: true` for cap accounting although this was a standard planning invocation. This is the owner-approved bounded report reconciliation in D-193; D-103's exact-final-head milestone suite remains a separate unfulfilled gate. No broad local suite, stopped lifecycle retest, release retry, tag/asset change, or fixture/rights action is authorized. Both automatic-advance flags stay false; stop after Phase 23.1.
+**Plans:** 1/1 plans executed; one execution wave, three sequential tasks. The sole plan uses `gap_closure: true` for cap accounting although this was a standard planning invocation. This is the owner-approved bounded report reconciliation in D-193. Plan tasks and configured post-checks finished, but final verification is blocked by two Critical review findings and one Warning after the two allowed review-fix rounds; the owner must discuss a rescope within the one-plan cap using `/gsd-discuss-phase 23.1`. D-103's exact-final-head milestone suite remains a separate unfulfilled gate. No broad local suite, stopped lifecycle retest, release retry, tag/asset change, or fixture/rights action is authorized. Both automatic-advance flags stay false; no next phase or milestone is selected.
 
 Plans:
 - [x] 23.1-01-PLAN.md — Enforce the exact cap exception, reconstruct Phase 22 verification from immutable evidence, and reconcile the open-milestone handoff with automated closure.
@@ -215,7 +215,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
 | 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
 | 23. Qualified v0.4.0 Release | 9/9 | Complete    | 2026-11-13 |
-| 23.1. Close v0.4 requirement and verification gaps | 1/1 | In Progress; bounded reconciliation, milestone stays open | — |
+| 23.1. Close v0.4 requirement and verification gaps | 1/1 | In Progress; final review blockers require owner rescope | — |
 
 ## Planning and Approval Boundary
 

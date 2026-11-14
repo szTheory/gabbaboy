@@ -6,9 +6,9 @@ current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
 current_plan: 1
 status: verifying
-stopped_at: Completed 23.1-01-PLAN.md
-last_updated: "2026-11-14T04:53:38.208Z"
-state_head: f113096ba959ea97c7831d4d5bbb3e6f137cb642
+stopped_at: Final review found two Critical issues and one Warning after the two permitted review-fix rounds; owner rescope decision required
+last_updated: "2026-11-14T05:57:14Z"
+state_head: 5a54f2feedd78e9ed9f4c0dcc429685ff1e60775
 progress:
   total_phases: 5
   completed_phases: 4
@@ -25,10 +25,10 @@ last_activity: 2026-11-14
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
 **Current Plan:** 1 of 1
-**Status:** Phase complete — ready for verification
+**Status:** Phase tasks complete — final review gate blocked; phase verification remains incomplete
 **Progress:** [████████░░] 80%
 
-Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and **Phase 23.1 execution**. The sole Phase 23.1 plan is complete; its historical Phase 22 report, current handoff, automated SUMMARY coverage, and generated UAT closure are committed and checked. The audit remains [gaps_found](v0.4-MILESTONE-AUDIT.md): FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending, and no milestone closure is claimed.
+Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and the three tasks in **Phase 23.1 execution**. Phase 23.1 is not complete: its latest code review has two Critical findings and one Warning after the two permitted review-fix rounds. The nested requirements mapping and Setext heading gaps remain open; the CTest floor is 116 while the checker reports 125 controls. No `23.1-VERIFICATION.md` was generated. The final review and per-finding disposition are [23.1-REVIEW.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md) and [23.1-REVIEW-DISPOSITION.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW-DISPOSITION.md). The milestone audit remains [gaps_found](v0.4-MILESTONE-AUDIT.md); FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending.
 
 ## Qualified Release
 
@@ -53,14 +53,14 @@ The **v0.4 milestone audit remains open with gaps found**. Phase 22 now has a hi
 
 The diagnostic record remains metadata-only: 513 names, seven unresolved gates, admitted=0, executed=0; 482 protocol candidates remain blocked and the 31 initial exclusions do not complete suite accounting. Potion Panic stopped before a ref/commit was returned from its creator-linked repository, and its fork is not source authority. µCity 1.3's required source include has no identified grant/notice under the recorded scope. Neither outcome establishes permission or a license prohibition.
 
-Phase 23.1 — Close v0.4 requirement and verification gaps — keeps the approved one-plan exception and three sequential tasks. **The v0.4 remains open.** D-103's exact-final-head full-suite milestone gate remains unfulfilled. No broad local suite is permitted. No third local lifecycle retest is permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. The owner-only next route, after Phase 23.1's handoff, is `/gsd-audit-milestone v0.4`; that route does not clear Pending requirements or the separate suite gate. No next phase or milestone is selected. [Continuation](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md), [Phase 22 report](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
+Phase 23.1 — Close v0.4 requirement and verification gaps — has completed its approved one-plan execution, but final verification is blocked by the open review findings. The two review-fix rounds are exhausted; an owner rescope is required before additional code edits. The recommended owner-only next command is `/gsd-discuss-phase 23.1` to decide how to rescope within D-193's one-plan allocation. No next phase or milestone is selected. **The v0.4 remains open.** D-103's exact-final-head full-suite gate remains unfulfilled; no broad local suite or third local lifecycle retest is permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. The later `/gsd-audit-milestone v0.4` route remains downstream of Phase 23.1 completion and is not started. [Continuation](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md), [Phase 23.1 review](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md), [Phase 22 report](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
 - Phase 23.1 inserted after Phase 23: Close v0.4 requirement and verification gaps (URGENT)
-- Phase 23.1 execution after Phase 23 and the v0.4 audit: its sole gap-closure plan is complete and the handoff preserves the open milestone. Next owner route, after verification: `/gsd-audit-milestone v0.4`. (URGENT)
+- Phase 23.1 plan tasks completed, but final review left two Critical issues and one Warning after the allowed two fix rounds. Owner rescope decision pending; `/gsd-discuss-phase 23.1`. The milestone audit remains downstream.
 
 ## Performance Metrics
 

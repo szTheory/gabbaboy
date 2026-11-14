@@ -30,9 +30,9 @@
     }
   ],
   "next": {
-    "command": "$gsd-progress --next",
-    "label": "Advance to the next step (verify)",
-    "reason": "Phase 5 of 5 · 80% · ready to verify"
+    "command": "$gsd-discuss-phase 23.1",
+    "label": "Owner rescope decision for Phase 23.1",
+    "reason": "Final review has two Critical findings and one Warning after the two permitted fix rounds; verification remains blocked and D-193 allows one plan"
   },
-  "updated_at": "2026-11-14T04:53:19.322Z"
+  "updated_at": "2026-11-14T05:57:14Z"
 }
