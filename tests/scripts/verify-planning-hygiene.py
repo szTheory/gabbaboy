@@ -497,7 +497,8 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
         criterion_terms = (
             ("synthetic", "composition", "source-cell", "mask", "identity", "image"),
             ("513", "metadata", "seven", "admitted", "executed"),
-            ("synthetic", "claim", "no real"),
+            ("documentation", "automated", "synthetic-only", "no-go", "license prohibition",
+             "diag-01", "diag-02", "rights-01", "pending"),
         )
         for index, terms in enumerate(criterion_terms):
             if not all(term in criterion_lines[index] for term in terms):
@@ -1234,7 +1235,7 @@ This is a historical reconstruction of the approved synthetic-plus-metadata Phas
 |---|---|---|
 | 1. The original compiled synthetic composition tracer preserves source-cell mask, identity, and image controls. | VERIFIED | See {artifact_link('22-01-SUMMARY.md')} and {artifact_link('22-EVIDENCE.md')}. The recorded compiled tracer check covers the source-cell mask and identity/image controls. |
 | 2. The full 513-name metadata inventory records seven gates, admitted=0, and executed=0. | VERIFIED | See {artifact_link('22-02-SUMMARY.md')}, {artifact_link('22-10-SUMMARY.md')}, and {artifact_link('22-SOURCE-AUDIT.md')}. The 482 protocol candidates remain blocked. |
-| 3. Public claims remain synthetic-only and make no real diagnostic claim. | VERIFIED | See {artifact_link('22-11-SUMMARY.md')} and {artifact_link('22-12-SUMMARY.md')}. Synthetic-only claims describe no real game or diagnostic evidence. |
+| 3. Documentation and automated checks keep the tracer labeled synthetic-only, record the real-fixture no-go without asserting a license prohibition, and leave DIAG-01, DIAG-02, and RIGHTS-01 Pending. | VERIFIED | See {artifact_link('22-11-SUMMARY.md')} and {artifact_link('22-12-SUMMARY.md')}. Synthetic-only claims describe no real game or diagnostic evidence. |
 
 The other recorded Phase 22 summaries are {artifact_link('22-11-SUMMARY.md')} and {artifact_link('22-12-SUMMARY.md')}.
 
@@ -1277,6 +1278,8 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         ("metadata count", report_content.replace("metadata_cases: 513", "metadata_cases: 512"), "v04-report-field"),
         ("gate list", report_content.replace(V04_UNRESOLVED_GATES[-1], "wrong_final_gate"), "v04-report-gates"),
         ("false requirement completion", report_content.replace("    status: Pending", "    status: Satisfied", 1), "v04-report-requirements"),
+        ("weakened criterion 3", report_content.replace("DIAG-01, DIAG-02, and RIGHTS-01 Pending",
+                                                          "diagnostic and rights requirements Pending", 1), "v04-report-criteria"),
     ):
         mutated_rev = commit({report_path: mutated}, f"mutate report {label}")
         cli_check("report", mutated_rev, error_code)
