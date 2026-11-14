@@ -553,7 +553,7 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
     goal = markdown_section(body, "Goal Achievement") or markdown_section(body, "Goal achievement")
     table = [cells for line in goal.splitlines() if (cells := markdown_table_cells(line)) is not None]
     status_columns = [index for index, title in enumerate(table[0] if table else [])
-                      if title.strip().lower() in ("status", "result", "result status")]
+                      if title.strip().lower() in ("status", "historical status", "result", "result status")]
     criterion_rows: list[tuple[int, list[str], str]] = []
     for line in goal.splitlines():
         cells = markdown_table_cells(line)
@@ -1319,7 +1319,7 @@ This is a historical reconstruction of the approved synthetic-plus-metadata Phas
 
 ## Goal Achievement
 
-| Phase 22 roadmap criterion | Status | Evidence and limits |
+| Phase 22 roadmap criterion | Historical status | Evidence and limits |
 |---|---|---|
 | 1. The original compiled synthetic composition tracer preserves source-cell mask, identity, and image controls. | VERIFIED | See {artifact_link('22-01-SUMMARY.md')} and {artifact_link('22-EVIDENCE.md')}. The recorded compiled tracer check covers the source-cell mask and identity/image controls. |
 | 2. The full 513-name metadata inventory records seven gates, admitted=0, and executed=0. | VERIFIED | See {artifact_link('22-02-SUMMARY.md')}, {artifact_link('22-10-SUMMARY.md')}, and {artifact_link('22-SOURCE-AUDIT.md')}. The 482 protocol candidates remain blocked. |
@@ -1363,6 +1363,9 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
     cli_check("report", report_rev)
     first_disposition = "\n".join(dispositions.splitlines()[:3])
     for label, mutated, error_code in (
+        ("wrong phase", report_content.replace("phase: GB-22-composition-and-microtest-evidence",
+                                                 "phase: GB-21-cgb-game-progress-and-scene-regressions", 1), "v04-report-field"),
+        ("wrong status", report_content.replace("status: passed", "status: complete", 1), "v04-report-field"),
         ("boundary identity", report_content.replace(f"source_head: {V04_EVIDENCE_HEAD}", "source_head: " + "0" * 40), "v04-report-field"),
         ("metadata count", report_content.replace("metadata_cases: 513", "metadata_cases: 512"), "v04-report-field"),
         ("gate list", report_content.replace(V04_UNRESOLVED_GATES[-1], "wrong_final_gate"), "v04-report-gates"),
