@@ -4,11 +4,11 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 Requirement and Verification Gaps
-current_plan: 1
-status: executing
-stopped_at: Phase 23.1 context gathered
-last_updated: "2026-11-14T16:57:37.044Z"
-state_head: b6e7f15994c8a011c480c03f8939dd9340064f24
+current_plan: 1 of 1
+status: verifying
+stopped_at: Completed GB-23.1-01 plan; mandatory independent review and final phase verification pending
+last_updated: "2026-11-14T17:42:56.469Z"
+state_head: 80f0dceedd3ed4de2a94f04df015dbddfb96deac
 progress:
   total_phases: 5
   completed_phases: 4
@@ -24,8 +24,8 @@ last_activity: 2026-11-14
 
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 Requirement and Verification Gaps
-**Current Plan:** 1
-**Status:** Executing Phase 23.1
+**Current Plan:** 1 of 1
+**Status:** Phase complete — ready for verification
 **Progress:** [████████░░] 80%
 
 Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and the three tasks in **Phase 23.1 execution**. The authorized D-194 corrections for the nested requirements map, protected Setext headings, and planning-hygiene control floor are implemented; the checker self-test, immutable report contract, and 125/124 wrapper boundary pass. Phase 23.1 remains incomplete while its one mandatory independent review and final verification are pending. The prior review and per-finding disposition remain [23.1-REVIEW.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW.md) and [23.1-REVIEW-DISPOSITION.md](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-REVIEW-DISPOSITION.md); no `23.1-VERIFICATION.md` was generated. The milestone audit remains [gaps_found](v0.4-MILESTONE-AUDIT.md); FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending.
@@ -67,14 +67,16 @@ Phase 23.1 — Close v0.4 requirement and verification gaps — has one D-194 co
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 23.1 P01 | about 57 min | 3 tasks | 9 files |
+| Phase GB-23.1 P01 | about 34 min (D-194 amendment) | 3 tasks | 9 files |
 
 ## Decisions
 
 - [Phase 23.1]: D-193 permits only the exact active v0.4 phase set and cap allocation; all normal caps remain unchanged.
 - [Phase 23.1]: D-141's historical synthetic-plus-metadata scope is documented without satisfying FIXT-01, RIGHTS-01, DIAG-01, or DIAG-02.
+- [Phase GB-23.1]: D-194 permits exactly one same-plan correction and independent review for CR-01, CR-02, and WR-01; all other D-193 stops remain.
 
 ## Session
 
-**Last session:** 2026-11-14T15:48:36.372Z
-**Stopped at:** Phase 23.1 context gathered
-**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/23.1-CONTEXT.md
+**Last session:** 2026-11-14T17:42:56.170Z
+**Stopped at:** Completed GB-23.1-01 plan; mandatory independent review and final phase verification pending
+**Resume file:** .planning/phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md
