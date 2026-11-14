@@ -4,10 +4,10 @@ milestone: v0.4
 milestone_name: Evidence Floor
 current_phase: "23.1"
 current_phase_name: Close v0.4 requirement and verification gaps
-current_plan: Not started
+current_plan: 1
 status: executing
-last_updated: "2026-11-14T03:32:53.785Z"
-state_head: c2f1279fd6c24bbb2264ed8789e154f8d053a6fe
+last_updated: "2026-11-14T03:47:07.183Z"
+state_head: 1d74b032d8106516b0fd22d6cd02ddaf916b2031
 progress:
   total_phases: 5
   completed_phases: 4
@@ -24,11 +24,11 @@ stopped_at: "Phase 23.1 planning complete; awaiting execution. Next: /gsd-execut
 
 **Current Phase:** 23.1
 **Current Phase Name:** Close v0.4 requirement and verification gaps
-**Current Plan:** Not started
-**Status:** Ready to execute
+**Current Plan:** 1
+**Status:** Executing Phase 23.1
 **Progress:** [████████░░] 80%
 
-Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and **Phase 23.1 planning**. Phase 23.1 has one plan with three sequential tasks; its execution has not started. The audit is [gaps_found](v0.4-MILESTONE-AUDIT.md): the GSD runtime accepted only Phase 23's verification at the audit boundary, and four requirements remain unsatisfied. No phase execution or milestone closure is started automatically.
+Completed stages: **Phase 23 — Qualified v0.4.0 Release**, the **v0.4 milestone audit**, and **Phase 23.1 planning**. Phase 23.1 has one plan with three sequential tasks; execution is in progress. The historical Phase 22 report and checker reconciliation are committed; Task 3 is preparing the current handoff, automated SUMMARY coverage, and shared UAT closure. The audit remains [gaps_found](v0.4-MILESTONE-AUDIT.md): four requirements remain unsatisfied, and no milestone closure is claimed.
 
 ## Qualified Release
 
@@ -44,11 +44,16 @@ The unclassified REL-01 edge and two descriptor-less transparency prohibitions r
 
 ## Owner Handoff
 
-The **v0.4 milestone audit is complete with gaps found**. Phase 20 and 21 verification reports are stale against covered source files, Phase 22 has no `22-VERIFICATION.md`, and FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending. See [audit report](v0.4-MILESTONE-AUDIT.md).
+The **v0.4 milestone audit remains open with gaps found**. Phase 22 now has a historical verification report at [22-VERIFICATION.md](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), reconstructed from immutable Phase 22 evidence. It documents the approved synthetic-plus-metadata scope and does not claim current runtime freshness. Phase 20 and Phase 21 verification reports remain stale; their reports and the historical audit snapshot are unchanged. See [audit report](v0.4-MILESTONE-AUDIT.md) for the recorded audit findings.
 
-Phase 23.1 — Close v0.4 requirement and verification gaps — is planned as one gap-closure plan with three sequential tasks. Execution has not started. The exact next owner command is `/gsd-execute-phase 23.1`.
+- **FIXT-01 — Pending**, original owner Phase 21.
+- **RIGHTS-01 — Pending**, original owner Phase 20.
+- **DIAG-01 — Pending**, original owner Phase 22.
+- **DIAG-02 — Pending**, original owner Phase 22.
 
-During execution, preserve the approved one-plan cap exception, use the normal phase-branch/PR and required remote-check workflow, and run only the plan's two focused local CTests. Do not run the stopped broad local suite or third lifecycle retest, retry publication, or change tags/assets/fixture rights. Both auto flags remain false; stop after Phase 23.1 and let the owner choose any later audit. [Continuation](phases/GB-23-qualified-v0-4-0-release/.continue-here.md), [Phase 23 verification](phases/GB-23-qualified-v0-4-0-release/23-VERIFICATION.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
+The diagnostic record remains metadata-only: 513 names, seven unresolved gates, admitted=0, executed=0; 482 protocol candidates remain blocked and the 31 initial exclusions do not complete suite accounting. Potion Panic stopped before a ref/commit was returned from its creator-linked repository, and its fork is not source authority. µCity 1.3's required source include has no identified grant/notice under the recorded scope. Neither outcome establishes permission or a license prohibition.
+
+Phase 23.1 — Close v0.4 requirement and verification gaps — keeps the approved one-plan exception and three sequential tasks. **The v0.4 remains open.** D-103's exact-final-head full-suite milestone gate remains unfulfilled. No broad local suite is permitted. No third local lifecycle retest is permitted. The publication allowance is spent: no release retry and no tag/asset/rights action. Both automatic-advance flags remain false. The owner-only next route, after Phase 23.1's handoff, is `/gsd-audit-milestone v0.4`; that route does not clear Pending requirements or the separate suite gate. No next phase or milestone is selected. [Continuation](phases/GB-23.1-close-v0-4-requirement-and-verification-gaps/.continue-here.md), [Phase 22 report](phases/GB-22-composition-and-microtest-evidence/22-VERIFICATION.md), [Phase 23 evidence](phases/GB-23-qualified-v0-4-0-release/23-EVIDENCE.md), [roadmap](ROADMAP.md), and [project](PROJECT.md) retain the evidence and limits.
 
 ## Accumulated Context
 
