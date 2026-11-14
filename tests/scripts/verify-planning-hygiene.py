@@ -377,18 +377,20 @@ def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
 
 def markdown_section(text: str, title: str) -> str:
     lines = text.splitlines()
+    heading_pattern = re.compile(r"^#{1,4}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
     start = next((index for index, line in enumerate(lines)
-                  if re.match(r"^#{1,4}\s+" + re.escape(title) + r"\s*$", line, re.IGNORECASE)), None)
+                  if heading_pattern.match(line)), None)
     if start is None:
         return ""
+    next_heading_pattern = re.compile(r"^#{1,4}\s+.*?(?:\s+#+)?\s*$")
     end = next((index for index in range(start + 1, len(lines))
-                if re.match(r"^#{1,4}\s+", lines[index])), len(lines))
+                if next_heading_pattern.match(lines[index])), len(lines))
     return "\n".join(lines[start + 1:end])
 
 
 def markdown_heading_count(text: str, title: str) -> int:
     """Count exact Markdown headings for a contract section, case-insensitively."""
-    pattern = re.compile(r"^#{1,6}\s+" + re.escape(title) + r"\s*$", re.IGNORECASE)
+    pattern = re.compile(r"^#{1,6}\s+" + re.escape(title) + r"(?:\s+#+)?\s*$", re.IGNORECASE)
     return sum(bool(pattern.match(line)) for line in text.splitlines())
 
 
@@ -624,6 +626,9 @@ def check_v04_handoff(repo: Path, rev: str, baseline_rev: str,
         return "", errors + ["v04-handoff-missing: STATE, PROJECT, or current phase continuation is missing"]
     state, project = state_raw.decode("utf-8", errors="replace"), project_raw.decode("utf-8", errors="replace")
     continuation = continuation_raw.decode("utf-8", errors="replace")
+    duplicate_state_fields = frontmatter_duplicates(state)
+    if duplicate_state_fields:
+        errors.append("v04-handoff-frontmatter-duplicate: " + ", ".join(duplicate_state_fields))
     for document_name, document, heading in (
             ("STATE", state, "Owner Handoff"),
             ("PROJECT", project, "Current State"),
@@ -1388,7 +1393,7 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
                                                                f"requirement_dispositions:\n{dispositions}\n{first_disposition}", 1),
          "v04-report-requirements"),
         ("duplicate no-go heading", report_content.replace("## Requirement truth and preserved limits",
-                                                              "## Exact game no-go facts\nDuplicate no-go heading.\n\n## Requirement truth and preserved limits", 1),
+                                                              "## Exact game no-go facts ##\nDuplicate no-go heading.\n\n## Requirement truth and preserved limits", 1),
          "v04-report-heading"),
     ):
         mutated_rev = commit({report_path: mutated}, f"mutate report {label}")
@@ -1441,9 +1446,14 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
                               "remove current report link")
     cli_check("handoff", missing_link_rev, "v04-handoff-link")
     git("checkout", "-q", handoff_rev)
-    duplicate_handoff_rev = commit({state_path: state_handoff + "\n## Owner Handoff\n\nDuplicate heading.\n"},
+    duplicate_handoff_rev = commit({state_path: state_handoff + "\n## Owner Handoff ##\n\nDuplicate heading.\n"},
                                    "duplicate current owner handoff")
     cli_check("handoff", duplicate_handoff_rev, "v04-handoff-heading")
+    git("checkout", "-q", handoff_rev)
+    duplicate_phase_state = state_handoff.replace('current_phase: "23.1"',
+                                                  'current_phase: "23.1"\ncurrent_phase: "22"', 1)
+    duplicate_phase_rev = commit({state_path: duplicate_phase_state}, "duplicate current phase frontmatter")
+    cli_check("handoff", duplicate_phase_rev, "v04-handoff-frontmatter-duplicate")
     git("checkout", "-q", handoff_rev)
     config = json.loads((repo / ".planning/config.json").read_text(encoding="utf-8"))
     config["workflow"]["auto_advance"] = True
