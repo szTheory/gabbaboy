@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Planning hygiene checks for GabbaBoy (Phase 16 plan 16-05, TUNE-05; D-24..D-27).
 
-Five checks, each a pure function over text or a directory that returns (summary, errors) with stable
+Six checks, each a pure function over text or a directory that returns (summary, errors) with stable
 error-code prefixes, so a control can pin the failure class instead of "some error":
 
   --check plan-cap (--roadmap PATH --phases-dir DIR | --rev COMMIT [--repo DIR])
@@ -9,7 +9,7 @@ error-code prefixes, so a control can pin the failure class instead of "some err
       the matching GB-N-* directory counts against it, whether it is named NN-NN-PLAN.md, NN-NNa-PLAN.md or
       NN-NN-PLAN-extra.md (a decimal phase counts against its parent unless it has its own heading and cap line;
       gap plans count). A cap above 12 fails, the caps must sum to at most 40 and the active milestone may list at
-      most four phases (D-24, D-102, WR-05). One slot of every cap is reserved for the single gap round: plans that
+      most four phases (D-24, D-102, WR-05), with the exact D-193 v0.4 exception. One slot of every cap is reserved for the single gap round: plans that
       do not declare `gap_closure: true` may number at most cap - 1. With --rev the ROADMAP and the plan names
       are read from that full commit id with git, never from the working tree (a symbolic revision is refused).
       At an explicitly completed milestone with no active requirements or phase records, the matching
@@ -32,6 +32,11 @@ error-code prefixes, so a control can pin the failure class instead of "some err
   --check deferrals --rev COMMIT [--repo DIR]
       Pins the Phase 19 RM-024 deferral and the six RM-032 v0.4 candidates in FUTURE-MILESTONES.md.
       Reads that file from one full immutable commit id with git show. Prints "deferrals pass pins=8".
+  --check v04-reconciliation --stage report|handoff --rev COMMIT --baseline-rev COMMIT [--repo DIR]
+      Checks Phase 22's historical report or its current Phase 23.1 handoff using two immutable commits.
+      Historical Phase 20/21 reports, the audit snapshot, requirements and Phase 22 source artifacts must
+      match the execution-start baseline; the Phase 22 facts are read from their pinned evidence commit.
+      Prints "v04-reconciliation pass stage=report|handoff".
 
   --self-test   runs every rule against generated and committed fixtures and prints
                 "planning-hygiene self-test pass controls=N" once; --rev/--repo select the
@@ -52,10 +57,13 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import os
+import posixpath
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -69,6 +77,8 @@ PLAN_CAP_MAX = 12
 PLAN_CAP_SUM_MAX = 40
 PHASE_COUNT_MAX = 4
 GAP_RESERVE = 1
+V04_APPROVED_PHASE_CAPS = {"20": 9, "21": 8, "22": 12, "23": 10, "23.1": 1}
+V04_EXCEPTION_TEXT = "one exact exception for the active v0.4 phase set 20/21/22/23/23.1"
 
 PHASE_HEADING = re.compile(r"^### Phase (\d+(?:\.\d+)?):")
 CAP_LINE = re.compile(r"^\*\*Plan cap\*\*: (\d+)\s*$")
@@ -193,6 +203,408 @@ def read_rev(repo: Path, rev: str) -> tuple[str, PlanTree]:
     return roadmap.stdout.decode("utf-8"), tree
 
 
+V04_IMPLEMENTATION_HEAD = "ca2f0be6b38e7dd22e0eb3296b9a21cceed1a765"
+V04_IMPLEMENTATION_TREE = "e768b7ec26d7c07542d6aa29aef53ae8fc826c5e"
+V04_EVIDENCE_HEAD = "d18db4c56d2a79e6138df37a9d16e3d346a86e13"
+V04_PENDING_OWNERS = {"FIXT-01": "Phase 21", "RIGHTS-01": "Phase 20",
+                      "DIAG-01": "Phase 22", "DIAG-02": "Phase 22"}
+V04_UNRESOLVED_GATES = (
+    "acid2_derivative_build_reproducibility",
+    "acid2_component_rights_and_output_scope",
+    "acid2_profile_applicability",
+    "gbmicrotest_component_rights_and_output_scope",
+    "gbmicrotest_prebuilt_rom_sha256",
+    "gbmicrotest_case_applicability",
+    "gbmicrotest_independent_oracle",
+)
+V04_HISTORICAL_AUDIT = ".planning/v0.4-MILESTONE-AUDIT.md"
+V04_PHASE22_SUMMARIES = ("22-01-SUMMARY.md", "22-02-SUMMARY.md", "22-10-SUMMARY.md",
+                         "22-11-SUMMARY.md", "22-12-SUMMARY.md")
+
+
+COMMIT_SNAPSHOT_CACHE: dict[tuple[str, str], dict[str, bytes]] = {}
+
+
+def commit_snapshot(repo: Path, rev: str) -> tuple[dict[str, bytes] | None, str | None]:
+    """Read the planning tree from a commit in one Git operation; cache only immutable object ids."""
+    cache_key = (str(repo.resolve()), rev)
+    if cache_key in COMMIT_SNAPSHOT_CACHE:
+        return COMMIT_SNAPSHOT_CACHE[cache_key], None
+    if not FULL_COMMIT.fullmatch(rev):
+        return None, "v04-reconciliation-rev: --rev must be a full 40-hex commit id"
+    found = git_run(repo, "cat-file", "-t", rev)
+    if found.returncode != 0 or found.stdout.strip() != b"commit":
+        return None, f"v04-reconciliation-rev: {rev} is not a commit in {repo}"
+    archive = git_run(repo, "archive", "--format=tar", rev, "--", ".planning")
+    if archive.returncode != 0:
+        return None, f"v04-reconciliation-tree: cannot read planning files at {rev}"
+    snapshot: dict[str, bytes] = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r:") as tar:
+            for member in tar.getmembers():
+                if member.isfile():
+                    stream = tar.extractfile(member)
+                    if stream is not None:
+                        snapshot[member.name] = stream.read()
+    except (tarfile.TarError, OSError) as error:
+        return None, f"v04-reconciliation-tree: cannot decode planning snapshot at {rev}: {error}"
+    if not snapshot:
+        return None, f"v04-reconciliation-tree: commit has no readable planning files at {rev}"
+    COMMIT_SNAPSHOT_CACHE[cache_key] = snapshot
+    return snapshot, None
+
+
+def commit_paths(repo: Path, rev: str) -> tuple[list[str] | None, str | None]:
+    """List planning paths in one immutable commit after validating its full object identity."""
+    snapshot, error = commit_snapshot(repo, rev)
+    return (sorted(snapshot) if snapshot is not None else None), error
+
+
+def commit_file(repo: Path, rev: str, path: str) -> bytes | None:
+    """Read a single file from a commit; never fall back to the checkout."""
+    snapshot, _ = commit_snapshot(repo, rev)
+    return snapshot.get(path) if snapshot is not None else None
+
+
+def phase_directory(paths: list[str], number: str) -> str | None:
+    """Find a unique phase directory from immutable Git inventory and its numeric metadata."""
+    found = {"/".join(path.split("/")[:3]) for path in paths
+             if len(path.split("/")) >= 4 and path.startswith(PHASES_AT_REV + "/")
+             and (match := PHASE_DIR.match(path.split("/")[2])) is not None and match.group(1) == number}
+    return next(iter(found)) if len(found) == 1 else None
+
+
+def phase_file(paths: list[str], number: str, filename: str) -> str | None:
+    directory = phase_directory(paths, number)
+    if directory is None:
+        return None
+    candidate = f"{directory}/{filename}"
+    return candidate if candidate in paths else None
+
+
+def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
+    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    if match is None:
+        return {}, text
+    fields: dict[str, str] = {}
+    for line in match.group(1).splitlines():
+        if line and not line[0].isspace() and ":" in line:
+            key, value = line.split(":", 1)
+            fields[key.strip()] = value.strip().strip("\"'")
+    return fields, text[match.end():]
+
+
+def frontmatter_sequence(text: str, key: str) -> list[str] | None:
+    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    if match is None:
+        return None
+    lines = match.group(1).splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() != f"{key}:":
+            continue
+        values: list[str] = []
+        for item in lines[index + 1:]:
+            if not item.strip():
+                continue
+            if not item.startswith((" ", "\t")):
+                break
+            value = re.match(r"\s+-\s+(.+?)\s*$", item)
+            if value:
+                values.append(value.group(1).strip().strip("\"'"))
+        return values
+    return None
+
+
+def frontmatter_objects(text: str, key: str) -> list[dict[str, str]] | None:
+    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    if match is None:
+        return None
+    lines = match.group(1).splitlines()
+    start = next((index for index, line in enumerate(lines) if line.strip() == f"{key}:"), None)
+    if start is None:
+        return None
+    entries: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    for line in lines[start + 1:]:
+        if line and not line[0].isspace():
+            break
+        item = re.match(r"\s+-\s+([A-Za-z0-9_-]+):\s*(.*?)\s*$", line)
+        if item:
+            if current is not None:
+                entries.append(current)
+            current = {item.group(1): item.group(2).strip().strip("\"'")}
+            continue
+        field = re.match(r"\s+([A-Za-z0-9_-]+):\s*(.*?)\s*$", line)
+        if field and current is not None:
+            current[field.group(1)] = field.group(2).strip().strip("\"'")
+    if current is not None:
+        entries.append(current)
+    return entries
+
+
+def markdown_section(text: str, title: str) -> str:
+    lines = text.splitlines()
+    start = next((index for index, line in enumerate(lines)
+                  if re.match(r"^#{1,4}\s+" + re.escape(title) + r"\s*$", line, re.IGNORECASE)), None)
+    if start is None:
+        return ""
+    end = next((index for index in range(start + 1, len(lines))
+                if re.match(r"^#{1,4}\s+", lines[index])), len(lines))
+    return "\n".join(lines[start + 1:end])
+
+
+def has_local_link(text: str, source_path: str, target_path: str) -> bool:
+    for match in re.finditer(r"\[[^\]]*\]\(([^)]+)\)", text):
+        href = match.group(1).strip().split(None, 1)[0].strip("<>").split("#", 1)[0]
+        if not href or "://" in href or href.startswith(("mailto:", "data:", "/")):
+            continue
+        if posixpath.normpath(posixpath.join(posixpath.dirname(source_path), href)) == target_path:
+            return True
+    return False
+
+
+def requirement_traceability(text: str) -> dict[str, tuple[str, str]]:
+    section = markdown_section(text, "Traceability")
+    rows: dict[str, tuple[str, str]] = {}
+    for line in section.splitlines():
+        match = re.match(r"\|\s*(FIXT-01|RIGHTS-01|DIAG-01|DIAG-02)\s*\|\s*(Phase\s+\d+(?:\.\d+)?)\s*\|\s*(Pending|Complete|Satisfied)\s*\|", line, re.IGNORECASE)
+        if match:
+            rows[match.group(1).upper()] = (" ".join(match.group(2).split()), match.group(3).capitalize())
+    return rows
+
+
+def phase22_immutable_paths(paths: list[str]) -> list[str]:
+    directory = phase_directory(paths, "22")
+    if directory is None:
+        return []
+    selected = []
+    for path in paths:
+        if not path.startswith(directory + "/"):
+            continue
+        filename = path.rsplit("/", 1)[-1]
+        if filename in ("22-EVIDENCE.md", "22-SOURCE-AUDIT.md") or re.fullmatch(r"22-\d+(?:\.\d+)?-SUMMARY\.md", filename):
+            selected.append(path)
+    return sorted(selected)
+
+
+def compare_immutable_inputs(repo: Path, rev: str, baseline_rev: str,
+                             target_paths: list[str], baseline_paths: list[str]) -> list[str]:
+    errors: list[str] = []
+    fixed_paths = [V04_HISTORICAL_AUDIT, ".planning/REQUIREMENTS.md"]
+    for number in ("20", "21"):
+        name = f"{number}-VERIFICATION.md"
+        base_path = phase_file(baseline_paths, number, name)
+        target_path = phase_file(target_paths, number, name)
+        if base_path is None or target_path is None or base_path != target_path:
+            errors.append(f"v04-history-missing: Phase {number} verification is missing or moved")
+        else:
+            fixed_paths.append(base_path)
+    phase23_continue_base = phase_file(baseline_paths, "23", ".continue-here.md")
+    phase23_continue_target = phase_file(target_paths, "23", ".continue-here.md")
+    if phase23_continue_base is None or phase23_continue_target is None or phase23_continue_base != phase23_continue_target:
+        errors.append("v04-history-missing: Phase 23 continuation is missing or moved")
+    else:
+        fixed_paths.append(phase23_continue_base)
+    base_22 = phase22_immutable_paths(baseline_paths)
+    target_22 = phase22_immutable_paths(target_paths)
+    if not base_22 or base_22 != target_22:
+        errors.append("v04-history-phase22: Phase 22 evidence, source audit, or summary inventory changed")
+    fixed_paths.extend(base_22)
+    for path in fixed_paths:
+        before = commit_file(repo, baseline_rev, path)
+        after = commit_file(repo, rev, path)
+        if before is None or after is None:
+            errors.append(f"v04-history-missing: required historical file is missing: {path.rsplit('/', 1)[-1]}")
+        elif before != after:
+            errors.append(f"v04-history-changed: immutable historical file changed: {path.rsplit('/', 1)[-1]}")
+    return errors
+
+
+def check_v04_report(repo: Path, rev: str, baseline_rev: str,
+                     paths: list[str], baseline_paths: list[str]) -> tuple[str, list[str]]:
+    errors = compare_immutable_inputs(repo, rev, baseline_rev, paths, baseline_paths)
+    report_path = phase_file(paths, "22", "22-VERIFICATION.md")
+    if report_path is None:
+        return "", errors + ["v04-report-missing: Phase 22 verification report is missing from --rev"]
+    if phase_file(baseline_paths, "22", "22-VERIFICATION.md") is not None:
+        errors.append("v04-report-baseline: Phase 22 verification already exists at --baseline-rev")
+    raw = commit_file(repo, rev, report_path)
+    if raw is None:
+        return "", errors + ["v04-report-missing: Phase 22 verification report cannot be read from --rev"]
+    report = raw.decode("utf-8", errors="replace")
+    fields, body = frontmatter_fields(report)
+    expected_fields = {
+        "source_head": V04_EVIDENCE_HEAD,
+        "implementation_head": V04_IMPLEMENTATION_HEAD,
+        "evidence_head": V04_EVIDENCE_HEAD,
+        "report_kind": "boundary_reconstruction",
+        "metadata_cases": "513",
+        "shared_macro_cases": "480",
+        "inline_cases": "2",
+        "initial_no_protocol_exclusions": "31",
+        "admitted": "0",
+        "executed": "0",
+        "requirements_satisfied": "[]",
+    }
+    for key, expected in expected_fields.items():
+        if fields.get(key) != expected:
+            errors.append(f"v04-report-field: {key} must be {expected}")
+    if frontmatter_sequence(report, "unresolved_gates") != list(V04_UNRESOLVED_GATES):
+        errors.append("v04-report-gates: the exact seven unresolved gates must be a frontmatter sequence")
+    dispositions = frontmatter_objects(report, "requirement_dispositions") or []
+    actual_dispositions = {item.get("id", ""): (item.get("status", ""), item.get("original_owner", "")) for item in dispositions}
+    expected_dispositions = {key: ("Pending", owner) for key, owner in V04_PENDING_OWNERS.items()}
+    if actual_dispositions != expected_dispositions:
+        errors.append("v04-report-requirements: four original requirements must remain Pending with their original owners")
+
+    implementation_tree = git_run(repo, "show", "-s", "--format=%T", V04_IMPLEMENTATION_HEAD)
+    if implementation_tree.returncode != 0 or implementation_tree.stdout.decode("ascii", errors="replace").strip() != V04_IMPLEMENTATION_TREE:
+        errors.append("v04-report-implementation: pinned implementation merge or tree identity is unavailable")
+    evidence_paths, evidence_error = commit_paths(repo, V04_EVIDENCE_HEAD)
+    if evidence_error:
+        errors.append("v04-report-evidence: pinned Phase 22 evidence commit is unavailable")
+    else:
+        evidence_path = phase_file(evidence_paths or [], "22", "22-EVIDENCE.md")
+        audit_path = phase_file(evidence_paths or [], "22", "22-SOURCE-AUDIT.md")
+        evidence = commit_file(repo, V04_EVIDENCE_HEAD, evidence_path) if evidence_path else None
+        audit = commit_file(repo, V04_EVIDENCE_HEAD, audit_path) if audit_path else None
+        evidence_text = evidence.decode("utf-8", errors="replace") if evidence else ""
+        audit_text = audit.decode("utf-8", errors="replace") if audit else ""
+        if not evidence or not audit or any(value not in evidence_text for value in ("513", "480", "31", "admitted = 0", "executed = 0")):
+            errors.append("v04-report-evidence: pinned evidence does not support the structured metadata-only counts")
+        if any(gate not in audit_text for gate in V04_UNRESOLVED_GATES):
+            errors.append("v04-report-evidence: pinned source audit does not contain the exact unresolved gates")
+        if "482" not in audit_text or "blocked" not in audit_text.lower():
+            errors.append("v04-report-evidence: pinned source audit does not preserve the 482 blocked-candidate count")
+
+    requirements_base = commit_file(repo, baseline_rev, ".planning/REQUIREMENTS.md")
+    requirements_now = commit_file(repo, rev, ".planning/REQUIREMENTS.md")
+    if requirements_base is None or requirements_now is None or requirements_base != requirements_now:
+        errors.append("v04-report-requirements: REQUIREMENTS.md changed from the execution-start baseline")
+    elif requirement_traceability(requirements_now.decode("utf-8", errors="replace")) != {
+            key: (owner, "Pending") for key, owner in V04_PENDING_OWNERS.items()}:
+        errors.append("v04-report-requirements: original Pending owners do not match REQUIREMENTS.md")
+
+    if "historical reconstruction scope" not in body.lower() or "synthetic" not in body.lower() or "metadata-only" not in body.lower():
+        errors.append("v04-report-scope: report must identify the historical synthetic-plus-metadata reconstruction scope")
+    if "482 protocol candidates remain blocked" not in " ".join(body.lower().split()):
+        errors.append("v04-report-evidence: report must retain the blocked 482 protocol-candidate count")
+    goal = markdown_section(body, "Goal Achievement") or markdown_section(body, "Goal achievement")
+    criterion_lines = [line.lower() for line in goal.splitlines() if re.match(r"^\s*\|\s*[123](?:\.|\s*\|)", line)]
+    if len(criterion_lines) < 3:
+        errors.append("v04-report-criteria: all three approved Phase 22 criteria need explicit evidence rows")
+    else:
+        criterion_terms = (
+            ("synthetic", "composition", "source-cell", "mask", "identity", "image"),
+            ("513", "metadata", "seven", "admitted", "executed"),
+            ("synthetic", "claim", "no real"),
+        )
+        for index, terms in enumerate(criterion_terms):
+            if not all(term in criterion_lines[index] for term in terms):
+                errors.append(f"v04-report-criteria: criterion {index + 1} is missing its scoped evidence facts")
+    evidence_paths, _ = commit_paths(repo, V04_EVIDENCE_HEAD)
+    required_link_names = ("22-EVIDENCE.md", "22-SOURCE-AUDIT.md", *V04_PHASE22_SUMMARIES)
+    required_link_paths = [phase_file(paths, "22", name) for name in required_link_names]
+    if (not report_path or any(path is None for path in required_link_paths)
+            or any(not has_local_link(report, report_path, path) for path in required_link_paths if path is not None)):
+        errors.append("v04-report-links: source, summary, and evidence key links must resolve in the immutable report revision")
+    if evidence_paths is None or any(phase_file(evidence_paths, "22", name) is None for name in ("22-EVIDENCE.md", "22-SOURCE-AUDIT.md")):
+        errors.append("v04-report-links: pinned evidence commit lacks its Phase 22 evidence or source audit")
+    no_go = " ".join(markdown_section(body, "Exact game no-go facts").lower().split())
+    potion_terms = ("potion panic", "creator-linked", "ref", "commit", "fork", "source authority", "unobserved")
+    ucity_terms = ("µcity 1.3", "d1880a2a112d7c26f16c0fc06a15b6c32fdc9137", "source/engine/hardware.inc",
+                   "grant", "notice", "no upstream tool", "no rom", "no-go")
+    if not all(term in no_go for term in potion_terms) or not all(term in no_go for term in ucity_terms):
+        errors.append("v04-report-no-go: exact Potion Panic and µCity 1.3 source/rights cutoffs are incomplete")
+    limits = " ".join(markdown_section(body, "Requirement truth and preserved limits").lower().split())
+    if not all(term in limits for term in ("license prohibition", "permission", "hardware", "perceptual", "timing", "linux", "steam deck", "playstead")):
+        errors.append("v04-report-limits: software-model, rights, hardware, perception, timing, and platform limits are incomplete")
+    if "full milestone closure remains unsatisfied" not in " ".join(body.lower().split()):
+        errors.append("v04-report-open: report must say full milestone closure remains unsatisfied")
+    return "v04-reconciliation pass stage=report", errors
+
+
+def check_v04_handoff(repo: Path, rev: str, baseline_rev: str,
+                      paths: list[str], baseline_paths: list[str]) -> tuple[str, list[str]]:
+    errors: list[str] = []
+    report_path = phase_file(paths, "22", "22-VERIFICATION.md")
+    report_raw = commit_file(repo, rev, report_path) if report_path else None
+    report = report_raw.decode("utf-8", errors="replace") if report_raw is not None else ""
+    _, report_errors = check_v04_report(repo, rev, baseline_rev, paths, baseline_paths)
+    errors.extend(report_errors)
+    state_path, project_path = ".planning/STATE.md", ".planning/PROJECT.md"
+    state_raw, project_raw = commit_file(repo, rev, state_path), commit_file(repo, rev, project_path)
+    continuation_path = phase_file(paths, "23.1", ".continue-here.md")
+    continuation_raw = commit_file(repo, rev, continuation_path) if continuation_path else None
+    if state_raw is None or project_raw is None or continuation_raw is None:
+        return "", errors + ["v04-handoff-missing: STATE, PROJECT, or current phase continuation is missing"]
+    state, project = state_raw.decode("utf-8", errors="replace"), project_raw.decode("utf-8", errors="replace")
+    continuation = continuation_raw.decode("utf-8", errors="replace")
+    state_fields, _ = frontmatter_fields(state)
+    if state_fields.get("current_phase") != "23.1" or state_fields.get("milestone") != "v0.4" or state_fields.get("status") == "milestone_completed":
+        errors.append("v04-handoff-state: current state must remain in open Phase 23.1 of v0.4")
+    config_raw = commit_file(repo, rev, ".planning/config.json")
+    try:
+        config = json.loads(config_raw.decode("utf-8")) if config_raw is not None else {}
+        workflow = config["workflow"]
+        if workflow.get("auto_advance") is not False or workflow.get("_auto_chain_active") is not False:
+            errors.append("v04-handoff-auto: both automatic-advance flags must remain false")
+    except (KeyError, TypeError, ValueError, UnicodeError):
+        errors.append("v04-handoff-auto: planning config or both false auto flags are missing")
+
+    state_handoff = markdown_section(state, "Owner Handoff")
+    project_state = markdown_section(project, "Current State")
+    current_handoff = markdown_section(continuation, "Owner Handoff") or continuation
+    state_norm = " ".join(state_handoff.lower().split())
+    project_norm = " ".join(project_state.lower().split())
+    continuation_norm = " ".join(continuation.lower().split())
+    if not all(value in state_norm for value in ("phase 22", "historical verification", "phase 20", "stale", "phase 21", "stale")):
+        errors.append("v04-handoff-stale: current state must mark Phase 20/21 reports stale and Phase 22 report historical")
+    required_pending = ("FIXT-01", "RIGHTS-01", "DIAG-01", "DIAG-02")
+    for document_name, text in (("STATE", state_handoff), ("PROJECT", project_state), ("continuation", current_handoff)):
+        normalized = " ".join(text.lower().split())
+        if "pending" not in normalized or not all(req.lower() in normalized for req in required_pending):
+            errors.append(f"v04-handoff-pending: {document_name} must preserve all four Pending requirements")
+    for req, owner in V04_PENDING_OWNERS.items():
+        line_found = any(req in line and owner.lower() in line.lower() and "pending" in line.lower()
+                         for line in state_handoff.splitlines())
+        if not line_found:
+            errors.append(f"v04-handoff-owner: current STATE handoff must retain {req} as Pending under {owner}")
+    if "v0.4 remains open" not in state_norm or "v0.4 remains open" not in project_norm:
+        errors.append("v04-handoff-open: STATE and PROJECT must keep the v0.4 milestone open")
+    if not all(term in state_norm for term in ("exact-final-head full-suite", "unfulfilled", "no broad local suite",
+                                               "no third local lifecycle retest", "no release retry", "no tag/asset/rights action")):
+        errors.append("v04-handoff-stops: preserved final-suite, lifecycle, publication, tag, asset, and rights stops are incomplete")
+    route = "/gsd-audit-milestone v0.4"
+    if route not in state_handoff or route not in continuation or "owner-only" not in continuation_norm:
+        errors.append("v04-handoff-route: current handoff must preserve the owner-only audit route")
+    if "no next phase or milestone is selected" not in continuation_norm or "phase 23.1" not in continuation_norm:
+        errors.append("v04-handoff-phase: continuation must close Phase 23.1 without selecting or starting another phase")
+    for path, text in ((state_path, state), (project_path, project), (continuation_path, continuation)):
+        if report_path and not has_local_link(text, path, report_path):
+            errors.append(f"v04-handoff-link: {path.rsplit('/', 1)[-1]} does not link to the Phase 22 report")
+    if not report or "full milestone closure remains unsatisfied" not in " ".join(report.lower().split()):
+        errors.append("v04-handoff-report: current handoff report is missing or overstates milestone completion")
+    return "v04-reconciliation pass stage=handoff", errors
+
+
+def check_v04_reconciliation(repo: Path, stage: str, rev: str, baseline_rev: str) -> tuple[str, list[str]]:
+    if stage not in ("report", "handoff"):
+        return "", ["v04-reconciliation-stage: stage must be report or handoff"]
+    if not FULL_COMMIT.fullmatch(baseline_rev):
+        return "", ["v04-reconciliation-baseline: --baseline-rev must be a full 40-hex commit id"]
+    paths, error = commit_paths(repo, rev)
+    if error:
+        return "", [error]
+    baseline_paths, error = commit_paths(repo, baseline_rev)
+    if error:
+        return "", ["v04-reconciliation-baseline: --baseline-rev is not a readable commit"]
+    assert paths is not None and baseline_paths is not None
+    if stage == "report":
+        return check_v04_report(repo, rev, baseline_rev, paths, baseline_paths)
+    return check_v04_handoff(repo, rev, baseline_rev, paths, baseline_paths)
+
+
 def read_deferrals(repo: Path, rev: str) -> str:
     """Read FUTURE-MILESTONES.md from one full commit id; never consult the working tree."""
     if not FULL_COMMIT.fullmatch(rev):
@@ -235,8 +647,16 @@ def check_plan_tree(roadmap: str, tree: PlanTree | None, where: str) -> tuple[st
             caps[current] = int(cap.group(1))
     if not caps:
         return "", ["plan-cap-vacuous: ROADMAP lists no active phase headings"]
-    if len(caps) > PHASE_COUNT_MAX:
+    roadmap_contract = " ".join(roadmap.lower().split())
+    approved_v04_exception = (
+        caps == V04_APPROVED_PHASE_CAPS
+        and V04_EXCEPTION_TEXT in roadmap_contract
+        and "see d-193" in roadmap_contract
+    )
+    if len(caps) > PHASE_COUNT_MAX and not approved_v04_exception:
         errors.append(f"plan-cap-phase-count: the active milestone lists {len(caps)} phases, above {PHASE_COUNT_MAX}")
+        if set(caps) == set(V04_APPROVED_PHASE_CAPS):
+            errors.append("plan-cap-approved-exception: the Phase 23.1 exception requires the exact D-193 phase set, caps, and roadmap approval")
     for number, cap in caps.items():
         if cap is None:
             errors.append(f"plan-cap-missing: Phase {number} has no '**Plan cap**: N' line")
@@ -411,6 +831,28 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
         expect("exactly four active phases pass", errors, None)
         _, errors = check_plan_cap(roadmap_text([("16", "2"), ("17", "2"), ("18", "2"), ("19", "2"), ("19.1", "2")]), phases("fivedec", {}))
         expect("a decimal phase heading is a fifth active phase", errors, "plan-cap-phase-count")
+        _, errors = check_plan_cap(roadmap_text([("16", "2"), ("17", "2"), ("18", "2"), ("19", "2"), ("20", "2"), ("21", "2")]), phases("six", {}))
+        expect("a sixth active phase fails", errors, "plan-cap-phase-count")
+        approved_caps = [("20", "9"), ("21", "8"), ("22", "12"), ("23", "10"), ("23.1", "1")]
+        approved_tree = phases("approved-v04", {"20": 8, "21": 7, "22": 11, "23": 9, "23.1": 0},
+                               {"20": 1, "21": 1, "22": 1, "23.1": 1})
+        approved_roadmap = roadmap_text(approved_caps).replace(
+            "## Progress", "The owner approved one exact exception for the active v0.4 phase set 20/21/22/23/23.1. See D-193.\n\n## Progress")
+        summary, errors = check_plan_cap(approved_roadmap, approved_tree)
+        expect("the exact owner-approved v0.4 fifth phase passes", errors, None)
+        if summary != "plan-cap pass phases=5 plans=39":
+            raise SystemExit(f"planning-hygiene self-test FAIL: unexpected approved v0.4 pass line {summary!r}")
+        substituted = roadmap_text([("20", "9"), ("21", "8"), ("22", "12"), ("23", "10"), ("23.2", "1")]).replace(
+            "## Progress", "The owner approved one exact exception for the active v0.4 phase set 20/21/22/23/23.1. See D-193.\n\n## Progress")
+        _, errors = check_plan_cap(substituted, phases("substituted-v04", {}))
+        expect("a substituted fifth phase is rejected", errors, "plan-cap-phase-count")
+        _, errors = check_plan_cap(roadmap_text(approved_caps), phases("wrong-fifth-allocation", {}))
+        expect("the fifth phase requires the exact approved cap allocation", errors, "plan-cap-phase-count")
+        expect("a changed allocation has a specific exception refusal", errors, "plan-cap-approved-exception")
+        _, errors = check_plan_cap(roadmap_text(approved_caps).replace(
+            "## Progress", "The owner approved one exact exception for the active v0.4 phase set 20/21/22/23/23.1.\n\n## Progress"),
+            phases("missing-d193", {}))
+        expect("the fifth phase requires an explicit D-193 roadmap exception", errors, "plan-cap-phase-count")
         _, errors = check_plan_cap(roadmap_text([("16", "8"), ("17", None)]), phases("nocap", {"16": 1}))
         expect("a phase without a cap line fails", errors, "plan-cap-missing")
         _, errors = check_plan_cap(roadmap_text([("16", "12")]), phases("c12", {"16": 11}, {"16": 1}))
@@ -504,6 +946,7 @@ def self_test(rev: str | None = None, repo: Path = Path(".")) -> int:
         controls += 1
 
         controls += self_test_playstead(base)
+        controls += self_test_v04_reconciliation(base, repo)
 
         live_revision = rev
         if live_revision is None:
@@ -669,16 +1112,253 @@ def self_test_plan_cap_rev(base: Path) -> int:
     return controls
 
 
+def self_test_v04_reconciliation(base: Path, source_repo: Path) -> int:
+    """Exercise report/handoff contracts through the real CLI in a disposable Git repository."""
+    controls = 0
+    source_repo = source_repo.resolve()
+    object_result = git_run(source_repo, "rev-parse", "--git-path", "objects")
+    if object_result.returncode != 0:
+        raise SystemExit("planning-hygiene self-test FAIL: could not resolve source Git object directory")
+    object_dir = Path(object_result.stdout.decode("utf-8", errors="replace").strip())
+    if not object_dir.is_absolute():
+        object_dir = (source_repo / object_dir).resolve()
+    for needed in (V04_IMPLEMENTATION_HEAD, V04_EVIDENCE_HEAD):
+        if git_run(source_repo, "cat-file", "-t", needed).stdout.strip() != b"commit":
+            raise SystemExit(f"planning-hygiene self-test FAIL: required immutable Phase 22 object is unavailable: {needed}")
+
+    repo = base / "v04-reconciliation-repo"
+    repo.mkdir()
+    env = {key: value for key, value in os.environ.items() if key in ("PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP")}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_SYSTEM=os.devnull, GIT_AUTHOR_NAME="fixture",
+               GIT_AUTHOR_EMAIL="fixture@example.invalid", GIT_COMMITTER_NAME="fixture",
+               GIT_COMMITTER_EMAIL="fixture@example.invalid")
+
+    def git(*args: str) -> str:
+        done = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+                              check=True, env=env, timeout=60)
+        return done.stdout.strip()
+
+    git("init", "-q")
+    alternate = repo / ".git" / "objects" / "info" / "alternates"
+    alternate.parent.mkdir(parents=True, exist_ok=True)
+    alternate.write_text(str(object_dir) + "\n", encoding="utf-8")
+
+    phase_dirs = {number: f".planning/phases/GB-{number}-fixture" for number in ("20", "21", "22", "23", "23.1")}
+    roadmap = roadmap_text(list(V04_APPROVED_PHASE_CAPS.items())).replace(
+        "## Progress", f"The owner approved one exact exception for the active v0.4 phase set 20/21/22/23/23.1. See D-193.\n\n## Progress")
+    requirements = """# Requirements
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| FIXT-01 | Phase 21 | Pending |
+| RIGHTS-01 | Phase 20 | Pending |
+| DIAG-01 | Phase 22 | Pending |
+| DIAG-02 | Phase 22 | Pending |
+"""
+    base_files: dict[str, str] = {
+        ".planning/ROADMAP.md": roadmap,
+        ".planning/REQUIREMENTS.md": requirements,
+        ".planning/config.json": json.dumps({"workflow": {"auto_advance": False, "_auto_chain_active": False}}) + "\n",
+        ".planning/v0.4-MILESTONE-AUDIT.md": "Historical audit snapshot: gaps found.\n",
+        ".planning/STATE.md": """---
+milestone: v0.4
+current_phase: "23.1"
+current_phase_name: Close v0.4 requirement and verification gaps
+status: executing
+---
+
+## Owner Handoff
+
+The milestone stays open. Phase 22's historical report is not yet present. Phase 20 and Phase 21 reports remain stale. FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending.
+""",
+        ".planning/PROJECT.md": """## Current State
+
+The v0.4 milestone remains open. Four requirements remain Pending.
+""",
+        f"{phase_dirs['20']}/20-VERIFICATION.md": "Phase 20 historical report: stale.\n",
+        f"{phase_dirs['21']}/21-VERIFICATION.md": "Phase 21 historical report: stale.\n",
+        f"{phase_dirs['22']}/22-EVIDENCE.md": "Phase 22 source evidence snapshot.\n",
+        f"{phase_dirs['22']}/22-SOURCE-AUDIT.md": "Phase 22 source audit snapshot.\n",
+        f"{phase_dirs['23']}/.continue-here.md": "Historical Phase 23 continuation; unchanged.\n",
+        f"{phase_dirs['23.1']}/23.1-01-PLAN.md": "---\ngap_closure: true\n---\n",
+    }
+    for name in V04_PHASE22_SUMMARIES:
+        base_files[f"{phase_dirs['22']}/{name}"] = f"{name} immutable summary.\n"
+
+    def commit(files: dict[str, str], message: str) -> str:
+        for relative, content in files.items():
+            path = repo / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content.encode("utf-8"))
+            git("add", relative)
+        git("commit", "-q", "-m", message)
+        return git("rev-parse", "HEAD")
+
+    baseline_rev = commit(base_files, "fixture baseline")
+
+    def artifact_link(name: str) -> str:
+        return f"[{name}]({name})"
+
+    gates = "\n".join(f"  - {gate}" for gate in V04_UNRESOLVED_GATES)
+    dispositions = "\n".join(f"  - id: {requirement}\n    status: Pending\n    original_owner: {owner}"
+                             for requirement, owner in V04_PENDING_OWNERS.items())
+    report_content = f"""---
+phase: GB-22-composition-and-microtest-evidence
+source_head: {V04_EVIDENCE_HEAD}
+implementation_head: {V04_IMPLEMENTATION_HEAD}
+evidence_head: {V04_EVIDENCE_HEAD}
+report_kind: boundary_reconstruction
+status: passed
+metadata_cases: 513
+shared_macro_cases: 480
+inline_cases: 2
+initial_no_protocol_exclusions: 31
+admitted: 0
+executed: 0
+unresolved_gates:
+{gates}
+requirements_satisfied: []
+requirement_dispositions:
+{dispositions}
+---
+
+## Historical reconstruction scope
+
+This is a historical reconstruction of the approved synthetic-plus-metadata Phase 22 scope. The metadata-only assessment never admitted or executed a real diagnostic fixture.
+
+## Goal Achievement
+
+| Phase 22 roadmap criterion | Status | Evidence and limits |
+|---|---|---|
+| 1. The original compiled synthetic composition tracer preserves source-cell mask, identity, and image controls. | VERIFIED | See {artifact_link('22-01-SUMMARY.md')} and {artifact_link('22-EVIDENCE.md')}. The recorded compiled tracer check covers the source-cell mask and identity/image controls. |
+| 2. The full 513-name metadata inventory records seven gates, admitted=0, and executed=0. | VERIFIED | See {artifact_link('22-02-SUMMARY.md')}, {artifact_link('22-10-SUMMARY.md')}, and {artifact_link('22-SOURCE-AUDIT.md')}. The 482 protocol candidates remain blocked. |
+| 3. Public claims remain synthetic-only and make no real diagnostic claim. | VERIFIED | See {artifact_link('22-11-SUMMARY.md')} and {artifact_link('22-12-SUMMARY.md')}. Synthetic-only claims describe no real game or diagnostic evidence. |
+
+The other recorded Phase 22 summaries are {artifact_link('22-11-SUMMARY.md')} and {artifact_link('22-12-SUMMARY.md')}.
+
+## Exact game no-go facts
+
+Potion Panic's creator-linked repository failed before a ref/commit was returned and its fork is not source authority; source/build/ROM/header/mode/predicate/observations remain unobserved. For µCity 1.3, source `d1880a2a112d7c26f16c0fc06a15b6c32fdc9137` was inspected, but required `source/engine/hardware.inc` lacks an identified grant/notice; no upstream tool/ROM ran and no ROM/header/mode/predicate/receipt was produced. These are missing-evidence no-go outcomes.
+
+## Requirement truth and preserved limits
+
+No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending with their original owners. Hardware, perceptual, timing, Linux, Steam Deck, and Playstead support remain unqualified. Full milestone closure remains unsatisfied.
+"""
+    report_path = f"{phase_dirs['22']}/22-VERIFICATION.md"
+    no_report_exit, no_report_out = 0, (io.StringIO(), io.StringIO())
+    with contextlib.redirect_stdout(no_report_out[0]), contextlib.redirect_stderr(no_report_out[1]):
+        no_report_exit = main(["--check", "v04-reconciliation", "--stage", "report", "--rev", baseline_rev,
+                               "--baseline-rev", baseline_rev, "--repo", str(repo)])
+    if no_report_exit != 1 or "v04-report-missing" not in no_report_out[1].getvalue():
+        raise SystemExit(f"planning-hygiene self-test FAIL: missing Phase 22 report was not rejected: {no_report_out[0].getvalue()} {no_report_out[1].getvalue()}")
+    controls += 1
+
+    report_rev = commit({report_path: report_content}, "add historical report")
+
+    def cli_check(stage: str, rev: str, expected_code: str | None = None) -> None:
+        nonlocal controls
+        output, error = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+            result = main(["--check", "v04-reconciliation", "--stage", stage, "--rev", rev,
+                           "--baseline-rev", baseline_rev, "--repo", str(repo)])
+        if expected_code is None:
+            expected_line = f"v04-reconciliation pass stage={stage}"
+            if result != 0 or output.getvalue().strip() != expected_line:
+                raise SystemExit(f"planning-hygiene self-test FAIL: {stage} CLI positive: {result} {output.getvalue()} {error.getvalue()}")
+        elif result != 1 or expected_code not in error.getvalue():
+            raise SystemExit(f"planning-hygiene self-test FAIL: {stage} CLI negative wanted {expected_code}: {result} {output.getvalue()} {error.getvalue()}")
+        controls += 1
+
+    cli_check("report", report_rev)
+    for label, mutated, error_code in (
+        ("boundary identity", report_content.replace(f"source_head: {V04_EVIDENCE_HEAD}", "source_head: " + "0" * 40), "v04-report-field"),
+        ("metadata count", report_content.replace("metadata_cases: 513", "metadata_cases: 512"), "v04-report-field"),
+        ("gate list", report_content.replace(V04_UNRESOLVED_GATES[-1], "wrong_final_gate"), "v04-report-gates"),
+        ("false requirement completion", report_content.replace("    status: Pending", "    status: Satisfied", 1), "v04-report-requirements"),
+    ):
+        mutated_rev = commit({report_path: mutated}, f"mutate report {label}")
+        cli_check("report", mutated_rev, error_code)
+    git("checkout", "-q", report_rev)
+    changed_history = "Phase 20 historical report was rewritten.\n"
+    history_rev = commit({f"{phase_dirs['20']}/20-VERIFICATION.md": changed_history}, "mutate historical report")
+    cli_check("report", history_rev, "v04-history-changed")
+
+    git("checkout", "-q", report_rev)
+    state_path, project_path = ".planning/STATE.md", ".planning/PROJECT.md"
+    phase22_link_state = f"phases/{phase_dirs['22'].rsplit('/', 1)[-1]}/22-VERIFICATION.md"
+    phase22_link_project = phase22_link_state
+    phase22_link_continuation = f"../{phase_dirs['22'].rsplit('/', 1)[-1]}/22-VERIFICATION.md"
+    state_handoff = f"""---
+milestone: v0.4
+current_phase: "23.1"
+current_phase_name: Close v0.4 requirement and verification gaps
+status: executing
+---
+
+## Owner Handoff
+
+Phase 23.1 reconciliation completed. Phase 22's historical verification report now exists at [{report_path.rsplit('/', 1)[-1]}]({phase22_link_state}). Phase 20 verification is stale and Phase 21 verification is stale. The Phase 22 report remains historical, not refreshed current coverage.
+
+- FIXT-01 — Pending, original owner Phase 21.
+- RIGHTS-01 — Pending, original owner Phase 20.
+- DIAG-01 — Pending, original owner Phase 22.
+- DIAG-02 — Pending, original owner Phase 22.
+
+The v0.4 remains open. D-103's exact-final-head full-suite milestone gate remains unfulfilled. No broad local suite and no third local lifecycle retest are permitted. The publication allowance is spent: no release retry, no tag/asset/rights action. Both auto flags remain false. The owner-only next route is `/gsd-audit-milestone v0.4`.
+"""
+    project_state = f"""## Current State
+
+Phase 22's historical verification is available at [{report_path.rsplit('/', 1)[-1]}]({phase22_link_project}). The v0.4 remains open. FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending.
+"""
+    continuation_path = f"{phase_dirs['23.1']}/.continue-here.md"
+    continuation = f"""# Phase 23.1 Closeout
+
+## Owner Handoff
+
+Completed stage: Phase 23.1 — Close v0.4 requirement and verification gaps. The historical report is [{report_path.rsplit('/', 1)[-1]}]({phase22_link_continuation}). FIXT-01, RIGHTS-01, DIAG-01, and DIAG-02 remain Pending; the D-103 exact-final-head suite is unfulfilled. No broad local suite, third local lifecycle retest, release retry, or tag/asset/rights action is allowed. Both auto flags remain false.
+
+The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or milestone is selected or started.
+"""
+    handoff_files = {state_path: state_handoff, project_path: project_state, continuation_path: continuation}
+    handoff_rev = commit(handoff_files, "reconcile current handoff")
+    cli_check("handoff", handoff_rev)
+    missing_link_rev = commit({state_path: state_handoff.replace(f"]({phase22_link_state})", "](#missing-report)")},
+                              "remove current report link")
+    cli_check("handoff", missing_link_rev, "v04-handoff-link")
+    git("checkout", "-q", handoff_rev)
+    config = json.loads((repo / ".planning/config.json").read_text(encoding="utf-8"))
+    config["workflow"]["auto_advance"] = True
+    auto_rev = commit({".planning/config.json": json.dumps(config) + "\n"}, "enable auto advance")
+    cli_check("handoff", auto_rev, "v04-handoff-auto")
+    git("checkout", "-q", handoff_rev)
+    bad_pending = state_handoff.replace("RIGHTS-01 — Pending", "RIGHTS-01 — Complete")
+    pending_rev = commit({state_path: bad_pending}, "complete pending requirement")
+    cli_check("handoff", pending_rev, "v04-handoff-owner")
+
+    # Later committed and dirty state must not affect a verdict bound to report_rev.
+    git("checkout", "-q", handoff_rev)
+    later_rev = commit({".planning/ROADMAP.md": roadmap + "\nLater checkout text.\n"}, "later planning checkout")
+    (repo / f"{phase_dirs['22']}/22-EVIDENCE.md").write_text("dirty evidence must not replace snapshots\n", encoding="utf-8")
+    cli_check("report", report_rev)
+    if not later_rev:
+        raise SystemExit("planning-hygiene self-test FAIL: missing later checkout commit")
+    return controls
+
+
 # ---- CLI -------------------------------------------------------------------------------------------------
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--check", choices=("plan-cap", "lessons-ids", "state-size", "playstead-docs", "deferrals"))
+    parser.add_argument("--check", choices=("plan-cap", "lessons-ids", "state-size", "playstead-docs", "deferrals", "v04-reconciliation"))
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--roadmap")
     parser.add_argument("--phases-dir")
-    parser.add_argument("--rev", help="plan-cap or deferrals: a full immutable commit id to read")
+    parser.add_argument("--rev", help="a full immutable commit id to read")
+    parser.add_argument("--stage", choices=("report", "handoff"), help="v04-reconciliation stage to check")
+    parser.add_argument("--baseline-rev", help="execution-start commit used to protect historical planning evidence")
     parser.add_argument("--repo", default=".", help="repository for an immutable --rev read (default: current directory)")
     parser.add_argument("--lessons")
     parser.add_argument("--state")
@@ -711,6 +1391,10 @@ def main(argv: list[str] | None = None) -> int:
             if not args.rev:
                 parser.error("deferrals needs --rev COMMIT")
             summary, errors = check_deferrals(read_deferrals(Path(args.repo), args.rev))
+        elif args.check == "v04-reconciliation":
+            if not args.stage or not args.rev or not args.baseline_rev:
+                parser.error("v04-reconciliation needs --stage report|handoff --rev COMMIT --baseline-rev COMMIT")
+            summary, errors = check_v04_reconciliation(Path(args.repo), args.stage, args.rev, args.baseline_rev)
         else:
             if not args.root:
                 parser.error("playstead-docs needs --root")
