@@ -155,16 +155,16 @@ Plans:
 - [x] 23-09-PLAN.md — Fix incomplete raw-HTML visibility bypasses in the existing notes/docs/changelog validators and add causal automated controls.
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 23-04-PLAN.md — Reissue all three independent source-bound reports after the visibility fix, gate their committed evidence and qualify the implementation head.
+- [x] 23-04-PLAN.md — Reissue all three independent source-bound reports after the visibility fix, gate their committed evidence and qualify the implementation head.
 
 **Wave 6** *(blocked on Wave 5 completion)*
-- [ ] 23-07-PLAN.md — Apply the observed 0.4.0 state-version policy before version freeze.
+- [x] 23-07-PLAN.md — Apply the observed 0.4.0 state-version policy before version freeze.
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 23-05-PLAN.md — Prepare the version PR and use the existing trusted release lifecycle.
+- [x] 23-05-PLAN.md — Prepare the version PR and use the existing trusted release lifecycle.
 
 **Wave 8** *(blocked on Wave 7 completion)*
-- [ ] 23-06-PLAN.md — Reconcile downloaded release evidence and generate automated phase closure.
+- [x] 23-06-PLAN.md — Reconcile downloaded release evidence and generate automated phase closure.
 
 **Wave 9** *(blocked on Wave 8 completion)*
 - [ ] 23-08-PLAN.md — Record transferable lessons and stop at the owner-controlled milestone boundary.
@@ -197,7 +197,7 @@ All eight v1 requirements have one owner phase. Cross-phase use of the admission
 | 20. Fixture Admission Tune-up | 9/9 | Complete; RIGHTS-01 remains pending because no fixture was admitted | 2026-11-01 |
 | 21. CGB Game Progress and Scene Regressions | 8/8 | Complete; PR #140 passed exact-head checks and merged as `bef2cfbd` | 2026-11-02 |
 | 22. Synthetic Composition and Diagnostic Gate Assessment | 5/5 | Complete; exact-head qualification and merge passed; DIAG-01/02 and RIGHTS-01 remain pending | 2026-11-03 |
-| 23. Qualified v0.4.0 Release | 4/9 | In Progress | - |
+| 23. Qualified v0.4.0 Release | 8/9 | In Progress | - |
 
 ## Planning and Approval Boundary
 

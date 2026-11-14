@@ -1,0 +1,9 @@
+# D-192 owner-approved routing harness correction
+
+The owner approved exact b47d840bff6457811d5e5919b6479e0bf6f9e743, parent 44653996, and one fresh protected qualification on existing PR #152. Only the coverage checker's `_self_test` changes. Its actual CLI/bounded extractor and separately authored trusted witness verify canonical inner prefix, root, layout, argv and cleanup. Three malformed-prefix cases retain refusal/no-call/cleanup assertions. Real product semantic controls remain; production policy bytes, registered test identities and all child/test/job limits are unchanged.
+
+D-191 protected attempt 43483920348 failed only the newly added Windows routing child at its existing 15-second limit. All other Windows cases and producer lanes passed; the missing final inventory marker and downstream preview failure were not called qualification. Original failed raw/canonical streams remain evidence.
+
+Carry D-191's unused ordinary actual postmerge qualification and original single conditional release request, with existing D-183 publication authority. Never add or renew a release request. Require the exact protected new head/current base, normal merge retaining P/S ancestry, all actual merged-main checks, permanent source S/tag/draft 443425157, fixed notes/original 20 tuples, complete writer quiescence and every existing source/window/nightly/consumer/final gate. No extra retry, cap change, publication bypass, asset replacement, fixture admission or phase/review/gap reset is authorized.
+
+The approved b47 protected and actual G5 main qualifications passed. The original carried single request was consumed before release 43526085579 attempt 1, which published unchanged source S and the original 20 assets plus the two final metadata assets. Independent public 22 readback passed. Plan 23-06 reconciles release evidence; Plan 23-08 owns final closure and the owner-controlled stop after Phase 23. This executed outcome does not renew any allowance.

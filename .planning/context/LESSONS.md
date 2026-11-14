@@ -1201,3 +1201,110 @@ The read-only [sibling/Playstead scan](../research/v0.3/MILESTONE-BOUNDARY-LESSO
 - **Verification:** The D-177 direct check’s actual interpreter was identified without changing any source/test deadline. Final qualification will use the configured interpreter and matching PATH; no faster-run or CTest-pass claim is inferred from the mismatch.
 - **Source:** D-177 source-check logs and23-EVIDENCE.md; WORKFLOW.md CI/CD efficiency.
 - **Status:** Environment drift identified and durable instruction added; exact configured qualification pending.
+
+
+### GB-CI-029 / 2026-11-11 / Exercise the actual version subject before hosted release qualification
+
+- **Cause and evidence:** The implementation's0.3 suites passed locally, on the exact PR and on merged main. The actual generated0.4 subject then exposed five local harness assumptions: an exact historical-only ledger count, a tracer that only rewrites0.3, and notes-positive fixtures without the mandatory0.4 profile or immutable revision. Production0.4 notes/docs and native-state checks passed. The failure was caught before spending the planned version-PR hosted qualification.
+- **Remedy:** Keep version-specific fixture initialization paired across the historical/current version and feed every positive/mutation the configured immutable source and corresponding managed profile. Bind an exact expectation to the actual selected inventory, retaining its historical tag checks; do not accept any positive count. Preserve the original CLI/mutation cases and deadlines.
+- **Applies when:** A release advances version-derived validators, generated artifacts or fixture assembly even when production functionality is unchanged.
+- **Verification:** D-178 owner-approved correction is being implemented. Original22-case failure stream is retained; exact-source causal controls, case/deadline equality and production-body equality are required before any new hosted version run. Do not read this pending remedy as qualification.
+- **Source:**23-EVIDENCE.md,23-05-T1-RESCOPE.md and ignored version preparation failure/diagnosis receipts.
+- **Status:** Local failure prevented an avoidable hosted attempt; bounded correction and qualification in progress.
+
+
+### GB-CI-030 / 2026-11-11 / Inspect minor-version budget expiries before release qualification
+
+- **Cause/evidence:** Actual0.4reached the deliberate0.4expiry in all288existing per-test timeout exceptions. The unchanged normal gate correctly stopped before the full local stream or new hosted version attempt, despite the bounded fixture correction having passed its five configured controls and independent source reviews.
+- **Remedy:** At the actual version subject, inspect populated minor-version expiry fields early and distinguish them from inactive content windows or historical API dates. Review the exact exception set and timing provenance, preserve all caps/cases/checker rules, and obtain the owner's resource-policy decision rather than automatically moving expiry. A renewed expiry is debt carryover, not fresh qualification or proof that every ceiling is needed.
+- **Applicability:** Releases that cross a configured review minor, even with unchanged core logic or CI job limits.
+- **Verification:** Original installed1942-case gate rejected exactly288expiryrows; an unapplied expiry-only candidate passed. The owner approved D-179; only0.4→0.5expiryfields changed and the normal gate passed. Every other row field and source object remained unchanged. Full0.4qualification is still running and not inferred from historical evidence.
+- **Status:** Policy review completed and renewal explicitly authorized through0.4; timeout reduction/review remains due at0.5.
+
+
+## CI-031 — isolate measured contention without extending deadlines
+
+Observed at frozen versionH2 (2026-11-11): the full parallel4stream timed out historical v03readback and lifecycle replay at60seconds. Sequential isolated probes at the same source passed18.63and13.54seconds under the originallimits. Source/profile diagnosis preceded probes; alloriginalcasesremain. Proposed remedy is PROCESSORS4 for just these two subprocess-heavy checks, with existing positive/negative inventory-property guards and POSIX-only applicability for lifecycle. The proposal is unapplied pending owner rescope for the accompanying public-output correctness fix. Verification must include final configuredproperties, causal controls and complete source qualification; isolated passes are diagnosis, never fullqualification. Apply to similarly subprocess-heavy Git/CLI controls only when measured contention and unchanged solo behavior are established.
+
+
+## CI-032 — validate a shared positive fixture once before independent mutations
+
+At the D180 corrected version source, the claims control revalidated the same immutable positive profile before17independent mutants. Instrumented calls cost about1.7s each; the unchanged baseline driver took54.37s near its60s limit. Validate the shared positive once, keep a fresh deep copy and the original production validator/expected diagnostic for every mutation. All21original negative identities remain exact; the native driver fell to26.17s. New assertions were balanced into an existing tracer, which passed22.31s; configured contracts passed too. This requires fixed immutable root/revision/input and no mutation-dependent mock context. Do not apply when the valid counterpart differs per case. Final full/hosted qualification remains separate evidence.
+
+
+## CI-033 — inspect every full-stream worker setting before rehearsal
+
+Two release-rehearsal full CTest streams omitted an explicit worker setting despite the qualified native stream using four. A two-case discriminator confirmed serial default and parallel overlap; dashboard mode honors the same environment. Fresh hosted floor and Linux case sums signaled limited cap headroom, but parallel case sums are not measured serial durations. Set the existing four-worker choice on both exact full steps, preserving commands, nonce receipts and caps; guard actual immutable argv/env against missing/serial settings, CLI filters/overrides and shell export/unset. H4 passes636coverage controls, configured affected tests, fresh corpus/current ledger and trusted policy checks; all three source reviews accept. Fresh exact-H4 hosted qualification remains required. Apply this before a rehearsal candidate is frozen to avoid a full requalification cycle; use the owner’s standing approved CI scope instead of inventing redundant approval gates.
+
+
+## CI-034 — recover an interrupted provider run selectively
+
+During the Nov11 GitHub Actions incident, Linux completed the full test inventory before upload stalls consumed its job budget; macOS was cancelled within its fixed job cap, and neither canceled native job log survived in individual or whole-run archives. Metadata/annotations and retained successful producers remain evidence; lost logs cannot establish a test pass or a source defect. After service recovery, preserve originals and use one unchanged-source, unchanged-cap selective retest for unsuccessful producers and their aggregator. Confirm actual selected jobs, all required latest results and per-job artifact attempts; start dependent preview retries only after CI success. H4 retest is active, not qualified. Do not widen caps, waive missing producer evidence or repeat all successful workloads merely because the service failed.
+
+
+## CI-035 — coalesce immutable baselines while preserving checkout-divergence coverage
+
+- Cause: the v0.4 version-window self-test repeated one accepted immutable-head CLI53extra times across masking mutants; fresh Python/Git startup added work to every full stream.
+- Evidence: D182 candidate1dc1d629, exact before/after invocation traces and23-EVIDENCE.md. All66 unique negative names/diagnostics/order remain; acceptedCLI62→9. One local diagnostic pair63.23→43.76s is not a hosted benchmark or speed guarantee.
+- Remedy: validate the shared baseline once after committing the first mutant, keeping explicit --rev different from current checkout. Retain every distinct mutated revision/rejection and all unique positive cases. Existing release_version_v04_controls remains registered at the unchanged90-second ceiling.
+- Applicability: reuse only inputs proven identical at an immutable revision within one self-test. Identical argv alone is insufficient when mutable checkout/environment is a distinct assertion; retain a representative causal check of that boundary. Avoid new cross-run caches, dependencies or concurrency for this saving.
+- Verification: before/after trace labels/codes and normalized whole-module AST, corrupted-trace refusals,15configured final-candidate contracts and independent harness/release reviews pass. Exact-H hosted CI, every native inventory and downloaded preview consumers passed. Windows changed-control duration was41.40s versus priorW83.02/84.24s, with the same reported image/compiler but different hosted VMs and unknown load; this is context only, not a formal speedup or whole-CI attribution. Evidence: private build/phase23-d182-ci-timing-note.json.
+
+Final W repeated the full qualification and downloaded preview checks successfully. Its Windows version-window control was40.68s, versus41.40s atH and83.02/84.24s in old cappedW runs. These remain uncontrolled hosted observations; the exact53removed launches with66retained negative cases are the primary efficiency proof. No further source edit followed freeze.
+
+
+## CI-036 — replay release recovery at the actual caller and judge roots
+
+- Cause: the release producer checked valid bytes from its repository root, while the final publisher invoked a trusted nested checkout with caller-relative notice paths. The product checker applied its separate repo root again, yielding a doubled path only at publication.
+- Evidence: the approved same-source recovery passed every platform and evidence producer, then failed the final Linux notice gate. The same held archive passes with an absolute notice path; a regression invoking the actual wrapper from outside the judge reproduces the failure before the fix.
+- Remedy: make only the notice argument lexically absolute at the wrapper boundary, preserve symlink refusal, and run the nested-layout regression before hosted qualification. Preserve package bytes, policy and receipts. Do not infer that a root-local producer check covers a nested final publisher.
+- Applicability: any workflow that treats one checkout as data and a second immutable checkout as judge. Keep caller paths and judge-root paths explicit.
+- Verification: focused existing source-archive CTest passed within its unchanged cap; the real wrapper reaches the receipt gate for valid caller-relative data and rejects a symlink. Hosted adoption remains owner-gated. Require fresh control-main CI green before another expensive release attempt; overlapping the streams spent work while a required control lane was incomplete.
+
+
+## CI-037 — include complete-file pin consumers in harness preflight
+
+- Cause: adding a test-only regression to the source-archive checker preserved its production AST but changed bytes protected by Phase22's source-package boundary. The focused checker pass did not exercise that consumer.
+- Evidence: every configured hosted lane completed and failed only the immutable helper-byte contract. Old tagged bytes passed; new independently reviewed helper bytes were rejected.
+- Remedy: search references/pins to each changed harness path before spending hosted qualification, and run the consumer contract at both the new candidate and permanent tagged source. Retain the historical exact pin and add only a reviewed complete-byte alternative with paired mutation/missing-pin/digest controls. Preserve the referenced commit in protected merge ancestry; squash/rebase can orphan a PR-only pin.
+- Applicability: cross-phase frozen checkers, same-source release recovery and any helper whose entire file is pinned even when only its self-tests change.
+- Verification: candidate and historical-tag full contracts pass; body/pin/digest negatives pass; ordinary merge retains the pinned ancestor while a same-tree squash negative does not. Existing controls pass within their unchanged limit. Fresh protected qualification remains separate and owner-gated.
+
+## CI-038 — make the child Python executable explicit in bounded local controls
+
+The configured parent interpreter can be Python3.14 while an unversioned child `python3` still resolves through stale/default tool paths. Prepending a versioned interpreter directory does not establish that the unversioned executable exists. In this recovery the broader controls stalled in nested CMake discovery in both normal and unsandboxed inherited environments; an explicit private alias to the already installed interpreter plus minimal PATH passed under the unchanged60-second cap. This comparison does not isolate which environment element caused the delay. Keep global profiles and limits unchanged, verify child resolution, retain failed evidence and use the project-local bounded environment when reproducing the check. No new dependency or general speedup is claimed.
+
+
+## CI-039 — replay tagged source guards with trusted overlays before hosted recovery
+
+- Cause: the current release wrapper overlay changed a tracked tagged-source file. A downloaded-player verifier correctly refused that dirty source before any player/native consumers executed. Earlier static checks did not compose these two roots.
+- Evidence: actual Mac terminal log stops at the source guard; later command text is the runner's echoed script, not proof of execution. Replaying the real historical guard with the actual overlay reproduces the failure. A pristine tagged worktree accepts the same downloaded bytes without relaxing the guard.
+- Remedy: isolate the tagged player's source and fixtures in a clean detached worktree; retain current trusted consumer overlays in the original checkout. Replay the actual held archive and subsequent prerequisites locally before another expensive hosted attempt. Preserve failed local harness setup evidence and every source/index/fixture refusal.
+- Applicability: post-tag automation where current verifier code differs from frozen product source. Command echo, scheduled worker count, skipped downstream jobs and cancelled corpus runs are not execution/qualification evidence.
+- Verification: local immutable wiring and real-Git controls pass within the existing CTest cap; actual downloaded player archive replay, cleanup and subsequent core/C/C++/host workflow step pass. Fresh hosted adoption requires a new explicit bounded owner decision because the prior attempt is spent. Cancel remaining costly jobs after a deterministic fatal gate; escalate to force cancellation only when normal cancellation leaves them active.
+
+
+## CI-040 — couple targeted infrastructure retries to real artifact production
+
+- Cause: an HTTP500 stopped the CMake-floor download before tests. The selected-job retry preserved native execution results, but GitHub copied the already completed player record into a newer attempt label while the actual artifact and producing receipt remained at the original attempt. Three preview runners had only been waiting for the upstream CI gate.
+- Evidence: original native inventories passed at the frozen candidate; floor retry2 passed its full inventory. The actual frozen waiter then selected missing player artifact2, while the downloaded artifact/receipt were still1 with the original execution times. A new actual producer3 yielded matching live waiter/artifact/receipt source/run/attempt and archive digest; the recovered preview2 then passed all installed and downloaded-player contracts. This is source-bound execution evidence, not a speedup inferred from clocks or counters.
+- Remedy: diagnose the failed job, preserve successful same-source evidence, and inspect attempt-bound artifact consumers before proposing the whole bounded recovery. Refresh only a necessary temporary producer under explicit authority, preserving truthful old public bytes and every identity check. Stop obsolete prerequisite-only waiters inside existing task authority; preserve the zero-product-work snapshot and recover consumers after upstream is green. Do not restart the entire matrix merely to repair a temporary artifact binding.
+- Applicability: same-source CI and release recovery with copied job records or attempt-scoped artifacts. The lesson is planning and preflight guidance; it grants no new resource budget, retry, cap change or phase advance. Exact owner stops remain authoritative.
+- Verification: D189 floor recovery and D190 temporary producer refresh, actual live waiter selection, downloaded archive/receipt digest, all four preview contracts, protected exact-head gate and normal merge passed without source/cap/release-asset changes. Fresh actual merged-main qualification and publication remain separate gates and are not completed by these PR results.
+
+
+## CI-041 — exercise the actual next publication commands before another hosted qualification
+
+- **Cause and evidence:** The required static workflow check pinned a publisher command containing `--repo-root`, while the executable checker accepted only `--root`. Its direct archive tests bypassed that CLI. After actual platform jobs passed, read-only preflight of the exact final command returned argparse exit2. The same preflight against all four fixed draft products exposed a second boundary mismatch: the player is packaged under `installed-prefix/`, while the publisher checked the outer extraction directory. The three flat core packages passed; the unchanged wrapped player failed `product-path-unknown`. Neither failure required a new corpus run to reproduce.
+- **Remedy:** Cancel the remaining known-unpublishable corpus work, retain all passed source-bound platform/reader evidence, and prepare one reviewed two-file control correction. Preserve the old immutable policy pin and allow only the two exact derived edits: the root-option alias and strict player-only prefix selection. Reject outside payloads and retain all extraction, policy, fixture and cleanup bounds. Before any newly approved hosted attempt, exercise exact downstream CLIs with all actual digest-checked products and game-insertion refusal controls, plus focused immutable coverage tests.
+- **Applicability:** Static command wiring and helper-only unit tests can both pass while their executable interface or real archive shape disagrees. At a recovery frontier, preflight the actual remaining consumers on existing data before repeating expensive producers. This does not replace protected exact-head CI, grant a retry, waive a gate, or change package bytes.
+- **Verification:** Current private candidate validates all four actual draft products with both root spellings and rejects four inserted licensed-game payloads. Independent security and consumer review cover the exact correction; focused test evidence and owner-authorized hosted qualification remain separate. Publication remains held; a cancelled corpus is unqualified. See Phase23 `23-EVIDENCE.md` current recovery record and retained exact-command/product preflight receipts.
+
+
+## CI-042 — keep routing regressions at their executable boundary
+
+- **Cause/evidence:** D191's actual Windows wrapper-routing CLI control exceeded its15-second child limit while an empty wrapper entered the complete fixture-policy baseline scan. Allother1803Windows cases passed, including realcore/playerfixturesemantic controls and the fullreleasepolicy group. Otherplatforms passed; the Windowslane and protectedqualification remainfailed.
+- **Prepared remedy:** Use the actual CLI/boundedextractor with a separatelyauthored temporarytrustedchecker that records exactcanonicalargv, innerprefix, layout, root andemptyrealdirectory. The wrappedpositiveassertswholewitnessreceiptandcleanup; malformedprefixesassertrefusal,nocallandcleanup. Existingrealcontentsemantics andactual4draftproduct/game-insertionproofs remainunchanged. Preserve15/30/180/jobcaps; no cache/concurrency/dependency change.
+- **Verification:** Privateb47 changesonlycoverage_self_test. Direct718pass6.40s; registeredcoverageandcontrols pass, controls5.46s under30. Security andWindowsconsumerreviewsacceptfinalhead. FreshWindows/protectedqualification remainsrequiredandunapprovedatthisrecord.
+- **Applicability:** A routing assertion needs an observablecallee receipt; repeating immutableGitcontentvalidation inside that assertion can dominate slower-platformruntime. Use existingsemanticcontrolsfortheirdistinctcontentassertions.
+- **Boundedfuturefinding:** The failedcasewasloggedat18:44:53 while the Windowsstreamcontinuedtoits19:36finalreport. Assessnativefail-fastexecutiononlyina separatelyauthorizedworkflowchange, preservingfullinventoryoneverypassingrun andall rejection/receiptgates. No suchworkflowchangeispartofthiscorrection.

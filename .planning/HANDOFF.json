@@ -1,42 +1,31 @@
 {
-  "version": "1.0",
-  "timestamp": "2026-11-11T04:32:04.976974+00:00",
-  "phase": "23",
-  "phase_name": "Qualified v0.4.0 Release",
-  "phase_dir": ".planning/phases/GB-23-qualified-v0-4-0-release",
-  "status": "executing",
-  "completed_stage": "D-177 policy snapshot56ff25b6 committed; coverage byte pin and17 causal stale-value controls integrated. Configured-binary source probes pass; final immutable implementation/reviews/qualification pending.",
-  "blockers": [
-    "Select and commit the integrated implementation, run immutable coverage self-test, reissue all three source reviews and qualify the final report head before the one approved hosted attempt."
+  "phase": 23,
+  "phase_title": "Qualified v0.4.0 Release",
+  "stage": "Plan 23-06 executing after qualified Plan05 publication/readback",
+  "completed_plans": [
+    "23-01",
+    "23-02",
+    "23-03",
+    "23-04",
+    "23-05",
+    "23-07",
+    "23-09"
   ],
-  "async_jobs": [
-    {
-      "workflow": "ci",
-      "run_id": 42948757274,
-      "status": "completed",
-      "conclusion": "cancelled"
-    },
-    {
-      "workflow": "fixture-repro",
-      "run_id": 42948757366,
-      "status": "completed",
-      "conclusion": "success"
-    },
-    {
-      "workflow": "preview-package-smoke",
-      "run_id": 42948757341,
-      "status": "completed",
-      "conclusion": "failure"
-    }
+  "remaining_plans": [
+    "23-06",
+    "23-08"
   ],
-  "next_action": "Continue $gsd-execute-phase 23 at Plan23-04 T2/T3 D-177. Freeze the integrated source, reject stale prior reports via explicit gate, run immutable coverage controls and obtain three independent source reports. Then configure/build/budget and one consolidated full/focused local stream using cache-configured Python/PATH. Push only after successful local reconciliation and review gate. No source changes after review except exact evidence allowlist. Stop after Phase23.",
-  "context_notes": "Reviewed implementation7b2ecaf6; frozen candidate76e32ae1. All80 historical findings preserved. Full initial stream failed five deadlines; all five bounded retests pass unchanged, validated by bounded-reconciliation.json and10 negative controls. No task remains running. Remote PR146 remains unmerged at failed88102b33; no tag/publication. Background tests only.",
-  "hosted_attempt_authorization": {
-    "proposal": "D-177",
-    "owner_answer": "Approve bounded extension and one attempt",
-    "attempts": 1,
-    "state": "authorized-not-yet-started",
-    "max_additional_configured_runner_minutes": 40
-  },
-  "proposed_budget_authorized": true
+  "who_acts_next": "agent within existing Phase23 authorization",
+  "next_command": "/gsd-execute-phase 23",
+  "phase_boundary_next_owner_command": "/gsd-audit-milestone",
+  "auto_advance": false,
+  "auto_chain_active": false,
+  "release_url": "https://github.com/szTheory/gabbaboy/releases/tag/v0.4.0",
+  "release_source": "3de1b0e427f37a202be4469dd818266f359c8b20",
+  "publication_control": "fbea1e2cc70f7c2ab9ea5820fa92ca18ddf997e8",
+  "release_run": 43526085579,
+  "release_attempt": 1,
+  "remaining_release_requests": 0,
+  "independent_readback": "pass",
+  "updated_at": "2026-11-14T00:23:37.617146+00:00"
 }
