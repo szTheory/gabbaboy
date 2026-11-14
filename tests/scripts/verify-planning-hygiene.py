@@ -294,6 +294,39 @@ def frontmatter_fields(text: str) -> tuple[dict[str, str], str]:
     return fields, text[match.end():]
 
 
+def frontmatter_duplicates(text: str) -> list[str]:
+    """Return duplicate top-level YAML keys and repeated fields within a sequence object."""
+    match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
+    if match is None:
+        return []
+    top_level: set[str] = set()
+    item_fields: set[str] | None = None
+    duplicates: list[str] = []
+    for line in match.group(1).splitlines():
+        if not line.strip():
+            continue
+        if not line[0].isspace():
+            item_fields = None
+            top = re.match(r"^([A-Za-z0-9_-]+):", line)
+            if top:
+                key = top.group(1)
+                if key in top_level:
+                    duplicates.append(f"top-level key '{key}'")
+                top_level.add(key)
+            continue
+        item = re.match(r"^\s+-\s+([A-Za-z0-9_-]+):", line)
+        if item:
+            item_fields = {item.group(1)}
+            continue
+        nested = re.match(r"^\s+([A-Za-z0-9_-]+):", line)
+        if nested and item_fields is not None:
+            key = nested.group(1)
+            if key in item_fields:
+                duplicates.append(f"nested field '{key}'")
+            item_fields.add(key)
+    return duplicates
+
+
 def frontmatter_sequence(text: str, key: str) -> list[str] | None:
     match = GAP_FRONTMATTER.match(text.replace("\r\n", "\n"))
     if match is None:
@@ -351,6 +384,22 @@ def markdown_section(text: str, title: str) -> str:
     end = next((index for index in range(start + 1, len(lines))
                 if re.match(r"^#{1,4}\s+", lines[index])), len(lines))
     return "\n".join(lines[start + 1:end])
+
+
+def markdown_heading_count(text: str, title: str) -> int:
+    """Count exact Markdown headings for a contract section, case-insensitively."""
+    pattern = re.compile(r"^#{1,6}\s+" + re.escape(title) + r"\s*$", re.IGNORECASE)
+    return sum(bool(pattern.match(line)) for line in text.splitlines())
+
+
+def markdown_table_cells(line: str) -> list[str] | None:
+    stripped = line.strip()
+    if not stripped.startswith("|") or not stripped.endswith("|"):
+        return None
+    cells = [cell.strip() for cell in stripped[1:-1].split("|")]
+    if cells and all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
+        return None
+    return cells
 
 
 def has_local_link(text: str, source_path: str, target_path: str) -> bool:
@@ -433,11 +482,16 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
         return "", errors + ["v04-report-missing: Phase 22 verification report cannot be read from --rev"]
     report = raw.decode("utf-8", errors="replace")
     fields, body = frontmatter_fields(report)
+    duplicate_fields = frontmatter_duplicates(report)
+    if duplicate_fields:
+        errors.append("v04-report-frontmatter-duplicate: " + ", ".join(duplicate_fields))
     expected_fields = {
+        "phase": "GB-22-composition-and-microtest-evidence",
         "source_head": V04_EVIDENCE_HEAD,
         "implementation_head": V04_IMPLEMENTATION_HEAD,
         "evidence_head": V04_EVIDENCE_HEAD,
         "report_kind": "boundary_reconstruction",
+        "status": "passed",
         "metadata_cases": "513",
         "shared_macro_cases": "480",
         "inline_cases": "2",
@@ -452,6 +506,9 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
     if frontmatter_sequence(report, "unresolved_gates") != list(V04_UNRESOLVED_GATES):
         errors.append("v04-report-gates: the exact seven unresolved gates must be a frontmatter sequence")
     dispositions = frontmatter_objects(report, "requirement_dispositions") or []
+    disposition_ids = [item.get("id", "") for item in dispositions]
+    if len(disposition_ids) != len(set(disposition_ids)):
+        errors.append("v04-report-requirements: requirement disposition IDs must be unique")
     actual_dispositions = {item.get("id", ""): (item.get("status", ""), item.get("original_owner", "")) for item in dispositions}
     expected_dispositions = {key: ("Pending", owner) for key, owner in V04_PENDING_OWNERS.items()}
     if actual_dispositions != expected_dispositions:
@@ -489,9 +546,34 @@ def check_v04_report(repo: Path, rev: str, baseline_rev: str,
         errors.append("v04-report-scope: report must identify the historical synthetic-plus-metadata reconstruction scope")
     if "482 protocol candidates remain blocked" not in " ".join(body.lower().split()):
         errors.append("v04-report-evidence: report must retain the blocked 482 protocol-candidate count")
+    for heading in ("Historical reconstruction scope", "Goal Achievement", "Exact game no-go facts",
+                    "Requirement truth and preserved limits"):
+        if markdown_heading_count(body, heading) != 1:
+            errors.append(f"v04-report-heading: {heading} must appear exactly once")
     goal = markdown_section(body, "Goal Achievement") or markdown_section(body, "Goal achievement")
-    criterion_lines = [line.lower() for line in goal.splitlines() if re.match(r"^\s*\|\s*[123](?:\.|\s*\|)", line)]
-    if len(criterion_lines) < 3:
+    table = [cells for line in goal.splitlines() if (cells := markdown_table_cells(line)) is not None]
+    status_columns = [index for index, title in enumerate(table[0] if table else [])
+                      if title.strip().lower() in ("status", "result", "result status")]
+    criterion_rows: list[tuple[int, list[str], str]] = []
+    for line in goal.splitlines():
+        cells = markdown_table_cells(line)
+        if not cells:
+            continue
+        criterion = re.match(r"^(\d+)\s*[.)]\s*", cells[0])
+        if criterion:
+            criterion_rows.append((int(criterion.group(1)), cells, line))
+    criterion_ids = [number for number, _, _ in criterion_rows]
+    if criterion_ids != [1, 2, 3]:
+        errors.append("v04-report-criteria: exactly criteria 1, 2, and 3 need explicit evidence rows")
+    if len(status_columns) != 1:
+        errors.append("v04-report-criteria: the criterion table needs exactly one Status or Result column")
+    elif len(criterion_rows) == 3:
+        for number, cells, _ in criterion_rows:
+            status_index = status_columns[0]
+            if len(cells) <= status_index or cells[status_index].strip().upper() != "VERIFIED":
+                errors.append(f"v04-report-criteria: criterion {number} result must be VERIFIED")
+    criterion_lines = [line.lower() for _, _, line in criterion_rows]
+    if len(criterion_lines) != 3:
         errors.append("v04-report-criteria: all three approved Phase 22 criteria need explicit evidence rows")
     else:
         criterion_terms = (
@@ -541,6 +623,12 @@ def check_v04_handoff(repo: Path, rev: str, baseline_rev: str,
         return "", errors + ["v04-handoff-missing: STATE, PROJECT, or current phase continuation is missing"]
     state, project = state_raw.decode("utf-8", errors="replace"), project_raw.decode("utf-8", errors="replace")
     continuation = continuation_raw.decode("utf-8", errors="replace")
+    for document_name, document, heading in (
+            ("STATE", state, "Owner Handoff"),
+            ("PROJECT", project, "Current State"),
+            ("continuation", continuation, "Owner Handoff")):
+        if markdown_heading_count(document, heading) != 1:
+            errors.append(f"v04-handoff-heading: {document_name} {heading} heading must appear exactly once")
     state_fields, _ = frontmatter_fields(state)
     if state_fields.get("current_phase") != "23.1" or state_fields.get("milestone") != "v0.4" or state_fields.get("status") == "milestone_completed":
         errors.append("v04-handoff-state: current state must remain in open Phase 23.1 of v0.4")
@@ -1273,6 +1361,7 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         controls += 1
 
     cli_check("report", report_rev)
+    first_disposition = "\n".join(dispositions.splitlines()[:3])
     for label, mutated, error_code in (
         ("boundary identity", report_content.replace(f"source_head: {V04_EVIDENCE_HEAD}", "source_head: " + "0" * 40), "v04-report-field"),
         ("metadata count", report_content.replace("metadata_cases: 513", "metadata_cases: 512"), "v04-report-field"),
@@ -1280,6 +1369,23 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         ("false requirement completion", report_content.replace("    status: Pending", "    status: Satisfied", 1), "v04-report-requirements"),
         ("weakened criterion 3", report_content.replace("DIAG-01, DIAG-02, and RIGHTS-01 Pending",
                                                           "diagnostic and rights requirements Pending", 1), "v04-report-criteria"),
+        ("criterion result", report_content.replace("| VERIFIED | See [22-01-SUMMARY.md]", "| PARTIAL | See [22-01-SUMMARY.md]", 1),
+         "v04-report-criteria"),
+        ("duplicate gate key", report_content.replace(f"unresolved_gates:\n{gates}",
+                                                         f"unresolved_gates:\n{gates}\nunresolved_gates:\n{gates}", 1),
+         "v04-report-frontmatter-duplicate"),
+        ("duplicate disposition block", report_content.replace(f"requirement_dispositions:\n{dispositions}",
+                                                                 f"requirement_dispositions:\n{dispositions}\nrequirement_dispositions:\n{dispositions}", 1),
+         "v04-report-frontmatter-duplicate"),
+        ("duplicate nested field", report_content.replace("    status: Pending\n    original_owner:",
+                                                            "    status: Pending\n    status: Pending\n    original_owner:", 1),
+         "v04-report-frontmatter-duplicate"),
+        ("duplicate requirement ID", report_content.replace(f"requirement_dispositions:\n{dispositions}",
+                                                               f"requirement_dispositions:\n{dispositions}\n{first_disposition}", 1),
+         "v04-report-requirements"),
+        ("duplicate no-go heading", report_content.replace("## Requirement truth and preserved limits",
+                                                              "## Exact game no-go facts\nDuplicate no-go heading.\n\n## Requirement truth and preserved limits", 1),
+         "v04-report-heading"),
     ):
         mutated_rev = commit({report_path: mutated}, f"mutate report {label}")
         cli_check("report", mutated_rev, error_code)
@@ -1330,6 +1436,10 @@ The next command is owner-only: `/gsd-audit-milestone v0.4`. No next phase or mi
     missing_link_rev = commit({state_path: state_handoff.replace(f"]({phase22_link_state})", "](#missing-report)")},
                               "remove current report link")
     cli_check("handoff", missing_link_rev, "v04-handoff-link")
+    git("checkout", "-q", handoff_rev)
+    duplicate_handoff_rev = commit({state_path: state_handoff + "\n## Owner Handoff\n\nDuplicate heading.\n"},
+                                   "duplicate current owner handoff")
+    cli_check("handoff", duplicate_handoff_rev, "v04-handoff-heading")
     git("checkout", "-q", handoff_rev)
     config = json.loads((repo / ".planning/config.json").read_text(encoding="utf-8"))
     config["workflow"]["auto_advance"] = True
