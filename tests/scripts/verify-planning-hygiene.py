@@ -1375,6 +1375,8 @@ No license prohibition or fixture permission is inferred. FIXT-01, RIGHTS-01, DI
         ("boundary identity", report_content.replace(f"source_head: {V04_EVIDENCE_HEAD}", "source_head: " + "0" * 40), "v04-report-field"),
         ("metadata count", report_content.replace("metadata_cases: 513", "metadata_cases: 512"), "v04-report-field"),
         ("gate list", report_content.replace(V04_UNRESOLVED_GATES[-1], "wrong_final_gate"), "v04-report-gates"),
+        ("nested requirement status", report_content.replace("  RIGHTS-01: pending", "  RIGHTS-01: satisfied", 1),
+         "v04-report-requirements"),
         ("false requirement completion", report_content.replace("    status: Pending", "    status: Satisfied", 1), "v04-report-requirements"),
         ("weakened criterion 3", report_content.replace("DIAG-01, DIAG-02, and RIGHTS-01 Pending",
                                                           "diagnostic and rights requirements Pending", 1), "v04-report-criteria"),
